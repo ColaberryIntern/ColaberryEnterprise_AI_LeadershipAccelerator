@@ -1,282 +1,277 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
+import portalApi from '../../utils/portalApi';
+import { fetchSchedule, fetchPublicEvents, OpenHouseView } from '../../services/onboardingApi';
 import './SchedulePage.css';
 
 /**
- * Schedule — faithful React port of the Design E "Schedule" view (ONE SPINE).
+ * Schedule — real-data calendar (Month / Week / Agenda).
  *
- * Renders every task from all four tracks (Learning / Project / Internship /
- * Cert) plus live events on one timeline, in Month / Week / Agenda modes, with
- * period navigation, a Today button, a points bank, and a color legend.
- *
- * The 12-week program is seeded once (useMemo). All dates are anchored to a
- * fixed program "today" (Aug 11 2026, Week 5) exactly as the mockup does, so the
- * seeded done/prog/up states line up. Per the repo's date-helper rule, no
- * `new Date()`/`Date.now()` runs at module top-level — the anchors are computed
- * inside the component/memo bodies.
- *
- * Clicking an event is a no-op here: the mockup's drill / task-detail panels are
- * intentionally not ported.
+ * Renders the learner's cohort class sessions (`/api/portal/sessions`) and the
+ * program's public events (`/api/portal/events`, sourced from CCPP) on one
+ * timeline. Anchored to the REAL current date and the cohort's first-class date;
+ * no seeded mock. Per the repo date-helper rule, no `new Date()` / `Date.now()`
+ * runs at module top-level — every "now" is computed inside the component/hooks.
  */
 
-// ── Fixed program anchors (Design E). Constructed lazily inside the component,
-//    never at module top-level, so the worktree date-helper rule holds.
-const KICKOFF_Y = 2026, KICKOFF_M = 6, KICKOFF_D = 13; // 2026-07-13 cohort kickoff (Monday)
-
-const WEEK_NAMES = [
-  'Claude Code Foundations', 'Agent Skills', 'Claude API + Workflow Assistant',
-  'Prompt Engineering', 'MCP Foundations', 'Advanced MCP', 'Subagents / Multi-Agent',
-  'Workflows / Automation', 'Reliability', 'Governance', 'Systems Architecture',
-  'Capstone + Architect Expo',
-];
-
-const PTS = { video: 35, test: 40, lab: 90, survey: 25, cert: 60, event: 15, project: 50, internship: 30 };
-
-const TOTAL_PTS = 2140;
-
-type EvType = 'learning' | 'project' | 'internship' | 'cert' | 'event';
-type EvState = 'done' | 'prog' | 'up' | 'lock';
-type SchedEvent = {
-  type: EvType;
-  taskType: string;
+type SessionItem = {
+  id: string;
+  session_number: number;
   title: string;
-  pts: number;
+  session_date: string;   // YYYY-MM-DD
+  start_time: string | null;
+  status: string;         // scheduled | live | completed | cancelled
+  session_type: string;
+};
+
+type EvKind = 'class' | 'event'; // class = cohort session, event = public open house
+type EvState = 'done' | 'live' | 'up';
+type SchedEvent = {
+  id: string;
+  kind: EvKind;
+  title: string;
+  time: string;   // display time ('' if none)
+  hour: number;   // 0..23 for time-grid slotting, -1 if unknown
   state: EvState;
-  time?: string;
+  href?: string;
+  external?: boolean;
+  sub: string;    // session_type or 'Open House'
 };
 type SchedMap = Record<string, SchedEvent[]>;
-
 type Mode = 'month' | 'week' | 'agenda';
 
-const DAY_MS = 7 * 864e5; // one week in ms (as in the mockup's weekNumFor)
+const DAY_MS = 7 * 864e5;
 
 const dkey = (d: Date): string => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+const dateOnly = (d: Date): Date => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const mondayOf = (d: Date): Date => { const x = new Date(d); x.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return x; };
 
-// ── Seed the 12-week program keyed by date. Mirrors the mockup's seed().
-function buildSchedule(kickoff: Date): SchedMap {
+/** Parse a DATEONLY 'YYYY-MM-DD' as a LOCAL date (avoids a UTC off-by-one). */
+function parseYmd(s: string | null | undefined): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || '');
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+/** '13:00[:00]' or a Date -> '1:00 PM'. */
+function fmtTime(t: string | null | undefined, from?: Date): string {
+  let h: number, min: number;
+  if (from) { h = from.getHours(); min = from.getMinutes(); }
+  else if (t && /^\d{1,2}:\d{2}/.test(t)) { const [hh, mm] = t.split(':'); h = Number(hh); min = Number(mm); }
+  else return '';
+  const ap = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(min).padStart(2, '0')} ${ap}`;
+}
+function hourOf(t: string | null | undefined, from?: Date): number {
+  if (from) return from.getHours();
+  if (t && /^\d{1,2}:/.test(t)) return Number(t.split(':')[0]);
+  return -1;
+}
+
+const KIND_CLASS: Record<EvKind, string> = { class: 'learning', event: 'event' };
+
+function stateForSession(status: string, day: Date, today: Date): EvState {
+  if (status === 'completed') return 'done';
+  if (status === 'live') return 'live';
+  return day.getTime() < today.getTime() ? 'done' : 'up';
+}
+
+function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], today: Date): SchedMap {
   const sched: SchedMap = {};
-  const addEv = (d: Date, o: SchedEvent): void => {
-    const k = dkey(d);
-    (sched[k] = sched[k] || []).push(o);
-  };
-  const wkMon = (n: number): Date => {
-    const d = new Date(kickoff);
-    d.setDate(kickoff.getDate() + (n - 1) * 7);
-    return d;
-  };
+  const add = (d: Date, ev: SchedEvent): void => { const k = dkey(d); (sched[k] = sched[k] || []).push(ev); };
 
-  for (let w = 1; w <= 12; w++) {
-    const mon = wkMon(w);
-    const past = w < 5, cur = w === 5;
-    const mk = (off: number, o: SchedEvent): void => {
-      const d = new Date(mon);
-      d.setDate(mon.getDate() + off);
-      addEv(d, o);
-    };
-    // Monday Architecture Day (live event)
-    mk(0, { type: 'event', taskType: 'video', title: 'Architecture Day · ' + WEEK_NAMES[w - 1], pts: PTS.event, state: past ? 'done' : cur ? 'done' : 'up', time: '10:00 AM' });
-    // Learning items
-    mk(0, { type: 'learning', taskType: 'video', title: 'Course · ' + WEEK_NAMES[w - 1], pts: PTS.video, state: past ? 'done' : cur ? 'done' : 'up' });
-    mk(1, { type: 'learning', taskType: 'video', title: 'Video · ' + WEEK_NAMES[w - 1] + ' deep dive', pts: PTS.video, state: past ? 'done' : cur ? 'done' : 'up' });
-    mk(2, { type: 'learning', taskType: 'lab', title: 'Lab · ' + WEEK_NAMES[w - 1] + ' build', pts: PTS.lab, state: past ? 'done' : cur ? 'prog' : 'up' });
-    mk(2, { type: 'learning', taskType: 'test', title: 'Quiz · ' + WEEK_NAMES[w - 1] + ' check', pts: PTS.test, state: past ? 'done' : 'up' });
-    // Thursday Build Day + project
-    mk(3, { type: 'event', taskType: 'video', title: 'Build Day · live demos', pts: PTS.event, state: past ? 'done' : 'up', time: '10:00 AM' });
-    mk(3, { type: 'project', taskType: 'lab', title: 'Project · Recipe Concierge step', pts: PTS.project, state: past ? 'done' : 'up' });
-    // Friday cert pulse
-    mk(4, { type: 'cert', taskType: 'survey', title: 'CCA-F · Week ' + w + ' confidence pulse', pts: PTS.survey, state: past ? 'done' : 'up' });
+  for (const s of sessions) {
+    if (s.status === 'cancelled') continue;
+    const d = parseYmd(s.session_date);
+    if (!d) continue;
+    add(d, {
+      id: s.id, kind: 'class', title: `#${s.session_number} · ${s.title}`,
+      time: fmtTime(s.start_time), hour: hourOf(s.start_time),
+      state: stateForSession(s.status, d, today),
+      href: `/portal/sessions/${s.id}`, sub: (s.session_type || 'session').replace(/_/g, ' '),
+    });
   }
-  // internship + a SkillsJar cert milestone in week 5
-  const w5 = wkMon(5);
-  const wed = new Date(w5); wed.setDate(w5.getDate() + 2);
-  addEv(wed, { type: 'internship', taskType: 'test', title: 'Internship · Data-source review (Acme)', pts: PTS.internship, state: 'up' });
-  const tue = new Date(w5); tue.setDate(w5.getDate() + 1);
-  addEv(tue, { type: 'cert', taskType: 'cert', title: 'SkillsJar · Introduction to MCP cert', pts: PTS.cert, state: 'up' });
-
+  for (const e of events) {
+    const dt = new Date(e.starts_at);
+    if (isNaN(dt.getTime())) continue;
+    add(dateOnly(dt), {
+      id: e.id, kind: 'event', title: e.title,
+      time: fmtTime(null, dt), hour: hourOf(null, dt), state: 'up',
+      href: e.registration_url || undefined, external: true, sub: 'Open House',
+    });
+  }
+  Object.keys(sched).forEach((k) =>
+    sched[k].sort((a, b) => (a.hour - b.hour) || a.title.localeCompare(b.title)));
   return sched;
 }
 
-const TYPE_CLASS: Record<EvType, string> = {
-  learning: 'learning', project: 'project', internship: 'internship', cert: 'cert', event: 'event',
-};
-
-// deterministic time-slot for the week time-grid (0..3 → 9:00 / 11:00 / 14:00 / 16:00)
-const TG_SLOTS = ['9:00', '11:00', '14:00', '16:00'];
-function slotForEv(ev: SchedEvent): number {
-  if (ev.type === 'event') return 0;       // live days
-  if (ev.taskType === 'video') return 1;    // learning videos late morning
-  if (ev.taskType === 'lab') return 2;      // labs early afternoon
-  if (ev.type === 'project') return 2;
-  return 3;                                 // quizzes / surveys / cert / internship
-}
+const slotForHour = (h: number): number => (h < 10 ? 0 : h < 13 ? 1 : h < 16 ? 2 : 3);
+const TG_SLOTS = ['Morning', 'Midday', 'Afternoon', 'Evening'];
 
 // ── small SVG helpers (no emoji; inline SVG per design system) ──
 const CheckIcon: React.FC<{ w?: number; h?: number; stroke?: string }> = ({ w = 13, h = 13, stroke = 'var(--leaf-action)' }) => (
   <svg width={w} height={h} viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke={stroke} strokeWidth="3" strokeLinecap="round" /></svg>
 );
-const ProgIcon: React.FC<{ w?: number; h?: number; stroke?: string }> = ({ w = 13, h = 13, stroke = 'var(--berry)' }) => (
-  <svg width={w} height={h} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke={stroke} strokeWidth="2" /><path d="M12 7v5l3 2" stroke={stroke} strokeWidth="2" strokeLinecap="round" /></svg>
+const LiveIcon: React.FC = () => (
+  <svg width={13} height={13} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="5" fill="var(--berry)" /></svg>
 );
 const TodoIcon: React.FC<{ w?: number; h?: number; stroke?: string }> = ({ w = 13, h = 13, stroke = 'currentColor' }) => (
   <svg width={w} height={h} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke={stroke} strokeWidth="2" /></svg>
 );
 
-// status pip shown on the .tk chips (week header)
-const StatusPip: React.FC<{ state: EvState }> = ({ state }) => {
-  if (state === 'done') return <span className="stpip"><CheckIcon w={12} h={12} stroke="currentColor" /> done</span>;
-  if (state === 'prog') return <span className="stpip" style={{ color: 'var(--berry)' }}><ProgIcon w={12} h={12} stroke="currentColor" /> in progress</span>;
-  if (state === 'lock') return (
-    <span className="stpip">
-      <svg viewBox="0 0 24 24" fill="none"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" /></svg>
-      upcoming
-    </span>
-  );
-  return <span className="stpip" style={{ color: 'var(--text-muted)' }}><TodoIcon w={12} h={12} stroke="currentColor" /> to do</span>;
-};
-
-const stPipText = (s: EvState): string => (s === 'done' ? ' · done' : s === 'prog' ? ' · in progress' : s === 'lock' ? ' · upcoming' : '');
-
 const SchedulePage: React.FC = () => {
-  // Fixed anchors, computed inside the component (never at module top-level).
-  const kickoff = useMemo(() => new Date(KICKOFF_Y, KICKOFF_M, KICKOFF_D), []);
-  const today = useMemo(() => new Date(2026, 7, 11), []);          // Tue Aug 11, Week 5
-  const week5Mon = useMemo(() => new Date(2026, 7, 10), []);       // Aug 10 = start of Week 5
-  const sched = useMemo(() => buildSchedule(kickoff), [kickoff]);
+  const navigate = useNavigate();
+  const today = useMemo(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }, []);
+
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [events, setEvents] = useState<OpenHouseView[]>([]);
+  const [kickoff, setKickoff] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [ssRes, evRes, koRes] = await Promise.allSettled([
+        portalApi.get('/api/portal/sessions'),
+        fetchPublicEvents(90),
+        fetchSchedule(),
+      ]);
+      if (cancelled) return;
+      setSessions(ssRes.status === 'fulfilled' ? (ssRes.value.data.sessions || []) : []);
+      setEvents(evRes.status === 'fulfilled' ? evRes.value : []);
+      const ko = koRes.status === 'fulfilled' ? koRes.value.first_class?.start_date : null;
+      setKickoff(ko ? parseYmd(ko) : null);
+      setLoading(false);
+    })().catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
+    return () => { cancelled = true; };
+  }, []);
+
+  const sched = useMemo(() => buildSchedule(sessions, events, today), [sessions, events, today]);
+  const totalItems = useMemo(() => Object.values(sched).reduce((n, arr) => n + arr.length, 0), [sched]);
+
+  // Week numbering anchor: cohort kickoff, else earliest session, else today.
+  const anchorMon = useMemo(() => {
+    const ds = sessions.map((s) => parseYmd(s.session_date)).filter((d): d is Date => !!d);
+    const earliest = ds.length ? ds.reduce((x, y) => (x.getTime() < y.getTime() ? x : y)) : null;
+    const a: Date = kickoff ?? earliest ?? today;
+    return mondayOf(a);
+  }, [kickoff, sessions, today]);
 
   const weekNumFor = useCallback((d: Date): number | null => {
-    const diff = Math.floor((d.getTime() - kickoff.getTime()) / DAY_MS);
-    return diff >= 0 && diff < 12 ? diff + 1 : null;
-  }, [kickoff]);
+    const diff = Math.floor((mondayOf(d).getTime() - anchorMon.getTime()) / DAY_MS);
+    return diff >= 0 && diff < 26 ? diff + 1 : null;
+  }, [anchorMon]);
 
-  const [mode, setMode] = useState<Mode>('week');
-  // month cursor is first-of-month; week/agenda cursor is Monday of the shown week.
-  const [cursor, setCursor] = useState<Date>(() => new Date(2026, 7, 10));
+  const [mode, setMode] = useState<Mode>('month');
+  const [cursor, setCursor] = useState<Date>(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
 
   const setView = useCallback((m: Mode): void => {
     setMode(m);
-    if (m === 'month') setCursor(new Date(today.getFullYear(), today.getMonth(), 1));
-    else setCursor(new Date(week5Mon));
-  }, [today, week5Mon]);
-
+    setCursor(m === 'month' ? new Date(today.getFullYear(), today.getMonth(), 1) : mondayOf(today));
+  }, [today]);
   const goToday = useCallback((): void => {
-    if (mode === 'month') setCursor(new Date(today.getFullYear(), today.getMonth(), 1));
-    else setCursor(new Date(week5Mon));
-  }, [mode, today, week5Mon]);
-
+    setCursor(mode === 'month' ? new Date(today.getFullYear(), today.getMonth(), 1) : mondayOf(today));
+  }, [mode, today]);
   const nav = useCallback((dir: number): void => {
-    setCursor((prev) => {
-      const next = new Date(prev);
-      if (mode === 'month') next.setMonth(next.getMonth() + dir);
-      else next.setDate(next.getDate() + 7 * dir);
-      return next;
-    });
+    setCursor((prev) => { const n = new Date(prev); if (mode === 'month') n.setMonth(n.getMonth() + dir); else n.setDate(n.getDate() + 7 * dir); return n; });
   }, [mode]);
 
-  // ── period label ──
   const periodLabel = useMemo((): string => {
     if (mode === 'month') return cursor.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
-    const ws = new Date(cursor), we = new Date(cursor); we.setDate(ws.getDate() + 4);
+    const ws = mondayOf(cursor), we = new Date(ws); we.setDate(ws.getDate() + 4);
     const wk = weekNumFor(cursor);
     return (wk ? 'Week ' + wk + ' · ' : '')
       + ws.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       + ' – ' + we.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }, [mode, cursor, weekNumFor]);
 
-  // ── points bank (day / period) ──
-  const { dayPts, periodPts } = useMemo(() => {
-    let day = 0, period = 0;
+  const { dayCount, periodCount, upcomingCount } = useMemo(() => {
+    let day = 0, period = 0, up = 0;
     const inPeriod = (d: Date): boolean => {
-      if (mode === 'month') return d.getMonth() === cursor.getMonth();
-      const ws = new Date(cursor), we = new Date(cursor); we.setDate(ws.getDate() + 6);
+      if (mode === 'month') return d.getMonth() === cursor.getMonth() && d.getFullYear() === cursor.getFullYear();
+      const ws = mondayOf(cursor), we = new Date(ws); we.setDate(ws.getDate() + 6);
       return d >= ws && d <= we;
     };
     Object.keys(sched).forEach((k) => {
       const [y, m, dd] = k.split('-').map(Number);
       const d = new Date(y, m, dd);
-      sched[k].forEach((ev) => {
-        if (ev.state === 'done') {
-          if (inPeriod(d)) period += ev.pts;
-          if (dkey(d) === dkey(today)) day += ev.pts;
-        }
+      sched[k].forEach(() => {
+        if (dkey(d) === dkey(today)) day++;
+        if (inPeriod(d)) period++;
+        if (d.getTime() >= today.getTime()) up++;
       });
     });
-    return { dayPts: day, periodPts: period };
+    return { dayCount: day, periodCount: period, upcomingCount: up };
   }, [mode, cursor, sched, today]);
 
   const isToday = useCallback((d: Date): boolean => dkey(d) === dkey(today), [today]);
+
+  const openItem = useCallback((ev: SchedEvent): void => {
+    if (!ev.href) return;
+    if (ev.external) window.open(ev.href, '_blank', 'noopener,noreferrer');
+    else navigate(ev.href);
+  }, [navigate]);
 
   // ── MONTH ──
   const renderMonth = (): React.ReactNode => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
     const start = new Date(first);
-    start.setDate(1 - ((first.getDay() + 6) % 7)); // back to Monday
+    start.setDate(1 - ((first.getDay() + 6) % 7));
     const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     const cells: React.ReactNode[] = [];
     for (let i = 0; i < 42; i++) {
       const d = new Date(start); d.setDate(start.getDate() + i);
       const out = d.getMonth() !== cursor.getMonth();
-      const k = dkey(d);
-      const evs = sched[k] || [];
+      const evs = sched[dkey(d)] || [];
       const wk = weekNumFor(d);
-      const dots = evs.slice(0, 3).map((ev, idx) => (
+      const dots = evs.slice(0, 3).map((ev) => (
         <div
-          key={idx}
-          className={`mdot ${TYPE_CLASS[ev.type]}${ev.state === 'done' ? ' done' : ''}${ev.state === 'lock' ? ' lock' : ''}`}
+          key={ev.id}
+          className={`mdot ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`}
+          title={ev.title}
         >
-          <b>{ev.title.split(' · ')[0]}</b>
-          <span className="mp">+{ev.pts}</span>
+          <b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</b>
+          {ev.time ? <span className="mp">{ev.time}</span> : null}
         </div>
       ));
       const more = evs.length > 3 ? <div className="mmore">+{evs.length - 3} more</div> : null;
       cells.push(
         <div key={i} className={`mcell${out ? ' out' : ''}${isToday(d) ? ' today' : ''}`}>
-          <div className="dn">
-            <span>{d.getDate()}</span>
-            {wk && d.getDay() === 1 ? <span className="wkn">W{wk}</span> : null}
-          </div>
-          {dots}
-          {more}
+          <div className="dn"><span>{d.getDate()}</span>{wk && d.getDay() === 1 ? <span className="wkn">W{wk}</span> : null}</div>
+          {dots}{more}
         </div>
       );
     }
-    return (
-      <div className="monthgrid">
-        {dows.map((d) => <div key={d} className="moh">{d}</div>)}
-        {cells}
-      </div>
-    );
+    return <div className="monthgrid">{dows.map((d) => <div key={d} className="moh">{d}</div>)}{cells}</div>;
   };
 
   // ── WEEK (time grid) ──
   const renderWeek = (): React.ReactNode => {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
     const wk = weekNumFor(cursor);
-    // bucket events by `${dayIndex}-${slotIndex}`
-    const buckets: Record<string, { ev: SchedEvent; k: string; idx: number }[]> = {};
+    const ws = mondayOf(cursor);
+    const buckets: Record<string, SchedEvent[]> = {};
     for (let i = 0; i < 5; i++) {
-      const d = new Date(cursor); d.setDate(cursor.getDate() + i);
-      const k = dkey(d);
-      (sched[k] || []).forEach((ev, idx) => {
-        const s = slotForEv(ev);
-        const key = i + '-' + s;
-        (buckets[key] = buckets[key] || []).push({ ev, k, idx });
+      const d = new Date(ws); d.setDate(ws.getDate() + i);
+      (sched[dkey(d)] || []).forEach((ev) => {
+        const key = i + '-' + slotForHour(ev.hour);
+        (buckets[key] = buckets[key] || []).push(ev);
       });
     }
     return (
       <>
         <div className="sch-weekhdr">
-          <span className="chip learning"><span className="sw" />{wk ? 'Week ' + wk + ' · ' + WEEK_NAMES[wk - 1] : 'Outside program'}</span>
+          <span className="chip learning"><span className="sw" />{wk ? 'Week ' + wk : 'Outside program'}</span>
         </div>
         <div className="timegrid">
           <div className="tg-corner" />
           {days.map((dn, i) => {
-            const d = new Date(cursor); d.setDate(cursor.getDate() + i);
-            const sl = i === 0 ? 'Architecture Day' : i === 3 ? 'Build Day' : '';
+            const d = new Date(ws); d.setDate(ws.getDate() + i);
             return (
               <div key={i} className={`tg-dayhead${isToday(d) ? ' today' : ''}`}>
-                <div className="d">{dn}</div>
-                <div className="n">{d.getDate()}</div>
-                {sl ? <div className="sl">{sl}</div> : null}
+                <div className="d">{dn}</div><div className="n">{d.getDate()}</div>
               </div>
             );
           })}
@@ -284,17 +279,18 @@ const SchedulePage: React.FC = () => {
             <React.Fragment key={slot}>
               <div className="tg-time">{slot}</div>
               {days.map((_, i) => {
-                const d = new Date(cursor); d.setDate(cursor.getDate() + i);
+                const d = new Date(ws); d.setDate(ws.getDate() + i);
                 const items = buckets[i + '-' + s] || [];
                 return (
                   <div key={i} className={`tg-cell${isToday(d) ? ' today' : ''}`}>
-                    {items.map(({ ev, k, idx }) => (
+                    {items.map((ev) => (
                       <div
-                        key={k + '-' + idx}
-                        className={`tg-ev ${TYPE_CLASS[ev.type]}${ev.state === 'done' ? ' done' : ''}${ev.state === 'lock' ? ' locked' : ''}`}
+                        key={ev.id}
+                        className={`tg-ev ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`}
+                        title={ev.title}
                       >
-                        <b>{ev.title.split(' · ')[0]}</b>
-                        <span className="tgp">+{ev.pts} · {ev.taskType}</span>
+                        <b>{ev.title}</b>
+                        <span className="tgp">{ev.time || ev.sub}{ev.time ? ' · ' + ev.sub : ''}</span>
                       </div>
                     ))}
                   </div>
@@ -309,44 +305,35 @@ const SchedulePage: React.FC = () => {
 
   // ── AGENDA ──
   const renderAgenda = (): React.ReactNode => {
-    const ws = new Date(cursor);
+    const ws = mondayOf(cursor);
     const blocks: React.ReactNode[] = [];
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 7; i++) {
       const d = new Date(ws); d.setDate(ws.getDate() + i);
-      const k = dkey(d);
-      const evs = sched[k] || [];
+      const evs = sched[dkey(d)] || [];
       if (!evs.length) continue;
       blocks.push(
-        <div key={k}>
-          <div className="agenda-day">
-            <div className="dh">
-              {d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
-              {isToday(d) ? ' — Today' : ''}
-            </div>
-          </div>
+        <div key={dkey(d)}>
+          <div className="agenda-day"><div className="dh">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}{isToday(d) ? ' — Today' : ''}</div></div>
           <div className="queue agenda-queue">
-            {evs.map((ev, idx) => {
-              const done = ev.state === 'done';
-              return (
-                <button key={idx} className={`qtask${done ? ' done' : ''}`} type="button">
-                  <span className="qrank">{done ? '✓' : ev.state === 'lock' ? '\u{1F512}' : '·'}</span>
-                  <span className="qbody">
-                    <span className="qtitle">{ev.title}</span>
-                    <span className="qmeta">
-                      <span className={`chip ${TYPE_CLASS[ev.type]}`}><span className="sw" />{ev.type}</span>
-                      <span className={`ptbadge${done ? ' earned' : ''}`}>+{ev.pts} pts</span>
-                      {' · '}{ev.taskType}{stPipText(ev.state)}
-                    </span>
+            {evs.map((ev) => (
+              <button key={ev.id} className={`qtask${ev.state === 'done' ? ' done' : ''}`} type="button" onClick={ev.href ? () => openItem(ev) : undefined}>
+                <span className="qrank">{ev.state === 'done' ? '✓' : ev.state === 'live' ? '●' : '·'}</span>
+                <span className="qbody">
+                  <span className="qtitle">{ev.title}</span>
+                  <span className="qmeta">
+                    <span className={`chip ${KIND_CLASS[ev.kind]}`}><span className="sw" />{ev.kind === 'class' ? 'Class' : 'Event'}</span>
+                    {ev.time ? <span className="ptbadge">{ev.time}</span> : null}
+                    {' · '}{ev.sub}{ev.state === 'live' ? ' · live now' : ''}
                   </span>
-                  <svg className="qgo" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-                </button>
-              );
-            })}
+                </span>
+                {ev.href ? <svg className="qgo" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> : null}
+              </button>
+            ))}
           </div>
         </div>
       );
     }
-    if (!blocks.length) return <div className="sch-empty">No scheduled items this week.</div>;
+    if (!blocks.length) return <div className="sch-empty">Nothing scheduled this week.</div>;
     return <>{blocks}</>;
   };
 
@@ -355,7 +342,7 @@ const SchedulePage: React.FC = () => {
       <div className="te-page-h">
         <div className="crumb">One Spine</div>
         <h1>Your schedule</h1>
-        <div className="sub">Every task from all four tracks on one timeline — scroll back through completed work or ahead to preview what's coming across all 12 weeks.</div>
+        <div className="sub">Your cohort's live classes and program events on one timeline. Scroll back through completed sessions or ahead to what's coming.</div>
       </div>
 
       <div className="sch-root">
@@ -376,25 +363,31 @@ const SchedulePage: React.FC = () => {
             <button className="sch-btn ghost sm" onClick={goToday} type="button">Today</button>
           </div>
           <div className="ptsbank">
-            <div className="ptchip"><span className="v">+{dayPts}</span><span className="l">This day</span></div>
-            <div className="ptchip"><span className="v">+{periodPts}</span><span className="l">This period</span></div>
-            <div className="ptchip"><span className="v">{TOTAL_PTS.toLocaleString()}</span><span className="l">Total pts</span></div>
+            <div className="ptchip"><span className="v">{dayCount}</span><span className="l">Today</span></div>
+            <div className="ptchip"><span className="v">{periodCount}</span><span className="l">This period</span></div>
+            <div className="ptchip"><span className="v">{upcomingCount}</span><span className="l">Upcoming</span></div>
           </div>
         </div>
 
-        <div>
-          {mode === 'month' ? renderMonth() : mode === 'week' ? renderWeek() : renderAgenda()}
-        </div>
+        {loading ? (
+          <div className="text-center py-5"><div className="spinner-border" style={{ color: 'var(--berry)' }} role="status"><span className="visually-hidden">Loading...</span></div></div>
+        ) : error ? (
+          <div className="sch-empty">We couldn't load your schedule right now. Please try again shortly.</div>
+        ) : (
+          <>
+            {totalItems === 0 && (
+              <div className="sch-empty" style={{ marginBottom: 12 }}>No classes or events scheduled yet. Program events will appear here as they're published.</div>
+            )}
+            <div>{mode === 'month' ? renderMonth() : mode === 'week' ? renderWeek() : renderAgenda()}</div>
+          </>
+        )}
 
         <div className="legend">
-          <span><span className="chip learning"><span className="sw" style={{ background: 'var(--dv-learning)' }} />Learning</span></span>
-          <span><span className="chip" style={{ background: 'rgba(91,166,60,.16)', color: 'var(--leaf-text)' }}><span className="sw" style={{ background: 'var(--dv-project2)' }} />Project</span></span>
-          <span><span className="chip" style={{ background: 'rgba(232,146,12,.16)', color: 'var(--amber-deep)' }}><span className="sw" style={{ background: 'var(--amber)' }} />Internship</span></span>
-          <span><span className="chip" style={{ background: 'rgba(46,106,134,.14)', color: 'var(--berry)' }}><span className="sw" style={{ background: 'var(--dv-cert2)' }} />Cert · CCA-F</span></span>
-          <span><span className="chip event"><span className="sw" />Live event</span></span>
+          <span><span className="chip learning"><span className="sw" style={{ background: 'var(--dv-learning)' }} />Class session</span></span>
+          <span><span className="chip event"><span className="sw" />Program event</span></span>
           <span style={{ marginLeft: 8, display: 'inline-flex', gap: 6, alignItems: 'center' }}><CheckIcon /> done</span>
-          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><ProgIcon /> in progress</span>
-          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><TodoIcon /> not started</span>
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><LiveIcon /> live</span>
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><TodoIcon /> upcoming</span>
         </div>
       </div>
     </PortalShell>
