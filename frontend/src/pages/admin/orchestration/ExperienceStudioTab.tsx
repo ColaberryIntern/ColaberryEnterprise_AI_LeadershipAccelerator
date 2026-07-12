@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
 import {
-  Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, frameHtml, Row, studioCss,
+  Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, Row, studioCss,
 } from './studio/studioKit';
+import StudentPreview from './studio/StudentPreview';
 import RendererEngine from './studio/RendererEngine';
 import LifecycleStepper from './studio/LifecycleStepper';
 import VersionCompare from './studio/VersionCompare';
@@ -32,6 +33,17 @@ type DTab = typeof DTABS[number]['key'];
 
 const FAV_KEY = 'studio.favorites';
 const loadFavs = (): string[] => { try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch { return []; } };
+
+// What a student actually gets for this interaction (render_band) — plain English.
+const studentUIFor = (band?: string): string => {
+  const b = String(band || '');
+  if (['media', 'live_class', 'video_feedback'].includes(b)) return 'an in-app video player + notes';
+  if (b === 'promptlab') return 'a prompt-lab workspace + AI evaluation';
+  if (['reflection', 'survey', 'question'].includes(b)) return 'a reflection flow';
+  if (b === 'interview') return 'an AI mock-interview flow';
+  if (['quiz', 'exam'].includes(b)) return 'an auto-graded knowledge check';
+  return 'a reading card';
+};
 
 const ExperienceStudioTab: React.FC = () => {
   const [list, setList] = useState<Cmp[]>([]);
@@ -131,7 +143,7 @@ const ExperienceStudioTab: React.FC = () => {
   // The fields the editor can actually persist (the Co-Designer's Apply can only
   // touch these; anything else can't be saved and would silently vanish).
   const SAVE_FIELDS = ['label', 'student_label', 'description', 'category', 'status', 'difficulty', 'render_band', 'bucket_default',
-    'learning_xp', 'builder_xp', 'community_xp', 'capabilities', 'variable_keys', 'learning_objectives', 'architect_domains', 'tags', 'renderers'];
+    'learning_xp', 'builder_xp', 'community_xp', 'capabilities', 'variable_keys', 'learning_objectives', 'architect_domains', 'tags', 'renderers', 'evaluation_type'];
   const buildPayload = (src: Cmp) => {
     const payload: any = {};
     STAGES.forEach((s) => { payload[s.field] = src[s.field] ?? null; });
@@ -251,6 +263,17 @@ const ExperienceStudioTab: React.FC = () => {
             <button className="es-btn pri" disabled={busy === 'save' || !dirty} onClick={save}>{busy === 'save' ? 'Saving…' : dirty ? 'Save version' : 'Saved'}</button>
           </div>
 
+          <div className="es-buildbar">
+            <div className="es-pillar"><div className="es-plab">1 · Interaction</div><div className="es-pval">{(sel.render_band || 'reading').replace(/_/g, ' ')}<small>students get {studentUIFor(sel.render_band)}</small></div></div>
+            <div className="es-pillar"><div className="es-plab">2 · Parts</div><div className="es-pval">{(sel.capabilities || []).length} on<small>toggle sections in Capabilities → (updates the preview)</small></div></div>
+            <div className="es-pillar"><div className="es-plab">3 · Content</div><div className="es-pval">AI-generated<small>the Generation prompt · run it in Preview</small></div></div>
+            <div className="es-pillar"><div className="es-plab">4 · Assessment</div>
+              <select className="es-in" style={{ padding: '4px 6px', fontSize: 12 }} value={sel.evaluation_type || 'none'} onChange={(e) => setField('evaluation_type', e.target.value)}>
+                {['none', 'ai', 'rubric', 'instructor', 'peer'].map((v) => <option key={v} value={v}>{v === 'none' ? 'not scored' : v}</option>)}
+              </select>
+            </div>
+          </div>
+
           <div className="es-tabs">
             {DTABS.map((t) => (
               <button key={t.key} title={t.hint} className={`es-tab ${detailTab === t.key ? 'on' : ''}`} onClick={() => setDetailTab(t.key)}>{t.label}</button>
@@ -330,15 +353,15 @@ const ExperienceStudioTab: React.FC = () => {
                   <div className="es-flowstepbox">
                     <div className="es-flownum">4</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="es-lab" style={{ marginTop: 0 }}>What the student sees · the same content, as a card</div>
-                      {!preview
-                        ? <div className="es-empty"><div style={{ fontSize: 24 }}>🎓</div><span className="es-muted">Run the flow to render the student card.</span></div>
+                      <div className="es-lab" style={{ marginTop: 0 }}>What the student sees · the real {(sel.render_band || 'activity').replace(/_/g, ' ')} experience</div>
+                      {!preview && !(isVideo && videoSource)
+                        ? <div className="es-empty"><div style={{ fontSize: 24 }}>🎓</div><span className="es-muted">Run the flow to render the student experience.</span></div>
                         : (
                           <div className="es-devices">
-                            {([['🖥 Desktop', 1000], ['📱 Phone', 375]] as [string, number][]).map(([name, w]) => (
-                              <div key={name} className="es-device">
+                            {([['🖥 Desktop', false], ['📱 Phone', true]] as [string, boolean][]).map(([name, phone]) => (
+                              <div key={name} className="es-device" style={phone ? { flex: 'none', width: 340 } : {}}>
                                 <div className="es-devlabel">{name}</div>
-                                <iframe title={name} className="es-frame" style={{ width: w > 480 ? '100%' : w, maxWidth: '100%' }} sandbox="" srcDoc={frameHtml(preview.experience, sel)} />
+                                <StudentPreview band={String(sel.render_band || '')} label={sel.label} experience={preview?.experience || null} videoUrl={videoUrl} parts={sel.capabilities} />
                               </div>
                             ))}
                           </div>
