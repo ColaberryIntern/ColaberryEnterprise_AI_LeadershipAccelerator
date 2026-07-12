@@ -10,6 +10,17 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Portal Schedule calendar wired to real data (class sessions + CCPP public events) (2026-07-12)
+- [x] **`SchedulePage.tsx` no longer a static mock — renders real sessions + public events**
+  - Date: 2026-07-12
+  - Session: CC-20260712-e3k7
+  - What changed:
+    - `frontend/src/pages/portal/schedule/SchedulePage.tsx`: replaced the hardcoded 12-week seeded mock (and its fixed fake "today" of Aug 11) with a real-data calendar. Fetches cohort class sessions (`/api/portal/sessions`) + program public events (`/api/portal/events?days=90`, CCPP-sourced) and renders them on the existing Month / Week / Agenda views, anchored to the real current date and the cohort's first-class date (from the onboarding schedule). Item state (done/live/upcoming) derived from session status/date; Agenda items are clickable (session → detail route, event → Eventbrite registration in a new tab). Points bank repurposed to real counts (Today / This period / Upcoming). Loading, error, and empty states added. Kept the design-system CSS classes; no CSS change.
+    - `frontend/src/services/onboardingApi.ts`: added `fetchPublicEvents(days=30)` → `GET /api/portal/events`, reusing the `OpenHouseView` type.
+  - Why: the Schedule page shipped as a faithful Design-E port with zero live data; Ali asked to put the public events (and, naturally, real classes) on the calendar. Depends on the `GET /api/portal/events` endpoint from the countdown-fix change.
+  - Verification: frontend typecheck could not be run locally (deps do not install on this host); CI frontend typecheck is authoritative. Manual review targeted the known prod-build traps: complete `useCallback`/`useMemo` dep arrays (no `exhaustive-deps` violations), no clickable `<div>`s (`jsx-a11y`; interaction only on real `<button>`s in Agenda), no shadowed globals. Needs screenshot review post-deploy (dev/preview) per the UI-change rule.
+  - Notes: guests (no cohort) get an empty class list and just see public events; members see both. Built on `workstream/portal-schedule-real-data`, stacked on `workstream/portal-next-class-event-ccpp` (needs that branch's `/api/portal/events` endpoint). Deeper track integration (curriculum/project/cert tasks + points) is a further follow-up.
+
 ### Portal "Next class" / "Next event" countdowns wired to real data (CCPP public events + Accelerator cohorts) (2026-07-12)
 - [x] **Student-portal topbar countdowns now populate; new CCPP public-events feed for the calendar**
   - Date: 2026-07-12

@@ -65,6 +65,12 @@ export async function fetchSchedule(): Promise<OnboardingSchedule> {
   return data;
 }
 
+/** Upcoming public events (Open Houses) from CCPP, for the portal calendar. */
+export async function fetchPublicEvents(days = 30): Promise<OpenHouseView[]> {
+  const { data } = await portalApi.get<{ events: OpenHouseView[] }>(`/api/portal/events?days=${days}`);
+  return data.events || [];
+}
+
 export async function fetchOnboardingProfile(): Promise<OnboardingProfileView> {
   const { data } = await portalApi.get<OnboardingProfileView>('/api/portal/onboarding/profile');
   return data;
