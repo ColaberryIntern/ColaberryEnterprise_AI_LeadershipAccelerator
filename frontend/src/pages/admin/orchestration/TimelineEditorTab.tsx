@@ -82,6 +82,7 @@ interface Card {
 interface TypeDef {
   slug: string; label: string; bucket: Bucket; render_band: string; difficulty: string;
   learning_xp: number; builder_xp: number; community_xp: number; competencies: string[]; event: boolean;
+  capabilities?: string[];   // the type's Parts — gate the preview's optional sections
 }
 interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[] }
 
@@ -195,6 +196,7 @@ const EditDrawer: React.FC<{
     subtitle: draft.subtitle, description: draft.description,
     difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
     points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
+    capabilities: typeDef?.capabilities,
   });
   return (
     <div className="te-scrim" onClick={onClose}>
