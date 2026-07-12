@@ -25,14 +25,20 @@ export function signParticipantJwt(enrollment: { id: string; email: string; coho
 }
 
 export async function requestMagicLink(email: string): Promise<{ success: boolean; message: string }> {
+  // Deterministic: a person may hold several enrollments (e.g. a prior Explorer
+  // plus a paid seat). Always target the MOST RECENT active, portal-enabled one so
+  // the login link never lands on a stale enrollment (was a non-deterministic
+  // findOne, which could email a link into the wrong account).
   const enrollment = await Enrollment.findOne({
     where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: true },
+    order: [['created_at', 'DESC']],
   });
 
   if (!enrollment) {
     // Check if enrollment exists but portal not enabled
     const pendingEnrollment = await Enrollment.findOne({
       where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: false },
+      order: [['created_at', 'DESC']],
     });
     if (pendingEnrollment) {
       return { success: false, message: 'Your enrollment is pending admin approval for portal access. Please contact your program administrator.' };

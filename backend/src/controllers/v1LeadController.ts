@@ -3,7 +3,6 @@ import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { v1LeadSchema } from '../schemas/v1LeadSchema';
 import { ingestExternalLead } from '../services/externalLeadIngestService';
-import { provisionTrainingSignup } from '../services/trainingOnboardingService';
 
 function log(
   level: 'info' | 'warn' | 'error',
@@ -35,18 +34,6 @@ export async function createExternalLead(req: Request, res: Response, next: Next
     res.status(status).json({
       id: String(result.id),
       created_at: result.created_at.toISOString(),
-    });
-
-    // Fire-and-forget onboarding: provision an Explorer portal account + send the
-    // branded welcome. Runs after the response so it never delays or fails the
-    // ingest; it is idempotent and internally gated by TRAINING_WELCOME_ENABLED,
-    // so it is safe to call on every successful ingest (new OR duplicate lead).
-    provisionTrainingSignup(result.id, correlation_id).catch((err) => {
-      log('error', 'training_onboarding_dispatch_failed', 'failure', {
-        correlation_id,
-        error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
-        message: err instanceof Error ? err.message : String(err),
-      });
     });
   } catch (err) {
     if (err instanceof ZodError) {
