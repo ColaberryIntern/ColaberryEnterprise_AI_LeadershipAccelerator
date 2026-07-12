@@ -47,6 +47,10 @@ export const env = {
   synthflowApiKey: process.env.SYNTHFLOW_API_KEY || '',
   synthflowWelcomeAgentId: process.env.SYNTHFLOW_WELCOME_AGENT_ID || '',
   synthflowInterestAgentId: process.env.SYNTHFLOW_INTEREST_AGENT_ID || '',
+  // Agent that handles inbound "call me now" callbacks from training.colaberry.com
+  // (the Cora Outbound Admissions agent, module 1b432b69-fcb1-4b70-9130-8a66e45eaff5).
+  // Falls back to the interest agent in synthflowService if left unset.
+  synthflowCallbackAgentId: process.env.SYNTHFLOW_CALLBACK_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',
