@@ -28,8 +28,8 @@ jest.mock('../../models', () => ({
   Campaign: {},
 }));
 
-const mockGetLatestOpenCohort = jest.fn();
-jest.mock('../../services/cohortService', () => ({ getLatestOpenCohort: (...a: any[]) => mockGetLatestOpenCohort(...a) }));
+const mockGetOrCreateExplorerCohort = jest.fn();
+jest.mock('../../services/cohortService', () => ({ getOrCreateExplorerCohort: (...a: any[]) => mockGetOrCreateExplorerCohort(...a) }));
 
 const mockSendTrainingWelcome = jest.fn();
 jest.mock('../../services/emailService', () => ({ sendTrainingWelcome: (...a: any[]) => mockSendTrainingWelcome(...a) }));
@@ -52,10 +52,10 @@ beforeEach(() => {
   findOne.mockReset();
   create.mockReset();
   findOrCreate.mockReset();
-  mockGetLatestOpenCohort.mockReset();
+  mockGetOrCreateExplorerCohort.mockReset();
   mockSendTrainingWelcome.mockReset();
   mockLogCommunication.mockReset();
-  mockGetLatestOpenCohort.mockResolvedValue({ id: 'coh-1' });
+  mockGetOrCreateExplorerCohort.mockResolvedValue({ id: 'coh-1' });
   findOrCreate.mockResolvedValue([{ id: 55 }, true]);
   mockLogCommunication.mockResolvedValue({});
 });

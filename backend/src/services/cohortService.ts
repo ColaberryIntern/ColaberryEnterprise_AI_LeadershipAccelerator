@@ -56,10 +56,49 @@ export async function getLatestOpenCohort(): Promise<Cohort | null> {
   // Placement for new Explorers (Open House signups). Historically this picked
   // the open cohort with the LATEST start_date, which filed every new signup
   // into the farthest-out cohort (e.g. a November cohort instead of the imminent
-  // July one). It now picks the SOONEST upcoming open cohort. Name retained for
-  // the single call site (enrollmentService). See selectNextOpenCohort.
+  // July one). It now picks the SOONEST upcoming open cohort. See selectNextOpenCohort.
+  // DEPRECATED for Explorer placement — start_date-based selection routed prospects
+  // into whichever cohort started soonest, including a demo cohort. Explorers are
+  // now filed into the dedicated Explorer cohort via getOrCreateExplorerCohort().
   const cohorts = await Cohort.findAll();
   return selectNextOpenCohort(cohorts, new Date());
+}
+
+// The single standing cohort that holds every free "Explorer" (Open House /
+// training.colaberry.com) signup. Its name.
+const EXPLORER_COHORT_NAME = process.env.EXPLORER_COHORT_NAME || 'Explorer — Prospects';
+
+/**
+ * Find (or lazily create once) the dedicated Explorer cohort. Identified by
+ * cohort_type='explorer' so placement is DETERMINISTIC and never depends on
+ * start_date — the previous getLatestOpenCohort() logic filed prospects into
+ * whichever open cohort started soonest, which dumped real signups into a demo
+ * cohort. This is the "free class of its own": portal access, no paid seat, and
+ * excluded from paid metrics (enrollments there carry enrollment_type='explorer').
+ * seats_taken is never touched here. Reuses the OLDEST explorer cohort if several
+ * ever exist, so the bucket is stable.
+ */
+export async function getOrCreateExplorerCohort(): Promise<Cohort> {
+  const existing = await Cohort.findOne({
+    where: { cohort_type: 'explorer' },
+    order: [['created_at', 'ASC']],
+  });
+  if (existing) return existing;
+
+  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  return Cohort.create({
+    name: EXPLORER_COHORT_NAME,
+    description:
+      'Standing container for training.colaberry.com / Open House prospects (Explorer tier). ' +
+      'Not a paid cohort; excluded from paid seat counts and revenue reporting.',
+    start_date: today,
+    core_day: 'Self-paced',
+    core_time: 'Anytime',
+    max_seats: 100000,
+    seats_taken: 0,
+    status: 'open',
+    cohort_type: 'explorer',
+  } as any);
 }
 
 export async function getCohortDetail(id: string) {
