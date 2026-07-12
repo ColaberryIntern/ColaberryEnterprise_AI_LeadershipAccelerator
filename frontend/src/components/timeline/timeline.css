@@ -197,6 +197,14 @@
 .tl-de .tld-foot{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:15px 20px;
   border-top:1px solid var(--border-subtle);flex:none}
 
+/* Inline (non-scrim) rendering of the shared CardDetailBody — used by the admin
+   Experience Studio preview + the Timeline editor "finished product". Same body,
+   minus the fixed slide-in chrome, so those previews ARE the student drawer.
+   No bounded height → the body flows (no nested scrollbar) inside the host page. */
+.tl-de .tld-inlinepanel{display:flex;flex-direction:column;border:1px solid var(--border-subtle);
+  border-radius:var(--r-16);overflow:hidden;background:var(--surface-page);box-shadow:var(--shadow-md)}
+.tl-de .tld-inlinepanel .tld-body{overflow:visible}
+
 /* ===== In-app video player (VideoEmbed) ===== */
 .tlv-frame{position:relative;width:100%;aspect-ratio:16/9;border-radius:var(--r-12);overflow:hidden;background:#000;
   display:flex;align-items:center;justify-content:center}

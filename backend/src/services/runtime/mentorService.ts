@@ -58,9 +58,11 @@ export async function videoAugment(card: CardCtx, force = false) {
   if (!force && cached) return { augment: cached, cost_usd: 0, cached: true };
 
   const system = 'You turn a course video into an interactive study experience for an AI Systems Architect student. Return STRICT json.';
+  // Only the fields the card actually renders (summary, chapters, quiz, flashcards,
+  // reflection). prompt_challenge/github_task were generated-then-hidden — dropped.
   const user = `Video: "${card.title}". ${card.description || ''}\nReturn json { "summary": string, "chapters": [{"t": "mm:ss", "title": string}], ` +
-    `"quiz": [{"q": string, "options": string[], "answer": integer}], "flashcards": [{"front": string, "back": string}], "reflection": string[], "prompt_challenge": string, "github_task": string }.`;
-  const r = await chatJson('runtime_video_augment', system, user, undefined, 1600);
+    `"quiz": [{"q": string, "options": string[], "answer": integer}], "flashcards": [{"front": string, "back": string}], "reflection": string[] }.`;
+  const r = await chatJson('runtime_video_augment', system, user, undefined, 1200);
 
   // Persist to the shared card so every future student reuses it (class-wide cache).
   // Non-transactional: concurrent first-views race but converge on an equivalent blob.
