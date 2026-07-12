@@ -4,6 +4,7 @@ export {};
  * engines into the daily PMO email. Covers the four mandatory test types
  * (CLAUDE.md): happy path, failure path, boundary cases, idempotency.
  */
+export {}; // make this a module so top-level consts don't collide with other test files (TS2451)
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const rv = require('../launchPmoRiskView');
 

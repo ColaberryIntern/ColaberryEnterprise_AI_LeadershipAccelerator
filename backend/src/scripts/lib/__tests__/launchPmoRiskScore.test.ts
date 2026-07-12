@@ -4,6 +4,7 @@ export {};
  * mandatory test types (CLAUDE.md): happy path, failure path, boundary cases,
  * and idempotency. The scorer must be a pure function of (task, ctx).
  */
+export {}; // make this a module so top-level consts don't collide with other test files (TS2451)
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const rs = require('../launchPmoRiskScore');
 
