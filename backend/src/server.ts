@@ -1307,6 +1307,36 @@ async function start(): Promise<void> {
   await ensureOpsCenterSchema();
   await ensureWorkforceSchema();
   await ensureIntelligenceSchema();
+  // Additive schema self-heal for the models that break user-facing flows when
+  // they drift behind their table (sync({alter}) is off — see below). Adds any
+  // missing column as NULLABLE; never drops/alters. Fixes the recurring
+  // enrollments drift that took down the student Classroom twice. Set
+  // SCHEMA_RECONCILE=false to disable. To protect another model, add it here.
+  if (process.env.SCHEMA_RECONCILE !== 'false') {
+    try {
+      const { reconcileMissingColumns } = await import('./config/schemaReconcile');
+      const Enrollment = (await import('./models/Enrollment')).default;
+      const TimelineCard = (await import('./models/TimelineCard')).default;
+      const TimelineCardProgress = (await import('./models/TimelineCardProgress')).default;
+      const CurriculumTypeDefinition = (await import('./models/CurriculumTypeDefinition')).default;
+      const r = await reconcileMissingColumns([
+        Enrollment,
+        TimelineCard,
+        TimelineCardProgress,
+        CurriculumTypeDefinition,
+      ]);
+      if (r.added.length) {
+        console.log(
+          `[schema-reconcile] healed ${r.added.length} missing column(s): ` +
+            r.added.map((a) => `${a.table}.${a.column}`).join(', '),
+        );
+      } else {
+        console.log(`[schema-reconcile] ${r.checked} model(s) checked, schema in sync`);
+      }
+    } catch (err: any) {
+      console.warn('[schema-reconcile] failed (non-fatal):', err?.message);
+    }
+  }
   // Seed the curriculum types + progression config only when the engine is enabled (idempotent upsert).
   if (process.env.TIMELINE_ENGINE_ENABLED === 'true') {
     try {
