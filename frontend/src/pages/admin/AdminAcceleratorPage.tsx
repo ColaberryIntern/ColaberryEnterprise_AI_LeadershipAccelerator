@@ -5,6 +5,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import AdminCurriculumTab from './AdminCurriculumTab';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
 
 interface Cohort {
   id: string;
@@ -140,6 +141,7 @@ function AdminAcceleratorPage() {
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [portalFilter, setPortalFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending_invoice' | 'failed'>('all');
+  const [historyTarget, setHistoryTarget] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     api.get('/api/admin/cohorts').then((res) => {
@@ -649,7 +651,13 @@ function AdminAcceleratorPage() {
                       return (
                       <tr key={e.id}>
                         <td className="fw-medium">
-                          {e.full_name}
+                          <button
+                            className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
+                            onClick={() => setHistoryTarget({ id: e.id, name: e.full_name })}
+                            title="View full history & activity"
+                          >
+                            {e.full_name}
+                          </button>
                           {e.company && e.company !== 'Prospect' && (
                             <div className="text-muted small fw-normal">{e.company}</div>
                           )}
@@ -965,6 +973,16 @@ function AdminAcceleratorPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Person 360 drill-down drawer */}
+      {historyTarget && (
+        <PersonHistoryDrawer
+          enrollmentId={historyTarget.id}
+          name={historyTarget.name}
+          onClose={() => setHistoryTarget(null)}
+          onViewAsStudent={handleViewAsStudent}
+        />
       )}
 
       {/* Delete Confirm */}

@@ -7,6 +7,7 @@ import {
   listCohortEnrollments, setPortalAccess, getPortalLoginUrl,
 } from '../services/acceleratorService';
 import { generateMeetLink } from '../services/meetingService';
+import { getEnrollmentHistory } from '../services/personHistoryService';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -218,5 +219,15 @@ export async function handleGetPortalLink(req: Request, res: Response, next: Nex
     const url = await getPortalLoginUrl(req.params.id as string);
     if (!url) return res.status(404).json({ error: 'Enrollment not found' });
     res.json({ url });
+  } catch (err) { next(err); }
+}
+
+// Person 360: full drill-down history for one participant (profile, acquisition,
+// communications, campaigns, portal activity, learning, timeline).
+export async function handleGetPersonHistory(req: Request, res: Response, next: NextFunction) {
+  try {
+    const history = await getEnrollmentHistory(req.params.id as string);
+    if (!history) return res.status(404).json({ error: 'Enrollment not found' });
+    res.json(history);
   } catch (err) { next(err); }
 }
