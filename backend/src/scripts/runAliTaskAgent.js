@@ -38,6 +38,7 @@ const { fetchAssignedActiveRows } = require('./lib/aliTaskAgent/mirrorSource');
 const { fetchAliCommentedTodoIds, DAY_MS } = require('./lib/aliTaskAgent/recentlyCommented');
 const { alreadyHandled } = require('./lib/aliTaskAgent/ataIdempotency');
 const { classifyTask } = require('./lib/aliTaskAgent/outwardFacing');
+const { filterOutCompleted } = require('./lib/aliTaskAgent/liveStateFilter');
 const { postComment, queueForApproval, completeTodo } = require('./lib/aliTaskAgent/executor');
 const { generateDraft } = require('./lib/aliTaskAgent/draftDeliverable');
 const { renderRunReport, renderRunReportText } = require('./lib/aliTaskAgent/renderRunReport');
@@ -196,6 +197,21 @@ async function main() {
     }
   }
   if (TASK_ID) queue = queue.filter((it) => it.todo.id === TASK_ID);
+
+  // Live-state guard (Layer 1): the mirror can be stale on COMPLETION - a todo
+  // completed in Basecamp keeps its 'active' flag until the sync re-sees it,
+  // which for completed todos may never happen, and being overdue it sorts to
+  // the top. Re-check each queued todo live and drop the already-completed ones
+  // so ATA never surfaces (or acts on) a dead ticket. Fail-open: an
+  // unverifiable todo is kept, never silently hidden.
+  {
+    const before = queue.length;
+    const { live, dropped, unverified } = await filterOutCompleted(queue, { bcGet: ops.bcGet });
+    queue = live;
+    if (dropped.length || unverified) {
+      console.log(`[ata] live-state guard: dropped ${dropped.length}/${before} already-completed todo(s)${unverified ? `, ${unverified} unverifiable (kept)` : ''}${dropped.length ? `: ${dropped.map((d) => `${d.id}(${d.reason})`).join(', ')}` : ''}`);
+    }
+  }
   console.log(`[ata] ${queue.length} task(s) in scope after filters`);
 
   const results = [];

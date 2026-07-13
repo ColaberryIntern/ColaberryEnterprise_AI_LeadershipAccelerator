@@ -1,6 +1,4 @@
 import React from 'react';
-import VideoEmbed from './VideoEmbed';
-import { parseVideoUrl } from '../../utils/videoEmbed';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
@@ -29,6 +27,8 @@ export interface TimelineFeedCard {
   completed_at: string | null;
   video?: { url: string; presenter: string | null; poster: string | null } | null;
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
+  course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
+  capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
 }
 
 type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -111,6 +111,7 @@ interface Props {
   card: TimelineFeedCard;
   onOpen?: (card: TimelineFeedCard) => void;
   onLike?: (card: TimelineFeedCard) => void;
+  onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
   likes?: number;
   liked?: boolean;
 }
@@ -119,30 +120,35 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const v = visualFor(card.render_band);
   const done = card.status === 'completed';
   const locked = card.status === 'locked';
+  const isSkillsJar = v.kind === 'skilljar';
   const pts = totalPoints(card.points);
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  const videoSource = card.video?.url ? parseVideoUrl(card.video.url) : null;
+  // Poster background: a video card uses its own poster image (darkened so the
+  // overlay text stays legible); every other kind uses its Design-E gradient.
+  const posterStyle: React.CSSProperties =
+    v.kind === 'video' && card.video?.poster
+      ? {
+          backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${card.video.poster})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }
+      : { background: KIND_GRADIENT[v.kind] };
 
-  const media = v.kind === 'video' && videoSource ? (
-    // Plays right here in the feed — press ▶ and watch in-app. "Open" is for the detail panel.
-    <div className="fc-video" onClick={(e) => e.stopPropagation()}>
-      <VideoEmbed source={videoSource} title={shortTitle} poster={card.video?.poster || null} />
-    </div>
-  ) : v.kind === 'video' ? (
-    // Video card with no link attached yet — poster opens the detail panel.
-    <button type="button" className="vframe" onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
-      <span className="poster" style={{ background: KIND_GRADIENT.video }} />
-      <span className="vgrad" />
-      <span className="vmeta"><b>{shortTitle}</b><span>video</span></span>
-      <span className="vplay"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
-    </button>
-  ) : (
-    <button type="button" className={`mthumb${done ? ' done' : ''}`} style={{ background: KIND_GRADIENT[v.kind] }} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
+  // ONE uniform 16:9 tile for EVERY card. The bottom-right ▶ opens the detail
+  // drawer (pop-out from the right) where the full assignment lives — the video
+  // plays there, content/quiz/reflection render there, the SkillsJar course +
+  // certificate upload happen there. Same size, same open-from-the-right action
+  // on every card in the feed.
+  const metaText = isSkillsJar
+    ? 'External course · certificate required'
+    : metaLine || (v.kind === 'video' ? 'video' : '');
+  const media = (
+    <button type="button" className={`mthumb${done ? ' done' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
       <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{shortTitle}</b><span>{metaLine}</span></span>
+      <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
       <span className="mt-open">{done
         ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
         : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>

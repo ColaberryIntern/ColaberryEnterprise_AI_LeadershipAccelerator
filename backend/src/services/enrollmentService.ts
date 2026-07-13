@@ -1,5 +1,7 @@
+import crypto from 'crypto';
 import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
+import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
@@ -118,7 +120,43 @@ export async function markEnrollmentPaid(
   exitPaymentCampaign(enrollment.email)
     .catch(err => console.error('[Payment Campaign] Auto-exit failed:', err.message));
 
+  // A paying student may still hold a lingering free "Explorer" account from an
+  // earlier Open House visit (a separate row in the Explorer cohort). Now that
+  // they've paid, retire that redundant free row so they appear once — as a paid
+  // student — and not also as an active free prospect. Best-effort + idempotent;
+  // never touches the paid row, seats, or money. This is the observable
+  // "moved out of the free class once you pay and activate".
+  retireRedundantExplorerAccounts(enrollment.email, enrollment.id)
+    .catch(err => console.error('[Enrollment] Explorer reconcile failed (non-fatal):', err.message));
+
   return enrollment;
+}
+
+/**
+ * When someone becomes a paid student, withdraw any OTHER still-active Explorer
+ * (free Open House) enrollment they hold, so the same person is not counted as
+ * both a paid student and a free prospect. Idempotent: withdrawn rows are skipped
+ * on re-run, and the paid enrollment itself is never touched. enrollment_type is
+ * left as 'explorer' so dashboards keep excluding it; status='withdrawn' removes
+ * it from the active free-prospect view.
+ */
+export async function retireRedundantExplorerAccounts(email: string, paidEnrollmentId: string): Promise<void> {
+  const strays = await Enrollment.findAll({
+    where: {
+      email: email.toLowerCase().trim(),
+      enrollment_type: 'explorer',
+      status: 'active',
+    },
+  });
+  const today = new Date().toISOString().slice(0, 10);
+  for (const stray of strays) {
+    if (stray.id === paidEnrollmentId) continue;
+    await stray.update({
+      status: 'withdrawn',
+      notes: `${stray.notes ? stray.notes + ' | ' : ''}Retired ${today}: superseded by paid enrollment ${paidEnrollmentId}`,
+    });
+    console.log(`[Enrollment] Retired redundant Explorer ${stray.id} (${email}) — now a paid student`);
+  }
 }
 
 export async function markEnrollmentFailed(externalId: string): Promise<Enrollment | null> {
@@ -194,9 +232,12 @@ export async function createAdminEnrollment(data: {
 /* ------------------------------------------------------------------ */
 
 // An "Explorer" is an Open House visitor who can log into the portal and explore
-// the app but has NOT paid or joined a class. They are placed under the current
-// (latest open) cohort, flagged enrollment_type='explorer', and — critically —
-// do NOT consume a paid seat and are excluded from student metrics.
+// the app but has NOT paid or joined a class. They are placed in the dedicated
+// Explorer cohort (a "free class of its own"), flagged enrollment_type='explorer',
+// and — critically — do NOT consume a paid seat and are excluded from student
+// metrics. Placement is deterministic (the explorer cohort), NOT start_date-based:
+// the old getLatestOpenCohort() routing filed prospects into whichever cohort
+// started soonest, which dumped real signups into a demo cohort.
 export async function createExplorerEnrollment(input: {
   name: string;
   email: string;
@@ -209,8 +250,8 @@ export async function createExplorerEnrollment(input: {
   const email = input.email.toLowerCase().trim();
   if (!email) throw new AppError('email is required', 400);
 
-  const { getLatestOpenCohort } = await import('./cohortService');
-  const cohort = await getLatestOpenCohort();
+  const { getOrCreateExplorerCohort } = await import('./cohortService');
+  const cohort = await getOrCreateExplorerCohort();
   if (!cohort) throw new AppError('No cohort available to place the Explorer under', 409);
 
   // Idempotent: reuse any existing enrollment for this email in the cohort —
@@ -237,8 +278,9 @@ export async function createExplorerEnrollment(input: {
   // paying students and must never consume a paid seat.
 
   // Capture as a Lead for CRM visibility (best-effort — never block the account).
+  let leadId: number | null = null;
   try {
-    await Lead.findOrCreate({
+    const [lead] = await Lead.findOrCreate({
       where: { email },
       defaults: {
         name: enrollment.full_name,
@@ -252,19 +294,65 @@ export async function createExplorerEnrollment(input: {
         page_url: input.page_url,
       } as any,
     });
+    leadId = (lead as any)?.id ?? null;
   } catch (err: any) {
     console.error('[OpenHouse] Lead capture failed (non-fatal):', err.message);
   }
 
-  // Send the passwordless login link. Requires status=active + portal_enabled
-  // (both set above). Best-effort so an email hiccup never loses the account; the
-  // visitor can request a fresh link later. Only fires on first creation, so
-  // re-running onboarding never double-sends.
-  try {
-    const { requestMagicLink } = await import('./participantService');
-    await requestMagicLink(email);
-  } catch (err: any) {
-    console.error('[OpenHouse] Magic link send failed (non-fatal):', err.message);
+  // Send the branded welcome with a one-click portal magic link, targeting THIS
+  // specific new enrollment. We generate the token on `enrollment` directly rather
+  // than doing an email-keyed lookup, which previously (via requestMagicLink) could
+  // land the token on a stale enrollment when a person has several. Best-effort so
+  // an email hiccup never loses the account, but the outcome is recorded to
+  // CommunicationLog and any failure is surfaced — never silently swallowed. Only
+  // fires on first creation, so re-running onboarding never double-sends.
+  {
+    const subject = 'Welcome to Colaberry — your AI journey starts now';
+    let sent = false;
+    let messageId: string | null = null;
+    let errorMessage: string | null = null;
+    try {
+      const { sendTrainingWelcome } = await import('./emailService');
+      const ttlDays = Math.max(1, env.trainingWelcomeTokenTtlDays || 30);
+      const token = crypto.randomUUID();
+      await enrollment.update({
+        portal_token: token,
+        portal_token_expires_at: new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000),
+      });
+      const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
+      const result = await sendTrainingWelcome({
+        to: email,
+        fullName: enrollment.full_name,
+        portalLink: `${base}/portal/verify?token=${token}`,
+      });
+      sent = result.sent;
+      messageId = result.messageId || null;
+      if (!sent) errorMessage = 'welcome email not sent (kill switch active or SMTP unconfigured)';
+    } catch (err: any) {
+      errorMessage = err?.message || 'unknown error';
+    }
+    if (!sent) {
+      console.error(`[OpenHouse] Welcome email NOT sent for enrollment ${enrollment.id} (${email}): ${errorMessage}`);
+    }
+    try {
+      const { logCommunication } = await import('./communicationLogService');
+      await logCommunication({
+        lead_id: leadId,
+        channel: 'email',
+        direction: 'outbound',
+        delivery_mode: 'live',
+        status: sent ? 'sent' : 'failed',
+        to_address: email,
+        from_address: env.trainingWelcomeFromEmail,
+        subject,
+        provider: 'mandrill',
+        provider_message_id: messageId,
+        error_message: errorMessage,
+        metadata: { event: 'open_house_welcome', enrollment_id: enrollment.id },
+      });
+    } catch (e: any) {
+      console.error('[OpenHouse] welcome comm-log failed (non-fatal):', e?.message);
+    }
   }
 
   return { enrollment, created: true, cohort_id: cohort.id };

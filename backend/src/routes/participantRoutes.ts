@@ -3,12 +3,12 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
-import { strategyPrepUpload } from '../config/upload';
+import { strategyPrepUpload, certificateUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
   handleFreeSignup, handleGetPoints,
-  handleGetOnboardingSchedule, handleRsvpOpenHouse,
+  handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail,
@@ -32,7 +32,11 @@ import {
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
 import {
-  handleOpenCard, handleMentor, handleReflection, handleVideoAugment, handlePromptLab,
+  handleGetSettings, handleUpdateProfile, handleSetAvatar, handleClearAvatar,
+  handleSetResume, handleGetResume, handleClearResume,
+} from '../controllers/portalSettingsController';
+import {
+  handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
 } from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
@@ -60,7 +64,10 @@ router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDele
 router.get('/api/portal/runtime/cards/:cardId', requireParticipant, handleOpenCard);
 router.post('/api/portal/runtime/cards/:cardId/mentor', requireParticipant, handleMentor);
 router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, handleReflection);
-router.post('/api/portal/runtime/cards/:cardId/video-augment', requireParticipant, handleVideoAugment);
+router.post('/api/portal/runtime/cards/:cardId/content', requireParticipant, handleEnsureContent);
+// Anthropic Skills Course — upload + AI-verify the completion certificate.
+router.post('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, certificateUpload.single('file'), handleUploadCertificate);
+router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, handleGetCertificate);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
@@ -73,9 +80,21 @@ router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPr
 router.get('/api/portal/progress', requireParticipant, handleGetProgress);
 router.get('/api/portal/points', requireParticipant, handleGetPoints);
 router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
+router.get('/api/portal/events', requireParticipant, handleGetPublicEvents); // public events (CCPP) for the calendar
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
 router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
 router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);
+
+// Student account Settings — profile, photo, resume file, account read.
+// Photo + resume are base64 JSON bodies (they ride the global 5mb express.json
+// limit); the resume download streams the decoded file back to its owner.
+router.get('/api/portal/settings', requireParticipant, handleGetSettings);
+router.put('/api/portal/settings/profile', requireParticipant, handleUpdateProfile);
+router.post('/api/portal/settings/avatar', requireParticipant, handleSetAvatar);
+router.delete('/api/portal/settings/avatar', requireParticipant, handleClearAvatar);
+router.post('/api/portal/settings/resume', requireParticipant, handleSetResume);
+router.get('/api/portal/settings/resume', requireParticipant, handleGetResume);
+router.delete('/api/portal/settings/resume', requireParticipant, handleClearResume);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);

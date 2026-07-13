@@ -1,0 +1,86 @@
+/* Student Settings — layered on the Design-E shell tokens (TodayShell.css is
+   loaded globally by PortalShell, so te-*, --cherry/--berry/--leaf and the
+   --color-* vars are all available here). Only settings-specific layout lives
+   in this file. */
+
+.set-wrap { max-width: 860px; margin: 0 auto; padding-bottom: 40px; }
+
+.set-section { margin-bottom: 18px; }
+.set-section h3 {
+  font-size: 15px; font-weight: 800; margin: 0 0 4px;
+  color: var(--color-text, #1A1A1A); display: flex; align-items: center; gap: 8px;
+}
+.set-section .set-sub { font-size: 13px; color: var(--color-text-light, #6B6B6B); margin: 0 0 16px; }
+
+/* photo */
+.set-photo-row { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+.set-avatar {
+  width: 96px; height: 96px; border-radius: 50%; overflow: hidden; flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--berry, #367895); color: #fff; font-weight: 800; font-size: 30px;
+  box-shadow: 0 3px 10px rgba(26,26,26,.14);
+}
+.set-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.set-photo-actions { display: flex; flex-direction: column; gap: 8px; }
+.set-photo-actions .row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* forms */
+.set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; }
+.set-field { display: flex; flex-direction: column; gap: 6px; }
+.set-field.full { grid-column: 1 / -1; }
+.set-label { font-size: 12.5px; font-weight: 700; color: var(--color-text, #2B2B2B); }
+.set-input {
+  border: 1px solid var(--color-border, #D8D8D8); border-radius: 10px; padding: 10px 13px;
+  font-size: 14.5px; font-family: inherit; background: var(--color-bg, #fff);
+  color: var(--color-text, #2B2B2B); outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.set-input:focus { border-color: var(--berry, #367895); box-shadow: 0 0 0 3px rgba(54,120,149,.20); }
+.set-input:disabled { background: var(--color-bg-alt, #F1F1F0); color: var(--color-text-light, #6B6B6B); }
+.set-readonly {
+  display: inline-flex; align-items: center; gap: 8px; font-size: 14px;
+  color: var(--color-text-light, #6B6B6B);
+}
+.set-readonly .lock { opacity: .6; }
+.set-actions { display: flex; gap: 10px; margin-top: 16px; align-items: center; flex-wrap: wrap; }
+
+/* resume row */
+.set-file {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px; flex-wrap: wrap;
+  border: 1px solid var(--color-border, #E4E4E3); border-radius: 12px; background: var(--color-bg-alt, #F8F8F7);
+}
+.set-file .fic {
+  width: 40px; height: 40px; border-radius: 9px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center;
+  background: rgba(251,40,50,.10); color: var(--cherry, #FB2832);
+}
+.set-file .meta { flex: 1 1 180px; min-width: 0; }
+.set-file .meta .nm { font-weight: 700; font-size: 14px; color: var(--color-text, #1A1A1A); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-file .meta .sb { font-size: 12.5px; color: var(--color-text-light, #6B6B6B); }
+.set-file .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+.set-empty {
+  border: 1.5px dashed var(--color-border, #D8D8D8); border-radius: 12px; padding: 22px; text-align: center;
+  color: var(--color-text-light, #6B6B6B); font-size: 13.5px;
+}
+
+/* points */
+.set-events { margin-top: 14px; display: flex; flex-direction: column; }
+.set-event { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--color-border, #EDEDED); }
+.set-event:first-child { border-top: 0; }
+.set-event .lb { font-size: 13.5px; color: var(--color-text, #2B2B2B); }
+.set-event .lb small { display: block; color: var(--color-text-light, #9A9A9A); font-size: 11.5px; }
+.set-event .pt { font-weight: 800; font-size: 13.5px; color: var(--leaf, #2F8F5B); white-space: nowrap; }
+.set-event .pt.zero { color: var(--color-text-light, #9A9A9A); }
+
+/* security / preferences rows */
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+.set-row + .set-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--color-border, #EDEDED); }
+.set-row .lab { font-size: 14px; font-weight: 700; color: var(--color-text, #1A1A1A); }
+.set-row .desc { font-size: 12.5px; color: var(--color-text-light, #6B6B6B); margin-top: 2px; max-width: 460px; }
+
+.set-danger .te-btn, .te-btn.danger {
+  background: transparent; color: var(--cherry, #FB2832); border: 1px solid rgba(251,40,50,.4);
+}
+.te-btn.danger:hover:not(:disabled) { background: rgba(251,40,50,.06); }
+
+@media (max-width: 620px) {
+  .set-grid { grid-template-columns: 1fr; }
+}

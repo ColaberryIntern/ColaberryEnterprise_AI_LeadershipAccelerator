@@ -9,6 +9,7 @@ import PortalShell from './PortalShell';
 import {
   readParticipant, countdown, firstClassTargetMs,
   StreakState, loadStreak, saveStreak, todayKey, dowMonFirst,
+  fmtCentralDateTime, fmtCentralDate,
 } from './shellUtils';
 import FeedCard from '../feed/FeedCard';
 import { buildTodayFeed } from '../feed/todayFeed';
@@ -113,7 +114,7 @@ const TodayShell: React.FC = () => {
   const feedItems = buildTodayFeed(
     {
       ohTitle: oh?.title || null,
-      ohWhen: oh ? new Date(oh.starts_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : null,
+      ohWhen: oh ? fmtCentralDate(oh.starts_at) : null,
       rsvped, hasBackground, firstClassLabel, project: projectHint,
     },
     { onRsvp: doRsvp, onUpload: () => setShowUpload(true), onSoon: (label) => flash(`${label} unlocks when you enroll`) },
@@ -149,7 +150,7 @@ const TodayShell: React.FC = () => {
               <span className="ic">◷</span>
               <div className="body">
                 <div className="t">{oh.title}</div>
-                <div className="w">{new Date(oh.starts_at).toLocaleString()} {ohCd && <>· <span className="cd">{ohCd.d}d {ohCd.h}h {ohCd.m}m {ohCd.s}s</span></>}</div>
+                <div className="w">{fmtCentralDateTime(oh.starts_at)} {ohCd && <>· <span className="cd">{ohCd.d}d {ohCd.h}h {ohCd.m}m {ohCd.s}s</span></>}</div>
               </div>
               <button className="te-btn berry sm" onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd" : 'RSVP (+10)'}</button>
             </div>
@@ -275,7 +276,7 @@ const TodayShell: React.FC = () => {
             {oh ? (
               <>
                 <div className="te-stat"><span className="lab">{oh.title}</span></div>
-                <div className="te-muted">{new Date(oh.starts_at).toLocaleString()}</div>
+                <div className="te-muted">{fmtCentralDateTime(oh.starts_at)}</div>
                 <button className="te-btn berry sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd" : 'RSVP to the open house'}</button>
               </>
             ) : <div className="te-muted">No open house scheduled yet — check back soon.</div>}

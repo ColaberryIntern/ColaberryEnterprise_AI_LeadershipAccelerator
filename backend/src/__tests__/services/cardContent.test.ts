@@ -1,4 +1,4 @@
-import { contentFromMetadata } from '../../services/timeline/timelineService';
+import { contentFromMetadata, normalizeCapabilities, courseFromMetadata } from '../../services/timeline/timelineService';
 
 // contentFromMetadata is what decides whether AI-generated content reaches the
 // student feed. It must ignore empty/garbage and surface only real fields.
@@ -21,5 +21,36 @@ describe('contentFromMetadata', () => {
   it('coerces question entries to strings and drops empty body/summary', () => {
     const out = contentFromMetadata({ content: { summary: '', body_html: '  ', questions: [1, 2] } });
     expect(out).toEqual({ questions: ['1', '2'] });
+  });
+});
+
+// normalizeCapabilities feeds each card its type's Parts. Junk in the JSONB
+// blob must never reach the render as a truthy "Part" (it would wrongly gate
+// sections), and a missing/garbage blob must be an empty list (⇒ show all).
+describe('normalizeCapabilities', () => {
+  it('returns [] for non-arrays', () => {
+    expect(normalizeCapabilities(null)).toEqual([]);
+    expect(normalizeCapabilities(undefined)).toEqual([]);
+    expect(normalizeCapabilities('ai_chat')).toEqual([]);
+    expect(normalizeCapabilities({ ai_chat: true })).toEqual([]);
+  });
+
+  it('keeps only trimmed non-empty strings', () => {
+    expect(normalizeCapabilities(['ai_chat', ' quiz ', '', '  ', 3, null, 'reflection']))
+      .toEqual(['ai_chat', 'quiz', 'reflection']);
+  });
+});
+
+// courseFromMetadata feeds the Skills Course card its class name + SkillsJar link.
+describe('courseFromMetadata', () => {
+  it('returns null when neither name nor url is present', () => {
+    expect(courseFromMetadata(null)).toBeNull();
+    expect(courseFromMetadata({})).toBeNull();
+    expect(courseFromMetadata({ course: {} })).toBeNull();
+    expect(courseFromMetadata({ course: { name: '  ', url: '' } })).toBeNull();
+  });
+  it('surfaces trimmed name/url, filling the other with null', () => {
+    expect(courseFromMetadata({ course: { name: ' Intro to MCP ', url: '' } })).toEqual({ name: 'Intro to MCP', url: null });
+    expect(courseFromMetadata({ course: { name: '', url: ' https://x.skilljar.com/c ' } })).toEqual({ name: null, url: 'https://x.skilljar.com/c' });
   });
 });

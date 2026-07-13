@@ -67,6 +67,11 @@
   display:flex;align-items:center;justify-content:center;cursor:pointer;flex:none;transition:background .14s,color .14s}
 .te-iconbtn:hover{background:var(--sunken);color:var(--strong)}
 .te-iconbtn svg{width:18px;height:18px}
+.te-iconbtn{text-decoration:none}
+.te-iconbtn.active{background:var(--sunken);color:var(--strong);border-color:var(--berry)}
+/* avatar is a link to Settings; show the photo when present */
+.te-avatar{overflow:hidden;text-decoration:none;cursor:pointer}
+.te-avatar img{width:100%;height:100%;object-fit:cover;display:block}
 
 /* builder chip star */
 .te-hud .lvl{display:flex;align-items:center;gap:5px}

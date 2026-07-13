@@ -119,7 +119,7 @@
 .tl-de .pip.done{color:var(--leaf-text)} .tl-de .pip.up{color:var(--text-muted)} .tl-de .pip.lock{color:var(--text-muted)}
 
 /* media: branded SVG thumbnail + video frame */
-.tl-de .mthumb{position:relative;border-radius:var(--r-12);overflow:hidden;width:100%;display:block;border:none;padding:0;height:250px;text-align:left;cursor:pointer}
+.tl-de .mthumb{position:relative;border-radius:var(--r-12);overflow:hidden;width:100%;display:block;border:none;padding:0;aspect-ratio:16/9;text-align:left;cursor:pointer}
 .tl-de .mthumb svg.bg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .tl-de .mthumb .mt-chip{position:absolute;left:14px;top:13px;z-index:3;display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.92);color:#1A1A1A;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:5px 12px;border-radius:var(--r-pill)}
 .tl-de .mthumb .mt-chip .sw{width:8px;height:8px;border-radius:50%}
@@ -129,13 +129,13 @@
 .tl-de .mthumb .mt-open{position:absolute;right:16px;bottom:14px;z-index:3;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.32);transition:transform .16s var(--ease)}
 .tl-de .mthumb:hover .mt-open{transform:scale(1.07)} .tl-de .mthumb .mt-open svg{width:24px;height:24px;color:var(--cherry-deep)}
 .tl-de .mthumb.done .mt-open{background:var(--leaf-action)} .tl-de .mthumb.done .mt-open svg{color:#fff}
-.tl-de .vframe{position:relative;border-radius:var(--r-12);height:250px;overflow:hidden;display:flex;align-items:center;justify-content:center;width:100%;cursor:pointer}
+.tl-de .vframe{position:relative;border-radius:var(--r-12);aspect-ratio:16/9;overflow:hidden;display:flex;align-items:center;justify-content:center;width:100%;cursor:pointer}
 .tl-de .vframe .poster{position:absolute;inset:0} .tl-de .vframe .vgrad{position:absolute;inset:0;background:linear-gradient(135deg,rgba(54,120,149,.5),rgba(26,26,26,.72))}
 .tl-de .vframe .vmeta{position:absolute;left:16px;bottom:14px;color:#fff;z-index:2} .tl-de .vframe .vmeta b{display:block;font-size:15px} .tl-de .vframe .vmeta span{font-size:12px;font-family:var(--mono);opacity:.85}
 .tl-de .vframe .vplay{position:relative;z-index:2;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.95);border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.35);transition:.16s var(--ease)}
 .tl-de .vframe:hover .vplay{transform:scale(1.07)} .tl-de .vframe .vplay svg{width:26px;height:26px;color:var(--cherry-deep);margin-left:4px}
 .tl-de .fc-video{border-radius:var(--r-12);overflow:hidden}
-@media(max-width:760px){.tl-de .mthumb,.tl-de .vframe{height:200px}}
+/* aspect-ratio keeps .mthumb/.vframe at video size (16:9) on every width */
 
 /* sidebar cards */
 .tl-de .side-card{padding:20px}
@@ -194,8 +194,43 @@
 .tl-de .tld-lessonframe{width:100%;height:340px;border:1px solid var(--border-subtle);border-radius:var(--r-12);background:#fff;display:block}
 .tl-de .tld-note{font-size:13px;color:var(--text-muted);background:var(--surface-sunken);border:1px solid var(--border-subtle);
   border-radius:var(--r-12);padding:12px 14px}
+
+/* ===== Anthropic Skills Course (skills_jar) ===== */
+.tl-de .tld-skilljar{margin-bottom:16px}
+.tl-de .tld-jarcard{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(150deg,#3a7f9e,#2b6580);color:#fff;border-radius:var(--r-16);border:2px solid rgba(255,255,255,.16);
+  padding:52px 20px 62px;text-align:center;overflow:hidden;min-height:230px}
+.tl-de .tld-jarbadge{position:absolute;top:16px;left:16px;background:rgba(255,255,255,.95);color:#2b6580;
+  font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:5px 11px;border-radius:999px}
+.tl-de .tld-jarbadge::first-letter{color:var(--amber)}
+.tl-de .tld-jarcap{width:112px;height:112px;color:#fff;opacity:.98;margin-bottom:8px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.18))}
+.tl-de .tld-jarbrand{font-size:26px;font-weight:800;color:#fff;line-height:1.15;letter-spacing:-.01em}
+.tl-de .tld-jarfoot{position:absolute;left:18px;bottom:16px;text-align:left}
+.tl-de .tld-jarname{font-size:15px;font-weight:800;color:#fff;line-height:1.2}
+.tl-de .tld-jarkind{font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:rgba(255,255,255,.82);margin-top:2px}
+.tl-de .tld-jaropen{display:flex;width:100%;justify-content:center;margin:12px 0 4px;text-decoration:none;font-size:15px;padding:12px}
+.tl-de .tld-upload{margin-top:12px;border:1.5px dashed var(--border-default);border-radius:var(--r-16);
+  padding:18px 16px;text-align:center;background:var(--surface-subtle)}
+.tl-de .tld-uplab{font-size:14px;font-weight:800;color:var(--text-strong);margin-bottom:6px}
+.tl-de .tld-choosecert{display:inline-flex;align-items:center;gap:6px;cursor:pointer}
+.tl-de .tld-choosecert.busy{opacity:.7;cursor:default}
+.tl-de .tld-certmsg{margin-top:12px;font-size:13.5px;font-weight:600;border-radius:var(--r-12);padding:10px 12px}
+.tl-de .tld-certmsg.ok{color:var(--leaf-deep);background:rgba(91,166,60,.12);border:1px solid rgba(91,166,60,.3)}
+.tl-de .tld-certmsg.err{color:var(--cherry-deep);background:rgba(251,40,50,.08);border:1px solid rgba(251,40,50,.24)}
+.tl-de .tld-certshare{margin-top:12px;border:1px solid var(--border-subtle);border-radius:var(--r-16);padding:14px;background:var(--surface-page)}
+.tl-de .tld-certimg{display:block;width:100%;max-height:420px;object-fit:contain;border-radius:var(--r-12);border:1px solid var(--border-subtle);background:var(--surface-sunken);margin:8px 0}
+.tl-de .tld-sharerow{display:flex;flex-wrap:wrap;gap:8px}
+.tl-de .tld-sharerow .tl-btn{text-decoration:none}
 .tl-de .tld-foot{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:15px 20px;
   border-top:1px solid var(--border-subtle);flex:none}
+
+/* Inline (non-scrim) rendering of the shared CardDetailBody — used by the admin
+   Experience Studio preview + the Timeline editor "finished product". Same body,
+   minus the fixed slide-in chrome, so those previews ARE the student drawer.
+   No bounded height → the body flows (no nested scrollbar) inside the host page. */
+.tl-de .tld-inlinepanel{display:flex;flex-direction:column;border:1px solid var(--border-subtle);
+  border-radius:var(--r-16);overflow:hidden;background:var(--surface-page);box-shadow:var(--shadow-md)}
+.tl-de .tld-inlinepanel .tld-body{overflow:visible}
 
 /* ===== In-app video player (VideoEmbed) ===== */
 .tlv-frame{position:relative;width:100%;aspect-ratio:16/9;border-radius:var(--r-12);overflow:hidden;background:#000;

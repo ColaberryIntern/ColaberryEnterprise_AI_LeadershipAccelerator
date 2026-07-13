@@ -7,7 +7,6 @@
  */
 import { chatText, chatJson } from './runtimeAi';
 import MentorTurn from '../../models/MentorTurn';
-import TimelineCard from '../../models/TimelineCard';
 
 export type MentorMode = 'ask' | 'hint' | 'explain' | 'review';
 
@@ -46,28 +45,3 @@ export async function reflectionPrompts(card: CardCtx) {
   return { questions: qs, cost_usd: r.cost_usd };
 }
 const DEFAULT_REFLECTION = ['What surprised you most?', 'What would you build with this?', 'How would you explain it to a teammate?', 'How would you improve it, and why?'];
-
-/**
- * Turn a passive video into an interactive experience: chapters, summary, quiz,
- * reflection. Generated ONCE and cached on the card so the whole class shares
- * it — the first student to tap "Make it interactive" pays the cost; everyone
- * after gets the saved copy instantly. `force` regenerates (admin override).
- */
-export async function videoAugment(card: CardCtx, force = false) {
-  const cached = card.metadata && typeof card.metadata === 'object' ? card.metadata.augment : null;
-  if (!force && cached) return { augment: cached, cost_usd: 0, cached: true };
-
-  const system = 'You turn a course video into an interactive study experience for an AI Systems Architect student. Return STRICT json.';
-  const user = `Video: "${card.title}". ${card.description || ''}\nReturn json { "summary": string, "chapters": [{"t": "mm:ss", "title": string}], ` +
-    `"quiz": [{"q": string, "options": string[], "answer": integer}], "flashcards": [{"front": string, "back": string}], "reflection": string[], "prompt_challenge": string, "github_task": string }.`;
-  const r = await chatJson('runtime_video_augment', system, user, undefined, 1600);
-
-  // Persist to the shared card so every future student reuses it (class-wide cache).
-  // Non-transactional: concurrent first-views race but converge on an equivalent blob.
-  await TimelineCard.update(
-    { metadata: { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}), augment: r.parsed } },
-    { where: { id: card.id } },
-  ).catch(() => {});
-
-  return { augment: r.parsed, cost_usd: r.cost_usd, cached: false };
-}

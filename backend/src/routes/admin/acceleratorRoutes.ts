@@ -11,6 +11,8 @@ import {
   handleCreateEnrollment,
   handleListCohortEnrollments,
   handleSetPortalAccess,
+  handleGetPortalLink,
+  handleGetPersonHistory,
 } from '../../controllers/acceleratorController';
 import {
   handleAdminOverrideLessonStatus,
@@ -65,6 +67,8 @@ router.post('/api/admin/accelerator/quick-add-student', requireAdmin, async (req
 router.post('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleCreateEnrollment);
 router.get('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleListCohortEnrollments);
 router.patch('/api/admin/accelerator/enrollments/:id/portal-access', requireAdmin, handleSetPortalAccess);
+router.get('/api/admin/accelerator/enrollments/:id/portal-link', requireAdmin, handleGetPortalLink);
+router.get('/api/admin/accelerator/enrollments/:id/history', requireAdmin, handleGetPersonHistory);
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
 router.delete('/api/admin/accelerator/sessions/:id', requireAdmin, handleDeleteSession);

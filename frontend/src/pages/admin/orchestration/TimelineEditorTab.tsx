@@ -7,8 +7,10 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import api from '../../../utils/api';
-import VideoEmbed from '../../../components/timeline/VideoEmbed';
-import { parseVideoUrl } from '../../../utils/videoEmbed';
+import CardDetailBody from '../../../components/timeline/CardDetailBody';
+import { adaptToFeedCard } from '../../../utils/cardAdapter';
+import AutofillButton from '../../../components/common/AutofillButton';
+import '../../../components/timeline/timeline.css';
 
 /**
  * TimelineEditorTab — the AUTHOR side of the Classroom, built to feel like the
@@ -69,6 +71,7 @@ const TypeThumb: React.FC<{ band?: string; size?: number }> = ({ band, size = 34
 );
 
 interface CardVideo { url?: string | null; presenter?: string | null; poster?: string | null }
+interface CardCourse { name?: string | null; url?: string | null }   // Skills Course (skills_jar)
 interface Card {
   id: string; type: string; title: string; subtitle: string | null; description: string | null;
   week: number | null; bucket: Bucket; order: number; difficulty: string;
@@ -79,6 +82,7 @@ interface Card {
 interface TypeDef {
   slug: string; label: string; bucket: Bucket; render_band: string; difficulty: string;
   learning_xp: number; builder_xp: number; community_xp: number; competencies: string[]; event: boolean;
+  capabilities?: string[];   // the type's Parts — gate the preview's optional sections
 }
 interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[] }
 
@@ -86,14 +90,23 @@ const pts = (p: Card['points']) => (p?.learning || 0) + (p?.builder || 0) + (p?.
 
 // ── one Facebook-style feed card (draggable) with inline play + admin actions ──
 const SortableCard: React.FC<{
-  card: Card; band?: string; onEdit: (c: Card) => void; onClone: (c: Card) => void;
+  card: Card; band?: string; studentLabel?: string; onEdit: (c: Card) => void; onClone: (c: Card) => void;
   onDelete: (c: Card) => void; onPublish: (c: Card) => void;
-}> = ({ card, band, onEdit, onClone, onDelete, onPublish }) => {
+}> = ({ card, band, studentLabel, onEdit, onClone, onDelete, onPublish }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const published = card.visibility === 'published';
-  const isVideo = VIDEO_BANDS.includes(band || '');
-  const videoSource = card.metadata?.video?.url ? parseVideoUrl(card.metadata.video.url) : null;
   const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition };
+  // Every card renders the SAME student view inline (the shared CardDetailBody),
+  // so the timeline == the edit preview == what the student sees — one size,
+  // one render, for every type (not just video).
+  const previewCard = adaptToFeedCard({
+    slug: card.type, render_band: band, label: card.title,
+    student_label: studentLabel || card.type.replace(/_/g, ' '),
+    subtitle: card.subtitle, description: card.description,
+    difficulty: card.difficulty, estimated_time: card.estimated_time, week: card.week,
+    points: card.points, video: card.metadata?.video, course: (card.metadata as any)?.course,
+    experience: (card.metadata as any)?.content,
+  });
   return (
     <div ref={setNodeRef} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
       <div className="te-chead">
@@ -106,20 +119,9 @@ const SortableCard: React.FC<{
         <span className="te-badge" style={{ background: published ? '#E7F5E9' : '#F0F0F0', color: published ? '#3C7A26' : '#8A8A8A' }}>{published ? 'LIVE' : card.visibility.toUpperCase()}</span>
       </div>
 
-      {isVideo && (
-        <div className="te-media">
-          {videoSource
-            ? <div className="tl-vwrap"><VideoEmbed source={videoSource} title={card.title} poster={card.metadata?.video?.poster || null} /></div>
-            : (
-              <div className="te-hero" style={{ background: `linear-gradient(135deg,${bandColor(band)},#2E6A86)` }}>
-                <span style={{ fontSize: 42, opacity: 0.92 }}>{bandIcon(band)}</span>
-                <span style={{ position: 'absolute', bottom: 10, left: 12, color: '#fff', fontSize: 12, fontWeight: 600, background: 'rgba(0,0,0,.28)', padding: '3px 9px', borderRadius: 6 }}>⚠ No video yet — Edit to add one</span>
-              </div>
-            )}
-        </div>
-      )}
-
-      {card.description && <p className="te-desc">{card.description}</p>}
+      <div className="te-media">
+        <div className="tl-de"><div className="tld-inlinepanel"><CardDetailBody card={previewCard} preview /></div></div>
+      </div>
 
       <div className="te-foot">
         <button className="te-act pri" onClick={() => onEdit(card)}>✎ Edit</button>
@@ -133,9 +135,9 @@ const SortableCard: React.FC<{
 
 // ── one bucket section (full width, vertical) ────────────────────────────────
 const BucketSection: React.FC<{
-  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
-  cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band'>;
-}> = ({ bucket, cards, bandOf, onReorder, onAdd, cardActions }) => {
+  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
+  cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel'>;
+}> = ({ bucket, cards, bandOf, labelOf, onReorder, onAdd, cardActions }) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -164,7 +166,7 @@ const BucketSection: React.FC<{
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {cards.length === 0
             ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
-            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} {...cardActions} />)}
+            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} {...cardActions} />)}
         </SortableContext>
       </DndContext>
     </div>
@@ -172,29 +174,30 @@ const BucketSection: React.FC<{
 };
 
 // ── right-side create / edit drawer (like the student detail panel) ──────────
-// Wrap AI body_html for a SANDBOXED iframe (no scripts run) — same safe render
-// the student drawer uses, so the editor preview matches the classroom exactly.
-function lessonDoc(bodyHtml: string): string {
-  return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
-    body{font-family:Roboto,system-ui,sans-serif;margin:0;padding:2px;color:#1A1A1A;font-size:13.5px;line-height:1.6}
-    h1,h2,h3{line-height:1.3;margin:12px 0 6px} h1{font-size:17px} h2{font-size:15px} h3{font-size:13.5px}
-    p{margin:0 0 9px} ul,ol{padding-left:20px;margin:0 0 9px} li{margin-bottom:3px} a{color:#367895} img{max-width:100%}
-    pre,code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#F2F2F2;border-radius:6px}
-    pre{padding:9px;overflow:auto} code{padding:1px 4px}
-  </style>${bodyHtml}`;
-}
-
+// The "finished product" preview renders the SHARED <CardDetailBody> (the exact
+// component the student drawer uses) via adaptToFeedCard, so the editor preview
+// is the classroom, pixel for pixel — no separate lessonDoc/markup to drift.
 const EditDrawer: React.FC<{
-  draft: Partial<Card> & { type?: string; video?: CardVideo }; types: TypeDef[]; isNew: boolean; saving: boolean;
-  aiBusy: boolean; onAiFill: () => void; genBusy: boolean; onGenerate: () => void;
-  onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo }) => void; onSave: () => void; onClose: () => void;
+  draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }; types: TypeDef[]; isNew: boolean; saving: boolean;
+  aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
+  onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => void; onSave: () => void; onClose: () => void;
 }> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
+  const isSkillsJar = band === 'skills_jar';
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
-  const videoSource = draft.video?.url ? parseVideoUrl(draft.video.url) : null;
-  const content = draft.metadata?.content || null;
+  const setCourse = (patch: Partial<CardCourse>) => onChange({ course: { ...(draft.course || {}), ...patch } });
+  // The preview IS the student drawer: build the same synthetic card the Studio
+  // preview uses and render the shared <CardDetailBody preview/> — one renderer.
+  const previewCard = adaptToFeedCard({
+    slug: draft.type, render_band: band,
+    label: draft.title || typeDef?.label, student_label: typeDef?.label,
+    subtitle: draft.subtitle, description: draft.description,
+    difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
+    points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
+    course: draft.course, capabilities: typeDef?.capabilities,
+  });
   return (
     <div className="te-scrim" onClick={onClose}>
       <div className="te-drawer" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
@@ -221,44 +224,41 @@ const EditDrawer: React.FC<{
           {draft.type && (
             <div style={{ marginBottom: 18 }}>
               <div className="te-plabel">Finished product · what the student sees</div>
-              <div className="te-pcard">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isVideo || draft.description ? 12 : 0 }}>
-                  <TypeThumb band={band} size={30} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#1A1A1A' }}>{draft.title || typeDef?.label || 'Untitled'}</div>
-                    {draft.subtitle && <div style={{ fontSize: 12, color: '#8A8A8A' }}>{draft.subtitle}</div>}
-                  </div>
+              <div className="tl-de">
+                <div className="tld-inlinepanel">
+                  <CardDetailBody card={previewCard} preview />
                 </div>
-                {isVideo && (videoSource
-                  ? <div className="tl-vwrap"><VideoEmbed source={videoSource} title={draft.title || ''} poster={draft.video?.poster || null} /></div>
-                  : <div style={{ fontSize: 12.5, color: '#C29A0A', background: '#FEF7E6', border: '1px solid #F5E4B8', borderRadius: 9, padding: '10px 12px' }}>⚠ No video linked yet — add a Video URL below (or ✦ Fill with AI) so students can play it right here.</div>)}
-                {draft.description && <p style={{ fontSize: 13.5, color: '#4A4A4A', lineHeight: 1.55, margin: '12px 0 0' }}>{draft.description}</p>}
-                {content && (content.summary || content.body_html || (content.questions && content.questions.length > 0)) && (
-                  <div style={{ marginTop: 12, borderTop: '1px solid #EEE', paddingTop: 12 }}>
-                    {content.summary && <p style={{ fontSize: 13.5, color: '#1A1A1A', lineHeight: 1.55, margin: '0 0 10px' }}>{content.summary}</p>}
-                    {content.body_html && <iframe className="te-lessonframe" title="Lesson" sandbox="" srcDoc={lessonDoc(content.body_html)} />}
-                    {Array.isArray(content.questions) && content.questions.length > 0 && (
-                      <><div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#8A8A8A', margin: '10px 0 5px' }}>Questions</div>
-                        <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: '#4A4A4A', lineHeight: 1.5 }}>{content.questions.map((q: string, i: number) => <li key={i}>{q}</li>)}</ul></>
-                    )}
-                  </div>
-                )}
               </div>
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button type="button" className="te-act" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
                   disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
                   onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill in the fields'}</button>
                 <button type="button" className="te-act pri" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
-                  disabled={genBusy || isNew || !draft.title} title={isNew ? 'Save the card first, then generate its content' : !draft.title ? 'Give it a title first' : 'Generate the real content students see (summary, body, questions) and save it to this card'}
-                  onClick={onGenerate}>{genBusy ? '✦ Generating…' : content ? '↻ Regenerate content' : '✦ Generate content'}</button>
+                  disabled={!!genBusy || (isSkillsJar ? !(draft.course?.url || '').trim() : (!draft.title && !(draft.video?.url || '').trim()))}
+                  title={isSkillsJar ? 'Fill everything from the SkillsJar link. Then Save.' : (!draft.title && !(draft.video?.url || '').trim()) ? 'Add a title (or paste a video URL) first' : isVideo ? 'Fill everything from your Title — or from your Video URL if you only pasted a link. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
+                  onClick={() => onGenerate(isSkillsJar ? 'course' : (draft.title ? 'title' : 'video'))}>{genBusy ? (isVideo || isSkillsJar ? '✦ Working…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
               </div>
-              {isNew && <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>Add the card first, then Generate content to write what students see.</div>}
+              <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>
+                {isSkillsJar
+                  ? 'Paste the SkillsJar course link and press ✦ Generate content — it fills the class name, description, XP, minutes, and overview. Then Save changes.'
+                  : isVideo
+                    ? 'Add a Title and press the ✦ next to it to find a video and fill the rest — or paste a Video URL and press the ✦ next to it to fill everything from that video. Then Save changes.'
+                    : 'Add a title and click Generate content to write what students see. Then Save changes.'}
+              </div>
             </div>
           )}
 
           <div className="te-sechead">Controls — tweak and watch the preview update</div>
           <label style={lbl}>Title
-            <input style={inp} value={draft.title || ''} onChange={(e) => onChange({ title: e.target.value })} placeholder="Card title" />
+            {isVideo ? (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input style={{ ...inp, flex: 1, minWidth: 0 }} value={draft.title || ''} onChange={(e) => onChange({ title: e.target.value })} placeholder="Card title" />
+                <AutofillButton onClick={() => onGenerate('title')} busy={genBusy === 'title'} disabled={!draft.title || !!genBusy}
+                  title="✦ Auto-fill from this title — find a matching video and write everything else" />
+              </div>
+            ) : (
+              <input style={inp} value={draft.title || ''} onChange={(e) => onChange({ title: e.target.value })} placeholder="Card title" />
+            )}
           </label>
           <label style={lbl}>Subtitle
             <input style={inp} value={draft.subtitle || ''} onChange={(e) => onChange({ subtitle: e.target.value })} placeholder="(optional)" />
@@ -273,7 +273,11 @@ const EditDrawer: React.FC<{
                 ▶ Video &amp; playback <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· the link this card plays in-app</span>
               </div>
               <label style={lbl}>Video URL
-                <input style={inp} value={draft.video?.url || ''} onChange={(e) => setVideo({ url: e.target.value })} placeholder="YouTube, Vimeo, Loom, Wistia, or .mp4 link" />
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input style={{ ...inp, flex: 1, minWidth: 0 }} value={draft.video?.url || ''} onChange={(e) => setVideo({ url: e.target.value })} placeholder="YouTube, Vimeo, Loom, Wistia, or .mp4 link" />
+                  <AutofillButton onClick={() => onGenerate('video')} busy={genBusy === 'video'} disabled={!(draft.video?.url || '').trim() || !!genBusy}
+                    title="✦ Auto-fill from this video — write the title and everything else" />
+                </div>
               </label>
               <div style={{ display: 'flex', gap: 10 }}>
                 <label style={{ ...lbl, flex: 1, marginBottom: 0 }}>Presenter
@@ -283,6 +287,24 @@ const EditDrawer: React.FC<{
                   <input style={inp} value={draft.video?.poster || ''} onChange={(e) => setVideo({ poster: e.target.value })} placeholder="(optional)" />
                 </label>
               </div>
+            </div>
+          )}
+
+          {isSkillsJar && (
+            <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#367895', marginBottom: 8 }}>
+                🎓 SkillsJar course <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· paste the link, then ✦ to fill the rest</span>
+              </div>
+              <label style={lbl}>Class link
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input style={{ ...inp, flex: 1, minWidth: 0 }} value={draft.course?.url || ''} onChange={(e) => setCourse({ url: e.target.value })} placeholder="The SkillsJar course URL (https://anthropic.skilljar.com/…)" />
+                  <AutofillButton onClick={() => onGenerate('course')} busy={genBusy === 'course'} disabled={!(draft.course?.url || '').trim() || !!genBusy}
+                    title="✦ Fill everything from this course link — class name, description, XP, minutes, and the overview" />
+                </div>
+              </label>
+              <label style={{ ...lbl, marginBottom: 0 }}>Class name
+                <input style={inp} value={draft.course?.name || ''} onChange={(e) => setCourse({ name: e.target.value })} placeholder="(auto-filled by ✦ — editable)" />
+              </label>
             </div>
           )}
 
@@ -341,11 +363,11 @@ const TimelineEditorTab: React.FC = () => {
   const [week, setWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo }) | null>(null);
+  const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [genBusy, setGenBusy] = useState(false);
+  const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course'>('');
 
   const loadBoard = useCallback(async () => {
     setLoading(true); setError('');
@@ -376,6 +398,11 @@ const TimelineEditorTab: React.FC = () => {
     const t = board?.types.find((x) => x.slug === type);
     return t?.render_band || guessBand(type);
   }, [board]);
+  // slug -> the type's participant-facing label (for the inline student render's crumb/chip).
+  const labelOf = useCallback((type: string): string => {
+    const t = board?.types.find((x) => x.slug === type);
+    return t?.label || type.replace(/_/g, ' ');
+  }, [board]);
 
   const weekCards = useMemo(
     () => (board?.cards || []).filter((c) => (typeof c.week === 'number' ? c.week : null) === week),
@@ -398,9 +425,9 @@ const TimelineEditorTab: React.FC = () => {
     setDraft({ type: def?.slug, title: '', bucket, week, difficulty: def?.difficulty || 'core',
       points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'draft' });
   };
-  const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined }); };
+  const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined }); };
 
-  const onDraftChange = (patch: Partial<Card> & { type?: string; video?: CardVideo }) => {
+  const onDraftChange = (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => {
     setDraft((d) => {
       if (!d) return d;
       const next = { ...d, ...patch };
@@ -424,19 +451,23 @@ const TimelineEditorTab: React.FC = () => {
       // Per-card "unique" data (the video/link) rides along as `video`; the API
       // merges it into metadata.video, which the student feed + Runtime read.
       const videoPayload = draft.video && (draft.video.url || '').trim() ? draft.video : null;
+      // AI-generated (or authored) student content rides along in metadata.content
+      // so "Generate content → Save" persists exactly what the preview showed.
+      const contentPayload = (draft.metadata as any)?.content || null;
+      const coursePayload = draft.course && ((draft.course.name || '').trim() || (draft.course.url || '').trim()) ? draft.course : null;
       if (isNew) {
         await api.post('/api/admin/orchestration/timeline/cards', {
           type: draft.type, title: draft.title, subtitle: draft.subtitle || null,
           description: draft.description || null, week: draft.week ?? null, bucket: draft.bucket,
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
-          points: draft.points, visibility: draft.visibility, video: videoPayload,
+          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload,
         });
       } else if (draft.id) {
         await api.put(`/api/admin/orchestration/timeline/cards/${draft.id}`, {
           title: draft.title, subtitle: draft.subtitle || null, description: draft.description || null,
           week: draft.week ?? null, bucket: draft.bucket, difficulty: draft.difficulty,
           estimated_time: draft.estimated_time ?? null, points: draft.points, visibility: draft.visibility,
-          video: videoPayload,
+          video: videoPayload, content: contentPayload, course: coursePayload,
         });
       }
       setDraft(null);
@@ -471,19 +502,59 @@ const TimelineEditorTab: React.FC = () => {
     finally { setAiBusy(false); }
   };
 
-  // "Generate content" — run the card's type generation prompt on its real inputs,
-  // SAVE the result onto the card (metadata.content), and show it in the preview.
-  // This is what students actually see: preview == classroom.
-  const genContent = async () => {
-    if (!draft?.id) return;
-    setGenBusy(true); setError('');
+  // The one-click, field-ANCHORED. The anchored field is kept; every other field
+  // is regenerated into the draft (nothing saved yet — the author reviews the
+  // live preview, then Save persists it).
+  //   anchor='title' → keep the Title, find a fresh video + fill the rest.
+  //   anchor='video' → keep the URL,  write the Title + fill the rest.
+  const genContent = async (anchor: 'title' | 'video' | 'course' = 'title') => {
+    if (!draft?.type) return;
+    // Skills Course: from just the SkillsJar link, fill class name + everything.
+    if (anchor === 'course') {
+      if (!(draft.course?.url || '').trim()) return;
+      setGenBusy('course'); setError('');
+      try {
+        const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: draft.type, url: draft.course!.url });
+        const g = r.data || {};
+        setDraft((d) => d && ({
+          ...d,
+          title: g.title ?? d.title,
+          subtitle: g.subtitle ?? d.subtitle,
+          description: g.description ?? d.description,
+          estimated_time: typeof g.estimated_time === 'number' ? g.estimated_time : d.estimated_time,
+          points: g.points || d.points,
+          course: g.course || d.course,   // keeps the URL, fills the class name
+          metadata: { ...(d.metadata || {}), content: g.content || (d.metadata as any)?.content },
+        }));
+      } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); }
+      finally { setGenBusy(''); }
+      return;
+    }
+    if (anchor === 'title' && !draft.title) return;
+    if (anchor === 'video' && !(draft.video?.url || '').trim()) return;
+    setGenBusy(anchor); setError('');
     try {
-      const r = await api.post(`/api/admin/orchestration/timeline/cards/${draft.id}/generate`, {});
-      const content = r.data?.content || null;
-      setDraft((d) => d && ({ ...d, metadata: { ...(d.metadata || {}), content } }));
-      loadBoard();
+      const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
+        type: draft.type, title: draft.title || null,
+        subtitle: draft.subtitle || null, description: draft.description || null,
+        video: draft.video || null, anchor,
+      });
+      const g = r.data || {};
+      setDraft((d) => d && ({
+        ...d,
+        title: anchor === 'video' ? (g.title ?? d.title) : d.title,   // keep title when title-anchored
+        subtitle: g.subtitle ?? d.subtitle,
+        description: g.description ?? d.description,
+        estimated_time: typeof g.estimated_time === 'number' ? g.estimated_time : d.estimated_time,
+        points: g.points || d.points,                                  // AI-guessed XP
+        video: g.video || d.video,                                     // g.video keeps the URL when video-anchored
+        metadata: { ...(d.metadata || {}), content: g.content || (d.metadata as any)?.content },
+      }));
+      if (g.video && g.video_verified === false) {
+        setError('Heads up: could not verify the video plays — check it in the preview or paste your own URL.');
+      }
     } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); }
-    finally { setGenBusy(false); }
+    finally { setGenBusy(''); }
   };
 
   const onPublish = async (c: Card) => {
@@ -515,7 +586,7 @@ const TimelineEditorTab: React.FC = () => {
         .te-ttl{font-size:15px;font-weight:700;color:#1A1A1A}
         .te-sub{font-size:12px;color:#8A8A8A;margin-top:1px}
         .te-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;letter-spacing:.03em;flex:none}
-        .te-media{padding:0 14px}
+        .te-media{padding:12px 14px 2px}
         .te-hero{aspect-ratio:16/9;border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;color:#fff}
         .te-desc{padding:10px 14px 0;font-size:13.5px;color:#4A4A4A;line-height:1.5;margin:0}
         .te-foot{display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid #F2F2F2;margin-top:12px;flex-wrap:wrap}
@@ -571,7 +642,7 @@ const TimelineEditorTab: React.FC = () => {
           </div>
 
           {BUCKETS.map((b) => (
-            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} onReorder={onReorder} onAdd={openAdd}
+            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} onReorder={onReorder} onAdd={openAdd}
               cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish }} />
           ))}
         </>

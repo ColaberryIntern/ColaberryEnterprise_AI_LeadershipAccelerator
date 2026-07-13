@@ -9,6 +9,7 @@ import { Op } from 'sequelize';
 import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineCardProgress';
 import Enrollment from '../../models/Enrollment';
+import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType } from './typeRegistry';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
@@ -27,6 +28,13 @@ export interface FeedContent {
   body_html?: string;
   questions?: string[];
   reflection?: string;
+}
+
+/** Anthropic Skills Course link (skills_jar) — the class name + SkillsJar URL
+ *  the student opens, then uploads their completion certificate against. */
+export interface FeedCourse {
+  name: string | null;
+  url: string | null;
 }
 
 export interface FeedCard {
@@ -49,6 +57,14 @@ export interface FeedCard {
   completed_at: Date | null;
   video: FeedVideo | null;
   content: FeedContent | null;
+  course: FeedCourse | null;          // Skills Course link (skills_jar)
+  capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
+}
+
+/** PURE — normalize a capabilities blob (JSONB, may be junk) into a string[]. */
+export function normalizeCapabilities(caps: any): string[] {
+  if (!Array.isArray(caps)) return [];
+  return caps.filter((c) => typeof c === 'string' && c.trim()).map((c) => c.trim());
 }
 
 /** PURE — the saved AI content from a card's metadata blob, or null. */
@@ -73,6 +89,16 @@ export function videoFromMetadata(metadata: any): FeedVideo | null {
     presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
     poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
   };
+}
+
+/** PURE — a typed Skills Course link from a card's metadata blob, or null when
+ *  neither the class name nor the URL is present. */
+export function courseFromMetadata(metadata: any): FeedCourse | null {
+  const c = metadata && typeof metadata === 'object' ? metadata.course : null;
+  if (!c || typeof c !== 'object') return null;
+  const name = typeof c.name === 'string' && c.name.trim() ? c.name.trim() : null;
+  const url = typeof c.url === 'string' && c.url.trim() ? c.url.trim() : null;
+  return name || url ? { name, url } : null;
 }
 
 export interface TimelineFeed {
@@ -134,6 +160,11 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   });
   const progressByCard = new Map(progressRows.map((p) => [p.card_id, p]));
 
+  // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
+  // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
+  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
+  const capsBySlug = new Map(typeDefs.map((t) => [t.slug, normalizeCapabilities(t.capabilities)]));
+
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
     const progress = progressByCard.get(card.id);
@@ -157,6 +188,8 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       completed_at: progress?.completed_at ?? null,
       video: videoFromMetadata(card.metadata),
       content: contentFromMetadata(card.metadata),
+      course: courseFromMetadata(card.metadata),
+      capabilities: capsBySlug.get(card.type) || [],
     };
   });
 

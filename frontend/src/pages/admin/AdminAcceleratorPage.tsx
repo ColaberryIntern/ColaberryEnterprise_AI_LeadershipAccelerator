@@ -5,6 +5,7 @@ import ConfirmModal from '../../components/ui/ConfirmModal';
 import AdminCurriculumTab from './AdminCurriculumTab';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
 
 interface Cohort {
   id: string;
@@ -57,6 +58,14 @@ interface EnrollmentInfo {
   payment_method?: string;
   portal_enabled?: boolean;
   created_at?: string;
+  enrollment_type?: string;
+  notes?: string;
+  // Acquisition/click attribution (from the matching Lead) — where they came from.
+  lead_source?: string | null;
+  form_type?: string | null;
+  utm_source?: string | null;
+  utm_campaign?: string | null;
+  page_url?: string | null;
 }
 
 interface Submission {
@@ -96,7 +105,9 @@ function AdminAcceleratorPage() {
   const { showToast } = useToast();
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [selectedCohortId, setSelectedCohortId] = useState('');
-  const [activeTab, setActiveTab] = useState<TabKey>('sessions');
+  // Default to Participants — Sessions is empty for most cohorts, so it made the
+  // page look blank on load.
+  const [activeTab, setActiveTab] = useState<TabKey>('participants');
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
 
@@ -130,6 +141,7 @@ function AdminAcceleratorPage() {
   const [enrollmentsLoading, setEnrollmentsLoading] = useState(false);
   const [portalFilter, setPortalFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending_invoice' | 'failed'>('all');
+  const [historyTarget, setHistoryTarget] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     api.get('/api/admin/cohorts').then((res) => {
@@ -331,6 +343,20 @@ function AdminAcceleratorPage() {
     }
   };
 
+  // Open the portal exactly as this participant sees it. Opens in a new tab; the
+  // participant session lives under a separate token (participant_token) so it
+  // does NOT log the admin out of this tab.
+  const handleViewAsStudent = async (enrollmentId: string) => {
+    try {
+      const res = await api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/portal-link`);
+      const url = res.data?.url;
+      if (!url) { showToast('No portal link available', 'error'); return; }
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      showToast('Failed to open student portal', 'error');
+    }
+  };
+
   const filteredEnrollments = cohortEnrollments.filter((e) => {
     if (portalFilter === 'enabled' && !e.portal_enabled) return false;
     if (portalFilter === 'disabled' && e.portal_enabled) return false;
@@ -372,6 +398,48 @@ function AdminAcceleratorPage() {
 
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
   const formatDateTime = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+
+  // "3 days ago" style relative label for when someone registered.
+  const timeAgo = (iso?: string) => {
+    if (!iso) return '';
+    const then = new Date(iso).getTime();
+    if (Number.isNaN(then)) return '';
+    const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+    const mins = Math.floor(secs / 60), hrs = Math.floor(mins / 60), days = Math.floor(hrs / 24);
+    if (secs < 60) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hrs < 24) return `${hrs}h ago`;
+    if (days < 30) return `${days}d ago`;
+    const months = Math.floor(days / 30);
+    if (months < 12) return `${months}mo ago`;
+    return `${Math.floor(days / 365)}y ago`;
+  };
+
+  // Where a prospect registered from: prefer the actual landing page's host, then
+  // the lead source, then a label derived from the enrollment note. Returns a
+  // human label + the raw page URL (if any) to link to, and a details tooltip.
+  const sourceInfo = (e: EnrollmentInfo): { label: string; href?: string; tooltip: string } => {
+    let label = '';
+    if (e.page_url) {
+      try { label = new URL(e.page_url).hostname.replace(/^www\./, ''); } catch { label = e.page_url; }
+    }
+    if (!label && e.lead_source) {
+      label = e.lead_source.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+    if (!label && e.notes) {
+      if (/open house/i.test(e.notes)) label = 'Open House';
+      else if (/training/i.test(e.notes)) label = 'Training signup';
+    }
+    if (!label) label = '—';
+    const parts: string[] = [];
+    if (e.lead_source) parts.push(`source: ${e.lead_source}`);
+    if (e.form_type) parts.push(`form: ${e.form_type}`);
+    if (e.utm_source) parts.push(`utm_source: ${e.utm_source}`);
+    if (e.utm_campaign) parts.push(`utm_campaign: ${e.utm_campaign}`);
+    if (e.page_url) parts.push(`page: ${e.page_url}`);
+    if (e.notes) parts.push(e.notes);
+    return { label, href: e.page_url || undefined, tooltip: parts.join('\n') || 'No acquisition data captured' };
+  };
 
   // Per-page trust signal — declared before any early return so hook order is stable.
   const trust: TrustSignal = useMemo(() => ({
@@ -569,35 +637,70 @@ function AdminAcceleratorPage() {
                     <tr>
                       <th>Name</th>
                       <th>Email</th>
-                      <th>Company</th>
+                      <th>Source</th>
                       <th>Payment</th>
-                      <th>Portal Access</th>
-                      <th>Enrolled</th>
+                      <th>Portal</th>
+                      <th>Registered</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredEnrollments.length === 0 ? (
                       <tr><td colSpan={6} className="text-center text-muted py-4">No enrollments found</td></tr>
-                    ) : filteredEnrollments.map((e) => (
+                    ) : filteredEnrollments.map((e) => {
+                      const src = sourceInfo(e);
+                      return (
                       <tr key={e.id}>
-                        <td className="fw-medium">{e.full_name}</td>
-                        <td className="small">{e.email}</td>
-                        <td>{e.company}</td>
-                        <td>{paymentBadge(e.payment_status || 'failed')}</td>
-                        <td>
-                          {e.portal_enabled ? (
-                            <button className="btn btn-outline-danger btn-sm" onClick={() => handleTogglePortal(e.id, false)}>
-                              <i className="ri-lock-line me-1" aria-hidden="true"></i>Revoke
-                            </button>
-                          ) : (
-                            <button className="btn btn-success btn-sm" onClick={() => handleTogglePortal(e.id, true)}>
-                              <i className="ri-lock-unlock-line me-1" aria-hidden="true"></i>Enable Portal
-                            </button>
+                        <td className="fw-medium">
+                          <button
+                            className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
+                            onClick={() => setHistoryTarget({ id: e.id, name: e.full_name })}
+                            title="View full history & activity"
+                          >
+                            {e.full_name}
+                          </button>
+                          {e.company && e.company !== 'Prospect' && (
+                            <div className="text-muted small fw-normal">{e.company}</div>
                           )}
                         </td>
-                        <td className="small">{formatDateTime(e.created_at || '')}</td>
+                        <td className="small">{e.email}</td>
+                        <td className="small" title={src.tooltip}>
+                          {src.href ? (
+                            <a href={src.href} target="_blank" rel="noopener noreferrer" className="text-decoration-none">
+                              {src.label} <i className="ri-external-link-line" aria-hidden="true"></i>
+                            </a>
+                          ) : (
+                            <span>{src.label}</span>
+                          )}
+                          {e.utm_campaign && <div className="text-muted" style={{ fontSize: '0.72rem' }}>{e.utm_campaign}</div>}
+                        </td>
+                        <td>{paymentBadge(e.payment_status || 'failed')}</td>
+                        <td>
+                          <div className="d-flex gap-1 align-items-center">
+                            {e.portal_enabled ? (
+                              <button className="btn btn-outline-danger btn-sm" onClick={() => handleTogglePortal(e.id, false)}>
+                                <i className="ri-lock-line me-1" aria-hidden="true"></i>Revoke
+                              </button>
+                            ) : (
+                              <button className="btn btn-success btn-sm" onClick={() => handleTogglePortal(e.id, true)}>
+                                <i className="ri-lock-unlock-line me-1" aria-hidden="true"></i>Enable
+                              </button>
+                            )}
+                            <button
+                              className="btn btn-outline-primary btn-sm"
+                              onClick={() => handleViewAsStudent(e.id)}
+                              title="Open the portal as this participant sees it (new tab)"
+                            >
+                              <i className="ri-eye-line me-1" aria-hidden="true"></i>View as student
+                            </button>
+                          </div>
+                        </td>
+                        <td className="small">
+                          {formatDateTime(e.created_at || '')}
+                          {e.created_at && <div className="text-muted" style={{ fontSize: '0.72rem' }}>{timeAgo(e.created_at)}</div>}
+                        </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -870,6 +973,16 @@ function AdminAcceleratorPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* Person 360 drill-down drawer */}
+      {historyTarget && (
+        <PersonHistoryDrawer
+          enrollmentId={historyTarget.id}
+          name={historyTarget.name}
+          onClose={() => setHistoryTarget(null)}
+          onViewAsStudent={handleViewAsStudent}
+        />
       )}
 
       {/* Delete Confirm */}

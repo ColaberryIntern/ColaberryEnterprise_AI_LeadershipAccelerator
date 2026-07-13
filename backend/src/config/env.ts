@@ -47,6 +47,10 @@ export const env = {
   synthflowApiKey: process.env.SYNTHFLOW_API_KEY || '',
   synthflowWelcomeAgentId: process.env.SYNTHFLOW_WELCOME_AGENT_ID || '',
   synthflowInterestAgentId: process.env.SYNTHFLOW_INTEREST_AGENT_ID || '',
+  // Agent that handles inbound "call me now" callbacks from training.colaberry.com
+  // (the Cora Outbound Admissions agent, module 1b432b69-fcb1-4b70-9130-8a66e45eaff5).
+  // Falls back to the interest agent in synthflowService if left unset.
+  synthflowCallbackAgentId: process.env.SYNTHFLOW_CALLBACK_AGENT_ID || '',
 
   // Admin alert phone (for Cory health monitor voice alerts)
   adminAlertPhone: process.env.ADMIN_ALERT_PHONE || '',
@@ -113,6 +117,16 @@ export const env = {
 
   // Enterprise CRM service token (service-to-service auth for /api/v1/leads)
   enterpriseCrmToken: process.env.ENTERPRISE_CRM_TOKEN || '',
+
+  // Branded welcome email for Open House / training.colaberry.com Explorer signups.
+  // Sent by createExplorerEnrollment via emailService.sendTrainingWelcome. The
+  // from-address stays on a Mandrill-verified domain (colaberry.com) but is
+  // training-branded; flip TRAINING_WELCOME_FROM_EMAIL to an @training.colaberry.com
+  // address only once that domain's SPF/DKIM is verified in Mandrill. The token TTL
+  // is how long the emailed portal magic link stays valid.
+  trainingWelcomeFromEmail: process.env.TRAINING_WELCOME_FROM_EMAIL || 'training@colaberry.com',
+  trainingWelcomeFromName: process.env.TRAINING_WELCOME_FROM_NAME || 'Colaberry Training',
+  trainingWelcomeTokenTtlDays: parseInt(process.env.TRAINING_WELCOME_TOKEN_TTL_DAYS || '30', 10),
 
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
