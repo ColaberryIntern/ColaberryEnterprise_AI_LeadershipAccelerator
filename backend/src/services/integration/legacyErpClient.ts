@@ -301,8 +301,16 @@ export async function pushUpdate(
 ): Promise<ErpUpdateResult> {
   const { allowedRoles = [], requiredFields = [] } = options;
 
-  // REQ-003: role check
-  if (allowedRoles.length > 0 && !allowedRoles.includes(request.callerRole)) {
+  // REQ-003: role check — FAIL CLOSED. A module with no allowedRoles configured has
+  // no authorized writers, so deny rather than fall through to open access. Callers
+  // must pass the module's explicit ACL (the agent runner sources it from module config).
+  if (allowedRoles.length === 0) {
+    throw Object.assign(
+      new Error(`No allowedRoles configured for ${request.module}; refusing push (fail-closed)`),
+      { errorClass: 'AuthorizationError' },
+    );
+  }
+  if (!allowedRoles.includes(request.callerRole)) {
     throw Object.assign(
       new Error(`Role '${request.callerRole}' is not permitted to push updates to ${request.module}`),
       { errorClass: 'AuthorizationError' },
