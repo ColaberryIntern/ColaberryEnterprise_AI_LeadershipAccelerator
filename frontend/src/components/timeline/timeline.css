@@ -119,7 +119,7 @@
 .tl-de .pip.done{color:var(--leaf-text)} .tl-de .pip.up{color:var(--text-muted)} .tl-de .pip.lock{color:var(--text-muted)}
 
 /* media: branded SVG thumbnail + video frame */
-.tl-de .mthumb{position:relative;border-radius:var(--r-12);overflow:hidden;width:100%;display:block;border:none;padding:0;height:250px;text-align:left;cursor:pointer}
+.tl-de .mthumb{position:relative;border-radius:var(--r-12);overflow:hidden;width:100%;display:block;border:none;padding:0;aspect-ratio:16/9;text-align:left;cursor:pointer}
 .tl-de .mthumb svg.bg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .tl-de .mthumb .mt-chip{position:absolute;left:14px;top:13px;z-index:3;display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.92);color:#1A1A1A;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:5px 12px;border-radius:var(--r-pill)}
 .tl-de .mthumb .mt-chip .sw{width:8px;height:8px;border-radius:50%}
@@ -129,13 +129,13 @@
 .tl-de .mthumb .mt-open{position:absolute;right:16px;bottom:14px;z-index:3;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.32);transition:transform .16s var(--ease)}
 .tl-de .mthumb:hover .mt-open{transform:scale(1.07)} .tl-de .mthumb .mt-open svg{width:24px;height:24px;color:var(--cherry-deep)}
 .tl-de .mthumb.done .mt-open{background:var(--leaf-action)} .tl-de .mthumb.done .mt-open svg{color:#fff}
-.tl-de .vframe{position:relative;border-radius:var(--r-12);height:250px;overflow:hidden;display:flex;align-items:center;justify-content:center;width:100%;cursor:pointer}
+.tl-de .vframe{position:relative;border-radius:var(--r-12);aspect-ratio:16/9;overflow:hidden;display:flex;align-items:center;justify-content:center;width:100%;cursor:pointer}
 .tl-de .vframe .poster{position:absolute;inset:0} .tl-de .vframe .vgrad{position:absolute;inset:0;background:linear-gradient(135deg,rgba(54,120,149,.5),rgba(26,26,26,.72))}
 .tl-de .vframe .vmeta{position:absolute;left:16px;bottom:14px;color:#fff;z-index:2} .tl-de .vframe .vmeta b{display:block;font-size:15px} .tl-de .vframe .vmeta span{font-size:12px;font-family:var(--mono);opacity:.85}
 .tl-de .vframe .vplay{position:relative;z-index:2;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.95);border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.35);transition:.16s var(--ease)}
 .tl-de .vframe:hover .vplay{transform:scale(1.07)} .tl-de .vframe .vplay svg{width:26px;height:26px;color:var(--cherry-deep);margin-left:4px}
 .tl-de .fc-video{border-radius:var(--r-12);overflow:hidden}
-@media(max-width:760px){.tl-de .mthumb,.tl-de .vframe{height:200px}}
+/* aspect-ratio keeps .mthumb/.vframe at video size (16:9) on every width */
 
 /* sidebar cards */
 .tl-de .side-card{padding:20px}
