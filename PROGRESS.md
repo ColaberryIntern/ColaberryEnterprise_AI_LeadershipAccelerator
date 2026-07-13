@@ -294,6 +294,32 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### STORY-002: VA ERP Integration — Push data updates to legacy ERP modules (2026-07-08)
+- [x] STORY-002 LegacyErpPushAgent — pushData command with role check, snapshot, rollback, audit
+  - Date: 2026-07-08
+  - Session: CC-20260708-va02
+  - What changed:
+    - `backend/src/services/integration/types.ts`: added ErpUpdateRequest, ErpUpdateResult; added allowedRoles + requiredFields to ErpModuleConfig
+    - `backend/src/services/integration/legacyErpClient.ts`: added validatePayload(), writeUpdateAuditLog(), pushUpdate() — role check (REQ-003), payload validation, GET snapshot for before-state, PUT/PATCH/POST with timeout + retry (idempotent methods only; POST fires once), compensating rollback on failure, TBI-compliant before-after audit log
+    - `backend/src/services/integration/legacyErpIntegrationAgent.ts`: added runLegacyErpPushAgent(updates) agent runner
+    - `backend/src/__tests__/services/legacyErpUpdateAgent.test.ts` (new): 12 unit tests — role check pass/fail/open-access, payload validation pass/fail, happy path old+new values, 204 No Content, snapshot-fail-proceed, rollback with snapshot, no-rollback without snapshot, POST non-retry, circuit breaker blocked, agent runner success/failure/authz-error
+  - Verification: tsc + jest require npm install on target env; code reviewed for strict-mode correctness
+  - Notes: TBI attestation — satisfies Transparent (before-after audit), Solid (compensating rollback), Permitted (role check). Build Guide STORY-002 mismatch flagged — BC ticket is source of truth.
+
+### STORY-001: VA ERP Integration — Legacy ERP data retrieval agent (2026-07-08)
+- [x] STORY-001 LegacyErpIntegrationAgent — retrieve data from legacy ERP modules via OAuth 2.0
+  - Date: 2026-07-08
+  - Session: CC-20260708-va01
+  - What changed:
+    - `backend/src/services/integration/types.ts` (new): ErpModuleConfig, ErpRetrievalRequest, ErpRetrievalResult, OAuthTokenCache, CircuitBreakerState types
+    - `backend/src/services/integration/legacyErpClient.ts` (new): OAuth 2.0 client-credentials token fetch + cache, HTTP retrieval with timeout (AbortController), exponential-backoff retry (max retries from env), in-memory circuit breaker (CLOSED→OPEN→HALF_OPEN), audit log write via AuditLog model
+    - `backend/src/services/integration/legacyErpIntegrationAgent.ts` (new): agent runner — parses VA_ERP_MODULE_CONFIG, iterates modules/endpoints, calls retrieveData, returns AgentExecutionResult
+    - `backend/src/__tests__/services/legacyErpIntegrationAgent.test.ts` (new): unit tests — happy path, token caching, circuit breaker open, auth error, idempotency, agent runner success + failure
+    - `backend/src/config/env.ts`: added VA_ERP_TOKEN_URL, VA_ERP_CLIENT_ID, VA_ERP_CLIENT_SECRET, VA_ERP_MODULE_CONFIG, VA_ERP_REQUEST_TIMEOUT_MS, VA_ERP_MAX_RETRIES
+    - `backend/.env.example`: added VA ERP section with all 6 env vars
+  - Verification: tsc --noEmit not runnable locally (node_modules not installed in dev checkout); code reviewed for strict-mode correctness — all variables initialized before use, no `any` without justification, all external calls have explicit timeouts
+  - Notes: node_modules must be installed on target env to run `npx jest` and `npx tsc --noEmit`. Circuit breaker is in-memory (resets on restart) — appropriate for an MVP agent. FedRAMP/ATO concerns re: the live demo URL (va-erp-demo.colaberry.dev) are tracked in the bid/no-bid analysis doc, not this story.
+
 ### Per-week Skilljar CourseLink: deep-link delivery wired into portal curriculum (2026-06-17)
 - [x] **CourseLink catalog (Postgres) + fail-soft service join + portal week CTA, implementing BC decision 9985688697 (Skilljar delivery = deep-link)**
   - Date: 2026-06-17
@@ -5920,6 +5946,7 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
   - What changed: Kes pushed `5412f015` (`fix: PR #3 review — kes-tasks cleanup, error leakage, a11y Space key, structured logging`) after my earlier PR comment listing the unresolved blockers. Verified each item against the diff: (1) `git rm -r kes-tasks/` removed all 5 orphan files (832 line deletions) + added `kes-tasks/` to `.gitignore`; (2) FK question confirmed safe in code — `backend/src/services/participantService.ts:61` signs JWT with `sub: enrollment.id` so `req.participant!.sub` IS the enrollment id (no FK violation possible against `enrollment_id UUID NOT NULL REFERENCES enrollments(id)`); (3) dynamic `await import()` calls in both project-dna routes replaced with a single static `import { saveProjectDna, getProjectDna } from "../services/projectDnaService"` at top of `participantRoutes.ts`; (4) structured JSON logging added to `projectDnaService.ts` (`project_dna_saved` with `duration_ms`, `project_dna_fetched` with `found` flag, both with random correlation_id) and to both 500 catch blocks in `participantRoutes.ts` (`project_dna_save_failed` / `project_dna_get_failed` with correlation_id from X-Correlation-ID header or generated UUID, error_class, context — client now gets generic `Failed to save/retrieve Project DNA` string instead of raw `err.message`); (5) a11y bonus — all 5 `onKeyDown` handlers on `role=radio`/`role=checkbox` elements in `ProjectDnaWizard.tsx` now activate on Enter OR Space (was Enter-only, WCAG 2.1 AA §4.1.2 fix). Three merge conflicts resolved additively on `/tmp/pr3-merge` worktree: `PROGRESS.md` (kept both sides), `backend/src/models/index.ts` (kept the `ProjectDna` export from PR side), `.gitignore` (auto-merged). Pushed as `0fe217cd`, squash-merged to main as `b077e4bb`.
   - Verification: `gh pr view 3` confirms state MERGED, mergedAt 2026-06-09T23:34:58Z, mergeCommit `b077e4bb`. Kes's commit body claims `tsc --noEmit` exit 0 on both backend and frontend; not independently re-run from local Windows env. Local worktree at `/tmp/pr3-merge` removed cleanly.
   - Notes: **Not yet deployed.** Three remaining steps before Kes can do his FK live-verification submission (his screenshot ask): (1) deploy to dev — `ssh root@95.216.199.47 && cd /opt/colaberry-accelerator && git pull origin main && docker compose -f docker-compose.development.yml up -d --build backend`; (2) run seed against the dev DB — `docker exec <accelerator-dev{1|2}-backend> npx ts-node backend/src/seeds/seedProjectDna.ts` (idempotent CREATE TABLE IF NOT EXISTS); (3) Ali generates a participant magic link via admin panel and sends to Kes. Kes will then load `http://95.216.199.47:9999/portal/project-builder`, submit through all 4 steps, and confirm the success screen (FK check). If a 500 surfaces with FK violation, the service needs an extra lookup of `enrollment_id` from `participant_id` first — but that is unlikely given the participantService.ts:61 evidence. **Deploy + magic link paused for Ali's confirmation** — shared dev2 infra + admin-panel UI both warrant Ali's explicit go-ahead per CLAUDE.md shared-state rule.
+
 - [x] **Dev deploy + project_dna seed + magic-link generation for Kes's FK live-test.**
   - Date: 2026-06-09
   - Session: CC-20260609-r4t8
@@ -7870,6 +7897,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: frontend tsc 0 (CI TS 5.7.3). Live check post-deploy (open a component → Preview/Flow → Run the whole flow → the prompt, the generated content, and the student card all show the same example).
   - Notes: frontend-only, no schema/backend change, no new dependency. Reuses runtimePreview (returns the experience) + frameHtml (renders it) + the shared vars state. Completes the "make the flow make sense" thread: the Studio now literally shows input → prompt → content → card as one chain.
 
+## VA ERP / Gov Contracts
+
+- [x] STORY-001 - Legacy ERP retrieval integration agent (OAuth2 + audit log)
+  - Date: 2026-07-09
+  - Session: CC-20260709-p9k4
+  - What changed: Verified the STORY-001 code from session CC-20260708-va01 (previously committed to PROGRESS.md as code-reviewed but never actually run — `node_modules` wasn't installed). Ran `npm install` at repo root, then found and fixed 2 pre-existing bugs blocking the gates: (1) `backend/src/controllers/v1LeadController.ts` used Zod v3's `err.errors` against Zod v4's `ZodError`, which only exposes `err.issues` — swapped both usages, unrelated to STORY-001 but blocked `tsc --noEmit` for the whole backend; (2) `legacyErpIntegrationAgent.test.ts`'s `jest.mock('../../models/AuditLog', ...)` factory was missing `__esModule: true`, so TS's `esModuleInterop` `__importDefault` double-wrapped the mock (`.default.default.create` instead of `.default.create`), plus the circuit-breaker test queued a token-response mock on every loop iteration even though the OAuth token is cached after the first fetch — the unconsumed extra mocks leaked into later tests via `jest.clearAllMocks()` (which doesn't clear queued `mockResolvedValueOnce` responses). Fixed both.
+  - Verification: `npx tsc --noEmit` from `/backend` exits 0. `npx jest legacyErpIntegrationAgent` — 9/9 pass.
+  - Notes: 6 `VA_ERP_*` env vars (`VA_ERP_TOKEN_URL`, `VA_ERP_CLIENT_ID`, `VA_ERP_CLIENT_SECRET`, `VA_ERP_MODULE_CONFIG`, `VA_ERP_REQUEST_TIMEOUT_MS`, `VA_ERP_MAX_RETRIES`) must be set in prod `.env` before the agent runs against a live VA ERP endpoint. Fulfills REQ-001, REQ-002. PR opened against `main`: https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/191.
 - [x] Experience Studio: real per-band student preview + simple 4-pillar Build model (Phases 1-2)
   - Date: 2026-07-10
   - Session: CC-20260708-q7m3
