@@ -20,6 +20,13 @@ interface ModuleSummary {
   total_lessons: number;
   completed_lessons: number;
   lessons: LessonSummary[];
+  // Canonical course structure (nullable for legacy cohorts)
+  intensive_number?: number | null;
+  intensive_title?: string | null;
+  week_number?: number | null;
+  anthropic_course_title?: string | null;
+  anthropic_course_url?: string | null;
+  anthropic_course_status?: string | null;
 }
 
 interface CurriculumData {
@@ -444,13 +451,21 @@ function PortalCurriculumPage() {
               <div className="card-header bg-white border-bottom" style={{ padding: '16px' }}>
                 <div className="d-flex justify-content-between align-items-start">
                   <div>
-                    <div className="d-flex align-items-center gap-2 mb-1">
+                    <div className="d-flex align-items-center gap-2 mb-1 flex-wrap">
                       <span
                         className="badge"
                         style={{ background: SKILL_COLORS[activeModule.skill_area] || '#6366f1', color: '#fff', fontSize: 10 }}
                       >
-                        Module {activeModule.module_number}
+                        {activeModule.week_number ? `Week ${activeModule.week_number}` : `Module ${activeModule.module_number}`}
                       </span>
+                      {activeModule.intensive_number && activeModule.intensive_title && (
+                        <span
+                          className="badge"
+                          style={{ background: '#1e293b', color: '#fff', fontSize: 10 }}
+                        >
+                          Intensive {activeModule.intensive_number}: {activeModule.intensive_title}
+                        </span>
+                      )}
                       <span
                         className="badge"
                         style={{ background: `${SKILL_COLORS[activeModule.skill_area] || '#6366f1'}15`, color: SKILL_COLORS[activeModule.skill_area] || '#6366f1', fontSize: 10 }}
@@ -460,6 +475,18 @@ function PortalCurriculumPage() {
                     </div>
                     <h5 className="fw-bold mb-1" style={{ color: '#1e293b' }}>{activeModule.title}</h5>
                     <p className="text-muted small mb-0">{activeModule.description}</p>
+                    {activeModule.anthropic_course_url && (
+                      <a
+                        href={activeModule.anthropic_course_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="d-inline-flex align-items-center gap-1 mt-2 text-decoration-none"
+                        style={{ fontSize: 12, color: '#6366f1', fontWeight: 600 }}
+                      >
+                        <i className="bi bi-box-arrow-up-right"></i>
+                        {activeModule.anthropic_course_title || 'Anthropic Academy course'}
+                      </a>
+                    )}
                   </div>
                   <div className="text-end">
                     <div className="fw-bold" style={{ fontSize: 20, color: SKILL_COLORS[activeModule.skill_area] || '#6366f1' }}>

@@ -146,6 +146,13 @@ export async function getParticipantCurriculum(enrollmentId: string) {
       skill_area: mod.skill_area,
       total_lessons: mod.total_lessons,
       completed_lessons: modCompleted,
+      // Canonical course structure (see docs/training-program-2026-q3/CANONICAL_COURSE_STRUCTURE.md)
+      intensive_number: mod.intensive_number ?? null,
+      intensive_title: mod.intensive_title ?? null,
+      week_number: mod.week_number ?? null,
+      anthropic_course_title: mod.anthropic_course_title ?? null,
+      anthropic_course_url: mod.anthropic_course_url ?? null,
+      anthropic_course_status: mod.anthropic_course_status ?? null,
       status: modCompleted === 0
         ? 'not_started'
         : modCompleted === mod.total_lessons

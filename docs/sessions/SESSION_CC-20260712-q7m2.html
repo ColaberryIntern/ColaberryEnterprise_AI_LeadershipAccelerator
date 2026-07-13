@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260712-q7m2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Sunday, July 12, 2026 at 8:43 PM</div>
+    <div><span class="sid">CC-20260712-q7m2</span><span class="count">3 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Locked the one canonical course as typed seed data that feeds Curriculum Composer, Timeline, and Experience Studio**</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">isolated `tsc --strict` clean on `canonicalCourse.ts` (exit 0); executable data check PASS (4 intensives / 12 weeks / 60 lessons / url=base+slug / Colaberry-weeks null-url / Thu=Mon+3 / strictly-increasing dates → 24 sessions); TS `transpileModule` syntax-clean on all 5 edited TS/TSX files. Full `tsc --noEmit` (backend+frontend) and `npm test -- canonicalCourse` deferred to a deps-enabled box — this Windows host&#39;s `backend/node_modules` has no `tsc`/`ts-jest` (OneDrive-synced source, deps not installed).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DB not yet seeded — run `seedCanonicalCourse.ts` on a box with backend deps to materialize the course. Weeks 10–12 are Colaberry-authored / CCA-F external gate (no Academy course); their status fields flag that so the Composer can surface it.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Colaberry-authored content outlines for weeks 10-12 (Intensive 4), encoded as typed data + folded into the lessons**</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">isolated `tsc --strict` clean on `canonicalCourse.ts` (exit 0); executable check PASS (authored weeks 10-12 fold objectives/lab/assessment, weeks 1-9 unaffected, 12wk/4int/60 lessons intact); TS `transpileModule` syntax-clean on the data + test files. Full backend `tsc --noEmit` + `npm test -- canonicalCourse` still deferred to a deps-enabled box.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Training signup onboarding: auto Explorer portal account + branded welcome email (ships dark, flag OFF)</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Built the training.colaberry.com -&gt; enterprise.colaberry.ai signup welcome flow Ali requested. Audit first confirmed the v1 ingest path (`POST /api/v1/leads` -&gt; `externalLeadIngestService.ingestExternalLead`) sends NO email today (just upserts a lead); `runLeadAutomation` is dead code and the PaySimple webhook only fires `runEnrollmentAutomation` on confirmed cohort payment. New pieces: (1) `services/trainingOnboardingService.ts` — `provisionTrainingSignup(leadId)` idempotently provisions an Explorer portal account and sends a branded welcome; `getOrCreateExplorerCohort()` lazily creates one standing `cohort_type=&#39;explorer&#39;` cohort so prospects get portal access without consuming paid-cohort seats (seats_taken only increments on confirmed payment). Account = an `Enrollment` (the only portal-login primitive) with `portal_enabled=true`, `payment_status=&#39;pending&#39;`, created directly (NOT via `setPortalAccess`) so the prospect stays in enterprise&#39;s campaign control. (2) `emailService.sendTrainingWelcome()` + exported `buildTrainingWelcomeHtml()` — on-brand HTML (navy #1a365d header, red #e53e3e &quot;Access Your Portal&quot; CTA, Segoe UI, escaped name), from `&quot;Colaberry Training&quot; &lt;training@colaberry.com&gt;` (Mandrill-verified colaberry.com domain, training-branded), routed through the existing `resolveEmailRecipient` so global test-mode redirect works for free. CTA = a fresh 30-day portal magic link (`/portal/verify?token=&lt;uuid&gt;`). (3) `config/env.ts` + `.env.example` — `TRAINING_WELCOME_ENABLED` (master switch, DEFAULT OFF), `TRAINING_WELCOME_FROM_EMAIL/NAME`, `TRAINING_WELCOME_TOKEN_TTL_DAYS`, `EXPLORER_COHORT_NAME`. (4) `controllers/v1LeadController.ts` — fires `provisionTrainingSignup(result.id, correlation_id)` fire-and-forget AFTER the HTTP response (never delays/breaks ingest), on every successful ingest (new or duplicate; internal guards make it exactly-once).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">New suite `backend/src/__tests__/services/trainingOnboardingService.test.ts` 12/12 green (flag-OFF no-op; new-signup provisions account+token+welcome; 30-day TTL; idempotent no-resend on marker; failure-first — send throw AND send not-sent both leave marker unset = retryable; lead_not_found; explorer-cohort reuse+create; welcome HTML renders link+first-name+footer and escapes `&lt;script&gt;` injection). Existing `externalLeadIngestService.test.ts` still green (regression check). ts-jest compiled all changed TS clean; full `tsc --noEmit` deferred to the Docker build gate per repo norm (times out ~5min on the OneDrive tree, Docker tsc authoritative).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">NOT deployed and fires NOTHING yet — two safety layers: master flag `TRAINING_WELCOME_ENABLED` defaults OFF, and global test-mode redirects all sends. DONE criterion (real person registers -&gt; gets the email) still needs: (a) after-hours prod deploy of this code, (b) set `TRAINING_WELCOME_ENABLED=true` in the prod backend env, (c) confirm training.colaberry.com is POSTing registrations to `/api/v1/leads` (Sai&#39;s side), (d) one real end-to-end test. DELIVERABILITY CONSTRAINT: Mandrill only verifies colaberry.com/colaberry.ai — sending literally `from:@training.colaberry.com` needs its SPF/DKIM added to Mandrill first; until then from stays `training@colaberry.com` (env-swappable). DECISIONS (reversible, flagged for Ali): prospects land in a dedicated Explorer cohort with `payment_status=&#39;pending&#39;` (keeps fake revenue out of reports — any cohort-bucketed report should exclude `cohort_type=&#39;explorer&#39;`); portal access is granted immediately with a 30-day reusable magic link.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260712-q7m2</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
