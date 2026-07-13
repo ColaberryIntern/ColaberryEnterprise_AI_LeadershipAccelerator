@@ -1,7 +1,9 @@
+import crypto from 'crypto';
 import { Op } from 'sequelize';
 import {
   Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail,
 } from '../models';
+import { env } from '../config/env';
 
 export async function listSessionsByCohort(cohortId: string) {
   return LiveSession.findAll({
@@ -435,11 +437,72 @@ function convertTo24h(timeStr: string): string {
 // -- Enrollment Management --
 
 export async function listCohortEnrollments(cohortId: string) {
-  return Enrollment.findAll({
+  const enrollments = await Enrollment.findAll({
     where: { cohort_id: cohortId },
     order: [['created_at', 'DESC']],
     include: [{ model: Cohort, as: 'cohort', attributes: ['name'] }],
   });
+
+  // Enrich each enrollment with the acquisition/click data we captured on the
+  // matching Lead (where they signed up from + UTM attribution), so the admin can
+  // see where a prospect came from. One query for all emails — no N+1.
+  const emails = Array.from(
+    new Set(enrollments.map((e) => (e.email || '').toLowerCase().trim()).filter(Boolean))
+  );
+  const leads = emails.length
+    ? await Lead.findAll({
+        where: { email: { [Op.in]: emails } },
+        attributes: ['email', 'source', 'form_type', 'utm_source', 'utm_campaign', 'page_url', 'created_at'],
+      })
+    : [];
+  const leadByEmail = new Map<string, Lead>();
+  for (const l of leads) {
+    const key = (l.email || '').toLowerCase().trim();
+    const prev = leadByEmail.get(key);
+    // Keep the earliest lead (first touch) when an email has several.
+    if (!prev || new Date(l.created_at ?? 0) < new Date(prev.created_at ?? 0)) leadByEmail.set(key, l);
+  }
+
+  return enrollments.map((e) => {
+    const lead = leadByEmail.get((e.email || '').toLowerCase().trim());
+    const json = e.toJSON() as any;
+    // Never leak the reusable portal login token into the list payload.
+    delete json.portal_token;
+    delete json.portal_token_expires_at;
+    return {
+      ...json,
+      lead_source: lead?.source ?? null,
+      form_type: lead?.form_type ?? null,
+      utm_source: lead?.utm_source ?? null,
+      utm_campaign: lead?.utm_campaign ?? null,
+      page_url: lead?.page_url ?? null,
+    };
+  });
+}
+
+/**
+ * Build a one-click portal login URL so an admin can view the portal exactly as a
+ * given participant sees it. Reuses a still-valid magic-link token (so we don't
+ * disturb the student's own bookmarked link) and mints a fresh 30-day one only
+ * when missing or expired. Returns null if the enrollment doesn't exist.
+ */
+export async function getPortalLoginUrl(enrollmentId: string): Promise<string | null> {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) return null;
+
+  const now = new Date();
+  let token = enrollment.portal_token;
+  const exp = enrollment.portal_token_expires_at;
+  if (!token || !exp || new Date(exp) <= now) {
+    token = crypto.randomUUID();
+    await enrollment.update({
+      portal_token: token,
+      portal_token_expires_at: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000),
+    });
+  }
+
+  const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
+  return `${base}/portal/verify?token=${token}`;
 }
 
 export async function setPortalAccess(enrollmentId: string, enabled: boolean) {
