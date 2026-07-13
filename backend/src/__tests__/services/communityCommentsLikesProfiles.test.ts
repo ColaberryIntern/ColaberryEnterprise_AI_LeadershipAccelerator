@@ -74,7 +74,7 @@ describe('levelFor', () => {
 });
 
 describe('createComment', () => {
-  const mockPost: any = { id: postId, cohort_id: cohortId, increment: jest.fn() };
+  const mockPost: any = { id: postId, cohort_id: cohortId, status: 'visible', increment: jest.fn() };
 
   it('happy path: creates a top-level comment', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
@@ -92,10 +92,21 @@ describe('createComment', () => {
     expect(mockPost.increment).toHaveBeenCalledWith('comment_count', { by: 1 });
   });
 
-  it('failure path: rejects a comment on a post outside the cohort', async () => {
+  it('failure path (REQ-C9): rejects a comment on a post outside the cohort with ForbiddenError (403), not NotFoundError', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findOrCreateMember.mockResolvedValue([mockMember, false]);
     findByPkPost.mockResolvedValue({ ...mockPost, cohort_id: 'different-cohort' });
+
+    await expect(createComment(enrollmentId, postId, { body: 'hi' })).rejects.toMatchObject({
+      error_class: 'ForbiddenError',
+    });
+    expect(createComment_).not.toHaveBeenCalled();
+  });
+
+  it('boundary path: rejects a comment on a removed post with NotFoundError (hidden from every participant)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue({ ...mockPost, status: 'removed' });
 
     await expect(createComment(enrollmentId, postId, { body: 'hi' })).rejects.toMatchObject({
       error_class: 'NotFoundError',
@@ -150,10 +161,18 @@ describe('listComments', () => {
     expect(result[0].replies[0].id).toBe('c2');
   });
 
-  it('failure path: throws NotFoundError for a post outside the cohort', async () => {
+  it('failure path (REQ-C9): throws ForbiddenError (403) for a post outside the cohort', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findOrCreateMember.mockResolvedValue([mockMember, false]);
-    findByPkPost.mockResolvedValue({ id: postId, cohort_id: 'different-cohort' });
+    findByPkPost.mockResolvedValue({ id: postId, cohort_id: 'different-cohort', status: 'visible' });
+
+    await expect(listComments(enrollmentId, postId)).rejects.toMatchObject({ error_class: 'ForbiddenError' });
+  });
+
+  it('boundary path: throws NotFoundError for a removed post', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue({ id: postId, cohort_id: cohortId, status: 'removed' });
 
     await expect(listComments(enrollmentId, postId)).rejects.toMatchObject({ error_class: 'NotFoundError' });
   });
@@ -207,12 +226,32 @@ describe('toggleLike', () => {
     expect(mockPost.decrement).toHaveBeenCalledWith('like_count', { by: 1 });
   });
 
-  it('failure path: throws NotFoundError for a post outside the cohort', async () => {
+  it('failure path (REQ-C9): throws ForbiddenError (403) for a post outside the cohort', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findOrCreateMember.mockResolvedValue([mockMember, false]);
     findByPkPost.mockResolvedValue({ ...mockPost, cohort_id: 'different-cohort' });
 
+    await expect(toggleLike(enrollmentId, 'post', postId)).rejects.toMatchObject({ error_class: 'ForbiddenError' });
+    expect(findOrCreateLike).not.toHaveBeenCalled();
+  });
+
+  it('boundary path: throws NotFoundError when liking a removed post', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue({ ...mockPost, status: 'removed' });
+
     await expect(toggleLike(enrollmentId, 'post', postId)).rejects.toMatchObject({ error_class: 'NotFoundError' });
+    expect(findOrCreateLike).not.toHaveBeenCalled();
+  });
+
+  it('failure path (REQ-C9): liking a comment whose parent post is in a different cohort is ForbiddenError (403)', async () => {
+    const commentId = 'comment-cross-cohort';
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkComment.mockResolvedValue({ id: commentId, post_id: postId, member_id: otherMemberId });
+    findByPkPost.mockResolvedValue({ id: postId, cohort_id: 'different-cohort', status: 'visible' });
+
+    await expect(toggleLike(enrollmentId, 'comment', commentId)).rejects.toMatchObject({ error_class: 'ForbiddenError' });
     expect(findOrCreateLike).not.toHaveBeenCalled();
   });
 

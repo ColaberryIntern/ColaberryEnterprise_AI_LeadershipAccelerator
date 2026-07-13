@@ -1,6 +1,8 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
+export type CommunityPostStatus = 'visible' | 'removed';
+
 export interface CommunityPostAttributes {
   id?: string;
   member_id: string;
@@ -12,6 +14,9 @@ export interface CommunityPostAttributes {
   like_count?: number;
   comment_count?: number;
   mentioned_member_ids?: string[];
+  status?: CommunityPostStatus;
+  removed_at?: Date | null;
+  removed_by?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -27,6 +32,9 @@ class CommunityPost extends Model<CommunityPostAttributes> implements CommunityP
   declare like_count: number;
   declare comment_count: number;
   declare mentioned_member_ids: string[];
+  declare status: CommunityPostStatus;
+  declare removed_at: Date | null;
+  declare removed_by: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -84,6 +92,19 @@ CommunityPost.init(
       type: DataTypes.JSONB,
       allowNull: false,
       defaultValue: [],
+    },
+    status: {
+      type: DataTypes.ENUM('visible', 'removed'),
+      allowNull: false,
+      defaultValue: 'visible',
+    },
+    removed_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    removed_by: {
+      type: DataTypes.UUID,
+      allowNull: true,
     },
   },
   {
