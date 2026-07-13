@@ -31,12 +31,17 @@ export interface TimelineFeedCard {
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
 }
 
-type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
+export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
 
-interface Visual { kind: Kind; color: string; }
+export interface Visual { kind: Kind; color: string; }
 
 // render_band -> Design E visual kind + accent colour (Colaberry palette).
-const BAND: Record<string, Visual> = {
+// EXPORTED as the format contract: every render_band the backend type registry
+// (backend/src/services/timeline/typeRegistry.ts) can emit MUST be a key here, or
+// the card silently falls back to the generic 'reading' visual — which would make
+// the Experience Studio demo and the real Classroom timeline event both lose the
+// type's intended format. curriculumFormatContract.test.ts enforces that.
+export const BAND: Record<string, Visual> = {
   media: { kind: 'video', color: '#367895' },
   live_class: { kind: 'video', color: '#FB2832' },
   video_feedback: { kind: 'video', color: '#E8920C' },
@@ -69,7 +74,7 @@ const BAND: Record<string, Visual> = {
   badge: { kind: 'milestone', color: '#5BA63C' },
   streak: { kind: 'milestone', color: '#E8920C' },
 };
-const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
+export const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
 
 const KIND_GRADIENT: Record<Kind, string> = {
   video: 'linear-gradient(135deg,#367895,#2E6A86)',
@@ -144,7 +149,37 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaText = isSkillsJar
     ? 'External course · certificate required'
     : metaLine || (v.kind === 'video' ? 'video' : '');
-  const media = (
+
+  // Skills Course (skills_jar) adds a second action beside ▶: "Open" jumps
+  // straight to the external course/assignment link, while ▶ still opens the
+  // right panel (course details + certificate upload). Open falls back to the
+  // panel when no link is attached, so neither button is ever dead. Because that
+  // needs two buttons, the skills_jar tile is a <div> (nesting a button in the
+  // whole-tile <button> would be invalid) — every other card keeps the uniform
+  // single-button tile.
+  const course = card.course || null;
+  const openCourseLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (locked) return;
+    if (course?.url) window.open(course.url, '_blank', 'noopener,noreferrer');
+    else onOpen?.(card);
+  };
+
+  const media = isSkillsJar ? (
+    <div className="mthumb skilljar" style={posterStyle}>
+      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+      <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
+      <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
+      <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="mt-play" onClick={() => !locked && onOpen?.(card)} aria-label={`Course details: ${card.title}`}>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+        </button>
+        <button type="button" className="mt-openbtn" onClick={openCourseLink} aria-label={course?.url ? 'Open the course link' : 'Open course details'}>
+          Open <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      </div>
+    </div>
+  ) : (
     <button type="button" className={`mthumb${done ? ' done' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
       <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>

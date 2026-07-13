@@ -137,6 +137,16 @@
 .tl-de .fc-video{border-radius:var(--r-12);overflow:hidden}
 /* aspect-ratio keeps .mthumb/.vframe at video size (16:9) on every width */
 
+/* Skills Course (skills_jar) tile: same 16:9 block as every other item, but with
+   a right-side action stack — ▶ opens the right panel (course details) and Open ↗
+   jumps straight to the external course/assignment link. */
+.tl-de .mthumb.skilljar{cursor:default}
+.tl-de .mthumb .mt-actions{position:absolute;right:16px;top:50%;transform:translateY(-50%);z-index:4;display:flex;flex-direction:column;align-items:center;gap:12px}
+.tl-de .mthumb .mt-play{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.95);border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.32);cursor:pointer;transition:transform .16s var(--ease)}
+.tl-de .mthumb .mt-play:hover{transform:scale(1.07)} .tl-de .mthumb .mt-play svg{width:24px;height:24px;color:var(--cherry-deep);margin-left:3px}
+.tl-de .mthumb .mt-openbtn{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.95);color:var(--cherry-deep);border:none;font-family:var(--sans);font-size:13px;font-weight:700;padding:7px 14px;border-radius:var(--r-pill);cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.24);transition:transform .16s var(--ease)}
+.tl-de .mthumb .mt-openbtn:hover{transform:translateY(-1px)} .tl-de .mthumb .mt-openbtn svg{width:14px;height:14px}
+
 /* sidebar cards */
 .tl-de .side-card{padding:20px}
 .tl-de .side-card h3{font-size:16px;margin-bottom:14px;display:flex;align-items:center;gap:8px} .tl-de .side-card h3 svg{width:17px;height:17px}
