@@ -1,6 +1,4 @@
 import React from 'react';
-import VideoEmbed from './VideoEmbed';
-import { parseVideoUrl } from '../../utils/videoEmbed';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
@@ -118,9 +116,6 @@ interface Props {
   card: TimelineFeedCard;
   onOpen?: (card: TimelineFeedCard) => void;
   onLike?: (card: TimelineFeedCard) => void;
-  // Accepted for a stable feed API (TimelineFeed forwards it), but the feed card
-  // no longer completes inline — completion is an explicit action in the detail
-  // drawer (opened via onOpen), so every card type completes the same way.
   onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
   likes?: number;
   liked?: boolean;
@@ -135,12 +130,33 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  const videoSource = card.video?.url ? parseVideoUrl(card.video.url) : null;
+  // Poster background: a video card uses its own poster image (darkened so the
+  // overlay text stays legible); every other kind uses its Design-E gradient.
+  const posterStyle: React.CSSProperties =
+    v.kind === 'video' && card.video?.poster
+      ? {
+          backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${card.video.poster})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        }
+      : { background: KIND_GRADIENT[v.kind] };
 
-  // Skills Course (skills_jar): the SAME 16:9 thumbnail every other item uses, with
-  // a right-side action stack — ▶ opens the detail panel (course details + the cert
-  // upload live there), and "Open" jumps straight to the external course link. When
-  // no link is attached yet, Open falls back to the panel so neither button is dead.
+  // ONE uniform 16:9 tile for EVERY card. The bottom-right ▶ opens the detail
+  // drawer (pop-out from the right) where the full assignment lives — the video
+  // plays there, content/quiz/reflection render there, the SkillsJar course +
+  // certificate upload happen there. Same size, same open-from-the-right action
+  // on every card in the feed.
+  const metaText = isSkillsJar
+    ? 'External course · certificate required'
+    : metaLine || (v.kind === 'video' ? 'video' : '');
+
+  // Skills Course (skills_jar) adds a second action beside ▶: "Open" jumps
+  // straight to the external course/assignment link, while ▶ still opens the
+  // right panel (course details + certificate upload). Open falls back to the
+  // panel when no link is attached, so neither button is ever dead. Because that
+  // needs two buttons, the skills_jar tile is a <div> (nesting a button in the
+  // whole-tile <button> would be invalid) — every other card keeps the uniform
+  // single-button tile.
   const course = card.course || null;
   const openCourseLink = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -148,11 +164,12 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
     if (course?.url) window.open(course.url, '_blank', 'noopener,noreferrer');
     else onOpen?.(card);
   };
-  const skillsJarMedia = (
-    <div className="mthumb skilljar" style={{ background: KIND_GRADIENT.skilljar }}>
-      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind="skilljar" /></svg>
+
+  const media = isSkillsJar ? (
+    <div className="mthumb skilljar" style={posterStyle}>
+      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{course?.name || shortTitle}</b><span>External course · cert required</span></span>
+      <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
       <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
         <button type="button" className="mt-play" onClick={() => !locked && onOpen?.(card)} aria-label={`Course details: ${card.title}`}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
@@ -162,26 +179,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
         </button>
       </div>
     </div>
-  );
-
-  const media = v.kind === 'video' && videoSource ? (
-    // Plays right here in the feed — press ▶ and watch in-app. "Open" is for the detail panel.
-    <div className="fc-video" onClick={(e) => e.stopPropagation()}>
-      <VideoEmbed source={videoSource} title={shortTitle} poster={card.video?.poster || null} />
-    </div>
-  ) : v.kind === 'video' ? (
-    // Video card with no link attached yet — poster opens the detail panel.
-    <button type="button" className="vframe" onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
-      <span className="poster" style={{ background: KIND_GRADIENT.video }} />
-      <span className="vgrad" />
-      <span className="vmeta"><b>{shortTitle}</b><span>video</span></span>
-      <span className="vplay"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
-    </button>
   ) : (
-    <button type="button" className={`mthumb${done ? ' done' : ''}`} style={{ background: KIND_GRADIENT[v.kind] }} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
+    <button type="button" className={`mthumb${done ? ' done' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
       <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{shortTitle}</b><span>{metaLine}</span></span>
+      <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
       <span className="mt-open">{done
         ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
         : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>
@@ -203,7 +205,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
       </div>
       <div className="fc-body">
         {card.description && <p>{card.description}</p>}
-        {isSkillsJar ? skillsJarMedia : media}
+        {media}
       </div>
       <div className="fc-foot">
         <button type="button" className={`like${liked ? ' liked' : ''}`} onClick={() => onLike?.(card)}>

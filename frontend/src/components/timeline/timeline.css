@@ -135,10 +135,11 @@
 .tl-de .vframe .vplay{position:relative;z-index:2;width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.95);border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.35);transition:.16s var(--ease)}
 .tl-de .vframe:hover .vplay{transform:scale(1.07)} .tl-de .vframe .vplay svg{width:26px;height:26px;color:var(--cherry-deep);margin-left:4px}
 .tl-de .fc-video{border-radius:var(--r-12);overflow:hidden}
+/* aspect-ratio keeps .mthumb/.vframe at video size (16:9) on every width */
 
-/* Skills Course (skills_jar) feed thumbnail: the SAME 16:9 block as every other
-   timeline item, with a right-side action stack — ▶ opens the right panel (course
-   details) and Open ↗ jumps straight to the external course/assignment link. */
+/* Skills Course (skills_jar) tile: same 16:9 block as every other item, but with
+   a right-side action stack — ▶ opens the right panel (course details) and Open ↗
+   jumps straight to the external course/assignment link. */
 .tl-de .mthumb.skilljar{cursor:default}
 .tl-de .mthumb .mt-actions{position:absolute;right:16px;top:50%;transform:translateY(-50%);z-index:4;display:flex;flex-direction:column;align-items:center;gap:12px}
 .tl-de .mthumb .mt-play{width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.95);border:none;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.32);cursor:pointer;transition:transform .16s var(--ease)}
