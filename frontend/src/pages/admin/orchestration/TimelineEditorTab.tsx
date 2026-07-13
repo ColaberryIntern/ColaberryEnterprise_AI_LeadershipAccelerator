@@ -7,8 +7,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import api from '../../../utils/api';
-import VideoEmbed from '../../../components/timeline/VideoEmbed';
-import { parseVideoUrl } from '../../../utils/videoEmbed';
 import CardDetailBody from '../../../components/timeline/CardDetailBody';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
 import AutofillButton from '../../../components/common/AutofillButton';
@@ -92,14 +90,23 @@ const pts = (p: Card['points']) => (p?.learning || 0) + (p?.builder || 0) + (p?.
 
 // ── one Facebook-style feed card (draggable) with inline play + admin actions ──
 const SortableCard: React.FC<{
-  card: Card; band?: string; onEdit: (c: Card) => void; onClone: (c: Card) => void;
+  card: Card; band?: string; studentLabel?: string; onEdit: (c: Card) => void; onClone: (c: Card) => void;
   onDelete: (c: Card) => void; onPublish: (c: Card) => void;
-}> = ({ card, band, onEdit, onClone, onDelete, onPublish }) => {
+}> = ({ card, band, studentLabel, onEdit, onClone, onDelete, onPublish }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const published = card.visibility === 'published';
-  const isVideo = VIDEO_BANDS.includes(band || '');
-  const videoSource = card.metadata?.video?.url ? parseVideoUrl(card.metadata.video.url) : null;
   const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition };
+  // Every card renders the SAME student view inline (the shared CardDetailBody),
+  // so the timeline == the edit preview == what the student sees — one size,
+  // one render, for every type (not just video).
+  const previewCard = adaptToFeedCard({
+    slug: card.type, render_band: band, label: card.title,
+    student_label: studentLabel || card.type.replace(/_/g, ' '),
+    subtitle: card.subtitle, description: card.description,
+    difficulty: card.difficulty, estimated_time: card.estimated_time, week: card.week,
+    points: card.points, video: card.metadata?.video, course: (card.metadata as any)?.course,
+    experience: (card.metadata as any)?.content,
+  });
   return (
     <div ref={setNodeRef} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
       <div className="te-chead">
@@ -112,20 +119,9 @@ const SortableCard: React.FC<{
         <span className="te-badge" style={{ background: published ? '#E7F5E9' : '#F0F0F0', color: published ? '#3C7A26' : '#8A8A8A' }}>{published ? 'LIVE' : card.visibility.toUpperCase()}</span>
       </div>
 
-      {isVideo && (
-        <div className="te-media">
-          {videoSource
-            ? <div className="tl-vwrap"><VideoEmbed source={videoSource} title={card.title} poster={card.metadata?.video?.poster || null} /></div>
-            : (
-              <div className="te-hero" style={{ background: `linear-gradient(135deg,${bandColor(band)},#2E6A86)` }}>
-                <span style={{ fontSize: 42, opacity: 0.92 }}>{bandIcon(band)}</span>
-                <span style={{ position: 'absolute', bottom: 10, left: 12, color: '#fff', fontSize: 12, fontWeight: 600, background: 'rgba(0,0,0,.28)', padding: '3px 9px', borderRadius: 6 }}>⚠ No video yet — Edit to add one</span>
-              </div>
-            )}
-        </div>
-      )}
-
-      {card.description && <p className="te-desc">{card.description}</p>}
+      <div className="te-media">
+        <div className="tl-de"><div className="tld-inlinepanel"><CardDetailBody card={previewCard} preview /></div></div>
+      </div>
 
       <div className="te-foot">
         <button className="te-act pri" onClick={() => onEdit(card)}>✎ Edit</button>
@@ -139,9 +135,9 @@ const SortableCard: React.FC<{
 
 // ── one bucket section (full width, vertical) ────────────────────────────────
 const BucketSection: React.FC<{
-  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
-  cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band'>;
-}> = ({ bucket, cards, bandOf, onReorder, onAdd, cardActions }) => {
+  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
+  cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel'>;
+}> = ({ bucket, cards, bandOf, labelOf, onReorder, onAdd, cardActions }) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -170,7 +166,7 @@ const BucketSection: React.FC<{
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {cards.length === 0
             ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
-            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} {...cardActions} />)}
+            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} {...cardActions} />)}
         </SortableContext>
       </DndContext>
     </div>
@@ -402,6 +398,11 @@ const TimelineEditorTab: React.FC = () => {
     const t = board?.types.find((x) => x.slug === type);
     return t?.render_band || guessBand(type);
   }, [board]);
+  // slug -> the type's participant-facing label (for the inline student render's crumb/chip).
+  const labelOf = useCallback((type: string): string => {
+    const t = board?.types.find((x) => x.slug === type);
+    return t?.label || type.replace(/_/g, ' ');
+  }, [board]);
 
   const weekCards = useMemo(
     () => (board?.cards || []).filter((c) => (typeof c.week === 'number' ? c.week : null) === week),
@@ -585,7 +586,7 @@ const TimelineEditorTab: React.FC = () => {
         .te-ttl{font-size:15px;font-weight:700;color:#1A1A1A}
         .te-sub{font-size:12px;color:#8A8A8A;margin-top:1px}
         .te-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;letter-spacing:.03em;flex:none}
-        .te-media{padding:0 14px}
+        .te-media{padding:12px 14px 2px}
         .te-hero{aspect-ratio:16/9;border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;color:#fff}
         .te-desc{padding:10px 14px 0;font-size:13.5px;color:#4A4A4A;line-height:1.5;margin:0}
         .te-foot{display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid #F2F2F2;margin-top:12px;flex-wrap:wrap}
@@ -641,7 +642,7 @@ const TimelineEditorTab: React.FC = () => {
           </div>
 
           {BUCKETS.map((b) => (
-            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} onReorder={onReorder} onAdd={openAdd}
+            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} onReorder={onReorder} onAdd={openAdd}
               cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish }} />
           ))}
         </>
