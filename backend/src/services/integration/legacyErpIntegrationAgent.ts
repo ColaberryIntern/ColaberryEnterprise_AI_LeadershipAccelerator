@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { env } from '../../config/env';
 import { retrieveData, pushUpdate } from './legacyErpClient';
+import { authorizeAgentAction } from '../agentAuthorizationService';
 import type { AgentExecutionResult, AgentAction } from '../agents/types';
 import type { ErpModuleConfig, ErpUpdateRequest } from './types';
 
@@ -92,6 +93,39 @@ export async function runLegacyErpPushAgent(
 
   for (const update of updates) {
     const moduleConfig = moduleConfigs.find(m => m.name === update.module);
+
+    // REQ-003 / TBI L5 governance: run every push through the ABAC chokepoint. In
+    // 'enforce' mode a high-stakes ERP write is HELD for human approval ("AI proposes,
+    // human approves"); in the default 'shadow' mode this records the would-deny
+    // exposure and proceeds, so it is safe to ship dark and flip on later.
+    const authz = await authorizeAgentAction({
+      agentId: AGENT_NAME,
+      agentName: AGENT_NAME,
+      action: 'erp_data_push',
+      resourceType: 'legacy_erp_module',
+      resourceId: update.module,
+      context: { resourceType: 'legacy_erp_module' },
+    });
+    if (!authz.allowed) {
+      actions.push({
+        campaign_id: null,
+        action: 'erp_data_push_held_for_approval',
+        reason: `Held pending human approval (${authz.reason}) — ${update.method} to ${update.module}${update.endpoint}`,
+        confidence: 1.0,
+        before_state: null,
+        after_state: null,
+        result: 'flagged',
+        entity_type: 'system',
+        details: {
+          correlationId: update.correlationId,
+          module: update.module,
+          endpoint: update.endpoint,
+          requiresApproval: authz.requiresApproval,
+          reason: authz.reason,
+        },
+      });
+      continue; // do NOT perform the write — it is held for a human
+    }
 
     try {
       const result = await pushUpdate(

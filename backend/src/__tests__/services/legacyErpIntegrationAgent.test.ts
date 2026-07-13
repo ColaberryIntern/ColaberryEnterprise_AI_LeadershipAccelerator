@@ -8,6 +8,15 @@ jest.mock('../../models/AuditLog', () => ({
   default: { create: jest.fn().mockResolvedValue({}) },
 }));
 
+// The push runner in this module imports the ABAC service; mock it so this retrieval
+// suite doesn't pull the DB/models graph at import time (retrieval never calls it).
+jest.mock('../../services/agentAuthorizationService', () => ({
+  authorizeAgentAction: jest.fn().mockResolvedValue({
+    allowed: true, enforced: false, reason: 'ok',
+    requiresApproval: false, level: 'act_audited', wouldDeny: false, mode: 'shadow',
+  }),
+}));
+
 jest.mock('../../config/env', () => ({
   env: {
     vaErpTokenUrl: 'https://api.va.gov/oauth2/token',
