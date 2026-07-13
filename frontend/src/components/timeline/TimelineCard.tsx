@@ -1,6 +1,5 @@
 import React from 'react';
 import VideoEmbed from './VideoEmbed';
-import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl } from '../../utils/videoEmbed';
 
 /**
@@ -34,12 +33,17 @@ export interface TimelineFeedCard {
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
 }
 
-type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
+export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
 
-interface Visual { kind: Kind; color: string; }
+export interface Visual { kind: Kind; color: string; }
 
 // render_band -> Design E visual kind + accent colour (Colaberry palette).
-const BAND: Record<string, Visual> = {
+// EXPORTED as the format contract: every render_band the backend type registry
+// (backend/src/services/timeline/typeRegistry.ts) can emit MUST be a key here, or
+// the card silently falls back to the generic 'reading' visual — which would make
+// the Experience Studio demo and the real Classroom timeline event both lose the
+// type's intended format. curriculumFormatContract.test.ts enforces that.
+export const BAND: Record<string, Visual> = {
   media: { kind: 'video', color: '#367895' },
   live_class: { kind: 'video', color: '#FB2832' },
   video_feedback: { kind: 'video', color: '#E8920C' },
@@ -72,7 +76,7 @@ const BAND: Record<string, Visual> = {
   badge: { kind: 'milestone', color: '#5BA63C' },
   streak: { kind: 'milestone', color: '#E8920C' },
 };
-const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
+export const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
 
 const KIND_GRADIENT: Record<Kind, string> = {
   video: 'linear-gradient(135deg,#367895,#2E6A86)',
@@ -114,12 +118,15 @@ interface Props {
   card: TimelineFeedCard;
   onOpen?: (card: TimelineFeedCard) => void;
   onLike?: (card: TimelineFeedCard) => void;
+  // Accepted for a stable feed API (TimelineFeed forwards it), but the feed card
+  // no longer completes inline — completion is an explicit action in the detail
+  // drawer (opened via onOpen), so every card type completes the same way.
   onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
   likes?: number;
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
   const done = card.status === 'completed';
   const locked = card.status === 'locked';
@@ -129,6 +136,33 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
   const videoSource = card.video?.url ? parseVideoUrl(card.video.url) : null;
+
+  // Skills Course (skills_jar): the SAME 16:9 thumbnail every other item uses, with
+  // a right-side action stack — ▶ opens the detail panel (course details + the cert
+  // upload live there), and "Open" jumps straight to the external course link. When
+  // no link is attached yet, Open falls back to the panel so neither button is dead.
+  const course = card.course || null;
+  const openCourseLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (locked) return;
+    if (course?.url) window.open(course.url, '_blank', 'noopener,noreferrer');
+    else onOpen?.(card);
+  };
+  const skillsJarMedia = (
+    <div className="mthumb skilljar" style={{ background: KIND_GRADIENT.skilljar }}>
+      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind="skilljar" /></svg>
+      <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
+      <span className="mt-meta"><b>{course?.name || shortTitle}</b><span>External course · cert required</span></span>
+      <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="mt-play" onClick={() => !locked && onOpen?.(card)} aria-label={`Course details: ${card.title}`}>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+        </button>
+        <button type="button" className="mt-openbtn" onClick={openCourseLink} aria-label={course?.url ? 'Open the course link' : 'Open course details'}>
+          Open <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+        </button>
+      </div>
+    </div>
+  );
 
   const media = v.kind === 'video' && videoSource ? (
     // Plays right here in the feed — press ▶ and watch in-app. "Open" is for the detail panel.
@@ -169,9 +203,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
       </div>
       <div className="fc-body">
         {card.description && <p>{card.description}</p>}
-        {isSkillsJar
-          ? <SkillsJarPanel card={card} onComplete={onComplete ? () => onComplete(card) : undefined} />
-          : media}
+        {isSkillsJar ? skillsJarMedia : media}
       </div>
       <div className="fc-foot">
         <button type="button" className={`like${liked ? ' liked' : ''}`} onClick={() => onLike?.(card)}>
@@ -183,11 +215,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }}>Unlocks later</span>
-            : isSkillsJar
-              ? <span className="tl-small" style={{ fontSize: 13 }}>Upload your certificate above to complete</span>
-              : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => onOpen?.(card)}>
-                  <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
-                </button>}
+            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => onOpen?.(card)}>
+                <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
+              </button>}
       </div>
     </div>
   );

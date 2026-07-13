@@ -2,6 +2,25 @@ import {
   resolve, resolveOrThrow, allTypes, mapLegacyType, CARD_TYPES,
 } from '../typeRegistry';
 
+/**
+ * Mirror of the keys of the frontend BAND map in
+ * frontend/src/components/timeline/TimelineCard.tsx. A render_band outside this
+ * set has no explicit Classroom visual, so it falls back to the generic 'reading'
+ * card — and the Experience Studio demo (which renders through the same
+ * component) and the real timeline event would BOTH lose the type's intended
+ * format. The authoritative cross-check is the frontend test
+ * curriculumFormatContract.test.ts, which reads THIS registry and asserts the
+ * frontend renders every band; this list gives backend devs the same guard with
+ * fast local feedback.
+ */
+const SUPPORTED_RENDER_BANDS = new Set<string>([
+  'media', 'live_class', 'video_feedback', 'event', 'overview', 'deepdive', 'reading',
+  'question', 'announcement', 'discussion', 'community', 'study', 'warmup', 'survey',
+  'reflection', 'quiz', 'exam', 'evaluation', 'promptlab', 'task', 'artifact',
+  'presentation', 'demo', 'interview', 'build_story', 'github', 'skills_jar',
+  'milestone', 'achievement', 'badge', 'streak',
+]);
+
 describe('typeRegistry', () => {
   it('registers the 36 canonical curriculum types', () => {
     expect(CARD_TYPES.length).toBe(36);
@@ -51,5 +70,12 @@ describe('typeRegistry', () => {
       expect(t.render_band).toBeTruthy();
       expect(t.bucket).toBeTruthy();
     }
+  });
+
+  it('every render_band is one the Classroom can render (so the Studio demo == the timeline event)', () => {
+    const unsupported = CARD_TYPES
+      .filter((t) => !SUPPORTED_RENDER_BANDS.has(t.render_band))
+      .map((t) => `${t.slug} -> ${t.render_band}`);
+    expect(unsupported).toEqual([]);
   });
 });
