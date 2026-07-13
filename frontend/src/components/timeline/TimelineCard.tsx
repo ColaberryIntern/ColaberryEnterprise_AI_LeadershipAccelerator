@@ -1,5 +1,6 @@
 import React from 'react';
 import VideoEmbed from './VideoEmbed';
+import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl } from '../../utils/videoEmbed';
 
 /**
@@ -113,14 +114,16 @@ interface Props {
   card: TimelineFeedCard;
   onOpen?: (card: TimelineFeedCard) => void;
   onLike?: (card: TimelineFeedCard) => void;
+  onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
   likes?: number;
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
   const done = card.status === 'completed';
   const locked = card.status === 'locked';
+  const isSkillsJar = v.kind === 'skilljar';
   const pts = totalPoints(card.points);
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
@@ -166,7 +169,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
       </div>
       <div className="fc-body">
         {card.description && <p>{card.description}</p>}
-        {media}
+        {isSkillsJar
+          ? <SkillsJarPanel card={card} onComplete={onComplete ? () => onComplete(card) : undefined} />
+          : media}
       </div>
       <div className="fc-foot">
         <button type="button" className={`like${liked ? ' liked' : ''}`} onClick={() => onLike?.(card)}>
@@ -178,9 +183,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }}>Unlocks later</span>
-            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => onOpen?.(card)}>
-                <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
-              </button>}
+            : isSkillsJar
+              ? <span className="tl-small" style={{ fontSize: 13 }}>Upload your certificate above to complete</span>
+              : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => onOpen?.(card)}>
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
+                </button>}
       </div>
     </div>
   );
