@@ -113,6 +113,10 @@ export const PreviewFrame: React.FC<{ title: string; html: string; width: number
 export const studioCss = `
   .es-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
   .es-title{font-size:15px;font-weight:700}.es-sub{font-size:12px;color:#8A8A8A}.es-muted{font-size:11px;color:#A0A0A0}
+  .es-titlein{font-family:inherit;font-size:16px;font-weight:700;color:#1A1A1A;border:1px solid transparent;border-radius:6px;padding:2px 6px;margin:-2px -6px;background:transparent;min-width:120px;max-width:340px}
+  .es-titlein:hover{border-color:#E0E0E0;background:#FAFAFA}.es-titlein:focus{border-color:#367895;background:#fff;outline:none}
+  .es-sublin{font-family:inherit;font-size:12px;color:#5A5A5A;border:1px solid transparent;border-radius:5px;padding:1px 5px;background:transparent;min-width:70px;max-width:220px}
+  .es-sublin:hover{border-color:#E0E0E0;background:#FAFAFA}.es-sublin:focus{border-color:#367895;background:#fff;outline:none}
   .es-err{background:#FDECEC;color:#C20E1E;padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:12px}
   .es-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
   .es-card{position:relative;border:1px solid #E4E4E4;border-radius:12px;padding:14px;cursor:pointer;background:#fff;transition:.12s}

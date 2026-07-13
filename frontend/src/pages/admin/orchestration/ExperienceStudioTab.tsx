@@ -325,8 +325,17 @@ const ExperienceStudioTab: React.FC = () => {
         <div>
           <div className="es-head">
             <button className="es-btn" onClick={() => setSel(null)}>← Library</button>
-            <div><div className="es-title" style={{ fontSize: 16 }}>{sel.label} <span className="es-muted" style={{ fontWeight: 500 }}>· v{sel.component_version}</span></div>
-              <div className="es-sub">{sel.slug} · {sel.category} · {(sel.architect_domains || []).join(', ') || '—'}</div></div>
+            <div>
+              <div className="es-title" style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <input className="es-titlein" value={sel.label} onChange={(e) => setField('label', e.target.value)} aria-label="Curriculum type name" title="Rename this curriculum type — Save version to keep it" spellCheck={false} />
+                <span className="es-muted" style={{ fontWeight: 500 }}>· v{sel.component_version}</span>
+              </div>
+              <div className="es-sub" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                <span>{sel.slug} · {sel.category} · {(sel.architect_domains || []).join(', ') || '—'}</span>
+                <span className="es-muted">· students see</span>
+                <input className="es-sublin" value={sel.student_label || ''} onChange={(e) => setField('student_label', e.target.value)} placeholder={sel.label} aria-label="Name students see on the card" title="The type name shown to students on their card" spellCheck={false} />
+              </div>
+            </div>
             <button className={`es-apprbtn ${sel.approved ? 'on' : 'off'}`} style={{ marginLeft: 'auto' }} title="Only approved components can be used by the Curriculum Composer" onClick={() => setApproval(!sel.approved)}>{sel.approved ? '✓ Approved for curriculum' : 'Approve for curriculum'}</button>
             <select className="es-in" style={{ width: 120 }} value={sel.status || 'ready'} onChange={(e) => setField('status', e.target.value)}>
               {['draft', 'ready', 'published', 'deprecated'].map((s) => <option key={s}>{s}</option>)}
