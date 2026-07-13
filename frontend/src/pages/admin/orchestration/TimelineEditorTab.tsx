@@ -183,7 +183,7 @@ const BucketSection: React.FC<{
 // is the classroom, pixel for pixel — no separate lessonDoc/markup to drift.
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }; types: TypeDef[]; isNew: boolean; saving: boolean;
-  aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video'; onGenerate: (anchor: 'title' | 'video') => void;
+  aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => void; onSave: () => void; onClose: () => void;
 }> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
@@ -238,14 +238,16 @@ const EditDrawer: React.FC<{
                   disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
                   onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill in the fields'}</button>
                 <button type="button" className="te-act pri" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
-                  disabled={!!genBusy || (!draft.title && !(draft.video?.url || '').trim())}
-                  title={(!draft.title && !(draft.video?.url || '').trim()) ? 'Add a title (or paste a video URL) first' : isVideo ? 'Fill everything from your Title — or from your Video URL if you only pasted a link. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
-                  onClick={() => onGenerate(draft.title ? 'title' : 'video')}>{genBusy ? (isVideo ? '✦ Working…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
+                  disabled={!!genBusy || (isSkillsJar ? !(draft.course?.url || '').trim() : (!draft.title && !(draft.video?.url || '').trim()))}
+                  title={isSkillsJar ? 'Fill everything from the SkillsJar link. Then Save.' : (!draft.title && !(draft.video?.url || '').trim()) ? 'Add a title (or paste a video URL) first' : isVideo ? 'Fill everything from your Title — or from your Video URL if you only pasted a link. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
+                  onClick={() => onGenerate(isSkillsJar ? 'course' : (draft.title ? 'title' : 'video'))}>{genBusy ? (isVideo || isSkillsJar ? '✦ Working…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
               </div>
               <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>
-                {isVideo
-                  ? 'Add a Title and press the ✦ next to it to find a video and fill the rest — or paste a Video URL and press the ✦ next to it to fill everything from that video. Then Save changes.'
-                  : 'Add a title and click Generate content to write what students see. Then Save changes.'}
+                {isSkillsJar
+                  ? 'Paste the SkillsJar course link and press ✦ Generate content — it fills the class name, description, XP, minutes, and overview. Then Save changes.'
+                  : isVideo
+                    ? 'Add a Title and press the ✦ next to it to find a video and fill the rest — or paste a Video URL and press the ✦ next to it to fill everything from that video. Then Save changes.'
+                    : 'Add a title and click Generate content to write what students see. Then Save changes.'}
               </div>
             </div>
           )}
@@ -295,13 +297,17 @@ const EditDrawer: React.FC<{
           {isSkillsJar && (
             <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
               <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#367895', marginBottom: 8 }}>
-                🎓 SkillsJar course <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· students open this, then upload their certificate</span>
+                🎓 SkillsJar course <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· paste the link, then ✦ to fill the rest</span>
               </div>
-              <label style={lbl}>Class name
-                <input style={inp} value={draft.course?.name || ''} onChange={(e) => setCourse({ name: e.target.value })} placeholder={'e.g., Anthropic "Introduction to MCP"'} />
+              <label style={lbl}>Class link
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input style={{ ...inp, flex: 1, minWidth: 0 }} value={draft.course?.url || ''} onChange={(e) => setCourse({ url: e.target.value })} placeholder="The SkillsJar course URL (https://anthropic.skilljar.com/…)" />
+                  <AutofillButton onClick={() => onGenerate('course')} busy={genBusy === 'course'} disabled={!(draft.course?.url || '').trim() || !!genBusy}
+                    title="✦ Fill everything from this course link — class name, description, XP, minutes, and the overview" />
+                </div>
               </label>
-              <label style={{ ...lbl, marginBottom: 0 }}>Class link
-                <input style={inp} value={draft.course?.url || ''} onChange={(e) => setCourse({ url: e.target.value })} placeholder="The SkillsJar course URL (https://anthropic.skilljar.com/…)" />
+              <label style={{ ...lbl, marginBottom: 0 }}>Class name
+                <input style={inp} value={draft.course?.name || ''} onChange={(e) => setCourse({ name: e.target.value })} placeholder="(auto-filled by ✦ — editable)" />
               </label>
             </div>
           )}
@@ -365,7 +371,7 @@ const TimelineEditorTab: React.FC = () => {
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [genBusy, setGenBusy] = useState<'' | 'title' | 'video'>('');
+  const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course'>('');
 
   const loadBoard = useCallback(async () => {
     setLoading(true); setError('');
@@ -500,8 +506,29 @@ const TimelineEditorTab: React.FC = () => {
   // live preview, then Save persists it).
   //   anchor='title' → keep the Title, find a fresh video + fill the rest.
   //   anchor='video' → keep the URL,  write the Title + fill the rest.
-  const genContent = async (anchor: 'title' | 'video' = 'title') => {
+  const genContent = async (anchor: 'title' | 'video' | 'course' = 'title') => {
     if (!draft?.type) return;
+    // Skills Course: from just the SkillsJar link, fill class name + everything.
+    if (anchor === 'course') {
+      if (!(draft.course?.url || '').trim()) return;
+      setGenBusy('course'); setError('');
+      try {
+        const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: draft.type, url: draft.course!.url });
+        const g = r.data || {};
+        setDraft((d) => d && ({
+          ...d,
+          title: g.title ?? d.title,
+          subtitle: g.subtitle ?? d.subtitle,
+          description: g.description ?? d.description,
+          estimated_time: typeof g.estimated_time === 'number' ? g.estimated_time : d.estimated_time,
+          points: g.points || d.points,
+          course: g.course || d.course,   // keeps the URL, fills the class name
+          metadata: { ...(d.metadata || {}), content: g.content || (d.metadata as any)?.content },
+        }));
+      } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); }
+      finally { setGenBusy(''); }
+      return;
+    }
     if (anchor === 'title' && !draft.title) return;
     if (anchor === 'video' && !(draft.video?.url || '').trim()) return;
     setGenBusy(anchor); setError('');

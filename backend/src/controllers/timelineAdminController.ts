@@ -10,6 +10,7 @@ import {
 } from '../services/timeline/timelineAdminService';
 import { generateCardContent } from '../services/timeline/cardContentService';
 import { generateVideoDraft } from '../services/timeline/videoDraftService';
+import { generateCourseDraft } from '../services/timeline/courseDraftService';
 
 const bucketEnum = z.enum(['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance']);
 const visibilityEnum = z.enum(['draft', 'scheduled', 'published', 'archived']);
@@ -87,6 +88,11 @@ const videoDraftSchema = z.object({
   video: videoSchema,
   anchor: z.enum(['title', 'video']).optional(),
 });
+// One-click for a Skills Course: from just the SkillsJar link, fill everything.
+const courseDraftSchema = z.object({
+  type: z.string().min(1),
+  url: z.string().min(1).max(2000),
+});
 
 const reorderSchema = z.object({
   items: z.array(z.object({
@@ -158,5 +164,14 @@ export async function handleGenerateVideoDraft(req: Request, res: Response, next
   try {
     const b = videoDraftSchema.parse(req.body);
     res.json(await generateVideoDraft(b));
+  } catch (err) { fail(res, err, next); }
+}
+
+// One-click for the Anthropic Skills Course: from just the SkillsJar link, fill
+// the class name, description, XP, minutes, and lesson content. Returns a draft.
+export async function handleGenerateCourseDraft(req: Request, res: Response, next: NextFunction) {
+  try {
+    const b = courseDraftSchema.parse(req.body);
+    res.json(await generateCourseDraft(b));
   } catch (err) { fail(res, err, next); }
 }
