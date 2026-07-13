@@ -163,7 +163,7 @@ const ClassroomPage: React.FC = () => {
 
           {weekCards.length === 0
             ? <div className="tl-empty">No cards here yet.</div>
-            : <TimelineFeed cards={weekCards} onOpen={openCard} />}
+            : <TimelineFeed cards={weekCards} onOpen={openCard} onComplete={completeCard} />}
         </div>
 
         <aside className="tl-side">
