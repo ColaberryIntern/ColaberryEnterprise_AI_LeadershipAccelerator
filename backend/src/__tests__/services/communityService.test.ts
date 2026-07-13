@@ -134,7 +134,7 @@ describe('listPosts', () => {
     await listPosts(enrollmentId);
 
     expect(findAllPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { cohort_id: cohortId } })
+      expect.objectContaining({ where: { cohort_id: cohortId, status: 'visible' } })
     );
   });
 
@@ -145,7 +145,7 @@ describe('listPosts', () => {
     await listPosts(enrollmentId, 'announcements');
 
     expect(findAllPosts).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { cohort_id: cohortId, category: 'announcements' } })
+      expect.objectContaining({ where: { cohort_id: cohortId, status: 'visible', category: 'announcements' } })
     );
   });
 
@@ -167,6 +167,8 @@ describe('togglePin', () => {
   const basePost: any = {
     id: 'post-1',
     member_id: memberId,
+    cohort_id: cohortId,
+    status: 'visible',
     body: 'hello',
     media_urls: [],
     category: null,
@@ -209,6 +211,26 @@ describe('togglePin', () => {
     findByPkPost.mockResolvedValue(null);
 
     await expect(togglePin(enrollmentId, 'missing-post', { pinned: true })).rejects.toMatchObject({
+      error_class: 'NotFoundError',
+    });
+  });
+
+  it('failure path (REQ-C9): a post from a different cohort is ForbiddenError, not NotFoundError', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue({ ...basePost, cohort_id: 'different-cohort' });
+
+    await expect(togglePin(enrollmentId, 'post-1', { pinned: true })).rejects.toMatchObject({
+      error_class: 'ForbiddenError',
+    });
+  });
+
+  it('boundary path: a removed post is NotFoundError, same as a missing one', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue({ ...basePost, status: 'removed' });
+
+    await expect(togglePin(enrollmentId, 'post-1', { pinned: true })).rejects.toMatchObject({
       error_class: 'NotFoundError',
     });
   });

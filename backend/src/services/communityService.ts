@@ -2,6 +2,7 @@ import CommunityMember, { CommunityPresenceStatus } from '../models/CommunityMem
 import CommunityPost from '../models/CommunityPost';
 import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
+import CommunityPostReport from '../models/CommunityPostReport';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
@@ -98,6 +99,23 @@ async function resolveCohortId(enrollmentId: string): Promise<string> {
   return enrollment.cohort_id;
 }
 
+// Systematic per-cohort authz check (REQ-C9): genuinely-missing or
+// staff-removed posts are 404 (nothing to distinguish — hidden from every
+// participant regardless of cohort); a real post that belongs to another
+// cohort is 403, not 404 — the caller is explicitly denied, not left to
+// guess whether the id exists. Every route that takes a :postId funnels
+// through here so the cross-cohort behavior is enforced in one place.
+async function requireVisiblePostInCohort(postId: string, cohortId: string): Promise<CommunityPost> {
+  const post = await CommunityPost.findByPk(postId);
+  if (!post || post.status === 'removed') {
+    throw notFoundError('Post not found');
+  }
+  if (post.cohort_id !== cohortId) {
+    throw forbiddenError('This post belongs to a different cohort');
+  }
+  return post;
+}
+
 export async function createPost(enrollmentId: string, input: CreatePostInput): Promise<PostFeedItem> {
   const [member, cohortId] = await Promise.all([
     getOrCreateMember(enrollmentId),
@@ -149,7 +167,7 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
 export async function listPosts(enrollmentId: string, category?: string): Promise<PostFeedItem[]> {
   const cohortId = await resolveCohortId(enrollmentId);
 
-  const where: Record<string, unknown> = { cohort_id: cohortId };
+  const where: Record<string, unknown> = { cohort_id: cohortId, status: 'visible' };
   if (category) {
     where.category = category;
   }
@@ -190,13 +208,19 @@ export async function togglePin(
   postId: string,
   input: TogglePinInput
 ): Promise<PostFeedItem> {
-  const member = await getOrCreateMember(enrollmentId);
+  const [member, cohortId] = await Promise.all([
+    getOrCreateMember(enrollmentId),
+    resolveCohortId(enrollmentId),
+  ]);
 
   const post = await CommunityPost.findByPk(postId, {
     include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
   });
-  if (!post) {
+  if (!post || post.status === 'removed') {
     throw notFoundError('Post not found');
+  }
+  if (post.cohort_id !== cohortId) {
+    throw forbiddenError('This post belongs to a different cohort');
   }
   if (post.member_id !== member.id) {
     throw forbiddenError('Only the post author can pin or unpin this post');
@@ -253,10 +277,7 @@ export async function createComment(
     resolveCohortId(enrollmentId),
   ]);
 
-  const post = await CommunityPost.findByPk(postId);
-  if (!post || post.cohort_id !== cohortId) {
-    throw notFoundError('Post not found');
-  }
+  const post = await requireVisiblePostInCohort(postId, cohortId);
 
   let parentCommentId: string | null = null;
   if (input.parent_comment_id) {
@@ -305,10 +326,7 @@ export async function listComments(enrollmentId: string, postId: string): Promis
     resolveCohortId(enrollmentId),
   ]);
 
-  const post = await CommunityPost.findByPk(postId);
-  if (!post || post.cohort_id !== cohortId) {
-    throw notFoundError('Post not found');
-  }
+  await requireVisiblePostInCohort(postId, cohortId);
 
   const comments = await CommunityComment.findAll({
     where: { post_id: postId },
@@ -392,20 +410,17 @@ export async function toggleLike(
   let post: CommunityPost | null = null;
 
   if (likeableType === 'post') {
-    post = await CommunityPost.findByPk(likeableId);
-    if (!post || post.cohort_id !== cohortId) {
-      throw notFoundError('Post not found');
-    }
+    post = await requireVisiblePostInCohort(likeableId, cohortId);
     authorMemberId = post.member_id;
   } else {
     const comment = await CommunityComment.findByPk(likeableId);
     if (!comment) {
       throw notFoundError('Comment not found');
     }
-    const parentPost = await CommunityPost.findByPk(comment.post_id);
-    if (!parentPost || parentPost.cohort_id !== cohortId) {
-      throw notFoundError('Comment not found');
-    }
+    // Cohort/removed-status is enforced against the parent post — a comment
+    // has no cohort_id of its own (see model), so this is the only place a
+    // wrong-cohort like attempt would surface.
+    await requireVisiblePostInCohort(comment.post_id, cohortId);
     authorMemberId = comment.member_id;
   }
 
@@ -446,6 +461,34 @@ export async function toggleLike(
   });
 
   return { liked, like_count: likeCount };
+}
+
+// ─── Reporting (REQ-C9) ─────────────────────────────────────────────────
+
+export interface ReportResult {
+  report_id: string;
+}
+
+// Idempotent — a member reporting the same post twice returns the existing
+// report row rather than creating a duplicate (unique constraint on
+// post_id+reporter_member_id). Cross-cohort/removed-post reporting is
+// rejected the same way any other post interaction is.
+export async function reportPost(enrollmentId: string, postId: string, reason?: string): Promise<ReportResult> {
+  const [member, cohortId] = await Promise.all([
+    getOrCreateMember(enrollmentId),
+    resolveCohortId(enrollmentId),
+  ]);
+
+  await requireVisiblePostInCohort(postId, cohortId);
+
+  const [report] = await CommunityPostReport.findOrCreate({
+    where: { post_id: postId, reporter_member_id: member.id },
+    defaults: { post_id: postId, reporter_member_id: member.id, reason: reason ?? null },
+  });
+
+  log('info', 'post_reported', { post_id: postId, reporter_member_id: member.id, outcome: 'success' });
+
+  return { report_id: report.id };
 }
 
 // ─── Member profiles + directory ────────────────────────────────────────

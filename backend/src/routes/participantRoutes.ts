@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
@@ -353,6 +354,7 @@ import { GetWeekSchema, RevealActivitySchema, StartInterviewSchema, SubmitInterv
 import {
   CreatePostSchema, ListPostsQuerySchema, TogglePinSchema, PostIdParamSchema,
   CreateCommentSchema, CommentIdParamSchema, MemberIdParamSchema, UpdateProfileSchema,
+  ReportPostSchema,
 } from '../schemas/communitySchemas';
 
 router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
@@ -441,7 +443,28 @@ function communityErrorStatus(err: any): number {
   }
 }
 
-router.post('/api/portal/community/posts', requireParticipant, async (req, res) => {
+// Posting rate limits (REQ-C9) — generous enough for normal discussion, tight
+// enough to blunt a spam/flood script. Keyed by IP like the v1 limiter
+// elsewhere in this repo; per-member limiting would need a keyGenerator
+// reading req.participant, which isn't available until after this middleware
+// runs in the current chain — IP is the pragmatic v1 choice here too.
+const communityPostRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many posts — please slow down' },
+});
+
+const communityCommentRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many comments — please slow down' },
+});
+
+router.post('/api/portal/community/posts', communityPostRateLimiter, requireParticipant, async (req, res) => {
   const parsed = CreatePostSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid post', details: parsed.error.flatten() });
@@ -487,7 +510,7 @@ router.patch('/api/portal/community/posts/:postId/pin', requireParticipant, asyn
   }
 });
 
-router.post('/api/portal/community/posts/:postId/comments', requireParticipant, async (req, res) => {
+router.post('/api/portal/community/posts/:postId/comments', communityCommentRateLimiter, requireParticipant, async (req, res) => {
   const paramsParsed = PostIdParamSchema.safeParse(req.params);
   const bodyParsed = CreateCommentSchema.safeParse(req.body);
   if (!paramsParsed.success || !bodyParsed.success) {
@@ -543,6 +566,22 @@ router.post('/api/portal/community/comments/:commentId/like', requireParticipant
     const { toggleLike } = await import('../services/communityService');
     const result = await toggleLike(req.participant!.sub, 'comment', paramsParsed.data.commentId);
     res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/posts/:postId/report', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  const bodyParsed = ReportPostSchema.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+  try {
+    const { reportPost } = await import('../services/communityService');
+    const result = await reportPost(req.participant!.sub, paramsParsed.data.postId, bodyParsed.data.reason);
+    res.status(201).json(result);
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }

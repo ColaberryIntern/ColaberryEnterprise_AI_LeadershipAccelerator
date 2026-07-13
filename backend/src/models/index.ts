@@ -292,6 +292,7 @@ import CommunityMember from './CommunityMember';
 import CommunityPost from './CommunityPost';
 import CommunityComment from './CommunityComment';
 import CommunityLike from './CommunityLike';
+import CommunityPostReport from './CommunityPostReport';
 import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
 import CommunityEvent from './CommunityEvent';
 
@@ -1185,6 +1186,7 @@ export {
   CommunityPost,
   CommunityComment,
   CommunityLike,
+  CommunityPostReport,
   CommunityLeaderboardEntry,
   CommunityEvent,
   StudentPointsEvent,
@@ -1268,6 +1270,12 @@ CommunityComment.belongsTo(CommunityComment, { foreignKey: 'parent_comment_id', 
 
 CommunityMember.hasMany(CommunityLike, { foreignKey: 'member_id', as: 'likes' });
 CommunityLike.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityPost.hasMany(CommunityPostReport, { foreignKey: 'post_id', as: 'reports', onDelete: 'CASCADE' });
+CommunityPostReport.belongsTo(CommunityPost, { foreignKey: 'post_id', as: 'post' });
+
+CommunityMember.hasMany(CommunityPostReport, { foreignKey: 'reporter_member_id', as: 'postReports' });
+CommunityPostReport.belongsTo(CommunityMember, { foreignKey: 'reporter_member_id', as: 'reporter' });
 
 CommunityMember.hasMany(CommunityLeaderboardEntry, { foreignKey: 'member_id', as: 'leaderboardEntries' });
 CommunityLeaderboardEntry.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });

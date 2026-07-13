@@ -76,6 +76,7 @@ import anthropicRoutes from './admin/anthropicRoutes';
 import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
 import mentorReviewRoutes from './admin/mentorReviewRoutes';
 import trustRoutes from './admin/trustRoutes';
+import communityModerationRoutes from './admin/communityModerationRoutes';
 
 const router = Router();
 
@@ -156,5 +157,6 @@ router.use(anthropicRoutes);
 router.use(qrAnalyticsRoutes);
 router.use(mentorReviewRoutes);
 router.use(trustRoutes);
+router.use(communityModerationRoutes);
 
 export default router;

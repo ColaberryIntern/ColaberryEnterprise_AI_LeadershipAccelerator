@@ -32,6 +32,10 @@ export const CreateCommentSchema = z.object({
   parent_comment_id: z.string().uuid().optional(),
 });
 
+export const ReportPostSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
 export const UpdateProfileSchema = z
   .object({
     display_name: z.string().min(1).max(255).optional(),
@@ -46,4 +50,5 @@ export type CreatePostInput = z.infer<typeof CreatePostSchema>;
 export type ListPostsQueryInput = z.infer<typeof ListPostsQuerySchema>;
 export type TogglePinInput = z.infer<typeof TogglePinSchema>;
 export type CreateCommentInput = z.infer<typeof CreateCommentSchema>;
+export type ReportPostInput = z.infer<typeof ReportPostSchema>;
 export type UpdateProfileInput = z.infer<typeof UpdateProfileSchema>;
