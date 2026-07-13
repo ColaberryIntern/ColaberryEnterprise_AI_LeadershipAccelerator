@@ -7130,6 +7130,14 @@ The manual test seeded `github_connections.access_token_encrypted` directly with
     - CREATED: `backend/src/services/__tests__/anthropicCatalogScraper.test.ts` — 10 test cases (happy path, fallback on 503, fallback on empty catalog, fallback on ECONNREFUSED, change detection, idempotency, DB error handling, boundary checks)
     - CREATED: `backend/src/seeds/migrations/add_outline_to_anthropic_content_registry.sql` — idempotent migration adding `outline TEXT NULL` column
     - UPDATED: `backend/src/models/AnthropicContentRegistry.ts` — added `outline` attribute and Sequelize column definition
+
+## VA ERP / Gov Contracts — STORY-001 + STORY-002 merged to main (2026-07-13)
+- [x] PR #191 merged — legacy ERP retrieval (STORY-001) + push/update (STORY-002) integration agents landed on main
+  - Date: 2026-07-13
+  - Session: CC-20260713-h7k2
+  - What changed: Took the CI-green-but-unmerged PR #191 to done (Ali ops). (1) Fixed the PR title/description to disclose it covers BOTH STORY-001 (retrieval) and STORY-002 (push/update) — the two stories share `legacyErpClient.ts` / `legacyErpIntegrationAgent.ts` / `types.ts`, so 002 rode along inside 001's PR. (2) Independent code review of `legacyErpClient.ts` (OAuth2 token cache, `AbortController` timeouts, backoff retry, circuit breaker, audit logging), `pushUpdate()` (role check, payload validation, GET snapshot, compensating rollback) and the agent runner — sound for R0. (3) Resolved a fresh `PROGRESS.md` merge conflict against main (append-only, `ort` auto-merge; `env.ts` + `.env.example` clean), pushed the resolution to the fork branch via maintainer-modify. (4) Squash-merged as `2ca07028`.
+  - Verification: all 4 required CI checks green on the merge commit (Backend typecheck, Backend unit tests, Frontend typecheck, Secret scan + route-auth lint); `tsc --noEmit` clean; jest 9/9 (`legacyErpIntegrationAgent`) + 15/15 (`legacyErpUpdateAgent`).
+  - Notes: Admin-merged — branch protection `require_last_push_approval` voided the approver because the same admin (ColaberryIntern) pushed the conflict fix; Ali authorized the merge directly. Decision: REQ-003 human approval-gate DEFERRED to later REQ-003 stories (Traceability Matrix: REQ-003 jointly covered by STORY-002/005/008/009/010/011); STORY-002 ships only the role-check slice. Pre-live follow-ups (NOT done): set the 6 `VA_ERP_*` env vars in prod `.env`, and land the REQ-003 approval-gate + tighten `allowedRoles: []` (currently = no role restriction) before `pushUpdate()` points at a live VA endpoint. Basecamp STORY-001 #10068242159 and STORY-002 #10068242168 both closed.
     - UPDATED: `backend/src/routes/admin/anthropicRoutes.ts` — added `POST /api/admin/sync/anthropic-catalog` route
     - UPDATED: `backend/src/seeds/seedAnthropicContentRegistry.ts` — removed Skilljar course rows (now scraper-owned); kept docs/news hubs
     - UPDATED: `backend/src/models/index.ts` — removed StudentSkilljarProgress import/export
