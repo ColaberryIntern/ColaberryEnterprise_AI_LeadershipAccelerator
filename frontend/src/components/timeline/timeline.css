@@ -197,15 +197,18 @@
 
 /* ===== Anthropic Skills Course (skills_jar) ===== */
 .tl-de .tld-skilljar{margin-bottom:16px}
-.tl-de .tld-jarcard{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
-  background:linear-gradient(135deg,var(--berry),var(--berry-hover));color:#fff;border-radius:var(--r-16);
-  padding:34px 20px 26px;text-align:center;overflow:hidden}
-.tl-de .tld-jarbadge{position:absolute;top:14px;left:14px;background:rgba(255,255,255,.94);color:var(--berry-hover);
-  font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:5px 10px;border-radius:999px}
-.tl-de .tld-jarcap{width:74px;height:74px;color:#fff;opacity:.96;margin-bottom:4px}
-.tl-de .tld-jartitle{font-size:21px;font-weight:800;color:#fff;line-height:1.2;max-width:86%}
-.tl-de .tld-jarsub{font-family:var(--mono);font-size:13px;letter-spacing:.04em;color:rgba(255,255,255,.86)}
-.tl-de .tld-jaropen{display:flex;width:100%;justify-content:center;margin:12px 0 4px;text-decoration:none}
+.tl-de .tld-jarcard{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:linear-gradient(150deg,#3a7f9e,#2b6580);color:#fff;border-radius:var(--r-16);border:2px solid rgba(255,255,255,.16);
+  padding:52px 20px 62px;text-align:center;overflow:hidden;min-height:230px}
+.tl-de .tld-jarbadge{position:absolute;top:16px;left:16px;background:rgba(255,255,255,.95);color:#2b6580;
+  font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:5px 11px;border-radius:999px}
+.tl-de .tld-jarbadge::first-letter{color:var(--amber)}
+.tl-de .tld-jarcap{width:112px;height:112px;color:#fff;opacity:.98;margin-bottom:8px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.18))}
+.tl-de .tld-jarbrand{font-size:26px;font-weight:800;color:#fff;line-height:1.15;letter-spacing:-.01em}
+.tl-de .tld-jarfoot{position:absolute;left:18px;bottom:16px;text-align:left}
+.tl-de .tld-jarname{font-size:15px;font-weight:800;color:#fff;line-height:1.2}
+.tl-de .tld-jarkind{font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:rgba(255,255,255,.82);margin-top:2px}
+.tl-de .tld-jaropen{display:flex;width:100%;justify-content:center;margin:12px 0 4px;text-decoration:none;font-size:15px;padding:12px}
 .tl-de .tld-upload{margin-top:12px;border:1.5px dashed var(--border-default);border-radius:var(--r-16);
   padding:18px 16px;text-align:center;background:var(--surface-subtle)}
 .tl-de .tld-uplab{font-size:14px;font-weight:800;color:var(--text-strong);margin-bottom:6px}

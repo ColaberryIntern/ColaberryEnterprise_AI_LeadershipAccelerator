@@ -7,7 +7,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListTimeline, handleCreateCard, handleUpdateCard,
   handleDeleteCard, handleReorderCards, handleCloneCard, handleGenerateCardContent,
-  handleGenerateVideoDraft,
+  handleGenerateVideoDraft, handleGenerateCourseDraft,
 } from '../../controllers/timelineAdminController';
 
 const router = Router();
@@ -21,6 +21,7 @@ router.put('/api/admin/orchestration/timeline/cards/reorder', requireAdmin, hand
 router.post('/api/admin/orchestration/timeline/cards/:id/clone', requireAdmin, handleCloneCard);
 // One-click "make a video from a title" — returns a draft (no card needed yet).
 router.post('/api/admin/orchestration/timeline/generate-video-draft', requireAdmin, handleGenerateVideoDraft);
+router.post('/api/admin/orchestration/timeline/generate-course-draft', requireAdmin, handleGenerateCourseDraft);
 router.post('/api/admin/orchestration/timeline/cards/:id/generate', requireAdmin, handleGenerateCardContent);
 router.put('/api/admin/orchestration/timeline/cards/:id', requireAdmin, handleUpdateCard);
 router.delete('/api/admin/orchestration/timeline/cards/:id', requireAdmin, handleDeleteCard);
