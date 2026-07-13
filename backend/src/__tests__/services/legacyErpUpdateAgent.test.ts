@@ -28,6 +28,15 @@ jest.mock('../../config/env', () => ({
   },
 }));
 
+// ABAC chokepoint — default to shadow "allow" so existing runner tests are unaffected;
+// individual tests override with mockResolvedValueOnce to exercise the enforce/hold path.
+jest.mock('../../services/agentAuthorizationService', () => ({
+  authorizeAgentAction: jest.fn().mockResolvedValue({
+    allowed: true, enforced: false, reason: 'ok',
+    requiresApproval: false, level: 'act_audited', wouldDeny: false, mode: 'shadow',
+  }),
+}));
+
 const mockFetch = jest.fn();
 global.fetch = mockFetch;
 
@@ -109,15 +118,12 @@ describe('pushUpdate — role check (REQ-003)', () => {
     expect(result.module).toBe('IFCAP');
   });
 
-  it('proceeds when allowedRoles is empty (open access)', async () => {
-    const current = { id: '42', name: 'Old Vendor' };
-    mockFetch
-      .mockResolvedValueOnce(tokenResponse() as unknown as Response)
-      .mockResolvedValueOnce(jsonResponse(current) as unknown as Response)
-      .mockResolvedValueOnce(jsonResponse({ id: '42', name: 'Updated Vendor' }) as unknown as Response);
-
-    const result = await pushUpdate(BASE_URL, { ...baseRequest(), callerRole: 'any_role' }, {});
-    expect(result.rolledBack).toBe(false);
+  it('denies when allowedRoles is empty (fail-closed — no open access)', async () => {
+    await expect(
+      pushUpdate(BASE_URL, { ...baseRequest(), callerRole: 'any_role' }, {}),
+    ).rejects.toMatchObject({ errorClass: 'AuthorizationError' });
+    // Denied before any HTTP call — nothing is fetched
+    expect(mockFetch).not.toHaveBeenCalled();
   });
 });
 
@@ -129,7 +135,7 @@ describe('pushUpdate — payload validation', () => {
       pushUpdate(
         BASE_URL,
         { ...baseRequest(), payload: { id: '42' } },   // missing 'name'
-        { requiredFields: ['id', 'name'] },
+        { allowedRoles: ['integration_agent'], requiredFields: ['id', 'name'] },
       ),
     ).rejects.toMatchObject({ errorClass: 'ValidationError' });
     expect(mockFetch).not.toHaveBeenCalled();
@@ -145,7 +151,7 @@ describe('pushUpdate — payload validation', () => {
     const result = await pushUpdate(
       BASE_URL,
       { ...baseRequest(), payload: { id: '42', name: 'New' } },
-      { requiredFields: ['id', 'name'] },
+      { allowedRoles: ['integration_agent'], requiredFields: ['id', 'name'] },
     );
     expect(result.newValues).toEqual({ id: '42', name: 'New' });
   });
@@ -162,7 +168,7 @@ describe('pushUpdate — happy path', () => {
       .mockResolvedValueOnce(jsonResponse(current) as unknown as Response)  // GET snapshot
       .mockResolvedValueOnce(jsonResponse(updated) as unknown as Response); // PUT
 
-    const result = await pushUpdate(BASE_URL, baseRequest(), {});
+    const result = await pushUpdate(BASE_URL, baseRequest(), { allowedRoles: ['integration_agent'] });
 
     expect(result.oldValues).toEqual(current);
     expect(result.newValues).toEqual(updated);
@@ -191,7 +197,7 @@ describe('pushUpdate — happy path', () => {
       .mockResolvedValueOnce(jsonResponse(current) as unknown as Response)
       .mockResolvedValueOnce(emptyResponse() as unknown as Response);
 
-    const result = await pushUpdate(BASE_URL, baseRequest(), {});
+    const result = await pushUpdate(BASE_URL, baseRequest(), { allowedRoles: ['integration_agent'] });
     expect(result.newValues).toBeNull();
     expect(result.rolledBack).toBe(false);
   });
@@ -202,7 +208,7 @@ describe('pushUpdate — happy path', () => {
       .mockResolvedValueOnce(errorResponse(503) as unknown as Response)   // snapshot GET fails
       .mockResolvedValueOnce(jsonResponse({ id: '42', name: 'Updated' }) as unknown as Response);  // token cached, not re-fetched
 
-    const result = await pushUpdate(BASE_URL, baseRequest(), {});
+    const result = await pushUpdate(BASE_URL, baseRequest(), { allowedRoles: ['integration_agent'] });
     expect(result.oldValues).toBeNull();
     expect(result.newValues).toEqual({ id: '42', name: 'Updated' });
   });
@@ -219,7 +225,7 @@ describe('pushUpdate — rollback mechanism', () => {
       .mockResolvedValueOnce(errorResponse(500) as unknown as Response)      // PUT fails
       .mockResolvedValueOnce(jsonResponse(current) as unknown as Response);  // rollback PUT (token cached, not re-fetched)
 
-    await expect(pushUpdate(BASE_URL, baseRequest(), {})).rejects.toBeDefined();
+    await expect(pushUpdate(BASE_URL, baseRequest(), { allowedRoles: ['integration_agent'] })).rejects.toBeDefined();
 
     const AuditLog = require('../../models/AuditLog').default;
     const rollbackCall = AuditLog.create.mock.calls.find(
@@ -236,7 +242,7 @@ describe('pushUpdate — rollback mechanism', () => {
       .mockResolvedValueOnce(errorResponse(500) as unknown as Response)  // GET snapshot fails
       .mockResolvedValueOnce(errorResponse(500) as unknown as Response); // PUT fails (token cached, not re-fetched)
 
-    await expect(pushUpdate(BASE_URL, baseRequest(), {})).rejects.toBeDefined();
+    await expect(pushUpdate(BASE_URL, baseRequest(), { allowedRoles: ['integration_agent'] })).rejects.toBeDefined();
 
     const AuditLog = require('../../models/AuditLog').default;
     const failureCall = AuditLog.create.mock.calls.find(
@@ -258,7 +264,7 @@ describe('pushUpdate — POST is not retried', () => {
       .mockResolvedValueOnce(errorResponse(503) as unknown as Response);    // POST fails once
 
     await expect(
-      pushUpdate(BASE_URL, { ...baseRequest(), method: 'POST' }, {}),
+      pushUpdate(BASE_URL, { ...baseRequest(), method: 'POST' }, { allowedRoles: ['integration_agent'] }),
     ).rejects.toMatchObject({ errorClass: 'UpstreamUnavailable' });
 
     // Only 3 calls: token + snapshot GET + POST (no retry). Filter on the
@@ -291,12 +297,12 @@ describe('pushUpdate — circuit breaker', () => {
           .mockResolvedValueOnce(errorResponse(500) as unknown as Response)   // snapshot
           .mockResolvedValueOnce(errorResponse(500) as unknown as Response);  // PUT
       }
-      await expect(pushUpdate(BASE_URL, { ...baseRequest(), correlationId: `f${i}` }, {})).rejects.toBeDefined();
+      await expect(pushUpdate(BASE_URL, { ...baseRequest(), correlationId: `f${i}` }, { allowedRoles: ['integration_agent'] })).rejects.toBeDefined();
     }
 
     const callsBefore = mockFetch.mock.calls.length;
     await expect(
-      pushUpdate(BASE_URL, { ...baseRequest(), correlationId: 'blocked' }, {}),
+      pushUpdate(BASE_URL, { ...baseRequest(), correlationId: 'blocked' }, { allowedRoles: ['integration_agent'] }),
     ).rejects.toMatchObject({ errorClass: 'CircuitOpenError' });
     expect(mockFetch.mock.calls.length).toBe(callsBefore);
   });
@@ -344,5 +350,22 @@ describe('runLegacyErpPushAgent', () => {
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toContain('AuthorizationError');
     expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('holds the push for human approval when governance denies (enforce mode)', async () => {
+    const { authorizeAgentAction } = require('../../services/agentAuthorizationService');
+    authorizeAgentAction.mockResolvedValueOnce({
+      allowed: false, enforced: true, reason: 'requires_approval:erp_write',
+      requiresApproval: true, level: 'act_audited', wouldDeny: true, mode: 'enforce',
+    });
+
+    const result = await runLegacyErpPushAgent([baseRequest()]);
+
+    expect(result.actions_taken).toHaveLength(1);
+    expect(result.actions_taken[0].action).toBe('erp_data_push_held_for_approval');
+    expect(result.actions_taken[0].result).toBe('flagged');
+    expect(result.entities_processed).toBe(0);
+    expect(result.errors).toHaveLength(0);      // a governance hold is NOT an error
+    expect(mockFetch).not.toHaveBeenCalled();   // no write performed — held for a human
   });
 });

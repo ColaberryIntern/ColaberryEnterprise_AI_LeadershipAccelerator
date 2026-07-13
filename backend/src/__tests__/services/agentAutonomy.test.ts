@@ -79,4 +79,10 @@ describe('agentAutonomy — HITL always-approval rules (§5 Q2)', () => {
   it('a routine send to an established lead in a mature campaign does NOT need a human', () => {
     expect(actionRequiresApproval('send_email', { isNewLead: false, campaignAgeHours: 200 }).required).toBe(false);
   });
+  it('high-stakes legacy ERP writes always need a human (REQ-003 approval gate)', () => {
+    expect(actionRequiresApproval('erp_data_push').required).toBe(true);
+    expect(actionRequiresApproval('erp_data_push').rule).toBe('erp_write');
+    // also triggers via resource type, regardless of the action verb
+    expect(actionRequiresApproval('erp_update', { resourceType: 'legacy_erp_module' }).rule).toBe('erp_write');
+  });
 });
