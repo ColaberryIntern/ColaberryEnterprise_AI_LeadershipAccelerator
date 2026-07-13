@@ -39,6 +39,8 @@ export interface ProjectAttributes {
   claude_md_content?: string;
   requirements_document?: string;
   target_mode?: string;
+  share_token?: string | null;
+  share_enabled?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -72,6 +74,8 @@ class Project extends Model<ProjectAttributes> implements ProjectAttributes {
   declare setup_status: any;
   declare claude_md_content: string;
   declare requirements_document: string;
+  declare share_token: string | null;
+  declare share_enabled: boolean;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -205,6 +209,15 @@ Project.init(
     target_mode: {
       type: DataTypes.STRING(20),
       defaultValue: 'production',
+    },
+    share_token: {
+      type: DataTypes.STRING(64),
+      allowNull: true,
+    },
+    share_enabled: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
   },
   {
