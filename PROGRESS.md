@@ -38,6 +38,13 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Why: weeks 10-12 have no 1:1 Anthropic Academy course; authoring them as typed `colaberry_module` data makes an authored week drop into the Curriculum Composer exactly like an Academy-mapped one.
   - Verification: isolated `tsc --strict` clean on `canonicalCourse.ts` (exit 0); executable check PASS (authored weeks 10-12 fold objectives/lab/assessment, weeks 1-9 unaffected, 12wk/4int/60 lessons intact); TS `transpileModule` syntax-clean on the data + test files. Full backend `tsc --noEmit` + `npm test -- canonicalCourse` still deferred to a deps-enabled box.
 
+- [x] **Backend build: exclude test files from the production tsc build (unblocks the Docker backend build)**
+  - Date: 2026-07-13
+  - Session: CC-20260712-q7m2
+  - What changed: `backend/tsconfig.json` `exclude` now also lists `src/**/__tests__/**`, `src/**/*.test.ts`, `src/**/*.spec.ts`. The prod build (`npm run build --workspace=backend` → `tsc`) was compiling test files and failing with TS2451 (`Cannot redeclare block-scoped variable 'classify'`) from two non-module test files sharing global scope (`govContractsTurnWatcher.test.ts`, `interviewPrepData.test.ts`) — the known recurring "main backend build RED on tests" issue. Tests are not runtime and jest uses ts-jest independently, so excluding them from the build is correct and doesn't affect the test suite.
+  - Why: the Docker backend image build (`RUN npm run build:backend`) failed exit 2 on these pre-existing test-file collisions, blocking the Dev 1 deploy of the canonical-course branch.
+  - Verification: dev backend image rebuild on VPS `/opt/acc-canon` after the change (see deploy below). Build reached backend `tsc` green (no TS2451).
+
 ### David ad trigger: approvals no longer escalate as broken; escalations made idempotent (2026-06-11)
 - [x] **Fixed `processDavidAdReply.js` false escalation on David's approval + per-poll escalation spam**
   - Date: 2026-06-11
