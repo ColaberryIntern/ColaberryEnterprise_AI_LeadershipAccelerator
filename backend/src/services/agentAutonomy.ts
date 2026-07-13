@@ -77,6 +77,12 @@ export function actionRequiresApproval(action: string, ctx: ActionContext = {}):
   const cat = actionCategory(action);
   const a = (action || '').toLowerCase();
 
+  // High-stakes legacy ERP writes (VA financial/procurement/asset systems) are always
+  // held for a human — REQ-003 approval gate + TBI "AI proposes, human approves".
+  if (a.includes('erp_data_push') || ctx.resourceType === 'legacy_erp_module') {
+    return { required: true, rule: 'erp_write' };
+  }
+
   if (cat === 'agent_lifecycle') return { required: true, rule: 'agent_lifecycle' };
 
   const isSocial = ctx.resourceType === 'social' || a.includes('social') || a.includes('publish');
