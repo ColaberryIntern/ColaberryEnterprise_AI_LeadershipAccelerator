@@ -36,7 +36,7 @@ import {
   handleSetResume, handleGetResume, handleClearResume,
 } from '../controllers/portalSettingsController';
 import {
-  handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handlePromptLab,
+  handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
 } from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
@@ -67,6 +67,7 @@ router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, h
 router.post('/api/portal/runtime/cards/:cardId/content', requireParticipant, handleEnsureContent);
 // Anthropic Skills Course — upload + AI-verify the completion certificate.
 router.post('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, certificateUpload.single('file'), handleUploadCertificate);
+router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, handleGetCertificate);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
