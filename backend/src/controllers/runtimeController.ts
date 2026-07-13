@@ -10,7 +10,8 @@ import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentor
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
-import { uploadCertificate } from '../services/runtime/certificateService';
+import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
+import fs from 'fs/promises';
 
 function fail(res: Response, err: any, next: NextFunction) {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
@@ -48,6 +49,18 @@ export async function handleUploadCertificate(req: Request, res: Response, next:
     const file = (req as any).file;
     if (!file) { res.status(400).json({ error: 'No certificate file uploaded.' }); return; }
     res.json(await uploadCertificate(eid(req), String(req.params.cardId), file));
+  } catch (e) { fail(res, e, next); }
+}
+
+// Serve THIS student's co-branded (Colaberry-logo) certificate image for download/share.
+export async function handleGetCertificate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const cert = await getCertificateFile(eid(req), String(req.params.cardId));
+    if (!cert) { res.status(404).json({ error: 'No certificate on file yet.' }); return; }
+    const buf = await fs.readFile(cert.path);
+    res.setHeader('Content-Type', cert.mime);
+    res.setHeader('Content-Disposition', `inline; filename="${cert.download}"`);
+    res.send(buf);
   } catch (e) { fail(res, e, next); }
 }
 
