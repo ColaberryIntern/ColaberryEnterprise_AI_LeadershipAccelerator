@@ -4,7 +4,7 @@
  */
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { listComponents, getComponent, updateComponent, createComponent, listVersions, restoreVersion, exportComponent, importComponent } from '../services/components/componentService';
+import { listComponents, getComponent, updateComponent, createComponent, listVersions, restoreVersion, exportComponent, importComponent, setCapabilities } from '../services/components/componentService';
 import { seedAnalytics, getAnalytics, analyticsOverview } from '../services/components/componentAnalyticsService';
 import { setDependencies, dependencyGraph } from '../services/components/dependencyService';
 import { compareVersions } from '../services/components/versionDiffService';
@@ -168,5 +168,17 @@ export async function handleSetApproval(req: Request, res: Response, next: NextF
     if (!c) return res.status(404).json({ error: 'Component not found' });
     await c.update({ approved, approved_at: approved ? new Date() : null, approved_by: approved ? author(req) : null });
     res.json({ slug: c.slug, approved: c.approved, approved_at: c.approved_at, approved_by: c.approved_by });
+  } catch (e) { fail(res, e, next); }
+}
+
+// ── Parts (capabilities) instant-save ────────────────────────────────────────
+// Side-channel write so a toggled Part persists immediately (like approval),
+// without the version-cutting full-component save. Returns the cleaned set.
+const capabilitiesSchema = z.object({ capabilities: z.array(z.string()) });
+export async function handleSetCapabilities(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { capabilities } = capabilitiesSchema.parse(req.body);
+    const saved = await setCapabilities(String(req.params.slug), capabilities);
+    res.json({ slug: String(req.params.slug), capabilities: saved });
   } catch (e) { fail(res, e, next); }
 }
