@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import type { TimelineFeedCard } from './TimelineCard';
 
@@ -28,7 +28,20 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
   const done = card.status === 'completed';
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ valid: boolean; reason: string } | null>(null);
+  const [certUrl, setCertUrl] = useState<string | null>(null); // co-branded cert (object URL)
   useEffect(() => { setResult(null); setBusy(false); }, [card.id]);
+
+  // Fetch the co-branded certificate (Colaberry logo) for download/share.
+  const loadCert = useCallback(async () => {
+    if (preview) return;
+    try {
+      const r = await portalApi.get(`/api/portal/runtime/cards/${card.id}/certificate`, { responseType: 'blob' });
+      setCertUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return URL.createObjectURL(r.data); });
+    } catch { /* none yet */ }
+  }, [card.id, preview]);
+  // Load the branded cert on open when the card is already complete.
+  useEffect(() => { if (done && !preview) loadCert(); }, [done, preview, loadCert]);
+  useEffect(() => () => { if (certUrl) URL.revokeObjectURL(certUrl); }, [certUrl]);
 
   const onPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -41,11 +54,14 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
       const r = await portalApi.post(`/api/portal/runtime/cards/${card.id}/certificate`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
       const d = r.data || {};
       setResult({ valid: !!d.valid, reason: d.reason || (d.valid ? 'Certificate verified.' : 'That does not look like a valid certificate.') });
-      if (d.valid && onComplete) await onComplete();
+      if (d.valid) { if (d.branded) await loadCert(); if (onComplete) await onComplete(); }
     } catch (err: any) {
       setResult({ valid: false, reason: err?.response?.data?.error || 'Upload failed — please try again.' });
     } finally { setBusy(false); }
   };
+
+  const shareText = `I completed ${course?.name || 'an Anthropic Skills course'} — verified through the Colaberry AI Systems Architect Accelerator. 🎓`;
+  const openShare = (url: string) => window.open(url, '_blank', 'noopener,noreferrer');
 
   return (
     <div className="tld-skilljar" onClick={(e) => e.stopPropagation()}>
@@ -69,9 +85,23 @@ const SkillsJarPanel: React.FC<Props> = ({ card, preview, onComplete }) => {
         : <div className="tld-note">No course link attached yet. An admin can add one from Orchestration → Timeline.</div>}
 
       {done ? (
-        <div className="tld-certmsg ok">✓ Certificate verified — course complete{pts > 0 ? ` · +${pts} pts earned` : ''}.</div>
+        <>
+          <div className="tld-certmsg ok">✓ Certificate verified — course complete{pts > 0 ? ` · +${pts} pts earned` : ''}.</div>
+          {certUrl && (
+            <div className="tld-certshare">
+              <div className="tld-uplab" style={{ textAlign: 'left' }}>Your Colaberry-verified certificate</div>
+              <img className="tld-certimg" src={certUrl} alt="Your co-branded certificate" />
+              <div className="tld-sharerow">
+                <a className="tl-btn ghost" href={certUrl} download="colaberry-certificate.png">⬇ Download</a>
+                <button type="button" className="tl-btn ghost" onClick={() => openShare(`https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(shareText)}`)}>Share on LinkedIn</button>
+                <button type="button" className="tl-btn ghost" onClick={() => openShare(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`)}>Share on X</button>
+              </div>
+              <p className="tld-desc muted" style={{ margin: '8px 0 0', fontSize: 12.5 }}>Download the certificate, then attach it to your post.</p>
+            </div>
+          )}
+        </>
       ) : preview ? (
-        <div className="tld-note">For students, this has <b>Open in SkillsJar</b> and a <b>certificate upload</b> that AI-verifies before completing the card.</div>
+        <div className="tld-note">For students, this has <b>Open in SkillsJar</b> and a <b>certificate upload</b> that AI-verifies, co-brands with the Colaberry logo, and lets them share to social.</div>
       ) : (
         <div className="tld-upload">
           <div className="tld-uplab">Upload your certificate to complete</div>
