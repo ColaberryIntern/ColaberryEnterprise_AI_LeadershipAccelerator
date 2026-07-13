@@ -13,6 +13,7 @@ import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import ComponentVersion from '../../models/ComponentVersion';
 import ComponentAnalytics from '../../models/ComponentAnalytics';
 import { estimateComponent } from './costEstimationService';
+import { capabilityIds } from './capabilityRegistry';
 
 /** Fields an author may edit in the builder (everything else is derived/system). */
 export const EDITABLE_FIELDS = [
@@ -92,6 +93,23 @@ export async function updateComponent(slug: string, patch: Record<string, any>, 
     await c.update(clean, { transaction: t });
     return c;
   });
+}
+
+/**
+ * Instant-save the "Parts" (capabilities) toggle without cutting a version.
+ * Mirrors the approval side-channel (a lightweight, no-version write) so the
+ * Experience Studio can persist a chip the moment it's toggled. Idempotent:
+ * writes the whole array, so replaying the same set is a no-op. Unknown ids are
+ * dropped (a stale client can't persist garbage) and duplicates are collapsed.
+ * Capabilities don't feed the cost estimate, so estimates are left untouched.
+ */
+export async function setCapabilities(slug: string, capabilities: string[]): Promise<string[]> {
+  const valid = new Set(capabilityIds());
+  const clean = Array.from(new Set(capabilities.filter((id) => valid.has(id))));
+  const c = await CurriculumTypeDefinition.findOne({ where: { slug } });
+  if (!c) throw Object.assign(new Error(`Component "${slug}" not found`), { status: 404 });
+  await c.update({ capabilities: clean });
+  return clean;
 }
 
 /** Create a NEW component from an (AI-generated) draft. Slug derived + de-duped. */

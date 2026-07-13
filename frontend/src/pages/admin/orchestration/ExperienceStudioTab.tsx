@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../../utils/api';
 import {
   Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, Row, studioCss,
@@ -56,6 +56,13 @@ const studentUIFor = (band?: string): string => {
   return 'a reading card';
 };
 
+// Capabilities that actually change the student runtime TODAY — they gate the
+// video-card augment (interactive notes / quiz / reflection) in CardDetailBody.
+// Every other Part is authored + saved here but not yet wired to the student
+// experience, so we label those "soon" rather than let an author believe a
+// toggle does something it doesn't. Move an id here the moment it gets wired.
+const WIRED_CAPS = new Set(['ai_chat', 'quiz', 'reflection']);
+
 const ExperienceStudioTab: React.FC = () => {
   const [list, setList] = useState<Cmp[]>([]);
   const [caps, setCaps] = useState<Cap[]>([]);
@@ -85,6 +92,11 @@ const ExperienceStudioTab: React.FC = () => {
   const [coDesign, setCoDesign] = useState<any>(null);
   const [busy, setBusy] = useState('');
   const [dirty, setDirty] = useState(false);
+  // Parts (capabilities) autosave the instant they're toggled — outside the
+  // dirty/Save-version flow — so capState is their own tiny save indicator and
+  // capsRef holds the authoritative in-flight set (guards rapid toggles).
+  const [capState, setCapState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const capsRef = useRef<string[]>([]);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [gen, setGen] = useState<{ open: boolean; desc: string; recipe: string; draft: any } | null>(null);
@@ -108,6 +120,7 @@ const ExperienceStudioTab: React.FC = () => {
     try {
       const r = await api.get(`/api/admin/components/${slug}`);
       setSel(r.data); setVersions(r.data.versions || []); setStage('generation'); setDirty(false); setDetailTab('preview'); setPreview(null); setVideoUrl('');
+      capsRef.current = Array.isArray(r.data.capabilities) ? r.data.capabilities : []; setCapState('idle');
       setTitle(''); setSubtitle(''); setDescription(''); setPresenter(''); setPoster(''); setCourseUrl('');
       setVars(Object.fromEntries((r.data.variable_keys || []).map((k: string) => [k, sampleFor(k)])));
       api.get(`/api/admin/components/${slug}/analytics`).then((a) => setAnalytics(a.data)).catch(() => {});
@@ -148,7 +161,31 @@ const ExperienceStudioTab: React.FC = () => {
   const stageField = (k: StageKey) => STAGES.find((s) => s.key === k)!.field;
   const setStagePrompt = (val: string) => { if (!sel) return; setSel({ ...sel, [stageField(stage)]: val }); setDirty(true); };
   const setField = (f: string, val: any) => { if (!sel) return; setSel({ ...sel, [f]: val }); setDirty(true); };
-  const toggleCap = (id: string) => { if (!sel) return; const cur: string[] = sel.capabilities || []; setField('capabilities', cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]); };
+  // Parts autosave the instant you toggle one (mirrors the approval side-channel):
+  // flip it locally for an immediate preview, PUT the whole set, and reconcile.
+  // On failure we roll back so a chip never shows "on" for something that didn't
+  // persist. capsRef is the source of truth so rapid toggles don't clobber each
+  // other, and the reference guards drop stale responses that a newer toggle beat.
+  const toggleCap = async (id: string) => {
+    if (!sel) return;
+    const slug = sel.slug;
+    const prev = capsRef.current;
+    const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    capsRef.current = next;
+    const applyCaps = (caps: string[]) => {
+      setSel((s) => (s && s.slug === slug ? { ...s, capabilities: caps } : s));
+      setList((l) => l.map((c) => (c.slug === slug ? { ...c, capabilities: caps } : c)));
+    };
+    applyCaps(next); setCapState('saving'); setError('');
+    try {
+      const r = await api.put(`/api/admin/components/${slug}/capabilities`, { capabilities: next });
+      const saved: string[] = Array.isArray(r.data?.capabilities) ? r.data.capabilities : next;
+      if (capsRef.current === next) { capsRef.current = saved; applyCaps(saved); setCapState('saved'); } // no newer toggle superseded us
+    } catch (e: any) {
+      if (capsRef.current === next) { capsRef.current = prev; applyCaps(prev); } // only revert if still ours
+      setCapState('error'); setError(e?.response?.data?.error || 'Could not save that Part — reverted.');
+    }
+  };
 
   const testStage = async () => {
     if (!sel) return; setBusy('test'); setStageTest(null); setError('');
@@ -336,7 +373,7 @@ const ExperienceStudioTab: React.FC = () => {
 
           <div className="es-buildbar">
             <div className="es-pillar"><div className="es-plab">1 · Interaction</div><div className="es-pval">{(sel.render_band || 'reading').replace(/_/g, ' ')}<small>students get {studentUIFor(sel.render_band)}</small></div></div>
-            <div className="es-pillar"><div className="es-plab">2 · Parts</div><div className="es-pval">{(sel.capabilities || []).length} on<small>toggle sections in Capabilities → (updates the preview)</small></div></div>
+            <div className="es-pillar"><div className="es-plab">2 · Parts</div><div className="es-pval">{(sel.capabilities || []).length} on<small>toggle in Parts → · saved instantly</small></div></div>
             <div className="es-pillar"><div className="es-plab">3 · Content</div><div className="es-pval">AI-generated<small>the Generation prompt · run it in Preview</small></div></div>
             <div className="es-pillar"><div className="es-plab">4 · Assessment</div>
               <select className="es-in" style={{ padding: '4px 6px', fontSize: 12 }} value={sel.evaluation_type || 'none'} onChange={(e) => setField('evaluation_type', e.target.value)}>
@@ -564,17 +601,24 @@ const ExperienceStudioTab: React.FC = () => {
                 the cohort), so there is no docked variables panel here. */}
             <aside>
               <div className="es-panel">
-                <div style={{ display: 'flex', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div className="es-lab" style={{ margin: 0 }}>Parts · what the student gets</div>
+                  {capState === 'saving' && <span style={{ fontSize: 10.5, color: '#8A8A8A' }}>Saving…</span>}
+                  {capState === 'saved' && <span style={{ fontSize: 10.5, color: '#3C7A26', fontWeight: 600 }}>Saved ✓</span>}
+                  {capState === 'error' && <span style={{ fontSize: 10.5, color: '#C0392B', fontWeight: 600 }}>Save failed</span>}
                   {bandCaps(sel.render_band) && <button className="es-btn" style={{ marginLeft: 'auto', fontSize: 10, padding: '2px 7px' }} onClick={() => setShowAllCaps((v) => !v)}>{showAllCaps ? 'Show relevant' : 'Show all 25'}</button>}
                 </div>
                 <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 6 }}>
                   {(showAllCaps || !bandCaps(sel.render_band) ? caps : caps.filter((c) => bandCaps(sel.render_band)!.includes(c.id))).map((cap) => {
-                    const on = (sel.capabilities || []).includes(cap.id); return (
-                      <button key={cap.id} title={cap.description} className={`es-capchip ${on ? 'on' : ''}`} onClick={() => toggleCap(cap.id)}>{cap.label}</button>
+                    const on = (sel.capabilities || []).includes(cap.id);
+                    const live = WIRED_CAPS.has(cap.id); return (
+                      <button key={cap.id}
+                        title={live ? `${cap.description} (live in the student experience)` : `${cap.description} — not wired to the student experience yet; saved as intent.`}
+                        className={`es-capchip ${on ? 'on' : ''}`} style={live ? undefined : { opacity: 0.6 }}
+                        onClick={() => toggleCap(cap.id)}>{cap.label}{!live && <span style={{ marginLeft: 4, fontSize: 8, fontWeight: 700, letterSpacing: 0.3, textTransform: 'uppercase', verticalAlign: 'middle' }}>soon</span>}</button>
                     ); })}
                 </div>
-                <div className="es-muted" style={{ marginTop: 6 }}>Toggling a part updates the preview.{bandCaps(sel.render_band) && !showAllCaps ? ' Showing the parts that apply to this type.' : ''}</div>
+                <div className="es-muted" style={{ marginTop: 6 }}>Toggling a part saves instantly. Only Parts without a <b>soon</b> tag change what a student sees today; the rest are saved as intent for features still being built.{bandCaps(sel.render_band) && !showAllCaps ? ' Showing the parts that apply to this type.' : ''}</div>
               </div>
 
               <details className="es-adv">
