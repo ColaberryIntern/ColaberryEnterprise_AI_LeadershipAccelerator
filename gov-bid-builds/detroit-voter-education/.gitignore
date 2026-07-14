@@ -1,0 +1,5 @@
+node_modules/
+.env
+app/client/dist/
+app/client/node_modules/
+*.log
