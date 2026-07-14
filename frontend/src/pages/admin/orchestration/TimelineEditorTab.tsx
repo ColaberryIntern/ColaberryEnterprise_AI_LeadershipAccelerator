@@ -436,10 +436,10 @@ const TimelineEditorTab: React.FC = () => {
     } catch { setError('Reorder failed'); loadBoard(); }
   };
 
-  const openAdd = (bucket: Bucket) => {
+  const openAdd = (bucket: Bucket, wk?: number | null) => {
     const def = board?.types.find((t) => t.bucket === bucket) || board?.types[0];
     setIsNew(true);
-    setDraft({ type: def?.slug, title: '', bucket, week, difficulty: def?.difficulty || 'core',
+    setDraft({ type: def?.slug, title: '', bucket, week: wk !== undefined ? wk : week, difficulty: def?.difficulty || 'core',
       points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'draft' });
   };
   const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined }); };
@@ -662,10 +662,11 @@ const TimelineEditorTab: React.FC = () => {
         <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
             {weeks.nums.map((w) => (
-              <button key={w} className={`tl-wk ${week === w ? 'on' : ''}`} onClick={() => setWeek(w)}>Week {w}</button>
+              <button key={w} className={`tl-wk ${week === w ? 'on' : ''}`} onClick={() => setWeek(w)}>{w === 0 ? 'Wk 0 · Free' : `Week ${w}`}</button>
             ))}
             {weeks.hasUnscheduled && <button className={`tl-wk ${week === null ? 'on' : ''}`} onClick={() => setWeek(null)}>Unscheduled</button>}
-            <button className="tl-wk" onClick={() => { const next = (weeks.nums[weeks.nums.length - 1] || 0) + 1; setWeek(next); openAdd('learn'); }}>+ Week</button>
+            {!weeks.nums.includes(0) && <button className="tl-wk" onClick={() => { setWeek(0); openAdd('learn', 0); }}>+ Free Preview (Wk 0)</button>}
+            <button className="tl-wk" onClick={() => { const next = (weeks.nums[weeks.nums.length - 1] || 0) + 1; setWeek(next); openAdd('learn', next); }}>+ Week</button>
           </div>
 
           {BUCKETS.map((b) => (
