@@ -354,7 +354,7 @@ import { GetWeekSchema, RevealActivitySchema, StartInterviewSchema, SubmitInterv
 import {
   CreatePostSchema, ListPostsQuerySchema, TogglePinSchema, PostIdParamSchema,
   CreateCommentSchema, CommentIdParamSchema, MemberIdParamSchema, UpdateProfileSchema,
-  ReportPostSchema, LeaderboardQuerySchema,
+  ReportPostSchema, LeaderboardQuerySchema, NotificationIdParamSchema,
 } from '../schemas/communitySchemas';
 
 router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
@@ -519,6 +519,41 @@ router.get('/api/portal/community/leaderboard', requireParticipant, async (req, 
     const { getLeaderboard } = await import('../services/communityLeaderboardService');
     const entries = await getLeaderboard(req.participant!.sub, parsed.data.period);
     res.json({ period: parsed.data.period, entries });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/calendar', requireParticipant, async (req, res) => {
+  try {
+    const { getUpcomingEvents } = await import('../services/communityCalendarService');
+    const events = await getUpcomingEvents(req.participant!.sub);
+    res.json({ events });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/notifications', requireParticipant, async (req, res) => {
+  try {
+    const { listNotifications } = await import('../services/communityNotificationService');
+    const notifications = await listNotifications(req.participant!.sub);
+    res.json({ notifications });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/notifications/:notificationId/read', requireParticipant, async (req, res) => {
+  const paramsParsed = NotificationIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid notification id' });
+    return;
+  }
+  try {
+    const { markNotificationRead } = await import('../services/communityNotificationService');
+    const notification = await markNotificationRead(req.participant!.sub, paramsParsed.data.notificationId);
+    res.json({ notification });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }

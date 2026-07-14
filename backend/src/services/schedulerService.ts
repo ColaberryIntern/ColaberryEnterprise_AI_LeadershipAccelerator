@@ -2753,6 +2753,26 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Architect evaluation agent: weekly Saturday at 06:00 UTC');
+
+  // ── Community Digest (daily, 08:00 UTC) ──────────────────────────────────────
+  // Deduped per (member, date) via CommunityDigestLog — safe to re-run; a
+  // second fire the same day is a no-op for every member already sent.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('CommunityDigest', async () => {
+      const { runDailyDigest } = await import('./communityDigestService');
+      const result = await runDailyDigest();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'community_digest_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Community digest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Community digest: daily at 08:00 UTC');
 }
 
 // ---------------------------------------------------------------------------

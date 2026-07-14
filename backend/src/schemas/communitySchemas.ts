@@ -32,6 +32,10 @@ export const MemberIdParamSchema = z.object({
   memberId: z.string().uuid('Invalid member id'),
 });
 
+export const NotificationIdParamSchema = z.object({
+  notificationId: z.string().uuid('Invalid notification id'),
+});
+
 export const CreateCommentSchema = z.object({
   body: z.string().min(1, 'Comment body cannot be empty').max(5000),
   parent_comment_id: z.string().uuid().optional(),
