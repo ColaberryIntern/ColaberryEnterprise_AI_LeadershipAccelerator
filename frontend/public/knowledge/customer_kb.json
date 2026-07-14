@@ -1,0 +1,475 @@
+{
+  "schema": "colaberry.customer-kb",
+  "version": "1.0",
+  "generated_at": "2026-07-14T00:00:00Z",
+  "source": "colaberry-customer-kb curated 2026-07-14 (publish candidate; final claims sign-off pending)",
+  "count": 37,
+  "categories": [
+    {
+      "key": "program-format",
+      "label": "Program & Format",
+      "description": "What the AI Systems Architect Accelerator is, who it's for, and how it runs.",
+      "order": 1
+    },
+    {
+      "key": "admissions-cost",
+      "label": "Admissions & Cost",
+      "description": "Eligibility, pricing, the free Open House, and financial support.",
+      "order": 2
+    },
+    {
+      "key": "learning-curriculum",
+      "label": "Learning & Curriculum",
+      "description": "What you learn and build, and how learning with Claude works.",
+      "order": 3
+    },
+    {
+      "key": "careers-outcomes",
+      "label": "Careers & Outcomes",
+      "description": "Certificates, credentials, and what you walk away with.",
+      "order": 4
+    },
+    {
+      "key": "policies-trust",
+      "label": "Policies & Trust",
+      "description": "Cancellation, international access, and accreditation.",
+      "order": 5
+    }
+  ],
+  "entries": [
+    {
+      "id": "program-format-01",
+      "slug": "what-is-the-ai-systems-architect-accelerator",
+      "category": "program-format",
+      "question": "What is the AI Systems Architect Accelerator?",
+      "answer": "It is Colaberry's program for going from using AI to architecting real systems with Claude. You join through an AI Membership, learn with Claude, build real guided projects, and follow a focused 12-week build path from idea to a working AI system. It is fully online and mentor-led.",
+      "tags": ["overview", "format", "membership"],
+      "related": ["learning-curriculum-01", "program-format-02"],
+      "featured": true,
+      "order": 1
+    },
+    {
+      "id": "program-format-02",
+      "slug": "who-is-it-for",
+      "category": "program-format",
+      "question": "Who is it for?",
+      "answer": "Everyone learns the same way, there are just three ways in: working professionals who want practical AI skills they can use at work; beginners and career switchers starting AI from the ground up; and builders and founders who want to turn an idea into a working system.",
+      "tags": ["audience", "eligibility"],
+      "related": ["admissions-cost-01"],
+      "featured": true,
+      "order": 2
+    },
+    {
+      "id": "program-format-03",
+      "slug": "is-it-online-and-how-much-time-does-it-take",
+      "category": "program-format",
+      "question": "Is it online, and how much time does it take?",
+      "answer": "It is 100% online and built around working lives. The build path runs across 12 weeks with guided projects you progress at a steady pace, plus live sessions and mentorship. You keep improving every month for as long as you are a member.",
+      "tags": ["online", "schedule", "time-commitment"],
+      "featured": false,
+      "order": 3
+    },
+    {
+      "id": "program-format-04",
+      "slug": "what-is-the-weekly-time-commitment",
+      "category": "program-format",
+      "question": "What is the weekly time commitment?",
+      "answer": "The program is built around a light live commitment so it fits alongside a full-time job, with live sessions each week plus guided project work you progress at your own pace. It is designed for working professionals, not a full-time bootcamp.",
+      "detail": "Outside of live sessions you work on your guided portfolio projects at your own pace. The structure is intentionally built so working professionals can keep their day job while they build.",
+      "tags": ["schedule", "time-commitment", "working-professionals"],
+      "related": ["program-format-03"],
+      "featured": false,
+      "order": 4
+    },
+    {
+      "id": "program-format-05",
+      "slug": "is-it-a-membership-or-a-one-time-course",
+      "category": "program-format",
+      "question": "Is it a membership or a one-time course?",
+      "answer": "It is a membership, not a one-time course. You join once and everything is included under a single price, and your access continues month to month so you keep learning and building for as long as you are a member.",
+      "tags": ["membership", "format", "inclusions"],
+      "related": ["admissions-cost-02", "learning-curriculum-01"],
+      "featured": false,
+      "order": 5
+    },
+    {
+      "id": "program-format-06",
+      "slug": "do-i-need-a-coding-or-engineering-background",
+      "category": "program-format",
+      "question": "Do I need a coding or engineering background?",
+      "answer": "No professional engineering background is required. It is built for career changers and working professionals who are comfortable with basic software concepts and want to build with AI. Beginners are welcome and start step by step.",
+      "detail": "The ideal fit is someone who understands the basics and wants to learn to build real AI systems, not a seasoned developer. It helps to arrive with a real business problem you want to solve.",
+      "tags": ["prerequisites", "background", "career-changers"],
+      "related": ["admissions-cost-01"],
+      "featured": true,
+      "order": 6
+    },
+    {
+      "id": "program-format-07",
+      "slug": "can-i-do-this-while-working-full-time",
+      "category": "program-format",
+      "question": "Can I do this while working a full-time job?",
+      "answer": "Yes, that is exactly who it is built for. The live commitment is light and structured around working lives, so working professionals and career changers can keep their day job while they build a real AI system.",
+      "tags": ["working-professionals", "full-time", "schedule"],
+      "related": ["program-format-04"],
+      "featured": false,
+      "order": 7
+    },
+    {
+      "id": "program-format-08",
+      "slug": "how-is-the-program-structured",
+      "category": "program-format",
+      "question": "How is the program structured?",
+      "answer": "It is a 12-week, project-based build path. Each stage moves you from architecture and design into a working build, so by the end you have a deployed AI system rather than just notes. The membership wraps the build path together with mentorship and guided projects.",
+      "tags": ["structure", "12-week", "project-based"],
+      "related": ["learning-curriculum-03"],
+      "featured": false,
+      "order": 8
+    },
+    {
+      "id": "admissions-cost-01",
+      "slug": "do-i-need-technical-experience-or-an-ml-degree",
+      "category": "admissions-cost",
+      "question": "Do I need technical experience or an ML degree?",
+      "answer": "No. You do not need to become a machine-learning engineer or have a computer-science degree. You need practical skills you can apply, and the right guidance and structure to build them. Beginners are welcome and start step by step.",
+      "tags": ["eligibility", "prerequisites", "beginners"],
+      "related": ["program-format-06"],
+      "featured": true,
+      "order": 1
+    },
+    {
+      "id": "admissions-cost-02",
+      "slug": "how-much-does-it-cost",
+      "category": "admissions-cost",
+      "question": "How much does it cost?",
+      "answer": "The Open House is free to attend. Membership is $149 per person per month, and you can cancel anytime. Teams and employers can also license annual seats that transfer between employees, so a seat stays with the company as people change roles. Every path begins inside the free Open House, so there is no payment required to explore what is included.",
+      "tags": ["pricing", "membership", "cost"],
+      "related": ["admissions-cost-03", "admissions-cost-06"],
+      "featured": true,
+      "order": 2
+    },
+    {
+      "id": "admissions-cost-03",
+      "slug": "what-is-the-free-open-house",
+      "category": "admissions-cost",
+      "question": "What is the free Open House?",
+      "answer": "A 90-minute live online session with demos, real student work, career pathways, and a Q&A. You will see exactly what is inside the membership, how members learn with Claude, and how to get started. See upcoming dates on our Events page.",
+      "tags": ["open-house", "free", "events"],
+      "reference": {
+        "label": "Upcoming Open House dates",
+        "url": "https://training.colaberry.com/events"
+      },
+      "related": ["admissions-cost-02"],
+      "featured": true,
+      "order": 3
+    },
+    {
+      "id": "admissions-cost-04",
+      "slug": "do-you-offer-scholarships-or-financial-support",
+      "category": "admissions-cost",
+      "question": "Do you offer scholarships or financial support?",
+      "answer": "We are committed to keeping AI skills accessible and offer flexible options, including military support. The best place to ask about your situation is the free Open House or our admissions team. Contact us to learn more.",
+      "tags": ["scholarships", "financial-support", "military"],
+      "reference": {
+        "label": "Contact admissions",
+        "url": "https://training.colaberry.com/contact"
+      },
+      "featured": false,
+      "order": 4
+    },
+    {
+      "id": "admissions-cost-05",
+      "slug": "what-is-included-in-the-membership",
+      "category": "admissions-cost",
+      "question": "What is included in the membership, and are there extra course fees?",
+      "answer": "One membership includes everything, with no separate course fees and no per-course tuition. It covers the full build path, certification prep, a hands-on internship experience, and guided GitHub portfolio projects, all under the single price.",
+      "detail": "It is a membership, not per-course tuition. The learning, the projects, the certification prep, and the internship experience are bundled together rather than sold as add-ons.",
+      "tags": ["membership", "inclusions", "no-extra-fees"],
+      "related": ["admissions-cost-02", "careers-outcomes-02"],
+      "featured": true,
+      "order": 5
+    },
+    {
+      "id": "admissions-cost-06",
+      "slug": "are-there-costs-beyond-the-membership-fee",
+      "category": "admissions-cost",
+      "question": "Are there any costs beyond the membership fee?",
+      "answer": "Yes, and we are upfront about it. On top of your membership you cover your own third-party tool costs, which Colaberry does not cover: an Anthropic subscription for Claude Code (about $20 a month) and any LLM API usage billed to your own key (most projects stay under $10 a month).",
+      "detail": "These are paid directly to the providers, not to Colaberry. They are required because you build and deploy real systems on your own keys, exactly as you would on the job, so your projects and portfolio stay portable and real afterward.",
+      "tags": ["costs", "fees", "anthropic", "api", "claude-code"],
+      "related": ["admissions-cost-02"],
+      "featured": false,
+      "order": 6
+    },
+    {
+      "id": "admissions-cost-07",
+      "slug": "do-i-have-to-pay-to-attend-the-open-house",
+      "category": "admissions-cost",
+      "question": "Do I have to pay to attend the Open House before I decide?",
+      "answer": "No. The Open House is free. You can come see the program first and decide afterward, with no payment required to explore what is included.",
+      "tags": ["open-house", "free"],
+      "related": ["admissions-cost-03"],
+      "featured": false,
+      "order": 7
+    },
+    {
+      "id": "admissions-cost-08",
+      "slug": "is-there-an-application-or-screening",
+      "category": "admissions-cost",
+      "question": "Is there an application or screening?",
+      "answer": "The best way to see if it is a fit is to attend the free Open House and talk with our admissions team. There are no prerequisite courses or certifications required before you join.",
+      "tags": ["enrollment", "prerequisites", "open-house"],
+      "reference": {
+        "label": "Contact admissions",
+        "url": "https://training.colaberry.com/contact"
+      },
+      "featured": false,
+      "order": 8
+    },
+    {
+      "id": "admissions-cost-09",
+      "slug": "do-you-offer-team-or-employer-plans",
+      "category": "admissions-cost",
+      "question": "Do you offer team or employer plans?",
+      "answer": "Yes. Alongside the $149 per person per month membership, teams and employers can license annual seats. A seat is transferable, so it stays with the company and can move between employees as roles change. Contact us for team and corporate pricing.",
+      "detail": "Annual seats suit employers who want to upskill their workforce and keep the seat with the company rather than the individual. Reach out and we will scope the right number of seats and pricing for your team.",
+      "tags": ["teams", "employer", "corporate", "annual-seats"],
+      "reference": {
+        "label": "Contact us for team pricing",
+        "url": "https://training.colaberry.com/contact"
+      },
+      "related": ["admissions-cost-02"],
+      "featured": false,
+      "order": 9
+    },
+    {
+      "id": "learning-curriculum-01",
+      "slug": "what-will-i-actually-learn-and-build",
+      "category": "learning-curriculum",
+      "question": "What will I actually learn and build?",
+      "answer": "Three things, in order: Learn with Claude, using it as a real work partner for research, analysis, planning, and problem solving; build real projects, guided hands-on work you can explain and show; and deploy in the real world, moving from concept to a working AI system over a 12-week build path.",
+      "tags": ["curriculum", "projects", "claude"],
+      "related": ["learning-curriculum-03", "careers-outcomes-03"],
+      "featured": true,
+      "order": 1
+    },
+    {
+      "id": "learning-curriculum-02",
+      "slug": "what-is-the-anthropic-partnership",
+      "category": "learning-curriculum",
+      "question": "What is the Anthropic partnership?",
+      "answer": "A cohort of our team completed Anthropic Academy's full four-course learning path, earning Colaberry confirmed status in the Claude Partner Network. When you learn here, you learn the real Claude from a team credentialed by the company that builds it.",
+      "tags": ["anthropic", "claude", "partnership"],
+      "related": ["careers-outcomes-04"],
+      "featured": false,
+      "order": 2
+    },
+    {
+      "id": "learning-curriculum-03",
+      "slug": "what-projects-will-i-build",
+      "category": "learning-curriculum",
+      "question": "What projects will I build?",
+      "answer": "You build a set of real, portfolio-grade projects rather than toy exercises: a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+      "detail": "These projects are guided, real, and yours to show employers. They map to the core stages of the build path and are designed to be portfolio-ready.",
+      "tags": ["projects", "portfolio", "deliverables"],
+      "related": ["learning-curriculum-04", "careers-outcomes-03"],
+      "featured": true,
+      "order": 3
+    },
+    {
+      "id": "learning-curriculum-04",
+      "slug": "what-is-an-mcp-server-and-why-build-one",
+      "category": "learning-curriculum",
+      "question": "What is an MCP server, and why am I building one?",
+      "answer": "You build a working MCP server that integrates with a real system, one of the core projects in the program. It is hands-on systems work that shows you can connect AI to live tools, not just chat with a model.",
+      "tags": ["mcp", "projects", "integration"],
+      "related": ["learning-curriculum-03"],
+      "featured": false,
+      "order": 4
+    },
+    {
+      "id": "learning-curriculum-05",
+      "slug": "who-teaches-this-and-what-platform-do-we-build-on",
+      "category": "learning-curriculum",
+      "question": "Who teaches this, and what platform do we build on?",
+      "answer": "You learn with Claude and build on Claude Code, the same tooling used to build production AI systems. Learning is mentor-led by a team credentialed through the Claude Partner Network, so you build on real, current tools rather than a sandbox.",
+      "tags": ["claude-code", "instruction", "anthropic"],
+      "related": ["learning-curriculum-02"],
+      "featured": false,
+      "order": 5
+    },
+    {
+      "id": "learning-curriculum-06",
+      "slug": "do-i-need-to-bring-my-own-project-idea",
+      "category": "learning-curriculum",
+      "question": "Do I need to bring my own project idea?",
+      "answer": "It helps to arrive with a business problem you want to solve. The principle is simple: arrive with an idea, leave with a deployed system. The program guides you to build your idea into something real, and beginners without a fixed idea are supported to find one.",
+      "tags": ["project-idea", "fit", "guidance"],
+      "related": ["program-format-06"],
+      "featured": false,
+      "order": 6
+    },
+    {
+      "id": "learning-curriculum-07",
+      "slug": "is-certification-prep-included-in-the-curriculum",
+      "category": "learning-curriculum",
+      "question": "Is certification prep part of the program or a separate cost?",
+      "answer": "It is included. One membership covers the full build path, certification prep, a hands-on internship experience, and guided GitHub portfolio projects, with no separate course fees. Certification prep is bundled with the build projects, not sold on the side.",
+      "tags": ["certification", "membership", "inclusions"],
+      "related": ["admissions-cost-05", "careers-outcomes-04"],
+      "featured": false,
+      "order": 7
+    },
+    {
+      "id": "careers-outcomes-01",
+      "slug": "do-i-earn-a-certificate",
+      "category": "careers-outcomes",
+      "question": "Do I earn a certificate?",
+      "answer": "Yes. Complete the membership and your guided projects and you receive a Colaberry-issued AI Systems Architect certificate, a verifiable credential you can share on LinkedIn and add to your resume.",
+      "tags": ["certificate", "credential", "linkedin"],
+      "related": ["careers-outcomes-03", "careers-outcomes-04"],
+      "featured": true,
+      "order": 1
+    },
+    {
+      "id": "careers-outcomes-02",
+      "slug": "is-the-internship-a-real-job-or-coursework",
+      "category": "careers-outcomes",
+      "question": "Is the internship a real job, or just part of the coursework?",
+      "answer": "It is a hands-on internship experience built right into the membership at no extra cost. You do not just learn the concepts, you apply them on real work, so you finish with hands-on experience rather than only theory.",
+      "detail": "The internship experience is included in the single membership alongside the build path, certification prep, and guided GitHub portfolio projects, with no separate fees.",
+      "tags": ["internship", "experience", "hands-on"],
+      "related": ["admissions-cost-05"],
+      "featured": false,
+      "order": 2
+    },
+    {
+      "id": "careers-outcomes-03",
+      "slug": "what-will-i-have-to-show-employers",
+      "category": "careers-outcomes",
+      "question": "What will I have to show employers when I finish?",
+      "answer": "You finish with three things you can put in front of any employer: a real AI system deployed in the real world, a GitHub portfolio of guided projects, and a verifiable AI Systems Architect certificate. Free courses leave you with a watch history; this leaves you with proof of capability.",
+      "detail": "Concrete builds in your portfolio include a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.",
+      "tags": ["portfolio", "github", "outcomes"],
+      "related": ["learning-curriculum-03", "careers-outcomes-01"],
+      "featured": true,
+      "order": 3
+    },
+    {
+      "id": "careers-outcomes-04",
+      "slug": "what-is-the-anthropic-architect-certification",
+      "category": "careers-outcomes",
+      "question": "What certification do I prepare for, and why does it matter to an employer?",
+      "answer": "The membership includes Anthropic Architect certification prep, so you prepare for an Anthropic-backed knowledge credential while you build. The principle is simple: Anthropic certifies knowledge, Colaberry certifies capability. You walk into conversations with both the credential and a deployed system to prove it.",
+      "detail": "The credibility comes from both sides: Anthropic backs the knowledge credential, and Colaberry validates that you can actually build and deploy by having you ship a real system.",
+      "tags": ["certification", "anthropic", "credential"],
+      "related": ["learning-curriculum-02", "careers-outcomes-01"],
+      "featured": true,
+      "order": 4
+    },
+    {
+      "id": "careers-outcomes-05",
+      "slug": "can-a-career-changer-build-a-portfolio-that-matters",
+      "category": "careers-outcomes",
+      "question": "I'm a career changer with no engineering background. Can I realistically build a portfolio that matters?",
+      "answer": "Yes. This is built for career changers and working professionals who are comfortable with basic software concepts and have a problem to solve. No professional engineering background is required, and you leave with a deployed system, a GitHub portfolio, and a verifiable certificate.",
+      "tags": ["career-change", "beginner", "portfolio"],
+      "related": ["program-format-06", "careers-outcomes-03"],
+      "featured": false,
+      "order": 5
+    },
+    {
+      "id": "careers-outcomes-06",
+      "slug": "can-i-keep-building-after-the-12-weeks",
+      "category": "careers-outcomes",
+      "question": "Can I keep building my portfolio and stay connected after the 12 weeks?",
+      "answer": "Yes. This is a membership, not a one-time course, so your access continues month to month at $149 per person and you keep learning and building for as long as you are a member.",
+      "tags": ["membership", "ongoing-access"],
+      "related": ["program-format-05", "policies-trust-01"],
+      "featured": false,
+      "order": 6
+    },
+    {
+      "id": "careers-outcomes-07",
+      "slug": "why-pay-when-anthropic-posts-free-content",
+      "category": "careers-outcomes",
+      "question": "Why pay for this when there is so much free AI content online?",
+      "answer": "Free videos teach you about AI. This membership makes you build with it. You ship a deployed AI system, a GitHub portfolio, and prepare for a certification, guided live by people who do this work. Most people consume AI; very few learn to build with it, and that is exactly the gap this closes.",
+      "detail": "Self-teaching gives you scattered knowledge; this gives you structure and proof. The four concrete builds are a Business Workflow Assistant with reusable Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server, and a complete Solution Architecture Package.",
+      "tags": ["value", "self-taught", "outcomes"],
+      "related": ["careers-outcomes-03", "learning-curriculum-01"],
+      "featured": false,
+      "order": 7
+    },
+    {
+      "id": "policies-trust-01",
+      "slug": "can-i-cancel-anytime",
+      "category": "policies-trust",
+      "question": "Can I cancel anytime?",
+      "answer": "Yes. Membership is $149 per person per month, billed month to month, and you can cancel anytime. Teams and employers can also license annual seats that transfer between employees.",
+      "tags": ["cancellation", "membership", "billing"],
+      "related": ["admissions-cost-02"],
+      "featured": true,
+      "order": 1
+    },
+    {
+      "id": "policies-trust-02",
+      "slug": "can-international-students-join",
+      "category": "policies-trust",
+      "question": "Can international students join?",
+      "answer": "Yes. Because the accelerator is fully online and membership-based, learners can join from anywhere, and our community already spans 49 countries. Colaberry, through the Colaberry School of Data Analytics, is a Texas Workforce Commission approved school (COA U5306).",
+      "tags": ["international", "accreditation", "twc"],
+      "featured": false,
+      "order": 2
+    },
+    {
+      "id": "policies-trust-03",
+      "slug": "what-is-your-refund-policy",
+      "category": "policies-trust",
+      "question": "What is your refund or cancellation policy if it isn't a fit?",
+      "answer": "Membership is $149 per person per month, billed month to month, so you can cancel anytime and keep access through the period you have paid for. Refund terms are being finalized, so please confirm the current details with our admissions team before enrolling.",
+      "detail": "If you have a specific situation, the free Open House and our admissions team are the best place to get the current, exact terms in writing.",
+      "tags": ["refund", "cancellation", "policy"],
+      "reference": {
+        "label": "Contact admissions",
+        "url": "https://training.colaberry.com/contact"
+      },
+      "related": ["policies-trust-01"],
+      "featured": false,
+      "order": 3
+    },
+    {
+      "id": "policies-trust-04",
+      "slug": "is-this-an-accredited-school",
+      "category": "policies-trust",
+      "question": "Is Colaberry an accredited or approved school?",
+      "answer": "Colaberry, through the Colaberry School of Data Analytics, is a Texas Workforce Commission approved school (COA U5306). The AI Systems Architect Accelerator itself is delivered fully online and membership-based, so learners can join from anywhere.",
+      "tags": ["accreditation", "twc", "trust"],
+      "related": ["policies-trust-02"],
+      "featured": false,
+      "order": 4
+    },
+    {
+      "id": "policies-trust-05",
+      "slug": "do-i-have-to-commit-before-i-see-the-program",
+      "category": "policies-trust",
+      "question": "Do I have to commit before I see what the program is like?",
+      "answer": "No. We host a free Open House so you can see exactly how the program works before you commit a dollar. It is your chance to see demos, real student work, and how members learn with Claude, at no cost.",
+      "tags": ["open-house", "free", "trust"],
+      "related": ["admissions-cost-03"],
+      "featured": true,
+      "order": 5
+    },
+    {
+      "id": "policies-trust-06",
+      "slug": "how-is-this-different-from-a-coding-bootcamp",
+      "category": "policies-trust",
+      "question": "How is this different from a coding bootcamp?",
+      "answer": "A coding bootcamp turns you into a junior engineer over months of full-time study. This is a 12-week, project-based membership built for working professionals, with a light live commitment each week. You do not need an engineering background, only basic comfort with the tools and a real problem to solve, and you finish with a deployed AI system and a verifiable certificate.",
+      "tags": ["bootcamp", "comparison", "working-professionals"],
+      "related": ["program-format-04", "careers-outcomes-03"],
+      "featured": false,
+      "order": 6
+    }
+  ]
+}
