@@ -5,10 +5,7 @@
 // Source of truth for the week->course map is backend/src/scripts/lib/curriculumWeeks.js
 // (WEEKS[]). module_number == week (1-12). The confirmed/pending split reflects the
 // BC decision (todo 9985688697 — deep-link delivery on enterprise.colaberry.com):
-//   - registry-confirmed Skilljar URLs: weeks 2/3/5/8 -> 'confirmed'
-//   - constructed-but-unverified slugs: weeks 1/6/7 -> 'pending_confirmation'
-//     (Kes confirms these against the live Skilljar catalog; the frontend renders a
-//      "coming soon" pill instead of a possibly-dead link until then)
+//   - Skilljar URLs verified live against catalog: weeks 1/2/3/5/6/7/8 -> 'confirmed'
 //   - Colaberry-original weeks 4/9/10/11 -> no Skilljar course ('not_applicable')
 //   - week 12 -> external CCA-F exam (known public URL, 'confirmed')
 // If WEEKS changes, update COURSE_LINK_ROWS to match.
@@ -30,13 +27,13 @@ const SKILLJAR = 'https://anthropic.skilljar.com';
 const CCA_F = 'https://claudecertifications.com/claude-certified-architect/exam-guide';
 
 export const COURSE_LINK_ROWS: CourseLinkSeedRow[] = [
-  { module_number: 1,  provider: 'skilljar',           course_title: 'Claude Code 101 (+ Claude Code in Action)',      course_url: `${SKILLJAR}/claude-code-101`,                          link_status: 'pending_confirmation' },
+  { module_number: 1,  provider: 'skilljar',           course_title: 'Claude Code 101',                               course_url: `${SKILLJAR}/claude-code-101`,                          link_status: 'confirmed' },
   { module_number: 2,  provider: 'skilljar',           course_title: 'Introduction to Agent Skills',                   course_url: `${SKILLJAR}/introduction-to-agent-skills`,             link_status: 'confirmed' },
   { module_number: 3,  provider: 'skilljar',           course_title: 'Claude with the Anthropic API',                  course_url: `${SKILLJAR}/claude-with-the-anthropic-api`,            link_status: 'confirmed' },
   { module_number: 4,  provider: 'colaberry_original', course_title: 'Prompt Engineering (Colaberry-original)',        course_url: null,                                                   link_status: 'not_applicable' },
   { module_number: 5,  provider: 'skilljar',           course_title: 'Introduction to Model Context Protocol',         course_url: `${SKILLJAR}/introduction-to-model-context-protocol`,   link_status: 'confirmed' },
   { module_number: 6,  provider: 'skilljar',           course_title: 'Model Context Protocol: Advanced Topics',        course_url: `${SKILLJAR}/model-context-protocol-advanced-topics`,   link_status: 'confirmed' },
-  { module_number: 7,  provider: 'skilljar',           course_title: 'Introduction to Subagents',                      course_url: `${SKILLJAR}/introduction-to-subagents`,                link_status: 'pending_confirmation' },
+  { module_number: 7,  provider: 'skilljar',           course_title: 'Introduction to Subagents',                      course_url: `${SKILLJAR}/introduction-to-subagents`,                link_status: 'confirmed' },
   { module_number: 8,  provider: 'skilljar',           course_title: 'Claude Code in Action',                          course_url: `${SKILLJAR}/claude-code-in-action`,                    link_status: 'confirmed' },
   { module_number: 9,  provider: 'colaberry_original', course_title: 'Reliability Engineering (Colaberry-original)',   course_url: null,                                                   link_status: 'not_applicable' },
   { module_number: 10, provider: 'colaberry_original', course_title: 'Governance (Colaberry-original)',                course_url: null,                                                   link_status: 'not_applicable' },

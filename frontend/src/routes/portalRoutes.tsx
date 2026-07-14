@@ -29,13 +29,16 @@ import WalkCapsPage from '../pages/portal/WalkCapsPage';
 import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
 import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
 import CoryHome from '../pages/portal/CoryHome';
+import ArchitectDashboard from '../pages/portal/ArchitectDashboard';
 import TodayShell from '../pages/portal/today/TodayShell';
 import SettingsPage from '../pages/portal/settings/SettingsPage';
 import PathPage from '../pages/portal/path/PathPage';
 import SchedulePage from '../pages/portal/schedule/SchedulePage';
 import ProjectsPage from '../pages/portal/projects/ProjectsPage';
+import CommunityPage from '../pages/portal/community/CommunityPage';
 import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
 import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
+import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
 import ExecutionLane from '../pages/project/ExecutionLane';
 import SystemView from '../pages/project/SystemView';
 
@@ -56,17 +59,20 @@ const portalRoutes = (
       {/* Projects tab: portal-native builds (lists + tasks, FB vibe), opens on
           the new-build wizard. Renders its own PortalShell chrome like Today. */}
       <Route path="/portal/projects" element={<ProjectsPage />} />
+      <Route path="/portal/community" element={<CommunityPage />} />
       {/* Classroom (Design E timeline) renders its own PortalShell chrome, like Today/Path/Projects. */}
       <Route path="/portal/classroom" element={<ClassroomPage />} />
       {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
       <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />
       <Route element={<PortalLayout />}>
         <Route path="/portal/home" element={<CoryHome />} />
+        <Route path="/portal/architect-dashboard" element={<ArchitectDashboard />} />
         <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />
         <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
         {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
         <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
+        <Route path="/portal/classroom/week/:weekNum" element={<ClassroomWeekPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
         <Route path="/portal/sessions" element={<PortalSessionsPage />} />
         <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />

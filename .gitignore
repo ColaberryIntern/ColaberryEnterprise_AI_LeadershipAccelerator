@@ -15,6 +15,9 @@ build/
 .vscode/
 .idea/
 
+# Personal Claude Code overrides — project-scoped, never shared with the team
+CLAUDE.local.md
+
 # OS
 .DS_Store
 Thumbs.db

@@ -2,7 +2,8 @@ import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from './openaiInstrumented';
 import Project from '../models/Project';
 import ProjectArtifact from '../models/ProjectArtifact';
-import { ArtifactDefinition, AssignmentSubmission, Enrollment } from '../models';
+import Artifact from '../models/Artifact';
+import { ArtifactDefinition, AssignmentSubmission, ArchitectEvaluation, CurriculumModule, Enrollment } from '../models';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -37,6 +38,26 @@ export interface ProjectMetadata {
   project_variables: Record<string, any>;
 }
 
+export type BuildArtifactStatus = 'not_started' | 'in_progress' | 'submitted' | 'reviewed';
+
+/**
+ * One week (1-12) of the Tier-A build-artifact program, joined against
+ * CurriculumModule (title) and ArchitectEvaluation (weekly AI evaluation) —
+ * additive alongside the legacy strategy/governance/architecture/
+ * implementation categories below, which several other services still
+ * depend on structurally (executiveDeliverableService, projectMentorService,
+ * projectWorkflowService, projectRequirementsContextService,
+ * portfolioEnhancementService, mentorInterventionService).
+ */
+export interface WeeklyPortfolioEntry {
+  week_number: number;
+  module_title: string | null;
+  url: string | null;
+  status: BuildArtifactStatus;
+  evaluation_summary: string | null;
+  evaluation_score: number | null;
+}
+
 export interface PortfolioStructure {
   project_metadata: ProjectMetadata;
   strategy: PortfolioArtifactEntry[];
@@ -45,6 +66,8 @@ export interface PortfolioStructure {
   implementation: PortfolioArtifactEntry[];
   total_artifacts: number;
   average_score: number | null;
+  weekly_artifacts: WeeklyPortfolioEntry[];
+  readiness_score: number | null;
 }
 
 export interface PortfolioResult {
@@ -108,6 +131,61 @@ function summarizeArtifact(submission: AssignmentSubmission, artifactDef: Artifa
   return artifactDef.description || `${artifactDef.name} submission`;
 }
 
+// ─── Weekly Tier-A Artifacts + Readiness Score ──────────────────────────────
+
+const TOTAL_WEEKS = 12;
+
+/**
+ * Builds the week-1..12 view of Tier-A build artifacts (BC #9985689899) plus
+ * the student's readiness score (BC #9985689951), for a project. Additive to
+ * the existing category-based portfolio — does not replace it.
+ */
+async function buildWeeklyPortfolio(
+  project: Project,
+  enrollmentId: string,
+): Promise<{ weekly_artifacts: WeeklyPortfolioEntry[]; readiness_score: number | null }> {
+  const [artifacts, evaluations, enrollment] = await Promise.all([
+    Artifact.findAll({ where: { project_id: project.id, type: 'build' } }),
+    ArchitectEvaluation.findAll({ where: { enrollment_id: enrollmentId } }),
+    Enrollment.findByPk(enrollmentId),
+  ]);
+
+  const artifactByWeek = new Map(artifacts.map((a: any) => [a.week_number, a]));
+  const evalByWeek = new Map(evaluations.map((e: any) => [e.week_number, e]));
+
+  let modulesByNumber = new Map<number, any>();
+  if (enrollment?.cohort_id) {
+    const modules = await CurriculumModule.findAll({ where: { cohort_id: enrollment.cohort_id } });
+    modulesByNumber = new Map(modules.map((m: any) => [m.module_number, m]));
+  }
+
+  const weekly_artifacts: WeeklyPortfolioEntry[] = [];
+  for (let week = 1; week <= TOTAL_WEEKS; week++) {
+    const artifact: any = artifactByWeek.get(week);
+    const evaluation: any = evalByWeek.get(week);
+    const module: any = modulesByNumber.get(week);
+    weekly_artifacts.push({
+      week_number: week,
+      module_title: module?.title ?? null,
+      url: artifact?.url ?? null,
+      status: artifact?.status ?? 'not_started',
+      evaluation_summary: evaluation?.progress_summary ?? null,
+      evaluation_score: evaluation?.overall_score ?? null,
+    });
+  }
+
+  // "Current" readiness = the most advanced week the student has an AI
+  // evaluation for, not a plain latest-by-timestamp (evaluations should
+  // arrive in week order, but week order is the meaningful ordering here).
+  const latestEvaluation = (evaluations as any[]).reduce(
+    (latest, e) => (!latest || e.week_number > latest.week_number ? e : latest),
+    null as any,
+  );
+  const readiness_score = latestEvaluation?.overall_score ?? null;
+
+  return { weekly_artifacts, readiness_score };
+}
+
 // ─── Core Generator ──────────────────────────────────────────────────────────
 
 /**
@@ -139,6 +217,8 @@ export async function generatePortfolio(enrollmentId: string): Promise<Portfolio
     implementation: [],
     total_artifacts: 0,
     average_score: null,
+    weekly_artifacts: [],
+    readiness_score: null,
   };
 
   if (!project) {
@@ -149,6 +229,10 @@ export async function generatePortfolio(enrollmentId: string): Promise<Portfolio
       file_hierarchy: buildFileHierarchy(portfolio),
     };
   }
+
+  const { weekly_artifacts, readiness_score } = await buildWeeklyPortfolio(project, enrollmentId);
+  portfolio.weekly_artifacts = weekly_artifacts;
+  portfolio.readiness_score = readiness_score;
 
   // Step 2: Load project artifacts with eager loads
   const projectArtifacts = await ProjectArtifact.findAll({
@@ -266,6 +350,7 @@ function buildReadme(metadata: ProjectMetadata, portfolio: PortfolioStructure): 
   if (metadata.industry) lines.push(`**Industry:** ${metadata.industry}`);
   lines.push(`**Project Stage:** ${metadata.project_stage}`);
   if (portfolio.average_score != null) lines.push(`**Average Artifact Score:** ${portfolio.average_score}%`);
+  if (portfolio.readiness_score != null) lines.push(`**AI Architect Readiness Score:** ${portfolio.readiness_score}/100`);
   lines.push('');
 
   if (metadata.primary_business_problem) {
@@ -306,6 +391,20 @@ function buildReadme(metadata: ProjectMetadata, portfolio: PortfolioStructure): 
     const metrics = Array.isArray(vars.success_metrics) ? vars.success_metrics : [vars.success_metrics];
     for (const m of metrics) {
       lines.push(`- ${m}`);
+    }
+    lines.push('');
+  }
+
+  const startedWeeks = portfolio.weekly_artifacts.filter((w) => w.status !== 'not_started');
+  if (startedWeeks.length > 0) {
+    lines.push('## Weekly Build Progress');
+    lines.push('');
+    lines.push('| Week | Focus | Status | Submission |');
+    lines.push('|------|-------|--------|------------|');
+    for (const w of portfolio.weekly_artifacts) {
+      const focus = w.module_title || `Week ${w.week_number}`;
+      const submission = w.url ? `[link](${w.url})` : '—';
+      lines.push(`| ${w.week_number} | ${focus} | ${w.status} | ${submission} |`);
     }
     lines.push('');
   }

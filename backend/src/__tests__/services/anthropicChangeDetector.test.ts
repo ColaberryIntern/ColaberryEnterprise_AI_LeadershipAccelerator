@@ -2,8 +2,16 @@ import { runChangeDetector } from '../../services/anthropicChangeDetector';
 import AnthropicContentRegistry from '../../models/AnthropicContentRegistry';
 import AnthropicChangeEvent from '../../models/AnthropicChangeEvent';
 
-jest.mock('../../models/AnthropicContentRegistry');
-jest.mock('../../models/AnthropicChangeEvent');
+// Factory mocks — prevent real module load so model.init() never fires against the
+// incomplete sequelize mock (auto-mock would load the real file and crash on init()).
+jest.mock('../../models/AnthropicContentRegistry', () => ({
+  __esModule: true,
+  default: { findAll: jest.fn(), findOne: jest.fn(), create: jest.fn(), update: jest.fn() },
+}));
+jest.mock('../../models/AnthropicChangeEvent', () => ({
+  __esModule: true,
+  default: { findAll: jest.fn(), findOne: jest.fn(), create: jest.fn() },
+}));
 jest.mock('../../config/database', () => ({
   sequelize: {
     transaction: jest.fn(async (fn: (t: unknown) => Promise<void>) => fn({})),
