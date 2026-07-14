@@ -10,6 +10,7 @@ import healthRoutes from './routes/healthRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
+import unsubscribeRoutes from './routes/unsubscribeRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
@@ -51,6 +52,10 @@ app.use(traceMiddleware);
 
 // Webhook routes — each sub-route handles its own body parsing
 app.use(webhookRoutes);
+
+// Public one-click unsubscribe — mounted before the JSON parser; the POST
+// (RFC 8058 one-click) handles its own urlencoded body parsing.
+app.use(unsubscribeRoutes);
 
 // Preview proxy — mounted BEFORE the JSON parser so request bodies pass through
 // raw to upstream preview stacks.
