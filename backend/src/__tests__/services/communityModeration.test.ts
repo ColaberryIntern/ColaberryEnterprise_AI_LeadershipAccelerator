@@ -18,6 +18,7 @@ jest.mock('../../models/CommunityPostReport', () => ({ findOrCreate: jest.fn(), 
 // against the mocked (non-functional) sequelize connection and throws.
 jest.mock('../../models/CommunityComment', () => ({}));
 jest.mock('../../models/CommunityLike', () => ({}));
+jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 
 import { reportPost } from '../../services/communityService';
 import { listReportedPosts, removePost } from '../../services/communityModerationService';
@@ -88,6 +89,15 @@ describe('reportPost', () => {
     findByPkPost.mockResolvedValue({ ...mockPost, status: 'removed' });
 
     await expect(reportPost(enrollmentId, postId)).rejects.toMatchObject({ error_class: 'NotFoundError' });
+    expect(findOrCreateReport).not.toHaveBeenCalled();
+  });
+
+  it('failure path (REQ-C4): a viewer below the post\'s required level cannot report content they can\'t see', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 1 }, false]);
+    findByPkPost.mockResolvedValue({ ...mockPost, min_level: 3 });
+
+    await expect(reportPost(enrollmentId, postId)).rejects.toMatchObject({ error_class: 'ForbiddenError' });
     expect(findOrCreateReport).not.toHaveBeenCalled();
   });
 });

@@ -15,6 +15,7 @@ jest.mock('../../models/CommunityMember', () => ({
 jest.mock('../../models/CommunityPost', () => ({ findByPk: jest.fn() }));
 jest.mock('../../models/CommunityComment', () => ({ create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../models/CommunityLike', () => ({ findOrCreate: jest.fn(), findAll: jest.fn(), count: jest.fn() }));
+jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 
 import {
   createComment, listComments, toggleLike, levelFor,
@@ -25,6 +26,7 @@ import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityComment from '../../models/CommunityComment';
 import CommunityLike from '../../models/CommunityLike';
+import CommunityPointsEvent from '../../models/CommunityPointsEvent';
 
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
@@ -39,6 +41,7 @@ const findAllComments = CommunityComment.findAll as jest.Mock;
 const findOrCreateLike = CommunityLike.findOrCreate as jest.Mock;
 const findAllLikes = CommunityLike.findAll as jest.Mock;
 const countLikes = CommunityLike.count as jest.Mock;
+const createPointsEvent = CommunityPointsEvent.create as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -207,6 +210,7 @@ describe('toggleLike', () => {
     expect(result).toEqual({ liked: true, like_count: 1 });
     expect(incrementMember).toHaveBeenCalledWith('points', { by: 1, where: { id: otherMemberId } });
     expect(mockPost.increment).toHaveBeenCalledWith('like_count', { by: 1 });
+    expect(createPointsEvent).toHaveBeenCalledWith({ member_id: otherMemberId, points: 1 });
   });
 
   it('idempotency: liking the same post twice unlikes it (toggle), removing the point', async () => {
@@ -224,6 +228,7 @@ describe('toggleLike', () => {
     expect(existingLike.destroy).toHaveBeenCalled();
     expect(decrementMember).toHaveBeenCalledWith('points', { by: 1, where: { id: otherMemberId } });
     expect(mockPost.decrement).toHaveBeenCalledWith('like_count', { by: 1 });
+    expect(createPointsEvent).toHaveBeenCalledWith({ member_id: otherMemberId, points: -1 });
   });
 
   it('failure path (REQ-C9): throws ForbiddenError (403) for a post outside the cohort', async () => {
@@ -283,6 +288,78 @@ describe('toggleLike', () => {
     await toggleLike(enrollmentId, 'post', postId);
 
     expect(authorAtThreshold.update).toHaveBeenCalledWith({ level: 2 });
+  });
+});
+
+describe('level-gated content (REQ-C4)', () => {
+  const gatedPost: any = {
+    id: postId, cohort_id: cohortId, status: 'visible', member_id: otherMemberId, min_level: 3, increment: jest.fn(),
+  };
+
+  it('createComment failure path: a viewer below the required level is ForbiddenError, not allowed to comment', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 1 }, false]);
+    findByPkPost.mockResolvedValue(gatedPost);
+
+    await expect(createComment(enrollmentId, postId, { body: 'hi' })).rejects.toMatchObject({
+      error_class: 'ForbiddenError',
+    });
+    expect(createComment_).not.toHaveBeenCalled();
+  });
+
+  it('createComment boundary path: a viewer exactly at the required level can comment', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 3 }, false]);
+    findByPkPost.mockResolvedValue(gatedPost);
+    createComment_.mockResolvedValue({
+      id: 'comment-gated', post_id: postId, member_id: memberId, parent_comment_id: null,
+      body: 'unlocked', created_at: new Date('2026-07-13'),
+    });
+
+    const result = await createComment(enrollmentId, postId, { body: 'unlocked' });
+
+    expect(result.id).toBe('comment-gated');
+  });
+
+  it('listComments failure path: a viewer below the required level is ForbiddenError', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 2 }, false]);
+    findByPkPost.mockResolvedValue(gatedPost);
+
+    await expect(listComments(enrollmentId, postId)).rejects.toMatchObject({ error_class: 'ForbiddenError' });
+  });
+
+  it('toggleLike failure path: a viewer below the required level cannot like gated content', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 1 }, false]);
+    findByPkPost.mockResolvedValue(gatedPost);
+
+    await expect(toggleLike(enrollmentId, 'post', postId)).rejects.toMatchObject({ error_class: 'ForbiddenError' });
+    expect(findOrCreateLike).not.toHaveBeenCalled();
+  });
+
+  it('toggleLike happy path: the author can always interact with their own gated post', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, id: otherMemberId, level: 1 }, false]);
+    findByPkPost.mockResolvedValue(gatedPost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-own' }, true]);
+    findByPkMember.mockResolvedValue({ id: otherMemberId, points: 0, level: 1, update: jest.fn() });
+    countLikes.mockResolvedValue(1);
+
+    const result = await toggleLike(enrollmentId, 'post', postId);
+
+    expect(result.liked).toBe(true);
+  });
+
+  it('toggleLike (comment branch) failure path: a viewer below the level required by the parent post cannot like the comment', async () => {
+    const commentId = 'comment-under-gated-post';
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 1 }, false]);
+    findByPkComment.mockResolvedValue({ id: commentId, post_id: postId, member_id: otherMemberId });
+    findByPkPost.mockResolvedValue(gatedPost);
+
+    await expect(toggleLike(enrollmentId, 'comment', commentId)).rejects.toMatchObject({ error_class: 'ForbiddenError' });
+    expect(findOrCreateLike).not.toHaveBeenCalled();
   });
 });
 

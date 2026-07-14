@@ -17,6 +17,7 @@ export interface CommunityPostAttributes {
   status?: CommunityPostStatus;
   removed_at?: Date | null;
   removed_by?: string | null;
+  min_level?: number;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -35,6 +36,7 @@ class CommunityPost extends Model<CommunityPostAttributes> implements CommunityP
   declare status: CommunityPostStatus;
   declare removed_at: Date | null;
   declare removed_by: string | null;
+  declare min_level: number;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -105,6 +107,13 @@ CommunityPost.init(
     removed_by: {
       type: DataTypes.UUID,
       allowNull: true,
+    },
+    // 0 = ungated (default, visible to everyone). REQ-C4 gamification —
+    // server-side enforced in communityService.ts, never a frontend-only hide.
+    min_level: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
     },
   },
   {

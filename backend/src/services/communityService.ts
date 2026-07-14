@@ -3,6 +3,7 @@ import CommunityPost from '../models/CommunityPost';
 import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
+import CommunityPointsEvent from '../models/CommunityPointsEvent';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
@@ -31,10 +32,9 @@ export async function touchPresence(enrollmentId: string): Promise<{ presence: C
 }
 
 // Deterministic, pure, recomputable from points alone — matches the approved
-// member-profile-system design mockup's level tiers exactly. Full leaderboard
-// ranking + level-gated content unlocks are a separate, later Epic 4 ticket
-// ("Gamification: points -> levels -> leaderboards -> level-gated unlocks");
-// this is only the level-badge derivation for the profile surface.
+// member-profile-system design mockup's level tiers exactly. Leaderboard
+// ranking lives in communityLeaderboardService.ts (REQ-C4); level-gated
+// content enforcement is assertLevelUnlocked()/toFeedItem() below.
 const LEVEL_TIERS = [
   { level: 1, min: 0 },
   { level: 2, min: 1500 },
@@ -64,13 +64,15 @@ function forbiddenError(message: string): Error {
 
 export interface PostFeedItem {
   id: string;
-  body: string;
+  body: string | null;
   media_urls: string[];
   category: string | null;
   pinned: boolean;
   like_count: number;
   comment_count: number;
   mentioned_member_ids: string[];
+  min_level: number;
+  locked: boolean;
   created_at: Date;
   member: { id: string; display_name: string; avatar_url: string | null };
 }
@@ -91,7 +93,9 @@ export async function getOrCreateMember(enrollmentId: string): Promise<Community
   return member;
 }
 
-async function resolveCohortId(enrollmentId: string): Promise<string> {
+// Exported for reuse by communityLeaderboardService.ts — same cohort
+// resolution, single source of truth rather than a second copy.
+export async function resolveCohortId(enrollmentId: string): Promise<string> {
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) {
     throw notFoundError('Enrollment not found');
@@ -114,6 +118,39 @@ async function requireVisiblePostInCohort(postId: string, cohortId: string): Pro
     throw forbiddenError('This post belongs to a different cohort');
   }
   return post;
+}
+
+// REQ-C4 gamification — hard block for interactions (comment/like/report) on
+// content the viewer hasn't unlocked yet. The author can always reach their
+// own post regardless of its gate. Read paths (listPosts/getPostById) do NOT
+// call this — they degrade to a locked teaser instead of throwing (see
+// toFeedItem) so the feed can still show that gated content exists.
+function assertLevelUnlocked(post: CommunityPost, viewerMemberId: string, viewerLevel: number): void {
+  if (post.member_id !== viewerMemberId && viewerLevel < post.min_level) {
+    throw forbiddenError(`This content unlocks at level ${post.min_level}`);
+  }
+}
+
+function toFeedItem(
+  post: CommunityPost & { member: { id: string; display_name: string; avatar_url: string | null } },
+  viewerMemberId: string,
+  viewerLevel: number
+): PostFeedItem {
+  const locked = post.member_id !== viewerMemberId && viewerLevel < post.min_level;
+  return {
+    id: post.id,
+    body: locked ? null : post.body,
+    media_urls: locked ? [] : post.media_urls,
+    category: post.category,
+    pinned: post.pinned,
+    like_count: post.like_count,
+    comment_count: post.comment_count,
+    mentioned_member_ids: locked ? [] : post.mentioned_member_ids,
+    min_level: post.min_level,
+    locked,
+    created_at: post.created_at,
+    member: { id: post.member.id, display_name: post.member.display_name, avatar_url: post.member.avatar_url },
+  };
 }
 
 export async function createPost(enrollmentId: string, input: CreatePostInput): Promise<PostFeedItem> {
@@ -146,10 +183,15 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     media_urls: input.media_urls ?? [],
     category: input.category ?? null,
     mentioned_member_ids: mentionedIds,
+    min_level: input.min_level ?? 0,
   });
 
-  log('info', 'post_created', { post_id: post.id, member_id: member.id, cohort_id: cohortId, outcome: 'success' });
+  log('info', 'post_created', {
+    post_id: post.id, member_id: member.id, cohort_id: cohortId, min_level: post.min_level, outcome: 'success',
+  });
 
+  // The author is creating their own post — never locked to them, so this
+  // is a plain projection rather than a toFeedItem() lock check.
   return {
     id: post.id,
     body: post.body,
@@ -159,13 +201,18 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     like_count: post.like_count,
     comment_count: post.comment_count,
     mentioned_member_ids: post.mentioned_member_ids,
+    min_level: post.min_level,
+    locked: false,
     created_at: post.created_at,
     member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url },
   };
 }
 
 export async function listPosts(enrollmentId: string, category?: string): Promise<PostFeedItem[]> {
-  const cohortId = await resolveCohortId(enrollmentId);
+  const [viewer, cohortId] = await Promise.all([
+    getOrCreateMember(enrollmentId),
+    resolveCohortId(enrollmentId),
+  ]);
 
   const where: Record<string, unknown> = { cohort_id: cohortId, status: 'visible' };
   if (category) {
@@ -181,22 +228,24 @@ export async function listPosts(enrollmentId: string, category?: string): Promis
     ],
   });
 
-  return posts.map((post: any) => ({
-    id: post.id,
-    body: post.body,
-    media_urls: post.media_urls,
-    category: post.category,
-    pinned: post.pinned,
-    like_count: post.like_count,
-    comment_count: post.comment_count,
-    mentioned_member_ids: post.mentioned_member_ids,
-    created_at: post.created_at,
-    member: {
-      id: post.member.id,
-      display_name: post.member.display_name,
-      avatar_url: post.member.avatar_url,
-    },
-  }));
+  return posts.map((post: any) => toFeedItem(post, viewer.id, viewer.level));
+}
+
+// New read endpoint (REQ-C4) — the demo surface for "open gated content, see
+// it locked." Unlike the interact endpoints, a locked post is not an error:
+// it's a 200 with a teaser (no body/media/mentions) so the feed can still
+// show that gated content exists and what level unlocks it.
+export async function getPostById(enrollmentId: string, postId: string): Promise<PostFeedItem> {
+  const [viewer, cohortId] = await Promise.all([
+    getOrCreateMember(enrollmentId),
+    resolveCohortId(enrollmentId),
+  ]);
+
+  const post = await requireVisiblePostInCohort(postId, cohortId);
+  const withMember = await CommunityPost.findByPk(post.id, {
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+  });
+  return toFeedItem(withMember as any, viewer.id, viewer.level);
 }
 
 // Author-only for v1 (smallest version that satisfies "students can ... pin").
@@ -232,6 +281,7 @@ export async function togglePin(
 
   log('info', 'post_pin_toggled', { post_id: post.id, member_id: member.id, pinned: input.pinned, outcome: 'success' });
 
+  // Author-only route — never locked to the caller.
   const postAny = post as any;
   return {
     id: post.id,
@@ -242,6 +292,8 @@ export async function togglePin(
     like_count: post.like_count,
     comment_count: post.comment_count,
     mentioned_member_ids: post.mentioned_member_ids,
+    min_level: post.min_level,
+    locked: false,
     created_at: post.created_at,
     member: {
       id: postAny.member.id,
@@ -278,6 +330,7 @@ export async function createComment(
   ]);
 
   const post = await requireVisiblePostInCohort(postId, cohortId);
+  assertLevelUnlocked(post, member.id, member.level);
 
   let parentCommentId: string | null = null;
   if (input.parent_comment_id) {
@@ -326,7 +379,8 @@ export async function listComments(enrollmentId: string, postId: string): Promis
     resolveCohortId(enrollmentId),
   ]);
 
-  await requireVisiblePostInCohort(postId, cohortId);
+  const post = await requireVisiblePostInCohort(postId, cohortId);
+  assertLevelUnlocked(post, member.id, member.level);
 
   const comments = await CommunityComment.findAll({
     where: { post_id: postId },
@@ -411,6 +465,7 @@ export async function toggleLike(
 
   if (likeableType === 'post') {
     post = await requireVisiblePostInCohort(likeableId, cohortId);
+    assertLevelUnlocked(post, member.id, member.level);
     authorMemberId = post.member_id;
   } else {
     const comment = await CommunityComment.findByPk(likeableId);
@@ -420,7 +475,8 @@ export async function toggleLike(
     // Cohort/removed-status is enforced against the parent post — a comment
     // has no cohort_id of its own (see model), so this is the only place a
     // wrong-cohort like attempt would surface.
-    await requireVisiblePostInCohort(comment.post_id, cohortId);
+    const parentPost = await requireVisiblePostInCohort(comment.post_id, cohortId);
+    assertLevelUnlocked(parentPost, member.id, member.level);
     authorMemberId = comment.member_id;
   }
 
@@ -431,11 +487,13 @@ export async function toggleLike(
   let liked: boolean;
   if (created) {
     await CommunityMember.increment('points', { by: 1, where: { id: authorMemberId } });
+    await CommunityPointsEvent.create({ member_id: authorMemberId, points: 1 });
     if (post) await post.increment('like_count', { by: 1 });
     liked = true;
   } else {
     await likeRow.destroy();
     await CommunityMember.decrement('points', { by: 1, where: { id: authorMemberId } });
+    await CommunityPointsEvent.create({ member_id: authorMemberId, points: -1 });
     if (post) await post.decrement('like_count', { by: 1 });
     liked = false;
   }
@@ -479,7 +537,8 @@ export async function reportPost(enrollmentId: string, postId: string, reason?: 
     resolveCohortId(enrollmentId),
   ]);
 
-  await requireVisiblePostInCohort(postId, cohortId);
+  const post = await requireVisiblePostInCohort(postId, cohortId);
+  assertLevelUnlocked(post, member.id, member.level);
 
   const [report] = await CommunityPostReport.findOrCreate({
     where: { post_id: postId, reporter_member_id: member.id },
@@ -551,9 +610,9 @@ export async function updateMyProfile(enrollmentId: string, input: UpdateProfile
 }
 
 // Cohort-scoped directory — ordered by points DESC, reusing the existing
-// idx_community_members_points index. No leaderboard period/rank computation
-// here (that's the separate, later "Gamification" ticket) — just a flat,
-// point-ordered member list for the directory surface.
+// idx_community_members_points index. This stays a flat, point-ordered list
+// for the directory surface; ranked/windowed leaderboards live in
+// communityLeaderboardService.ts::getLeaderboard.
 export async function listMembers(enrollmentId: string): Promise<MemberProfile[]> {
   const cohortId = await resolveCohortId(enrollmentId);
 
