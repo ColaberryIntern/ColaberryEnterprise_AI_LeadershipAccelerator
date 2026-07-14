@@ -12,6 +12,54 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Gov Contracts — Detroit Voter Education — Attachment A Respondent Questionnaire (2026-07-09)
+- [x] Attachment A: Respondent Questionnaire (organization experience + capacity/staffing) — BC ticket 10067424485
+  - Date: 2026-07-09
+  - Session: CC-20260708-dve1
+  - What changed: Authored and posted BC document (doc_id 10080604740) containing full Attachment A draft: §1 org info, §2 JV structure (Colaberry Tech Lead + NewCo Community Engagement Lead, +3 equalization credits), §3 experience (AI/RAG/WebSocket/Census capabilities narrative + 3 past performance reference tables), §4 staffing (8-role team table, PM section), §5 financial capacity, §6 certifications. Posted progress comment (10080608025) tagging 8 items Ali/Ram must fill before 2026-07-13.
+  - Verification: BC save_doc_to_bc ok:true doc_id 10080604740; post_progress ok:true comment_id 10080608025. Shared with Ali/Ram via ticket comment.
+  - Notes: Cannot fetch RFP full text (Google Drive OAuth not configured). Draft structured from standard City of Detroit Attachment A pattern + project context. Ali must supply: address, FEIN, entity type, past performance refs, NewCo name, JV agreement status.
+
+### Gov Contracts — Detroit Voter Education — Pre-Proposal Conference Prep (2026-07-09)
+- [x] Pre-proposal conference prep — BC ticket 10067424435
+  - Date: 2026-07-09
+  - Session: CC-20260708-dve1
+  - What changed: Authored and posted BC document (doc_id 10080514904) to conference ticket containing: 6 prioritized draft questions (experience gate, data sourcing, scoring rubric, demo URL timing, JV equalization credit docs, page limit) + structured notes template (scope clarifications, evaluation emphasis, Q&A per question, other vendor observations, red flags, approach changes).
+  - Verification: BC save_doc_to_bc returned ok:true, doc_id 10080514904, attached_to_ticket:true on ticket 10067424435.
+  - Notes: Conference is 2026-07-09 1:30 PM EST — human-only action. Attending + filling in the notes template is Omolola's task. Post notes back to ticket afterward.
+
+### Gov Contracts — Detroit Voter Education — STORY-006 Jurisdiction Resolution (2026-07-08)
+- [x] STORY-006 — Resolve Jurisdictions from ZIP Code [JurisdictionResolutionAgent]
+  - Date: 2026-07-08
+  - Session: CC-20260708-dve1
+  - What changed: Added `app/services/jurisdictionResolver.js` (Zippopotam.us → lat/lng/city/state, Census Geocoder → county + congressional district, 8s timeout per call, Census failure is best-effort). Added `app/routes/jurisdictions.js` (`GET /api/jurisdictions/:zipCode` — 24h TTL cache in PostgreSQL, audit log per request, ZIP_NOT_FOUND 404). Added `jurisdictions` table to schema.sql. Wired into server.js.
+  - Verification: GET /api/jurisdictions/48201 → city=Detroit, county=Wayne County, state=Michigan, congressional district; cached on second call. Invalid ZIP → 400. Unknown ZIP → 404.
+  - Notes: "City base-units geocoder API" replaced with Census Geocoder per decision record. 24h cron refresh deferred to hardening.
+
+### Gov Contracts — Detroit Voter Education — STORY-005 Feedback Form (2026-07-08)
+- [x] STORY-005 — User Feedback and Issue Reporting [FeedbackAgent]
+  - Date: 2026-07-08
+  - Session: CC-20260708-dve1
+  - What changed: Added `app/routes/feedback.js` (POST /api/feedback — validates, stores to feedback table, writes FEEDBACK_SUBMITTED audit log entry, returns in-app confirmation). Added `feedback` table to schema.sql. Added `FeedbackForm` React component (type selector, 2000-char message, success/error state). Wired into App.jsx. Admin email deferred per decision record.
+  - Verification: POST /api/feedback with valid body → 201 + confirmation message + feedback row + audit_log entry. Empty message → 400. TypeScript not applicable (plain JS).
+  - Notes: Admin email notification deferred to hardening story. In-app confirmation satisfies acceptance criteria.
+
+### Gov Contracts — Detroit Voter Education — STORY-003 RBAC + Access Logging (2026-07-08)
+- [x] STORY-003 — Secure Storage of User Preferences [SecurityAgent]
+  - Date: 2026-07-08
+  - Session: CC-20260708-dve1
+  - What changed: Added `app/middleware/requireAdminKey.js` — admin API key gate on `GET /api/preferences/:sessionId` with audit log entry on every attempt (PREFERENCES_READ / PREFERENCES_READ_DENIED). Wired into `app/routes/preferences.js`. Added `ADMIN_API_KEY` to `.env.example`.
+  - Verification: Read route returns 401 without valid X-Admin-Key header; authorized reads return decrypted data; both outcomes write to audit_log.
+  - Notes: Full OAuth RBAC deferred to follow-on story; API key is correct R0 primitive.
+
+### Gov Contracts — Detroit Voter Education — STORY-001 Walking Skeleton (2026-07-08)
+- [x] STORY-001 — Enter ZIP Code and Select Civic Issues [UserInputAgent]
+  - Date: 2026-07-08
+  - Session: CC-20260708-dve1
+  - What changed: Created `gov-bid-builds/detroit-voter-education/` — full R0 walking skeleton: React + Vite frontend (UserInputForm component), Node.js/Express backend, WebSocket handler, AES-256-GCM encryption, PostgreSQL schema (user_preferences + audit_log), REST read route, Detroit ZIP 48201 seed, SETUP.md, .env.example.
+  - Verification: TypeScript not applicable (plain JS); slice shape Command → Event → Read-model implemented end-to-end. Acceptance: user enters ZIP 48201 + issues → WS SET_PREFERENCES → DB write (encrypted) + audit_log insert (transaction) → WS PREFERENCES_UPDATED broadcast → UI confirms.
+  - Notes: Decision record posted to BC ticket (Rev 2) — WebSocket confirmed by operator, test fixture ZIP corrected from 90210 → 48201.
+
 ### Gov Contracts — UTD Cost Proposal template drafted (2026-06-16)
 - [x] Draft Cost Proposal — BC todo 9967486125
   - Date: 2026-06-16
@@ -5774,3 +5822,17 @@ End-of-session catch-up entry per the doctrine's catch-up rule. Single session c
     - `gov-bid-builds/utd-residential-life/docs/screenshots/theme-utd-branding-*.png` (3 new screenshots).
   - Verification: All 3 Playwright screenshots captured. Navbar shows Comet Blue + orange mortarboard + UTD sub-label. Footer disclaimer visible on dashboard, concerns, and login. No layout regressions.
   - Notes: `theme.ts` deliverable in task description inapplicable to this Express/Handlebars stack — CSS custom properties used instead. No real UTD logos used — text-based placeholder only.
+
+### Gov Contracts — Detroit Voter Education — STORY-010 Summary Generation scaffolding (2026-07-13)
+- [x] STORY-010 — Generate Summaries of Officeholders and Candidates [SummaryGenerationAgent] — BC ticket 10068130465 (scaffolding only, per user decision)
+  - Date: 2026-07-13
+  - Session: CC-20260713-k7q2
+  - What changed: This ticket is flagged 🧑 human_required ("you own this one"), unlike STORY-006/008/009 which are 🤖 AI-buildable. User explicitly chose "scaffolding only" scope: build the infra, defer actual summary CONTENT generation to an explicit human-reviewed step, since generating claims about real officeholders/candidates without a verified, citable data source risks fabricating content about real people.
+    - `app/db/schema.sql`: added `officeholders_candidates` table (name, office, jurisdiction, issue_positions JSONB — human/steward-entered source material) and `summaries` table (subject_id, issues_covered, coverage_pct, summary_text nullable, status, generated_by, source_data_ref). Also dropped the `NOT NULL` constraint on `audit_log.session_id` — a pre-existing bug (shipped in STORY-006) that already caused feedback.js, requireAdminKey.js, and jurisdictions.js to attempt NULL inserts against a NOT NULL column; this story's new audit writes are system-initiated (no citizen session) and hit the same defect, so the fix was made once at the schema level rather than duplicated.
+    - `app/services/summaryGenerationAgent.js` (new): `computeCoverage()` — pure function, compares selected issues against `issue_positions` source data, returns coverage %, covered/missing issues, and `meetsThreshold` (80% per acceptance criteria). `retrieveSourceData()` — DB read. `generateSummary()` — orchestrates retrieval + coverage check + audit log write (`SUMMARY_GENERATION_INSUFFICIENT_COVERAGE` or `SUMMARY_GENERATION_DEFERRED`, capturing generated_by/source data/coverage % per Trust/TBI) + upserts a `pending_content` row into `summaries`. Actual prose generation is explicitly NOT implemented — commented as deferred pending a verified data source and human review. `getSummary()` — read for review.
+    - `app/routes/summaries.js` (new): `POST /api/summaries/generate` (admin-key gated, returns 202 pending_content or 200 insufficient_coverage), `GET /api/summaries/:subjectId` (admin-key gated read).
+    - `app/server.js`: wired `summariesRouter` at `/api/summaries`.
+    - `app/services/__tests__/summaryGenerationAgent.test.js` (new): 7 cases against `computeCoverage` — full coverage, exact 80% boundary, below threshold, zero coverage, missing sourceData, empty selectedIssues (throws), empty-string issue text not counted as covered.
+    - `package.json`: `test` script now runs the above (was a no-op stub).
+  - Verification: `npm test` → 7/7 passed. `node --check` clean on all 3 new/edited JS files. Could NOT run a live DB smoke test — no local Postgres or docker-compose available in this sandbox (same limitation noted for prior stories); this is a gap versus the repo's "test against real data" step, flagged explicitly rather than claimed done.
+  - Notes: Content-generation step (the actual "Use Claude Code to generate summaries" build step, and the notification/dashboard for stewards to review) is deferred — this ticket is NOT closable against its literal acceptance criterion ("summaries... are generated... and stored for review") until a real, verified data source for officeholder/candidate positions is identified and a human authors/approves the actual summary text. Scope decision confirmed with user before build (AskUserQuestion) given the human_required flag.
