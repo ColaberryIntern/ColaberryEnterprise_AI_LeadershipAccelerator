@@ -8,6 +8,7 @@ import {
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
+import Enrollment from '../models/Enrollment';
 import { getUpcomingPublicEvents } from '../services/publicEventsService';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
 
@@ -40,7 +41,9 @@ export async function handleGetPoints(req: Request, res: Response, next: NextFun
 export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
   try {
     const schedule = await getOnboardingSchedule(req.participant!.sub);
-    res.json(schedule);
+    // Explorer status drives the free-tier conversion funnel on the portal (Today).
+    const enr = await Enrollment.findByPk(req.participant!.sub, { attributes: ['enrollment_type'] });
+    res.json({ ...schedule, is_explorer: (enr as any)?.enrollment_type === 'explorer' });
   } catch (err) { next(err); }
 }
 

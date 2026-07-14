@@ -127,10 +127,33 @@ const TodayShell: React.FC = () => {
       {toast && <div className="te-toast">{toast}</div>}
 
       <div className="te-page-h">
-        <div className="crumb">Command Center</div>
+        <div className="crumb">{schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
         <h1>Welcome{me.email ? `, ${me.email.split('@')[0]}` : ''}</h1>
-        <div className="sub">Let's get you set up. A few quick steps unlock your first points and your seat.</div>
+        <div className="sub">{schedule?.is_explorer
+          ? "Explore AI for free — watch, listen, learn, and try. Enroll when you're ready to build for real."
+          : "Let's get you set up. A few quick steps unlock your first points and your seat."}</div>
       </div>
+
+      {schedule?.is_explorer && (
+        <div className="te-card" style={{ background: 'linear-gradient(135deg,#2E6A86,#367895)', color: '#fff', padding: '20px 22px', marginBottom: 18, border: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', opacity: 0.9 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 8h16v8H4zM4 8l2-3h12l2 3M9 12h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+            Free AI Preview
+          </div>
+          <h2 style={{ margin: '8px 0 6px', fontSize: 22, color: '#fff' }}>You're learning AI for free</h2>
+          <p style={{ margin: '0 0 14px', opacity: 0.92, maxWidth: '54ch' }}>Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live build classes, the community, and your certification.</p>
+          {(fcCd || ohCd) && (
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', margin: '2px 0 16px' }}>
+              {fcCd && <div><div style={{ fontSize: 11, opacity: 0.82 }}>Next class starts in</div><div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 700, fontSize: 15 }}>{fcCd.d}d {fcCd.h}h {fcCd.m}m {fcCd.s}s</div></div>}
+              {oh && ohCd && <div><div style={{ fontSize: 11, opacity: 0.82 }}>{oh.title} in</div><div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 700, fontSize: 15 }}>{ohCd.d}d {ohCd.h}h {ohCd.m}m {ohCd.s}s</div></div>}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link className="te-btn cherry" to="/portal/curriculum">Enroll to unlock →</Link>
+            {oh && <button className="te-btn ghost" style={{ color: '#fff', borderColor: 'rgba(255,255,255,.5)' }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd for the event" : 'RSVP for the event'}</button>}
+          </div>
+        </div>
+      )}
 
       <div className="te-grid">
         <div>

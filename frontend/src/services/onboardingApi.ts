@@ -35,6 +35,7 @@ export interface OnboardingSchedule {
   next_open_house: OpenHouseView | null;
   my_rsvp: boolean;
   first_class: FirstClassView | null;
+  is_explorer?: boolean;   // free Explorer tier — drives the Today conversion funnel
 }
 
 export interface OnboardingProfileView {
