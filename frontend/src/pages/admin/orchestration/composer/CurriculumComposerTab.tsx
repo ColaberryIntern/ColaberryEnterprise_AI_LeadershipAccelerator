@@ -108,7 +108,12 @@ const CurriculumComposerTab: React.FC = () => {
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
           <select className="cc-in" style={{ width: 'auto' }} value={sel?.id || ''} onChange={(e) => e.target.value && openBlueprint(e.target.value)}>
             <option value="">— select blueprint —</option>
-            {list.map((b) => <option key={b.id} value={b.id}>{b.title}{b.week != null ? ` · Wk ${b.week}` : ''} ({b.status})</option>)}
+            {[...list]
+              .sort((a, b) =>
+                (a.week ?? 999) - (b.week ?? 999) ||
+                Number(b.status === 'published') - Number(a.status === 'published') ||
+                (a.title || '').localeCompare(b.title || ''))
+              .map((b) => <option key={b.id} value={b.id}>{b.title}{b.week != null ? ` · Wk ${b.week}` : ''} ({b.status})</option>)}
           </select>
           <Btn tone="ghost" disabled={busy === 'new'} onClick={newBlueprint}>＋ New</Btn>
         </div>
