@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  composerApi, composerCss, Blueprint, Track, Plan, Assessment, PlanCard,
+  composerApi, composerCss, Blueprint, Plan, Assessment, PlanCard,
   Chip, Lab, Btn, Meter, Ring, money, bandTone, initials,
 } from './composerKit';
 
@@ -20,12 +20,8 @@ const BUCKETS: Array<[string, string]> = [
 const csv = (v?: string[] | null) => (v || []).join(', ');
 const parseCsv = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
-const byWeek = (a: Blueprint, b: Blueprint) => (a.week ?? 999) - (b.week ?? 999);
-
 const CurriculumComposerTab: React.FC = () => {
   const [list, setList] = useState<Blueprint[]>([]);
-  const [tracks, setTracks] = useState<Track[]>([]);
-  const [trackId, setTrackId] = useState<string>('');
   const [sel, setSel] = useState<Blueprint | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [assess, setAssess] = useState<Assessment | null>(null);
@@ -37,17 +33,10 @@ const CurriculumComposerTab: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        const [bps, trks] = await Promise.all([composerApi.list(), composerApi.tracks().catch(() => [] as Track[])]);
-        setList(bps); setTracks(trks);
-        // Default to the Track that owns the most weeks (falls back to "all").
-        const counts: Record<string, number> = {};
-        bps.forEach((b) => { if (b.program_id) counts[b.program_id] = (counts[b.program_id] || 0) + 1; });
-        const topTrack = Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
-        setTrackId(topTrack);
-        const pool = (topTrack ? bps.filter((b) => b.program_id === topTrack) : bps).slice().sort(byWeek);
-        const firstBp = pool[0] || bps[0];
-        if (firstBp) {
-          const bp = await composerApi.get(firstBp.id);
+        const bps = await composerApi.list();
+        setList(bps);
+        if (bps.length) {
+          const bp = await composerApi.get(bps[0].id);
           setSel(bp); setPlan(bp.generated_plan || null); setAssess(bp.assessment || null);
           if (bp.title) setInstruction(`Generate a week for ${bp.title}`);
         }
@@ -64,19 +53,10 @@ const CurriculumComposerTab: React.FC = () => {
     } catch { setError('Failed to open blueprint.'); }
   };
 
-  const selectTrack = async (tid: string) => {
-    setTrackId(tid); setError(''); setNote('');
-    const pool = (tid ? list.filter((b) => b.program_id === tid) : list).slice().sort(byWeek);
-    if (pool[0]) await openBlueprint(pool[0].id);
-    else { setSel(null); setPlan(null); setAssess(null); }
-  };
-
   const newBlueprint = async () => {
     setBusy('new');
     try {
-      const inTrack = (trackId ? list.filter((b) => b.program_id === trackId) : list).map((b) => b.week || 0);
-      const nextWeek = inTrack.length ? Math.max(...inTrack) + 1 : 1;
-      const bp = await composerApi.create({ title: 'New week', program_id: trackId || undefined, week: nextWeek, difficulty: 'core', scope: 'week', competencies: [], architect_domains: [], learning_objectives: [] });
+      const bp = await composerApi.create({ title: 'New curriculum', week: 1, difficulty: 'core', scope: 'week', competencies: [], architect_domains: [], learning_objectives: [] });
       setList((l) => [bp, ...l]); setSel(bp); setPlan(null); setAssess(null);
     } catch { setError('Create failed.'); } finally { setBusy(''); }
   };
@@ -115,8 +95,6 @@ const CurriculumComposerTab: React.FC = () => {
   const v = assess?.validation; const ev = assess?.evidence; const jr = assess?.journey;
   const lanes = BUCKETS.map(([b, label]) => [label, (plan?.cards || []).filter((c) => c.bucket === b)] as [string, PlanCard[]]).filter(([, cs]) => cs.length);
   const depIssue = (t: string) => assess?.dependencies.issues.find((i) => i.type === t);
-  const weekList = (trackId ? list.filter((b) => b.program_id === trackId) : list).slice().sort(byWeek);
-  const trackName = tracks.find((t) => t.id === trackId)?.name || '';
 
   return (
     <div className="cc">
@@ -126,17 +104,11 @@ const CurriculumComposerTab: React.FC = () => {
       {/* blueprint bar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <div><div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.02em' }}>Curriculum Composer</div>
-          <div className="cc-muted">{trackName
-            ? <>Track: <b style={{ color: 'var(--berry-deep)' }}>{trackName}</b> · {weekList.length} week{weekList.length === 1 ? '' : 's'} — describe an outcome; the AI Architect assembles, validates, and publishes each week.</>
-            : 'Describe an outcome — the AI Architect assembles, validates, and publishes a week from your components.'}</div></div>
+          <div className="cc-muted">Describe an outcome — the AI Architect assembles, validates, and publishes a week from your components.</div></div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select className="cc-in" style={{ width: 'auto' }} value={trackId} onChange={(e) => selectTrack(e.target.value)} title="Track">
-            <option value="">— all tracks —</option>
-            {tracks.map((t) => { const n = list.filter((b) => b.program_id === t.id).length; return <option key={t.id} value={t.id}>{t.name}{n ? ` · ${n} wk` : ''}</option>; })}
-          </select>
           <select className="cc-in" style={{ width: 'auto' }} value={sel?.id || ''} onChange={(e) => e.target.value && openBlueprint(e.target.value)}>
-            <option value="">— select week —</option>
-            {weekList.map((b) => <option key={b.id} value={b.id}>{b.week != null ? `Wk ${b.week} · ` : ''}{b.title} ({b.status})</option>)}
+            <option value="">— select blueprint —</option>
+            {list.map((b) => <option key={b.id} value={b.id}>{b.title}{b.week != null ? ` · Wk ${b.week}` : ''} ({b.status})</option>)}
           </select>
           <Btn tone="ghost" disabled={busy === 'new'} onClick={newBlueprint}>＋ New</Btn>
         </div>
