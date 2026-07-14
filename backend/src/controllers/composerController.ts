@@ -61,8 +61,8 @@ export async function handleFillCard(req: Request, res: Response, next: NextFunc
 }
 
 // ── blueprint CRUD ───────────────────────────────────────────────────────────
-export async function handleListBlueprints(_req: Request, res: Response, next: NextFunction) {
-  try { res.json({ blueprints: await listBlueprints() }); } catch (e) { fail(res, e, next); }
+export async function handleListBlueprints(req: Request, res: Response, next: NextFunction) {
+  try { res.json({ blueprints: await listBlueprints((req.query.program_id as string) || undefined) }); } catch (e) { fail(res, e, next); }
 }
 export async function handleGetBlueprint(req: Request, res: Response, next: NextFunction) {
   try { res.json(await getBlueprint(String(req.params.id))); } catch (e) { fail(res, e, next); }

@@ -36,10 +36,15 @@ export interface Blueprint {
   generated_plan?: Plan | null; published_card_ids?: string[]; assessment?: Assessment | null; [k: string]: any;
 }
 
+// A "Course" is a ProgramBlueprint — the Composer + Timeline are scoped to one.
+export interface Course { id: string; name: string; is_active?: boolean }
+
 // ── API client ───────────────────────────────────────────────────────────────
 export const composerApi = {
   palette: () => api.get('/api/admin/composer/palette').then((r) => r.data.types as PaletteType[]),
-  list: () => api.get('/api/admin/composer/blueprints').then((r) => r.data.blueprints as Blueprint[]),
+  courses: () => api.get('/api/admin/orchestration/programs').then((r) => (r.data as Course[]).map((c) => ({ id: c.id, name: c.name, is_active: c.is_active }))),
+  createCourse: (name: string) => api.post('/api/admin/orchestration/programs', { name }).then((r) => r.data as Course),
+  list: (programId?: string) => api.get('/api/admin/composer/blueprints', { params: programId ? { program_id: programId } : {} }).then((r) => r.data.blueprints as Blueprint[]),
   get: (id: string) => api.get(`/api/admin/composer/blueprints/${id}`).then((r) => r.data as Blueprint),
   create: (b: Partial<Blueprint>) => api.post('/api/admin/composer/blueprints', b).then((r) => r.data as Blueprint),
   update: (id: string, b: Partial<Blueprint>) => api.put(`/api/admin/composer/blueprints/${id}`, b).then((r) => r.data as Blueprint),

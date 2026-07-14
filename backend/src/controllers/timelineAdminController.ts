@@ -109,9 +109,9 @@ function fail(res: Response, err: any, next: NextFunction) {
   return next(err);
 }
 
-export async function handleListTimeline(_req: Request, res: Response, next: NextFunction) {
+export async function handleListTimeline(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await listTimeline());
+    res.json(await listTimeline((req.query.program_id as string) || undefined));
   } catch (err) { fail(res, err, next); }
 }
 

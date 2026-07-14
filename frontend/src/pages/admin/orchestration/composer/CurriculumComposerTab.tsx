@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  composerApi, composerCss, Blueprint, Plan, Assessment, PlanCard,
+  composerApi, composerCss, Blueprint, Course, Plan, Assessment, PlanCard,
   Chip, Lab, Btn, Meter, Ring, money, bandTone, initials,
 } from './composerKit';
 
@@ -21,6 +21,8 @@ const csv = (v?: string[] | null) => (v || []).join(', ');
 const parseCsv = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
 
 const CurriculumComposerTab: React.FC = () => {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseId, setCourseId] = useState<string>('');
   const [list, setList] = useState<Blueprint[]>([]);
   const [sel, setSel] = useState<Blueprint | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -30,19 +32,45 @@ const CurriculumComposerTab: React.FC = () => {
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
 
+  // Load the courses once, then default to the AI Systems Architect Accelerator.
   useEffect(() => {
     (async () => {
       try {
-        const bps = await composerApi.list();
+        const cs = await composerApi.courses();
+        setCourses(cs);
+        const def = cs.find((c) => /architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
+        setCourseId(def?.id || '');
+      } catch { setError('Failed to load courses.'); }
+    })();
+  }, []);
+
+  // (Re)load the blueprints for the selected course — the Composer is scoped to one.
+  useEffect(() => {
+    if (!courseId) return;
+    (async () => {
+      try {
+        const bps = await composerApi.list(courseId);
         setList(bps);
         if (bps.length) {
           const bp = await composerApi.get(bps[0].id);
           setSel(bp); setPlan(bp.generated_plan || null); setAssess(bp.assessment || null);
           if (bp.title) setInstruction(`Generate a week for ${bp.title}`);
-        }
+        } else { setSel(null); setPlan(null); setAssess(null); }
       } catch { setError('Failed to load the Composer.'); }
     })();
-  }, []);
+  }, [courseId]);
+
+  const addCourse = async () => {
+    const name = window.prompt('Name the new course');
+    if (!name || !name.trim()) return;
+    setBusy('course');
+    try {
+      const c = await composerApi.createCourse(name.trim());
+      setCourses((cs) => [...cs, { id: c.id, name: c.name, is_active: c.is_active }]);
+      setCourseId(c.id); // switch to the new (empty) course
+      setList([]); setSel(null); setPlan(null); setAssess(null);
+    } catch { setError('Could not create the course.'); } finally { setBusy(''); }
+  };
 
   const openBlueprint = async (id: string) => {
     setError(''); setNote('');
@@ -56,7 +84,7 @@ const CurriculumComposerTab: React.FC = () => {
   const newBlueprint = async () => {
     setBusy('new');
     try {
-      const bp = await composerApi.create({ title: 'New curriculum', week: 1, difficulty: 'core', scope: 'week', competencies: [], architect_domains: [], learning_objectives: [] });
+      const bp = await composerApi.create({ title: 'New curriculum', week: 1, difficulty: 'core', scope: 'week', competencies: [], architect_domains: [], learning_objectives: [], program_id: courseId || null });
       setList((l) => [bp, ...l]); setSel(bp); setPlan(null); setAssess(null);
     } catch { setError('Create failed.'); } finally { setBusy(''); }
   };
@@ -106,8 +134,15 @@ const CurriculumComposerTab: React.FC = () => {
         <div><div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-.02em' }}>Curriculum Composer</div>
           <div className="cc-muted">Describe an outcome — the AI Architect assembles, validates, and publishes a week from your components.</div></div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <label className="cc-muted" style={{ fontSize: 12, fontWeight: 600 }}>Course</label>
+          <select className="cc-in" style={{ width: 'auto', fontWeight: 600 }} value={courseId} onChange={(e) => setCourseId(e.target.value)} title="The Composer and Timeline are scoped to one course">
+            {courses.length === 0 && <option value="">— loading —</option>}
+            {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <Btn tone="ghost" disabled={busy === 'course'} onClick={addCourse}>＋ Course</Btn>
+          <span style={{ width: 1, height: 22, background: 'var(--border-default, #E4E4E4)' }} />
           <select className="cc-in" style={{ width: 'auto' }} value={sel?.id || ''} onChange={(e) => e.target.value && openBlueprint(e.target.value)}>
-            <option value="">— select blueprint —</option>
+            <option value="">— select week —</option>
             {[...list]
               .sort((a, b) =>
                 (a.week ?? 999) - (b.week ?? 999) ||
