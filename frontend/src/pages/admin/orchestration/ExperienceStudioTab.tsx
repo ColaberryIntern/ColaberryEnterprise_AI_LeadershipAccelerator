@@ -56,6 +56,18 @@ const studentUIFor = (band?: string): string => {
   return 'a reading card';
 };
 
+// A short, friendly name for the interaction archetype (the render_band). Shown in
+// the Interaction pillar instead of the raw internal band value (e.g. "warmup").
+const interactionName = (band?: string): string => {
+  const b = String(band || '');
+  if (['media', 'live_class', 'video_feedback'].includes(b)) return 'Video';
+  if (b === 'promptlab') return 'Prompt lab';
+  if (['reflection', 'survey', 'question'].includes(b)) return 'Reflection';
+  if (b === 'interview') return 'Mock interview';
+  if (['quiz', 'exam'].includes(b)) return 'Knowledge check';
+  return 'Reading card';
+};
+
 const ExperienceStudioTab: React.FC = () => {
   const [list, setList] = useState<Cmp[]>([]);
   const [caps, setCaps] = useState<Cap[]>([]);
@@ -148,6 +160,11 @@ const ExperienceStudioTab: React.FC = () => {
   const stageField = (k: StageKey) => STAGES.find((s) => s.key === k)!.field;
   const setStagePrompt = (val: string) => { if (!sel) return; setSel({ ...sel, [stageField(stage)]: val }); setDirty(true); };
   const setField = (f: string, val: any) => { if (!sel) return; setSel({ ...sel, [f]: val }); setDirty(true); };
+  // A curriculum type has ONE name. Editing it renames everything the user sees —
+  // the builder label, the name on the student's card (student_label), and the
+  // library category — together. The slug (internal id) is deliberately NOT touched
+  // so existing timeline bindings and dependencies keep resolving.
+  const renameType = (val: string) => { if (!sel) return; setSel({ ...sel, label: val, student_label: val, category: val }); setDirty(true); };
   const toggleCap = (id: string) => { if (!sel) return; const cur: string[] = sel.capabilities || []; setField('capabilities', cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]); };
 
   const testStage = async () => {
@@ -327,20 +344,13 @@ const ExperienceStudioTab: React.FC = () => {
             <button className="es-btn" onClick={() => setSel(null)}>← Library</button>
             <div>
               <div className="es-title" style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label className="es-nameedit" title="Rename this curriculum type — Save version to keep it">
+                <label className="es-nameedit" title="Rename this curriculum type. This is the name in the builder, on the student's card, and in the library. Save version to keep it.">
                   <svg className="es-pen" viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M13.5 6.5l3 3" stroke="currentColor" strokeWidth="2" /></svg>
-                  <input className="es-titlein" value={sel.label} onChange={(e) => setField('label', e.target.value)} aria-label="Curriculum type name" spellCheck={false} />
+                  <input className="es-titlein" value={sel.label} onChange={(e) => renameType(e.target.value)} aria-label="Curriculum type name" spellCheck={false} />
                 </label>
                 <span className="es-muted" style={{ fontWeight: 500 }}>· v{sel.component_version}</span>
               </div>
-              <div className="es-sub" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span>{sel.slug} · {sel.category} · {(sel.architect_domains || []).join(', ') || '—'}</span>
-                <span className="es-muted">students see</span>
-                <label className="es-subedit" title="The type name shown to students on their card">
-                  <svg className="es-pen" viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M13.5 6.5l3 3" stroke="currentColor" strokeWidth="2" /></svg>
-                  <input className="es-sublin" value={sel.student_label || ''} onChange={(e) => setField('student_label', e.target.value)} placeholder={sel.label} aria-label="Name students see on the card" spellCheck={false} />
-                </label>
-              </div>
+              <div className="es-sub">This name shows in the builder, on the student's card, and in the library.</div>
             </div>
             <button className={`es-apprbtn ${sel.approved ? 'on' : 'off'}`} style={{ marginLeft: 'auto' }} title="Only approved components can be used by the Curriculum Composer" onClick={() => setApproval(!sel.approved)}>{sel.approved ? '✓ Approved for curriculum' : 'Approve for curriculum'}</button>
             <select className="es-in" style={{ width: 120 }} value={sel.status || 'ready'} onChange={(e) => setField('status', e.target.value)}>
@@ -350,7 +360,7 @@ const ExperienceStudioTab: React.FC = () => {
           </div>
 
           <div className="es-buildbar">
-            <div className="es-pillar"><div className="es-plab">1 · Interaction</div><div className="es-pval">{(sel.render_band || 'reading').replace(/_/g, ' ')}<small>students get {studentUIFor(sel.render_band)}</small></div></div>
+            <div className="es-pillar"><div className="es-plab">1 · Interaction</div><div className="es-pval">{interactionName(sel.render_band)}<small>students get {studentUIFor(sel.render_band)}</small></div></div>
             <div className="es-pillar"><div className="es-plab">2 · Parts</div><div className="es-pval">{(sel.capabilities || []).length} on<small>toggle sections in Capabilities → (updates the preview)</small></div></div>
             <div className="es-pillar"><div className="es-plab">3 · Content</div><div className="es-pval">AI-generated<small>the Generation prompt · run it in Preview</small></div></div>
             <div className="es-pillar"><div className="es-plab">4 · Assessment</div>

@@ -117,10 +117,6 @@ export const studioCss = `
   .es-nameedit:focus-within{border-color:#367895;background:#fff;box-shadow:0 0 0 3px rgba(54,120,149,.12)}
   .es-nameedit .es-pen{width:13px;height:13px;color:#8A97A2;flex:none}
   .es-titlein{font-family:inherit;font-size:16px;font-weight:700;color:#1A1A1A;border:none;background:transparent;padding:0;min-width:110px;max-width:320px;outline:none}
-  .es-subedit{display:inline-flex;align-items:center;gap:4px;padding:2px 6px 2px 8px;border:1px solid #CBD2D8;border-radius:7px;background:#F7F9FA}
-  .es-subedit:focus-within{border-color:#367895;background:#fff}
-  .es-subedit .es-pen{width:11px;height:11px;color:#8A97A2;flex:none}
-  .es-sublin{font-family:inherit;font-size:12px;font-weight:600;color:#1A1A1A;border:none;background:transparent;padding:0;min-width:70px;max-width:200px;outline:none}
   .es-err{background:#FDECEC;color:#C20E1E;padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:12px}
   .es-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
   .es-card{position:relative;border:1px solid #E4E4E4;border-radius:12px;padding:14px;cursor:pointer;background:#fff;transition:.12s}
