@@ -214,6 +214,7 @@ import InboxStyleProfile from './InboxStyleProfile';
 import InboxLearningEvent from './InboxLearningEvent';
 import InboxDigestLog from './InboxDigestLog';
 import InboxAuditLog from './InboxAuditLog';
+import CoraReplyLog from './CoraReplyLog';
 import InboxOpportunityScore from './InboxOpportunityScore';
 import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
 import InboxSurfacePreference from './InboxSurfacePreference';
@@ -1109,6 +1110,7 @@ export {
   InboxLearningEvent,
   InboxDigestLog,
   InboxAuditLog,
+  CoraReplyLog,
   InboxOpportunityScore,
   InboxFalseNegativeFeedback,
   InboxSurfacePreference,

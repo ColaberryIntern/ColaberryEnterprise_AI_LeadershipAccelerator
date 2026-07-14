@@ -8,12 +8,36 @@
  * during shadow testing to verify Cora quality before going live.
  */
 import OpenAI from 'openai';
+import { Op } from 'sequelize';
 import { buildCoraSystemPromptFromDB, getCourseBySlug } from '../kbService';
 import { logAuditEvent } from './inboxAuditService';
+import CoraReplyLog from '../../models/CoraReplyLog';
+import InboxAuditLog from '../../models/InboxAuditLog';
 
 const LOG_PREFIX = '[InboxCOS][Cora]';
 
-const DRY_RUN = process.env.CORA_DRY_RUN === 'true';
+// Read per-call rather than cached at module load — makes CORA_DRY_RUN
+// flips take effect without a process restart, and lets tests toggle it
+// per-scenario without needing jest.resetModules().
+function isDryRun(): boolean {
+  return process.env.CORA_DRY_RUN === 'true';
+}
+
+// Circuit breaker (2026-07-14 mail-loop incident, BC #10095332194): if this
+// many real sends have happened in the trailing window, stop sending and
+// route everything to a human instead — a handful of duplicate replies is an
+// acceptable failure mode, 1,800 is not. Configurable so a real traffic spike
+// doesn't need a code change to raise the ceiling.
+const CIRCUIT_BREAKER_MAX_SENDS = parseInt(process.env.CORA_CIRCUIT_BREAKER_MAX_SENDS || '20', 10);
+const CIRCUIT_BREAKER_WINDOW_MS = parseInt(process.env.CORA_CIRCUIT_BREAKER_WINDOW_MINUTES || '10', 10) * 60_000;
+
+async function isCircuitBreakerTripped(): Promise<boolean> {
+  const since = new Date(Date.now() - CIRCUIT_BREAKER_WINDOW_MS);
+  const recentSends = await InboxAuditLog.count({
+    where: { action: 'cora_reply_sent', created_at: { [Op.gte]: since } },
+  });
+  return recentSends >= CIRCUIT_BREAKER_MAX_SENDS;
+}
 
 // KB Ops Phase 1 (BC #10036783688): Cora's system prompt is now DB-backed via
 // cora_kb_entries/cora_cohorts, not the static coraKnowledgeBase.ts. This slug
@@ -159,6 +183,45 @@ export async function handleCoraInquiry(email: {
 }): Promise<CoraDispatchResult> {
   console.log(`${LOG_PREFIX} Handling inquiry: email=${email.id} from=${email.from_address}`);
 
+  const threadKey = email.provider_thread_id || email.provider_message_id;
+
+  // Circuit breaker (skipped in dry-run — nothing real would be sent anyway).
+  // Checked BEFORE reserving the dedup slot below so a tripped breaker leaves
+  // this thread free for a real attempt once volume subsides, rather than
+  // permanently marking it "already handled" with no reply ever sent.
+  if (!isDryRun() && (await isCircuitBreakerTripped())) {
+    const reason = `Circuit breaker tripped (>= ${CIRCUIT_BREAKER_MAX_SENDS} Cora sends in the last ${CIRCUIT_BREAKER_WINDOW_MS / 60_000}min)`;
+    console.error(`${LOG_PREFIX} ${reason} — routing ${email.id} to human instead of sending`);
+    await logAuditEvent({
+      email_id: email.id,
+      action: 'cora_circuit_breaker_tripped',
+      new_state: 'INBOX',
+      actor: 'cora',
+      reasoning: reason,
+      metadata: { thread_key: threadKey, max_sends: CIRCUIT_BREAKER_MAX_SENDS, window_ms: CIRCUIT_BREAKER_WINDOW_MS },
+    });
+    return { archive: false, handoffReason: 'cora_circuit_breaker_tripped' };
+  }
+
+  // Reserve-then-send dedup (loop guard, BC #10095332194): a second inquiry
+  // for a thread Cora has already replied to — however it got here, including
+  // her own reply being re-ingested — is skipped rather than answered again.
+  const [, reserved] = await CoraReplyLog.findOrCreate({
+    where: { thread_key: threadKey },
+    defaults: { thread_key: threadKey, email_id: email.id },
+  });
+  if (!reserved) {
+    console.warn(`${LOG_PREFIX} Duplicate thread ${threadKey} for email ${email.id} — already replied, skipping (loop guard)`);
+    await logAuditEvent({
+      email_id: email.id,
+      action: 'cora_reply_skipped_duplicate_thread',
+      new_state: 'AUTOMATION',
+      actor: 'cora',
+      metadata: { thread_key: threadKey },
+    });
+    return { archive: true };
+  }
+
   let reply: CoraReply;
   try {
     reply = await generateCoraReply(
@@ -176,10 +239,10 @@ export async function handleCoraInquiry(email: {
       metadata: { error_class: 'GenerationError', error: error.message },
     });
     // Generation failed — don't bury the email; leave it for a human.
-    return decideCoraDisposition({ generated: false, dryRun: DRY_RUN, needsHuman: false, sent: false });
+    return decideCoraDisposition({ generated: false, dryRun: isDryRun(), needsHuman: false, sent: false });
   }
 
-  if (DRY_RUN) {
+  if (isDryRun()) {
     console.log(
       `${LOG_PREFIX} DRY RUN — would ${reply.needsHuman ? 'send handoff ack + flag for human' : 'send'} ` +
       `to ${email.from_address}:\nSubject: ${reply.subject}\n\n${reply.body}`
