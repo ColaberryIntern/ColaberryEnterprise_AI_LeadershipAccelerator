@@ -36,6 +36,12 @@ export const env = {
   jwtSecret: resolveJwtSecret(),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '4h',
 
+  // Unsubscribe token signing — HMAC secret for one-click List-Unsubscribe links.
+  // Falls back to the (prod-required) JWT secret so shipping needs no new env var;
+  // the HMAC is domain-separated by a context prefix (see unsubscribeTokenService)
+  // so an unsubscribe token can never be cross-used as a JWT and vice versa.
+  unsubscribeSecret: process.env.UNSUBSCRIBE_SECRET || resolveJwtSecret(),
+
   // Email (SMTP)
   smtpHost: process.env.SMTP_HOST || 'smtp.gmail.com',
   smtpPort: parseInt(process.env.SMTP_PORT || '587', 10),
@@ -130,6 +136,11 @@ export const env = {
 
   // App
   frontendUrl: process.env.FRONTEND_URL || 'http://localhost:3000',
+
+  // Public origin where the backend API is reachable from the internet (nginx-proxied).
+  // Used to build absolute one-click unsubscribe links embedded in outbound campaign
+  // email. Must be the public https host, not the internal container port.
+  publicAppUrl: process.env.PUBLIC_APP_URL || 'https://enterprise.colaberry.ai',
 
   // Open House landing/registration page (training.colaberry.com) — destination for the
   // Accelerator Open House campaign email CTAs. The page is owned by the landing-page work
