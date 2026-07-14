@@ -68,6 +68,9 @@ const TodayShell: React.FC = () => {
   const hasBackground = !!(profile && (profile.has_resume || profile.linkedin_url));
   const rsvped = !!schedule?.my_rsvp;
 
+  // The real registration lives on Eventbrite; RSVP here records it + awards
+  // points, then sends the student to Eventbrite to secure their seat.
+  const EVENTBRITE_OPEN_HOUSE_URL = 'https://www.eventbrite.com/e/colaberry-ai-systems-architect-accelerator-open-house-tickets-1992498063344';
   const doRsvp = async () => {
     if (!oh || busy) return;
     setBusy(true);
@@ -76,6 +79,7 @@ const TodayShell: React.FC = () => {
       await loadAll();
       flash(r.awarded ? `RSVP confirmed — +${r.points} points` : 'You are already RSVP\'d');
     } catch { flash('Could not RSVP right now'); } finally { setBusy(false); }
+    window.open(EVENTBRITE_OPEN_HOUSE_URL, '_blank', 'noopener');
   };
 
   // Resume / LinkedIn are BOTH uploads. LinkedIn can't be scraped from a link,

@@ -181,8 +181,9 @@ const BucketSection: React.FC<{
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }; types: TypeDef[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
+  bpContext: { week: number; title: string; purpose: string | null } | null;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => void; onSave: () => void; onClose: () => void;
-}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, onChange, onSave, onClose }) => {
+}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
@@ -212,6 +213,16 @@ const EditDrawer: React.FC<{
         </div>
 
         <div className="te-dbody">
+          {bpContext && (
+            <div style={{ border: '1px solid #E0E0E0', background: '#F4F5F6', borderRadius: 9, padding: '10px 12px', marginBottom: 14, color: '#6A6A6A', cursor: 'not-allowed', userSelect: 'none' }} title="Auto-included in every AI generation for this card. Read-only.">
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#9A9A9A', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M9 5h9a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" strokeWidth="2" /></svg>
+                Week {bpContext.week} blueprint · auto-included in AI generation
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#5A5A5A', marginTop: 5 }}>{bpContext.title}</div>
+              {bpContext.purpose && <div style={{ fontSize: 12, marginTop: 3, lineHeight: 1.45 }}>{bpContext.purpose}</div>}
+            </div>
+          )}
           {isNew && (
             <label style={lbl}>Type
               <select style={inp} value={draft.type || ''} onChange={(e) => onChange({ type: e.target.value })}>
@@ -371,6 +382,7 @@ const TimelineEditorTab: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course'>('');
+  const [bpContext, setBpContext] = useState<{ week: number; title: string; purpose: string | null } | null>(null);
 
   // Load the courses once and default to the AI Systems Architect Accelerator —
   // the Timeline is scoped to one course.
@@ -396,6 +408,17 @@ const TimelineEditorTab: React.FC = () => {
   }, [courseId]);
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
+
+  // The week's Blueprint that's auto-injected into every generator for this card —
+  // fetched read-only so the editor can show it grayed out.
+  useEffect(() => {
+    if (!draft || draft.week == null || !courseId) { setBpContext(null); return; }
+    let cancelled = false;
+    api.get('/api/admin/orchestration/timeline/blueprint-context', { params: { program_id: courseId, week: draft.week } })
+      .then((r) => { if (!cancelled) setBpContext(r.data || null); })
+      .catch(() => { if (!cancelled) setBpContext(null); });
+    return () => { cancelled = true; };
+  }, [draft?.week, courseId, Boolean(draft)]);
 
   const weeks = useMemo(() => {
     const s = new Set<number | null>();
@@ -532,7 +555,7 @@ const TimelineEditorTab: React.FC = () => {
       if (!(draft.course?.url || '').trim()) return;
       setGenBusy('course'); setError('');
       try {
-        const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: draft.type, url: draft.course!.url });
+        const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: draft.type, url: draft.course!.url, program_id: courseId || null, week: draft.week ?? null });
         const g = r.data || {};
         setDraft((d) => d && ({
           ...d,
@@ -555,6 +578,7 @@ const TimelineEditorTab: React.FC = () => {
       const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
         type: draft.type, title: draft.title || null,
         subtitle: draft.subtitle || null, description: draft.description || null,
+        program_id: courseId || null, week: draft.week ?? null,
         video: draft.video || null, anchor,
       });
       const g = r.data || {};
@@ -678,7 +702,7 @@ const TimelineEditorTab: React.FC = () => {
 
       {draft && (
         <EditDrawer draft={draft} types={board?.types || []} isNew={isNew} saving={saving}
-          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent}
+          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext}
           onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} />
       )}
     </div>
