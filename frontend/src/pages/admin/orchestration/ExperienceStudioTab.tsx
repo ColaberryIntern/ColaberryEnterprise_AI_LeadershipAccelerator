@@ -326,14 +326,20 @@ const ExperienceStudioTab: React.FC = () => {
           <div className="es-head">
             <button className="es-btn" onClick={() => setSel(null)}>← Library</button>
             <div>
-              <div className="es-title" style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <input className="es-titlein" value={sel.label} onChange={(e) => setField('label', e.target.value)} aria-label="Curriculum type name" title="Rename this curriculum type — Save version to keep it" spellCheck={false} />
+              <div className="es-title" style={{ fontSize: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label className="es-nameedit" title="Rename this curriculum type — Save version to keep it">
+                  <svg className="es-pen" viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M13.5 6.5l3 3" stroke="currentColor" strokeWidth="2" /></svg>
+                  <input className="es-titlein" value={sel.label} onChange={(e) => setField('label', e.target.value)} aria-label="Curriculum type name" spellCheck={false} />
+                </label>
                 <span className="es-muted" style={{ fontWeight: 500 }}>· v{sel.component_version}</span>
               </div>
-              <div className="es-sub" style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+              <div className="es-sub" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span>{sel.slug} · {sel.category} · {(sel.architect_domains || []).join(', ') || '—'}</span>
-                <span className="es-muted">· students see</span>
-                <input className="es-sublin" value={sel.student_label || ''} onChange={(e) => setField('student_label', e.target.value)} placeholder={sel.label} aria-label="Name students see on the card" title="The type name shown to students on their card" spellCheck={false} />
+                <span className="es-muted">students see</span>
+                <label className="es-subedit" title="The type name shown to students on their card">
+                  <svg className="es-pen" viewBox="0 0 24 24" fill="none"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M13.5 6.5l3 3" stroke="currentColor" strokeWidth="2" /></svg>
+                  <input className="es-sublin" value={sel.student_label || ''} onChange={(e) => setField('student_label', e.target.value)} placeholder={sel.label} aria-label="Name students see on the card" spellCheck={false} />
+                </label>
               </div>
             </div>
             <button className={`es-apprbtn ${sel.approved ? 'on' : 'off'}`} style={{ marginLeft: 'auto' }} title="Only approved components can be used by the Curriculum Composer" onClick={() => setApproval(!sel.approved)}>{sel.approved ? '✓ Approved for curriculum' : 'Approve for curriculum'}</button>
