@@ -29,8 +29,10 @@ export interface Assessment {
   recommendations: Array<{ rank: number; area: string; severity: 'low' | 'medium' | 'high'; title: string; why: string; patch: any }>;
   dependencies: { ok: boolean; issues: Array<{ type: string; missing: string[] }>; edges: Array<{ from: string; to: string; satisfied: boolean }> };
 }
+/** A Track = a program the weeks roll up into (backed by ProgramBlueprint). */
+export interface Track { id: string; name: string; [k: string]: any }
 export interface Blueprint {
-  id: string; title: string; purpose?: string | null; week?: number | null; session?: string | null; scope?: string;
+  id: string; title: string; program_id?: string | null; purpose?: string | null; week?: number | null; session?: string | null; scope?: string;
   difficulty?: string; estimated_hours?: number | null; competencies?: string[]; architect_domains?: string[];
   learning_objectives?: string[]; status?: string; quality_score?: number; coverage_score?: number; readiness_score?: number;
   generated_plan?: Plan | null; published_card_ids?: string[]; assessment?: Assessment | null; [k: string]: any;
@@ -39,6 +41,7 @@ export interface Blueprint {
 // ── API client ───────────────────────────────────────────────────────────────
 export const composerApi = {
   palette: () => api.get('/api/admin/composer/palette').then((r) => r.data.types as PaletteType[]),
+  tracks: () => api.get('/api/admin/orchestration/programs').then((r) => (Array.isArray(r.data) ? r.data : (r.data?.programs || [])) as Track[]),
   list: () => api.get('/api/admin/composer/blueprints').then((r) => r.data.blueprints as Blueprint[]),
   get: (id: string) => api.get(`/api/admin/composer/blueprints/${id}`).then((r) => r.data as Blueprint),
   create: (b: Partial<Blueprint>) => api.post('/api/admin/composer/blueprints', b).then((r) => r.data as Blueprint),
