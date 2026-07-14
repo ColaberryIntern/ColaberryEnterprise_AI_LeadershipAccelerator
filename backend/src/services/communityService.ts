@@ -4,6 +4,7 @@ import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
+import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
@@ -186,6 +187,20 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     min_level: input.min_level ?? 0,
   });
 
+  // In-app notification per mention (REQ-C6) — one row per (recipient, post),
+  // fired exactly once since the post itself is only ever created once here.
+  if (mentionedIds.length > 0) {
+    await CommunityNotification.bulkCreate(
+      mentionedIds.map((mentionedId) => ({
+        member_id: mentionedId,
+        actor_member_id: member.id,
+        notification_type: 'mention' as const,
+        source_type: 'post' as const,
+        source_id: post.id,
+      }))
+    );
+  }
+
   log('info', 'post_created', {
     post_id: post.id, member_id: member.id, cohort_id: cohortId, min_level: post.min_level, outcome: 'success',
   });
@@ -333,6 +348,7 @@ export async function createComment(
   assertLevelUnlocked(post, member.id, member.level);
 
   let parentCommentId: string | null = null;
+  let notifyRecipientId: string | null = post.member_id;
   if (input.parent_comment_id) {
     const parent = await CommunityComment.findByPk(input.parent_comment_id);
     if (!parent || parent.post_id !== postId) {
@@ -342,6 +358,9 @@ export async function createComment(
       throw validationError('Replies are one level deep only — cannot reply to a reply');
     }
     parentCommentId = parent.id;
+    // A reply notifies the parent comment's author, not the post's author —
+    // one recipient per comment event, keeping this a 1:1 event->notification.
+    notifyRecipientId = parent.member_id;
   }
 
   const comment = await CommunityComment.create({
@@ -352,6 +371,18 @@ export async function createComment(
   });
 
   await post.increment('comment_count', { by: 1 });
+
+  // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
+  // comments on their own post/comment.
+  if (notifyRecipientId && notifyRecipientId !== member.id) {
+    await CommunityNotification.create({
+      member_id: notifyRecipientId,
+      actor_member_id: member.id,
+      notification_type: 'reply',
+      source_type: 'comment',
+      source_id: comment.id,
+    });
+  }
 
   log('info', 'comment_created', {
     comment_id: comment.id,
