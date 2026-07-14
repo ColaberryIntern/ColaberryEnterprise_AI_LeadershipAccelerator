@@ -4,8 +4,13 @@
  * Called from inboxStateManager when hardRuleEngine matches rule_id 'cora_0c'.
  * Uses OpenAI (same key as replyDraftService) with the Cora system prompt.
  *
- * Set CORA_DRY_RUN=true to log generated replies without sending — use this
- * during shadow testing to verify Cora quality before going live.
+ * Sending is OPT-IN: Cora sends real email only when CORA_DRY_RUN is explicitly
+ * set to the string "false". Unset — or set to anything else — keeps it in shadow
+ * mode (logs the generated reply, sends nothing). This default-safe behavior is
+ * deliberate: an unset or misconfigured flag must never cause live sends. A
+ * prior default (send-unless-CORA_DRY_RUN==="true") let a stray deploy re-arm
+ * live sending and produced a self-reply storm. See coraAutoReplySkipReason()
+ * for the loop guards that stop such a storm even when live.
  */
 import OpenAI from 'openai';
 import { buildCoraSystemPromptFromDB, getCourseBySlug } from '../kbService';
@@ -13,7 +18,86 @@ import { logAuditEvent } from './inboxAuditService';
 
 const LOG_PREFIX = '[InboxCOS][Cora]';
 
-const DRY_RUN = process.env.CORA_DRY_RUN === 'true';
+/**
+ * Resolve the dry-run (shadow) flag. Sending is opt-in: only an explicit
+ * CORA_DRY_RUN="false" enables live sends; unset or any other value ⇒ dry run.
+ * Pure so the safety default (an unset flag must be shadow) is unit-tested.
+ */
+export function resolveDryRun(flag: string | undefined): boolean {
+  return flag !== 'false';
+}
+
+const DRY_RUN = resolveDryRun(process.env.CORA_DRY_RUN);
+
+if (!DRY_RUN) {
+  console.warn(
+    `${LOG_PREFIX} LIVE SEND ENABLED (CORA_DRY_RUN="false") — Cora will send real email as the support mailbox.`
+  );
+}
+
+/**
+ * Addresses Cora sends AS, or that belong to the mailbox it reads. Replying to
+ * mail from any of these creates a self-reply loop, so they are always skipped.
+ * support@ is the From: identity; the mailbox actually authenticates as
+ * ali@colaberry.com (support@ is not a verified send-as alias), so both must be
+ * guarded. Overridable via env for other deployments.
+ */
+const SELF_ADDRESSES = [
+  process.env.CORA_SUPPORT_ADDRESS || 'support@colaberry.com',
+  process.env.CORA_MAILBOX_ADDRESS || process.env.GMAIL_SENDER_EMAIL || 'ali@colaberry.com',
+].map((a) => a.trim().toLowerCase());
+
+/** Normalize `Name <local+tag@domain>` to `local@domain`, lowercased. */
+export function normalizeEmailAddress(raw: string): string {
+  const angle = /<([^>]+)>/.exec(raw);
+  const email = (angle ? angle[1] : raw).trim().toLowerCase();
+  const at = email.lastIndexOf('@');
+  if (at < 0) return email;
+  const local = email.slice(0, at).split('+')[0];
+  return `${local}@${email.slice(at + 1)}`;
+}
+
+/**
+ * Loop-prevention guard. Returns a short skip reason when Cora must NOT
+ * auto-reply to an email, or null when it is safe to proceed. Pure + deterministic
+ * so every branch is unit-tested. This is the fix for the self-reply-storm class
+ * of incident, where Cora replies to its own replies and to bounce notices.
+ */
+export function coraAutoReplySkipReason(email: {
+  from_address: string | null | undefined;
+  headers?: Record<string, unknown> | null;
+}): string | null {
+  const from = normalizeEmailAddress(email.from_address || '');
+  if (from.indexOf('@') < 0) return 'no_sender';
+
+  // 1. Our own send identity / mailbox — replying would loop.
+  if (SELF_ADDRESSES.includes(from)) return 'self_address';
+
+  // 2. Automated / bounce / no-reply senders.
+  const localPart = from.slice(0, from.indexOf('@'));
+  if (
+    /^(mailer-daemon|postmaster|bounce|bounces)$/.test(localPart) ||
+    /(^|[.\-_])(no-?reply|do-?not-?reply|donotreply)([.\-_]|$)/.test(localPart) ||
+    from.includes('mailer-daemon@')
+  ) {
+    return 'automated_sender';
+  }
+
+  // 3. Auto-generated mail per RFC 3834 and common auto-responder headers.
+  const headers = email.headers || {};
+  const header = (name: string): string => {
+    const hit = Object.entries(headers).find(([k]) => k.toLowerCase() === name);
+    return (hit?.[1] ?? '').toString().toLowerCase();
+  };
+  const autoSubmitted = header('auto-submitted');
+  if (autoSubmitted && autoSubmitted !== 'no') return 'auto_submitted';
+  if (/(^|[ ;,])(bulk|auto_reply|junk|list)([ ;,]|$)/.test(header('precedence'))) return 'bulk_precedence';
+  if (header('x-autoreply') || header('x-autorespond') || header('x-auto-response-suppress')) {
+    return 'x_autoreply';
+  }
+
+  return null;
+}
 
 // KB Ops Phase 1 (BC #10036783688): Cora's system prompt is now DB-backed via
 // cora_kb_entries/cora_cohorts, not the static coraKnowledgeBase.ts. This slug
@@ -158,6 +242,25 @@ export async function handleCoraInquiry(email: {
   headers: any;
 }): Promise<CoraDispatchResult> {
   console.log(`${LOG_PREFIX} Handling inquiry: email=${email.id} from=${email.from_address}`);
+
+  // Loop-prevention: never auto-reply to our own mail, to bounces, or to
+  // auto-generated mail. Without this, a live Cora replies to its own replies
+  // (and to mailer-daemon bounces), producing a self-reply storm.
+  const skipReason = coraAutoReplySkipReason(email);
+  if (skipReason) {
+    console.log(
+      `${LOG_PREFIX} Skipping auto-reply: email=${email.id} from=${email.from_address} reason=${skipReason}`
+    );
+    await logAuditEvent({
+      email_id: email.id,
+      action: 'cora_reply_skipped',
+      new_state: 'AUTOMATION',
+      actor: 'cora',
+      metadata: { reason: skipReason, from_address: email.from_address },
+    });
+    // Cora abstains: don't reply, and don't archive — leave it untouched for a human.
+    return { archive: false, handoffReason: `cora_skipped_${skipReason}` };
+  }
 
   let reply: CoraReply;
   try {
