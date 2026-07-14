@@ -124,11 +124,43 @@ describe('createPost', () => {
 
     expect(result.mentioned_member_ids).toEqual(['peer-member']);
   });
+
+  it('happy path (REQ-C4): passes min_level through to the created post, defaulting to 0 when omitted', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-3', body: 'ungated', media_urls: [], category: null, pinned: false, like_count: 0,
+      comment_count: 0, mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-07-13'),
+    });
+
+    await createPost(enrollmentId, { body: 'ungated' });
+
+    expect(createPostMock).toHaveBeenCalledWith(expect.objectContaining({ min_level: 0 }));
+  });
+
+  it('happy path (REQ-C4): a gated post is created with the requested min_level', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-4', body: 'bonus content', media_urls: [], category: null, pinned: false, like_count: 0,
+      comment_count: 0, mentioned_member_ids: [], min_level: 3, created_at: new Date('2026-07-13'),
+    });
+
+    const result = await createPost(enrollmentId, { body: 'bonus content', min_level: 3 });
+
+    expect(createPostMock).toHaveBeenCalledWith(expect.objectContaining({ min_level: 3 }));
+    expect(result.min_level).toBe(3);
+    expect(result.locked).toBe(false);
+  });
 });
 
 describe('listPosts', () => {
-  it('happy path: scopes the feed to the caller\'s cohort', async () => {
+  beforeEach(() => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 1, points: 0 }, false]);
+  });
+
+  it('happy path: scopes the feed to the caller\'s cohort', async () => {
     findAllPosts.mockResolvedValue([]);
 
     await listPosts(enrollmentId);
@@ -139,7 +171,6 @@ describe('listPosts', () => {
   });
 
   it('boundary path: applies the category filter when provided', async () => {
-    findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findAllPosts.mockResolvedValue([]);
 
     await listPosts(enrollmentId, 'announcements');
@@ -150,7 +181,6 @@ describe('listPosts', () => {
   });
 
   it('happy path: orders pinned posts first', async () => {
-    findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findAllPosts.mockResolvedValue([]);
 
     await listPosts(enrollmentId);
@@ -160,6 +190,58 @@ describe('listPosts', () => {
       ['pinned', 'DESC'],
       ['created_at', 'DESC'],
     ]);
+  });
+
+  it('failure/boundary (REQ-C4): a post gated above the viewer\'s level is returned locked, with no body/media leaked', async () => {
+    findAllPosts.mockResolvedValue([
+      {
+        id: 'post-locked', member_id: 'other-member', cohort_id: cohortId, body: 'secret bonus content',
+        media_urls: ['https://example.com/a.png'], category: null, pinned: false, like_count: 0, comment_count: 0,
+        mentioned_member_ids: [], min_level: 3, created_at: new Date('2026-07-13'),
+        member: { id: 'other-member', display_name: 'Staff', avatar_url: null },
+      },
+    ]);
+
+    const [item] = await listPosts(enrollmentId);
+
+    expect(item.locked).toBe(true);
+    expect(item.body).toBeNull();
+    expect(item.media_urls).toEqual([]);
+    expect(item.min_level).toBe(3);
+  });
+
+  it('happy path (REQ-C4): the author sees their own gated post unlocked regardless of level', async () => {
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 1, points: 0 }, false]);
+    findAllPosts.mockResolvedValue([
+      {
+        id: 'post-own', member_id: memberId, cohort_id: cohortId, body: 'my bonus content',
+        media_urls: [], category: null, pinned: false, like_count: 0, comment_count: 0,
+        mentioned_member_ids: [], min_level: 3, created_at: new Date('2026-07-13'),
+        member: { id: memberId, display_name: 'Ada Lovelace', avatar_url: null },
+      },
+    ]);
+
+    const [item] = await listPosts(enrollmentId);
+
+    expect(item.locked).toBe(false);
+    expect(item.body).toBe('my bonus content');
+  });
+
+  it('boundary path (REQ-C4): a viewer exactly at the required level sees the post unlocked', async () => {
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 3, points: 2700 }, false]);
+    findAllPosts.mockResolvedValue([
+      {
+        id: 'post-atlevel', member_id: 'other-member', cohort_id: cohortId, body: 'week 4 bonus',
+        media_urls: [], category: null, pinned: false, like_count: 0, comment_count: 0,
+        mentioned_member_ids: [], min_level: 3, created_at: new Date('2026-07-13'),
+        member: { id: 'other-member', display_name: 'Staff', avatar_url: null },
+      },
+    ]);
+
+    const [item] = await listPosts(enrollmentId);
+
+    expect(item.locked).toBe(false);
+    expect(item.body).toBe('week 4 bonus');
   });
 });
 

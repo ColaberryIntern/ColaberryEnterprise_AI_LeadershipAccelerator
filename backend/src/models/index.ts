@@ -294,6 +294,7 @@ import CommunityComment from './CommunityComment';
 import CommunityLike from './CommunityLike';
 import CommunityPostReport from './CommunityPostReport';
 import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
+import CommunityPointsEvent from './CommunityPointsEvent';
 import CommunityEvent from './CommunityEvent';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
@@ -1188,6 +1189,7 @@ export {
   CommunityLike,
   CommunityPostReport,
   CommunityLeaderboardEntry,
+  CommunityPointsEvent,
   CommunityEvent,
   StudentPointsEvent,
   OpenHouseEvent,
@@ -1279,6 +1281,9 @@ CommunityPostReport.belongsTo(CommunityMember, { foreignKey: 'reporter_member_id
 
 CommunityMember.hasMany(CommunityLeaderboardEntry, { foreignKey: 'member_id', as: 'leaderboardEntries' });
 CommunityLeaderboardEntry.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityMember.hasMany(CommunityPointsEvent, { foreignKey: 'member_id', as: 'pointsEvents' });
+CommunityPointsEvent.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
 
 Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
 CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });

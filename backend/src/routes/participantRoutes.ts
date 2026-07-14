@@ -354,7 +354,7 @@ import { GetWeekSchema, RevealActivitySchema, StartInterviewSchema, SubmitInterv
 import {
   CreatePostSchema, ListPostsQuerySchema, TogglePinSchema, PostIdParamSchema,
   CreateCommentSchema, CommentIdParamSchema, MemberIdParamSchema, UpdateProfileSchema,
-  ReportPostSchema,
+  ReportPostSchema, LeaderboardQuerySchema,
 } from '../schemas/communitySchemas';
 
 router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
@@ -489,6 +489,36 @@ router.get('/api/portal/community/posts', requireParticipant, async (req, res) =
     const { listPosts } = await import('../services/communityService');
     const posts = await listPosts(req.participant!.sub, parsed.data.category);
     res.json({ posts });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/posts/:postId', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid post id' });
+    return;
+  }
+  try {
+    const { getPostById } = await import('../services/communityService');
+    const post = await getPostById(req.participant!.sub, paramsParsed.data.postId);
+    res.json({ post });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/leaderboard', requireParticipant, async (req, res) => {
+  const parsed = LeaderboardQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid query', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { getLeaderboard } = await import('../services/communityLeaderboardService');
+    const entries = await getLeaderboard(req.participant!.sub, parsed.data.period);
+    res.json({ period: parsed.data.period, entries });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }

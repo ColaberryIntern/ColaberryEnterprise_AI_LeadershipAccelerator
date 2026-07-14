@@ -5,6 +5,11 @@ export const CreatePostSchema = z.object({
   category: z.string().min(1).max(100).optional(),
   media_urls: z.array(z.string().url()).max(10).optional(),
   mentioned_member_ids: z.array(z.string().uuid()).max(20).optional(),
+  min_level: z.number().int().min(0).max(10).optional(),
+});
+
+export const LeaderboardQuerySchema = z.object({
+  period: z.enum(['7d', '30d', 'all_time']).optional().default('all_time'),
 });
 
 export const ListPostsQuerySchema = z.object({
@@ -47,6 +52,7 @@ export const UpdateProfileSchema = z
   });
 
 export type CreatePostInput = z.infer<typeof CreatePostSchema>;
+export type LeaderboardQueryInput = z.infer<typeof LeaderboardQuerySchema>;
 export type ListPostsQueryInput = z.infer<typeof ListPostsQuerySchema>;
 export type TogglePinInput = z.infer<typeof TogglePinSchema>;
 export type CreateCommentInput = z.infer<typeof CreateCommentSchema>;
