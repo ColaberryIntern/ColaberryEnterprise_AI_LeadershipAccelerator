@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, July 15, 2026 at 12:22 PM</div>
-    <div><span class="sid">CC-20260715-b7q4</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Wednesday, July 15, 2026 at 1:07 PM</div>
+    <div><span class="sid">CC-20260715-b7q4</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -72,6 +72,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Dev Docker build exit 0 — backend `tsc` 0 errors + frontend CRA &quot;Compiled successfully&quot; (the authoritative typecheck; no local node_modules in this repo). Deployed to Dev 1 (95.216.199.47:9999) from worktree /opt/acc-blueprint, DB accelerator_dev1 (verified, not prod). Backend booted (&quot;schema in sync&quot;, port 3001); `GET .../timeline/blueprint-context` and `POST /api/admin/components/:slug/preview` both return 401 unauth (routes wired + auth-gated); nginx :9999 → 200. End-to-end: ran the compiled `getBlueprintContext(92b98a72…, week 1)` against real dev data — returns the enriched `prompt_text` (&quot;Topics &amp; competencies covered this week: claude_code, build_discipline.&quot; + objectives + domains + level), confirming the fuller context flows into both the injected system prompt and the read-only block. Backend unit test `blueprintContext.test.ts` written but NOT run this session (Docker build excludes test files from tsc; no jest installed locally — CI jest is authoritative).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The Studio is deliberately global (a reusable component library), which is why the prior commit skipped it; the new course+week picker is the minimal context needed to inject a specific week&#39;s Blueprint. New backend unit test: `backend/src/services/timeline/__tests__/blueprintContext.test.ts` (pure formatter: always anchors to week+course, includes each optional field only when present, deterministic/idempotent). Branch `workstream/composer-blueprint-autofill` off `main`, deployed to Dev 1 (:9999) for review.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Timeline Edit Card: same auto-included Blueprint block, LOCKED to the card&#39;s week (shared component)</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali wants the Studio&#39;s read-only &quot;auto-included&quot; block in the Timeline Edit Card too, but LOCKED — no course/week picker, no drill-down, defaulted to whatever week the card is assigned to (establishing the pattern before he starts fixing other curriculum types). Refactored both surfaces onto ONE shared component `frontend/src/pages/admin/orchestration/BlueprintDefaults.tsx` (self-contained `.bpx-*` scoped styles so it renders identically in either tab). Two modes: Studio passes an editable Course/Week `picker`; Timeline passes `locked` — which renders a non-interactive &quot;🔒 Week N · locked to this card&quot; chip instead of a picker, and the values (title, purpose, topic tags, objectives, domains, level) are read-only (cursor:not-allowed, user-select:none) with no way to change or drill in. The Timeline block now renders ALWAYS (even with no Blueprint for that week → a clear empty state), so every curriculum type carries the section. Removed the now-dead `.es-bp*` CSS from studioKit and the Studio&#39;s + Timeline&#39;s inline block markup. Files: NEW BlueprintDefaults.tsx; ExperienceStudioTab.tsx (use shared component w/ picker); TimelineEditorTab.tsx (use shared component, locked, always-on); studio/studioKit.tsx (drop dead CSS).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Dev nginx `--no-cache` rebuild exit 0, CRA &quot;Compiled successfully&quot; (frontend typecheck clean). nginx :9999 → 200; served bundle `main.3b3a6d99.js` contains `bpx-lock`, &quot;locked to this card&quot;, &quot;Auto-included in every&quot;, &quot;Design for&quot;, and &quot;No Blueprint for Week&quot; — confirming the shared block is live in BOTH modes (Timeline locked chip + Studio editable picker + empty state). Backend unchanged. (Used `--no-cache` deliberately: an earlier normal `--build` served a STALE frontend bundle from an evicted/partial Docker cache layer — see [[reference_prod_disk_build_cache_fills_root]] — so blueprint UI changes on this dev box should rebuild nginx with `--no-cache`.)</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">One component = no drift between the two surfaces. Video/skills_jar don&#39;t strictly need it, but the scaffold is now in place for the reading/quiz/reflection types Ali is about to build.</span></div>
           
         </div>
       </article>
