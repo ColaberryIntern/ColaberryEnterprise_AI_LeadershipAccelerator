@@ -1,17 +1,19 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { generateClarifyingQuestions, generateRequirementsDoc, QuestionAnswer, _resetClientForTesting } from '../advisorBrainService';
 
-jest.mock('@anthropic-ai/sdk');
+jest.mock('../openaiInstrumented', () => ({
+  getInstrumentedOpenAI: jest.fn(),
+}));
 jest.mock('../../config/env', () => ({
   env: {
-    anthropicApiKey: 'test-key',
-    advisorClaudeModel: 'claude-sonnet-4-6',
+    openaiApiKey: 'test-key',
+    aiModel: 'gpt-4o-mini',
     nodeEnv: 'test',
     databaseUrl: 'postgres://accelerator:accelerator@localhost:5432/accelerator_dev',
   },
 }));
 
-const MockedAnthropic = Anthropic as jest.MockedClass<typeof Anthropic>;
+const mockedGetClient = getInstrumentedOpenAI as jest.Mock;
 
 const MOCK_QUESTIONS = [
   'Who is the primary user of this system?',
@@ -52,17 +54,22 @@ const MOCK_REQUIREMENTS_RESPONSE = {
   raw_markdown: '# AI Restaurant Inventory Manager\n\n## Problem\nSmall restaurant owners...',
 };
 
-function makeMessageResponse(content: string): Anthropic.Message {
+// Minimal OpenAI ChatCompletion shape — the service only reads choices[0].message.content.
+function makeChatResponse(content: string): any {
   return {
-    id: 'msg_test',
-    type: 'message',
-    role: 'assistant',
-    content: [{ type: 'text', text: content, citations: [] } as Anthropic.TextBlock],
-    model: 'claude-sonnet-4-6',
-    stop_reason: 'end_turn',
-    stop_sequence: null,
-    usage: { input_tokens: 100, output_tokens: 200 } as Anthropic.Usage,
-  } as Anthropic.Message;
+    id: 'chatcmpl_test',
+    object: 'chat.completion',
+    created: 0,
+    model: 'gpt-4o-mini',
+    choices: [
+      {
+        index: 0,
+        message: { role: 'assistant', content },
+        finish_reason: 'stop',
+      },
+    ],
+    usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 },
+  };
 }
 
 describe('advisorBrainService', () => {
@@ -72,15 +79,15 @@ describe('advisorBrainService', () => {
     jest.clearAllMocks();
     _resetClientForTesting();
     mockCreate = jest.fn();
-    MockedAnthropic.mockImplementation(() => ({
-      messages: { create: mockCreate },
-    }) as any);
+    mockedGetClient.mockImplementation(() => ({
+      chat: { completions: { create: mockCreate } },
+    }));
   });
 
   describe('generateClarifyingQuestions', () => {
     it('happy path: returns 10 questions for a valid idea', async () => {
       mockCreate.mockResolvedValueOnce(
-        makeMessageResponse(JSON.stringify({ questions: MOCK_QUESTIONS })),
+        makeChatResponse(JSON.stringify({ questions: MOCK_QUESTIONS })),
       );
 
       const result = await generateClarifyingQuestions(
@@ -94,12 +101,12 @@ describe('advisorBrainService', () => {
       expect(result.questions[0]).toBe('Who is the primary user of this system?');
     });
 
-    it('returns AuthError when ANTHROPIC_API_KEY is missing', async () => {
+    it('returns AuthError when OPENAI_API_KEY is missing', async () => {
       jest.resetModules();
       jest.doMock('../../config/env', () => ({
         env: {
-          anthropicApiKey: '',
-          advisorClaudeModel: 'claude-sonnet-4-6',
+          openaiApiKey: '',
+          aiModel: 'gpt-4o-mini',
           nodeEnv: 'test',
           databaseUrl: 'postgres://accelerator:accelerator@localhost:5432/accelerator_dev',
         },
@@ -107,7 +114,7 @@ describe('advisorBrainService', () => {
       const { generateClarifyingQuestions: noKey } = await import('../advisorBrainService');
 
       const result = await noKey('some idea', 'enroll-123');
-      expect(result.error).toContain('ANTHROPIC_API_KEY not set');
+      expect(result.error).toContain('OPENAI_API_KEY not set');
       expect(result.questions).toHaveLength(0);
     });
 
@@ -119,15 +126,15 @@ describe('advisorBrainService', () => {
       expect(result.questions).toHaveLength(0);
     });
 
-    it('boundary: empty idea string returns error without calling Claude', async () => {
+    it('boundary: empty idea string returns error without calling OpenAI', async () => {
       const result = await generateClarifyingQuestions('', 'enroll-123');
       expect(result.error).toBe('idea must not be empty');
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
-    it('handles Claude returning markdown-fenced JSON', async () => {
+    it('handles the model returning markdown-fenced JSON', async () => {
       const fenced = '```json\n' + JSON.stringify({ questions: MOCK_QUESTIONS }) + '\n```';
-      mockCreate.mockResolvedValueOnce(makeMessageResponse(fenced));
+      mockCreate.mockResolvedValueOnce(makeChatResponse(fenced));
 
       const result = await generateClarifyingQuestions('restaurant inventory AI', 'enroll-456');
       expect(result.error).toBeNull();
@@ -143,7 +150,7 @@ describe('advisorBrainService', () => {
 
     it('happy path: returns structured requirements doc', async () => {
       mockCreate.mockResolvedValueOnce(
-        makeMessageResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)),
+        makeChatResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)),
       );
 
       const result = await generateRequirementsDoc(
@@ -160,9 +167,9 @@ describe('advisorBrainService', () => {
       expect(result.raw_markdown).toContain('# AI Restaurant Inventory Manager');
     });
 
-    it('boundary: empty answers array still produces a doc (Claude infers defaults)', async () => {
+    it('boundary: empty answers array still produces a doc (model infers defaults)', async () => {
       mockCreate.mockResolvedValueOnce(
-        makeMessageResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)),
+        makeChatResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)),
       );
 
       const result = await generateRequirementsDoc(
@@ -177,7 +184,7 @@ describe('advisorBrainService', () => {
 
     it('boundary: partial answers (3 of 10) still produces a doc', async () => {
       mockCreate.mockResolvedValueOnce(
-        makeMessageResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)),
+        makeChatResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)),
       );
       const threeAnswers: QuestionAnswer[] = SAMPLE_ANSWERS.slice(0, 3);
 
@@ -185,12 +192,12 @@ describe('advisorBrainService', () => {
       expect(result.error).toBeNull();
     });
 
-    it('returns AuthError when ANTHROPIC_API_KEY is missing', async () => {
+    it('returns AuthError when OPENAI_API_KEY is missing', async () => {
       jest.resetModules();
       jest.doMock('../../config/env', () => ({
         env: {
-          anthropicApiKey: '',
-          advisorClaudeModel: 'claude-sonnet-4-6',
+          openaiApiKey: '',
+          aiModel: 'gpt-4o-mini',
           nodeEnv: 'test',
           databaseUrl: 'postgres://accelerator:accelerator@localhost:5432/accelerator_dev',
         },
@@ -198,7 +205,7 @@ describe('advisorBrainService', () => {
       const { generateRequirementsDoc: noKey } = await import('../advisorBrainService');
 
       const result = await noKey('some idea', [], 'enroll-123');
-      expect(result.error).toContain('ANTHROPIC_API_KEY not set');
+      expect(result.error).toContain('OPENAI_API_KEY not set');
       expect(result.title).toBe('');
     });
 
@@ -210,7 +217,7 @@ describe('advisorBrainService', () => {
       expect(result.title).toBe('');
     });
 
-    it('empty idea string returns error without calling Claude', async () => {
+    it('empty idea string returns error without calling OpenAI', async () => {
       const result = await generateRequirementsDoc('  ', SAMPLE_ANSWERS, 'enroll-123');
       expect(result.error).toBe('idea must not be empty');
       expect(mockCreate).not.toHaveBeenCalled();
@@ -218,8 +225,8 @@ describe('advisorBrainService', () => {
 
     it('idempotent: two calls with same inputs both return valid structure', async () => {
       mockCreate
-        .mockResolvedValueOnce(makeMessageResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)))
-        .mockResolvedValueOnce(makeMessageResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)));
+        .mockResolvedValueOnce(makeChatResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)))
+        .mockResolvedValueOnce(makeChatResponse(JSON.stringify(MOCK_REQUIREMENTS_RESPONSE)));
 
       const r1 = await generateRequirementsDoc('AI tool', SAMPLE_ANSWERS, 'enroll-123');
       const r2 = await generateRequirementsDoc('AI tool', SAMPLE_ANSWERS, 'enroll-123');
