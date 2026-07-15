@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, July 15, 2026 at 1:07 PM</div>
-    <div><span class="sid">CC-20260715-b7q4</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Wednesday, July 15, 2026 at 1:25 PM</div>
+    <div><span class="sid">CC-20260715-b7q4</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -87,6 +87,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Dev nginx `--no-cache` rebuild exit 0, CRA &quot;Compiled successfully&quot; (frontend typecheck clean). nginx :9999 → 200; served bundle `main.3b3a6d99.js` contains `bpx-lock`, &quot;locked to this card&quot;, &quot;Auto-included in every&quot;, &quot;Design for&quot;, and &quot;No Blueprint for Week&quot; — confirming the shared block is live in BOTH modes (Timeline locked chip + Studio editable picker + empty state). Backend unchanged. (Used `--no-cache` deliberately: an earlier normal `--build` served a STALE frontend bundle from an evicted/partial Docker cache layer — see [[reference_prod_disk_build_cache_fills_root]] — so blueprint UI changes on this dev box should rebuild nginx with `--no-cache`.)</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">One component = no drift between the two surfaces. Video/skills_jar don&#39;t strictly need it, but the scaffold is now in place for the reading/quiz/reflection types Ali is about to build.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Timeline block placement: move locked Blueprint block from top-of-drawer to directly above the Week field</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The locked block rendered at the very top of the Edit Card drawer, above the large &quot;Finished product&quot; preview — so once the author scrolled down to the controls (Week/Difficulty/XP) it was scrolled out of view (&quot;I don&#39;t see it&quot;). Moved `&lt;BlueprintDefaults locked&gt;` to sit directly ABOVE the Week/Bucket row in the Controls section — where the author works and where it&#39;s most meaningful (it&#39;s locked to that week). Single-file change to TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Dev nginx `--no-cache` rebuild exit 0, CRA &quot;Compiled successfully&quot;; nginx :9999 → 200; new served bundle `main.75c03117.js`. Source confirmed on the deployed worktree: `&lt;BlueprintDefaults&gt;` now renders immediately above the Week/Bucket row (line 317, Week label at 319).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Placement-only; the shared component + lock behavior are unchanged.</span></div>
           
         </div>
       </article>
