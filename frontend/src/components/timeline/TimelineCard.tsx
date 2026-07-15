@@ -25,7 +25,7 @@ export interface TimelineFeedCard {
   status: 'locked' | 'available' | 'in_progress' | 'completed';
   quiz_score: number | null;
   completed_at: string | null;
-  video?: { url: string; presenter: string | null; poster: string | null } | null;
+  video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
@@ -182,8 +182,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   ) : (
     <button type="button" className={`mthumb${done ? ' done' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
       <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+      {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
+      <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>
       <span className="mt-open">{done
         ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
         : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>

@@ -14,14 +14,19 @@ interface Props {
   title?: string;
   poster?: string | null;
   onEnded?: () => void;
+  /** A corner ribbon label drawn over the poster (e.g. "Testimonial") so the card
+   *  type is always visible on the thumbnail. */
+  badge?: string | null;
 }
 
 const PlayIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
 );
 
-const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded }) => {
+const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge }) => {
   const [playing, setPlaying] = useState(false);
+
+  const ribbon = badge ? <span className="tlv-ribbon">{badge}</span> : null;
 
   if (!source) {
     return <div className="tlv-none">No video is attached to this card yet.</div>;
@@ -31,6 +36,7 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded }) => {
   if (source.kind === 'link') {
     return (
       <div className="tlv-frame tlv-link">
+        {ribbon}
         <div className="tlv-linkbody">
           <p>This video is hosted on {providerLabel(source.provider)}.</p>
           <a className="tl-btn primary sm" href={source.originalUrl} target="_blank" rel="noopener noreferrer">
@@ -47,6 +53,7 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded }) => {
       <button type="button" className="tlv-frame tlv-poster" onClick={() => setPlaying(true)} aria-label={`Play ${title || 'video'}`}>
         {poster && <img className="tlv-posterimg" src={poster} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
         <span className="tlv-postergrad" />
+        {ribbon}
         <span className="tlv-bigplay"><PlayIcon /></span>
         {title && <span className="tlv-postertitle">{title}</span>}
       </button>

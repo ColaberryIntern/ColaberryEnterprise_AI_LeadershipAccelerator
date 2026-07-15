@@ -518,7 +518,7 @@ const ExperienceStudioTab: React.FC = () => {
                               <AutofillButton onClick={() => runVideoFlow('video')} busy={vBusy === 'video'} disabled={!videoUrl.trim() || !!vBusy}
                                 title="✦ Auto-fill from this video — write the title and everything else" />
                             </div>
-                            {videoSource && <div className="es-video" style={{ marginTop: 8 }}><VideoEmbed source={videoSource} title={title || sel.label} poster={poster || null} /></div>}</div>
+                            {videoSource && <div className="es-video" style={{ marginTop: 8 }}><VideoEmbed source={videoSource} title={title || sel.label} poster={poster || null} badge={sel.slug === 'testimonial' ? 'Testimonial' : null} /></div>}</div>
                           <div style={{ display: 'flex', gap: 10 }}>
                             <div style={{ flex: 1 }}><div className="es-sublab">Presenter</div>
                               <input className="es-in" placeholder="(optional)" value={presenter} onChange={(e) => setPresenter(e.target.value)} /></div>

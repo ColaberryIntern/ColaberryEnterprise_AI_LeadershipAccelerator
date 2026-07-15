@@ -94,7 +94,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
         {isVideo && (
           <div className="tld-player">
-            <VideoEmbed source={source} title={card.title} poster={card.video?.poster || null} onEnded={done || preview ? undefined : onComplete} />
+            <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : null} onEnded={done || preview ? undefined : onComplete} />
           </div>
         )}
 
