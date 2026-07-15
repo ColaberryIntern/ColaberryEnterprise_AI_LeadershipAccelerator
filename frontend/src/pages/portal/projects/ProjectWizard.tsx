@@ -42,8 +42,8 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void }> = ({ o
       {step === 1 && (
         <div className="card pjw-pane">
           <h3>What do you want to build?</h3>
-          <p className="lead">Describe it in a sentence or two. Don't worry about being precise — the next step sharpens it with you.</p>
-          <textarea value={idea} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 92 }} placeholder="e.g. An AI agent that triages my support inbox and drafts replies" />
+          <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise; the more you pour out here, the better we shape it. The next step sharpens it with you.</p>
+          <textarea value={idea} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
           <label className="pjw-label">Give it a name (optional)</label>
           <input className="txt" value={name} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
           <label className="pjw-label">How big is what you're building?</label>
