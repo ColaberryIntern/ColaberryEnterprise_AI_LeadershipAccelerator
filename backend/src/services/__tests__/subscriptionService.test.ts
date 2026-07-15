@@ -1,5 +1,5 @@
 import {
-  PLANS, isSubscriptionRef, getSubscription, startCheckout, activateByRef, cancelSubscription,
+  PLANS, isSubscriptionRef, isNonPayingCohortName, getSubscription, startCheckout, activateByRef, cancelSubscription,
 } from '../subscriptionService';
 import { Enrollment, Cohort, Subscription } from '../../models';
 import { findOrCreateCustomer, createPaymentLink } from '../paysimpleService';
@@ -34,6 +34,12 @@ describe('subscriptionService', () => {
       expect(isSubscriptionRef('SUB-abc-123')).toBe(true);
       expect(isSubscriptionRef('CB-1-2')).toBe(false);
       expect(isSubscriptionRef(undefined)).toBe(false);
+    });
+    it('never treats the Explorer/prospect/demo cohorts as a paying target', () => {
+      expect(isNonPayingCohortName('Explorer — Prospects')).toBe(true);
+      expect(isNonPayingCohortName('Timeline Demo Cohort')).toBe(true);
+      expect(isNonPayingCohortName('Cohort - July 2026')).toBe(false);
+      expect(isNonPayingCohortName('Cohort 1 — July 2026')).toBe(false);
     });
   });
 

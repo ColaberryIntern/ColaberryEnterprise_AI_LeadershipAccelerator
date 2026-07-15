@@ -49,8 +49,15 @@ const SUB_PREFIX = 'SUB-';
 export const isSubscriptionRef = (externalId: string | undefined | null): boolean =>
   !!externalId && externalId.startsWith(SUB_PREFIX);
 
+/** A cohort a PAYING subscriber must never be dropped into: demo/test fixtures,
+ *  or the free Explorer / prospect holding cohorts. */
+export function isNonPayingCohortName(name: string | null | undefined): boolean {
+  return isDemoCohortName(name) || /explorer|prospect/i.test(name || '');
+}
+
 /** The paid cohort a subscriber is enrolled into ("July batch"): env override,
- *  else the soonest open, non-demo cohort. Null if none is configured. */
+ *  else the soonest open cohort that is a real paid cohort (never a demo or the
+ *  Explorer/prospect holding cohort). Null if none is configured. */
 async function resolveTargetCohort(): Promise<Cohort | null> {
   const override = process.env.SUBSCRIPTION_TARGET_COHORT_ID;
   if (override) {
@@ -58,7 +65,7 @@ async function resolveTargetCohort(): Promise<Cohort | null> {
     if (c) return c;
   }
   const open = await Cohort.findAll({ where: { status: 'open' }, order: [['start_date', 'ASC']], limit: 10 });
-  return open.find((c: any) => !isDemoCohortName(c.name)) || null;
+  return open.find((c: any) => !isNonPayingCohortName(c.name)) || null;
 }
 
 /** The student's current subscription = newest non-failed row. */
