@@ -201,3 +201,38 @@
 }
 .set-toggle.on .knob { transform: translateX(19px); }
 .set-toggle:focus-visible { outline: 2px solid var(--cherry, #FB2832); outline-offset: 2px; }
+
+/* Free/current plan card (shown selected) */
+.set-plan.current {
+  border-color: var(--leaf, #5BA63C);
+  box-shadow: 0 0 0 2px rgba(91,166,60,.18);
+  background: rgba(91,166,60,.035);
+}
+.set-plan-badge.current {
+  background: var(--leaf, #5BA63C);
+  display: inline-flex; align-items: center; gap: 4px;
+}
+
+/* Post-payment: manage-your-subscription screen */
+.set-sub-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--color-border, #EDEDED);
+}
+.set-sub-badge {
+  display: inline-block; font-size: 11px; font-weight: 800; letter-spacing: .03em;
+  padding: 3px 10px; border-radius: 999px; margin-bottom: 8px;
+}
+.set-sub-badge.active { background: rgba(91,166,60,.15); color: #3C7A26; }
+.set-sub-badge.canceled { background: rgba(107,107,107,.14); color: #6B6B6B; }
+.set-sub-plan { font-size: 20px; font-weight: 800; color: var(--color-text, #1A1A1A); text-transform: capitalize; }
+.set-sub-sub { font-size: 13px; color: var(--color-text-light, #6B6B6B); margin-top: 3px; }
+.set-sub-amt { font-size: 26px; font-weight: 800; font-family: 'Roboto Mono', monospace; color: var(--color-text, #1A1A1A); white-space: nowrap; }
+.set-sub-amt span { font-size: 14px; font-weight: 700; color: var(--color-text-light, #6B6B6B); }
+.set-sub-facts { display: flex; flex-direction: column; margin-bottom: 16px; }
+.set-sub-facts .fact {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--color-border, #F0F0EE); font-size: 13.5px;
+}
+.set-sub-facts .fact:last-child { border-bottom: none; }
+.set-sub-facts .fact .k { color: var(--color-text-light, #6B6B6B); }
+.set-sub-facts .fact .v { font-weight: 700; color: var(--color-text, #1A1A1A); }

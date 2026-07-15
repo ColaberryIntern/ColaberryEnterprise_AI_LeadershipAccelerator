@@ -31,17 +31,26 @@ export interface PlanConfig {
   blurb: string;
 }
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** The amount actually charged for a plan: per-month × 12 for annual, per-month
+ *  for monthly. Single source of truth so real prices ($149 / $199) drop in by
+ *  editing per_month only. */
+export function planChargeAmount(cfg: Pick<PlanConfig, 'per_month' | 'cadence'>): number {
+  return round2(cfg.cadence === 'year' ? cfg.per_month * 12 : cfg.per_month);
+}
+
+/** Build a plan from its per-month rate; price + amount_cents are derived. */
+function makePlan(id: SubscriptionPlan, label: string, per_month: number, cadence: 'year' | 'month', period_days: number, blurb: string): PlanConfig {
+  const price = planChargeAmount({ per_month, cadence });
+  return { id, label, per_month, cadence, period_days, blurb, price, amount_cents: Math.round(price * 100) };
+}
+
+// NOTE: per_month values are TEST amounts (annual $0.15/mo → $1.80/yr, monthly
+// $0.19/mo). To go live, change ONLY the per_month numbers to 149 and 199.
 export const PLANS: Record<SubscriptionPlan, PlanConfig> = {
-  annual: {
-    id: 'annual', label: 'Annual', price: 1788, amount_cents: 178800, cadence: 'year',
-    per_month: 149, period_days: 365,
-    blurb: 'Best value — just $149/mo, billed once a year. Full access to the program.',
-  },
-  monthly: {
-    id: 'monthly', label: 'Monthly', price: 199, amount_cents: 19900, cadence: 'month',
-    per_month: 199, period_days: 30,
-    blurb: 'Month-to-month at $199/mo. Cancel anytime.',
-  },
+  annual: makePlan('annual', 'Annual', 0.15, 'year', 365, 'Best value — pay once a year for full access to the program.'),
+  monthly: makePlan('monthly', 'Monthly', 0.19, 'month', 30, 'Month-to-month. Cancel anytime.'),
 };
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -160,7 +169,8 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
     const link = await createPaymentLink({
       externalId,
       cohortName: `${cfg.label} plan`,
-      amount: cfg.price,
+      amount: planChargeAmount(cfg),  // charge the plan's amount (test or real), not the $0.01 override
+      exactAmount: true,
       customerFirstName: firstName,
       customerLastName: lastName,
       customerEmail: enrollment.email,
