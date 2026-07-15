@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260715-b7q4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, July 15, 2026 at 12:22 PM</div>
+    <div><span class="sid">CC-20260715-b7q4</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Auto-inject the week&#39;s Blueprint into Experience Studio generation + show it as a read-only &quot;defaults&quot; block (Studio parity with the Timeline)</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Prior work (ad8c3067, 2026-07-14) built &quot;Blueprint-as-context&quot; ONLY for the Timeline editor — the week&#39;s Blueprint is fetched by `getBlueprintContext(program_id, week)` and prepended to the video/course/card generators&#39; system prompt, with a grayed read-only block in the Timeline drawer. The Experience Studio (the tab in the user&#39;s screenshot) was course/week-agnostic and injected NOTHING. This brings the Studio to parity and enriches both surfaces. (1) `backend/src/services/timeline/blueprintContext.ts`: extracted a pure, unit-tested `buildBlueprintPromptText()` and enriched the context to carry the full &quot;topics covered&quot; picture — competencies (labeled &quot;Topics &amp; competencies covered this week&quot;), learning objectives, architect domains, student outcomes, success criteria, level, estimated workload. `BlueprintContext` now exposes those fields for the read-only UI. (2) Component preview/test path now also blueprint-aware: `previewSchema`/`testSchema` accept optional `program_id`/`week` (`backend/src/controllers/componentController.ts`); `runtimePreview` (`componentAiService.ts`) and `testPrompt` (`promptTesterService.ts`) prepend the blueprint prompt text when a week is chosen. (3) FRONTEND `ExperienceStudioTab.tsx`: added a &quot;Design for [Course] · [Week]&quot; picker + a grayed, non-editable (cursor:not-allowed, userSelect:none) &quot;Auto-included in every ✦ generation · read-only&quot; block ABOVE input #1, showing the week&#39;s title/purpose/topics/objectives/domains/level. All three generate flows (skills_jar `generate-course-draft`, video `generate-video-draft`, variable `/components/:slug/preview` + `/test`) now pass `program_id`/`week`, so the blueprint is injected server-side. (4) `TimelineEditorTab.tsx`: expanded its read-only block to show topics/objectives/domains/level (was title+purpose only). (5) Shared `BlueprintContextDTO` type + `.es-bp*` styles added to `composer/composerKit.tsx` / `studio/studioKit.tsx` so the two surfaces never drift. No DB migration (the Blueprint model already holds every field; nothing new to store).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Dev Docker build exit 0 — backend `tsc` 0 errors + frontend CRA &quot;Compiled successfully&quot; (the authoritative typecheck; no local node_modules in this repo). Deployed to Dev 1 (95.216.199.47:9999) from worktree /opt/acc-blueprint, DB accelerator_dev1 (verified, not prod). Backend booted (&quot;schema in sync&quot;, port 3001); `GET .../timeline/blueprint-context` and `POST /api/admin/components/:slug/preview` both return 401 unauth (routes wired + auth-gated); nginx :9999 → 200. End-to-end: ran the compiled `getBlueprintContext(92b98a72…, week 1)` against real dev data — returns the enriched `prompt_text` (&quot;Topics &amp; competencies covered this week: claude_code, build_discipline.&quot; + objectives + domains + level), confirming the fuller context flows into both the injected system prompt and the read-only block. Backend unit test `blueprintContext.test.ts` written but NOT run this session (Docker build excludes test files from tsc; no jest installed locally — CI jest is authoritative).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The Studio is deliberately global (a reusable component library), which is why the prior commit skipped it; the new course+week picker is the minimal context needed to inject a specific week&#39;s Blueprint. New backend unit test: `backend/src/services/timeline/__tests__/blueprintContext.test.ts` (pure formatter: always anchors to week+course, includes each optional field only when present, deterministic/idempotent). Branch `workstream/composer-blueprint-autofill` off `main`, deployed to Dev 1 (:9999) for review.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260715-b7q4</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
