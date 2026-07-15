@@ -142,7 +142,9 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) return { ok: false, reason: 'enrollment_not_found' };
 
-  const externalId = `${SUB_PREFIX}${enrollmentId}-${nowMs}`;
+  // PaySimple caps external_id at 50 chars. UUID-with-dashes (36) + prefix +
+  // timestamp overflowed (54); use the dashless hex (32) + base36 time → ~45.
+  const externalId = `${SUB_PREFIX}${enrollmentId.replace(/-/g, '')}-${nowMs.toString(36)}`;
   const nameParts = (enrollment.full_name || '').trim().split(/\s+/);
   const firstName = nameParts[0] || enrollment.full_name || 'Student';
   const lastName = nameParts.slice(1).join(' ') || '-';

@@ -179,3 +179,25 @@
   .set-tabs { gap: 0; }
   .set-tab { padding: 10px 12px; font-size: 13px; }
 }
+
+/* Expandable "add more details" toggle */
+.set-more-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: none; border: none; cursor: pointer; padding: 12px 0 6px;
+  font-size: 13.5px; font-weight: 700; color: var(--cherry, #FB2832);
+}
+.set-more-toggle .chev { display: inline-block; transition: transform .15s ease; font-size: 17px; line-height: 1; }
+.set-more-hint { font-weight: 500; color: var(--color-text-light, #8A8A8A); font-size: 12px; }
+
+/* iOS-style toggle switch (notification prefs) */
+.set-toggle {
+  position: relative; width: 44px; height: 25px; border-radius: 999px; flex: none; padding: 0;
+  background: var(--color-border, #D9D8D5); border: none; cursor: pointer; transition: background .18s ease;
+}
+.set-toggle.on { background: var(--leaf, #5BA63C); }
+.set-toggle .knob {
+  position: absolute; top: 3px; left: 3px; width: 19px; height: 19px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .18s ease;
+}
+.set-toggle.on .knob { transform: translateX(19px); }
+.set-toggle:focus-visible { outline: 2px solid var(--cherry, #FB2832); outline-offset: 2px; }

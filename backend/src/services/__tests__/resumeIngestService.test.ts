@@ -1,5 +1,5 @@
 import {
-  buildResumeExtractionPrompt, parseExtractionJson, mapExtractionToPrefill, ingestBackground,
+  buildResumeExtractionPrompt, parseExtractionJson, mapExtractionToPrefill, mapExtractionToProfile, ingestBackground,
 } from '../resumeIngestService';
 import { OnboardingProfile } from '../../models';
 
@@ -58,6 +58,27 @@ describe('resumeIngestService', () => {
     });
   });
 
+  describe('mapExtractionToProfile (pure)', () => {
+    it('maps profile fields + personalization, title falls back to role', () => {
+      const { profile, personalization } = mapExtractionToProfile({
+        full_name: 'Ada Lovelace', company_name: 'Acme', company_size: '51-200', phone: '555',
+        role: 'Data Lead', industry: 'Retail', seniority: 'Senior', years_experience: '8',
+        skills: ['Python', 'MCP'], goals: 'Ship agents', location: 'Austin',
+      });
+      expect(profile).toEqual({ full_name: 'Ada Lovelace', title: 'Data Lead', company: 'Acme', company_size: '51-200', phone: '555' });
+      expect(personalization).toEqual({
+        industry: 'Retail', role: 'Data Lead', seniority: 'Senior', years_experience: '8',
+        skills: 'Python, MCP', goals: 'Ship agents', location: 'Austin',
+      });
+    });
+    it('prefers explicit title over role', () => {
+      expect(mapExtractionToProfile({ title: 'CTO', role: 'Engineer' }).profile.title).toBe('CTO');
+    });
+    it('is empty for null extraction', () => {
+      expect(mapExtractionToProfile(null)).toEqual({ profile: {}, personalization: {} });
+    });
+  });
+
   describe('ingestBackground', () => {
     it('rejects when neither resume nor linkedin is provided', async () => {
       const res = await ingestBackground('enr-1', {});
@@ -78,9 +99,16 @@ describe('resumeIngestService', () => {
       expect(res.parsed).toBe(true);
       expect(res.prefill).toEqual({ industry: 'Retail' });
       expect(res.variables).toEqual({ industry: 'Retail', role: 'COO' });
+      expect(res.profile).toEqual({ title: 'COO' });                          // role → title
+      expect(res.personalization).toEqual({ industry: 'Retail', role: 'COO' });
       const created = (OnboardingProfile.create as jest.Mock).mock.calls[0][0];
       expect(created.enrollment_id).toBe('enr-1');
-      expect(created.prefill).toEqual({ industry: 'Retail' });
+      // Saved prefill now bundles ProjectDNA + the profile + personalization prefills.
+      expect(created.prefill).toEqual({
+        industry: 'Retail',
+        profile: { title: 'COO' },
+        personalization: { industry: 'Retail', role: 'COO' },
+      });
     });
 
     it('is non-fatal when the extractor throws: still saves, empty prefill, parsed=false', async () => {
