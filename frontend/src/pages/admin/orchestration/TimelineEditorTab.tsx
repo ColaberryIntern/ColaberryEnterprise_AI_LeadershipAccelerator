@@ -10,7 +10,7 @@ import api from '../../../utils/api';
 import CardDetailBody from '../../../components/timeline/CardDetailBody';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
 import AutofillButton from '../../../components/common/AutofillButton';
-import { composerApi, Course } from './composer/composerKit';
+import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
 import '../../../components/timeline/timeline.css';
 
 /**
@@ -181,7 +181,7 @@ const BucketSection: React.FC<{
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }; types: TypeDef[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
-  bpContext: { week: number; title: string; purpose: string | null } | null;
+  bpContext: BlueprintContextDTO | null;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => void; onSave: () => void; onClose: () => void;
 }> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
@@ -214,13 +214,28 @@ const EditDrawer: React.FC<{
 
         <div className="te-dbody">
           {bpContext && (
-            <div style={{ border: '1px solid #E0E0E0', background: '#F4F5F6', borderRadius: 9, padding: '10px 12px', marginBottom: 14, color: '#6A6A6A', cursor: 'not-allowed', userSelect: 'none' }} title="Auto-included in every AI generation for this card. Read-only.">
+            <div style={{ border: '1px solid #E0E0E0', background: '#F4F5F6', borderRadius: 9, padding: '10px 12px', marginBottom: 14, color: '#6A6A6A', cursor: 'not-allowed', userSelect: 'none' }} title="Auto-included in every AI generation for this card. Read-only — edit it in the Curriculum Composer.">
               <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#9A9A9A', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M9 5h9a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" strokeWidth="2" /></svg>
                 Week {bpContext.week} blueprint · auto-included in AI generation
               </div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#5A5A5A', marginTop: 5 }}>{bpContext.title}</div>
               {bpContext.purpose && <div style={{ fontSize: 12, marginTop: 3, lineHeight: 1.45 }}>{bpContext.purpose}</div>}
+              {bpContext.competencies.length > 0 && (
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center', marginTop: 7 }}>
+                  <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', color: '#9A9A9A', marginRight: 2 }}>Topics</span>
+                  {bpContext.competencies.map((t) => <span key={t} style={{ fontSize: 10, fontWeight: 600, padding: '1px 7px', borderRadius: 999, background: '#E7E9EA', color: '#5A5A5A' }}>{t}</span>)}
+                </div>
+              )}
+              {bpContext.learning_objectives.length > 0 && (
+                <div style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.45 }}><span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', color: '#9A9A9A', marginRight: 6 }}>Objectives</span>{bpContext.learning_objectives.join(' · ')}</div>
+              )}
+              {(bpContext.architect_domains.length > 0 || bpContext.difficulty || bpContext.estimated_hours != null) && (
+                <div style={{ fontSize: 11.5, marginTop: 5, lineHeight: 1.45 }}>
+                  {bpContext.architect_domains.length > 0 && <><span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', color: '#9A9A9A', marginRight: 6 }}>Domains</span>{bpContext.architect_domains.join(', ')}</>}
+                  {bpContext.difficulty && <span style={{ marginLeft: bpContext.architect_domains.length > 0 ? 10 : 0 }}><span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', color: '#9A9A9A', marginRight: 6 }}>Level</span>{bpContext.difficulty}{bpContext.estimated_hours != null ? ` · ~${bpContext.estimated_hours}h` : ''}</span>}
+                </div>
+              )}
             </div>
           )}
           {isNew && (
@@ -382,7 +397,7 @@ const TimelineEditorTab: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course'>('');
-  const [bpContext, setBpContext] = useState<{ week: number; title: string; purpose: string | null } | null>(null);
+  const [bpContext, setBpContext] = useState<BlueprintContextDTO | null>(null);
 
   // Load the courses once and default to the AI Systems Architect Accelerator —
   // the Timeline is scoped to one course.

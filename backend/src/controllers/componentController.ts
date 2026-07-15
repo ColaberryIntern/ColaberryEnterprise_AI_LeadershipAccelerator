@@ -19,10 +19,14 @@ import { CAPABILITY_MODULES } from '../services/components/capabilityRegistry';
 import { RECIPES } from '../services/components/recipeRegistry';
 import CurriculumTypeDefinition from '../models/CurriculumTypeDefinition';
 
+// program_id + week are optional: when supplied (the Experience Studio "design
+// for week N" context), the week's Blueprint is auto-injected into the prompt.
 const testSchema = z.object({
   kind: z.enum(PROMPT_KINDS),
   variables: z.record(z.string(), z.string()).optional(),
   model: z.string().optional(),
+  program_id: z.string().nullable().optional(),
+  week: z.number().nullable().optional(),
 });
 
 function fail(res: Response, err: any, next: NextFunction) {
@@ -49,8 +53,8 @@ export async function handleUpdateComponent(req: Request, res: Response, next: N
 
 export async function handleTestComponentPrompt(req: Request, res: Response, next: NextFunction) {
   try {
-    const { kind, variables, model } = testSchema.parse(req.body);
-    res.json(await testPrompt(String(req.params.slug), kind as PromptKind, variables || {}, model));
+    const { kind, variables, model, program_id, week } = testSchema.parse(req.body);
+    res.json(await testPrompt(String(req.params.slug), kind as PromptKind, variables || {}, model, program_id, week));
   } catch (e) { fail(res, e, next); }
 }
 
@@ -76,7 +80,12 @@ export async function handleBackfillComponents(req: Request, res: Response, next
 
 // ── Experience Studio (AI-native) ────────────────────────────────────────────
 const genSchema = z.object({ description: z.string().min(3), recipe: z.string().optional(), model: z.string().optional() });
-const previewSchema = z.object({ variables: z.record(z.string(), z.string()).optional(), model: z.string().optional() });
+const previewSchema = z.object({
+  variables: z.record(z.string(), z.string()).optional(),
+  model: z.string().optional(),
+  program_id: z.string().nullable().optional(),
+  week: z.number().nullable().optional(),
+});
 
 export async function handleGenerateComponent(req: Request, res: Response, next: NextFunction) {
   try {
@@ -95,8 +104,8 @@ export async function handleCoDesign(req: Request, res: Response, next: NextFunc
 
 export async function handleRuntimePreview(req: Request, res: Response, next: NextFunction) {
   try {
-    const { variables, model } = previewSchema.parse(req.body || {});
-    res.json(await runtimePreview(String(req.params.slug), variables || {}, model));
+    const { variables, model, program_id, week } = previewSchema.parse(req.body || {});
+    res.json(await runtimePreview(String(req.params.slug), variables || {}, model, program_id, week));
   } catch (e) { fail(res, e, next); }
 }
 

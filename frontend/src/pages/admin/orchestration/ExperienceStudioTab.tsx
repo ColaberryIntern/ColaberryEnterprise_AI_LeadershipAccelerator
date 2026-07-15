@@ -3,6 +3,7 @@ import api from '../../../utils/api';
 import {
   Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, Row, studioCss,
 } from './studio/studioKit';
+import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
 import StudentPreview from './studio/StudentPreview';
 import RendererEngine from './studio/RendererEngine';
 import LifecycleStepper from './studio/LifecycleStepper';
@@ -105,6 +106,15 @@ const ExperienceStudioTab: React.FC = () => {
   const [showAllCaps, setShowAllCaps] = useState(false);
   const [favs, setFavs] = useState<string[]>(loadFavs);
   const toggleFav = (slug: string) => setFavs((f) => { const next = f.includes(slug) ? f.filter((x) => x !== slug) : [...f, slug]; localStorage.setItem(FAV_KEY, JSON.stringify(next)); return next; });
+  // "Design for week N" context — the Studio is otherwise course-agnostic. Picking
+  // a course + week auto-injects that week's Blueprint into every ✦ generation and
+  // surfaces it as the read-only "defaults" block above the inputs (same Blueprint
+  // the Timeline injects, so a Studio-authored card matches when it lands on a week).
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseId, setCourseId] = useState<string>('');
+  const [weeks, setWeeks] = useState<{ week: number; title: string }[]>([]);
+  const [week, setWeek] = useState<number | null>(null);
+  const [bpContext, setBpContext] = useState<BlueprintContextDTO | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -114,6 +124,55 @@ const ExperienceStudioTab: React.FC = () => {
     } catch { setError('Failed to load studio'); } finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  // Load courses once; default to the Architect course (matches Composer/Timeline).
+  useEffect(() => {
+    let cancelled = false;
+    composerApi.courses().then((cs) => {
+      if (cancelled) return;
+      setCourses(cs);
+      const def = cs.find((c) => /architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
+      setCourseId((cur) => cur || def?.id || '');
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // The weeks (blueprints) of the chosen course populate the Week picker.
+  useEffect(() => {
+    if (!courseId) { setWeeks([]); return; }
+    let cancelled = false;
+    composerApi.list(courseId).then((bps) => {
+      if (cancelled) return;
+      const ws = bps.filter((b) => b.week != null)
+        .map((b) => ({ week: b.week as number, title: b.title }))
+        .sort((a, b) => a.week - b.week);
+      setWeeks(ws);
+      setWeek((cur) => (cur != null ? cur : (ws[0]?.week ?? null)));
+    }).catch(() => { if (!cancelled) setWeeks([]); });
+    return () => { cancelled = true; };
+  }, [courseId]);
+
+  // Fetch the read-only Blueprint context that gets auto-injected into generation.
+  useEffect(() => {
+    if (!courseId || week == null) { setBpContext(null); return; }
+    let cancelled = false;
+    api.get('/api/admin/orchestration/timeline/blueprint-context', { params: { program_id: courseId, week } })
+      .then((r) => { if (!cancelled) setBpContext(r.data || null); })
+      .catch(() => { if (!cancelled) setBpContext(null); });
+    return () => { cancelled = true; };
+  }, [courseId, week]);
+
+  // Reflect the week's Blueprint into the sample {{week}}/{{topic}} vars so the
+  // variable-based preview reads the same week the block shows.
+  useEffect(() => {
+    if (!bpContext) return;
+    setVars((v) => {
+      const next = { ...v };
+      if ('week' in next) next.week = String(bpContext.week);
+      if ('topic' in next && bpContext.title) next.topic = bpContext.title;
+      return next;
+    });
+  }, [bpContext]);
 
   const open = async (slug: string) => {
     setError(''); setNotice(''); setStageTest(null); setPreview(null); setCoDesign(null); setAnalytics(null); setDepGraph(null);
@@ -169,12 +228,12 @@ const ExperienceStudioTab: React.FC = () => {
 
   const testStage = async () => {
     if (!sel) return; setBusy('test'); setStageTest(null); setError('');
-    try { const r = await api.post(`/api/admin/components/${sel.slug}/test`, { kind: stage, variables: vars }); setStageTest(r.data); }
+    try { const r = await api.post(`/api/admin/components/${sel.slug}/test`, { kind: stage, variables: vars, program_id: courseId || null, week }); setStageTest(r.data); }
     catch (e: any) { setError(e?.response?.data?.error || 'Test failed'); } finally { setBusy(''); }
   };
   const runPreview = async () => {
     if (!sel) return; setBusy('preview'); setPreview(null); setError('');
-    try { const r = await api.post(`/api/admin/components/${sel.slug}/preview`, { variables: vars }); setPreview(r.data); }
+    try { const r = await api.post(`/api/admin/components/${sel.slug}/preview`, { variables: vars, program_id: courseId || null, week }); setPreview(r.data); }
     catch (e: any) { setError(e?.response?.data?.error || 'Preview failed'); } finally { setBusy(''); }
   };
   // Video one-click — the SAME field-anchored engine the Timeline editor uses.
@@ -189,6 +248,7 @@ const ExperienceStudioTab: React.FC = () => {
       const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
         type: sel.slug, title: title || null,
         subtitle: subtitle || null, description: description || null,
+        program_id: courseId || null, week,
         video: { url: videoUrl || null, presenter: presenter || null, poster: poster || null },
         anchor,
       });
@@ -208,7 +268,7 @@ const ExperienceStudioTab: React.FC = () => {
     if (!sel || !courseUrl.trim()) return;
     setVBusy('course'); setPreview(null); setError(''); setNotice('');
     try {
-      const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: sel.slug, url: courseUrl });
+      const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: sel.slug, url: courseUrl, program_id: courseId || null, week });
       const g = r.data || {};
       if (g.title) setTitle(g.title);
       if (g.subtitle != null) setSubtitle(g.subtitle);
@@ -403,6 +463,51 @@ const ExperienceStudioTab: React.FC = () => {
                       : <button className="es-btn pri" disabled={busy === 'preview' || !sel.generation_prompt} onClick={runPreview}>{busy === 'preview' ? 'Running…' : preview ? '↻ Run the whole flow again' : '▶ Run the whole flow'}</button>}
                     {isSkillsJar ? <span className="es-muted">Paste the SkillsJar link and press ✦ — it fills the class name and everything.</span> : isVideo ? <span className="es-muted">Add a Title and press the ✦ next to it — or paste a Video URL and press the ✦ next to it.</span> : !sel.generation_prompt && <span className="es-muted">Write the Generation prompt in step 2 first.</span>}
                     {preview && !isVideo && !isSkillsJar && <span className="es-muted">{usd(preview.cost_usd)} · {preview.runtime_ms}ms</span>}
+                  </div>
+
+                  {/* Read-only "defaults" — the week's Blueprint auto-injected into every ✦
+                      generation. Pick the course + week here; the values below are shown
+                      but not editable (grayed, cursor:not-allowed). */}
+                  <div className="es-bp">
+                    <div className="es-bphead">
+                      <span className="es-bptag" title="These Blueprint values are auto-included in the system prompt for every ✦ generation below. Read-only — edit them in the Curriculum Composer.">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M9 5h9a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" strokeWidth="2" /></svg>
+                        Auto-included in every ✦ generation · read-only
+                      </span>
+                      <div className="es-bppick">
+                        <label>Design for</label>
+                        <select value={courseId} onChange={(e) => setCourseId(e.target.value)} title="Which course this content is for">
+                          {courses.length === 0 && <option value="">— course —</option>}
+                          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <select value={week ?? ''} onChange={(e) => setWeek(e.target.value === '' ? null : Number(e.target.value))} title="Which week's Blueprint to inject into generation">
+                          <option value="">— week —</option>
+                          {weeks.map((w) => <option key={w.week} value={w.week}>Week {w.week} · {w.title}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    {bpContext ? (
+                      <div className="es-bpvals">
+                        <div className="es-bptitle">Week {bpContext.week} · {bpContext.title}</div>
+                        {bpContext.purpose && <div className="es-bppurpose">{bpContext.purpose}</div>}
+                        <div className="es-bpgrid">
+                          {bpContext.competencies.length > 0 && (
+                            <div className="es-bpline"><span className="k">Topics</span><span className="es-bpchips">{bpContext.competencies.map((t) => <span key={t} className="es-bpchip">{t}</span>)}</span></div>
+                          )}
+                          {bpContext.learning_objectives.length > 0 && (
+                            <div className="es-bpline"><span className="k">Objectives</span>{bpContext.learning_objectives.join(' · ')}</div>
+                          )}
+                          {bpContext.architect_domains.length > 0 && (
+                            <div className="es-bpline"><span className="k">Domains</span>{bpContext.architect_domains.join(', ')}</div>
+                          )}
+                          {(bpContext.difficulty || bpContext.estimated_hours != null) && (
+                            <div className="es-bpline"><span className="k">Level</span>{bpContext.difficulty || '—'}{bpContext.estimated_hours != null ? ` · ~${bpContext.estimated_hours}h` : ''}</div>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="es-bpempty">{week == null ? 'Pick a week to auto-include its Blueprint (topics, objectives, level) in every generation below.' : 'No Blueprint for this week yet — add topics & objectives in the Curriculum Composer.'}</div>
+                    )}
                   </div>
 
                   {/* STEP 1 — inputs */}

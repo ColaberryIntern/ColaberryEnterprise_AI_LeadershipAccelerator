@@ -39,6 +39,25 @@ export interface Blueprint {
 // A "Course" is a ProgramBlueprint — the Composer + Timeline are scoped to one.
 export interface Course { id: string; name: string; is_active?: boolean }
 
+// The read-only week-Blueprint context auto-injected into every AI generation,
+// from GET /api/admin/orchestration/timeline/blueprint-context. Mirrors the
+// backend BlueprintContext (backend/src/services/timeline/blueprintContext.ts).
+// Shared by the Timeline editor and Experience Studio so the "defaults" block
+// never drifts between the two surfaces.
+export interface BlueprintContextDTO {
+  week: number;
+  title: string;
+  purpose: string | null;
+  difficulty: string | null;
+  estimated_hours: number | null;
+  competencies: string[];
+  learning_objectives: string[];
+  architect_domains: string[];
+  success_criteria: string[];
+  student_outcomes: string[];
+  prompt_text: string;
+}
+
 // ── API client ───────────────────────────────────────────────────────────────
 export const composerApi = {
   palette: () => api.get('/api/admin/composer/palette').then((r) => r.data.types as PaletteType[]),
