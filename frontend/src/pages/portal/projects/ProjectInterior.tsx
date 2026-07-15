@@ -5,6 +5,7 @@ import {
 } from './projectsStore';
 import NextSessionStrip from './NextSessionStrip';
 import ProjectWorkspaceDrawer from './ProjectWorkspaceDrawer';
+import { useIsExplorer } from '../useIsExplorer';
 import { buildProjectTaskPrompt } from './projectWorkspacePrompt';
 import { loadDeliveryMode } from '../../../services/deliveryModes';
 
@@ -61,6 +62,7 @@ const TaskActions: React.FC<{
   onOpen: (taskId: string) => void;
 }> = ({ project, task, onOpen }) => {
   const [copied, setCopied] = useState(false);
+  const demo = useIsExplorer();   // Explorer = demo mode: doing actions are locked
   const copyPrompt = useCallback(() => {
     // Reuse the SAME prompt builder + persisted delivery mode the drawer uses.
     const modeId = loadDeliveryMode();
@@ -70,19 +72,20 @@ const TaskActions: React.FC<{
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   }, [project, task]);
+  const lock = demo ? 'Demo — enroll to build for real' : undefined;
 
   return (
     <div className="pw-acts">
-      <button type="button" className={`pw-act copy${copied ? ' ok' : ''}`} onClick={copyPrompt}>
+      <button type="button" className={`pw-act copy${copied ? ' ok' : ''}`} onClick={copyPrompt} disabled={demo} title={lock}>
         {IC_COPY} {copied ? 'Copied' : 'Copy Prompt'}
       </button>
       <button type="button" className="pw-act open" onClick={() => onOpen(task.id)}>
         {IC_OPEN} Open Workspace
       </button>
-      <button type="button" className="pw-act done" onClick={() => markTaskDone(project.id, task.id)}>
+      <button type="button" className="pw-act done" onClick={() => markTaskDone(project.id, task.id)} disabled={demo} title={lock}>
         {IC_DONE} Mark Done
       </button>
-      <button type="button" className="pw-act skip" onClick={() => skipTask(project.id, task.id)}>
+      <button type="button" className="pw-act skip" onClick={() => skipTask(project.id, task.id)} disabled={demo} title={lock}>
         Skip
       </button>
     </div>
