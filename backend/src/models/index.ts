@@ -149,6 +149,7 @@ import Project from './Project';
 import ProjectArtifact from './ProjectArtifact';
 import ShowcaseArtifact from './ShowcaseArtifact';
 import Artifact from './Artifact';
+import BuildLogDraft from './BuildLogDraft';
 import ProposedAgentAction from './ProposedAgentAction';
 import AgentWriteAudit from './AgentWriteAudit';
 import StrategicInitiative from './StrategicInitiative';
@@ -751,6 +752,11 @@ ShowcaseArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' })
 Project.hasMany(Artifact, { foreignKey: 'project_id', as: 'artifacts', onDelete: 'CASCADE' });
 Artifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+Project.hasMany(BuildLogDraft, { foreignKey: 'project_id', as: 'buildLogDrafts', onDelete: 'CASCADE' });
+BuildLogDraft.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+Artifact.hasOne(BuildLogDraft, { foreignKey: 'source_artifact_id', as: 'buildLogDraft' });
+BuildLogDraft.belongsTo(Artifact, { foreignKey: 'source_artifact_id', as: 'sourceArtifact' });
+
 ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
 
@@ -1068,6 +1074,7 @@ export {
   ProjectArtifact,
   ShowcaseArtifact,
   Artifact,
+  BuildLogDraft,
   ProposedAgentAction,
   AgentWriteAudit,
   StrategicInitiative,
