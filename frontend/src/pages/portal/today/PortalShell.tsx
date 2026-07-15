@@ -185,7 +185,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
                   <span className="ic">{n.icon}</span>
                   <span className="lb">{n.label}</span>
                   {n.label === 'Today' && !!todayBadge && todayBadge > 0 && <span className="badge">{todayBadge}</span>}
-                  {n.label === 'Projects' && isExplorer && <span className="te-soon" style={{ background: '#FBF1E1', color: '#B5710A' }}>Demo</span>}
+                  {n.label === 'Projects' && isExplorer && <span className="te-soon" style={{ background: '#E8920C', color: '#fff', fontWeight: 700 }}>Demo</span>}
                   {n.soon && <span className="te-soon">Soon</span>}
                 </>
               );

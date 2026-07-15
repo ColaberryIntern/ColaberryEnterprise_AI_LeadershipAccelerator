@@ -101,6 +101,21 @@ const CurriculumComposerTab: React.FC = () => {
     } catch { setError('Save failed.'); } finally { setBusy(''); }
   };
 
+  const deleteBlueprint = async () => {
+    if (!sel) return;
+    const label = `${sel.title}${sel.week != null ? ` · Wk ${sel.week}` : ''}`;
+    if (!window.confirm(`Delete "${label}"? This removes the week from this course. It can't be undone.`)) return;
+    setBusy('delete'); setError(''); setNote('');
+    try {
+      await composerApi.remove(sel.id);
+      const bps = await composerApi.list(courseId);
+      setList(bps);
+      if (bps.length) { const bp = await composerApi.get(bps[0].id); setSel(bp); setPlan(bp.generated_plan || null); setAssess(bp.assessment || null); }
+      else { setSel(null); setPlan(null); setAssess(null); }
+      setNote('Week deleted.');
+    } catch { setError('Delete failed.'); } finally { setBusy(''); }
+  };
+
   const generate = async (extra?: string) => {
     if (!sel) return; setBusy('generate'); setError(''); setNote('');
     try {
@@ -174,6 +189,7 @@ const CurriculumComposerTab: React.FC = () => {
           <div className="cc-field"><label>Architect domains (comma)</label><input className="cc-in mono" value={csv(sel.architect_domains)} onChange={(e) => setField('architect_domains', parseCsv(e.target.value))} /></div>
           <div className="cc-field"><label>Learning objectives (one per line)</label><textarea className="cc-in" style={{ minHeight: 56 }} value={(sel.learning_objectives || []).join('\n')} onChange={(e) => setField('learning_objectives', e.target.value.split('\n').filter(Boolean))} /></div>
           <Btn tone="berry" style={{ width: '100%' }} disabled={busy === 'save'} onClick={saveBlueprint}>{busy === 'save' ? 'Saving…' : 'Save blueprint'}</Btn>
+          <button type="button" onClick={deleteBlueprint} disabled={busy === 'delete'} style={{ width: '100%', marginTop: 8, background: 'none', border: '1px solid #E4B4B4', color: '#C20E1E', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>{busy === 'delete' ? 'Deleting…' : 'Delete this week'}</button>
         </div>
 
         {/* CENTER — Canvas */}
