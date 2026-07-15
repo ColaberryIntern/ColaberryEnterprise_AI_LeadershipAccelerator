@@ -116,6 +116,11 @@ const SettingsPage: React.FC = () => {
     if (s.status === 'fulfilled') applySettings(s.value);
     // Prefill any still-empty fields from previously parsed resume/LinkedIn data.
     if (op.status === 'fulfilled') prefillEmpty(op.value.profile, op.value.personalization, op.value.linkedin_url);
+    // We REQUIRE industry — if we don't have it yet, open the extra-details
+    // section so the student is prompted to fill it in.
+    const industry = (s.status === 'fulfilled' && s.value.personalization?.industry)
+      || (op.status === 'fulfilled' && op.value.personalization?.industry) || '';
+    if (!industry) setShowMore(true);
   }, [applySettings, prefillEmpty]);
 
   useEffect(() => { load(); }, [load]);
@@ -125,7 +130,10 @@ const SettingsPage: React.FC = () => {
 
   const onSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Required checks: we always want the name, current/last title, and industry.
     if (!form.full_name.trim()) { flash('Name cannot be empty'); return; }
+    if (!form.title.trim()) { flash('Please add your current or last job title'); return; }
+    if (!personal.industry.trim()) { setShowMore(true); flash('Please add your industry — it helps us tailor your program'); return; }
     setSavingProfile(true);
     try {
       const updated = await updateProfile({ ...form, personalization: personal });
@@ -319,8 +327,8 @@ const SettingsPage: React.FC = () => {
                 <input id="s-name" className="set-input" value={form.full_name} onChange={(e) => setField('full_name', e.target.value)} placeholder="Your name" />
               </div>
               <div className="set-field">
-                <label className="set-label" htmlFor="s-title">Title / role</label>
-                <input id="s-title" className="set-input" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="e.g. Director of Operations" />
+                <label className="set-label" htmlFor="s-title">Title / role <span className="set-req">required</span></label>
+                <input id="s-title" className="set-input" value={form.title} onChange={(e) => setField('title', e.target.value)} placeholder="Your current or last job title" />
               </div>
               <div className="set-field">
                 <label className="set-label" htmlFor="s-company">Company</label>
@@ -349,8 +357,8 @@ const SettingsPage: React.FC = () => {
             {showMore && (
               <div className="set-grid" style={{ marginTop: 6 }}>
                 <div className="set-field">
-                  <label className="set-label">Industry</label>
-                  <input className="set-input" value={personal.industry} onChange={(e) => setPersonalField('industry', e.target.value)} placeholder="e.g. Healthcare" />
+                  <label className="set-label">Industry <span className="set-req">required</span></label>
+                  <input className="set-input" value={personal.industry} onChange={(e) => setPersonalField('industry', e.target.value)} placeholder="e.g. Healthcare, Financial Services" />
                 </div>
                 <div className="set-field">
                   <label className="set-label">Function / focus area</label>

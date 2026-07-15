@@ -41,8 +41,10 @@
 /* Lens grid */
 .points-root .pts-lenses {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 16px;
+  /* Smaller min so 2–3 lenses fit side-by-side even inside the narrower
+     Settings > Points tab (was minmax(280px) → collapsed to one column). */
+  grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+  gap: 14px;
   margin-bottom: 18px;
 }
 .points-root .pts-lens {

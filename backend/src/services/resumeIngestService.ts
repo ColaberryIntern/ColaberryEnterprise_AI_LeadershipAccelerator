@@ -61,12 +61,14 @@ export function buildResumeExtractionPrompt(sourceText: string): string {
   const text = (sourceText || '').slice(0, MAX_SOURCE_CHARS);
   return [
     'Extract a structured professional background from the resume / LinkedIn text below.',
-    'Return ONLY minified JSON (no prose, no code fences) with these optional keys:',
-    '{"full_name","title"(current job title),"company_name","company_size"(employees, e.g. "51-200"),',
+    'Return ONLY minified JSON (no prose, no code fences) with these keys:',
+    '{"full_name","title"(their most recent/current job title),"company_name","company_size"(employees, e.g. "51-200"),',
     '"phone","location","linkedin_url","industry","role","seniority","years_experience",',
     '"goals"(one short sentence on their career/learning goal),"target_user","business_problem",',
     '"industry_track","ai_maturity_level"(0-5 integer),"skills"(string array of the top 6)}.',
-    'Omit any key you cannot infer. Do not invent facts.',
+    'ALWAYS provide "title" (their last job title) and "industry" — if the industry is not stated,',
+    'infer it from the company and role (e.g. a lending company → "Financial Services", a hospital → "Healthcare").',
+    'Only omit a key when there is genuinely no basis to infer it. Do not invent specific facts (names, numbers).',
     '',
     '--- BACKGROUND TEXT ---',
     text,

@@ -247,3 +247,9 @@
   animation: set-spin .8s linear infinite;
 }
 @keyframes set-spin { to { transform: rotate(360deg); } }
+
+/* Required-field badge */
+.set-req {
+  font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--cherry, #FB2832); margin-left: 5px; vertical-align: middle;
+}
