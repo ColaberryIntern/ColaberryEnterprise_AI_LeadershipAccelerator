@@ -3,12 +3,12 @@ import { Link } from 'react-router-dom';
 import './TodayShell.css';
 import {
   fetchPoints, fetchSchedule, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
-  levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView,
+  fetchStreak, claimDailyStreak,
+  levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
 } from '../../../services/onboardingApi';
 import PortalShell from './PortalShell';
 import {
   readParticipant, countdown, firstClassTargetMs,
-  StreakState, loadStreak, saveStreak, todayKey, dowMonFirst,
   fmtCentralDateTime,
 } from './shellUtils';
 import portalApi from '../../../utils/portalApi';
@@ -26,7 +26,7 @@ const TodayShell: React.FC = () => {
   const [uploadName, setUploadName] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
-  const [streak, setStreak] = useState<StreakState>(() => loadStreak());
+  const [streak, setStreak] = useState<StreakView | null>(null);
   const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
   const [visibleCount, setVisibleCount] = useState(5);
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
@@ -35,13 +35,14 @@ const TodayShell: React.FC = () => {
   const me = useMemo(readParticipant, []);
 
   const loadAll = useCallback(async () => {
-    const [p, s, pr, cl] = await Promise.allSettled([
-      fetchPoints(), fetchSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'),
+    const [p, s, pr, cl, st] = await Promise.allSettled([
+      fetchPoints(), fetchSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'), fetchStreak(),
     ]);
     if (p.status === 'fulfilled') setPoints(p.value);
     if (s.status === 'fulfilled') setSchedule(s.value);
     if (pr.status === 'fulfilled') setProfile(pr.value);
     if (cl.status === 'fulfilled') setCurriculum(((cl.value.data?.cards as TimelineFeedCard[]) || []).sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || a.order - b.order));
+    if (st.status === 'fulfilled') setStreak(st.value);
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -101,13 +102,19 @@ const TodayShell: React.FC = () => {
     } catch { flash('Could not upload that right now'); } finally { setBusy(false); }
   };
 
-  const claimedToday = streak.lastClaim === todayKey();
-  const doClaimStreak = () => {
-    if (claimedToday) return;
-    const week = [...streak.week]; week[dowMonFirst()] = true;
-    const next: StreakState = { count: streak.count + 1, lastClaim: todayKey(), week };
-    setStreak(next); saveStreak(next);
-    flash(`Daily streak — ${next.count} day${next.count === 1 ? '' : 's'}`);
+  const claimedToday = !!streak?.claimed_today;
+  const doClaimStreak = async () => {
+    if (claimedToday || busy) return;
+    setBusy(true);
+    try {
+      const r = await claimDailyStreak();
+      setStreak(r.streak);
+      // Streak points fold into the score — refresh the points total too.
+      try { setPoints(await fetchPoints()); } catch { /* keep prior total */ }
+      flash(r.awarded
+        ? `Daily streak — ${r.streak.count} day${r.streak.count === 1 ? '' : 's'} · +${r.points} pts`
+        : 'Already claimed today');
+    } catch { flash('Could not claim your streak right now'); } finally { setBusy(false); }
   };
 
   const steps = [
@@ -119,7 +126,8 @@ const TodayShell: React.FC = () => {
   const setupRemaining = steps.filter((s) => !s.done).length;
   const setupDone = steps.filter((s) => s.done).length;
   const setupPct = Math.round((setupDone / steps.length) * 100);
-  const streakDow = dowMonFirst();
+  const streakCount = streak?.count ?? 0;
+  const streakWeek = streak?.week ?? [];
 
   // The Today timeline mirrors the Classroom curriculum — an endless FB-style
   // feed of the real cards (Week 0 for a free Explorer). Cycles as you scroll so
@@ -261,7 +269,8 @@ const TodayShell: React.FC = () => {
             <div className="te-stat"><span className="lab">Architect Readiness</span><span className="num">0/100</span></div>
             <div className="te-ribbon" style={{ marginBottom: 4 }}><i style={{ width: '2%', background: 'var(--cherry)' }} /></div>
             <div className="te-muted" style={{ fontSize: 12 }}>Grows as you build once the program starts.</div>
-            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/path">See your path</Link>
+            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/points">Break down my points</Link>
+            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} to="/portal/path">See your path</Link>
             <div className="te-chip guest" style={{ marginTop: 12 }}>Free preview account</div>
           </div>
 
@@ -270,17 +279,19 @@ const TodayShell: React.FC = () => {
             <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2c1 3-1 4.5-2.5 6.5C8 10.5 7 12 7 14a5 5 0 0 0 10 0c0-2-1-3.4-2-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Daily streak</h3>
             <div className="te-streak-top">
               <span className="fl"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2c1 3-1 4.5-2.5 6.5C8 10.5 7 12 7 14a5 5 0 0 0 10 0c0-2-1-3.4-2-5 .5 1 .5 2 .2 2.8C16.8 9.4 15 8 14.5 5.5 14 3.5 13 2.6 12 2z" fill="#E8920C" /><path d="M12 21a3 3 0 0 0 3-3c0-1.6-1.3-2.6-2-4-.7 1.4-2 2-2 4a1 1 0 0 0 1 3z" fill="#FB2832" /></svg></span>
-              <div className="ct"><b>{streak.count}</b><span>day{streak.count === 1 ? '' : 's'} streak</span></div>
+              <div className="ct"><b>{streakCount}</b><span>day{streakCount === 1 ? '' : 's'} streak</span></div>
             </div>
             <div className="te-streak-week">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
-                <div key={d} className={`sd${streak.week[i] ? ' hit' : ''}${i === streakDow ? ' today' : ''}`}>
+              {streakWeek.map((d) => (
+                <div key={d.date} className={`sd${d.hit ? ' hit' : ''}${d.is_today ? ' today' : ''}`}>
                   <span className="dot"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
-                  <span className="lbl">{d}</span>
+                  <span className="lbl">{d.label}</span>
                 </div>
               ))}
             </div>
-            <button className="te-btn leaf sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doClaimStreak} disabled={claimedToday}>{claimedToday ? 'Claimed today' : 'Claim today'}</button>
+            <button className="te-btn leaf sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doClaimStreak} disabled={claimedToday || busy}>
+              {claimedToday ? 'Claimed today' : streak ? `Claim today · +${streak.next_points} pts` : 'Claim today'}
+            </button>
           </div>
 
           {schedule?.first_class && (

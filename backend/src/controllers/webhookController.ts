@@ -3,6 +3,7 @@ import { verifyWebhookSignature } from '../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed, enrollInClassReadinessCampaign } from '../services/enrollmentService';
 import { Cohort, EnrollmentLead } from '../models';
 import { runEnrollmentAutomation } from '../services/automationService';
+import { activateByRef, isSubscriptionRef } from '../services/subscriptionService';
 
 export async function handlePaySimpleWebhook(req: Request, res: Response): Promise<void> {
   // PaySimple sends signature in 'paysimple-hmac-sha256' header
@@ -44,6 +45,16 @@ export async function handlePaySimpleWebhook(req: Request, res: Response): Promi
         console.error('[Webhook] No external ID in payment event:', JSON.stringify(event.data));
         // Still acknowledge receipt to avoid retries
         res.json({ received: true, warning: 'No external ID found' });
+        return;
+      }
+
+      // Student self-serve subscription payments (SUB-<enrollment>-<ts>) activate
+      // the subscription + convert the Explorer, separate from the enrollment flow.
+      if (isSubscriptionRef(externalId)) {
+        const sub = await activateByRef(externalId, { paymentId, amount });
+        if (sub) console.log(`[Webhook] Subscription ${sub.id} activated (${sub.plan}) for enrollment ${sub.enrollment_id}`);
+        else console.warn(`[Webhook] No subscription found for ref: ${externalId}`);
+        res.json({ received: true });
         return;
       }
 

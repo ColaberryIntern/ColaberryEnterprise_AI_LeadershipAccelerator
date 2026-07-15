@@ -84,3 +84,51 @@
 @media (max-width: 620px) {
   .set-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Subscription & billing ── */
+.set-plans {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 6px;
+}
+.set-plan {
+  position: relative;
+  border: 1px solid var(--color-border, #EDEDED);
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--color-surface, #fff);
+}
+.set-plan.featured { border-color: var(--cherry, #FB2832); box-shadow: 0 4px 18px rgba(251,40,50,.08); }
+.set-plan-badge {
+  position: absolute; top: -10px; left: 18px;
+  background: var(--cherry, #FB2832); color: #fff;
+  font-size: 10.5px; font-weight: 800; letter-spacing: .03em;
+  padding: 3px 9px; border-radius: 999px;
+}
+.set-plan-name { font-size: 13px; font-weight: 800; color: var(--color-text, #1A1A1A); text-transform: uppercase; letter-spacing: .03em; }
+.set-plan-price { font-size: 34px; font-weight: 800; color: var(--color-text, #1A1A1A); line-height: 1.1; font-family: 'Roboto Mono', monospace; }
+.set-plan-price span { font-size: 15px; font-weight: 700; color: var(--color-text-light, #6B6B6B); }
+.set-plan-terms { font-size: 12px; color: var(--color-text-light, #6B6B6B); }
+.set-plan-blurb { font-size: 12.5px; color: var(--color-text-light, #6B6B6B); margin: 6px 0 12px; line-height: 1.45; flex: 1; }
+
+.set-billrow {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--color-border, #EDEDED);
+}
+.set-billrow .lab { font-size: 14px; font-weight: 800; color: var(--color-text, #1A1A1A); text-transform: capitalize; }
+.set-billrow .desc { font-size: 12.5px; color: var(--color-text-light, #6B6B6B); margin-top: 3px; }
+.set-bill-amt { font-size: 22px; font-weight: 800; color: var(--color-text, #1A1A1A); font-family: 'Roboto Mono', monospace; white-space: nowrap; }
+
+.set-cancel { border: 1px solid var(--color-border, #EDEDED); border-radius: 12px; padding: 14px; margin-top: 4px; }
+.set-cancel .lab { font-size: 13.5px; font-weight: 700; color: var(--color-text, #1A1A1A); margin-bottom: 8px; }
+.set-reasons { display: flex; flex-wrap: wrap; gap: 8px; }
+.set-reason {
+  font-size: 12.5px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid var(--color-border, #DDD); background: transparent;
+  color: var(--color-text, #3A3A3A); cursor: pointer;
+}
+.set-reason.sel { border-color: var(--cherry, #FB2832); background: rgba(251,40,50,.08); color: var(--cherry, #C20E1E); font-weight: 700; }

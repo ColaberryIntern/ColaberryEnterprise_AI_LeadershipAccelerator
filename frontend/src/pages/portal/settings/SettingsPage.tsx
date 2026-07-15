@@ -10,6 +10,7 @@ import {
   fileToBase64, downscaleImageToSquare, formatBytes,
   SettingsView, ProfilePatch,
 } from '../../../services/portalSettingsApi';
+import SubscriptionSection from './SubscriptionSection';
 import './SettingsPage.css';
 
 const RESUME_EXT = ['.pdf', '.doc', '.docx', '.rtf', '.txt', '.md'];
@@ -174,6 +175,9 @@ const SettingsPage: React.FC = () => {
       </div>
 
       <div className="set-wrap">
+        {/* ── Subscription & billing (top: the conversion surface) ── */}
+        <SubscriptionSection onToast={flash} />
+
         {/* ── Photo ── */}
         <section className="te-card set-section">
           <h3>Profile photo</h3>

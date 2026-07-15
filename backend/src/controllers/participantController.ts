@@ -7,6 +7,10 @@ import {
 } from '../services/participantService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
+import { getStreak, claimStreak } from '../services/streakService';
+import { getPointsDrilldown } from '../services/pointsDrilldownService';
+import { getSubscription, startCheckout, cancelSubscription } from '../services/subscriptionService';
+import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
 import Enrollment from '../models/Enrollment';
 import { getUpcomingPublicEvents } from '../services/publicEventsService';
@@ -35,6 +39,59 @@ export async function handleGetPoints(req: Request, res: Response, next: NextFun
   try {
     const summary = await getPointsSummary(req.participant!.sub);
     res.json(summary);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetPointsDrilldown(req: Request, res: Response, next: NextFunction) {
+  try {
+    const drilldown = await getPointsDrilldown(req.participant!.sub);
+    res.json(drilldown);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetSubscription(req: Request, res: Response, next: NextFunction) {
+  try {
+    const view = await getSubscription(req.participant!.sub);
+    res.json(view);
+  } catch (err) { next(err); }
+}
+
+export async function handleStartSubscriptionCheckout(req: Request, res: Response, next: NextFunction) {
+  try {
+    const plan = String(req.body?.plan || '') as SubscriptionPlan;
+    if (plan !== 'annual' && plan !== 'monthly') {
+      return res.status(400).json({ error: 'plan must be "annual" or "monthly"' });
+    }
+    const result = await startCheckout(req.participant!.sub, plan);
+    if (result.ok) return res.json({ payment_link: result.payment_link, plan: result.plan, amount: result.amount });
+    const status = result.reason === 'billing_unconfigured' ? 503
+      : result.reason === 'enrollment_not_found' ? 404
+      : result.reason === 'unknown_plan' ? 400 : 502;
+    return res.status(status).json({ error: result.reason, message: result.message });
+  } catch (err) { next(err); }
+}
+
+export async function handleCancelSubscription(req: Request, res: Response, next: NextFunction) {
+  try {
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason) return res.status(400).json({ error: 'A cancellation reason is required' });
+    const result = await cancelSubscription(req.participant!.sub, reason);
+    if (!result.ok) return res.status(409).json({ error: result.reason });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetStreak(req: Request, res: Response, next: NextFunction) {
+  try {
+    const streak = await getStreak(req.participant!.sub);
+    res.json(streak);
+  } catch (err) { next(err); }
+}
+
+export async function handleClaimStreak(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await claimStreak(req.participant!.sub);
+    res.json(result);
   } catch (err) { next(err); }
 }
 

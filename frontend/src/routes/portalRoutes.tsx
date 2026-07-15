@@ -33,6 +33,7 @@ import TodayShell from '../pages/portal/today/TodayShell';
 import SettingsPage from '../pages/portal/settings/SettingsPage';
 import PathPage from '../pages/portal/path/PathPage';
 import SchedulePage from '../pages/portal/schedule/SchedulePage';
+import PointsPage from '../pages/portal/points/PointsPage';
 import ProjectsPage from '../pages/portal/projects/ProjectsPage';
 import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
 import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
@@ -53,6 +54,7 @@ const portalRoutes = (
       {/* Path + Schedule share the Design E shell (PortalShell), like Today. */}
       <Route path="/portal/path" element={<PathPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />
+      <Route path="/portal/points" element={<PointsPage />} />
       {/* Projects tab: portal-native builds (lists + tasks, FB vibe), opens on
           the new-build wizard. Renders its own PortalShell chrome like Today. */}
       <Route path="/portal/projects" element={<ProjectsPage />} />

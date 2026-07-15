@@ -497,6 +497,40 @@ async function ensurePointsSchema() {
   }
 }
 
+async function ensureSubscriptionSchema() {
+  // Student self-serve subscriptions. Explicit idempotent create (sequelize.sync
+  // is disabled on this graph). One row per checkout; payment_ref is the
+  // PaySimple external_id used to activate on the payment webhook.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS subscriptions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       plan VARCHAR(20) NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       amount_cents INTEGER NOT NULL DEFAULT 0,
+       payment_ref VARCHAR(120) NOT NULL,
+       paysimple_customer_id VARCHAR(120),
+       paysimple_payment_id VARCHAR(120),
+       started_at TIMESTAMPTZ,
+       current_period_end TIMESTAMPTZ,
+       canceled_at TIMESTAMPTZ,
+       cancel_reason TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_payment_ref_unique ON subscriptions (payment_ref)`,
+    `CREATE INDEX IF NOT EXISTS idx_subscriptions_enrollment ON subscriptions (enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] subscription schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureFreeTierSchema() {
   // Free/guest tier support: a `tier` column on enrollments, and a nullable
   // cohort_id so self-serve free (non-member) accounts can exist without a
@@ -1290,6 +1324,8 @@ async function start(): Promise<void> {
   await ensureEnrollmentColumns();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
+  // Student self-serve subscriptions (idempotent).
+  await ensureSubscriptionSchema();
   // Open house events (idempotent).
   await ensureOpenHouseSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).
@@ -1319,11 +1355,13 @@ async function start(): Promise<void> {
       const TimelineCard = (await import('./models/TimelineCard')).default;
       const TimelineCardProgress = (await import('./models/TimelineCardProgress')).default;
       const CurriculumTypeDefinition = (await import('./models/CurriculumTypeDefinition')).default;
+      const Subscription = (await import('./models/Subscription')).default;
       const r = await reconcileMissingColumns([
         Enrollment,
         TimelineCard,
         TimelineCardProgress,
         CurriculumTypeDefinition,
+        Subscription,
       ]);
       if (r.added.length) {
         console.log(

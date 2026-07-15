@@ -7,7 +7,8 @@ import { strategyPrepUpload, certificateUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
-  handleFreeSignup, handleGetPoints,
+  handleFreeSignup, handleGetPoints, handleGetPointsDrilldown, handleGetStreak, handleClaimStreak,
+  handleGetSubscription, handleStartSubscriptionCheckout, handleCancelSubscription,
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
@@ -79,6 +80,12 @@ router.post('/api/portal/submissions', requireParticipant, handleCreateSubmissio
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
 router.get('/api/portal/progress', requireParticipant, handleGetProgress);
 router.get('/api/portal/points', requireParticipant, handleGetPoints);
+router.get('/api/portal/points/drilldown', requireParticipant, handleGetPointsDrilldown);
+router.get('/api/portal/streak', requireParticipant, handleGetStreak);
+router.post('/api/portal/streak/claim', requireParticipant, handleClaimStreak);
+router.get('/api/portal/subscription', requireParticipant, handleGetSubscription);
+router.post('/api/portal/subscription/checkout', requireParticipant, handleStartSubscriptionCheckout);
+router.post('/api/portal/subscription/cancel', requireParticipant, handleCancelSubscription);
 router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
 router.get('/api/portal/events', requireParticipant, handleGetPublicEvents); // public events (CCPP) for the calendar
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);

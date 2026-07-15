@@ -61,6 +61,47 @@ export async function fetchPoints(): Promise<PointsSummary> {
   return data;
 }
 
+// ── Daily streak (server-authoritative, escalating) ──────────────────────────
+export interface StreakDay { date: string; label: string; hit: boolean; is_today: boolean; }
+export interface StreakView {
+  count: number;
+  claimed_today: boolean;
+  week: StreakDay[];            // last 7 Central days, oldest → today
+  total_streak_points: number;
+  next_points: number;         // what a claim right now would award (0 if claimed)
+}
+export async function fetchStreak(): Promise<StreakView> {
+  const { data } = await portalApi.get<StreakView>('/api/portal/streak');
+  return data;
+}
+
+// ── Points drill-down: three lenses (engagement / skill XP / readiness) ───────
+export interface DrilldownView {
+  engagement: {
+    total: number;
+    streak_days: number;
+    streak_points: number;
+    recent: Array<{ event_type: string; points: number; created_at: string }>;
+  };
+  skill_xp: { learning: number; builder: number; community: number; total: number } | null;
+  readiness: {
+    pct: number;
+    level: string;
+    rank: number;
+    next_level: string | null;
+    at_max: boolean;
+    gaps: string[];
+  } | null;
+}
+export async function fetchPointsDrilldown(): Promise<DrilldownView> {
+  const { data } = await portalApi.get<DrilldownView>('/api/portal/points/drilldown');
+  return data;
+}
+export async function claimDailyStreak(): Promise<{ awarded: boolean; points: number; streak: StreakView }> {
+  const { data } = await portalApi.post('/api/portal/streak/claim');
+  return data;
+}
+
 export async function fetchSchedule(): Promise<OnboardingSchedule> {
   const { data } = await portalApi.get<OnboardingSchedule>('/api/portal/onboarding/schedule');
   return data;
