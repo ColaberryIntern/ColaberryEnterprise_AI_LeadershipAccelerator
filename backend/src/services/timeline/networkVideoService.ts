@@ -84,14 +84,22 @@ function weightedPick(items: Array<{ v: NetworkVideoRow; s: number }>): NetworkV
   return items[0].v;
 }
 
+export interface PickedTestimonial {
+  video: FeedVideo;
+  title: string | null;
+  description: string | null;
+}
+
 /**
  * Pick (or reuse) the testimonial video this student should see for this card.
- * Returns a FeedVideo, or null if nothing is available / on any error.
+ * Returns the FeedVideo PLUS the picked video's own title + description (so the
+ * card can present the actual testimonial, not the authored placeholder), or
+ * null if nothing is available / on any error.
  */
 export async function selectTestimonialForEnrollment(
   enrollmentId: string,
   card: TimelineCard,
-): Promise<FeedVideo | null> {
+): Promise<PickedTestimonial | null> {
   try {
     const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
     const category = String(meta.testimonial_category || 'testimonial').toLowerCase();
@@ -104,7 +112,7 @@ export async function selectTestimonialForEnrollment(
         LIMIT 1`,
       { replacements: { eid: enrollmentId, cid: card.id }, type: QueryTypes.SELECT },
     );
-    if (assigned.length) return toFeedVideo(assigned[0]);
+    if (assigned.length) return { video: toFeedVideo(assigned[0]), title: assigned[0].title, description: assigned[0].description };
 
     // 2. Candidate pool: unseen by this student, in category, playable.
     let pool = await sequelize.query<NetworkVideoRow>(
@@ -150,7 +158,7 @@ export async function selectTestimonialForEnrollment(
       },
     );
 
-    return toFeedVideo(pick);
+    return { video: toFeedVideo(pick), title: pick.title, description: pick.description };
   } catch (err: any) {
     console.warn('[networkVideoService] select failed:', err?.message?.split('\n')[0]);
     return null;

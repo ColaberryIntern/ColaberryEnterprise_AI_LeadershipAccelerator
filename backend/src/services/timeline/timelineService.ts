@@ -212,7 +212,15 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     const card = cards[i];
     const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
     if (fc.type === 'testimonial' && meta.mode === 'random' && !fc.video) {
-      fc.video = await selectTestimonialForEnrollment(enrollmentId, card);
+      const picked = await selectTestimonialForEnrollment(enrollmentId, card);
+      if (picked) {
+        // The picked testimonial IS the card now — its title + description take
+        // over the authored placeholder, and no stale AI lesson notes are shown.
+        fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
     }
   }
 
