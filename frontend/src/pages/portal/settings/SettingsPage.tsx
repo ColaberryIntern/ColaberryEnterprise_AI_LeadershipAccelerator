@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
 import portalApi from '../../../utils/portalApi';
@@ -25,6 +25,15 @@ const EVENT_LABELS: Record<string, string> = {
   first_task_complete: 'Completed your first task',
 };
 const humanize = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+type SetTab = 'subscription' | 'profile' | 'points' | 'preferences' | 'account';
+const SET_TABS: { id: SetTab; label: string }[] = [
+  { id: 'subscription', label: 'Subscription' },
+  { id: 'profile', label: 'Profile' },
+  { id: 'points', label: 'Points' },
+  { id: 'preferences', label: 'Preferences' },
+  { id: 'account', label: 'Account' },
+];
 const initialsOf = (name: string, email: string) => {
   const src = (name || email || 'You').trim();
   const parts = src.split(/[\s@.]+/).filter(Boolean);
@@ -47,6 +56,7 @@ const SettingsPage: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try { return (localStorage.getItem('te-theme') as 'light' | 'dark') || 'light'; } catch { return 'light'; }
   });
+  const [tab, setTab] = useState<SetTab>('subscription');
   const avatarRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLInputElement>(null);
 
@@ -171,13 +181,29 @@ const SettingsPage: React.FC = () => {
       <div className="te-page-h">
         <div className="crumb">Settings</div>
         <h1>Your account</h1>
-        <div className="sub">Update your photo, background, and preferences. Changes save to your Colaberry profile.</div>
+        <div className="sub">Manage your subscription, profile, points, and preferences — each in its own place.</div>
       </div>
 
-      <div className="set-wrap">
-        {/* ── Subscription & billing (top: the conversion surface) ── */}
-        <SubscriptionSection onToast={flash} />
+      <div className="set-shell">
+        <div className="set-tabs" role="tablist" aria-label="Settings sections">
+          {SET_TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`set-tab${tab === t.id ? ' active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
+        <div className="set-panel">
+        {tab === 'subscription' && <SubscriptionSection onToast={flash} />}
+
+        {tab === 'profile' && (<>
         {/* ── Photo ── */}
         <section className="te-card set-section">
           <h3>Profile photo</h3>
@@ -272,14 +298,16 @@ const SettingsPage: React.FC = () => {
             <span className="set-sub" style={{ margin: '2px 0 0' }}>Saved with “Save changes” above.</span>
           </div>
         </section>
+        </>)}
 
-        {/* ── Points & level ── */}
+        {tab === 'points' && (
         <section className="te-card set-section">
           <h3>Points &amp; level</h3>
           <p className="set-sub">You earn points as you set up, show up, and build.</p>
           <div className="te-stat"><span className="lab">{lvl.name}</span><span className="num">{total.toLocaleString()} pts</span></div>
           <div className="te-ribbon"><i style={{ width: `${lvl.pct}%`, background: 'var(--leaf)' }} /></div>
-          <div className="set-sub" style={{ margin: '-2px 0 0' }}>{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Top level reached'}</div>
+          <div className="set-sub" style={{ margin: '-2px 0 12px' }}>{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Top level reached'}</div>
+          <Link className="te-btn ghost sm" to="/portal/points">See the full breakdown</Link>
           {points && points.events.length > 0 && (
             <div className="set-events">
               {points.events.slice(0, 8).map((ev, i) => (
@@ -293,8 +321,9 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
         </section>
+        )}
 
-        {/* ── Preferences ── */}
+        {tab === 'preferences' && (
         <section className="te-card set-section">
           <h3>Preferences</h3>
           <div className="set-row">
@@ -305,8 +334,9 @@ const SettingsPage: React.FC = () => {
             <button className="te-btn ghost sm" onClick={toggleTheme}>{theme === 'dark' ? 'Switch to light' : 'Switch to dark'}</button>
           </div>
         </section>
+        )}
 
-        {/* ── Security (passwordless) ── */}
+        {tab === 'account' && (
         <section className="te-card set-section">
           <h3>Sign-in &amp; security</h3>
           <div className="set-row">
@@ -336,6 +366,8 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
         </section>
+        )}
+        </div>
       </div>
     </PortalShell>
   );
