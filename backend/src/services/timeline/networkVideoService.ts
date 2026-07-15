@@ -29,6 +29,7 @@ interface NetworkVideoRow {
   title: string | null;
   description: string | null;
   host: string | null;
+  provider_video_id: string | null;
   embed_url: string | null;
   watch_url: string | null;
   thumbnail_url: string | null;
@@ -59,7 +60,13 @@ function toFeedVideo(v: NetworkVideoRow): FeedVideo {
   // Pass the canonical watch URL; the frontend `parseVideoUrl` turns it into the
   // durable in-app embed. Title = this specific video's title (poster overlay).
   const url = (v.watch_url || v.embed_url || '').trim();
-  return { url, presenter: null, poster: v.thumbnail_url || null, title: v.title || null };
+  // Poster: prefer the stored thumbnail; fall back to the derivable YouTube poster
+  // so a random pick never renders a blank card.
+  let poster = v.thumbnail_url || null;
+  if (!poster && v.host === 'youtube' && v.provider_video_id) {
+    poster = `https://img.youtube.com/vi/${v.provider_video_id}/hqdefault.jpg`;
+  }
+  return { url, presenter: null, poster, title: v.title || null };
 }
 
 function score(v: NetworkVideoRow, userTags: Set<string>): number {

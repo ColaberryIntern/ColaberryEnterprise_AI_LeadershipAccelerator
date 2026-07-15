@@ -94,6 +94,15 @@ function deriveTags(category, title, desc) {
   return Array.from(tags);
 }
 
+// Derive a durable thumbnail from the provider id when the source has none, so
+// every row has a poster we can "just grab" (YouTube has no thumbnail in CCPP).
+function deriveThumb(host, id) {
+  if (!id) return null;
+  if (host === 'youtube') return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+  if (host === 'cameratag') return `https://www.cameratag.com/assets/${id}/qvga_thumb.jpg`;
+  return null;
+}
+
 const DDL = `
 CREATE TABLE IF NOT EXISTS network_videos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -148,7 +157,8 @@ CREATE INDEX IF NOT EXISTS idx_nvv_enrollment_card ON network_video_views(enroll
       external_source_id: r.ID, category: String(r.ContentType).toLowerCase(),
       title: r.ContentName, description: r.ContentDesc,
       host: n.host, provider_video_id: n.providerId, embed_url: n.embedUrl, watch_url: n.watchUrl,
-      original_url: r.Url, thumbnail_url: r.ContentThumbnail,
+      original_url: r.Url,
+      thumbnail_url: (r.ContentThumbnail && String(r.ContentThumbnail).trim()) ? r.ContentThumbnail : deriveThumb(n.host, n.providerId),
       tags: deriveTags(r.ContentType, r.ContentName, r.ContentDesc),
       playable: n.playable, needs_attention: needs, is_active: r.IsActive === 1 || r.IsActive === true,
     };
