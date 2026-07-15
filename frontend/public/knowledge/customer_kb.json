@@ -3,7 +3,7 @@
   "version": "1.0",
   "generated_at": "2026-07-14T00:00:00Z",
   "source": "colaberry-customer-kb curated 2026-07-14 (publish candidate; final claims sign-off pending)",
-  "count": 37,
+  "count": 38,
   "categories": [
     {
       "key": "program-format",
@@ -142,9 +142,10 @@
       "slug": "how-much-does-it-cost",
       "category": "admissions-cost",
       "question": "How much does it cost?",
-      "answer": "The Open House is free to attend. Membership is $149 per person per month, and you can cancel anytime. Teams and employers can also license annual seats that transfer between employees, so a seat stays with the company as people change roles. Every path begins inside the free Open House, so there is no payment required to explore what is included.",
+      "answer": "The Open House is free to attend, with no payment required to explore what is included. Membership is one price that covers everything, and you choose how you pay: $199 a month month-to-month with cancel anytime, or $149 a month billed annually ($1,788 a year), which is our best value. It is the same full membership either way, the only difference is how you pay.",
+      "detail": "Beyond the membership you cover two small third-party costs on your own accounts, which Colaberry does not bill: a Claude Code subscription from Anthropic (about $20 a month) and any AI usage on your own API key, where most projects stay under $10 a month. Teams and employers can license transferable annual seats, see the team and employer plans question.",
       "tags": ["pricing", "membership", "cost"],
-      "related": ["admissions-cost-03", "admissions-cost-06"],
+      "related": ["admissions-cost-10", "admissions-cost-06", "admissions-cost-03"],
       "featured": true,
       "order": 2
     },
@@ -231,7 +232,7 @@
       "slug": "do-you-offer-team-or-employer-plans",
       "category": "admissions-cost",
       "question": "Do you offer team or employer plans?",
-      "answer": "Yes. Alongside the $149 per person per month membership, teams and employers can license annual seats. A seat is transferable, so it stays with the company and can move between employees as roles change. Contact us for team and corporate pricing.",
+      "answer": "Yes. Alongside the individual membership, teams and employers can license annual seats at $149 a month per seat ($1,788 per seat per year). A seat is transferable, so it stays with the company and can move between employees as roles change. Contact us for team and corporate pricing.",
       "detail": "Annual seats suit employers who want to upskill their workforce and keep the seat with the company rather than the individual. Reach out and we will scope the right number of seats and pricing for your team.",
       "tags": ["teams", "employer", "corporate", "annual-seats"],
       "reference": {
@@ -241,6 +242,17 @@
       "related": ["admissions-cost-02"],
       "featured": false,
       "order": 9
+    },
+    {
+      "id": "admissions-cost-10",
+      "slug": "difference-between-the-149-and-199-plans",
+      "category": "admissions-cost",
+      "question": "What is the difference between the $149 and $199 plans?",
+      "answer": "It is the same full membership, the only difference is how you pay. $199 a month is billed monthly, so you can cancel anytime. $149 a month is billed annually ($1,788 a year) and is the best value. Both plans include everything: the full build path, Anthropic certification prep, the internship experience, and the guided GitHub portfolio projects.",
+      "tags": ["pricing", "plans", "annual", "monthly"],
+      "related": ["admissions-cost-02", "admissions-cost-05"],
+      "featured": true,
+      "order": 10
     },
     {
       "id": "learning-curriculum-01",
@@ -383,7 +395,7 @@
       "slug": "can-i-keep-building-after-the-12-weeks",
       "category": "careers-outcomes",
       "question": "Can I keep building my portfolio and stay connected after the 12 weeks?",
-      "answer": "Yes. This is a membership, not a one-time course, so your access continues month to month at $149 per person and you keep learning and building for as long as you are a member.",
+      "answer": "Yes. This is a membership, not a one-time course, so you keep learning and building for as long as you are a member, on whichever plan you choose: $199 a month monthly, or $149 a month billed annually.",
       "tags": ["membership", "ongoing-access"],
       "related": ["program-format-05", "policies-trust-01"],
       "featured": false,
@@ -406,7 +418,7 @@
       "slug": "can-i-cancel-anytime",
       "category": "policies-trust",
       "question": "Can I cancel anytime?",
-      "answer": "Yes. Membership is $149 per person per month, billed month to month, and you can cancel anytime. Teams and employers can also license annual seats that transfer between employees.",
+      "answer": "Yes, on the monthly plan. At $199 a month, billed monthly, you can cancel anytime and keep access through the month you have paid for. The $149 a month annual plan ($1,788 a year) is the better value if you are committed to the full program. Teams and employers can also license transferable annual seats.",
       "tags": ["cancellation", "membership", "billing"],
       "related": ["admissions-cost-02"],
       "featured": true,
@@ -427,7 +439,7 @@
       "slug": "what-is-your-refund-policy",
       "category": "policies-trust",
       "question": "What is your refund or cancellation policy if it isn't a fit?",
-      "answer": "Membership is $149 per person per month, billed month to month, so you can cancel anytime and keep access through the period you have paid for. Refund terms are being finalized, so please confirm the current details with our admissions team before enrolling.",
+      "answer": "It depends on your plan. On the monthly plan ($199 a month) you can cancel anytime and keep access through the month you have paid for. The annual plan ($149 a month) is a yearly commitment and the better value. Exact refund terms are being finalized, so please confirm the current details with our admissions team before enrolling.",
       "detail": "If you have a specific situation, the free Open House and our admissions team are the best place to get the current, exact terms in writing.",
       "tags": ["refund", "cancellation", "policy"],
       "reference": {
