@@ -46,11 +46,10 @@ function makePlan(id: SubscriptionPlan, label: string, per_month: number, cadenc
   return { id, label, per_month, cadence, period_days, blurb, price, amount_cents: Math.round(price * 100) };
 }
 
-// NOTE: per_month values are TEST amounts (annual $0.15/mo → $1.80/yr, monthly
-// $0.19/mo). To go live, change ONLY the per_month numbers to 149 and 199.
+// Real prices: annual $149/mo → $1,788/yr (per_month × 12), monthly $199/mo.
 export const PLANS: Record<SubscriptionPlan, PlanConfig> = {
-  annual: makePlan('annual', 'Annual', 0.15, 'year', 365, 'Best value — pay once a year for full access to the program.'),
-  monthly: makePlan('monthly', 'Monthly', 0.19, 'month', 30, 'Month-to-month. Cancel anytime.'),
+  annual: makePlan('annual', 'Annual', 149, 'year', 365, 'Best value — pay once a year for full access to the program.'),
+  monthly: makePlan('monthly', 'Monthly', 199, 'month', 30, 'Month-to-month. Cancel anytime.'),
 };
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -169,8 +168,10 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
     const link = await createPaymentLink({
       externalId,
       cohortName: `${cfg.label} plan`,
-      amount: planChargeAmount(cfg),  // charge the plan's amount (test or real), not the $0.01 override
-      exactAmount: true,
+      // Real plan amount on prod (live mode). On dev (PAYMENT_MODE=test) the
+      // service reduces this to $0.01 so checkout can be tested without a real
+      // $1,788/$199 charge.
+      amount: planChargeAmount(cfg),
       customerFirstName: firstName,
       customerLastName: lastName,
       customerEmail: enrollment.email,

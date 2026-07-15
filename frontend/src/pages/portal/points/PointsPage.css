@@ -41,12 +41,21 @@
 /* Lens grid */
 .points-root .pts-lenses {
   display: grid;
-  /* Smaller min so 2–3 lenses fit side-by-side even inside the narrower
-     Settings > Points tab (was minmax(280px) → collapsed to one column). */
-  grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
-  gap: 14px;
+  /* Always 3 lenses across (minmax(0,1fr) lets them shrink to fit any width,
+     e.g. the narrower Settings > Points tab). Collapses to 1 column on phones. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
   margin-bottom: 18px;
 }
+@media (max-width: 680px) {
+  .points-root .pts-lenses { grid-template-columns: 1fr; }
+}
+/* Tighter internals so the 3 lenses stay clean at narrow column widths. */
+.points-root .pts-lens { padding: 15px 15px; }
+.points-root .pts-big { font-size: 32px; }
+.points-root .pts-ring { width: 74px; height: 74px; }
+.points-root .pts-readi { gap: 12px; }
+.points-root .pts-lens-h h3 { font-size: 15px; }
 .points-root .pts-lens {
   background: var(--pr-card);
   border: 1px solid var(--pr-line);

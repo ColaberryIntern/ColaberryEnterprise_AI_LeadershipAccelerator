@@ -31,9 +31,10 @@ describe('subscriptionService', () => {
       expect(planChargeAmount({ per_month: 0.19, cadence: 'month' })).toBe(0.19);
       expect(planChargeAmount({ per_month: 149, cadence: 'year' })).toBe(1788);
       expect(planChargeAmount({ per_month: 199, cadence: 'month' })).toBe(199);
-      expect(PLANS.annual.price).toBe(1.8);
-      expect(PLANS.annual.amount_cents).toBe(180);
-      expect(PLANS.monthly.price).toBe(0.19);
+      expect(PLANS.annual.price).toBe(1788);
+      expect(PLANS.annual.amount_cents).toBe(178800);
+      expect(PLANS.annual.per_month).toBe(149);
+      expect(PLANS.monthly.price).toBe(199);
     });
     it('recognizes a subscription external_id', () => {
       expect(isSubscriptionRef('SUB-abc-123')).toBe(true);
@@ -105,13 +106,13 @@ describe('subscriptionService', () => {
       (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
       (Subscription.create as jest.Mock).mockResolvedValue({});
       const r = await startCheckout('e1', 'annual', NOW);
-      expect(r).toEqual({ ok: true, payment_link: 'https://pay.example/abc', plan: 'annual', amount: 1.8 });
+      expect(r).toEqual({ ok: true, payment_link: 'https://pay.example/abc', plan: 'annual', amount: 1788 });
       const created = (Subscription.create as jest.Mock).mock.calls[0][0];
       expect(created.status).toBe('pending');
       expect(created.payment_ref).toMatch(/^SUB-e1-/);
-      expect(created.amount_cents).toBe(180);
-      // Subscriptions charge the exact plan amount, bypassing the $0.01 test override.
-      expect((createPaymentLink as jest.Mock).mock.calls[0][0]).toMatchObject({ amount: 1.8, exactAmount: true });
+      expect(created.amount_cents).toBe(178800);
+      // Checkout requests the real plan amount (test mode reduces it to $0.01 on dev).
+      expect((createPaymentLink as jest.Mock).mock.calls[0][0]).toMatchObject({ amount: 1788 });
     });
   });
 
