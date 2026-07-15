@@ -163,6 +163,7 @@ const ActivityCard: React.FC<{ a: ProjectActivity }> = ({ a }) => (
 );
 
 const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }> = ({ project, onBack }) => {
+  const demo = useIsExplorer();   // Explorer = demo mode
   const [sel, setSel] = useState<string>('all'); // 'all' or a list id (drives the outline filter)
   const [wsTaskId, setWsTaskId] = useState<string | null>(null); // task open in the workspace drawer
   const prog = projectProgress(project);
@@ -201,6 +202,12 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
   return (
     <>
       <button className="pj-back" onClick={onBack}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> All builds</button>
+      {demo && (
+        <div style={{ border: '1px solid #F0D9AE', background: '#FBF1E1', color: '#7A5310', borderRadius: 10, padding: '11px 15px', margin: '0 0 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style={{ flex: 'none', color: '#C97C0A' }}><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" /></svg>
+          <span style={{ fontSize: 13.5 }}><b>Demo build.</b> Look around freely — running prompts, marking tasks done, and skipping are locked until you enroll.</span>
+        </div>
+      )}
 
       {/* full-width build header */}
       <div className="card pj-head">
