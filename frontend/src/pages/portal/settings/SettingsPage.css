@@ -236,3 +236,14 @@
 .set-sub-facts .fact:last-child { border-bottom: none; }
 .set-sub-facts .fact .k { color: var(--color-text-light, #6B6B6B); }
 .set-sub-facts .fact .v { font-weight: 700; color: var(--color-text, #1A1A1A); }
+
+/* Waiting-for-payment panel (new-tab checkout) */
+.set-sub-waiting { text-align: center; padding: 26px 16px; }
+.set-sub-waiting .lab { font-size: 15px; font-weight: 800; color: var(--color-text, #1A1A1A); margin: 14px 0 4px; }
+.set-sub-waiting .desc { font-size: 13px; color: var(--color-text-light, #6B6B6B); max-width: 430px; margin: 0 auto; line-height: 1.5; }
+.set-sub-wait-spinner {
+  width: 34px; height: 34px; border-radius: 50%; margin: 0 auto;
+  border: 3px solid var(--color-border, #E7E6E3); border-top-color: var(--cherry, #FB2832);
+  animation: set-spin .8s linear infinite;
+}
+@keyframes set-spin { to { transform: rotate(360deg); } }

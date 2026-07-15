@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
-  fetchSubscription, startSubscriptionCheckout, cancelSubscription,
+  fetchSubscription, startSubscriptionCheckout, cancelSubscription, confirmSubscriptionCheckout,
   SubscriptionView, PlanId,
 } from '../../../services/subscriptionApi';
 
@@ -22,6 +22,7 @@ const CANCEL_REASONS = ['Too expensive', 'Not enough time', 'Not what I expected
 const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onToast }) => {
   const [view, setView] = useState<SubscriptionView | null>(null);
   const [busy, setBusy] = useState(false);
+  const [waiting, setWaiting] = useState(false);
   const [showCancel, setShowCancel] = useState(false);
   const [reason, setReason] = useState('');
   const [showPlans, setShowPlans] = useState(false);
@@ -35,19 +36,45 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
   }, []);
 
   const onChoose = async (plan: PlanId) => {
-    if (busy) return;
+    if (busy || waiting) return;
     setBusy(true);
     try {
       const { payment_link } = await startSubscriptionCheckout(plan);
-      window.location.href = payment_link; // hand off to PaySimple hosted checkout
+      window.open(payment_link, '_blank', 'noopener'); // pay in a NEW tab; this tab waits
+      setWaiting(true);
     } catch (err: any) {
       const code = err?.response?.data?.error;
       flash(code === 'billing_unconfigured'
         ? 'Payments aren’t enabled in this environment yet.'
         : 'Could not start checkout right now. Please try again.');
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   };
+
+  // While waiting on a payment, poll for activation (and re-check whenever this
+  // tab regains focus, e.g. after the user finishes in the payment tab).
+  const checkPayment = useCallback(async (): Promise<boolean> => {
+    try {
+      const r = await confirmSubscriptionCheckout();
+      if (r.view.subscription?.status === 'active') {
+        setView(r.view); setWaiting(false); setShowPlans(false);
+        flash('You’re all set — welcome to the program!');
+        return true;
+      }
+    } catch { /* keep polling */ }
+    return false;
+  }, [onToast]);
+
+  useEffect(() => {
+    if (!waiting) return;
+    let tries = 0;
+    let stop = false;
+    const tick = async () => { if (stop) return; tries += 1; const done = await checkPayment(); if (done || tries >= 45) stop = true; };
+    const id = window.setInterval(tick, 4000);
+    const onFocus = () => { tick(); };
+    window.addEventListener('focus', onFocus);
+    tick(); // immediate first check
+    return () => { stop = true; window.clearInterval(id); window.removeEventListener('focus', onFocus); };
+  }, [waiting, checkPayment]);
 
   const onConfirmCancel = async () => {
     if (busy || !reason.trim()) { flash('Please tell us why you’re canceling'); return; }
@@ -118,8 +145,21 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
     <section className="te-card set-section">
       <h3>Subscription &amp; billing</h3>
 
+      {/* ── WAITING: payment opened in a new tab; poll until it activates ── */}
+      {waiting && (
+        <div className="set-sub-waiting">
+          <div className="set-sub-wait-spinner" />
+          <div className="lab">Complete your payment in the new tab</div>
+          <div className="desc">This page updates automatically once your payment clears — it’s safe to close the payment tab when you’re done.</div>
+          <div className="set-actions" style={{ gap: 8, justifyContent: 'center', marginTop: 4 }}>
+            <button className="te-btn berry sm" onClick={() => checkPayment()}>I’ve paid — check now</button>
+            <button className="te-btn ghost sm" onClick={() => setWaiting(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
       {/* ── FREE: no subscription yet → Free (current) + the two paid plans ── */}
-      {!sub && (
+      {!sub && !waiting && (
         <>
           <p className="set-sub">You’re on the free plan. Upgrade to unlock the full program.</p>
           {renderPlans(true)}
@@ -127,7 +167,7 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       )}
 
       {/* ── ACTIVE: the manage-your-subscription screen ── */}
-      {sub && sub.status === 'active' && (
+      {sub && sub.status === 'active' && !waiting && (
         <div className="set-sub-manage">
           <div className="set-sub-head">
             <div>
@@ -154,7 +194,7 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       )}
 
       {/* ── CANCELED: access-until + resubscribe ── */}
-      {sub && sub.status === 'canceled' && (
+      {sub && sub.status === 'canceled' && !waiting && (
         <div className="set-sub-manage">
           <div className="set-sub-head">
             <div>

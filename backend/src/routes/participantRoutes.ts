@@ -9,7 +9,7 @@ import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
   handleFreeSignup, handleGetPoints, handleGetPointsDrilldown, handleGetStreak, handleClaimStreak,
-  handleGetSubscription, handleStartSubscriptionCheckout, handleCancelSubscription,
+  handleGetSubscription, handleStartSubscriptionCheckout, handleCancelSubscription, handleConfirmCheckout,
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
@@ -86,6 +86,7 @@ router.get('/api/portal/streak', requireParticipant, handleGetStreak);
 router.post('/api/portal/streak/claim', requireParticipant, handleClaimStreak);
 router.get('/api/portal/subscription', requireParticipant, handleGetSubscription);
 router.post('/api/portal/subscription/checkout', requireParticipant, handleStartSubscriptionCheckout);
+router.post('/api/portal/subscription/confirm', requireParticipant, handleConfirmCheckout);
 router.post('/api/portal/subscription/cancel', requireParticipant, handleCancelSubscription);
 router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
 router.get('/api/portal/events', requireParticipant, handleGetPublicEvents); // public events (CCPP) for the calendar

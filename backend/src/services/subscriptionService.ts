@@ -262,3 +262,33 @@ export async function cancelSubscription(enrollmentId: string, reason: string, n
   });
   return { ok: true, access_until: sub.current_period_end ? new Date(sub.current_period_end).toISOString() : null };
 }
+
+const RETURN_ACTIVATE_WINDOW_MS = 30 * 60 * 1000; // only a checkout started in the last 30 min
+
+/**
+ * Called when the student returns from the PaySimple checkout (the app polls
+ * this). On PROD, activation is driven by the signed webhook — this just reports
+ * the current status so the UI updates once that lands. On DEV (env flag
+ * `SUBSCRIPTION_ALLOW_RETURN_ACTIVATE=true`), where the webhook can't reach the
+ * instance, it activates the most-recent pending subscription so the flow can be
+ * tested end-to-end. The flag is OFF in production, so no unpaid activation.
+ */
+export async function confirmCheckout(enrollmentId: string, nowMs: number = Date.now()): Promise<{ activated: boolean; view: SubscriptionView }> {
+  const current = await currentSubscription(enrollmentId);
+  if (current && current.status === 'active') {
+    return { activated: false, view: await getSubscription(enrollmentId, nowMs) };
+  }
+
+  if (process.env.SUBSCRIPTION_ALLOW_RETURN_ACTIVATE === 'true') {
+    const pending = await Subscription.findOne({
+      where: { enrollment_id: enrollmentId, status: 'pending' },
+      order: [['created_at', 'DESC']],
+    });
+    if (pending && (nowMs - new Date(pending.created_at).getTime()) < RETURN_ACTIVATE_WINDOW_MS) {
+      await activateByRef(pending.payment_ref, {}, nowMs);
+      return { activated: true, view: await getSubscription(enrollmentId, nowMs) };
+    }
+  }
+
+  return { activated: false, view: await getSubscription(enrollmentId, nowMs) };
+}
