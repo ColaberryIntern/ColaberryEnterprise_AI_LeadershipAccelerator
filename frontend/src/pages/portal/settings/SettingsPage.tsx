@@ -3,7 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
 import portalApi from '../../../utils/portalApi';
-import { fetchPoints, levelFor, ingestBackground, PointsSummary } from '../../../services/onboardingApi';
+import { fetchPoints, levelFor, ingestBackground, fetchOnboardingProfile, PointsSummary } from '../../../services/onboardingApi';
 import {
   fetchSettings, updateProfile, uploadAvatar, removeAvatar,
   uploadResume, removeResume, downloadResume,
@@ -74,11 +74,29 @@ const SettingsPage: React.FC = () => {
     });
   }, []);
 
+  // Fill ONLY empty profile fields from parsed resume/LinkedIn data — never
+  // overwrite what the student already typed or saved. Powers "fill the profile
+  // from your resume, fewer steps".
+  const prefillEmpty = useCallback((prefill: Record<string, any> | undefined, linkedin?: string | null) => {
+    const p = prefill || {};
+    setForm((f) => ({
+      ...f,
+      full_name: f.full_name || p.name || '',
+      title: f.title || p.title || '',
+      company: f.company || p.company || '',
+      company_size: f.company_size || p.company_size || '',
+      phone: f.phone || p.phone || '',
+      linkedin_url: f.linkedin_url || linkedin || p.linkedin_url || '',
+    }));
+  }, []);
+
   const load = useCallback(async () => {
-    const [s, p] = await Promise.allSettled([fetchSettings(), fetchPoints()]);
+    const [s, p, op] = await Promise.allSettled([fetchSettings(), fetchPoints(), fetchOnboardingProfile()]);
     if (s.status === 'fulfilled') applySettings(s.value);
     if (p.status === 'fulfilled') setPoints(p.value);
-  }, [applySettings]);
+    // Prefill any still-empty fields from previously parsed resume/LinkedIn data.
+    if (op.status === 'fulfilled') prefillEmpty(op.value.prefill, op.value.linkedin_url);
+  }, [applySettings, prefillEmpty]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -130,12 +148,17 @@ const SettingsPage: React.FC = () => {
       const mime = file.type || (ext === '.pdf' ? 'application/pdf' : 'text/plain');
       const updated = await uploadResume({ file_name: file.name, mime, data_base64 });
       applySettings(updated);
-      // Text resumes also feed the background personalization (parity with the
-      // Today onboarding step); non-fatal if the extractor is unavailable.
+      // Text resumes are parsed now → prefill the empty profile fields. Binary
+      // (PDF/DOCX) are parsed server-side; those fields fill in on the next load.
       if (ext === '.txt' || ext === '.md') {
-        try { await ingestBackground({ resume_text: await file.text() }); } catch { /* best effort */ }
+        try {
+          const r = await ingestBackground({ resume_text: await file.text() });
+          if (r.parsed) prefillEmpty(r.prefill, r.linkedin_url);
+          flash(r.parsed ? 'Resume uploaded — we filled in your profile below' : 'Resume uploaded');
+        } catch { flash('Resume uploaded'); }
+      } else {
+        flash('Resume uploaded — we’ll fill in your profile shortly');
       }
-      flash('Resume uploaded');
     } catch (err: any) {
       flash(err?.response?.data?.error || 'Could not upload that file');
     } finally { setResumeBusy(false); if (resumeRef.current) resumeRef.current.value = ''; }
@@ -204,6 +227,38 @@ const SettingsPage: React.FC = () => {
         {tab === 'subscription' && <SubscriptionSection onToast={flash} />}
 
         {tab === 'profile' && (<>
+        {/* ── Uploads first: resume/LinkedIn (prefills the form) + photo ── */}
+        <section className="te-card set-section">
+          <h3>Start here — resume &amp; LinkedIn</h3>
+          <p className="set-sub">Upload your resume, or export your LinkedIn profile to PDF (profile → More → Save to PDF) and upload that. We read it and fill in your profile below for you — fewer steps.</p>
+          <input ref={resumeRef} type="file" accept=".pdf,.doc,.docx,.rtf,.txt,.md" style={{ display: 'none' }}
+            onChange={(e) => onPickResume(e.target.files?.[0] || null)} />
+          {resume ? (
+            <div className="set-file">
+              <span className="fic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M14 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg></span>
+              <div className="meta">
+                <div className="nm">{resume.file_name}</div>
+                <div className="sb">{formatBytes(resume.size_bytes)}{resume.uploaded_at ? ` · uploaded ${new Date(resume.uploaded_at).toLocaleDateString()}` : ''}</div>
+              </div>
+              <div className="acts">
+                <button className="te-btn ghost sm" disabled={resumeBusy} onClick={() => downloadResume(resume.file_name)}>Download</button>
+                <button className="te-btn berry sm" disabled={resumeBusy} onClick={() => resumeRef.current?.click()}>Replace</button>
+                <button className="te-btn danger sm" disabled={resumeBusy} onClick={onRemoveResume}>Remove</button>
+              </div>
+            </div>
+          ) : (
+            <div className="set-empty">
+              <div style={{ marginBottom: 12 }}>No resume on file yet.</div>
+              <button className="te-btn cherry sm" disabled={resumeBusy} onClick={() => resumeRef.current?.click()}>{resumeBusy ? 'Uploading…' : 'Upload resume / LinkedIn PDF'}</button>
+            </div>
+          )}
+          <div className="set-field full" style={{ marginTop: 16 }}>
+            <label className="set-label" htmlFor="s-linkedin">LinkedIn URL</label>
+            <input id="s-linkedin" className="set-input" value={form.linkedin_url} onChange={(e) => setField('linkedin_url', e.target.value)} placeholder="https://www.linkedin.com/in/you" />
+            <span className="set-sub" style={{ margin: '2px 0 0' }}>Saved with “Save changes” below.</span>
+          </div>
+        </section>
+
         {/* ── Photo ── */}
         <section className="te-card set-section">
           <h3>Profile photo</h3>
@@ -230,10 +285,10 @@ const SettingsPage: React.FC = () => {
           </div>
         </section>
 
-        {/* ── Profile ── */}
+        {/* ── Profile (prefilled from the resume where we can) ── */}
         <section className="te-card set-section">
-          <h3>Profile</h3>
-          <p className="set-sub">This personalizes your program and how mentors see you.</p>
+          <h3>Your details</h3>
+          <p className="set-sub">We fill in what we can from your resume — just review and tweak. This personalizes your program and how mentors see you.</p>
           <form onSubmit={onSaveProfile}>
             <div className="set-grid">
               <div className="set-field">
@@ -265,38 +320,6 @@ const SettingsPage: React.FC = () => {
               <button className="te-btn cherry" type="submit" disabled={savingProfile}>{savingProfile ? 'Saving…' : 'Save changes'}</button>
             </div>
           </form>
-        </section>
-
-        {/* ── Background: resume + LinkedIn ── */}
-        <section className="te-card set-section">
-          <h3>Resume &amp; LinkedIn</h3>
-          <p className="set-sub">Upload your resume, or export your LinkedIn profile to PDF (profile → More → Save to PDF) and upload that. We tailor your experience from it in the background.</p>
-          <input ref={resumeRef} type="file" accept=".pdf,.doc,.docx,.rtf,.txt,.md" style={{ display: 'none' }}
-            onChange={(e) => onPickResume(e.target.files?.[0] || null)} />
-          {resume ? (
-            <div className="set-file">
-              <span className="fic"><svg viewBox="0 0 24 24" width="20" height="20" fill="none"><path d="M14 3v5h5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg></span>
-              <div className="meta">
-                <div className="nm">{resume.file_name}</div>
-                <div className="sb">{formatBytes(resume.size_bytes)}{resume.uploaded_at ? ` · uploaded ${new Date(resume.uploaded_at).toLocaleDateString()}` : ''}</div>
-              </div>
-              <div className="acts">
-                <button className="te-btn ghost sm" disabled={resumeBusy} onClick={() => downloadResume(resume.file_name)}>Download</button>
-                <button className="te-btn berry sm" disabled={resumeBusy} onClick={() => resumeRef.current?.click()}>Replace</button>
-                <button className="te-btn danger sm" disabled={resumeBusy} onClick={onRemoveResume}>Remove</button>
-              </div>
-            </div>
-          ) : (
-            <div className="set-empty">
-              <div style={{ marginBottom: 12 }}>No resume on file yet.</div>
-              <button className="te-btn cherry sm" disabled={resumeBusy} onClick={() => resumeRef.current?.click()}>{resumeBusy ? 'Uploading…' : 'Upload resume / LinkedIn PDF'}</button>
-            </div>
-          )}
-          <div className="set-field full" style={{ marginTop: 16 }}>
-            <label className="set-label" htmlFor="s-linkedin">LinkedIn URL</label>
-            <input id="s-linkedin" className="set-input" value={form.linkedin_url} onChange={(e) => setField('linkedin_url', e.target.value)} placeholder="https://www.linkedin.com/in/you" />
-            <span className="set-sub" style={{ margin: '2px 0 0' }}>Saved with “Save changes” above.</span>
-          </div>
         </section>
         </>)}
 

@@ -165,8 +165,15 @@
 .set-tab:focus-visible { outline: 2px solid var(--cherry, #FB2832); outline-offset: 2px; border-radius: 6px; }
 
 .set-panel { display: flex; flex-direction: column; }
-.set-panel .set-section { margin-bottom: 20px; }
+/* Generous internal padding so content isn't crammed against the card edges. */
+.set-panel .set-section { margin-bottom: 20px; padding: 28px 32px; border-radius: 14px; }
 .set-panel .set-section:last-child { margin-bottom: 0; }
+/* The subscription plan cards get a little more inner room too. */
+.set-panel .set-plan { padding: 22px 24px; }
+
+@media (max-width: 620px) {
+  .set-panel .set-section { padding: 20px 18px; }
+}
 
 @media (max-width: 620px) {
   .set-tabs { gap: 0; }
