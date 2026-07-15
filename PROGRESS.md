@@ -8467,5 +8467,5 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Date: 2026-07-15
   - Session: CC-20260715-b7q4
   - What changed: The locked block rendered at the very top of the Edit Card drawer, above the large "Finished product" preview — so once the author scrolled down to the controls (Week/Difficulty/XP) it was scrolled out of view ("I don't see it"). Moved `<BlueprintDefaults locked>` to sit directly ABOVE the Week/Bucket row in the Controls section — where the author works and where it's most meaningful (it's locked to that week). Single-file change to TimelineEditorTab.tsx.
-  - Verification: <PENDING dev --no-cache rebuild>
+  - Verification: Dev nginx `--no-cache` rebuild exit 0, CRA "Compiled successfully"; nginx :9999 → 200; new served bundle `main.75c03117.js`. Source confirmed on the deployed worktree: `<BlueprintDefaults>` now renders immediately above the Week/Bucket row (line 317, Week label at 319).
   - Notes: Placement-only; the shared component + lock behavior are unchanged.
