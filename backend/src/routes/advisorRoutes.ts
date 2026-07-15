@@ -47,7 +47,7 @@ router.post('/api/portal/advisor/questions', requireParticipant, async (req: Req
   const result = await generateClarifyingQuestions(parsed.data.idea, enrollmentId);
 
   if (result.error) {
-    const status = result.error.includes('AuthError') || result.error.includes('ANTHROPIC_API_KEY') ? 503 : 502;
+    const status = result.error.includes('AuthError') || result.error.includes('API_KEY') ? 503 : 502;
     return res.status(status).json(result);
   }
 
@@ -76,7 +76,7 @@ router.post('/api/portal/advisor/requirements', requireParticipant, async (req: 
   );
 
   if (result.error) {
-    const status = result.error.includes('AuthError') || result.error.includes('ANTHROPIC_API_KEY') ? 503 : 502;
+    const status = result.error.includes('AuthError') || result.error.includes('API_KEY') ? 503 : 502;
     return res.status(status).json(result);
   }
 
