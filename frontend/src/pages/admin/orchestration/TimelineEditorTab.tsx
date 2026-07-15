@@ -214,10 +214,6 @@ const EditDrawer: React.FC<{
         </div>
 
         <div className="te-dbody">
-          {/* Auto-included Blueprint context — LOCKED to this card's week (no picker,
-              no drill-down). Always shown so every curriculum type carries the section.
-              Shared with the Experience Studio via <BlueprintDefaults>. */}
-          <BlueprintDefaults ctx={bpContext} week={draft.week ?? null} locked />
           {isNew && (
             <label style={lbl}>Type
               <select style={inp} value={draft.type || ''} onChange={(e) => onChange({ type: e.target.value })}>
@@ -315,6 +311,10 @@ const EditDrawer: React.FC<{
             </div>
           )}
 
+          {/* Auto-included Blueprint context — LOCKED to this card's week (no picker,
+              no drill-down). Sits right above the Week field it follows; always shown so
+              every curriculum type carries the section. Shared with the Studio via <BlueprintDefaults>. */}
+          <BlueprintDefaults ctx={bpContext} week={draft.week ?? null} locked />
           <div style={{ display: 'flex', gap: 10 }}>
             <label style={{ ...lbl, flex: 1 }}>Week
               <input type="number" style={inp} value={draft.week ?? ''} onChange={(e) => onChange({ week: e.target.value === '' ? null : Number(e.target.value) })} />
