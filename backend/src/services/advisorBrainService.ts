@@ -1,4 +1,5 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type OpenAI from 'openai';
+import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { env } from '../config/env';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -29,16 +30,17 @@ export interface RequirementsDocResult {
 }
 
 // ─── Client ───────────────────────────────────────────────────────────────────
+// Uses the shared instrumented OpenAI client (PII redaction + ai_events cost
+// tracking). All AI in this project runs on the single OPENAI_API_KEY.
 
-let _client: Anthropic | null = null;
+let _client: OpenAI | null = null;
 
-function buildClient(): Anthropic {
+function buildClient(): OpenAI {
   if (!_client) {
-    _client = new Anthropic({
-      apiKey: env.anthropicApiKey,
-      timeout: 90000,
-      maxRetries: 1,
-    });
+    _client = getInstrumentedOpenAI(
+      { workflow_id: 'advisor_brain' },
+      { timeout: 90000, maxRetries: 1 },
+    );
   }
   return _client;
 }
@@ -75,7 +77,7 @@ function classifyError(err: unknown): string {
   if (status === 429) return 'RateLimitError';
   if (status && status >= 500) return 'UpstreamUnavailable';
   if (/timeout|timed out/i.test(msg)) return 'TimeoutError';
-  return 'ClaudeApiError';
+  return 'OpenAiApiError';
 }
 
 // ─── Prompts ──────────────────────────────────────────────────────────────────
@@ -133,7 +135,7 @@ Rules:
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function parseJsonFromResponse(raw: string): unknown {
-  // Strip markdown code fences if Claude wraps in ```json
+  // Strip markdown code fences if the model wraps in ```json
   const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/, '').trim();
   return JSON.parse(cleaned);
 }
@@ -147,15 +149,15 @@ function safeStringArray(val: unknown): string[] {
 
 /**
  * Generates ~10 clarifying questions from a raw project idea.
- * One Claude call. Idempotent — same idea produces same question structure.
- * Returns AuthError result (never throws) when ANTHROPIC_API_KEY is absent.
+ * One OpenAI call. Idempotent — same idea produces same question structure.
+ * Returns AuthError result (never throws) when OPENAI_API_KEY is absent.
  */
 export async function generateClarifyingQuestions(
   idea: string,
   enrollmentId: string,
 ): Promise<ClarifyingQuestionsResult> {
-  if (!env.anthropicApiKey) {
-    const error = 'ANTHROPIC_API_KEY not set — add it to the backend .env file';
+  if (!env.openaiApiKey) {
+    const error = 'OPENAI_API_KEY not set — add it to the backend .env file';
     log('warn', 'advisor_questions_skipped', { outcome: 'failure', error_class: 'AuthError', enrollmentId });
     return { enrollmentId, questions: [], error };
   }
@@ -169,19 +171,22 @@ export async function generateClarifyingQuestions(
   const start = Date.now();
 
   try {
-    const message = await client.messages.create({
-      model: env.advisorClaudeModel,
+    const completion = await client.chat.completions.create({
+      model: env.aiModel,
       max_tokens: 1024,
-      system: QUESTIONS_SYSTEM,
-      messages: [{ role: 'user', content: `Project idea: "${trimmedIdea}"` }],
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: QUESTIONS_SYSTEM },
+        { role: 'user', content: `Project idea: "${trimmedIdea}"` },
+      ],
     });
 
-    const raw = (message.content[0] as Anthropic.TextBlock).text;
+    const raw = completion.choices[0]?.message?.content || '';
     const parsed = parseJsonFromResponse(raw) as { questions?: unknown };
     const questions = safeStringArray(parsed?.questions);
 
     if (questions.length === 0) {
-      throw new Error('Claude returned an empty questions array');
+      throw new Error('OpenAI returned an empty questions array');
     }
 
     log('info', 'advisor_questions_generated', {
@@ -207,7 +212,7 @@ export async function generateClarifyingQuestions(
 
 /**
  * Generates a structured requirements document from an idea + Q&A answers.
- * One Claude call. Returns AuthError result (never throws) when key is absent.
+ * One OpenAI call. Returns AuthError result (never throws) when key is absent.
  */
 export async function generateRequirementsDoc(
   idea: string,
@@ -227,8 +232,8 @@ export async function generateRequirementsDoc(
     raw_markdown: '',
   };
 
-  if (!env.anthropicApiKey) {
-    const error = 'ANTHROPIC_API_KEY not set — add it to the backend .env file';
+  if (!env.openaiApiKey) {
+    const error = 'OPENAI_API_KEY not set — add it to the backend .env file';
     log('warn', 'advisor_requirements_skipped', { outcome: 'failure', error_class: 'AuthError', enrollmentId });
     return { ...empty, error };
   }
@@ -249,14 +254,17 @@ export async function generateRequirementsDoc(
   const start = Date.now();
 
   try {
-    const message = await client.messages.create({
-      model: env.advisorClaudeModel,
+    const completion = await client.chat.completions.create({
+      model: env.aiModel,
       max_tokens: 4096,
-      system: REQUIREMENTS_SYSTEM,
-      messages: [{ role: 'user', content: userContent }],
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: REQUIREMENTS_SYSTEM },
+        { role: 'user', content: userContent },
+      ],
     });
 
-    const raw = (message.content[0] as Anthropic.TextBlock).text;
+    const raw = completion.choices[0]?.message?.content || '';
     const parsed = parseJsonFromResponse(raw) as Record<string, unknown>;
 
     const result: RequirementsDocResult = {
