@@ -4,6 +4,7 @@ import {
   Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, Row, studioCss,
 } from './studio/studioKit';
 import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
+import BlueprintDefaults from './BlueprintDefaults';
 import StudentPreview from './studio/StudentPreview';
 import RendererEngine from './studio/RendererEngine';
 import LifecycleStepper from './studio/LifecycleStepper';
@@ -466,49 +467,21 @@ const ExperienceStudioTab: React.FC = () => {
                   </div>
 
                   {/* Read-only "defaults" — the week's Blueprint auto-injected into every ✦
-                      generation. Pick the course + week here; the values below are shown
-                      but not editable (grayed, cursor:not-allowed). */}
-                  <div className="es-bp">
-                    <div className="es-bphead">
-                      <span className="es-bptag" title="These Blueprint values are auto-included in the system prompt for every ✦ generation below. Read-only — edit them in the Curriculum Composer.">
-                        <svg viewBox="0 0 24 24" fill="none"><path d="M9 5h9a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><rect x="9" y="3" width="6" height="4" rx="1" stroke="currentColor" strokeWidth="2" /></svg>
-                        Auto-included in every ✦ generation · read-only
-                      </span>
-                      <div className="es-bppick">
-                        <label>Design for</label>
-                        <select value={courseId} onChange={(e) => setCourseId(e.target.value)} title="Which course this content is for">
-                          {courses.length === 0 && <option value="">— course —</option>}
-                          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
-                        <select value={week ?? ''} onChange={(e) => setWeek(e.target.value === '' ? null : Number(e.target.value))} title="Which week's Blueprint to inject into generation">
-                          <option value="">— week —</option>
-                          {weeks.map((w) => <option key={w.week} value={w.week}>Week {w.week} · {w.title}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    {bpContext ? (
-                      <div className="es-bpvals">
-                        <div className="es-bptitle">Week {bpContext.week} · {bpContext.title}</div>
-                        {bpContext.purpose && <div className="es-bppurpose">{bpContext.purpose}</div>}
-                        <div className="es-bpgrid">
-                          {bpContext.competencies.length > 0 && (
-                            <div className="es-bpline"><span className="k">Topics</span><span className="es-bpchips">{bpContext.competencies.map((t) => <span key={t} className="es-bpchip">{t}</span>)}</span></div>
-                          )}
-                          {bpContext.learning_objectives.length > 0 && (
-                            <div className="es-bpline"><span className="k">Objectives</span>{bpContext.learning_objectives.join(' · ')}</div>
-                          )}
-                          {bpContext.architect_domains.length > 0 && (
-                            <div className="es-bpline"><span className="k">Domains</span>{bpContext.architect_domains.join(', ')}</div>
-                          )}
-                          {(bpContext.difficulty || bpContext.estimated_hours != null) && (
-                            <div className="es-bpline"><span className="k">Level</span>{bpContext.difficulty || '—'}{bpContext.estimated_hours != null ? ` · ~${bpContext.estimated_hours}h` : ''}</div>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="es-bpempty">{week == null ? 'Pick a week to auto-include its Blueprint (topics, objectives, level) in every generation below.' : 'No Blueprint for this week yet — add topics & objectives in the Curriculum Composer.'}</div>
-                    )}
-                  </div>
+                      generation. In the Studio the author picks the course + week; the
+                      values are shown but not editable. Shared with the Timeline editor. */}
+                  <BlueprintDefaults ctx={bpContext} week={week} picker={
+                    <>
+                      <label>Design for</label>
+                      <select value={courseId} onChange={(e) => setCourseId(e.target.value)} title="Which course this content is for">
+                        {courses.length === 0 && <option value="">— course —</option>}
+                        {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                      <select value={week ?? ''} onChange={(e) => setWeek(e.target.value === '' ? null : Number(e.target.value))} title="Which week's Blueprint to inject into generation">
+                        <option value="">— week —</option>
+                        {weeks.map((w) => <option key={w.week} value={w.week}>Week {w.week} · {w.title}</option>)}
+                      </select>
+                    </>
+                  } />
 
                   {/* STEP 1 — inputs */}
                   <div className="es-flowstepbox">

@@ -250,22 +250,4 @@ export const studioCss = `
   .sp-opt{font-size:12.5px;color:#6B6B6B;padding:3px 0}
   .sp-foot{display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:12px;border-top:1px solid #F2F2F2;flex-wrap:wrap}
   .sp-cta{display:inline-block;font-size:12.5px;font-weight:600;color:#fff;background:#FB2832;border-radius:8px;padding:7px 14px}
-  /* Blueprint "defaults" — the week's Blueprint auto-injected into every ✦ generation.
-     The picker is interactive (choose course + week); the values are read-only. */
-  .es-bp{border:1px solid #DDE3E6;background:#F4F6F7;border-radius:11px;padding:11px 13px;margin:0 0 14px}
-  .es-bphead{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .es-bptag{display:inline-flex;align-items:center;gap:6px;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#5E7A88}
-  .es-bptag svg{width:12px;height:12px;flex:none}
-  .es-bppick{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-  .es-bppick label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#8A979D}
-  .es-bppick select{font-size:12px;font-weight:600;border:1px solid #CBD5DA;border-radius:7px;padding:3px 6px;background:#fff;color:#37474F;max-width:230px}
-  .es-bpvals{margin-top:9px;cursor:not-allowed;user-select:none}
-  .es-bptitle{font-size:13px;font-weight:700;color:#37474F}
-  .es-bppurpose{font-size:12px;margin-top:2px;line-height:1.45;color:#5B6B72}
-  .es-bpgrid{display:flex;flex-direction:column;gap:5px;margin-top:8px}
-  .es-bpline{font-size:11.5px;color:#5B6B72;line-height:1.45}
-  .es-bpline .k{font-weight:800;text-transform:uppercase;letter-spacing:.03em;font-size:9.5px;color:#8A979D;margin-right:6px}
-  .es-bpchips{display:inline-flex;gap:4px;flex-wrap:wrap;vertical-align:middle}
-  .es-bpchip{font-size:10px;font-weight:600;padding:1px 7px;border-radius:999px;background:#E4EAED;color:#4A5C64}
-  .es-bpempty{font-size:12px;color:#8A979D;margin-top:8px;cursor:not-allowed;user-select:none}
 `;
