@@ -7,6 +7,13 @@
   var DATA = window.KB_DATA || { categories: [], qa: [] };
   var CORY_LIVE_ENDPOINT = '/api/sales-hub/cory'; // RAG endpoint; falls back to local retrieval if unreachable (e.g. offline file://)
 
+  // Phase 2 KB Ops (BC #10036783688): try the DB-backed live endpoint first, but
+  // DATA above already holds the bundled kb-data.js as a ready fallback. Flip
+  // USE_LIVE_KB to false (and redeploy) to bypass the live attempt entirely.
+  var USE_LIVE_KB = true;
+  var LIVE_KB_ENDPOINT = '/api/v1/knowledge/sales';
+  var LIVE_KB_TIMEOUT_MS = 4000;
+
   var DOCS = {
     onepager:   { label: 'Founding Cohort one-pager', href: 'downloads/01-founding-cohort-one-pager.pdf' },
     objections: { label: 'Objection-handling sheet',  href: 'downloads/02-objection-handling-sheet.pdf' },
@@ -250,8 +257,34 @@
   }
 
   /* ---------- boot ---------- */
-  document.addEventListener('DOMContentLoaded',function(){
+  function boot(){
     renderQA(); renderDownloads(); renderTraining(); renderDiagrams(); initCory();
     var q=document.getElementById('q'); q.addEventListener('input',filter); filter();
+  }
+
+  document.addEventListener('DOMContentLoaded',function(){
+    if (!USE_LIVE_KB || typeof fetch !== 'function') { boot(); return; }
+
+    var settled = false;
+    var timer = setTimeout(function(){
+      if (settled) return;
+      settled = true; boot(); // static DATA (window.KB_DATA, set above) renders unchanged
+    }, LIVE_KB_TIMEOUT_MS);
+
+    fetch(LIVE_KB_ENDPOINT)
+      .then(function(res){ if(!res.ok) throw new Error('bad status'); return res.json(); })
+      .then(function(json){
+        if (settled) return; // the timeout already fired and booted with static data
+        settled = true; clearTimeout(timer);
+        if (json && Array.isArray(json.categories) && Array.isArray(json.qa) && json.qa.length > 0) {
+          DATA = json; // swap to the live, DB-backed KB
+        }
+        boot();
+      })
+      .catch(function(){
+        if (settled) return;
+        settled = true; clearTimeout(timer);
+        boot(); // any network/parse failure falls straight through to static DATA
+      });
   });
 })();

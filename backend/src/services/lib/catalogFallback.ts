@@ -71,6 +71,28 @@ export const KNOWN_CATALOG: readonly KnownCourse[] = [
       'MCP security and best practices',
     ].join('\n'),
   },
+  {
+    title: 'Model Context Protocol: Advanced Topics',
+    url: 'https://anthropic.skilljar.com/model-context-protocol-advanced-topics',
+    outline: [
+      'Advanced MCP server patterns',
+      'MCP resource management',
+      'Multi-server orchestration',
+      'MCP in production environments',
+      'Debugging and observability for MCP',
+    ].join('\n'),
+  },
+  {
+    title: 'Introduction to Subagents',
+    url: 'https://anthropic.skilljar.com/introduction-to-subagents',
+    outline: [
+      'What are subagents?',
+      'Designing multi-agent architectures',
+      'Delegation and coordination patterns',
+      'State management across subagents',
+      'Safety and reliability in multi-agent systems',
+    ].join('\n'),
+  },
 ];
 
 /**

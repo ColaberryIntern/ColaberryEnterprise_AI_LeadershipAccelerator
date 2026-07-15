@@ -114,9 +114,9 @@ export function buildTodayFeed(ctx: TodayFeedCtx, h: TodayFeedHandlers): FeedIte
     desc: 'Answer prep questions in a feed to build exam readiness across the five domains.',
     cta: { label: 'Coming soon', onClick: () => h.onSoon('Cert Prep'), variant: 'ghost' } });
 
-  items.push({ ...base('community', 'cm-forming'), title: 'Your cohort is forming', meta: 'Community', likes: 8,
-    desc: 'Meet your cohort, share builds, and get unblocked. The community feed opens when you enroll.',
-    cta: { label: 'Coming soon', onClick: () => h.onSoon('Community'), variant: 'ghost' } });
+  items.push({ ...base('community', 'cm-live'), title: 'Catch up with your cohort', meta: 'Community', likes: 8,
+    desc: 'Post a win, ask for help, or cheer someone on — the feed, leaderboard, and your cohort are all here.',
+    cta: { label: 'Open Community', to: '/portal/community', variant: 'leaf' } });
 
   return items;
 }

@@ -147,6 +147,8 @@ import CampaignDeployment from './CampaignDeployment';
 import UnsubscribeEvent from './UnsubscribeEvent';
 import Project from './Project';
 import ProjectArtifact from './ProjectArtifact';
+import ShowcaseArtifact from './ShowcaseArtifact';
+import Artifact from './Artifact';
 import ProposedAgentAction from './ProposedAgentAction';
 import AgentWriteAudit from './AgentWriteAudit';
 import StrategicInitiative from './StrategicInitiative';
@@ -268,6 +270,10 @@ import OpsMetricsDaily from './OpsMetricsDaily';
 import OpsBcProject from './OpsBcProject';
 import OpsSkill from './OpsSkill';
 import ProjectDna from './ProjectDna';
+import ArchitectEvaluation from './ArchitectEvaluation';
+import WeekItemVisibility from './WeekItemVisibility';
+import InterviewRubric from './InterviewRubric';
+import InterviewSession from './InterviewSession';
 import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
@@ -275,6 +281,22 @@ import StudentPointsEvent from './StudentPointsEvent';
 import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
 import Subscription from './Subscription';
+
+// Knowledge Operations System — KB Unification
+import CoraKbCourse from './CoraKbCourse';
+import CoraKbCohort from './CoraKbCohort';
+import ResponsiblePerson from './ResponsiblePerson';
+import CoraKbEntry from './CoraKbEntry';
+
+// Epic 4 — Community + Gamification
+import CommunityMember from './CommunityMember';
+import CommunityPost from './CommunityPost';
+import CommunityComment from './CommunityComment';
+import CommunityLike from './CommunityLike';
+import CommunityPostReport from './CommunityPostReport';
+import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
+import CommunityPointsEvent from './CommunityPointsEvent';
+import CommunityEvent from './CommunityEvent';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
@@ -721,6 +743,12 @@ Project.belongsTo(ProgramBlueprint, { foreignKey: 'program_id', as: 'program' })
 Project.hasMany(ProjectArtifact, { foreignKey: 'project_id', as: 'projectArtifacts', onDelete: 'CASCADE' });
 ProjectArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+Project.hasMany(ShowcaseArtifact, { foreignKey: 'project_id', as: 'showcaseArtifacts', onDelete: 'CASCADE' });
+ShowcaseArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+Project.hasMany(Artifact, { foreignKey: 'project_id', as: 'artifacts', onDelete: 'CASCADE' });
+Artifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
 ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
 
@@ -1040,6 +1068,8 @@ export {
   UnsubscribeEvent,
   Project,
   ProjectArtifact,
+  ShowcaseArtifact,
+  Artifact,
   ProposedAgentAction,
   AgentWriteAudit,
   StrategicInitiative,
@@ -1137,6 +1167,10 @@ export {
   // AI Systems Architect Accelerator
   ProjectDna,
   StudentGithubActivity,
+  ArchitectEvaluation,
+  WeekItemVisibility,
+  InterviewRubric,
+  InterviewSession,
   // One Class, Many Doors — Sponsorship + Challenge/Leaderboard
   Sponsor,
   SponsorSeat,
@@ -1148,6 +1182,20 @@ export {
   EnrollmentLead,
   StudentTaskList,
   StudentTask,
+  // Knowledge Operations System — KB Unification
+  CoraKbCourse,
+  CoraKbCohort,
+  ResponsiblePerson,
+  CoraKbEntry,
+  // Epic 4 — Community + Gamification
+  CommunityMember,
+  CommunityPost,
+  CommunityComment,
+  CommunityLike,
+  CommunityPostReport,
+  CommunityLeaderboardEntry,
+  CommunityPointsEvent,
+  CommunityEvent,
   StudentPointsEvent,
   OpenHouseEvent,
   OnboardingProfile,
@@ -1188,6 +1236,63 @@ SkoolTask.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' }
 
 SkoolResponse.hasMany(SkoolEngagement, { foreignKey: 'response_id', as: 'engagements' });
 SkoolEngagement.belongsTo(SkoolResponse, { foreignKey: 'response_id', as: 'response' });
+
+// --- Classroom Week View associations ---
+Enrollment.hasMany(WeekItemVisibility, { foreignKey: 'enrollment_id', as: 'weekItemVisibilities' });
+WeekItemVisibility.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(InterviewSession, { foreignKey: 'enrollment_id', as: 'interviewSessions' });
+InterviewSession.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+InterviewRubric.hasMany(InterviewSession, { foreignKey: 'rubric_id', as: 'sessions' });
+InterviewSession.belongsTo(InterviewRubric, { foreignKey: 'rubric_id', as: 'rubric' });
+
+// --- Knowledge Operations System associations ---
+CoraKbCourse.hasMany(CoraKbCohort, { foreignKey: 'course_id', as: 'cohorts' });
+CoraKbCohort.belongsTo(CoraKbCourse, { foreignKey: 'course_id', as: 'course' });
+
+CoraKbCourse.hasMany(CoraKbEntry, { foreignKey: 'course_id', as: 'kbEntries' });
+CoraKbEntry.belongsTo(CoraKbCourse, { foreignKey: 'course_id', as: 'course' });
+
+ResponsiblePerson.hasMany(CoraKbEntry, { foreignKey: 'primary_person_id', as: 'primaryEntries' });
+CoraKbEntry.belongsTo(ResponsiblePerson, { foreignKey: 'primary_person_id', as: 'primaryPerson' });
+
+// --- Community + Gamification associations (Epic 4) ---
+Enrollment.hasOne(CommunityMember, { foreignKey: 'enrollment_id', as: 'communityMember' });
+CommunityMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Cohort.hasMany(CommunityPost, { foreignKey: 'cohort_id', as: 'communityPosts' });
+CommunityPost.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+CommunityMember.hasMany(CommunityPost, { foreignKey: 'member_id', as: 'posts' });
+CommunityPost.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityPost.hasMany(CommunityComment, { foreignKey: 'post_id', as: 'comments' });
+CommunityComment.belongsTo(CommunityPost, { foreignKey: 'post_id', as: 'post' });
+
+CommunityMember.hasMany(CommunityComment, { foreignKey: 'member_id', as: 'comments' });
+CommunityComment.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityComment.hasMany(CommunityComment, { foreignKey: 'parent_comment_id', as: 'replies' });
+CommunityComment.belongsTo(CommunityComment, { foreignKey: 'parent_comment_id', as: 'parentComment' });
+
+CommunityMember.hasMany(CommunityLike, { foreignKey: 'member_id', as: 'likes' });
+CommunityLike.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityPost.hasMany(CommunityPostReport, { foreignKey: 'post_id', as: 'reports', onDelete: 'CASCADE' });
+CommunityPostReport.belongsTo(CommunityPost, { foreignKey: 'post_id', as: 'post' });
+
+CommunityMember.hasMany(CommunityPostReport, { foreignKey: 'reporter_member_id', as: 'postReports' });
+CommunityPostReport.belongsTo(CommunityMember, { foreignKey: 'reporter_member_id', as: 'reporter' });
+
+CommunityMember.hasMany(CommunityLeaderboardEntry, { foreignKey: 'member_id', as: 'leaderboardEntries' });
+CommunityLeaderboardEntry.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityMember.hasMany(CommunityPointsEvent, { foreignKey: 'member_id', as: 'pointsEvents' });
+CommunityPointsEvent.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
+CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
 
 // --- Timeline Engine associations (Classroom rebuild) ---
 TimelineCard.hasMany(TimelineCardProgress, { foreignKey: 'card_id', as: 'progress', onDelete: 'CASCADE' });

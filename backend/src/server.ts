@@ -10,6 +10,7 @@ import healthRoutes from './routes/healthRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
+import unsubscribeRoutes from './routes/unsubscribeRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
@@ -19,6 +20,9 @@ import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
+import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
+import buildArtifactRoutes from './routes/buildArtifactRoutes';
+import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
@@ -49,6 +53,10 @@ app.use(traceMiddleware);
 // Webhook routes — each sub-route handles its own body parsing
 app.use(webhookRoutes);
 
+// Public one-click unsubscribe — mounted before the JSON parser; the POST
+// (RFC 8058 one-click) handles its own urlencoded body parsing.
+app.use(unsubscribeRoutes);
+
 // Preview proxy — mounted BEFORE the JSON parser so request bodies pass through
 // raw to upstream preview stacks.
 app.use('/preview', previewProxyMiddleware());
@@ -63,6 +71,9 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+app.use(showcaseArtifactRoutes);
+app.use(buildArtifactRoutes);
+app.use(publicPortfolioRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);

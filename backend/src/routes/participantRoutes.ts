@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
@@ -22,7 +23,7 @@ import {
   handleGetCurriculumProfile, handleUpdateCurriculumProfile,
   handleGetSkillGenome, handleGetSkillGaps,
   handleSaveQuizProgress, handleSaveTaskProgress, handleGradeArtifacts,
-  handleGetOrchestrationContext,
+  handleGetOrchestrationContext, handleSaveSurveyResponse,
 } from '../controllers/curriculumController';
 import {
   handleSendMentorMessage, handleGetMentorHistory,
@@ -111,6 +112,7 @@ router.put('/api/portal/curriculum/lessons/:lessonId/complete', requireParticipa
 router.post('/api/portal/curriculum/lessons/:lessonId/lab', requireParticipant, handleSubmitLabData);
 router.post('/api/portal/curriculum/lessons/:lessonId/prompt-lab', requireParticipant, handleExecutePromptLab);
 router.post('/api/portal/curriculum/lessons/:lessonId/quiz-progress', requireParticipant, handleSaveQuizProgress);
+router.post('/api/portal/curriculum/lessons/:lessonId/survey', requireParticipant, handleSaveSurveyResponse);
 router.post('/api/portal/curriculum/lessons/:lessonId/task-progress', requireParticipant, handleSaveTaskProgress);
 router.post('/api/portal/curriculum/lessons/:lessonId/grade-artifacts', requireParticipant, handleGradeArtifacts);
 router.get('/api/portal/curriculum/session-readiness/:sessionId', requireParticipant, handleCheckSessionReadiness);
@@ -119,6 +121,15 @@ router.put('/api/portal/curriculum/profile', requireParticipant, handleUpdateCur
 router.get('/api/portal/curriculum/skill-genome', requireParticipant, handleGetSkillGenome);
 router.get('/api/portal/curriculum/skill-gaps', requireParticipant, handleGetSkillGaps);
 router.get('/api/portal/curriculum/lessons/:lessonId/orchestration-context', requireParticipant, handleGetOrchestrationContext);
+
+// Architect project evaluation — latest AI evaluation for this enrollment
+router.get('/api/portal/project/evaluation', requireParticipant, async (req, res, next) => {
+  try {
+    const { getLatestEvaluation } = await import('../services/agents/architectEvaluationAgent');
+    const evaluation = await getLatestEvaluation(req.participant!.sub);
+    res.json(evaluation ? evaluation.toJSON() : null);
+  } catch (err) { next(err); }
+});
 
 // Context state — returns learner's context mode for UX adaptation
 router.get('/api/portal/context-state', requireParticipant, async (req, res) => {
@@ -341,6 +352,337 @@ router.post('/api/portal/github/status-report', requireParticipant, async (req, 
     res.json({ report });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Classroom Week View ──────────────────────────────────────────────────────
+
+import { GetWeekSchema, RevealActivitySchema, StartInterviewSchema, SubmitInterviewSchema } from '../schemas/interviewSchemas';
+import {
+  CreatePostSchema, ListPostsQuerySchema, TogglePinSchema, PostIdParamSchema,
+  CreateCommentSchema, CommentIdParamSchema, MemberIdParamSchema, UpdateProfileSchema,
+  ReportPostSchema, LeaderboardQuerySchema,
+} from '../schemas/communitySchemas';
+
+router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
+  const parsed = GetWeekSchema.safeParse(req.params);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Week must be 1–12', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { getWeekData } = await import('../services/weekVisibilityService');
+    const data = await getWeekData(req.participant!.sub, parseInt(parsed.data.weekNum, 10));
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/classroom/week/:weekNum/reveal', requireParticipant, async (req, res) => {
+  const weekParsed = GetWeekSchema.safeParse(req.params);
+  const bodyParsed = RevealActivitySchema.safeParse(req.body);
+  if (!weekParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+  try {
+    const { revealNextActivity } = await import('../services/weekVisibilityService');
+    const result = await revealNextActivity(
+      req.participant!.sub,
+      parseInt(weekParsed.data.weekNum, 10),
+      bodyParsed.data.completed_item
+    );
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/interview/start', requireParticipant, async (req, res) => {
+  const parsed = StartInterviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { startInterview } = await import('../services/interviewService');
+    const result = await startInterview(req.participant!.sub, parsed.data.week_number);
+    res.json(result);
+  } catch (err: any) {
+    const status = err.error_class === 'ValidationError' ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/interview/:sessionId/submit', requireParticipant, async (req, res) => {
+  const parsed = SubmitInterviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid answers', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { submitInterview } = await import('../services/interviewService');
+    const result = await submitInterview(
+      req.params.sessionId as string,
+      req.participant!.sub,
+      parsed.data.answers
+    );
+    res.json(result);
+  } catch (err: any) {
+    const status = err.error_class === 'ValidationError' ? 400 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// ─── Community Feed ───────────────────────────────────────────────────────────
+
+function communityErrorStatus(err: any): number {
+  switch (err.error_class) {
+    case 'ValidationError':
+      return 400;
+    case 'NotFoundError':
+      return 404;
+    case 'ForbiddenError':
+      return 403;
+    default:
+      return 500;
+  }
+}
+
+// Posting rate limits (REQ-C9) — generous enough for normal discussion, tight
+// enough to blunt a spam/flood script. Keyed by IP like the v1 limiter
+// elsewhere in this repo; per-member limiting would need a keyGenerator
+// reading req.participant, which isn't available until after this middleware
+// runs in the current chain — IP is the pragmatic v1 choice here too.
+const communityPostRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many posts — please slow down' },
+});
+
+const communityCommentRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many comments — please slow down' },
+});
+
+router.post('/api/portal/community/posts', communityPostRateLimiter, requireParticipant, async (req, res) => {
+  const parsed = CreatePostSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid post', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { createPost } = await import('../services/communityService');
+    const post = await createPost(req.participant!.sub, parsed.data);
+    res.status(201).json({ post });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/posts', requireParticipant, async (req, res) => {
+  const parsed = ListPostsQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid query', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { listPosts } = await import('../services/communityService');
+    const posts = await listPosts(req.participant!.sub, parsed.data.category);
+    res.json({ posts });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/posts/:postId', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid post id' });
+    return;
+  }
+  try {
+    const { getPostById } = await import('../services/communityService');
+    const post = await getPostById(req.participant!.sub, paramsParsed.data.postId);
+    res.json({ post });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/leaderboard', requireParticipant, async (req, res) => {
+  const parsed = LeaderboardQuerySchema.safeParse(req.query);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid query', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { getLeaderboard } = await import('../services/communityLeaderboardService');
+    const entries = await getLeaderboard(req.participant!.sub, parsed.data.period);
+    res.json({ period: parsed.data.period, entries });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.patch('/api/portal/community/posts/:postId/pin', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  const bodyParsed = TogglePinSchema.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+  try {
+    const { togglePin } = await import('../services/communityService');
+    const post = await togglePin(req.participant!.sub, paramsParsed.data.postId, bodyParsed.data);
+    res.json({ post });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/posts/:postId/comments', communityCommentRateLimiter, requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  const bodyParsed = CreateCommentSchema.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: 'Invalid comment' });
+    return;
+  }
+  try {
+    const { createComment } = await import('../services/communityService');
+    const comment = await createComment(req.participant!.sub, paramsParsed.data.postId, bodyParsed.data);
+    res.status(201).json({ comment });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/posts/:postId/comments', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid post id' });
+    return;
+  }
+  try {
+    const { listComments } = await import('../services/communityService');
+    const comments = await listComments(req.participant!.sub, paramsParsed.data.postId);
+    res.json({ comments });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/posts/:postId/like', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid post id' });
+    return;
+  }
+  try {
+    const { toggleLike } = await import('../services/communityService');
+    const result = await toggleLike(req.participant!.sub, 'post', paramsParsed.data.postId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/comments/:commentId/like', requireParticipant, async (req, res) => {
+  const paramsParsed = CommentIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid comment id' });
+    return;
+  }
+  try {
+    const { toggleLike } = await import('../services/communityService');
+    const result = await toggleLike(req.participant!.sub, 'comment', paramsParsed.data.commentId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/posts/:postId/report', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  const bodyParsed = ReportPostSchema.safeParse(req.body);
+  if (!paramsParsed.success || !bodyParsed.success) {
+    res.status(400).json({ error: 'Invalid request' });
+    return;
+  }
+  try {
+    const { reportPost } = await import('../services/communityService');
+    const result = await reportPost(req.participant!.sub, paramsParsed.data.postId, bodyParsed.data.reason);
+    res.status(201).json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Specific literal routes ('me', bare directory) are registered before the
+// generic ':memberId' route so Express matches them first.
+router.get('/api/portal/community/members/me', requireParticipant, async (req, res) => {
+  try {
+    const { getMyProfile } = await import('../services/communityService');
+    const profile = await getMyProfile(req.participant!.sub);
+    res.json({ profile });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.patch('/api/portal/community/members/me', requireParticipant, async (req, res) => {
+  const parsed = UpdateProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid profile update', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const { updateMyProfile } = await import('../services/communityService');
+    const profile = await updateMyProfile(req.participant!.sub, parsed.data);
+    res.json({ profile });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/members', requireParticipant, async (req, res) => {
+  try {
+    const { listMembers } = await import('../services/communityService');
+    const members = await listMembers(req.participant!.sub);
+    res.json({ members });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/presence/ping', requireParticipant, async (req, res) => {
+  try {
+    const { touchPresence } = await import('../services/communityService');
+    const result = await touchPresence(req.participant!.sub);
+    res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/members/:memberId', requireParticipant, async (req, res) => {
+  const paramsParsed = MemberIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid member id' });
+    return;
+  }
+  try {
+    const { getMemberProfileById } = await import('../services/communityService');
+    const profile = await getMemberProfileById(req.participant!.sub, paramsParsed.data.memberId);
+    res.json({ profile });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
   }
 });
 

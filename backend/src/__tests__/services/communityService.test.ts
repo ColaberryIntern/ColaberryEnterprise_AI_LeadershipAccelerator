@@ -1,0 +1,393 @@
+/**
+ * communityService unit tests (Epic 4 feed, BC #10036783688 / todo 9985689693).
+ * Model layer is mocked; no DB I/O.
+ */
+
+jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
+jest.mock('../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), findAll: jest.fn() }));
+jest.mock('../../models/CommunityPost', () => ({ create: jest.fn(), findAll: jest.fn(), findByPk: jest.fn() }));
+
+import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
+import Enrollment from '../../models/Enrollment';
+import CommunityMember from '../../models/CommunityMember';
+import CommunityPost from '../../models/CommunityPost';
+
+const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
+const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
+const findAllMembers = CommunityMember.findAll as jest.Mock;
+const createPostMock = CommunityPost.create as jest.Mock;
+const findAllPosts = CommunityPost.findAll as jest.Mock;
+const findByPkPost = CommunityPost.findByPk as jest.Mock;
+
+beforeEach(() => {
+  jest.clearAllMocks();
+});
+
+const enrollmentId = '11111111-1111-1111-1111-111111111111';
+const cohortId = '22222222-2222-2222-2222-222222222222';
+const memberId = '33333333-3333-3333-3333-333333333333';
+
+const mockEnrollment: any = { id: enrollmentId, full_name: 'Ada Lovelace', cohort_id: cohortId };
+const mockMember: any = { id: memberId, enrollment_id: enrollmentId, display_name: 'Ada Lovelace', avatar_url: null };
+
+describe('getOrCreateMember', () => {
+  it('happy path: creates a member for a first-time poster', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, true]);
+
+    const member = await getOrCreateMember(enrollmentId);
+
+    expect(member).toBe(mockMember);
+    expect(findOrCreateMember).toHaveBeenCalledWith({
+      where: { enrollment_id: enrollmentId },
+      defaults: { enrollment_id: enrollmentId, display_name: 'Ada Lovelace' },
+    });
+  });
+
+  it('failure path: throws NotFoundError for a missing enrollment', async () => {
+    findByPkEnrollment.mockResolvedValue(null);
+
+    await expect(getOrCreateMember(enrollmentId)).rejects.toMatchObject({
+      error_class: 'NotFoundError',
+    });
+  });
+
+  it('idempotency: repeat calls resolve to the same member row (findOrCreate, not create)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+
+    const first = await getOrCreateMember(enrollmentId);
+    const second = await getOrCreateMember(enrollmentId);
+
+    expect(first).toBe(mockMember);
+    expect(second).toBe(mockMember);
+    expect(findOrCreateMember).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('createPost', () => {
+  it('happy path: creates a post with defaults', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    const createdPost: any = {
+      id: 'post-1',
+      body: 'Shipped my requirements today!',
+      media_urls: [],
+      category: null,
+      pinned: false,
+      like_count: 0,
+      comment_count: 0,
+      mentioned_member_ids: [],
+      created_at: new Date('2026-07-07'),
+    };
+    createPostMock.mockResolvedValue(createdPost);
+
+    const result = await createPost(enrollmentId, { body: 'Shipped my requirements today!' });
+
+    expect(result.id).toBe('post-1');
+    expect(result.member.id).toBe(memberId);
+    expect(createPostMock).toHaveBeenCalledWith(
+      expect.objectContaining({ member_id: memberId, cohort_id: cohortId, body: 'Shipped my requirements today!' })
+    );
+  });
+
+  it('failure path: rejects a mention outside the author\'s cohort', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findAllMembers.mockResolvedValue([
+      { id: 'other-member', enrollment: { cohort_id: 'different-cohort' } },
+    ]);
+
+    await expect(
+      createPost(enrollmentId, { body: 'hi @someone', mentioned_member_ids: ['other-member'] })
+    ).rejects.toMatchObject({ error_class: 'ValidationError' });
+    expect(createPostMock).not.toHaveBeenCalled();
+  });
+
+  it('boundary path: accepts a mention that is in the same cohort', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findAllMembers.mockResolvedValue([{ id: 'peer-member', enrollment: { cohort_id: cohortId } }]);
+    createPostMock.mockResolvedValue({
+      id: 'post-2',
+      body: 'cc @peer',
+      media_urls: [],
+      category: null,
+      pinned: false,
+      like_count: 0,
+      comment_count: 0,
+      mentioned_member_ids: ['peer-member'],
+      created_at: new Date('2026-07-07'),
+    });
+
+    const result = await createPost(enrollmentId, { body: 'cc @peer', mentioned_member_ids: ['peer-member'] });
+
+    expect(result.mentioned_member_ids).toEqual(['peer-member']);
+  });
+
+  it('happy path (REQ-C4): passes min_level through to the created post, defaulting to 0 when omitted', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-3', body: 'ungated', media_urls: [], category: null, pinned: false, like_count: 0,
+      comment_count: 0, mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-07-13'),
+    });
+
+    await createPost(enrollmentId, { body: 'ungated' });
+
+    expect(createPostMock).toHaveBeenCalledWith(expect.objectContaining({ min_level: 0 }));
+  });
+
+  it('happy path (REQ-C4): a gated post is created with the requested min_level', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-4', body: 'bonus content', media_urls: [], category: null, pinned: false, like_count: 0,
+      comment_count: 0, mentioned_member_ids: [], min_level: 3, created_at: new Date('2026-07-13'),
+    });
+
+    const result = await createPost(enrollmentId, { body: 'bonus content', min_level: 3 });
+
+    expect(createPostMock).toHaveBeenCalledWith(expect.objectContaining({ min_level: 3 }));
+    expect(result.min_level).toBe(3);
+    expect(result.locked).toBe(false);
+  });
+});
+
+describe('listPosts', () => {
+  beforeEach(() => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 1, points: 0 }, false]);
+  });
+
+  it('happy path: scopes the feed to the caller\'s cohort', async () => {
+    findAllPosts.mockResolvedValue([]);
+
+    await listPosts(enrollmentId);
+
+    expect(findAllPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { cohort_id: cohortId, status: 'visible' } })
+    );
+  });
+
+  it('boundary path: applies the category filter when provided', async () => {
+    findAllPosts.mockResolvedValue([]);
+
+    await listPosts(enrollmentId, 'announcements');
+
+    expect(findAllPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { cohort_id: cohortId, status: 'visible', category: 'announcements' } })
+    );
+  });
+
+  it('happy path: orders pinned posts first', async () => {
+    findAllPosts.mockResolvedValue([]);
+
+    await listPosts(enrollmentId);
+
+    const callArgs = findAllPosts.mock.calls[0][0];
+    expect(callArgs.order).toEqual([
+      ['pinned', 'DESC'],
+      ['created_at', 'DESC'],
+    ]);
+  });
+
+  it('failure/boundary (REQ-C4): a post gated above the viewer\'s level is returned locked, with no body/media leaked', async () => {
+    findAllPosts.mockResolvedValue([
+      {
+        id: 'post-locked', member_id: 'other-member', cohort_id: cohortId, body: 'secret bonus content',
+        media_urls: ['https://example.com/a.png'], category: null, pinned: false, like_count: 0, comment_count: 0,
+        mentioned_member_ids: [], min_level: 3, created_at: new Date('2026-07-13'),
+        member: { id: 'other-member', display_name: 'Staff', avatar_url: null },
+      },
+    ]);
+
+    const [item] = await listPosts(enrollmentId);
+
+    expect(item.locked).toBe(true);
+    expect(item.body).toBeNull();
+    expect(item.media_urls).toEqual([]);
+    expect(item.min_level).toBe(3);
+  });
+
+  it('happy path (REQ-C4): the author sees their own gated post unlocked regardless of level', async () => {
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 1, points: 0 }, false]);
+    findAllPosts.mockResolvedValue([
+      {
+        id: 'post-own', member_id: memberId, cohort_id: cohortId, body: 'my bonus content',
+        media_urls: [], category: null, pinned: false, like_count: 0, comment_count: 0,
+        mentioned_member_ids: [], min_level: 3, created_at: new Date('2026-07-13'),
+        member: { id: memberId, display_name: 'Ada Lovelace', avatar_url: null },
+      },
+    ]);
+
+    const [item] = await listPosts(enrollmentId);
+
+    expect(item.locked).toBe(false);
+    expect(item.body).toBe('my bonus content');
+  });
+
+  it('boundary path (REQ-C4): a viewer exactly at the required level sees the post unlocked', async () => {
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, level: 3, points: 2700 }, false]);
+    findAllPosts.mockResolvedValue([
+      {
+        id: 'post-atlevel', member_id: 'other-member', cohort_id: cohortId, body: 'week 4 bonus',
+        media_urls: [], category: null, pinned: false, like_count: 0, comment_count: 0,
+        mentioned_member_ids: [], min_level: 3, created_at: new Date('2026-07-13'),
+        member: { id: 'other-member', display_name: 'Staff', avatar_url: null },
+      },
+    ]);
+
+    const [item] = await listPosts(enrollmentId);
+
+    expect(item.locked).toBe(false);
+    expect(item.body).toBe('week 4 bonus');
+  });
+});
+
+describe('togglePin', () => {
+  const basePost: any = {
+    id: 'post-1',
+    member_id: memberId,
+    cohort_id: cohortId,
+    status: 'visible',
+    body: 'hello',
+    media_urls: [],
+    category: null,
+    pinned: false,
+    like_count: 0,
+    comment_count: 0,
+    mentioned_member_ids: [],
+    created_at: new Date('2026-07-07'),
+    member: { id: memberId, display_name: 'Ada Lovelace', avatar_url: null },
+    update: jest.fn(),
+  };
+
+  it('happy path: the author can pin their own post', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    const post = { ...basePost, update: jest.fn().mockImplementation(async function (this: any, patch) {
+      this.pinned = patch.pinned;
+    }) };
+    findByPkPost.mockResolvedValue(post);
+
+    const result = await togglePin(enrollmentId, 'post-1', { pinned: true });
+
+    expect(post.update).toHaveBeenCalledWith({ pinned: true });
+    expect(result.pinned).toBe(true);
+  });
+
+  it('failure path: a non-author cannot pin the post', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, id: 'someone-else' }, false]);
+    findByPkPost.mockResolvedValue(basePost);
+
+    await expect(togglePin(enrollmentId, 'post-1', { pinned: true })).rejects.toMatchObject({
+      error_class: 'ForbiddenError',
+    });
+  });
+
+  it('failure path: throws NotFoundError for a missing post', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(null);
+
+    await expect(togglePin(enrollmentId, 'missing-post', { pinned: true })).rejects.toMatchObject({
+      error_class: 'NotFoundError',
+    });
+  });
+
+  it('failure path (REQ-C9): a post from a different cohort is ForbiddenError, not NotFoundError', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue({ ...basePost, cohort_id: 'different-cohort' });
+
+    await expect(togglePin(enrollmentId, 'post-1', { pinned: true })).rejects.toMatchObject({
+      error_class: 'ForbiddenError',
+    });
+  });
+
+  it('boundary path: a removed post is NotFoundError, same as a missing one', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue({ ...basePost, status: 'removed' });
+
+    await expect(togglePin(enrollmentId, 'post-1', { pinned: true })).rejects.toMatchObject({
+      error_class: 'NotFoundError',
+    });
+  });
+
+  it('idempotency: pinning an already-pinned post is a no-op update', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    const alreadyPinned = { ...basePost, pinned: true, update: jest.fn() };
+    findByPkPost.mockResolvedValue(alreadyPinned);
+
+    const result = await togglePin(enrollmentId, 'post-1', { pinned: true });
+
+    expect(alreadyPinned.update).not.toHaveBeenCalled();
+    expect(result.pinned).toBe(true);
+  });
+});
+
+describe('derivePresence', () => {
+  const now = new Date('2026-07-10T12:00:00.000Z');
+
+  it('happy path: recent activity (< 90s) reads online', () => {
+    expect(derivePresence(new Date(now.getTime() - 30_000), now)).toBe('online');
+  });
+
+  it('happy path: activity between 90s and 10min reads away', () => {
+    expect(derivePresence(new Date(now.getTime() - 5 * 60_000), now)).toBe('away');
+  });
+
+  it('happy path: activity older than 10min reads offline', () => {
+    expect(derivePresence(new Date(now.getTime() - 20 * 60_000), now)).toBe('offline');
+  });
+
+  it('boundary: never-active member (null last_active_at) reads offline', () => {
+    expect(derivePresence(null, now)).toBe('offline');
+  });
+
+  it('boundary: exactly at the online threshold (90s) still reads online', () => {
+    expect(derivePresence(new Date(now.getTime() - 90_000), now)).toBe('online');
+  });
+
+  it('boundary: exactly at the away threshold (10min) still reads away', () => {
+    expect(derivePresence(new Date(now.getTime() - 10 * 60_000), now)).toBe('away');
+  });
+
+  it('failure/edge case: clock-skewed future timestamp reads online rather than throwing', () => {
+    expect(derivePresence(new Date(now.getTime() + 5_000), now)).toBe('online');
+  });
+});
+
+describe('touchPresence', () => {
+  it('happy path: bumps last_active_at and presence_status on the member row', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    const update = jest.fn();
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, update }, false]);
+
+    const result = await touchPresence(enrollmentId);
+
+    expect(result.presence).toBe('online');
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ presence_status: 'online' }));
+  });
+
+  it('idempotency: repeat pings are safe, each just bumps the timestamp forward', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    const update = jest.fn();
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, update }, false]);
+
+    await touchPresence(enrollmentId);
+    await touchPresence(enrollmentId);
+
+    expect(update).toHaveBeenCalledTimes(2);
+  });
+
+  it('failure path: propagates NotFoundError for a missing enrollment', async () => {
+    findByPkEnrollment.mockResolvedValue(null);
+
+    await expect(touchPresence(enrollmentId)).rejects.toMatchObject({ error_class: 'NotFoundError' });
+  });
+});

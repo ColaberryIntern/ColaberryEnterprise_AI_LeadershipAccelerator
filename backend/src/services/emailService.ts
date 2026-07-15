@@ -1889,3 +1889,53 @@ export async function sendCurriculumImpactDigest(
     `[Email] Curriculum impact digest sent to: ${r.to} | items: ${items.length} | msgId: ${info.messageId}`,
   );
 }
+
+// --- AI Mock Interview Result ---
+
+export interface InterviewResultEmailData {
+  to: string;
+  full_name: string;
+  week_number: number;
+  total_score: number;
+  feedback: string;
+}
+
+export async function sendInterviewResult(data: InterviewResultEmailData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping interview result email to:', data.to);
+    return;
+  }
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    `[Accelerator] Week ${data.week_number} Mock Interview Results`
+  );
+
+  const scoreColor = data.total_score >= 70 ? '#10b981' : data.total_score >= 50 ? '#f59e0b' : '#ef4444';
+  const html = `
+<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+  <h2 style="color:#1e293b">Week ${data.week_number} Mock Interview Complete</h2>
+  <p>Hi ${data.full_name},</p>
+  <p>Your Week ${data.week_number} AI mock interview has been scored.</p>
+  <div style="background:#f8fafc;border-radius:8px;padding:20px;margin:20px 0;text-align:center">
+    <div style="font-size:48px;font-weight:700;color:${scoreColor}">${data.total_score}</div>
+    <div style="color:#64748b;font-size:14px">out of 100</div>
+  </div>
+  <h3 style="color:#1e293b">Feedback</h3>
+  <p style="color:#374151;line-height:1.6">${data.feedback}</p>
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+  <p style="color:#64748b;font-size:13px">Colaberry Enterprise AI · AI Systems Architect Accelerator</p>
+</body></html>`;
+
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-interview-result'),
+  });
+
+  console.log(`[Email] Interview result sent to: ${r.to} | week: ${data.week_number} | score: ${data.total_score} | msgId: ${info.messageId}`);
+}
