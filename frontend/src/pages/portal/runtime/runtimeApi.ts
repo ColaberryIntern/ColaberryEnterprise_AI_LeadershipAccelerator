@@ -10,6 +10,8 @@ export interface RtCard {
   student_label: string; render_band: string; estimated_time?: number | null; competencies?: any;
   evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
+  content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
+  type_thumbnail?: string | null;   // the type's picture — hero banner with the title overlaid
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 
@@ -33,6 +35,8 @@ export const runtimeApi = {
   reflection: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/reflection`).then((r) => r.data as { questions: string[] }),
   promptLab: (cardId: string, prompt: string, output?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/prompt-lab`, { prompt, output }).then((r) => r.data as PromptEval),
   complete: (cardId: string, work?: string, reflection?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/complete`, { work, reflection }).then((r) => r.data as { outcome: any; artifact: any; readiness: Readiness }),
+  watch: (cardId: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/watch`, beat).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
   readiness: () => portalApi.get('/api/portal/runtime/readiness').then((r) => r.data as Readiness),
   saveNote: (cardId: string, body: string, kind = 'note') => portalApi.post('/api/portal/runtime/notebook', { card_id: cardId, kind, body }).then((r) => r.data),
   comments: (cardId: string) => portalApi.get(`/api/portal/classroom/cards/${cardId}/comments`).then((r) => r.data as { comments: CardComment[] }),

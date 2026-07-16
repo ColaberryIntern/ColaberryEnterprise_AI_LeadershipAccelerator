@@ -16,7 +16,11 @@ import { computeEmploymentReadiness } from './employmentReadiness';
 import { computeCertificationReadiness } from './certificationReadiness';
 import { StudentSignals } from './readinessTypes';
 import { generateArtifact, listArtifacts } from './portfolioService';
-import { videoFromMetadata } from '../timeline/timelineService';
+import { videoFromMetadata, contentFromMetadata, blogFromMetadata } from '../timeline/timelineService';
+import { selectTestimonialForEnrollment } from '../timeline/networkVideoService';
+import { selectPodcastForEnrollment } from '../timeline/podcastMediaService';
+import { selectBlogForEnrollment } from '../timeline/blogMediaService';
+import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 
 /** Build the student's signal vector from progression + completed evidence + portfolio. */
 export async function studentSignals(enrollmentId: string): Promise<StudentSignals> {
@@ -57,21 +61,56 @@ export async function cardContext(cardId: string) {
   return { id: c.id, type: c.type, title: c.title, description: c.description, student_label: def?.student_label || c.type, metadata: c.metadata };
 }
 
-/** Open a published card for the runtime (card + the student's progress + video). */
+/** Open a published card for the runtime (card + the student's progress + video +
+ *  the saved lesson content + the type's picture, so the workspace opens WITH the
+ *  lesson the student saw on the card and its hero image). */
 export async function openCard(enrollmentId: string, cardId: string) {
   const card = await TimelineCard.findByPk(cardId);
   if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
   const def = resolveType(card.type);
+  // The type's Studio thumbnail lives on the DB definition (not the code registry).
+  const dbDef = await CurriculumTypeDefinition.findOne({ where: { slug: card.type }, attributes: ['thumbnail_url'] });
   const [progress] = await TimelineCardProgress.findOrCreate({
     where: { card_id: cardId, enrollment_id: enrollmentId },
     defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'available' },
   });
+
+  // Per-student media resolution — the SAME picks the feed shows (stable per
+  // (enrollment, card) assignments make these idempotent). Without this a
+  // random testimonial/podcast/blog card opens in the workspace with no media,
+  // which would also dead-end the watch gate.
+  let title = card.title;
+  let description = card.description;
+  let video = videoFromMetadata(card.metadata);
+  let blog = blogFromMetadata(card.metadata);
+  if (!video && (card.type === 'testimonial' || card.type === 'podcast')) {
+    const picked = card.type === 'testimonial'
+      ? await selectTestimonialForEnrollment(enrollmentId, card)
+      : await selectPodcastForEnrollment(enrollmentId, card);
+    if (picked) {
+      video = picked.video;
+      if (picked.title) title = picked.title;
+      if (picked.description) description = picked.description;
+    }
+  }
+  if (!blog && card.type === 'blog') {
+    const picked = await selectBlogForEnrollment(enrollmentId, card);
+    if (picked) {
+      blog = picked.blog;
+      if (picked.title) title = picked.title;
+      if (picked.description) description = picked.description;
+    }
+  }
+
   return {
     card: {
-      id: card.id, type: card.type, title: card.title, subtitle: card.subtitle, description: card.description,
+      id: card.id, type: card.type, title, subtitle: card.subtitle, description,
       student_label: def?.student_label || card.type, render_band: def?.render_band || 'overview',
       estimated_time: card.estimated_time, competencies: card.competencies,
-      evidence_required: !!def?.evidence_required, video: videoFromMetadata(card.metadata),
+      evidence_required: !!def?.evidence_required, video,
+      blog,
+      content: contentFromMetadata(card.metadata),
+      type_thumbnail: ((dbDef?.thumbnail_url || '') as string).trim() || null,
     },
     progress: { status: progress.status, completed_at: progress.completed_at },
   };

@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, July 16, 2026 at 10:56 AM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">62 changes</span></div>
+    <div class="meta">Generated Thursday, July 16, 2026 at 12:08 PM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">63 changes</span></div>
   </header>
   <main>
     
@@ -987,6 +987,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 52/52 incl. new cardCommentService 5/5 (body trim/empty/oversize; display-name shapes); backend + frontend tsc 0; curriculumFormatContract 5/5. DEV after deploy: timeline_card_comments table created on boot; comment posted on a card appears in the feed thread AND in the workspace thread (same data).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Comments are class-wide per card (no cohort scoping yet — one shared curriculum). Admin timeline hides the Comment button (participant-auth endpoints). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">63</span>
+          <h2>Merge main (sibling sessions&#39; PRs #259/#260 + blog type) — one implementation per feature; video tiles show the VIDEO&#39;s image</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;these changes are not on dev environment&quot; + &quot;Videos, just like Testimonials should show the image for the video - instead of default image.&quot; Root cause: parallel Claude sessions ship to the ONE dev instance — a deploy from /opt/acc-testimonials (main + PRs #259/#260) replaced this branch&#39;s deploy 12 min after it went live, and main independently implemented card comments + inline click-to-play. Reconciled by merging origin/main in and keeping ONE implementation per feature: (1) DROPPED my duplicate comments backend (CardComment model, cardCommentService+test, runtime routes/handlers, my ensureCardCommentsSchema) in favor of main&#39;s TimelineCardComment + rate-limited /api/portal/classroom/cards/:cardId/comments + sync-based ensure — my feed &lt;CardComments&gt; toggle (unique: comments IN the feed card; main&#39;s are workspace-only) rewired to main&#39;s endpoint (newest-first, prepend on post). (2) TimelineCard: main&#39;s playingInline is the inline-play mechanism, generalized — my VideoEmbed-based inline branch replaces main&#39;s podcast-audio-only special case (any playable card plays in-tile incl. .mp3); poster chain unioned per Ali&#39;s newest ask: card image → video poster → DERIVED YouTube thumbnail (so a video card shows ITS video&#39;s image, never the type banner) → blog thumbnail → type banner (main&#39;s field name type_thumbnail) → gradient; kept my ▶-only-when-playable + Open-pill affordances, main&#39;s blog ribbon/title. (3) CardDetailBody: derived-thumb poster fallback + no-clip hero + autoplay preserved; main&#39;s non-video type_thumbnail hero gated to not fight the card&#39;s own image. (4) Editor: kept my student-tile lanes + student-view popup + Image URL field + launched gate; adopted main&#39;s blog source UI + field names (type_thumbnail, blog payloads). (5) RuntimeWorkspace: main&#39;s cohort-comments panel is the one implementation (mine removed); kept derived-thumb poster fallback. Fixed field-name drift (type_thumbnail_url → type_thumbnail) across adapter/editor/body.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0; backend jest timeline+podcast+blog+__tests__ 1022 passed (1 failing suite adminRoutes.test.ts is byte-identical to origin/main — pre-existing on main, not from this merge); curriculumFormatContract 5/5. DEV live check after deploy: &quot;Intro to Large Language Models&quot; (YouTube URL, no saved poster) shows the real video thumbnail on its tile; Comment button opens the thread in the feed; workspace comments + inline play intact.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY branch state (main itself untouched). Coordination: multiple sessions deploying different branches to the one dev instance keep overwriting each other — flagged to Ali in the session summary.</span></div>
           
         </div>
       </article>

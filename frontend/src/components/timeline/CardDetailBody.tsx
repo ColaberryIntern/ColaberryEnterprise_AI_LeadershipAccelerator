@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
-import VideoEmbed from './VideoEmbed';
+import VideoEmbed, { WatchBeatPayload } from './VideoEmbed';
 import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
+import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -70,6 +71,24 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const presenter = card.video?.presenter || null;
   const duration = card.estimated_time ? `${card.estimated_time} min` : null;
 
+  // Server-truth watch gate (video/testimonial/podcast): each heartbeat response
+  // updates the bar + Mark-complete enablement; the server enforces regardless.
+  const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
+  const [gateMsg, setGateMsg] = useState<string | null>(null);
+  useEffect(() => { setWatch(null); setGateMsg(null); }, [card.id]);
+  const live = !preview && !done;
+  const handleWatchBeat = live
+    ? (beat: WatchBeatPayload) => { runtimeApi.watch(card.id, beat).then(setWatch).catch(() => { /* best-effort heartbeat */ }); }
+    : undefined;
+  const completeSafely = onComplete
+    ? async () => {
+        setGateMsg(null);
+        try { await onComplete(); }
+        catch (err: any) { setGateMsg(err?.response?.data?.error || 'Not quite yet — keep watching to unlock your points.'); }
+      }
+    : undefined;
+  const gateActive = watch?.required_pct != null;
+
   return (
     <>
       <div className="tld-head">
@@ -99,7 +118,17 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {isVideo && (
           <div className="tld-player">
             {source ? (
-              <VideoEmbed key={card.id} source={source} title={card.video?.title || card.title} poster={card.video?.poster || videoThumbnail(source) || card.type_thumbnail || null} autoplay={autoplayVideo} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} onEnded={done || preview ? undefined : onComplete} />
+              <VideoEmbed
+                key={card.id}
+                source={source}
+                title={card.video?.title || card.title}
+                poster={card.video?.poster || videoThumbnail(source) || card.type_thumbnail || null}
+                autoplay={autoplayVideo}
+                badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+                onEnded={done || preview ? undefined : completeSafely}
+                onWatchBeat={handleWatchBeat}
+                fallbackDurationS={card.estimated_time ? card.estimated_time * 60 : null}
+              />
             ) : (card.image || card.type_thumbnail) ? (
               // No clip attached yet — show the card's image (own image, else the
               // type's banner) instead of an empty dashed box; the note below
@@ -107,6 +136,18 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
               <img className="tld-hero" style={{ marginBottom: 0 }} src={(card.image || card.type_thumbnail) as string} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             ) : (
               <VideoEmbed source={null} title={card.title} />
+            )}
+            {live && source && (
+              <div className="tlv-watch">
+                <div className="tlv-watchbar"><i style={{ width: `${Math.min(100, watch?.watched_pct ?? 0)}%` }} /></div>
+                <span className="tlv-watchpct">
+                  {gateActive
+                    ? (watch?.met
+                        ? '✓ Watched — points unlocked'
+                        : `Watched ${watch?.watched_pct ?? 0}% · reach ${watch?.required_pct}% to collect your points`)
+                    : `Watched ${watch?.watched_pct ?? 0}%`}
+                </span>
+              </div>
             )}
           </div>
         )}
@@ -199,8 +240,23 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             ? <span className="tld-note" style={{ padding: '8px 12px' }}>For students, this footer has <b>Close</b> and <b>Enter workspace →</b> (the full activity + AI Mentor).</span>
             : (
               <>
+                {gateMsg && <span className="tld-gatemsg">{gateMsg}</span>}
                 {onClose && <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>}
-                {onEnterWorkspace && <button type="button" className="tl-btn primary" onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {/* Media cards collect points here, gated by the server's watch check.
+                    When the gate is active but unmet, the button is disabled with the
+                    remaining %; the server enforces the same rule regardless. */}
+                {isVideo && source && completeSafely && (
+                  <button
+                    type="button"
+                    className="tl-btn primary"
+                    onClick={completeSafely}
+                    disabled={gateActive && !watch?.met}
+                    title={gateActive && !watch?.met ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
+                  >
+                    {gateActive && !watch?.met ? `Collect points · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%` : 'Collect points'}
+                  </button>
+                )}
+                {onEnterWorkspace && <button type="button" className={`tl-btn ${isVideo && source ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
               </>
             )}
       </div>

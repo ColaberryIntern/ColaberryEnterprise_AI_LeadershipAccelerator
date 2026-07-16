@@ -29,7 +29,8 @@ export function parseVideoUrl(raw: string | null | undefined): VideoSource | nul
   if (!url) return null;
 
   const yt = url.match(/(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([\w-]{11})/);
-  if (yt) return src('youtube', 'iframe', yt[1], `https://www.youtube-nocookie.com/embed/${yt[1]}?rel=0&modestbranding=1`, url);
+  // enablejsapi opens YouTube's postMessage channel so watch progress is measurable.
+  if (yt) return src('youtube', 'iframe', yt[1], `https://www.youtube-nocookie.com/embed/${yt[1]}?rel=0&modestbranding=1&enablejsapi=1`, url);
 
   const vim = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
   if (vim) return src('vimeo', 'iframe', vim[1], `https://player.vimeo.com/video/${vim[1]}`, url);

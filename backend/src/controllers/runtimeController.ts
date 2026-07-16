@@ -6,6 +6,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
+import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
@@ -73,6 +74,22 @@ export async function handlePromptLab(req: Request, res: Response, next: NextFun
 }
 
 const completeSchema = z.object({ work: z.string().optional(), reflection: z.string().optional() });
+const watchBeatSchema = z.object({
+  delta_s: z.number().min(0).max(600),
+  position_s: z.number().min(0).nullable().optional(),
+  duration_s: z.number().min(0).nullable().optional(),
+  provider: z.string().max(32).nullable().optional(),
+});
+
+/** POST /api/portal/runtime/cards/:cardId/watch — throttled watch heartbeat.
+ *  Returns { watched_pct, required_pct, met } so the UI can sync the gate. */
+export async function handleWatchBeat(req: Request, res: Response, next: NextFunction) {
+  try {
+    const beat = watchBeatSchema.parse(req.body);
+    res.json(await recordWatchBeat(eid(req), String(req.params.cardId), beat));
+  } catch (err) { fail(res, err, next); }
+}
+
 export async function handleComplete(req: Request, res: Response, next: NextFunction) {
   try { res.json(await completeActivity(eid(req), String(req.params.cardId), completeSchema.parse(req.body || {}))); } catch (e) { fail(res, e, next); }
 }

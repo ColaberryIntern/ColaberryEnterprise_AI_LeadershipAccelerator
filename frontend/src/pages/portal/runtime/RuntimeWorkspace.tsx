@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment } from './runtimeApi';
-import VideoEmbed from '../../../components/timeline/VideoEmbed';
+import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
+import { lessonDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 
@@ -32,6 +33,8 @@ const RuntimeWorkspace: React.FC = () => {
   const [reflectionText, setReflectionText] = useState('');
   const [artifact, setArtifact] = useState<any>(null);
   const [completed, setCompleted] = useState(false);
+  // Server-truth watch state for the 75% gate (video/testimonial/podcast).
+  const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
 
   // mentor
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -46,8 +49,8 @@ const RuntimeWorkspace: React.FC = () => {
     (async () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
-        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed');
-        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null);
+        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
         if (VIDEO_BANDS.includes(open.card.render_band)) {
           runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
         }
@@ -62,6 +65,15 @@ const RuntimeWorkspace: React.FC = () => {
   const isVideo = VIDEO_BANDS.includes(band);
   const isLab = band === 'promptlab';
   const isReflect = ['reflection', 'survey', 'question'].includes(band);
+  // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
+  // beats the card's raw title everywhere the student sees it.
+  const displayTitle = card?.content?.title || card?.title || '';
+  // Watch gate: report play heartbeats while not yet completed; the "Mark complete"
+  // button stays disabled until the server confirms the 75% threshold is met.
+  const onWatchBeat: ((beat: WatchBeatPayload) => void) | undefined = card && !completed
+    ? (beat) => { runtimeApi.watch(card.id, beat).then(setWatch).catch(() => { /* best-effort */ }); }
+    : undefined;
+  const watchGated = isVideo && watch?.required_pct != null && !watch?.met;
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -113,15 +125,43 @@ const RuntimeWorkspace: React.FC = () => {
       <style>{runtimeCss}</style>
       <header className="rt-top">
         <button className="rt-back" onClick={() => navigate('/portal/classroom')} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
-        <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{card.title}</div></div>
+        <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
         <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>
       </header>
 
       <div className="rt-body">
         {/* CENTER — activity */}
         <main className="rt-mid">
+          {/* Hero — the type's picture with the lesson title ON the image (video bands keep their player). */}
+          {!isVideo && card.type_thumbnail && (
+            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+              <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
+              <div style={{ position: 'absolute', left: 16, right: 16, bottom: 12, color: '#fff', fontWeight: 800, fontSize: 20, lineHeight: 1.25, textShadow: '0 1px 3px rgba(0,0,0,.45)' }}>{displayTitle}</div>
+            </div>
+          )}
+
           {isVideo && (
-            <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.video?.title || card.title} poster={card.video?.poster || videoThumbnail(parseVideoUrl(card.video?.url))} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} />
+            <>
+              <VideoEmbed
+                source={parseVideoUrl(card.video?.url)}
+                title={card.video?.title || card.title}
+                poster={card.video?.poster || videoThumbnail(parseVideoUrl(card.video?.url))}
+                badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+                onWatchBeat={onWatchBeat}
+                fallbackDurationS={card.estimated_time ? card.estimated_time * 60 : null}
+              />
+              {!completed && card.video?.url && (
+                <div className="tlv-watch">
+                  <div className="tlv-watchbar"><i style={{ width: `${Math.min(100, watch?.watched_pct ?? 0)}%` }} /></div>
+                  <span className="tlv-watchpct">
+                    {watch?.required_pct != null
+                      ? (watch.met ? '✓ Watched — points unlocked' : `Watched ${watch?.watched_pct ?? 0}% · reach ${watch.required_pct}% to collect your points`)
+                      : `Watched ${watch?.watched_pct ?? 0}%`}
+                  </span>
+                </div>
+              )}
+            </>
           )}
 
           {isLab && (
@@ -148,15 +188,31 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
 
+          {/* The workspace OPENS with the saved lesson (same content as the card drawer),
+              so the student reads it here and asks the Mentor about it. */}
           {!isVideo && !isLab && !isReflect && (
-            <div className="rt-card">{card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}</div>
+            <div className="rt-card">
+              {card.content?.summary && <p>{card.content.summary}</p>}
+              {card.content?.body_html
+                ? <iframe title="Lesson" sandbox="" srcDoc={lessonDoc(card.content.body_html)} style={{ width: '100%', border: 0, minHeight: 420, background: '#fff', borderRadius: 8 }} />
+                : card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
+            </div>
           )}
 
           {artifact && <div className="rt-artifact"><div className="rt-lab">Portfolio artifact created</div><b>{artifact.title}</b><p className="rt-muted">{artifact.summary}</p></div>}
 
           <div className="rt-complete">
             {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
-              : <button className="rt-btn cta" disabled={busy === 'complete'} onClick={complete}>{busy === 'complete' ? 'Generating evidence…' : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}</button>}
+              : <button
+                  className="rt-btn cta"
+                  disabled={busy === 'complete' || watchGated}
+                  title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
+                  onClick={complete}
+                >
+                  {busy === 'complete' ? 'Generating evidence…'
+                    : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
+                    : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
+                </button>}
           </div>
 
           {/* COHORT COMMENTS — media cards (podcast / testimonial / video), newest first */}

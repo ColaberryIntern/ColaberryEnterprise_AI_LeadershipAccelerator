@@ -28,6 +28,7 @@ export interface FeedVideo {
  *  "Generate content"), rendered in the student drawer — what was previewed IS
  *  what the student sees. */
 export interface FeedContent {
+  title?: string;    // the generated lesson title (e.g. "Overview — {week topic}") — display beats the card's raw title
   summary?: string;
   body_html?: string;
   questions?: string[];
@@ -88,6 +89,7 @@ export function contentFromMetadata(metadata: any): FeedContent | null {
   const c = metadata && typeof metadata === 'object' ? metadata.content : null;
   if (!c || typeof c !== 'object') return null;
   const out: FeedContent = {};
+  if (typeof c.title === 'string' && c.title.trim()) out.title = c.title;
   if (typeof c.summary === 'string' && c.summary.trim()) out.summary = c.summary;
   if (typeof c.body_html === 'string' && c.body_html.trim()) out.body_html = c.body_html;
   if (Array.isArray(c.questions) && c.questions.length) out.questions = c.questions.map(String);
