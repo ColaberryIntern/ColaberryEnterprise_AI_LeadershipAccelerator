@@ -840,6 +840,18 @@ async function ensurePodcastSchema() {
   }
 }
 
+// Per-card student comments (Runtime workspace, newest-first). Model is the schema
+// contract; targeted sync creates the table if missing (boot has no global sync).
+async function ensureCardCommentsSchema() {
+  try {
+    const { TimelineCardComment } = await import('./models');
+    await TimelineCardComment.sync();
+    console.log('[DB] Card comments schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] Card comments schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
 // Blog library (training.colaberry.com/blog) + per-student read ledger — powers the
 // Blog type's auto-match mode (see blogMediaService / blogIngestionService). Raw
 // idempotent DDL with DB-side defaults, sibling of ensureNetworkVideoSchema.
@@ -1501,6 +1513,8 @@ async function start(): Promise<void> {
   await ensureNetworkVideoSchema();
   // Podcast Library (Podcast random personalized mode) — catalog + per-enrollment listen ledger.
   await ensurePodcastSchema();
+  // Per-card student comments (Runtime workspace).
+  await ensureCardCommentsSchema();
   // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();

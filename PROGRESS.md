@@ -308,6 +308,17 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Podcast UX: inline click-to-play + workspace comments + AI rail (2026-07-16)
+- [x] **Feed tile plays the episode on click; Open = drawer (no autoplay); workspace gets cohort comments (newest-first) beside the existing AI Mentor**
+  - Date: 2026-07-16
+  - Session: CC-20260715-p3k8
+  - What changed:
+    - `frontend/src/components/timeline/TimelineCard.tsx`: podcast cards with a direct audio episode render a two-action `<div>` tile (skills_jar pattern) — clicking the artwork starts an inline `<audio autoPlay>` right in the feed (auto-completes the card on `ended`); the footer "Open" stops inline playback and opens the drawer, which stays poster-first/no-autoplay.
+    - Card comments (NEW, card-scoped — the feed's Comment button was dead and likes are client-side seeds): `backend/src/models/TimelineCardComment.ts` (`timeline_card_comments`: card_id, enrollment_id, body, created_at; indexed card+created), registered in `models/index.ts`, boot `ensureCardCommentsSchema()` in `server.ts` (no global sync on main); `backend/src/controllers/timelineCommentController.ts` + routes `GET/POST /api/portal/classroom/cards/:cardId/comments` (newest-first, authors from Enrollment.full_name, zod 1-2000 chars, POST behind the shared community rate limiter — registered after the limiter consts to avoid TDZ).
+    - Workspace (`RuntimeWorkspace.tsx` + `runtimeApi.ts` + `runtimeKit.tsx`): media-band cards (podcast/testimonial/video) get a "Comments" section under the activity — post box + newest-first list ("You" for own) — alongside the existing right-rail AI Mentor; Podcast badge on the workspace player. Artwork+audio player already worked there (poster-first).
+  - Why: Ali — clicking a podcast should play it immediately; Open should open the side panel without autoplay; the workspace should show the podcast art/player, cohort comments (most recent up top), and the AI on the far right.
+  - Verification: all touched TS/TSX transpile clean; PR CI (backend+frontend tsc, jest, secret scan); deployed to dev + prod, comments API smoke-tested (401 unauth, table ensured at boot).
+
 ### Podcast personalization — auto-pick a matched episode per student + listen tracking (2026-07-16)
 - [x] **Timeline cards fall back to the type's Experience Studio thumbnail when they have no poster (Ali: podcast card had no image on the student timeline)**
   - Date: 2026-07-16
