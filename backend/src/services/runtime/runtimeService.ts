@@ -16,7 +16,8 @@ import { computeEmploymentReadiness } from './employmentReadiness';
 import { computeCertificationReadiness } from './certificationReadiness';
 import { StudentSignals } from './readinessTypes';
 import { generateArtifact, listArtifacts } from './portfolioService';
-import { videoFromMetadata } from '../timeline/timelineService';
+import { videoFromMetadata, contentFromMetadata } from '../timeline/timelineService';
+import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 
 /** Build the student's signal vector from progression + completed evidence + portfolio. */
 export async function studentSignals(enrollmentId: string): Promise<StudentSignals> {
@@ -57,11 +58,15 @@ export async function cardContext(cardId: string) {
   return { id: c.id, type: c.type, title: c.title, description: c.description, student_label: def?.student_label || c.type, metadata: c.metadata };
 }
 
-/** Open a published card for the runtime (card + the student's progress + video). */
+/** Open a published card for the runtime (card + the student's progress + video +
+ *  the saved lesson content + the type's picture, so the workspace opens WITH the
+ *  lesson the student saw on the card and its hero image). */
 export async function openCard(enrollmentId: string, cardId: string) {
   const card = await TimelineCard.findByPk(cardId);
   if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
   const def = resolveType(card.type);
+  // The type's Studio thumbnail lives on the DB definition (not the code registry).
+  const dbDef = await CurriculumTypeDefinition.findOne({ where: { slug: card.type }, attributes: ['thumbnail_url'] });
   const [progress] = await TimelineCardProgress.findOrCreate({
     where: { card_id: cardId, enrollment_id: enrollmentId },
     defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'available' },
@@ -72,6 +77,8 @@ export async function openCard(enrollmentId: string, cardId: string) {
       student_label: def?.student_label || card.type, render_band: def?.render_band || 'overview',
       estimated_time: card.estimated_time, competencies: card.competencies,
       evidence_required: !!def?.evidence_required, video: videoFromMetadata(card.metadata),
+      content: contentFromMetadata(card.metadata),
+      type_thumbnail: ((dbDef?.thumbnail_url || '') as string).trim() || null,
     },
     progress: { status: progress.status, completed_at: progress.completed_at },
   };

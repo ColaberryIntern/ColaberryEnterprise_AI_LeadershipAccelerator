@@ -10,6 +10,8 @@ export interface RtCard {
   student_label: string; render_band: string; estimated_time?: number | null; competencies?: any;
   evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
+  content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
+  type_thumbnail?: string | null;   // the type's picture — hero banner with the title overlaid
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 
