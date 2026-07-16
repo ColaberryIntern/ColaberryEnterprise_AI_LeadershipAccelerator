@@ -1392,6 +1392,11 @@ async function start(): Promise<void> {
       const { seedCurriculumTypeDefinitions } = await import('./services/timeline/typeSeeder');
       const r = await seedCurriculumTypeDefinitions();
       console.log(`[TimelineEngine] curriculum types seeded: ${r.created} created, ${r.updated} updated`);
+      // Layer human-authored config (generation prompt, thumbnail, Parts, contracts)
+      // on top of the freshly-seeded type registry. Idempotent; keyed on slug.
+      const { seedComponentAuthoring } = await import('./seeds/seedComponentAuthoring');
+      const authoring = await seedComponentAuthoring();
+      console.log(`[TimelineEngine] component authoring applied: ${authoring.updated.length} updated${authoring.missing.length ? `, missing: ${authoring.missing.join(',')}` : ''}`);
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
