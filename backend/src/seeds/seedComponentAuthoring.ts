@@ -16,32 +16,30 @@ import CurriculumTypeDefinition, { CurriculumTypeDefinitionAttributes } from '..
 
 type AuthoredFields = Partial<CurriculumTypeDefinitionAttributes>;
 
-// ── overview ─────────────────────────────────────────────────────────────────
-// Fixed teal "vista" watermark (aerial view over land + water), embedded as a
-// self-contained data-URI SVG so the same image renders on every Overview card.
-const OVERVIEW_VISTA_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 675" width="1200" height="675" role="img" aria-label="Overview vista overlooking land and water">
-<defs>
-<linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#062b33"/><stop offset="55%" stop-color="#0d5967"/><stop offset="100%" stop-color="#2fa7b3"/></linearGradient>
-<linearGradient id="sea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#37b4c0"/><stop offset="100%" stop-color="#0a4551"/></linearGradient>
-<linearGradient id="land" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a3b44"/><stop offset="100%" stop-color="#052228"/></linearGradient>
-<radialGradient id="sun" cx="68%" cy="46%" r="34%"><stop offset="0%" stop-color="#dff6f5" stop-opacity="0.55"/><stop offset="100%" stop-color="#dff6f5" stop-opacity="0"/></radialGradient>
-<linearGradient id="scrim" x1="0" y1="1" x2="0" y2="0"><stop offset="0%" stop-color="#04191d" stop-opacity="0.78"/><stop offset="45%" stop-color="#04191d" stop-opacity="0.20"/><stop offset="100%" stop-color="#04191d" stop-opacity="0"/></linearGradient>
-<radialGradient id="vig" cx="50%" cy="42%" r="72%"><stop offset="70%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#02171b" stop-opacity="0.42"/></radialGradient>
-</defs>
-<rect x="0" y="0" width="1200" height="312" fill="url(#sky)"/>
-<ellipse cx="816" cy="300" rx="440" ry="180" fill="url(#sun)"/>
-<rect x="0" y="300" width="1200" height="375" fill="url(#sea)"/>
-<g stroke="#bfeef0" stroke-opacity="0.16" stroke-width="2"><line x1="120" y1="352" x2="1080" y2="352"/><line x1="220" y1="388" x2="1000" y2="388"/><line x1="300" y1="420" x2="900" y2="420"/><line x1="380" y1="452" x2="820" y2="452"/></g>
-<path d="M0 300 Q 210 268 420 288 Q 560 302 700 300 L 700 320 Q 480 330 0 322 Z" fill="#0b4e5a" fill-opacity="0.7"/>
-<path d="M0 675 L0 372 Q 180 344 340 400 Q 470 446 560 542 Q 610 596 640 675 Z" fill="url(#land)"/>
-<g stroke="#3fd0d8" stroke-opacity="0.18" stroke-width="2" fill="none"><path d="M40 640 Q 210 520 380 560"/><path d="M40 588 Q 220 470 360 512"/><path d="M60 536 Q 210 434 330 470"/><path d="M90 486 Q 200 410 300 436"/></g>
-<path d="M0 372 Q 180 344 340 400 Q 470 446 560 542" stroke="#dff6f5" stroke-opacity="0.35" stroke-width="3" fill="none"/>
-<rect x="0" y="337" width="1200" height="338" fill="url(#scrim)"/>
-<rect x="0" y="0" width="1200" height="675" fill="url(#vig)"/>
-<text x="60" y="612" font-family="Georgia,serif" font-size="34" letter-spacing="10" fill="#dff6f5" fill-opacity="0.14">OVERVIEW</text>
-</svg>`;
+// ── AI banner thumbnails ─────────────────────────────────────────────────────
+// One unique AI-generated banner per curriculum type (consistent enterprise art
+// direction + a small Colaberry wordmark chip), shipped as static assets in
+// frontend/public/thumbnails/curriculum-types/ and served by the frontend build
+// at /thumbnails/curriculum-types/<slug>.jpg. Replaces the deterministic
+// gradient templateThumbnail() SVGs (and the earlier hand-drawn Overview vista).
+// Regeneration pipeline: scripts/curriculum-type-thumbnails/ (see its README).
+const THUMBNAIL_SLUGS = [
+  'announcement', 'overview', 'live_class', 'event', 'video', 'testimonial',
+  'podcast', 'blog', 'warmup', 'knowledge_check', 'survey', 'prompt_lab',
+  'deep_dive', 'prompt_challenge', 'implementation_task', 'artifact_submission',
+  'ai_video_feedback', 'mock_interview', 'anthropic_skills_jar',
+  'certification_exercise', 'evaluation', 'question', 'discussion',
+  'project_task', 'build_story', 'github_sync', 'reflection',
+  'community_discussion', 'presentation', 'study_session', 'demo',
+  'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
+  'milestone', 'achievement', 'daily_streak', 'completion_badge',
+];
 
-const OVERVIEW_THUMBNAIL_URL = 'data:image/svg+xml;base64,' + Buffer.from(OVERVIEW_VISTA_SVG).toString('base64');
+const thumbnailUrlFor = (slug: string): string => `/thumbnails/curriculum-types/${slug}.jpg`;
+
+const AI_THUMBNAILS: Record<string, AuthoredFields> = Object.fromEntries(
+  THUMBNAIL_SLUGS.map((slug) => [slug, { thumbnail_url: thumbnailUrlFor(slug) }]),
+);
 
 // Zero author input: the runtime prepends the week's Blueprint as "WEEK CONTEXT"
 // (see getBlueprintContext), and enforces the fixed output schema. This prompt
@@ -67,6 +65,7 @@ const OVERVIEW_GENERATION_PROMPT = [
 
 /** slug -> authored fields layered on top of the registry defaults. */
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
+  ...AI_THUMBNAILS,
   overview: {
     student_label: 'Overview',
     category: 'Learn',
@@ -83,7 +82,7 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     completion_rules: { on: 'view' },
     evaluation_type: 'none',
     generation_prompt: OVERVIEW_GENERATION_PROMPT,
-    thumbnail_url: OVERVIEW_THUMBNAIL_URL,
+    thumbnail_url: thumbnailUrlFor('overview'),
     approved: true,
     status: 'ready',
   },
