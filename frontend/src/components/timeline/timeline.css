@@ -57,11 +57,17 @@
 .tl-de .tl-wkmid{min-width:160px;text-align:center}
 .tl-de .tl-wklbl{font-size:16px;font-weight:700;color:var(--text-strong);line-height:1.1}
 
-/* two-column classroom layout */
+/* two-column classroom layout. FB-style responsive rule: when the screen
+   shrinks, the feed NEVER shrinks with it — the right rail disappears first
+   and the feed keeps its normal card/image size, centered like a FB feed. */
 .tl-de .tl-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
 .tl-de .tl-feedcol{min-width:0}
 .tl-de .tl-side{display:flex;flex-direction:column;gap:16px;position:sticky;top:20px;align-self:start}
-@media(max-width:1000px){.tl-de .tl-grid{grid-template-columns:1fr}.tl-de .tl-side{position:static}}
+@media(max-width:1180px){
+  .tl-de .tl-grid{grid-template-columns:minmax(0,1fr)}
+  .tl-de .tl-side{display:none}
+  .tl-de .tl-feedcol{max-width:720px;margin:0 auto;width:100%}
+}
 
 /* card shell + chips + buttons (Design E) */
 .tl-de .tl-card{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-24);box-shadow:var(--shadow-md)}
