@@ -85,6 +85,7 @@ interface TypeDef {
   slug: string; label: string; bucket: Bucket; render_band: string; difficulty: string;
   learning_xp: number; builder_xp: number; community_xp: number; competencies: string[]; event: boolean;
   capabilities?: string[];   // the type's Parts — gate the preview's optional sections
+  launched?: boolean;        // Studio lifecycle "published" + active — only these can be ADDED
 }
 interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[] }
 
@@ -218,8 +219,13 @@ const EditDrawer: React.FC<{
             <label style={lbl}>Type
               <select style={inp} value={draft.type || ''} onChange={(e) => onChange({ type: e.target.value })}>
                 <option value="" disabled>Choose a type…</option>
-                {types.map((t) => <option key={t.slug} value={t.slug}>{t.label}</option>)}
+                {/* Only LAUNCHED types (Studio lifecycle "published" + active) are
+                    offered — unapproved types can't be hand-placed on the timeline. */}
+                {types.filter((t) => t.launched).map((t) => <option key={t.slug} value={t.slug}>{t.label}</option>)}
               </select>
+              <span style={{ fontSize: 11, color: '#8A8A8A', marginTop: 4, display: 'block' }}>
+                Only launched types appear here. Launch a type in the Experience Studio → Status tab.
+              </span>
             </label>
           )}
 
@@ -455,7 +461,9 @@ const TimelineEditorTab: React.FC = () => {
   };
 
   const openAdd = (bucket: Bucket, wk?: number | null) => {
-    const def = board?.types.find((t) => t.bucket === bucket) || board?.types[0];
+    // Default to a LAUNCHED type — unlaunched ones aren't offered in the picker.
+    const launched = (board?.types || []).filter((t) => t.launched);
+    const def = launched.find((t) => t.bucket === bucket) || launched[0];
     setIsNew(true);
     setDraft({ type: def?.slug, title: '', bucket, week: wk !== undefined ? wk : week, difficulty: def?.difficulty || 'core',
       points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'draft' });

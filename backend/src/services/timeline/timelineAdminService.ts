@@ -137,28 +137,49 @@ export async function listTimeline(programId?: string | null) {
     where,
     order: [['week', 'ASC'], ['bucket', 'ASC'], ['order', 'ASC']],
   });
-  // The type's Parts (capabilities) live on the DB CurriculumTypeDefinition
-  // (what the Studio "Parts" panel edits), keyed by slug — merged in so the
-  // editor's "finished product" preview gates sections like the live render.
-  const capRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
-  const capsBySlug = new Map(capRows.map((c) => [c.slug, normalizeCapabilities(c.capabilities)]));
-  // Authorable types only — system types are engine-emitted, not hand-placed.
+  // The type's Parts (capabilities) + lifecycle live on the DB
+  // CurriculumTypeDefinition (what the Studio edits), keyed by slug — merged in
+  // so the editor's preview gates sections like the live render, and so the
+  // "Add card" picker can be limited to LAUNCHED types.
+  const defRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'status', 'is_active'] });
+  const defBySlug = new Map(defRows.map((c: any) => [c.slug, c]));
+  // ALL authorable types are returned (existing cards of unlaunched types still
+  // need labels/bands); `launched` marks the ones staff may ADD — a type is
+  // launched once its Studio lifecycle reaches "published" and it is active.
   const types = allTypes()
     .filter((t) => !t.system)
-    .map((t) => ({
-      slug: t.slug, label: t.label, student_label: t.student_label,
-      bucket: t.bucket, render_band: t.render_band, difficulty: t.difficulty,
-      learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
-      competencies: t.competencies, event: !!t.event,
-      capabilities: capsBySlug.get(t.slug) || [],
-    }));
+    .map((t) => {
+      const row: any = defBySlug.get(t.slug);
+      return {
+        slug: t.slug, label: t.label, student_label: t.student_label,
+        bucket: t.bucket, render_band: t.render_band, difficulty: t.difficulty,
+        learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
+        competencies: t.competencies, event: !!t.event,
+        capabilities: row ? normalizeCapabilities(row.capabilities) : [],
+        launched: !!row && row.status === 'published' && row.is_active !== false,
+      };
+    });
   return { scope: 'global', buckets: BUCKETS, cards, types };
+}
+
+/** A type may be hand-placed on the timeline only once its Studio lifecycle is
+ *  "published" (launched/approved) and it hasn't been deactivated. */
+async function assertTypeLaunched(slug: string): Promise<void> {
+  const row: any = await CurriculumTypeDefinition.findOne({ where: { slug }, attributes: ['slug', 'status', 'is_active'] });
+  const launched = !!row && row.status === 'published' && row.is_active !== false;
+  if (!launched) {
+    throw Object.assign(
+      new Error(`Type "${slug}" has not been launched — publish it in the Experience Studio (Status tab) before adding it to the timeline`),
+      { status: 400 },
+    );
+  }
 }
 
 export async function createCard(input: CreateCardInput): Promise<TimelineCard> {
   const def = resolveType(input.type);
   if (!def) throw Object.assign(new Error(`Unknown card type "${input.type}"`), { status: 400 });
   if (def.system) throw Object.assign(new Error(`Type "${input.type}" is system-emitted and cannot be created manually`), { status: 400 });
+  await assertTypeLaunched(input.type); // only launched/approved types may be hand-placed
   if (input.bucket && !BUCKETS.includes(input.bucket)) throw Object.assign(new Error(`Invalid bucket "${input.bucket}"`), { status: 400 });
 
   const bucket = input.bucket || def.bucket;
