@@ -97,16 +97,16 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
         {isVideo && (
           <div className="tld-player">
-            <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} onEnded={done || preview ? undefined : onComplete} />
+            <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || card.type_thumbnail || null} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} onEnded={done || preview ? undefined : onComplete} />
           </div>
         )}
 
         {/* The type's fixed picture (Studio thumbnail) as the card hero — every
             card of the type shares the image; only the title varies. Video-ish
             bands and Skills Course keep their own visual instead. */}
-        {!isVideo && !isSkillsJar && card.thumbnail_url && (
+        {!isVideo && !isSkillsJar && card.type_thumbnail && (
           <div className="tld-player">
-            <img src={card.thumbnail_url} alt="" style={{ width: '100%', display: 'block', borderRadius: 12 }} />
+            <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', borderRadius: 12 }} />
           </div>
         )}
 

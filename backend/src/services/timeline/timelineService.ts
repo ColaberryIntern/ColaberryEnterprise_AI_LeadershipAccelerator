@@ -73,7 +73,7 @@ export interface FeedCard {
   course: FeedCourse | null;          // Skills Course link (skills_jar)
   blog: FeedBlog | null;              // Blog post (blog type) — fixed or auto-matched per student
   capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
-  thumbnail_url: string | null;       // the type's fixed picture (Studio thumbnail) — hero image on non-video cards
+  type_thumbnail: string | null;      // the type's Experience Studio thumbnail — hero on non-video cards; fallback art when the card has no poster
 }
 
 /** PURE — normalize a capabilities blob (JSONB, may be junk) into a string[]. */
@@ -201,7 +201,8 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
   const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
   const capsBySlug = new Map(typeDefs.map((t) => [t.slug, normalizeCapabilities(t.capabilities)]));
-  const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t as any).thumbnail_url || null]));
+  // The type's Studio thumbnail — hero on non-video cards; poster/tile fallback elsewhere.
+  const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t.thumbnail_url || '').trim() || null]));
 
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
@@ -211,7 +212,6 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       type: card.type,
       student_label: def?.student_label || card.type,
       render_band: def?.render_band || 'overview',
-      thumbnail_url: thumbBySlug.get(card.type) || null,
       title: card.title,
       subtitle: card.subtitle,
       description: card.description,
@@ -230,6 +230,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       course: courseFromMetadata(card.metadata),
       blog: blogFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
+      type_thumbnail: thumbBySlug.get(card.type) || null,
     };
   });
 

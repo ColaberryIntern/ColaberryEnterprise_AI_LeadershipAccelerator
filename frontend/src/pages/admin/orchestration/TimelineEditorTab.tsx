@@ -109,7 +109,7 @@ const SortableCard: React.FC<{
     difficulty: card.difficulty, estimated_time: card.estimated_time, week: card.week,
     points: card.points, video: card.metadata?.video, course: (card.metadata as any)?.course,
     blog: (card.metadata as any)?.blog,
-    experience: (card.metadata as any)?.content, thumbnail_url: thumbnailUrl,
+    experience: (card.metadata as any)?.content, type_thumbnail: thumbnailUrl,
   });
   return (
     <div ref={setNodeRef} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
@@ -217,7 +217,7 @@ const EditDrawer: React.FC<{
     subtitle: draft.subtitle, description: draft.description,
     difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
     points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
-    course: draft.course, blog: (draft.metadata as any)?.blog, capabilities: typeDef?.capabilities, thumbnail_url: typeDef?.thumbnail_url ?? null,
+    course: draft.course, blog: (draft.metadata as any)?.blog, capabilities: typeDef?.capabilities, type_thumbnail: typeDef?.thumbnail_url ?? null,
   });
   return (
     <div className="te-scrim" onClick={onClose}>

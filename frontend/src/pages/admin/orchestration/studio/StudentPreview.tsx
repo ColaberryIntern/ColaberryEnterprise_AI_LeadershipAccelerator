@@ -27,7 +27,7 @@ const StudentPreview: React.FC<Props> = ({ band, label, experience, videoUrl, pr
   const card = adaptToFeedCard({
     render_band: band, label, student_label: label, experience,
     video: { url: videoUrl || null, presenter: presenter || null, poster: poster || null },
-    course, capabilities: parts, thumbnail_url: thumbnail ?? null,
+    course, capabilities: parts, type_thumbnail: thumbnail ?? null,
   });
   return (
     <div className="tl-de">

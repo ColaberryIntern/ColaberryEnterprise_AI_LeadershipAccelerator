@@ -30,7 +30,7 @@ export interface TimelineFeedCard {
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
-  thumbnail_url?: string | null;   // the type's fixed picture — hero image on non-video cards
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail — hero on non-video cards; fallback art when no poster
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -133,11 +133,13 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
   // Poster background: a video card uses its own poster image, a blog card its
-  // post thumbnail (both darkened so the overlay text stays legible); every
-  // other kind uses its Design-E gradient.
+  // post thumbnail (both darkened so the overlay text stays legible), and a
+  // media/blog card without its own art falls back to the type's Experience
+  // Studio thumbnail; every other kind uses its Design-E gradient.
   const posterImg =
     (v.kind === 'video' && card.video?.poster) ||
-    (card.type === 'blog' && card.blog?.thumbnail) || null;
+    (card.type === 'blog' && card.blog?.thumbnail) ||
+    ((v.kind === 'video' || card.type === 'blog') && card.type_thumbnail) || null;
   const posterStyle: React.CSSProperties = posterImg
     ? {
         backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterImg})`,
