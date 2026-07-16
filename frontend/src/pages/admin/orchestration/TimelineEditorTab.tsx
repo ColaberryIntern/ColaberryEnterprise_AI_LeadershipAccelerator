@@ -85,6 +85,7 @@ interface TypeDef {
   slug: string; label: string; bucket: Bucket; render_band: string; difficulty: string;
   learning_xp: number; builder_xp: number; community_xp: number; competencies: string[]; event: boolean;
   capabilities?: string[];   // the type's Parts — gate the preview's optional sections
+  thumbnail_url?: string | null;   // the type's fixed picture — hero on non-video cards
 }
 interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[] }
 
@@ -92,9 +93,9 @@ const pts = (p: Card['points']) => (p?.learning || 0) + (p?.builder || 0) + (p?.
 
 // ── one Facebook-style feed card (draggable) with inline play + admin actions ──
 const SortableCard: React.FC<{
-  card: Card; band?: string; studentLabel?: string; onEdit: (c: Card) => void; onClone: (c: Card) => void;
+  card: Card; band?: string; studentLabel?: string; thumbnailUrl?: string | null; onEdit: (c: Card) => void; onClone: (c: Card) => void;
   onDelete: (c: Card) => void; onPublish: (c: Card) => void;
-}> = ({ card, band, studentLabel, onEdit, onClone, onDelete, onPublish }) => {
+}> = ({ card, band, studentLabel, thumbnailUrl, onEdit, onClone, onDelete, onPublish }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const published = card.visibility === 'published';
   const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition };
@@ -108,7 +109,7 @@ const SortableCard: React.FC<{
     difficulty: card.difficulty, estimated_time: card.estimated_time, week: card.week,
     points: card.points, video: card.metadata?.video, course: (card.metadata as any)?.course,
     blog: (card.metadata as any)?.blog,
-    experience: (card.metadata as any)?.content,
+    experience: (card.metadata as any)?.content, type_thumbnail: thumbnailUrl,
   });
   return (
     <div ref={setNodeRef} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
@@ -138,9 +139,9 @@ const SortableCard: React.FC<{
 
 // ── one bucket section (full width, vertical) ────────────────────────────────
 const BucketSection: React.FC<{
-  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
-  cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel'>;
-}> = ({ bucket, cards, bandOf, labelOf, onReorder, onAdd, cardActions }) => {
+  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; thumbOf: (type: string) => string | null; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
+  cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel' | 'thumbnailUrl'>;
+}> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, cardActions }) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -169,7 +170,7 @@ const BucketSection: React.FC<{
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {cards.length === 0
             ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
-            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} {...cardActions} />)}
+            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} thumbnailUrl={thumbOf(c.type)} {...cardActions} />)}
         </SortableContext>
       </DndContext>
     </div>
@@ -216,7 +217,7 @@ const EditDrawer: React.FC<{
     subtitle: draft.subtitle, description: draft.description,
     difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
     points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
-    course: draft.course, blog: (draft.metadata as any)?.blog, capabilities: typeDef?.capabilities,
+    course: draft.course, blog: (draft.metadata as any)?.blog, capabilities: typeDef?.capabilities, type_thumbnail: typeDef?.thumbnail_url ?? null,
   });
   return (
     <div className="te-scrim" onClick={onClose}>
@@ -494,6 +495,11 @@ const TimelineEditorTab: React.FC = () => {
     const t = board?.types.find((x) => x.slug === type);
     return t?.label || type.replace(/_/g, ' ');
   }, [board]);
+  // slug -> the type's fixed picture (Studio thumbnail) — hero on non-video cards.
+  const thumbOf = useCallback((type: string): string | null => {
+    const t = board?.types.find((x) => x.slug === type);
+    return t?.thumbnail_url || null;
+  }, [board]);
 
   const weekCards = useMemo(
     () => (board?.cards || []).filter((c) => (typeof c.week === 'number' ? c.week : null) === week),
@@ -761,7 +767,7 @@ const TimelineEditorTab: React.FC = () => {
           </div>
 
           {BUCKETS.map((b) => (
-            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} onReorder={onReorder} onAdd={openAdd}
+            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} thumbOf={thumbOf} onReorder={onReorder} onAdd={openAdd}
               cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish }} />
           ))}
         </>

@@ -30,7 +30,7 @@ export interface TimelineFeedCard {
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
-  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail — fallback art when the card has no poster
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail — hero on non-video cards; fallback art when no poster
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
