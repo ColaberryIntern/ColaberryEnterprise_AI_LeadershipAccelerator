@@ -4,9 +4,10 @@ import { VideoSource, providerLabel, withAutoplay, isAudioUrl } from '../../util
 /**
  * VideoEmbed — plays a lesson video in-app from any supported link (YouTube,
  * Vimeo, Loom, Wistia, or a direct file), with no third-party player library.
- * Shows a poster + play button first (so we never autoplay audio on open); on
- * play it swaps to the live embed. Direct-file videos report `onEnded` so the
- * card can auto-complete; iframe providers complete via an explicit action.
+ * Inline contexts show a poster + play button first; drawer contexts pass
+ * `autoplay` (the click that OPENED the drawer is the play intent) so the video
+ * starts right away. Direct-file videos report `onEnded` so the card can
+ * auto-complete; iframe providers complete via an explicit action.
  */
 
 interface Props {
@@ -17,14 +18,17 @@ interface Props {
   /** A corner ribbon label drawn over the poster (e.g. "Testimonial") so the card
    *  type is always visible on the thumbnail. */
   badge?: string | null;
+  /** Start playing immediately (no poster click) — used when the user's click
+   *  already expressed play intent (opening a video card's drawer). */
+  autoplay?: boolean;
 }
 
 const PlayIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
 );
 
-const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge }) => {
-  const [playing, setPlaying] = useState(false);
+const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, autoplay }) => {
+  const [playing, setPlaying] = useState(!!autoplay);
 
   const ribbon = badge ? <span className="tlv-ribbon">{badge}</span> : null;
 

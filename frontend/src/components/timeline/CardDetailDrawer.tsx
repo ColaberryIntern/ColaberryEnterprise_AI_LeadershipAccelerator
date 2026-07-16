@@ -38,6 +38,7 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview 
         <CardDetailBody
           card={card}
           preview={preview}
+          autoplayVideo
           onClose={onClose}
           onComplete={preview || !onComplete ? undefined : () => onComplete(card)}
           onEnterWorkspace={preview ? undefined : () => navigate(`/portal/runtime/${card.id}`)}

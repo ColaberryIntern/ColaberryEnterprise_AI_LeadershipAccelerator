@@ -37,9 +37,10 @@ interface Props {
   onComplete?: () => Promise<void> | void; // real drawer: mark complete (also on video end)
   onEnterWorkspace?: () => void;           // real drawer: navigate to the runtime
   onClose?: () => void;                    // real drawer: the header × button
+  autoplayVideo?: boolean;                 // drawer contexts: the open click was the play intent — start the video immediately
 }
 
-const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWorkspace, onClose }) => {
+const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWorkspace, onClose, autoplayVideo }) => {
   // The admin-populated lesson content is the single source of notes. It expires
   // after 30 days; on open (live only) we ask the server to ensure it's fresh —
   // the first student past 30 days triggers a class-wide regenerate. Until that
@@ -97,7 +98,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {isVideo && (
           <div className="tld-player">
             {source ? (
-              <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || videoThumbnail(source)} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} onEnded={done || preview ? undefined : onComplete} />
+              <VideoEmbed key={card.id} source={source} title={card.video?.title || card.title} poster={card.video?.poster || videoThumbnail(source)} autoplay={autoplayVideo} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} onEnded={done || preview ? undefined : onComplete} />
             ) : (card.image || card.type_thumbnail_url) ? (
               // No clip attached yet — show the card's image (own image, else the
               // type's banner) instead of an empty dashed box; the note below

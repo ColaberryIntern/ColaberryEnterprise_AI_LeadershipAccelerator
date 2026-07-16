@@ -138,6 +138,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   // the video URL (YouTube). Otherwise the curriculum type's AI banner is the
   // default image for every card; the Design-E gradient remains the last-resort
   // fallback. Darkened so the overlay text stays legible.
+  // Playable = a real video/audio source is attached. Only playable cards get
+  // the ▶ affordance; everything else shows an "Open" pill (right-panel intent).
+  const playable = !!parseVideoUrl(card.video?.url);
   const ownImage =
     (card.image && card.image.trim()) ||
     card.video?.poster ||
@@ -187,8 +190,10 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
       <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
+        {/* Not a playable medium — the circle opens the right panel (details), so
+            it carries an open-panel chevron, not a ▶ (▶ is reserved for playback). */}
         <button type="button" className="mt-play" onClick={() => !locked && onOpen?.(card)} aria-label={`Course details: ${card.title}`}>
-          <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <button type="button" className="mt-openbtn" onClick={openCourseLink} aria-label={course?.url ? 'Open the course link' : 'Open course details'}>
           Open <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
@@ -202,9 +207,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>
-      <span className="mt-open">{done
-        ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
-        : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>
+      {done
+        ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
+        : playable
+          ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
+          : <span className="mt-openpill">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>}
     </button>
   );
 
