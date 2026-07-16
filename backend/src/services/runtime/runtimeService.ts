@@ -17,6 +17,8 @@ import { computeCertificationReadiness } from './certificationReadiness';
 import { StudentSignals } from './readinessTypes';
 import { generateArtifact, listArtifacts } from './portfolioService';
 import { videoFromMetadata, contentFromMetadata } from '../timeline/timelineService';
+import { selectTestimonialForEnrollment } from '../timeline/networkVideoService';
+import { selectPodcastForEnrollment } from '../timeline/podcastMediaService';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 
 /** Build the student's signal vector from progression + completed evidence + portfolio. */
@@ -71,12 +73,28 @@ export async function openCard(enrollmentId: string, cardId: string) {
     where: { card_id: cardId, enrollment_id: enrollmentId },
     defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'available' },
   });
+
+  // Personalized media cards (podcast / testimonial) carry no fixed metadata.video —
+  // resolve the SAME per-student pick the classroom feed shows (the pickers reuse the
+  // stable per-card assignment), so the workspace always has the episode/video too.
+  let video = videoFromMetadata(card.metadata);
+  let title = card.title;
+  let description = card.description;
+  if (!video && card.type === 'podcast') {
+    const picked = await selectPodcastForEnrollment(enrollmentId, card);
+    if (picked) { video = picked.video; if (picked.title) title = picked.title; if (picked.description) description = picked.description; }
+  }
+  if (!video && card.type === 'testimonial') {
+    const picked = await selectTestimonialForEnrollment(enrollmentId, card);
+    if (picked) { video = picked.video; if (picked.title) title = picked.title; if (picked.description) description = picked.description; }
+  }
+
   return {
     card: {
-      id: card.id, type: card.type, title: card.title, subtitle: card.subtitle, description: card.description,
+      id: card.id, type: card.type, title, subtitle: card.subtitle, description,
       student_label: def?.student_label || card.type, render_band: def?.render_band || 'overview',
       estimated_time: card.estimated_time, competencies: card.competencies,
-      evidence_required: !!def?.evidence_required, video: videoFromMetadata(card.metadata),
+      evidence_required: !!def?.evidence_required, video,
       content: contentFromMetadata(card.metadata),
       type_thumbnail: ((dbDef?.thumbnail_url || '') as string).trim() || null,
     },
