@@ -324,6 +324,13 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
   - Verification: ran the shipped parser logic (ported 1:1, same cheerio 1.2.0) against the REAL index HTML + RSS — 24 index entries, 322 feed episodes, **24/24 matched with real distinct thumbnail + audio + date + duration + GUID**, deterministic; all jest fixtures assert-pass; all 7 TS files transpile syntax-clean. Deployed to Dev 1 (see deploy notes). Full `tsc`/`jest` via the Docker build gate.
   - Notes: staged surgically onto `workstream/podcast-catalog` off `main` (the authoring tree was entangled with other instances' work); frontend Experience Studio tab deferred per Ali's "later" — backend data layer + API contract are ready.
 
+- [x] **Catalog match-readiness: per-episode `category` + `tags` for the shared personalization picker**
+  - Date: 2026-07-16
+  - Session: CC-20260715-p3k8
+  - What changed: added `category STRING(80)` + `tags JSONB` to `backend/src/models/Podcast.ts`; new pure `backend/src/services/podcast/podcastTagger.ts` (`derivePodcastTags`/`derivePodcastCategory` — AI-topic/vendor vocabulary + coarse subject buckets `frontier-models`/`agents-automation`/`governance-safety`/`robotics-hardware`/`tools-coding`/`industry-news`); wired into `enrichEntries` → upsert (`podcastFeedParser.ts`, `podcastIngestionService.ts`, tags array-diffed in the idempotent content compare); test `__tests__/podcastTagger.test.ts`; `docs/PODCAST_CATALOG.md` + new `docs/PODCAST_PERSONALIZATION_SPEC.md` (shared media-picker plan).
+  - Why: prerequisite for the "auto-pick a podcast per student by match/curriculum-subject + track views/interactions" feature (mirrors testimonials). Ali chose: shared media-picker landing after the testimonials + podcast-catalog branches merge; podcasts picked from this Buzzsprout catalog with audio playback. These match-signal columns are the one piece that ships independently now.
+  - Verification: all `podcastTagger` jest assertions pass (ported 1:1, run against real data); tags/category derived sensibly across the 24 real episodes; all edited/new TS transpile syntax-clean. New-column DB re-ingest exercised on Dev 1 as part of the prod-promotion check.
+
 ### STORY-002: VA ERP Integration — Push data updates to legacy ERP modules (2026-07-08)
 - [x] STORY-002 LegacyErpPushAgent — pushData command with role check, snapshot, rollback, audit
   - Date: 2026-07-08

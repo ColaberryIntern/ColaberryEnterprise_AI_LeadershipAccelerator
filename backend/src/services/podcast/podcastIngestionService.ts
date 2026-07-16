@@ -101,6 +101,8 @@ const CONTENT_FIELDS: (keyof PodcastRecord)[] = [
   'buzzsproutGuid',
   'featured',
   'source',
+  'category',
+  'tags',
 ];
 
 function recordToRow(rec: PodcastRecord, now: Date) {
@@ -117,6 +119,8 @@ function recordToRow(rec: PodcastRecord, now: Date) {
     buzzsprout_guid: rec.buzzsproutGuid,
     featured: rec.featured,
     source: rec.source,
+    category: rec.category,
+    tags: rec.tags,
     raw_meta_json: { matched: rec.matched },
     last_seen_at: now,
   };
@@ -126,6 +130,10 @@ function recordToRow(rec: PodcastRecord, now: Date) {
 function hasContentChange(existing: Podcast, rec: PodcastRecord): boolean {
   for (const field of CONTENT_FIELDS) {
     const next = rec[field];
+    if (field === 'tags') {
+      if (JSON.stringify(existing.tags || []) !== JSON.stringify((next as string[]) || [])) return true;
+      continue;
+    }
     let current: unknown;
     switch (field) {
       case 'audioUrl': current = existing.audio_url; break;

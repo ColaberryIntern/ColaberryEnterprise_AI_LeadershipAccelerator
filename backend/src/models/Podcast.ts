@@ -25,6 +25,8 @@ export interface PodcastAttributes {
   featured?: boolean;
   is_active?: boolean;
   source?: string;
+  category?: string | null;
+  tags?: string[];
   raw_meta_json?: any;
   last_seen_at?: Date | null;
   created_at?: Date;
@@ -46,6 +48,8 @@ class Podcast extends Model<PodcastAttributes> implements PodcastAttributes {
   declare featured: boolean;
   declare is_active: boolean;
   declare source: string;
+  declare category: string | null;
+  declare tags: string[];
   declare raw_meta_json: any;
   declare last_seen_at: Date | null;
   declare created_at: Date;
@@ -68,6 +72,8 @@ Podcast.init(
     featured: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     is_active: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
     source: { type: DataTypes.STRING(120), allowNull: false, defaultValue: 'training.colaberry.com' },
+    category: { type: DataTypes.STRING(80), allowNull: true },
+    tags: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     raw_meta_json: { type: DataTypes.JSONB, allowNull: true },
     last_seen_at: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },

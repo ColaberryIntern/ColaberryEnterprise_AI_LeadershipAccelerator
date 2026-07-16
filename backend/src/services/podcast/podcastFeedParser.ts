@@ -14,6 +14,7 @@
  * without a network or database. The I/O + persistence lives in podcastIngestionService.ts.
  */
 import * as cheerio from 'cheerio';
+import { derivePodcastTags, derivePodcastCategory } from './podcastTagger';
 
 export interface TrainingIndexEntry {
   title: string;
@@ -49,6 +50,8 @@ export interface PodcastRecord {
   buzzsproutGuid: string | null;
   featured: boolean;
   source: string;
+  category: string; // coarse subject bucket for admin filtering ("curriculum subject")
+  tags: string[]; // topic/vendor keywords for personalized matching
   matched: boolean; // true if a feed episode was matched (i.e. a real thumbnail was resolved)
 }
 
@@ -246,6 +249,9 @@ export function enrichEntries(index: TrainingIndexEntry[], feed: FeedEpisode[]):
   return index.map((entry) => {
     const ep = byTitle.get(normalizeTitle(entry.title)) || null;
     const durationSeconds = ep?.durationSeconds ?? parseDurationToSeconds(entry.durationLabel);
+    const description = entry.description ?? ep?.description ?? null;
+    const tags = derivePodcastTags(entry.title, description);
+    const category = derivePodcastCategory(entry.title, description, tags);
 
     return {
       title: entry.title,
@@ -253,13 +259,15 @@ export function enrichEntries(index: TrainingIndexEntry[], feed: FeedEpisode[]):
       websiteUrl: entry.websiteUrl,
       audioUrl: ep?.audioUrl ?? null,
       thumbnailUrl: ep?.thumbnailUrl ?? null,
-      description: entry.description ?? ep?.description ?? null,
+      description,
       durationSeconds: durationSeconds ?? null,
       durationLabel: entry.durationLabel ?? secondsToLabel(ep?.durationSeconds ?? null),
       publishedAt: ep?.publishedAt ?? parseDate(entry.displayDate),
       buzzsproutGuid: ep?.guid ?? null,
       featured: entry.featured,
       source: PODCAST_SOURCE,
+      category,
+      tags,
       matched: !!ep,
     };
   });

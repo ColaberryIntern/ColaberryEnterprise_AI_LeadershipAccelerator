@@ -50,6 +50,8 @@ on boot — no migration file). Dedup/idempotency key: **`website_url` (unique)*
 | `featured` | BOOLEAN | true for the featured card on the index |
 | `is_active` | BOOLEAN | portal shows only active rows |
 | `source` | STRING(120) | `training.colaberry.com` |
+| `category` | STRING(80) | coarse subject bucket for admin filtering (`frontier-models`, `agents-automation`, `governance-safety`, `robotics-hardware`, `tools-coding`, `industry-news`) — the "curriculum subject" the personalization picker filters on |
+| `tags` | JSONB | topic/vendor keywords (`anthropic`, `agents`, `governance`, …) derived at ingest for personalized matching (see `podcastTagger.ts`) |
 | `raw_meta_json` | JSONB | e.g. `{ matched: true }` |
 | `last_seen_at` | DATE | last scrape that saw this episode |
 | `created_at` / `updated_at` | DATE | |
