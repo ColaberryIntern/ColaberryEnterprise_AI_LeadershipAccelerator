@@ -7,7 +7,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import api from '../../../utils/api';
-import CardDetailBody from '../../../components/timeline/CardDetailBody';
+import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
 import AutofillButton from '../../../components/common/AutofillButton';
 import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
@@ -95,14 +96,15 @@ const pts = (p: Card['points']) => (p?.learning || 0) + (p?.builder || 0) + (p?.
 // ── one Facebook-style feed card (draggable) with inline play + admin actions ──
 const SortableCard: React.FC<{
   card: Card; band?: string; studentLabel?: string; typeThumbUrl?: string | null; onEdit: (c: Card) => void; onClone: (c: Card) => void;
-  onDelete: (c: Card) => void; onPublish: (c: Card) => void;
-}> = ({ card, band, studentLabel, typeThumbUrl, onEdit, onClone, onDelete, onPublish }) => {
+  onDelete: (c: Card) => void; onPublish: (c: Card) => void; onPreview: (c: TimelineFeedCard) => void;
+}> = ({ card, band, studentLabel, typeThumbUrl, onEdit, onClone, onDelete, onPublish, onPreview }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const published = card.visibility === 'published';
   const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition };
-  // Every card renders the SAME student view inline (the shared CardDetailBody),
-  // so the timeline == the edit preview == what the student sees — one size,
-  // one render, for every type (not just video).
+  // Every card renders as the REAL student card (16:9 image tile + short copy);
+  // the LONG details live behind the tile's ▶/Open, which pulls up the student's
+  // right-side popup. Runtime-personalized items (random testimonials/podcasts)
+  // show their STORED image here — only students see their personalized pick.
   const previewCard = adaptToFeedCard({
     slug: card.type, render_band: band, label: card.title,
     student_label: studentLabel || card.type.replace(/_/g, ' '),
@@ -125,7 +127,7 @@ const SortableCard: React.FC<{
       </div>
 
       <div className="te-media">
-        <div className="tl-de"><div className="tld-inlinepanel"><CardDetailBody card={previewCard} preview /></div></div>
+        <div className="tl-de"><TimelineCard card={previewCard} onOpen={() => onPreview(previewCard)} /></div>
       </div>
 
       <div className="te-foot">
@@ -179,15 +181,16 @@ const BucketSection: React.FC<{
 };
 
 // ── right-side create / edit drawer (like the student detail panel) ──────────
-// The "finished product" preview renders the SHARED <CardDetailBody> (the exact
-// component the student drawer uses) via adaptToFeedCard, so the editor preview
-// is the classroom, pixel for pixel — no separate lessonDoc/markup to drift.
+// The "finished product" preview renders the REAL student <TimelineCard> (16:9
+// tile) via adaptToFeedCard; the full details open in the student's right-side
+// popup (CardDetailDrawer preview) — one renderer, nothing to drift.
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }; types: TypeDef[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
   bpContext: BlueprintContextDTO | null;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => void; onSave: () => void; onClose: () => void;
-}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose }) => {
+  onPreview: (c: TimelineFeedCard) => void;
+}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose, onPreview }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
@@ -204,8 +207,8 @@ const EditDrawer: React.FC<{
     : ((draft.metadata as any)?.testimonial_category || 'testimonial');
   const setTestimonial = (mode: 'link' | 'random', category = tCategory) =>
     onChange({ metadata: { ...(draft.metadata || {}), mode, ...(isPodcast ? { podcast_category: category } : { testimonial_category: category }) } });
-  // The preview IS the student drawer: build the same synthetic card the Studio
-  // preview uses and render the shared <CardDetailBody preview/> — one renderer.
+  // The preview IS the student card: build the same synthetic card the Studio
+  // preview uses; the tile's ▶/Open pulls up the real student popup.
   const previewCard = adaptToFeedCard({
     slug: draft.type, render_band: band,
     label: draft.title || typeDef?.label, student_label: typeDef?.label,
@@ -242,15 +245,18 @@ const EditDrawer: React.FC<{
             </label>
           )}
 
-          {/* FINISHED PRODUCT — play it, resize, then toy with the controls below */}
+          {/* FINISHED PRODUCT — the student's card (16:9 tile); the full details
+              open in the student's right-side popup via ▶/Open. */}
           {draft.type && (
             <div style={{ marginBottom: 18 }}>
               <div className="te-plabel">Finished product · what the student sees</div>
               <div className="tl-de">
-                <div className="tld-inlinepanel">
-                  <CardDetailBody card={previewCard} preview />
-                </div>
+                <TimelineCard card={previewCard} onOpen={() => onPreview(previewCard)} />
               </div>
+              <button type="button" className="te-act" style={{ width: '100%', justifyContent: 'center', padding: '9px 12px', marginBottom: 8 }}
+                onClick={() => onPreview(previewCard)}>
+                Open the student view — full details →
+              </button>
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button type="button" className="te-act" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
                   disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
@@ -431,6 +437,8 @@ const TimelineEditorTab: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) | null>(null);
+  // The card whose STUDENT VIEW popup is open (the real right-side drawer).
+  const [studentView, setStudentView] = useState<TimelineFeedCard | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
@@ -737,6 +745,12 @@ const TimelineEditorTab: React.FC = () => {
         .tl-vwrap .tlv-link,.tl-vwrap .tlv-none{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:#F5F5F5;border:1px solid #E4E4E4;border-radius:10px;color:#8A8A8A;padding:16px;font-size:12.5px}
         .tl-vwrap .tl-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;border:1px solid #367895;background:#367895;color:#fff;text-decoration:none;cursor:pointer}
         .te-lessonframe{width:100%;height:300px;border:1px solid #E4E4E4;border-radius:9px;background:#fff;display:block}
+        /* Cards in the lanes ARE the student card — hide the student-only social
+           row (Like/Comment) in the admin context; keep the Open CTA. */
+        .te-media .fc-foot .like,.te-media .fc-foot .cmt{display:none}
+        .te-media .tl-card.fcard,.te-dbody .tl-card.fcard{margin-bottom:6px;box-shadow:none;border:1px solid #E9E9E9}
+        /* The student-view popup must sit ABOVE the edit drawer (te-scrim z=1000). */
+        .te-studentpop .tld-scrim{z-index:1200}
       `}</style>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
@@ -770,7 +784,7 @@ const TimelineEditorTab: React.FC = () => {
 
           {BUCKETS.map((b) => (
             <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} thumbOf={thumbOf} onReorder={onReorder} onAdd={openAdd}
-              cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish }} />
+              cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish, onPreview: setStudentView }} />
           ))}
         </>
       )}
@@ -778,8 +792,15 @@ const TimelineEditorTab: React.FC = () => {
       {draft && (
         <EditDrawer draft={draft} types={board?.types || []} isNew={isNew} saving={saving}
           aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext}
-          onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} />
+          onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} onPreview={setStudentView} />
       )}
+
+      {/* The student's right-side popup — the EXACT drawer students get, opened
+          from any card tile's ▶/Open (and from the edit drawer). Sits above the
+          edit drawer (see .te-studentpop z-index override). */}
+      <div className="tl-de te-studentpop">
+        <CardDetailDrawer card={studentView} preview onClose={() => setStudentView(null)} />
+      </div>
     </div>
   );
 };
