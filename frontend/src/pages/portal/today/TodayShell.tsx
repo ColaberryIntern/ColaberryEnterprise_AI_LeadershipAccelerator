@@ -321,7 +321,17 @@ const TodayShell: React.FC = () => {
           </div>
         </aside>
       </div>
-      <CardDetailDrawer card={selectedCard} onClose={() => setSelectedCard(null)} onComplete={async () => { setSelectedCard(null); await loadAll(); }} />
+      <CardDetailDrawer
+        card={selectedCard}
+        onClose={() => setSelectedCard(null)}
+        onComplete={async (card) => {
+          // Persist the completion (the 75% watch gate is enforced server-side; a
+          // rejection propagates so the drawer surfaces "keep watching").
+          await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+          setSelectedCard(null);
+          await loadAll();
+        }}
+      />
     </PortalShell>
   );
 };

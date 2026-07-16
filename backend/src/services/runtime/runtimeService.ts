@@ -16,9 +16,10 @@ import { computeEmploymentReadiness } from './employmentReadiness';
 import { computeCertificationReadiness } from './certificationReadiness';
 import { StudentSignals } from './readinessTypes';
 import { generateArtifact, listArtifacts } from './portfolioService';
-import { videoFromMetadata, contentFromMetadata } from '../timeline/timelineService';
+import { videoFromMetadata, contentFromMetadata, blogFromMetadata } from '../timeline/timelineService';
 import { selectTestimonialForEnrollment } from '../timeline/networkVideoService';
 import { selectPodcastForEnrollment } from '../timeline/podcastMediaService';
+import { selectBlogForEnrollment } from '../timeline/blogMediaService';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 
 /** Build the student's signal vector from progression + completed evidence + portfolio. */
@@ -74,19 +75,31 @@ export async function openCard(enrollmentId: string, cardId: string) {
     defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'available' },
   });
 
-  // Personalized media cards (podcast / testimonial) carry no fixed metadata.video —
-  // resolve the SAME per-student pick the classroom feed shows (the pickers reuse the
-  // stable per-card assignment), so the workspace always has the episode/video too.
-  let video = videoFromMetadata(card.metadata);
+  // Per-student media resolution — the SAME picks the feed shows (stable per
+  // (enrollment, card) assignments make these idempotent). Without this a
+  // random testimonial/podcast/blog card opens in the workspace with no media,
+  // which would also dead-end the watch gate.
   let title = card.title;
   let description = card.description;
-  if (!video && card.type === 'podcast') {
-    const picked = await selectPodcastForEnrollment(enrollmentId, card);
-    if (picked) { video = picked.video; if (picked.title) title = picked.title; if (picked.description) description = picked.description; }
+  let video = videoFromMetadata(card.metadata);
+  let blog = blogFromMetadata(card.metadata);
+  if (!video && (card.type === 'testimonial' || card.type === 'podcast')) {
+    const picked = card.type === 'testimonial'
+      ? await selectTestimonialForEnrollment(enrollmentId, card)
+      : await selectPodcastForEnrollment(enrollmentId, card);
+    if (picked) {
+      video = picked.video;
+      if (picked.title) title = picked.title;
+      if (picked.description) description = picked.description;
+    }
   }
-  if (!video && card.type === 'testimonial') {
-    const picked = await selectTestimonialForEnrollment(enrollmentId, card);
-    if (picked) { video = picked.video; if (picked.title) title = picked.title; if (picked.description) description = picked.description; }
+  if (!blog && card.type === 'blog') {
+    const picked = await selectBlogForEnrollment(enrollmentId, card);
+    if (picked) {
+      blog = picked.blog;
+      if (picked.title) title = picked.title;
+      if (picked.description) description = picked.description;
+    }
   }
 
   return {
@@ -95,6 +108,7 @@ export async function openCard(enrollmentId: string, cardId: string) {
       student_label: def?.student_label || card.type, render_band: def?.render_band || 'overview',
       estimated_time: card.estimated_time, competencies: card.competencies,
       evidence_required: !!def?.evidence_required, video,
+      blog,
       content: contentFromMetadata(card.metadata),
       type_thumbnail: ((dbDef?.thumbnail_url || '') as string).trim() || null,
     },

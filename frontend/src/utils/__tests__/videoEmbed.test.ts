@@ -13,6 +13,8 @@ describe('parseVideoUrl', () => {
       expect(s.id).toBe('dQw4w9WgXcQ');
       expect(s.kind).toBe('iframe');
       expect(s.embedUrl).toContain('youtube-nocookie.com/embed/dQw4w9WgXcQ');
+      // enablejsapi opens YouTube's postMessage channel so watch progress is measurable.
+      expect(s.embedUrl).toContain('enablejsapi=1');
     }
     expect(parseVideoUrl('https://www.youtube.com/shorts/abcdefghijk')!.id).toBe('abcdefghijk');
   });
