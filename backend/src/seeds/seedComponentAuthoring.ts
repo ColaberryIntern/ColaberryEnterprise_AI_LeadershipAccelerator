@@ -53,7 +53,7 @@ const OVERVIEW_GENERATION_PROMPT = [
   '',
   'body_html: clean, self-contained, VALID and fully balanced HTML (no scripts, no inline styles). Emit exactly these four parts in order:',
   '  1. <p> a one or two sentence welcome naming the week\'s big idea </p>',
-  '  2. <p><strong>What you\'ll cover</strong></p> then a <ul> of 3 to 5 short <li> items from the learning objectives',
+  '  2. <p><strong>What you\'ll cover</strong></p> then a <ul> of 3 to 6 short <li> items describing what the student will actually DO this week — when a THIS WEEK\'S ACTIVITIES list is provided above, draw the items from it (name the videos, labs, courses, and builds); otherwise use the learning objectives',
   '  3. <p><strong>Why it matters</strong></p> then <p> one or two sentences tying the week to the AI Systems Architect path </p>',
   '  4. <p><strong>By the end of this week you\'ll be able to…</strong></p> then a <ul> of 2 to 3 <li> capability statements from the student outcomes or success criteria',
   'Every opening tag must have a matching closing tag. Do not leave any stray or unbalanced tags.',
@@ -73,8 +73,9 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     icon: 'bi-binoculars',
     badge_class: 'bg-info',
     estimated_time: 8,
-    capabilities: [],
+    capabilities: ['bookmarks', 'comments', 'likes'],
     inputs: [],
+    variable_keys: [], // zero author input — the runtime injects blueprint + week roster
     outputs: [
       { key: 'title', type: 'string', description: 'Overview — {week topic}' },
       { key: 'body_html', type: 'html', description: '4-part week overview' },
