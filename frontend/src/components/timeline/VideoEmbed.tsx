@@ -197,9 +197,11 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, on
       return (
         <div className="tlv-frame" style={{ position: 'relative' }}>
           {poster && <img className="tlv-posterimg" src={poster} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
-          <span className="tlv-postergrad" />
+          <span className="tlv-postergrad" style={{ pointerEvents: 'none' }} />
           {ribbon}
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 12px', display: 'grid', gap: 6 }}>
+          {/* zIndex 2: the postergrad overlay is z-index:1 and would otherwise sit ON TOP
+              of the (z-auto) player and swallow every click on the pause/play controls. */}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 12px', display: 'grid', gap: 6, zIndex: 2 }}>
             {title && <span className="tlv-postertitle" style={{ position: 'static' }}>{title}</span>}
             <audio
               style={{ width: '100%' }}
