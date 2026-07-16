@@ -23,8 +23,9 @@ interface CardCommentDto {
 /** GET /api/portal/classroom/cards/:cardId/comments — newest first (max 100). */
 export async function handleListCardComments(req: Request, res: Response): Promise<void> {
   const enrollmentId = eid(req);
+  const cardId = String(req.params.cardId); // express 5 types: params values are string | string[]
   const rows = await TimelineCardComment.findAll({
-    where: { card_id: req.params.cardId },
+    where: { card_id: cardId },
     order: [['created_at', 'DESC']],
     limit: 100,
   });
@@ -52,7 +53,7 @@ export async function handleCreateCardComment(req: Request, res: Response): Prom
     return;
   }
   const row = await TimelineCardComment.create({
-    card_id: req.params.cardId,
+    card_id: String(req.params.cardId), // express 5 types: params values are string | string[]
     enrollment_id: enrollmentId,
     body: parsed.data.body,
   });
