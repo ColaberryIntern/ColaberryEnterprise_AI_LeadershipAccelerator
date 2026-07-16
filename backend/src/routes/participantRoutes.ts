@@ -32,6 +32,7 @@ import {
   handleGetSessionChat, handlePostSessionChat,
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
+import { listPodcastsPortal } from '../controllers/podcastController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
 import {
   handleGetSettings, handleUpdateProfile, handleSetAvatar, handleClearAvatar,
@@ -55,6 +56,7 @@ router.get('/api/portal/verify', handleVerifyMagicLink);
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
 router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
+router.get('/api/portal/podcasts', requireParticipant, listPodcastsPortal);
 // Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
 router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);

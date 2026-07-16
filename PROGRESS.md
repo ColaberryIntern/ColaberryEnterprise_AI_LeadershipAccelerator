@@ -308,6 +308,29 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Podcast catalog — weekly scrape of the training-site podcasts + Buzzsprout thumbnails, for Experience Studio (2026-07-15)
+- [x] **Scrape + store the curated podcast list with real per-episode thumbnails, refreshed weekly, exposed via admin + portal APIs**
+  - Date: 2026-07-15
+  - Session: CC-20260715-p3k8
+  - What changed:
+    - `backend/src/models/Podcast.ts` (new): `podcasts` table (Sequelize `class extends Model`), dedup/idempotency key `website_url` (unique), plus `thumbnail_url`, `audio_url`, `buzzsprout_guid`, `duration_seconds/label`, `published_at`, `featured`, `is_active`, `last_seen_at`, `raw_meta_json`. Registered in `backend/src/models/index.ts`. Auto-created by the boot `sequelize.sync({ alter: true })` — no migration file.
+    - `backend/src/services/podcast/podcastFeedParser.ts` (new): pure, unit-tested parse + enrich. `parseTrainingIndex()` (cheerio) reads the curated cards from `training.colaberry.com/podcasts` (no thumbnails there); `parseBuzzsproutFeed()` (cheerio `{ xml: true }`, child-scan for namespaced `itunes:image`/`itunes:duration`) reads the feed behind it (`feeds.buzzsprout.com/2456315.rss`); `enrichEntries()` joins them **by normalized title** to attach the real per-episode thumbnail/audio/GUID/date/duration. No new dependency (cheerio present; global `fetch`).
+    - `backend/src/services/podcast/podcastIngestionService.ts` (new): `refreshPodcasts()` — fetch (20s timeout + 3 capped retries) → parse → enrich → **idempotent upsert keyed on `website_url`** (content-diffed). Failure-first: index fetch REQUIRED (throws, never wipes on empty/failed scrape); feed fetch OPTIONAL (degrades to index-only null-thumbnails); 0-episode parse raises `ContractViolation`.
+    - Weekly job `PodcastRefresh` (`cron '0 3 * * 1'`, `America/Chicago`) in `backend/src/services/schedulerService.ts`.
+    - API: `backend/src/controllers/podcastController.ts` + `backend/src/routes/admin/podcastRoutes.ts` (`GET /api/admin/podcasts`, `POST /api/admin/podcasts/refresh?dryRun=`) mounted in `adminRoutes.ts`; `GET /api/portal/podcasts` (student-safe fields) in `participantRoutes.ts`.
+    - CLI: `backend/src/scripts/refreshPodcasts.ts` (new) for initial/manual runs (`--dry-run`).
+    - Tests: `backend/src/services/podcast/__tests__/podcastFeedParser.test.ts` (new). Docs: `docs/PODCAST_CATALOG.md` (new).
+  - Why: Ali wants the training-site podcasts scraped/stored with thumbnails, refreshed weekly, so Experience Studio can show them to students. Scope confirmed: store only the episodes on the training page, enriched with feed thumbnails/audio.
+  - Verification: ran the shipped parser logic (ported 1:1, same cheerio 1.2.0) against the REAL index HTML + RSS — 24 index entries, 322 feed episodes, **24/24 matched with real distinct thumbnail + audio + date + duration + GUID**, deterministic; all jest fixtures assert-pass; all 7 TS files transpile syntax-clean. Deployed to Dev 1 (see deploy notes). Full `tsc`/`jest` via the Docker build gate.
+  - Notes: staged surgically onto `workstream/podcast-catalog` off `main` (the authoring tree was entangled with other instances' work); frontend Experience Studio tab deferred per Ali's "later" — backend data layer + API contract are ready.
+
+- [x] **Catalog match-readiness: per-episode `category` + `tags` for the shared personalization picker**
+  - Date: 2026-07-16
+  - Session: CC-20260715-p3k8
+  - What changed: added `category STRING(80)` + `tags JSONB` to `backend/src/models/Podcast.ts`; new pure `backend/src/services/podcast/podcastTagger.ts` (`derivePodcastTags`/`derivePodcastCategory` — AI-topic/vendor vocabulary + coarse subject buckets `frontier-models`/`agents-automation`/`governance-safety`/`robotics-hardware`/`tools-coding`/`industry-news`); wired into `enrichEntries` → upsert (`podcastFeedParser.ts`, `podcastIngestionService.ts`, tags array-diffed in the idempotent content compare); test `__tests__/podcastTagger.test.ts`; `docs/PODCAST_CATALOG.md` + new `docs/PODCAST_PERSONALIZATION_SPEC.md` (shared media-picker plan).
+  - Why: prerequisite for the "auto-pick a podcast per student by match/curriculum-subject + track views/interactions" feature (mirrors testimonials). Ali chose: shared media-picker landing after the testimonials + podcast-catalog branches merge; podcasts picked from this Buzzsprout catalog with audio playback. These match-signal columns are the one piece that ships independently now.
+  - Verification: all `podcastTagger` jest assertions pass (ported 1:1, run against real data); tags/category derived sensibly across the 24 real episodes; all edited/new TS transpile syntax-clean. New-column DB re-ingest exercised on Dev 1 as part of the prod-promotion check.
+
 ### STORY-002: VA ERP Integration — Push data updates to legacy ERP modules (2026-07-08)
 - [x] STORY-002 LegacyErpPushAgent — pushData command with role check, snapshot, rollback, audit
   - Date: 2026-07-08

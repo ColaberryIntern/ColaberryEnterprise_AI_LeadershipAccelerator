@@ -1768,6 +1768,21 @@ export function startScheduler(): void {
     });
   });
 
+  // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
+  // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
+  cron.schedule(
+    '0 3 * * 1',
+    () => {
+      instrumentCronJob('PodcastRefresh', async () => {
+        const { refreshPodcasts } = await import('./podcast/podcastIngestionService');
+        await refreshPodcasts();
+      }).catch((err) => {
+        console.error('[Scheduler] Podcast refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', async () => {
     try {
