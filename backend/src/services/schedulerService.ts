@@ -1783,6 +1783,22 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
+  // Refresh the student blog library once per week (Monday 03:30 America/Chicago).
+  // One fetch of training.colaberry.com/blog (__NEXT_DATA__ JSON) upserted by slug —
+  // new posts appear automatically in the Blog type's auto-match pool.
+  cron.schedule(
+    '30 3 * * 1',
+    () => {
+      instrumentCronJob('BlogRefresh', async () => {
+        const { refreshBlogPosts } = await import('./blog/blogIngestionService');
+        await refreshBlogPosts();
+      }).catch((err) => {
+        console.error('[Scheduler] Blog refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', async () => {
     try {

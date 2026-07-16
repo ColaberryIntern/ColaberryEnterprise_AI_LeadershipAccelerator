@@ -107,6 +107,7 @@ const SortableCard: React.FC<{
     subtitle: card.subtitle, description: card.description,
     difficulty: card.difficulty, estimated_time: card.estimated_time, week: card.week,
     points: card.points, video: card.metadata?.video, course: (card.metadata as any)?.course,
+    blog: (card.metadata as any)?.blog,
     experience: (card.metadata as any)?.content,
   });
   return (
@@ -194,13 +195,19 @@ const EditDrawer: React.FC<{
   // Testimonials + Podcast types: one set video ("link") or a personalized pick per student ("random").
   const isTestimonial = draft.type === 'testimonial';
   const isPodcast = draft.type === 'podcast';
-  const isPersonalizable = isTestimonial || isPodcast;
+  const isBlog = draft.type === 'blog';
+  const isPersonalizable = isTestimonial || isPodcast || isBlog;
   const tMode: 'link' | 'random' = (draft.metadata as any)?.mode === 'random' ? 'random' : 'link';
   const tCategory = isPodcast
     ? ((draft.metadata as any)?.podcast_category || '')
     : ((draft.metadata as any)?.testimonial_category || 'testimonial');
   const setTestimonial = (mode: 'link' | 'random', category = tCategory) =>
-    onChange({ metadata: { ...(draft.metadata || {}), mode, ...(isPodcast ? { podcast_category: category } : { testimonial_category: category }) } });
+    onChange({ metadata: { ...(draft.metadata || {}), mode, ...(isBlog ? {} : isPodcast ? { podcast_category: category } : { testimonial_category: category }) } });
+  // Blog link mode: the pasted post URL lives in metadata.blog.url (enriched with
+  // title/thumbnail from the blog_posts library at save time, server-side).
+  const blogUrl = ((draft.metadata as any)?.blog?.url || '') as string;
+  const setBlogUrl = (url: string) =>
+    onChange({ metadata: { ...(draft.metadata || {}), mode: 'link', blog: url.trim() ? { url } : undefined } });
   // The preview IS the student drawer: build the same synthetic card the Studio
   // preview uses and render the shared <CardDetailBody preview/> — one renderer.
   const previewCard = adaptToFeedCard({
@@ -209,7 +216,7 @@ const EditDrawer: React.FC<{
     subtitle: draft.subtitle, description: draft.description,
     difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
     points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
-    course: draft.course, capabilities: typeDef?.capabilities,
+    course: draft.course, blog: (draft.metadata as any)?.blog, capabilities: typeDef?.capabilities,
   });
   return (
     <div className="te-scrim" onClick={onClose}>
@@ -283,9 +290,9 @@ const EditDrawer: React.FC<{
           {isPersonalizable && (
             <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
               <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#367895', marginBottom: 8 }}>
-                {isPodcast ? '🎙 Podcast source' : '★ Testimonial source'} <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· one set {isPodcast ? 'episode' : 'video'}, or a personalized pick per student</span>
+                {isPodcast ? '🎙 Podcast source' : isBlog ? '📖 Blog source' : '★ Testimonial source'} <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· one set {isPodcast ? 'episode' : isBlog ? 'post' : 'video'}, or a personalized pick per student</span>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: tMode === 'random' ? 10 : 0 }}>
+              <div style={{ display: 'flex', gap: 8, marginBottom: tMode === 'random' || (isBlog && tMode === 'link') ? 10 : 0 }}>
                 {(['link', 'random'] as const).map((m) => (
                   <button key={m} type="button" onClick={() => setTestimonial(m)}
                     style={{ flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13,
@@ -295,15 +302,24 @@ const EditDrawer: React.FC<{
                   </button>
                 ))}
               </div>
+              {isBlog && tMode === 'link' && (
+                <label style={{ ...lbl, marginBottom: 0 }}>Blog post URL
+                  <input style={inp} value={blogUrl} onChange={(e) => setBlogUrl(e.target.value)} placeholder="https://training.colaberry.com/blog/…" />
+                </label>
+              )}
               {tMode === 'random' && (
                 <>
-                  <label style={lbl}>Library category{isPodcast ? ' (optional)' : ''}
-                    <input style={inp} value={tCategory} onChange={(e) => setTestimonial('random', e.target.value)} placeholder={isPodcast ? 'blank = whole catalog' : 'testimonial'} />
-                  </label>
+                  {!isBlog && (
+                    <label style={lbl}>Library category{isPodcast ? ' (optional)' : ''}
+                      <input style={inp} value={tCategory} onChange={(e) => setTestimonial('random', e.target.value)} placeholder={isPodcast ? 'blank = whole catalog' : 'testimonial'} />
+                    </label>
+                  )}
                   <p style={{ margin: '4px 2px 0', fontSize: 12, color: '#6A6A6A' }}>
                     {isPodcast
                       ? 'Each student hears an episode matched to what we know about them (role / goals), never the same one twice — and every listen is tracked per student.'
-                      : 'Each student sees a testimonial matched to what we know about them (industry / role), and never the same one twice.'}
+                      : isBlog
+                        ? 'Each student gets a Colaberry blog post matched to their profile AND the week this card sits on — never the same post twice, every read tracked per student. New posts join the pool automatically each week.'
+                        : 'Each student sees a testimonial matched to what we know about them (industry / role), and never the same one twice.'}
                   </p>
                 </>
               )}
@@ -527,12 +543,14 @@ const TimelineEditorTab: React.FC = () => {
       // merges it into metadata.video, which the student feed + Runtime read.
       // Testimonials type: link mode plays a set video; random mode picks a
       // matched testimonial per student, so no fixed video is stored.
-      const srcMode = (draft.type === 'testimonial' || draft.type === 'podcast')
+      const srcMode = (draft.type === 'testimonial' || draft.type === 'podcast' || draft.type === 'blog')
         ? ((draft.metadata as any)?.mode === 'random' ? 'random' : 'link') : null;
       const testimonialPayload = draft.type === 'testimonial' && srcMode
         ? { mode: srcMode, category: (draft.metadata as any)?.testimonial_category || 'testimonial' } : null;
       const podcastPayload = draft.type === 'podcast' && srcMode
         ? { mode: srcMode, category: (draft.metadata as any)?.podcast_category || null } : null;
+      const blogPayload = draft.type === 'blog' && srcMode
+        ? { mode: srcMode, url: srcMode === 'link' ? (((draft.metadata as any)?.blog?.url || '').trim() || null) : null } : null;
       const videoPayload = srcMode === 'random'
         ? null
         : (draft.video && (draft.video.url || '').trim() ? draft.video : null);
@@ -547,6 +565,7 @@ const TimelineEditorTab: React.FC = () => {
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
           points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload, testimonial: testimonialPayload,
           ...(draft.type === 'podcast' ? { podcast: podcastPayload } : {}),
+          ...(draft.type === 'blog' ? { blog: blogPayload } : {}),
           program_id: courseId || null,
         });
       } else if (draft.id) {
@@ -556,6 +575,7 @@ const TimelineEditorTab: React.FC = () => {
           estimated_time: draft.estimated_time ?? null, points: draft.points, visibility: draft.visibility,
           video: videoPayload, content: contentPayload, course: coursePayload, testimonial: testimonialPayload,
           ...(draft.type === 'podcast' ? { podcast: podcastPayload } : {}),
+          ...(draft.type === 'blog' ? { blog: blogPayload } : {}),
         });
       }
       setDraft(null);
