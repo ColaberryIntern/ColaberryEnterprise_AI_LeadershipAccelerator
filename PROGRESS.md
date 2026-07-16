@@ -308,6 +308,20 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 
 ## Completed Work
 
+### Podcast personalization — auto-pick a matched episode per student + listen tracking (2026-07-16)
+- [x] **Podcast timeline card now works "just like testimonials": personalized, non-repeating episode per student (by match or subject category) with per-student listen tracking**
+  - Date: 2026-07-16
+  - Session: CC-20260715-p3k8
+  - What changed:
+    - `backend/src/models/PodcastView.ts` (new): `podcast_views` — per-student listen ledger, exact sibling of `network_video_views` (`enrollment_id, podcast_id, category, first/last_seen_at, seen_count, last_timeline_card_id, context`, UNIQUE(enrollment_id, podcast_id)). Registered in `models/index.ts`; created by boot `sync({alter:true})`.
+    - `backend/src/services/timeline/podcastMediaService.ts` (new): `selectPodcastForEnrollment()` — exact sibling of `selectTestimonialForEnrollment`: stable per-card reuse → unheard pool (optional `metadata.podcast_category` filter; blank = whole catalog) → LRU rotation → `matchScore` (shared `networkVideoMatch` + `buildUserTags`) + jitter → weighted top-5 pick → idempotent UPSERT into `podcast_views` (Node-generated UUID; no DB default dependency). Fail-safe null on error.
+    - `backend/src/services/timeline/timelineService.ts`: podcast branch in the `getFeed` resolution loop — any podcast card WITHOUT a pasted video gets a personalized episode; picked title/description/artwork take over the card.
+    - Admin: `timelineAdminController.ts` `podcast` payload field (same shape as testimonial) on create+update schemas; `timelineAdminService.ts` `buildPodcastMeta()` (PURE) persists `metadata.mode` + optional `metadata.podcast_category` (update branch runs after the testimonial branch; editor only sends `podcast` for podcast-type cards).
+    - Frontend: `TimelineEditorTab.tsx` — the "Paste a link vs Random · personalized" source panel now also serves Podcast cards (optional category, blank = whole catalog); `utils/videoEmbed.ts` recognizes audio files (`.mp3/.m4a/.aac/.wav`) + `isAudioUrl()`; `VideoEmbed.tsx` renders an in-app `<audio>` player over the episode artwork (auto-completes on `ended` like direct video); Podcast ribbon/badge in `TimelineCard.tsx`/`CardDetailBody.tsx`; podcast cards skip the AI content refresh (picked episode's description is the card).
+    - Tests: `backend/src/services/timeline/__tests__/podcastMediaService.test.ts` (shared-matcher ranking + `buildPodcastMeta` normalization/blank-category/invalid-mode).
+  - Why: Ali: "Just like testimonials, podcast should have a random option where it can pick the podcast for the person based on match or based on curriculum subject. It should keep track of what is viewed and interacted with." Tracking = `podcast_views` (listens, server-side at pick) + existing `timeline_card_progress` `/complete` (interactions) — per docs/PODCAST_PERSONALIZATION_SPEC.md, unblocked when #249 (testimonials engine) + #250 (podcast catalog) both reached main.
+  - Verification: jest (CI) — shared-matcher + buildPodcastMeta tests; all edited/new TS/TSX transpile syntax-clean; PR CI gate (backend/frontend typecheck + unit tests + secret scan); end-to-end feed pick + podcast_views row verified on dev after merge.
+
 ### Podcast catalog — weekly scrape of the training-site podcasts + Buzzsprout thumbnails, for Experience Studio (2026-07-15)
 - [x] **Scrape + store the curated podcast list with real per-episode thumbnails, refreshed weekly, exposed via admin + portal APIs**
   - Date: 2026-07-15

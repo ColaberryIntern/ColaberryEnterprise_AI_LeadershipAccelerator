@@ -46,6 +46,12 @@ const testimonialSchema = z.object({
   mode: z.enum(['link', 'random']).nullable().optional(),
   category: z.string().max(64).nullable().optional(),
 }).nullable().optional();
+// Podcast type: link mode plays a pasted episode/video; random mode picks a matched
+// episode per student from the Buzzsprout `podcasts` catalog (blank category = whole catalog).
+const podcastSourceSchema = z.object({
+  mode: z.enum(['link', 'random']).nullable().optional(),
+  category: z.string().max(64).nullable().optional(),
+}).nullable().optional();
 
 const createSchema = z.object({
   type: z.string().min(1),
@@ -65,6 +71,7 @@ const createSchema = z.object({
   content: contentSchema,
   course: courseSchema,
   testimonial: testimonialSchema,
+  podcast: podcastSourceSchema,
 });
 
 const updateSchema = z.object({
@@ -85,6 +92,7 @@ const updateSchema = z.object({
   content: contentSchema,
   course: courseSchema,
   testimonial: testimonialSchema,
+  podcast: podcastSourceSchema,
 }).strict();
 
 // One-click: build a full video-card draft from a title (find a real video +

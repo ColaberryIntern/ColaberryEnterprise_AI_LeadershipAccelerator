@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { VideoSource, providerLabel, withAutoplay } from '../../utils/videoEmbed';
+import { VideoSource, providerLabel, withAutoplay, isAudioUrl } from '../../utils/videoEmbed';
 
 /**
  * VideoEmbed — plays a lesson video in-app from any supported link (YouTube,
@@ -61,6 +61,21 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge }) 
   }
 
   if (source.kind === 'file') {
+    // Audio-only episode (podcast .mp3) — keep the artwork as the backdrop with an
+    // in-app audio player; `onEnded` still auto-completes like direct-file video.
+    if (isAudioUrl(source.embedUrl)) {
+      return (
+        <div className="tlv-frame" style={{ position: 'relative' }}>
+          {poster && <img className="tlv-posterimg" src={poster} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+          <span className="tlv-postergrad" />
+          {ribbon}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 12px', display: 'grid', gap: 6 }}>
+            {title && <span className="tlv-postertitle" style={{ position: 'static' }}>{title}</span>}
+            <audio style={{ width: '100%' }} src={source.embedUrl} controls autoPlay onEnded={onEnded} />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="tlv-frame">
         <video className="tlv-media" src={source.embedUrl} controls autoPlay onEnded={onEnded}>
