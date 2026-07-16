@@ -9,6 +9,7 @@ export interface RtCard {
   id: string; type: string; title: string; subtitle?: string | null; description?: string | null;
   student_label: string; render_band: string; estimated_time?: number | null; competencies?: any;
   evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
+  blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 
@@ -23,6 +24,7 @@ export interface Readiness {
 }
 export interface PromptEval { score: number; architect_score: number; strengths: string[]; gaps: string[]; suggestions: string[]; better_prompt: string }
 export interface MentorReply { reply: string; kind: string }
+export interface CardComment { id: string; body: string; author: string; mine: boolean; created_at: string }
 
 export const runtimeApi = {
   open: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}`).then((r) => r.data as RtOpen),
@@ -33,4 +35,6 @@ export const runtimeApi = {
   complete: (cardId: string, work?: string, reflection?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/complete`, { work, reflection }).then((r) => r.data as { outcome: any; artifact: any; readiness: Readiness }),
   readiness: () => portalApi.get('/api/portal/runtime/readiness').then((r) => r.data as Readiness),
   saveNote: (cardId: string, body: string, kind = 'note') => portalApi.post('/api/portal/runtime/notebook', { card_id: cardId, kind, body }).then((r) => r.data),
+  comments: (cardId: string) => portalApi.get(`/api/portal/classroom/cards/${cardId}/comments`).then((r) => r.data as { comments: CardComment[] }),
+  comment: (cardId: string, body: string) => portalApi.post(`/api/portal/classroom/cards/${cardId}/comments`, { body }).then((r) => r.data as { comment: CardComment }),
 };

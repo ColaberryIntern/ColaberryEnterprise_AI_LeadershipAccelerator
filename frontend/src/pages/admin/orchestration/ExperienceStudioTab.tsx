@@ -587,7 +587,7 @@ const ExperienceStudioTab: React.FC = () => {
                             {([['🖥 Desktop', false], ['📱 Phone', true]] as [string, boolean][]).map(([name, phone]) => (
                               <div key={name} className="es-device" style={phone ? { flex: 'none', width: 340 } : {}}>
                                 <div className="es-devlabel">{name}</div>
-                                <StudentPreview band={String(sel.render_band || '')} label={(isVideo || isSkillsJar) ? (title || sel.label) : sel.label} experience={preview?.experience || null} videoUrl={videoUrl} presenter={presenter} poster={poster} course={isSkillsJar ? (preview?.course || { name: title || null, url: courseUrl || null }) : null} parts={sel.capabilities} />
+                                <StudentPreview band={String(sel.render_band || '')} label={(isVideo || isSkillsJar) ? (title || sel.label) : sel.label} experience={preview?.experience || null} videoUrl={videoUrl} presenter={presenter} poster={poster} course={isSkillsJar ? (preview?.course || { name: title || null, url: courseUrl || null }) : null} parts={sel.capabilities} thumbnail={sel.thumbnail_url || null} />
                               </div>
                             ))}
                           </div>

@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, July 15, 2026 at 9:39 AM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">46 changes</span></div>
+    <div class="meta">Generated Thursday, July 16, 2026 at 10:56 AM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">62 changes</span></div>
   </header>
   <main>
     
@@ -747,6 +747,246 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 15/15 (plan prices; SUB- ref detect; explorer needs-subscription; active next-payment; canceled access-until; checkout unknown-plan / billing-unconfigured / no-enrollment / happy; activate unknown-ref / idempotent-already-active / first-activation-converts-explorer / keeps-existing-cohort; cancel no-active / records-reason). webhook regression 9/9 green. backend + frontend tsc 0 (CI TS 5.7.3). Live check post-deploy on DEV: Settings shows the plans; checkout redirects to PaySimple (test mode = $0.01); a simulated SUB- payment_created webhook flips the Explorer to member (Week-0 gate + demo drop) and sets the period; cancel captures the reason.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">V1 = existing one-time PaySimple checkout per the locked decision; the schema carries current_period_end so true auto-charge is an additive follow-on once PaySimple recurring is enabled. Target cohort = SUBSCRIPTION_TARGET_COHORT_ID env override else the soonest open non-demo cohort. GOVERNANCE: touches real payments — shipping to DEV first for Ali&#39;s review before any prod promotion (BC todo 10028907149). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">47</span>
+          <h2>Subscription target-cohort: pin prod July cohort + harden fallback to never pick Explorer/demo cohorts</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">After the batch went live on prod, found that with SUBSCRIPTION_TARGET_COHORT_ID unset, resolveTargetCohort() fell back to the soonest open non-demo cohort — which was &quot;Explorer — Prospects&quot; (the free-explorer holding cohort), so a paying subscriber would have been converted to a member but dropped into the wrong cohort. Two fixes: (1) PROD: set SUBSCRIPTION_TARGET_COHORT_ID=1f1d86f4-6da5-4767-a250-cd8310570bea (Cohort - July 2026, starts 2026-07-23 — Ali&#39;s choice) in /opt/colaberry-accelerator/.env and recreated the backend; verified it resolves to that cohort. (2) CODE: hardened the fallback — new isNonPayingCohortName() excludes the Explorer/prospect holding cohorts (name matches /explorer|prospect/i) in addition to demo/test/sandbox, so even with no env override a paying subscriber can never land in a non-paying cohort. Files: backend/src/services/subscriptionService.ts, backend/src/services/__tests__/subscriptionService.test.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 16/16 (added: Explorer/prospect/demo cohort names are non-paying; real July cohort names are paying). backend tsc 0. PROD: env var confirmed in container -&gt; resolves to &quot;Cohort - July 2026 | 2026-07-23 | open&quot;. Deploy backend.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The env override remains the source of truth on prod; the code hardening is the defensive backstop for any env where it is unset (dev/future). Real-money billing is LIVE on prod as of this session.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">48</span>
+          <h2>Settings redesign: split the crammed single page into sleek tabs</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;This settings page needs to be redesigned... Seems all splattered together... add multiple tabs to make it more clean. We are going for sleek... everything should not be on the same page.&quot; The Settings page stacked every section on one long page (subscription, photo, profile, resume, points, preferences, security). Refactored into a tabbed shell with an underline tab bar (matching the Orchestration tab pattern): Subscription / Profile (photo + profile form + resume+LinkedIn) / Points (level summary + link to the full /portal/points drill-down) / Preferences / Account (sign-in + sign out + account). Only the active tab renders, so nothing feels crammed. Content constrained to a max-width shell for a calmer, sleeker layout. All existing handlers/state unchanged — pure render reorganization. Files: frontend/src/pages/portal/settings/SettingsPage.tsx (tab state + grouped render), SettingsPage.css (.set-shell/.set-tabs/.set-tab/.set-panel).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3 authoritative). Deployed to DEV only per Ali; live check: /portal/settings shows 5 tabs, each with just its own section(s).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY change (Ali: &quot;Update the dev environment only&quot;) — committed to workstream/curriculum-type-rename + deployed to dev; NOT promoted to main/prod. Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">49</span>
+          <h2>Settings polish: roomier card padding + uploads-first Profile tab that prefills from the resume</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;the text seems all scrunched up in the corner... give it a thicker border to where the words don&#39;t seem crammed to the left. Put the uploads at the top so they can easily fill out the profile from the resume/linkedin - fewer steps.&quot; (1) Padding: settings cards now have generous internal padding (28px 32px) so content no longer hugs the left edge. (2) Profile tab reordered — Resume &amp; LinkedIn (relabeled &quot;Start here&quot;) is first, then Photo, then the details form (now &quot;Your details&quot;). (3) Wired the actual prefill: on load and after a text-resume upload, empty profile fields (name/title/company/company_size/phone/LinkedIn) auto-fill from the parsed resume/onboarding prefill — never overwriting anything already entered; binary (PDF/DOCX) resumes are parsed server-side and fill in on the next load. Files: frontend/src/pages/portal/settings/SettingsPage.tsx, SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). DEV-only per Ali; live check: Profile tab shows uploads first, cards have breathing room, and an uploaded resume fills empty fields.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY — branch + dev nginx; not promoted to main/prod. Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">50</span>
+          <h2>Billing checkout bug (external_id &gt; 50 chars) + resume-&gt;profile prefill + Points-in-Settings + optional fields + more preferences</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Batch from Ali testing on dev. (1) CRITICAL billing fix: PaySimple rejected checkout with &quot;external_id must be 50 chars or fewer&quot; (SUB-&lt;uuid-36&gt;-&lt;ts&gt; = 54). Shortened to dashless-hex uuid (32) + base36 timestamp (~45). This bug blocks EVERY checkout, including on prod (billing is live). subscriptionService.startCheckout. (2) Resume-&gt;profile prefill now actually works: the Settings resume upload used to only STORE the file (no extraction). Now portalSettingsService.setResume decodes the base64, runs fileExtractionService.extractTextFromBuffer (new; officeparser handles pdf/docx/rtf/txt via a temp file) and resumeIngestService.ingestResumeFileText → an LLM (gpt-4o-mini via getInstrumentedOpenAI) extracts profile fields (full_name/title/company/company_size/phone/linkedin) + personalization (industry/role/seniority/years/skills/goals/location), stored on onboarding_profiles.prefill.{profile,personalization}. resumeIngestService extended (ResumeExtraction + prompt + mapExtractionToProfile + ingestResumeFileText + getOnboardingProfile returns profile/personalization); ingestBackground now returns them too. Frontend SettingsPage.onPickResume re-reads the parsed profile after upload and prefills EMPTY fields only (never overwrites). (3) Points tab now shows the FULL 3-lens drill-down (combined the /portal/points screen into Settings): extracted PointsDrilldown.tsx (shared by PointsPage + the Settings Points tab). (4) Expandable optional personalization fields (industry, function, seniority, years, location, skills, goals) behind an &quot;Add more details&quot; toggle in the Profile tab — prefilled from the resume, saved with the profile. (5) More Preferences: notification toggles (program updates / event reminders / weekly digest / community visibility, auto-save), plus experience-level, weekly-hours, timezone, preferred-contact, and #1 goal. Personalization + preferences persist in enrollments.intake_data_json (JSONB) via extended sanitizeProfilePatch/updateProfile/getSettings. (6) Dev PAYMENT_MODE flipped to test (env, not code) so every checkout is $0.01. Files: backend subscriptionService.ts, resumeIngestService.ts (+test), fileExtractionService.ts, portalSettingsService.ts; frontend onboardingApi.ts, portalSettingsApi.ts, pages/portal/points/PointsDrilldown.tsx (NEW) + PointsPage.tsx, pages/portal/settings/SettingsPage.tsx + SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest — resumeIngestService 19/19 (incl. new mapExtractionToProfile + profile/personalization on the result), subscriptionService 16/16; backend + frontend tsc 0 (CI TS 5.7.3). DEV-only per Ali: deploy backend + nginx to dev; live-test the $0.01 checkout + resume upload autofill.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY (Ali: &quot;Update the dev environment only&quot;) — committed to workstream/curriculum-type-rename + deployed to dev; NOT promoted to main/prod. FLAG: the external_id checkout bug is ALSO live-broken on prod (billing shipped but no one can actually check out) — recommend promoting at least that fix to prod. The resume LLM parse runs inline on upload (~3-5s); gated on OPENAI_API_KEY (set on dev). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">51</span>
+          <h2>Subscription: per-month×12 pricing model, exact test amounts, Free card (selected), post-payment manage screen</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Dev testing batch from Ali. (1) Pricing is now per-month-driven: planChargeAmount(cfg) = per_month×12 for annual, per_month for monthly — so real prices ($149/$199) drop in by editing only per_month. Test amounts set: annual $0.15/mo → $1.80/yr, monthly $0.19/mo. makePlan() derives price + amount_cents from per_month. (2) The subscription checkout now charges the EXACT plan amount (createPaymentLink gains `exactAmount` to bypass the blanket $0.01 test override) — so $1.80/$0.19 actually flow through PaySimple. (3) Free card: the plan-selection view shows a 3rd &quot;Free · Explorer&quot; card styled as the user&#39;s current/selected plan, alongside Annual + Monthly. (4) Post-payment = a different &quot;manage your subscription&quot; screen: active badge, which plan (prominent), $amount/cadence, next-payment &quot;in N days&quot;, access-through date, started date, and Cancel-with-reason; canceled shows access-until + reason + resubscribe. Files: backend subscriptionService.ts (planChargeAmount/makePlan/PLANS + checkout), paysimpleService.ts (exactAmount), subscriptionService.test.ts; frontend pages/portal/settings/SubscriptionSection.tsx + SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest subscription 16/16 (incl. planChargeAmount ×12 for both test + real numbers, and checkout charges exactAmount); backend + frontend tsc 0. DEV-only; deploy backend + nginx; live-check the $1.80/$0.19 checkout link + the Free card + manage screen.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. To go live, change per_month to 149/199 (nothing else). LIMITATION: PaySimple&#39;s activation webhook targets one URL (prod), so a dev test payment leaves the subscription &#39;pending&#39; — the post-payment screen is shown by manually activating the dev subscription on request (safe container-side activateByRef). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">52</span>
+          <h2>Post-payment flow: new-tab checkout + auto-activating confirm (webhook on prod, dev-gated return-activate) + manage screen</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali made a real $1.80 test payment (PaySimple Order #12928, Annual, Paid, Visa …1159, item correctly named &quot;AI Leadership Accelerator - Annual plan&quot;) but the plan didn&#39;t update. Root cause validated: the subscription stayed &#39;pending&#39; because PaySimple&#39;s activation webhook targets prod, so it never reached the dev instance (paysimple_payment_id null, enrollment still explorer). Probed PaySimple to build a query-based confirm, but this account returns stale 2016-2021 data and ignores customer/date filters and GET /ps/payment_link/{id} 404s — so a reliable payment-status query isn&#39;t available. Fixes: (1) Activated the paid $1.80 sub manually so the post-payment screen shows now. (2) New confirmCheckout(enrollmentId): on PROD reports current status so the UI updates once the signed webhook lands; on DEV only (env SUBSCRIPTION_ALLOW_RETURN_ACTIVATE=true, set on the dev host .env) it activates the most-recent pending sub created in the last 30 min so the flow can be tested end-to-end — flag OFF in prod, so no unpaid activation. New POST /api/portal/subscription/confirm. (3) Frontend: checkout now opens PaySimple in a NEW TAB (window.open); the Settings tab shows a &quot;Complete your payment…&quot; waiting panel and auto-polls confirm every 4s (and re-checks on window focus) for ~3 min, then flips to the manage screen with no manual refresh — plus an &quot;I&#39;ve paid — check now&quot; button. Files: backend subscriptionService.ts (confirmCheckout), controllers/participantController.ts, routes/participantRoutes.ts, subscriptionService.test.ts; frontend subscriptionApi.ts, pages/portal/settings/SubscriptionSection.tsx + SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest subscription 20/20 (incl. confirm: already-active no-op, flag-off no activation, flag-on recent-pending activates, stale-pending ignored); backend + frontend tsc 0. DEV-only; deploy backend + nginx. Ali&#39;s paid sub activated (annual, active, renews 2027-07-15).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. On prod the webhook remains the source of truth (confirm never blindly activates without the flag). The dev flag lives only in the dev host .env, never committed. When promoting to prod, do NOT set SUBSCRIPTION_ALLOW_RETURN_ACTIVATE. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">53</span>
+          <h2>Settings: require industry + last title (checks + always-infer) and make the Points tab multi-column</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;put checks in place to make sure we collect things like industry. And Role/Title of their last job. Points section should be formatted better. Looks like a phone, fix that with at least 2 columns.&quot; (1) Industry + Title/role are now REQUIRED: the resume prompt is strengthened to ALWAYS provide title (their last job title) and industry (inferring industry from company/role when not stated, e.g. lending co -&gt; Financial Services); on load, if industry is still missing the &quot;Add more details&quot; section auto-expands so it&#39;s prompted; Save changes now blocks with a clear message until name + title + industry are filled; both labels show a red &quot;required&quot; badge. (2) Points drill-down was collapsing to a single column inside the narrower Settings &gt; Points tab — reduced the lens grid min from 280px to 205px (auto-fit) so 2-3 lenses sit side-by-side there while the standalone /portal/points still shows 3. Files: backend resumeIngestService.ts (prompt); frontend pages/portal/settings/SettingsPage.tsx (auto-expand + required validation + labels) + SettingsPage.css (.set-req), pages/portal/points/PointsPage.css (.pts-lenses grid).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest resumeIngest 15/15; backend + frontend tsc 0 (CI TS 5.7.3). DEV-only; deploy backend + nginx.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Required checks are client-side prompts (name is already server-enforced non-empty); industry/title are stored in intake_data_json / enrollments. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">54</span>
+          <h2>Subscription real prices ($149/$199) + Points forced 3-column layout</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;change the price from .15 to $149 and .19 to $199&quot; and &quot;We need 3 columns for points... make it fit, it looks awful.&quot; (1) Prices: PLANS per_month set to 149 (annual → $1,788/yr via ×12) and 199 (monthly). Dropped the subscription checkout&#39;s exactAmount flag so on DEV (PAYMENT_MODE=test) checkout still charges $0.01 for safe testing while the cards show the real $149/$199; on PROD (live mode) it charges the real $1,788/$199. (2) Points drill-down: the lens grid is now an explicit repeat(3, minmax(0,1fr)) (was auto-fit, which collapsed to 2 columns in the narrower Settings &gt; Points tab), collapsing to 1 column only under 680px; tightened the lens internals (padding, big-number 40→32, readiness ring 92→74) so three lenses sit cleanly side-by-side. Files: backend subscriptionService.ts (PLANS + checkout) + subscriptionService.test.ts; frontend pages/portal/points/PointsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest subscription 20/20 (pricing now 1788/199, checkout requests real amount); backend + frontend tsc 0. DEV-only; deploy backend + nginx.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. On dev, subscription checkout charges $0.01 (test mode); real $1,788/$199 charges only happen in prod live mode. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">55</span>
+          <h2>Timeline launch gate: only LAUNCHED curriculum types can be added to the timeline</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;When I go to add a card to the timeline, I should only see Curriculum types that have been activated. I don&#39;t want staff to add curriculum types that have not been launched or approved.&quot; The Add-card Type dropdown listed every registry type regardless of approval. The Studio already has the lifecycle (draft → generated → validated → published, via the Status tab + PUT /api/admin/components/:slug/lifecycle) — the timeline just ignored it. Now: (1) listTimeline returns every authorable type WITH a computed `launched` flag (CurriculumTypeDefinition.status === &#39;published&#39; AND is_active !== false; no Studio row = not launched) — all types still returned so existing cards keep labels/bands. (2) Server-side enforcement: createCard → assertTypeLaunched() rejects hand-placing an unlaunched type with a 400 pointing at the Studio Status tab (staff can&#39;t bypass the dropdown via API). (3) Frontend: the Add-card Type select offers ONLY launched types (+ a hint &quot;Launch a type in the Experience Studio → Status tab&quot;), and openAdd defaults to a launched type. (4) One-time dev backfill: published the 24 types already in use on the timeline (de-facto launched); 18 unused types remain gated until approved in the Studio. Files: backend/src/services/timeline/timelineAdminService.ts, NEW backend/src/services/timeline/__tests__/typeLaunchGate.test.ts; frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 15/15 (new gate suite: rejects not-published / deactivated / no-row, allows published+active, listTimeline launched flags incl. no-row default; existing timelineAdminService tests still green). backend + frontend tsc 0. DEV: 24 published / 18 gated after backfill; live check — Add card shows only launched types.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY for now. On promotion to prod, run the same one-time backfill there (publish in-use types) or the Add dropdown starts empty: UPDATE curriculum_type_definitions SET status=&#39;published&#39; WHERE status&lt;&gt;&#39;published&#39; AND slug IN (SELECT DISTINCT type FROM timeline_cards WHERE type IS NOT NULL). Governance now lives in the Studio lifecycle: publish = launch. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">56</span>
+          <h2>Timeline launch gate v2: gate on the Studio&#39;s &quot;Approved for curriculum&quot; flag (not lifecycle status)</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;There are 19 approved but over 30 in the drop down. There should only be 19.&quot; The v1 gate keyed on lifecycle status=&#39;published&#39;, but the Studio&#39;s authoritative approval is the separate `approved` boolean (the &quot;✓ Approved for curriculum&quot; button, PUT /api/admin/components/:slug/approval) — the same flag the Curriculum Composer already honors, and the source of the Studio&#39;s &quot;19 approved&quot; count. The gate now keys on `approved === true &amp;&amp; is_active !== false` in both listTimeline&#39;s `launched` flag and createCard&#39;s assertTypeLaunched (error message now points at the Studio approval button). Frontend hint updated. The v1 published-status backfill is harmless (status is a separate authoring axis; no data reverted). Files: backend/src/services/timeline/timelineAdminService.ts, __tests__/typeLaunchGate.test.ts (re-keyed to approved); frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx (hint text).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest typeLaunchGate 5/5 (not-approved / deactivated / no-row rejected; approved+active allowed; launched flags); backend tsc 0. DEV live check: Add-card picker = approved ∩ hand-placeable types (19 approved on dev; system-emitted approved types like github_sync never appear in the picker by design).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Approval workflow: Experience Studio → open type → &quot;Approve for curriculum&quot; toggles it in/out of the picker; no separate backfill needed on prod promotion since `approved` is already curated there by the Studio. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">57</span>
+          <h2>Timeline cards show each item&#39;s OWN image (video/blog/testimonial) instead of the generic type visual</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Videos, blogs and testimonials should override these picture. They all have their own images. … The images should show in the timeline.&quot; Tiles only ever used a poster for video-kind cards WITH an explicitly saved poster; blogs had no image field at all. Now every card resolves its OWN image with a fallback chain — explicit card image (NEW metadata.image, for blogs etc.) → saved video poster → thumbnail derived from the video URL (new videoThumbnail(): YouTube img.youtube.com/vi/&lt;id&gt;/hqdefault.jpg) — and the timeline tile shows it (darkened for text legibility) for ANY card kind, falling back to the Design-E gradient only when none exists. The detail body (student drawer = Studio preview = editor preview) passes the derived thumbnail to VideoEmbed as the poster fallback and renders a 16:9 hero image for non-video items that carry metadata.image. Editor: new &quot;Image URL&quot; field for non-video/non-SkillsJar types, saved via new image key on create/update (zod imageSchema; buildImageMeta write + imageFromMetadata feed read; updateCard merges/clears metadata.image). Files: backend timelineService.ts (FeedCard.image + imageFromMetadata), timelineAdminService.ts (buildImageMeta, compose + updateCard), timelineAdminController.ts (imageSchema on create/update); frontend videoEmbed.ts (videoThumbnail), TimelineCard.tsx (ownImage tile), CardDetailBody.tsx (poster fallback + .tld-hero), timeline.css, cardAdapter.ts (image passthrough), TimelineEditorTab.tsx (field + previews + save).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 25/25 (new: metadata.image write via composeCardAttributes, buildImageMeta empties → null, imageFromMetadata read/absent/non-string; gate + video suites still green). backend tsc 0, frontend tsc 0. DEV live check after deploy: video card with YouTube URL and no saved poster now shows its real thumbnail on the tile.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Cards still show the gradient until media is attached — testimonials/podcasts get theirs the moment a clip is attached (✦ Generate already finds the video + writes the poster); blogs use the new Image URL field. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">58</span>
+          <h2>Merge: curriculum-type banners (CC-20260716-k3v7&#39;s branch) + item-own images unified into one image chain</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Merged `origin/workstream/curriculum-type-thumbnails` (type banner JPGs + type_thumbnail_url feed field + testimonial/podcast personalized sources + audio playback) into `workstream/curriculum-type-rename` — my earlier dev deploy had unknowingly replaced that session&#39;s Dev 1 deployment, hiding the banners Ali was already seeing. Combined tile precedence (TimelineCard): item&#39;s OWN image (metadata.image → video.poster → derived YouTube thumb) → type banner (type_thumbnail_url) → Design-E gradient; watermark icon only on gradient tiles. NEW in this merge (closes Ali&#39;s &quot;The images should show in the timeline&quot; on the ADMIN editor): listTimeline types now carry thumbnail_url; the Timeline editor passes it through thumbOf()/typeThumbUrl into every card preview + the edit drawer; CardDetailBody video cards with NO clip attached now show the card&#39;s image (own image, else type banner) instead of the empty dashed &quot;No video&quot; box (note below still says where to attach one). Also fixed two latent sibling-branch test breaks: FeedVideo.title extension vs videoFromMetadata expectation; type count 36→39 (testimonial/podcast/blog).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest timeline+podcast+cardContent 71/71; frontend curriculumFormatContract 5/5 (react-scripts); backend tsc 0; frontend tsc 0. DEV live check after deploy: admin Timeline shows banner/own images on cards (no more empty dashed boxes where a banner exists).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY (both branches). Merge commit unions zod schemas (image + testimonial + podcast) and updateCard metadata merge (video/content/course/image/testimonial/podcast). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">59</span>
+          <h2>Admin Timeline redesigned as the student classroom: 16:9 tile cards + details in the student&#39;s right-side popup</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Every curriculum object should have a 16:9 image in the preview and then allow the user to click something to see the details… I want it to look more like the student&#39;s experience where we can click on the button to pull it up (popup) on the right side. For [runtime-personalized items] in the timeline we can just use their stored image; only the student view shows the thumbnail specific to the student&#39;s experience.&quot; The admin Timeline previously rendered the FULL CardDetailBody inline on every card (very long). Now each card in the lanes renders the REAL student &lt;TimelineCard&gt; (header + short copy + 16:9 image tile via the stored-image chain: metadata.image → video poster/derived YouTube thumb → type banner → gradient); clicking ▶/Open pulls up the student&#39;s actual right-side popup — CardDetailDrawer gained an optional `preview` prop (complete/Enter-workspace disabled) so the admin popup IS the student drawer. Edit drawer&#39;s long inline &quot;Finished product&quot; is now the compact student tile + &quot;Open the student view — full details →&quot; button into the same popup (z-index raised above the edit drawer). Student-only Like/Comment hidden in admin lanes. Runtime-personalized cards (random testimonials/podcasts) show their STORED image in admin by construction (listTimeline never personalizes); students keep their per-student pick (getFeed injection). Files: frontend/src/components/timeline/CardDetailDrawer.tsx (preview prop, onComplete optional); frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx (student tiles, studentView popup state, EditDrawer onPreview, CSS overrides).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5 (react-scripts). DEV live check after deploy: every lane card is a 16:9 image tile; tile ▶/Open opens the right-side student popup; edit drawer shows compact tile + working student-view button.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Frontend-only change — deploy nginx. Backend untouched (admin uses stored metadata already).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">60</span>
+          <h2>One-click video playback + play/open affordance split on timeline tiles</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;I should be able to click on all videos and get them to play right away&quot; + &quot;We don&#39;t need a play button for everything - only things that can be played. Everything else will have an open button [that] opens on the right panel.&quot; (1) Autoplay: VideoEmbed gained an `autoplay` prop (starts in the playing state, no poster click); CardDetailBody threads it as `autoplayVideo`; CardDetailDrawer always passes it — opening a card&#39;s drawer IS the play intent, so any card with a video (student classroom, Today feed, admin Timeline popup) starts playback on the single click that opened it. VideoEmbed keyed by card.id so switching cards re-applies. Audio episodes (podcast .mp3) autoplay the same way. (2) Affordances: the tile&#39;s ▶ circle now appears ONLY when a playable source is attached (parseVideoUrl); everything else shows an &quot;Open →&quot; pill (new .mt-openpill style) that pulls up the right panel; the Skills Course tile&#39;s details circle swapped its ▶ for an open-panel chevron (▶ is reserved for playback). Completed cards keep the ✓. Files: frontend/src/components/timeline/VideoEmbed.tsx, CardDetailBody.tsx, CardDetailDrawer.tsx, TimelineCard.tsx, timeline.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. DEV live check after deploy: clicking a video card opens the popup with the video already playing; cards without a playable source show &quot;Open →&quot; and no ▶ anywhere on them.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Frontend-only — deploy nginx. Iframe autoplay works because the embed carries allow=&quot;autoplay&quot; and renders on a user click (Chrome delegation).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">61</span>
+          <h2>Classroom responsive: right rail disappears on shrink; feed keeps normal size (FB-style)</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;When in the classroom and the size of the screen shrinks, instead of making the content smaller, disappear the right side and keep the images their normal size making it more of a FB kind of view.&quot; Previously the two-column grid squeezed the feed (cards + 16:9 images shrank with the viewport) and below 1000px the rail stacked underneath. Now at ≤1180px the right rail (countdown / status / weekly progress) hides entirely and the feed column centers at max-width 720px — the cards and their images hold their normal size like a Facebook feed. Only ClassroomPage uses this grid (verified), so the change is scoped. File: frontend/src/components/timeline/timeline.css (.tl-grid/.tl-side/.tl-feedcol media rule).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">CSS-only; CRA Docker build green on deploy; DEV live check — shrink the classroom window: rail disappears, cards stay full-size and centered.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">62</span>
+          <h2>Inline video playback + working class comments (feed + workspace next to AI Mentor)</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Clicking on the video should start playing it in the current screen… I would need to click on the open button to open up the right side. That should be the only way.&quot; + &quot;The comment section doesn&#39;t work… when you go to workspace the video should play there — I should see comments from other users right next to the AI Mentor.&quot; (1) Inline play: clicking a playable tile (or its ▶) now swaps the 16:9 tile to the live player IN the feed (FB-style; VideoEmbed reused with autoplay + ribbon; onEnded still auto-completes direct files); the footer &quot;Open&quot; button (and the Open pill on non-playable tiles) is now the ONLY way to open the right-side panel. (2) Comments, full-stack: NEW timeline_card_comments table (idempotent ensureCardCommentsSchema — boot runs no global sync), CardComment model, cardCommentService (normalizeCommentBody ≤2000 chars, displayName &quot;First L.&quot;, listComments flags `mine`, addComment denormalizes author_name), GET/POST /api/portal/runtime/cards/:cardId/comments (requireParticipant + zod). NEW shared &lt;CardComments&gt; (self-fetching thread + post box, self-contained tlc-* CSS + dark theme) — the feed card&#39;s Comment button now toggles the real thread, and the Runtime workspace shows the same thread directly under the AI Mentor. (3) Workspace video: poster falls back to the derived YouTube thumbnail; podcast ribbon added. Files: backend server.ts, models/CardComment.ts (NEW), services/runtime/cardCommentService.ts (NEW) + test (NEW), controllers/runtimeController.ts, routes/participantRoutes.ts; frontend TimelineCard.tsx, CardComments.tsx (NEW), cardComments.css (NEW), RuntimeWorkspace.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 52/52 incl. new cardCommentService 5/5 (body trim/empty/oversize; display-name shapes); backend + frontend tsc 0; curriculumFormatContract 5/5. DEV after deploy: timeline_card_comments table created on boot; comment posted on a card appears in the feed thread AND in the workspace thread (same data).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Comments are class-wide per card (no cohort scoping yet — one shared curriculum). Admin timeline hides the Comment button (participant-auth endpoints). Deploy backend + nginx.</span></div>
           
         </div>
       </article>

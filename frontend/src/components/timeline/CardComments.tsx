@@ -4,9 +4,10 @@ import './cardComments.css';
 
 /**
  * CardComments — the class comment thread under a Timeline card (FB-style):
- * every enrolled student reads the same thread and can post to it. Shared by
- * the feed card's "Comment" toggle and the Runtime workspace (beside the AI
- * Mentor). Self-fetching: GET/POST /api/portal/runtime/cards/:id/comments.
+ * every enrolled student reads the same thread and can post to it. Toggled by
+ * the feed card's "Comment" button; the SAME thread the Runtime workspace
+ * shows beside the AI Mentor (same endpoint + data, newest first).
+ * Self-fetching: GET/POST /api/portal/classroom/cards/:id/comments.
  */
 
 interface CommentRow { id: string; author: string; mine: boolean; body: string; created_at: string }
@@ -28,7 +29,7 @@ const CardComments: React.FC<{ cardId: string; title?: string }> = ({ cardId, ti
   useEffect(() => {
     let alive = true;
     setRows(null); setError('');
-    portalApi.get(`/api/portal/runtime/cards/${cardId}/comments`)
+    portalApi.get(`/api/portal/classroom/cards/${cardId}/comments`)
       .then((r) => { if (alive) setRows(r.data?.comments || []); })
       .catch(() => { if (alive) { setRows([]); setError('Couldn’t load comments.'); } });
     return () => { alive = false; };
@@ -39,8 +40,9 @@ const CardComments: React.FC<{ cardId: string; title?: string }> = ({ cardId, ti
     if (!body || busy) return;
     setBusy(true); setError('');
     try {
-      const r = await portalApi.post(`/api/portal/runtime/cards/${cardId}/comments`, { body });
-      setRows((rs) => [...(rs || []), r.data]);
+      const r = await portalApi.post(`/api/portal/classroom/cards/${cardId}/comments`, { body });
+      // The thread is newest-first (matches the workspace) — prepend.
+      if (r.data?.comment) setRows((rs) => [r.data.comment, ...(rs || [])]);
       setText('');
     } catch {
       setError('Couldn’t post your comment — try again.');

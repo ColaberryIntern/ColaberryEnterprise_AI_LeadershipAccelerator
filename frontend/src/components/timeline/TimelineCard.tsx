@@ -36,8 +36,9 @@ export interface TimelineFeedCard {
   image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
+  blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
-  type_thumbnail_url?: string | null;   // the type's banner — the card's DEFAULT image (own media poster overrides it)
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -132,6 +133,7 @@ interface Props {
 
 const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
+  const [playingInline, setPlayingInline] = useState(false);
   const done = card.status === 'completed';
   const locked = card.status === 'locked';
   const isSkillsJar = v.kind === 'skilljar';
@@ -139,23 +141,25 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  // Poster background precedence: the item's OWN image wins — an explicit card
-  // image (blog cover), the video's saved poster, or a thumbnail derived from
-  // the video URL (YouTube). Otherwise the curriculum type's AI banner is the
-  // default image for every card; the Design-E gradient remains the last-resort
-  // fallback. Darkened so the overlay text stays legible.
+  // Poster background precedence: a card's OWN art wins — an explicit card
+  // image (blog cover), the video's saved poster (incl. podcast episode art /
+  // picked testimonial), a thumbnail DERIVED from the video URL (YouTube — so a
+  // plain video card shows ITS video's image, never the generic banner), or a
+  // blog card's post thumbnail; otherwise EVERY card defaults to its curriculum
+  // type's AI banner (the Experience Studio thumbnail); the Design-E gradient
+  // is the last-resort fallback. Darkened so the overlay text stays legible.
   // Playable = a real video/audio source is attached. Only playable cards get
   // the ▶ affordance — and ▶ plays INLINE in the tile (never opens the panel);
   // everything else shows an "Open" pill (right-panel intent).
   const source = parseVideoUrl(card.video?.url);
   const playable = !!source;
-  const [inlinePlaying, setInlinePlaying] = useState(false);
   const [showComments, setShowComments] = useState(false);
-  const ownImage =
+  const ownPoster =
     (card.image && card.image.trim()) ||
     card.video?.poster ||
-    videoThumbnail(source);
-  const posterUrl = ownImage || card.type_thumbnail_url || null;
+    videoThumbnail(source) ||
+    (card.type === 'blog' && card.blog?.thumbnail) || null;
+  const posterUrl = ownPoster || card.type_thumbnail || null;
   const posterStyle: React.CSSProperties = posterUrl
     ? {
         backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterUrl})`,
@@ -210,31 +214,34 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
         </button>
       </div>
     </div>
-  ) : playable && inlinePlaying ? (
-    // ▶ was clicked — the tile IS the player now (in-feed playback, no panel).
+  ) : playable && playingInline ? (
+    // The tile IS the player now (in-feed playback, no panel) — covers video
+    // embeds AND direct audio episodes (VideoEmbed renders an <audio> player
+    // over the artwork for .mp3 sources). Ending playback auto-completes.
     <div className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}>
       <VideoEmbed
         source={source}
         title={card.video?.title || shortTitle}
-        poster={ownImage}
+        poster={ownPoster || posterUrl}
         autoplay
         badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
-        onEnded={done || !onComplete ? undefined : () => onComplete(card)}
+        onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
       />
     </div>
   ) : (
     <button
       type="button"
-      className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}`}
+      className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`}
       style={posterStyle}
-      onClick={() => !locked && (playable ? setInlinePlaying(true) : onOpen?.(card))}
-      aria-label={playable ? `Play ${card.title}` : `Open ${card.title}`}
+      onClick={() => !locked && (playable ? setPlayingInline(true) : onOpen?.(card))}
+      aria-label={playable ? `Play ${card.video?.title || card.title}` : `Open ${card.title}`}
     >
       {watermark}
       {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
+      {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>
+      <span className="mt-meta"><b>{card.video?.title || card.blog?.title || shortTitle}</b><span>{metaText}</span></span>
       {done
         ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
         : playable
@@ -272,7 +279,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }}>Unlocks later</span>
-            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => onOpen?.(card)}>
+            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
                 <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
               </button>}
       </div>

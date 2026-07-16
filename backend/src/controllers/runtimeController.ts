@@ -9,7 +9,6 @@ import { openCard, completeActivity, readinessSummary, cardContext } from '../se
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
-import { listComments, addComment } from '../services/runtime/cardCommentService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
 import fs from 'fs/promises';
@@ -80,18 +79,6 @@ export async function handleComplete(req: Request, res: Response, next: NextFunc
 
 export async function handleReadiness(req: Request, res: Response, next: NextFunction) {
   try { res.json(await readinessSummary(eid(req))); } catch (e) { fail(res, e, next); }
-}
-
-// class comments — the shared thread under a card (FB-style)
-export async function handleListComments(req: Request, res: Response, next: NextFunction) {
-  try { res.json({ comments: await listComments(eid(req), String(req.params.cardId)) }); } catch (e) { fail(res, e, next); }
-}
-const commentSchema = z.object({ body: z.string().min(1).max(2000) });
-export async function handleAddComment(req: Request, res: Response, next: NextFunction) {
-  try {
-    const b = commentSchema.parse(req.body || {});
-    res.status(201).json(await addComment(eid(req), String(req.params.cardId), b.body));
-  } catch (e) { fail(res, e, next); }
 }
 
 // notebook

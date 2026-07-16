@@ -112,11 +112,12 @@ export async function selectPodcastForEnrollment(
     const scored = pool.map((p) => ({ p, s: score(p, userTags) })).sort((a, b) => b.s - a.s);
     const pick = weightedPick(scored.slice(0, Math.min(5, scored.length)));
 
-    // 5. Record the assignment/listen (idempotent; seen_count++ on repeat). The id is
-    // generated in Node so the raw INSERT never depends on a DB-level uuid default.
+    // 5. Record the assignment/listen (idempotent; seen_count++ on repeat). The id and
+    // timestamps are supplied explicitly so the raw INSERT never depends on DB-level
+    // defaults (the model's UUIDV4/NOW defaults are Sequelize-side only).
     await sequelize.query(
-      `INSERT INTO podcast_views (id, enrollment_id, podcast_id, category, last_timeline_card_id, context)
-       VALUES (:id, :eid, :pid, :cat, :cid, :ctx::jsonb)
+      `INSERT INTO podcast_views (id, enrollment_id, podcast_id, category, first_seen_at, last_seen_at, seen_count, last_timeline_card_id, context)
+       VALUES (:id, :eid, :pid, :cat, NOW(), NOW(), 1, :cid, :ctx::jsonb)
        ON CONFLICT (enrollment_id, podcast_id) DO UPDATE SET
          last_seen_at = NOW(),
          seen_count = podcast_views.seen_count + 1,

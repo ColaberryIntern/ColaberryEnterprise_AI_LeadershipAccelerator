@@ -34,6 +34,7 @@ import {
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import { listPodcastsPortal } from '../controllers/podcastController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
+import { handleListCardComments, handleCreateCardComment } from '../controllers/timelineCommentController';
 import {
   handleGetSettings, handleUpdateProfile, handleSetAvatar, handleClearAvatar,
   handleSetResume, handleGetResume, handleClearResume,
@@ -41,7 +42,6 @@ import {
 import {
   handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleListComments, handleAddComment,
 } from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
@@ -75,9 +75,6 @@ router.post('/api/portal/runtime/cards/:cardId/certificate', requireParticipant,
 router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, handleGetCertificate);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
-// Class comments — the shared FB-style thread under a card.
-router.get('/api/portal/runtime/cards/:cardId/comments', requireParticipant, handleListComments);
-router.post('/api/portal/runtime/cards/:cardId/comments', requireParticipant, handleAddComment);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
@@ -614,6 +611,11 @@ router.post('/api/portal/community/comments/:commentId/like', requireParticipant
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
 });
+
+// Per-card student comments (Runtime workspace) — newest first. Registered here
+// (after the community limiters are defined) so the shared rate limiter is in scope.
+router.get('/api/portal/classroom/cards/:cardId/comments', requireParticipant, handleListCardComments);
+router.post('/api/portal/classroom/cards/:cardId/comments', communityCommentRateLimiter, requireParticipant, handleCreateCardComment);
 
 router.post('/api/portal/community/posts/:postId/report', requireParticipant, async (req, res) => {
   const paramsParsed = PostIdParamSchema.safeParse(req.params);

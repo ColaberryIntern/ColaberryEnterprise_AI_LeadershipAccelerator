@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { runtimeApi, RtOpen, Readiness, PromptEval } from './runtimeApi';
+import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment } from './runtimeApi';
 import VideoEmbed from '../../../components/timeline/VideoEmbed';
-import CardComments from '../../../components/timeline/CardComments';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 
@@ -39,12 +38,19 @@ const RuntimeWorkspace: React.FC = () => {
   const [mentorInput, setMentorInput] = useState('');
   const mentorEnd = useRef<HTMLDivElement>(null);
 
+  // cohort comments (media cards) — newest first
+  const [comments, setComments] = useState<CardComment[]>([]);
+  const [commentInput, setCommentInput] = useState('');
+
   useEffect(() => {
     (async () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
         setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed');
         setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        if (VIDEO_BANDS.includes(open.card.render_band)) {
+          runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
+        }
       } catch { setError('Could not open this activity.'); }
     })();
   }, [cardId]);
@@ -67,6 +73,17 @@ const RuntimeWorkspace: React.FC = () => {
       setMsgs((m) => [...m, { role: 'assistant', content: r.reply, kind: r.kind }]);
     } catch { setMsgs((m) => [...m, { role: 'assistant', content: 'I had trouble reaching you — try again.', kind: 'error' }]); } finally { setBusy(''); }
   }, [card, msgs]);
+
+  const postComment = async () => {
+    const body = commentInput.trim();
+    if (!card || !body) return;
+    setBusy('comment');
+    try {
+      const r = await runtimeApi.comment(card.id, body);
+      setComments((c) => [r.comment, ...c]);   // newest first
+      setCommentInput('');
+    } catch { /* keep the draft in the input */ } finally { setBusy(''); }
+  };
 
   const runLab = async () => {
     if (!card || !prompt.trim()) return; setBusy('lab');
@@ -141,6 +158,25 @@ const RuntimeWorkspace: React.FC = () => {
             {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
               : <button className="rt-btn cta" disabled={busy === 'complete'} onClick={complete}>{busy === 'complete' ? 'Generating evidence…' : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}</button>}
           </div>
+
+          {/* COHORT COMMENTS — media cards (podcast / testimonial / video), newest first */}
+          {isVideo && (
+            <section className="rt-comments">
+              <div className="rt-lab">Comments</div>
+              <div className="rt-cpost">
+                <input className="rt-in" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commentInput.trim() && postComment()} placeholder="Share a thought with your cohort…" />
+                <button className="rt-btn pri" disabled={busy === 'comment' || !commentInput.trim()} onClick={postComment}>Post</button>
+              </div>
+              {comments.length === 0
+                ? <p className="rt-muted" style={{ margin: '8px 2px' }}>No comments yet — be the first.</p>
+                : comments.map((cm) => (
+                    <div key={cm.id} className="rt-comment">
+                      <div className="rt-cwho"><b>{cm.mine ? 'You' : cm.author}</b><span>{new Date(cm.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
+                      <p>{cm.body}</p>
+                    </div>
+                  ))}
+            </section>
+          )}
         </main>
 
         {/* RIGHT — AI Mentor */}
@@ -157,9 +193,6 @@ const RuntimeWorkspace: React.FC = () => {
             <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && mentorInput.trim() && ask('ask', mentorInput)} placeholder="Ask your mentor…" />
             <button className="rt-btn pri" disabled={busy === 'mentor' || !mentorInput.trim()} onClick={() => ask('ask', mentorInput)}>Send</button>
           </div>
-          {/* Class comments — the same shared thread the feed card shows, right
-              next to the AI Mentor so students see each other's take while working. */}
-          <div style={{ padding: '0 14px 14px' }}><CardComments cardId={card.id} /></div>
         </aside>
       </div>
 
