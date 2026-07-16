@@ -34,6 +34,7 @@ import {
 import { handleExecutePromptLab } from '../controllers/promptLabController';
 import { listPodcastsPortal } from '../controllers/podcastController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
+import { handleListCardComments, handleCreateCardComment } from '../controllers/timelineCommentController';
 import {
   handleGetSettings, handleUpdateProfile, handleSetAvatar, handleClearAvatar,
   handleSetResume, handleGetResume, handleClearResume,
@@ -610,6 +611,11 @@ router.post('/api/portal/community/comments/:commentId/like', requireParticipant
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
 });
+
+// Per-card student comments (Runtime workspace) — newest first. Registered here
+// (after the community limiters are defined) so the shared rate limiter is in scope.
+router.get('/api/portal/classroom/cards/:cardId/comments', requireParticipant, handleListCardComments);
+router.post('/api/portal/classroom/cards/:cardId/comments', communityCommentRateLimiter, requireParticipant, handleCreateCardComment);
 
 router.post('/api/portal/community/posts/:postId/report', requireParticipant, async (req, res) => {
   const paramsParsed = PostIdParamSchema.safeParse(req.params);
