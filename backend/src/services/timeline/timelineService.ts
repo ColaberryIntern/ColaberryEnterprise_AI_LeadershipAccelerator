@@ -12,6 +12,8 @@ import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType } from './typeRegistry';
 import { selectTestimonialForEnrollment } from './networkVideoService';
+import { selectPodcastForEnrollment } from './podcastMediaService';
+import { selectBlogForEnrollment } from './blogMediaService';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -39,6 +41,15 @@ export interface FeedCourse {
   url: string | null;
 }
 
+/** A blog post on the card (Blog type) — a fixed pasted post, or the per-student
+ *  auto-matched pick from the training-site library (see blogMediaService). */
+export interface FeedBlog {
+  url: string;
+  title: string | null;
+  excerpt?: string | null;
+  thumbnail?: string | null;
+}
+
 export interface FeedCard {
   id: string;
   type: string;
@@ -60,6 +71,7 @@ export interface FeedCard {
   video: FeedVideo | null;
   content: FeedContent | null;
   course: FeedCourse | null;          // Skills Course link (skills_jar)
+  blog: FeedBlog | null;              // Blog post (blog type) — fixed or auto-matched per student
   capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
   thumbnail_url: string | null;       // the type's fixed picture (Studio thumbnail) — hero image on non-video cards
 }
@@ -92,6 +104,20 @@ export function videoFromMetadata(metadata: any): FeedVideo | null {
     presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
     poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
     title: typeof v.title === 'string' && v.title.trim() ? v.title.trim() : null,
+  };
+}
+
+/** PURE — a typed blog post from a card's metadata blob (link mode), or null.
+ *  Only the URL is required; title/thumbnail/excerpt are display extras filled
+ *  from the library at save time when the URL is a training-site post. */
+export function blogFromMetadata(metadata: any): FeedBlog | null {
+  const b = metadata && typeof metadata === 'object' ? metadata.blog : null;
+  if (!b || typeof b !== 'object' || typeof b.url !== 'string' || !b.url.trim()) return null;
+  return {
+    url: b.url.trim(),
+    title: typeof b.title === 'string' && b.title.trim() ? b.title.trim() : null,
+    excerpt: typeof b.excerpt === 'string' && b.excerpt.trim() ? b.excerpt.trim() : null,
+    thumbnail: typeof b.thumbnail === 'string' && b.thumbnail.trim() ? b.thumbnail.trim() : null,
   };
 }
 
@@ -202,6 +228,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       video: videoFromMetadata(card.metadata),
       content: contentFromMetadata(card.metadata),
       course: courseFromMetadata(card.metadata),
+      blog: blogFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
     };
   });
@@ -221,6 +248,31 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
         // The picked testimonial IS the card now — its title + description take
         // over the authored placeholder, and no stale AI lesson notes are shown.
         fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+    // Any podcast card WITHOUT a fixed pasted link pulls a personalized episode from
+    // the Buzzsprout catalog (per student, non-repeating), recorded in podcast_views.
+    // A pasted link keeps its own video. Exact sibling of the testimonial block above.
+    if (fc.type === 'podcast' && !fc.video) {
+      const picked = await selectPodcastForEnrollment(enrollmentId, card);
+      if (picked) {
+        fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+    // Any blog card WITHOUT a fixed pasted post pulls a week+student-matched post
+    // from the training-site blog library (per student, non-repeating), recorded in
+    // blog_post_views. A pasted link keeps its own post. Third sibling of the
+    // testimonial/podcast blocks above; see blogMediaService.
+    if (fc.type === 'blog' && !fc.blog) {
+      const picked = await selectBlogForEnrollment(enrollmentId, card);
+      if (picked) {
+        fc.blog = picked.blog;
         if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
         if (picked.description) fc.description = picked.description;
         fc.content = null;

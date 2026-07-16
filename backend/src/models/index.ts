@@ -1,6 +1,7 @@
 import Cohort from './Cohort';
 import Enrollment from './Enrollment';
 import Podcast from './Podcast';
+import PodcastView from './PodcastView';
 import AdminUser from './AdminUser';
 import Lead from './Lead';
 import AutomationLog from './AutomationLog';
@@ -973,7 +974,7 @@ ChallengeParticipant.hasOne(LeaderboardScore, { foreignKey: 'challenge_participa
 LeaderboardScore.belongsTo(ChallengeParticipant, { foreignKey: 'challenge_participant_id', as: 'participant' });
 
 export {
-  Cohort, Enrollment, Podcast, AdminUser, Lead, AutomationLog,
+  Cohort, Enrollment, Podcast, PodcastView, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
