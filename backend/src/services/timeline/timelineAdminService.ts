@@ -40,6 +40,7 @@ export interface CreateCardInput {
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
+  testimonial?: { mode?: string | null; category?: string | null } | null;   // Testimonials type: link vs random personalized
 }
 
 /** PURE — normalize an author's video input into the stored metadata shape, or
@@ -73,6 +74,17 @@ export function buildCourseMeta(course: CreateCardInput['course']): { name: stri
   const url = str(course.url);
   if (!name && !url) return null;
   return { name, url };
+}
+
+/** PURE — normalize the Testimonials source config into the stored metadata
+ *  shape (top-level `mode` + `testimonial_category`), or null when no valid mode.
+ *  `random` = pick a matched testimonial per student; `link` = play a set video. */
+export function buildTestimonialMeta(testimonial: CreateCardInput['testimonial']): { mode: 'link' | 'random'; testimonial_category: string } | null {
+  if (!testimonial || typeof testimonial !== 'object') return null;
+  const mode = testimonial.mode === 'random' ? 'random' : testimonial.mode === 'link' ? 'link' : null;
+  if (!mode) return null;
+  const cat = typeof testimonial.category === 'string' && testimonial.category.trim() ? testimonial.category.trim().toLowerCase() : 'testimonial';
+  return { mode, testimonial_category: cat };
 }
 
 /**
@@ -115,6 +127,7 @@ export function composeCardAttributes(
       ...(buildVideoMeta(input.video) ? { video: buildVideoMeta(input.video) } : {}),
       ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content), content_at: new Date().toISOString() } : {}),
       ...(buildCourseMeta(input.course) ? { course: buildCourseMeta(input.course) } : {}),
+      ...(buildTestimonialMeta(input.testimonial) || {}),   // top-level mode + testimonial_category
     },
   };
 }
@@ -184,11 +197,16 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
   // Video + content live in the metadata blob; merge them (setting/clearing each
   // key) without disturbing other metadata. Start from the latest metadata (or
   // whatever a prior branch already staged in clean.metadata).
-  if ('video' in patch || 'content' in patch || 'course' in patch) {
+  if ('video' in patch || 'content' in patch || 'course' in patch || 'testimonial' in patch) {
     const meta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
     if ('video' in patch) {
       const v = buildVideoMeta(patch.video);
       if (v) meta.video = v; else delete meta.video;
+    }
+    if ('testimonial' in patch) {
+      const t = buildTestimonialMeta(patch.testimonial);
+      if (t) { meta.mode = t.mode; meta.testimonial_category = t.testimonial_category; }
+      else { delete meta.mode; delete meta.testimonial_category; }
     }
     if ('content' in patch) {
       const c = buildContentMeta(patch.content);

@@ -765,6 +765,88 @@ async function ensureExperienceBuilderSchema() {
   console.log('[DB] Experience Builder schema ensured');
 }
 
+// Network Video Library — the ColaberryTV testimonial/marketing/motivational
+// catalog (network_videos) + a per-enrollment anti-repeat ledger
+// (network_video_views). Powers the Testimonials type's random personalized
+// mode. See docs/NETWORK_VIDEO_LIBRARY.md and scripts/ingestNetworkVideos.js.
+async function ensureNetworkVideoSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS network_videos (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       source VARCHAR(64) NOT NULL DEFAULT 'colaberrytv',
+       external_source_id INTEGER,
+       category VARCHAR(64) NOT NULL,
+       title TEXT,
+       description TEXT,
+       host VARCHAR(32),
+       provider_video_id VARCHAR(160),
+       embed_url TEXT,
+       watch_url TEXT,
+       original_url TEXT,
+       thumbnail_url TEXT,
+       duration_seconds INTEGER,
+       tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+       playable BOOLEAN NOT NULL DEFAULT TRUE,
+       needs_attention TEXT,
+       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+       ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       UNIQUE (source, external_source_id)
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_network_videos_active_cat ON network_videos (category) WHERE is_active`,
+    `CREATE INDEX IF NOT EXISTS idx_network_videos_tags ON network_videos USING gin (tags)`,
+    `CREATE TABLE IF NOT EXISTS network_video_views (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       video_id UUID NOT NULL REFERENCES network_videos(id) ON DELETE CASCADE,
+       category VARCHAR(64),
+       first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       seen_count INTEGER NOT NULL DEFAULT 1,
+       last_timeline_card_id UUID,
+       context JSONB NOT NULL DEFAULT '{}'::jsonb,
+       UNIQUE (enrollment_id, video_id)
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_nvv_enrollment_cat ON network_video_views (enrollment_id, category)`,
+    `CREATE INDEX IF NOT EXISTS idx_nvv_enrollment_card ON network_video_views (enrollment_id, last_timeline_card_id)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Network Video schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Network Video schema ensured');
+}
+
+// Enhance the existing (stub) `testimonial` curriculum type into the working
+// "Testimonials" type: relabel, publish its link-vs-random settings schema, and
+// mark it approved for the Composer. Idempotent; runs after the type is seeded.
+async function seedTestimonialType() {
+  const settingsSchema = {
+    mode: {
+      type: 'enum', values: ['link', 'random'], default: 'link', label: 'Source',
+      help: 'Link = play one specific pasted video. Random = pick a matched testimonial per student (personalized, non-repeating).',
+    },
+    testimonial_category: { type: 'string', default: 'testimonial', label: 'Library category' },
+  };
+  try {
+    await sequelize.query(
+      `UPDATE curriculum_type_definitions
+          SET label='Testimonials', student_label='Testimonials', render_band='media',
+              is_active=TRUE, settings_schema = :schema::jsonb
+        WHERE slug='testimonial'`,
+      { replacements: { schema: JSON.stringify(settingsSchema) } },
+    );
+  } catch (err: any) { console.warn('[DB] Testimonials type seed failed:', err.message?.split('\n')[0]); }
+  try {
+    await sequelize.query(
+      `UPDATE curriculum_type_definitions
+          SET approved=TRUE, approved_at=NOW(), approved_by=COALESCE(approved_by,'system:testimonials')
+        WHERE slug='testimonial' AND approved IS DISTINCT FROM TRUE`,
+    );
+  } catch { /* approved column absent on old schemas — non-fatal */ }
+  console.log('[DB] Testimonials type ensured');
+}
+
 async function ensureTimelineEngineSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS timeline_cards (
@@ -1347,6 +1429,8 @@ async function start(): Promise<void> {
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
   await ensureTimelineEngineSchema();
+  // Network Video Library (Testimonials random personalized mode) — catalog + per-enrollment view ledger.
+  await ensureNetworkVideoSchema();
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();
@@ -1397,6 +1481,8 @@ async function start(): Promise<void> {
       const { seedComponentAuthoring } = await import('./seeds/seedComponentAuthoring');
       const authoring = await seedComponentAuthoring();
       console.log(`[TimelineEngine] component authoring applied: ${authoring.updated.length} updated${authoring.missing.length ? `, missing: ${authoring.missing.join(',')}` : ''}`);
+      // Testimonials type: relabel + publish link/random settings AFTER authoring so it wins.
+      await seedTestimonialType();
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);

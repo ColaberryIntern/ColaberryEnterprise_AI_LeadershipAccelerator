@@ -40,6 +40,12 @@ const courseSchema = z.object({
   name: z.string().max(300).nullable().optional(),
   url: z.string().max(2000).nullable().optional(),
 }).nullable().optional();
+// Testimonials type: link mode plays a specific video; random mode picks a
+// matched testimonial per student from the network_videos library.
+const testimonialSchema = z.object({
+  mode: z.enum(['link', 'random']).nullable().optional(),
+  category: z.string().max(64).nullable().optional(),
+}).nullable().optional();
 
 const createSchema = z.object({
   type: z.string().min(1),
@@ -58,6 +64,7 @@ const createSchema = z.object({
   video: videoSchema,
   content: contentSchema,
   course: courseSchema,
+  testimonial: testimonialSchema,
 });
 
 const updateSchema = z.object({
@@ -77,6 +84,7 @@ const updateSchema = z.object({
   video: videoSchema,
   content: contentSchema,
   course: courseSchema,
+  testimonial: testimonialSchema,
 }).strict();
 
 // One-click: build a full video-card draft from a title (find a real video +

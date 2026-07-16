@@ -48,6 +48,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   useEffect(() => { setContent(card.content || null); }, [card.id, card.content]);
   useEffect(() => {
     if (preview) return;
+    // Testimonials present the picked video's own description — never AI lesson notes.
+    if (card.type === 'testimonial') return;
     // Only content-bearing cards refresh (video, or anything that already has content).
     const contentBearing = ['media', 'live_class', 'video_feedback'].includes(card.render_band) || !!card.content;
     if (!contentBearing) return;
@@ -84,7 +86,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           {done && <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed</span>}
         </div>
 
-        <h2 className="tld-title">{card.title}</h2>
+        <h2 className="tld-title">{card.video?.title || card.title}</h2>
 
         <div className="tld-meta">
           {presenter && <span><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" /><path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>{presenter}</span>}
@@ -94,7 +96,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
         {isVideo && (
           <div className="tld-player">
-            <VideoEmbed source={source} title={card.title} poster={card.video?.poster || null} onEnded={done || preview ? undefined : onComplete} />
+            <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : null} onEnded={done || preview ? undefined : onComplete} />
           </div>
         )}
 
@@ -113,7 +115,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         </div>
 
-        {content && (content.summary || content.body_html || (content.questions && content.questions.length > 0) || content.reflection) && (
+        {card.type !== 'testimonial' && content && (content.summary || content.body_html || (content.questions && content.questions.length > 0) || content.reflection) && (
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}

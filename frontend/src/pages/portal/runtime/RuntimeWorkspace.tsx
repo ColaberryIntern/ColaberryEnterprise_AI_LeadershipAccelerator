@@ -103,7 +103,7 @@ const RuntimeWorkspace: React.FC = () => {
         {/* CENTER — activity */}
         <main className="rt-mid">
           {isVideo && (
-            <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.title} poster={card.video?.poster || null} />
+            <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : null} />
           )}
 
           {isLab && (

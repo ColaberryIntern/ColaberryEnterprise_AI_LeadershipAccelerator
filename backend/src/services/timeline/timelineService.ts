@@ -11,6 +11,7 @@ import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineC
 import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType } from './typeRegistry';
+import { selectTestimonialForEnrollment } from './networkVideoService';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -18,6 +19,7 @@ export interface FeedVideo {
   url: string;
   presenter: string | null;
   poster: string | null;
+  title?: string | null;   // the specific video's own title — overlaid on the poster (personalized picks)
 }
 
 /** AI-generated student content saved onto the card (by the Timeline editor's
@@ -88,6 +90,7 @@ export function videoFromMetadata(metadata: any): FeedVideo | null {
     url: v.url.trim(),
     presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
     poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
+    title: typeof v.title === 'string' && v.title.trim() ? v.title.trim() : null,
   };
 }
 
@@ -199,6 +202,27 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       capabilities: capsBySlug.get(card.type) || [],
     };
   });
+
+  // Resolve per-student random testimonials (personalized, non-repeating). A
+  // testimonial card in "random" mode carries no fixed metadata.video — instead we
+  // pick a video this student hasn't seen and record it. Sequential (not parallel)
+  // so two random cards in the same feed can't both claim the same video.
+  for (let i = 0; i < feedCards.length; i++) {
+    const fc = feedCards[i];
+    const card = cards[i];
+    const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
+    if (fc.type === 'testimonial' && meta.mode === 'random' && !fc.video) {
+      const picked = await selectTestimonialForEnrollment(enrollmentId, card);
+      if (picked) {
+        // The picked testimonial IS the card now — its title + description take
+        // over the authored placeholder, and no stale AI lesson notes are shown.
+        fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+  }
 
   return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
 }
