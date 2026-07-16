@@ -817,6 +817,21 @@ async function ensureNetworkVideoSchema() {
   console.log('[DB] Network Video schema ensured');
 }
 
+// Podcast catalog + per-student listen ledger (Podcast type's random personalized mode,
+// see podcastMediaService). Boot has no global sequelize.sync, so the tables are ensured
+// here from the Sequelize models themselves (single schema source; CREATE IF NOT EXISTS).
+// Order matters: podcast_views references podcasts(id).
+async function ensurePodcastSchema() {
+  try {
+    const { Podcast, PodcastView } = await import('./models');
+    await Podcast.sync();
+    await PodcastView.sync();
+    console.log('[DB] Podcast schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] Podcast schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
 // Enhance the existing (stub) `testimonial` curriculum type into the working
 // "Testimonials" type: relabel, publish its link-vs-random settings schema, and
 // mark it approved for the Composer. Idempotent; runs after the type is seeded.
@@ -1431,6 +1446,8 @@ async function start(): Promise<void> {
   await ensureTimelineEngineSchema();
   // Network Video Library (Testimonials random personalized mode) — catalog + per-enrollment view ledger.
   await ensureNetworkVideoSchema();
+  // Podcast Library (Podcast random personalized mode) — catalog + per-enrollment listen ledger.
+  await ensurePodcastSchema();
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();
