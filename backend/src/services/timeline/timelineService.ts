@@ -73,6 +73,7 @@ export interface FeedCard {
   course: FeedCourse | null;          // Skills Course link (skills_jar)
   blog: FeedBlog | null;              // Blog post (blog type) — fixed or auto-matched per student
   capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
+  type_thumbnail: string | null;      // the type's Experience Studio thumbnail — feed-card fallback art when the card has no poster
 }
 
 /** PURE — normalize a capabilities blob (JSONB, may be junk) into a string[]. */
@@ -198,8 +199,10 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
 
   // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
   // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
-  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
+  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
   const capsBySlug = new Map(typeDefs.map((t) => [t.slug, normalizeCapabilities(t.capabilities)]));
+  // The type's Studio thumbnail — cards without their own poster fall back to it.
+  const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t.thumbnail_url || '').trim() || null]));
 
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
@@ -227,6 +230,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       course: courseFromMetadata(card.metadata),
       blog: blogFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
+      type_thumbnail: thumbBySlug.get(card.type) || null,
     };
   });
 

@@ -826,6 +826,14 @@ async function ensurePodcastSchema() {
     const { Podcast, PodcastView } = await import('./models');
     await Podcast.sync();
     await PodcastView.sync();
+    // Default Studio thumbnail for the Podcast type (the show's channel artwork) —
+    // ONLY when unset, so anything an admin sets in the Experience Studio wins.
+    await sequelize.query(
+      `UPDATE curriculum_type_definitions
+          SET thumbnail_url = :art
+        WHERE slug = 'podcast' AND (thumbnail_url IS NULL OR thumbnail_url = '')`,
+      { replacements: { art: 'https://storage.buzzsprout.com/um2agaid5j7zpurbt3t3e74b67wg?.jpg' } },
+    );
     console.log('[DB] Podcast schema ensured');
   } catch (err: any) {
     console.warn('[DB] Podcast schema ensure failed:', err.message?.split('\n')[0]);
