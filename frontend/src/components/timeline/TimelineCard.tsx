@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { isAudioUrl } from '../../utils/videoEmbed';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
@@ -123,8 +124,11 @@ interface Props {
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
+  // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE.
+  const podcastAudio = card.type === 'podcast' && card.video?.url && isAudioUrl(card.video.url) ? card.video.url : null;
+  const [playingInline, setPlayingInline] = useState(false);
   const done = card.status === 'completed';
   const locked = card.status === 'locked';
   const isSkillsJar = v.kind === 'skilljar';
@@ -193,6 +197,33 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
         </button>
       </div>
     </div>
+  ) : podcastAudio ? (
+    // Podcast tile with a direct audio episode: clicking the artwork starts the
+    // episode playing INLINE (the footer "Open" still opens the drawer, which
+    // never autoplays). Two interactive elements ⇒ a <div> tile like skills_jar.
+    <div
+      className={`mthumb${done ? ' done' : ''}`} style={posterStyle} role="button" tabIndex={0}
+      onClick={() => !locked && setPlayingInline(true)}
+      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); setPlayingInline(true); } }}
+      aria-label={`Play ${card.video?.title || card.title}`}
+    >
+      {watermark}
+      <span className="mt-ribbon">Podcast</span>
+      <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
+      {!playingInline && <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>}
+      {playingInline ? (
+        <span onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', left: 10, right: 10, bottom: 10, zIndex: 3, display: 'block' }}>
+          <audio
+            style={{ width: '100%' }} src={podcastAudio} controls autoPlay
+            onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
+          />
+        </span>
+      ) : (
+        <span className="mt-open">{done
+          ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
+          : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>
+      )}
+    </div>
   ) : (
     <button type="button" className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
       {watermark}
@@ -234,7 +265,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }}>Unlocks later</span>
-            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => onOpen?.(card)}>
+            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
                 <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
               </button>}
       </div>

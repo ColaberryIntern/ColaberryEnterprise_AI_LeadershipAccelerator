@@ -14,6 +14,12 @@ export const runtimeCss = `
 .rt *{box-sizing:border-box}
 .rt .mono{font-family:var(--mono)}
 .rt-top{display:flex;align-items:center;gap:13px;padding:12px 20px;background:var(--paper);border-bottom:1px solid var(--line);flex:none}
+.rt-comments{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}
+.rt-cpost{display:flex;gap:8px;margin-bottom:12px}
+.rt-cpost .rt-in{flex:1}
+.rt-comment{padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin-bottom:8px;background:var(--paper)}
+.rt-cwho{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:#6A6A6A;margin-bottom:4px}
+.rt-comment p{margin:0;font-size:13.5px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere}
 .rt-back{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--paper);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);flex:none}
 .rt-back:hover{border-color:var(--berry);color:var(--berry)}.rt-back svg{width:18px;height:18px}
 .rt-kick{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--berry)}
