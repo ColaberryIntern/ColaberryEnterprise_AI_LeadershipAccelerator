@@ -64,6 +64,13 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
   const card = await TimelineCard.findByPk(cardId);
   if (!card) throw new Error(`card ${cardId} not found`);
 
+  // Watch gate: video-bearing cards (video/testimonial/podcast) require the
+  // configured share actually watched (default 75%) BEFORE completion + XP.
+  // Single choke point — covers the classroom drawer, Today, and the runtime.
+  // Throws { status: 422, code: 'watch_requirement' } when below threshold.
+  const { assertWatchRequirement } = await import('../runtime/watchProgressService');
+  await assertWatchRequirement(enrollmentId, card);
+
   // Mark progress complete (idempotent).
   const [progress] = await TimelineCardProgress.findOrCreate({
     where: { card_id: cardId, enrollment_id: enrollmentId },
