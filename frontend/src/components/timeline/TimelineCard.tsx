@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { isAudioUrl } from '../../utils/videoEmbed';
 
 /**
@@ -128,9 +128,18 @@ interface Props {
 
 const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onComments, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
-  // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE.
+  // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE —
+  // and while playing, clicking the artwork toggles pause/play (the bar has the
+  // native controls too).
   const podcastAudio = card.type === 'podcast' && card.video?.url && isAudioUrl(card.video.url) ? card.video.url : null;
   const [playingInline, setPlayingInline] = useState(false);
+  const inlineAudioRef = useRef<HTMLAudioElement | null>(null);
+  const toggleInline = () => {
+    if (locked) return;
+    if (!playingInline) { setPlayingInline(true); return; }
+    const a = inlineAudioRef.current;
+    if (a) { if (a.paused) { void a.play(); } else { a.pause(); } }
+  };
   const done = card.status === 'completed';
   const locked = card.status === 'locked';
   const isSkillsJar = v.kind === 'skilljar';
@@ -205,17 +214,31 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onCom
     // never autoplays). Two interactive elements ⇒ a <div> tile like skills_jar.
     <div
       className={`mthumb${done ? ' done' : ''}`} style={posterStyle} role="button" tabIndex={0}
-      onClick={() => !locked && setPlayingInline(true)}
-      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); setPlayingInline(true); } }}
-      aria-label={`Play ${card.video?.title || card.title}`}
+      onClick={toggleInline}
+      onKeyDown={(e) => {
+        // Only claim Enter/Space BEFORE playback starts — once the player is up,
+        // the native <audio> keyboard controls (space = pause) must win.
+        if (!playingInline && (e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); setPlayingInline(true); }
+      }}
+      aria-label={playingInline ? `Pause ${card.video?.title || card.title}` : `Play ${card.video?.title || card.title}`}
     >
       {watermark}
       <span className="mt-ribbon">Podcast</span>
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       {!playingInline && <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>}
       {playingInline ? (
-        <span onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', left: 10, right: 10, bottom: 10, zIndex: 3, display: 'block' }}>
+        // The control bar must own ALL its pointer/keyboard events — nothing may
+        // bubble to the tile (which toggles playback) or steal the native controls.
+        <span
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          style={{ position: 'absolute', left: 10, right: 10, bottom: 10, zIndex: 5, display: 'block' }}
+        >
           <audio
+            ref={inlineAudioRef}
             style={{ width: '100%' }} src={podcastAudio} controls autoPlay
             onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
           />
