@@ -219,12 +219,12 @@ const EditDrawer: React.FC<{
             <label style={lbl}>Type
               <select style={inp} value={draft.type || ''} onChange={(e) => onChange({ type: e.target.value })}>
                 <option value="" disabled>Choose a type…</option>
-                {/* Only LAUNCHED types (Studio lifecycle "published" + active) are
-                    offered — unapproved types can't be hand-placed on the timeline. */}
+                {/* Only APPROVED types (the Studio's "✓ Approved for curriculum"
+                    flag — same gate as the Composer) can be hand-placed. */}
                 {types.filter((t) => t.launched).map((t) => <option key={t.slug} value={t.slug}>{t.label}</option>)}
               </select>
               <span style={{ fontSize: 11, color: '#8A8A8A', marginTop: 4, display: 'block' }}>
-                Only launched types appear here. Launch a type in the Experience Studio → Status tab.
+                Only types approved for curriculum appear here. Approve a type in the Experience Studio.
               </span>
             </label>
           )}

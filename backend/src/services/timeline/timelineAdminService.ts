@@ -137,15 +137,15 @@ export async function listTimeline(programId?: string | null) {
     where,
     order: [['week', 'ASC'], ['bucket', 'ASC'], ['order', 'ASC']],
   });
-  // The type's Parts (capabilities) + lifecycle live on the DB
+  // The type's Parts (capabilities) + curriculum APPROVAL live on the DB
   // CurriculumTypeDefinition (what the Studio edits), keyed by slug — merged in
   // so the editor's preview gates sections like the live render, and so the
-  // "Add card" picker can be limited to LAUNCHED types.
-  const defRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'status', 'is_active'] });
+  // "Add card" picker can be limited to APPROVED types.
+  const defRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'approved', 'is_active'] });
   const defBySlug = new Map(defRows.map((c: any) => [c.slug, c]));
-  // ALL authorable types are returned (existing cards of unlaunched types still
-  // need labels/bands); `launched` marks the ones staff may ADD — a type is
-  // launched once its Studio lifecycle reaches "published" and it is active.
+  // ALL authorable types are returned (existing cards of unapproved types still
+  // need labels/bands); `launched` marks the ones staff may ADD — the same
+  // "✓ Approved for curriculum" flag the Composer honors (Studio approval button).
   const types = allTypes()
     .filter((t) => !t.system)
     .map((t) => {
@@ -156,20 +156,21 @@ export async function listTimeline(programId?: string | null) {
         learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
         competencies: t.competencies, event: !!t.event,
         capabilities: row ? normalizeCapabilities(row.capabilities) : [],
-        launched: !!row && row.status === 'published' && row.is_active !== false,
+        launched: !!row && row.approved === true && row.is_active !== false,
       };
     });
   return { scope: 'global', buckets: BUCKETS, cards, types };
 }
 
-/** A type may be hand-placed on the timeline only once its Studio lifecycle is
- *  "published" (launched/approved) and it hasn't been deactivated. */
+/** A type may be hand-placed on the timeline only if it carries the Studio's
+ *  "✓ Approved for curriculum" flag (and hasn't been deactivated) — the exact
+ *  same gate the Curriculum Composer uses. */
 async function assertTypeLaunched(slug: string): Promise<void> {
-  const row: any = await CurriculumTypeDefinition.findOne({ where: { slug }, attributes: ['slug', 'status', 'is_active'] });
-  const launched = !!row && row.status === 'published' && row.is_active !== false;
+  const row: any = await CurriculumTypeDefinition.findOne({ where: { slug }, attributes: ['slug', 'approved', 'is_active'] });
+  const launched = !!row && row.approved === true && row.is_active !== false;
   if (!launched) {
     throw Object.assign(
-      new Error(`Type "${slug}" has not been launched — publish it in the Experience Studio (Status tab) before adding it to the timeline`),
+      new Error(`Type "${slug}" is not approved for curriculum — approve it in the Experience Studio before adding it to the timeline`),
       { status: 400 },
     );
   }
