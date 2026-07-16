@@ -42,6 +42,7 @@ export interface CreateCardInput {
   course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
   testimonial?: { mode?: string | null; category?: string | null } | null;   // Testimonials type: link vs random personalized
   podcast?: { mode?: string | null; category?: string | null } | null;       // Podcast type: link vs random personalized episode
+  blog?: { mode?: string | null; url?: string | null } | null;               // Blog type: one specific post vs auto-matched per student+week
 }
 
 /** PURE — normalize an author's video input into the stored metadata shape, or
@@ -100,6 +101,18 @@ export function buildPodcastMeta(podcast: CreateCardInput['podcast']): { mode: '
   return cat ? { mode, podcast_category: cat } : { mode };
 }
 
+/** PURE — normalize the Blog source config into the stored metadata shape
+ *  (top-level `mode` + `blog { url }` in link mode), or null when no valid mode.
+ *  `random` = auto-match a post per student+week from the blog_posts library;
+ *  `link` = one specific post (the URL is enriched from the library at save time). */
+export function buildBlogMeta(blog: CreateCardInput['blog']): { mode: 'link' | 'random'; blog?: { url: string } } | null {
+  if (!blog || typeof blog !== 'object') return null;
+  const mode = blog.mode === 'random' ? 'random' : blog.mode === 'link' ? 'link' : null;
+  if (!mode) return null;
+  const url = typeof blog.url === 'string' && blog.url.trim() ? blog.url.trim() : '';
+  return mode === 'link' && url ? { mode, blog: { url } } : { mode };
+}
+
 /**
  * PURE — compose the DB attributes for a new card from its type registry entry
  * plus author overrides. No I/O, fully unit-testable. `order` is supplied by the
@@ -142,6 +155,7 @@ export function composeCardAttributes(
       ...(buildCourseMeta(input.course) ? { course: buildCourseMeta(input.course) } : {}),
       ...(buildTestimonialMeta(input.testimonial) || {}),   // top-level mode + testimonial_category
       ...(buildPodcastMeta(input.podcast) || {}),           // top-level mode + optional podcast_category
+      ...(buildBlogMeta(input.blog) || {}),                 // top-level mode + blog { url } in link mode
     },
   };
 }
@@ -167,8 +181,9 @@ export async function listTimeline(programId?: string | null) {
   // The type's Parts (capabilities) live on the DB CurriculumTypeDefinition
   // (what the Studio "Parts" panel edits), keyed by slug — merged in so the
   // editor's "finished product" preview gates sections like the live render.
-  const capRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
+  const capRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
   const capsBySlug = new Map(capRows.map((c) => [c.slug, normalizeCapabilities(c.capabilities)]));
+  const thumbBySlug = new Map(capRows.map((c) => [c.slug, (c as any).thumbnail_url || null]));
   // Authorable types only — system types are engine-emitted, not hand-placed.
   const types = allTypes()
     .filter((t) => !t.system)
@@ -178,6 +193,7 @@ export async function listTimeline(programId?: string | null) {
       learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
       competencies: t.competencies, event: !!t.event,
       capabilities: capsBySlug.get(t.slug) || [],
+      thumbnail_url: thumbBySlug.get(t.slug) || null,
     }));
   return { scope: 'global', buckets: BUCKETS, cards, types };
 }
@@ -190,7 +206,16 @@ export async function createCard(input: CreateCardInput): Promise<TimelineCard> 
 
   const bucket = input.bucket || def.bucket;
   const order = await nextOrderInLane(input.week ?? null, bucket);
-  return TimelineCard.create(composeCardAttributes(def, input, order) as any);
+  const attrs = composeCardAttributes(def, input, order);
+  // Link-mode blog: enrich the pasted training-site URL from the blog_posts library
+  // so the card carries the real title/thumbnail/excerpt without manual typing.
+  const bmeta: any = (attrs.metadata as any)?.blog;
+  if (bmeta?.url) {
+    const { lookupBlogByUrl } = await import('./blogMediaService');
+    const enriched = await lookupBlogByUrl(bmeta.url);
+    if (enriched) (attrs.metadata as any).blog = enriched;
+  }
+  return TimelineCard.create(attrs as any);
 }
 
 const EDITABLE_FIELDS = [
@@ -211,7 +236,7 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
   // Video + content live in the metadata blob; merge them (setting/clearing each
   // key) without disturbing other metadata. Start from the latest metadata (or
   // whatever a prior branch already staged in clean.metadata).
-  if ('video' in patch || 'content' in patch || 'course' in patch || 'testimonial' in patch) {
+  if ('video' in patch || 'content' in patch || 'course' in patch || 'testimonial' in patch || 'podcast' in patch || 'blog' in patch) {
     const meta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
     if ('video' in patch) {
       const v = buildVideoMeta(patch.video);
@@ -231,6 +256,18 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
         meta.mode = p.mode;
         if (p.podcast_category) meta.podcast_category = p.podcast_category; else delete meta.podcast_category;
       } else { delete meta.mode; delete meta.podcast_category; }
+    }
+    // Sibling of the podcast branch — the editor only sends the `blog` key for
+    // blog-type cards, so other personalizable types are never touched here.
+    if ('blog' in patch) {
+      const b = buildBlogMeta(patch.blog);
+      if (b) {
+        meta.mode = b.mode;
+        if (b.blog?.url) {
+          const { lookupBlogByUrl } = await import('./blogMediaService');
+          meta.blog = (await lookupBlogByUrl(b.blog.url)) || b.blog;
+        } else delete meta.blog;
+      } else { delete meta.mode; delete meta.blog; }
     }
     if ('content' in patch) {
       const c = buildContentMeta(patch.content);

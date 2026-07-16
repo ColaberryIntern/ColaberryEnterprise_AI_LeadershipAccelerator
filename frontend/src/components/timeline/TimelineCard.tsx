@@ -28,8 +28,9 @@ export interface TimelineFeedCard {
   video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
+  blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
-  type_thumbnail_url?: string | null;   // the type's banner — the card's DEFAULT image (own media poster overrides it)
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -131,12 +132,15 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  // Poster background precedence: a media card's OWN image (video poster /
-  // podcast episode art / picked testimonial) wins; otherwise the curriculum
-  // type's AI banner is the default image for every card; the Design-E gradient
-  // remains the last-resort fallback. Darkened so the overlay text stays legible.
-  const ownPoster = v.kind === 'video' && card.video?.poster ? card.video.poster : null;
-  const posterUrl = ownPoster || card.type_thumbnail_url || null;
+  // Poster background precedence: a card's OWN art wins — a video card's poster
+  // (incl. podcast episode art / picked testimonial), a blog card's post
+  // thumbnail; otherwise EVERY card defaults to its curriculum type's AI banner
+  // (the Experience Studio thumbnail); the Design-E gradient is the last-resort
+  // fallback. Darkened so the overlay text stays legible.
+  const ownPoster =
+    (v.kind === 'video' && card.video?.poster) ||
+    (card.type === 'blog' && card.blog?.thumbnail) || null;
+  const posterUrl = ownPoster || card.type_thumbnail || null;
   const posterStyle: React.CSSProperties = posterUrl
     ? {
         backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterUrl})`,
@@ -190,12 +194,13 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
       </div>
     </div>
   ) : (
-    <button type="button" className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
+    <button type="button" className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
       {watermark}
       {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
+      {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>
+      <span className="mt-meta"><b>{card.video?.title || card.blog?.title || shortTitle}</b><span>{metaText}</span></span>
       <span className="mt-open">{done
         ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
         : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>

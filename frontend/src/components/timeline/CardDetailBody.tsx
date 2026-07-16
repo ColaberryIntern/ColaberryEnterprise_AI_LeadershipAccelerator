@@ -48,8 +48,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   useEffect(() => { setContent(card.content || null); }, [card.id, card.content]);
   useEffect(() => {
     if (preview) return;
-    // Testimonials + podcasts present the picked item's own description — never AI lesson notes.
-    if (card.type === 'testimonial' || card.type === 'podcast') return;
+    // Testimonials + podcasts + blogs present the picked item's own description — never AI lesson notes.
+    if (card.type === 'testimonial' || card.type === 'podcast' || card.type === 'blog') return;
     // Only content-bearing cards refresh (video, or anything that already has content).
     const contentBearing = ['media', 'live_class', 'video_feedback'].includes(card.render_band) || !!card.content;
     if (!contentBearing) return;
@@ -63,6 +63,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const source = parseVideoUrl(card.video?.url);
   const isVideo = ['media', 'live_class', 'video_feedback'].includes(card.render_band);
   const isSkillsJar = card.render_band === 'skills_jar';
+  const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
@@ -86,7 +87,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           {done && <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed</span>}
         </div>
 
-        <h2 className="tld-title">{card.video?.title || card.title}</h2>
+        <h2 className="tld-title">{card.video?.title || card.blog?.title || card.title}</h2>
 
         <div className="tld-meta">
           {presenter && <span><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" /><path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>{presenter}</span>}
@@ -96,14 +97,36 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
         {isVideo && (
           <div className="tld-player">
-            <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} onEnded={done || preview ? undefined : onComplete} />
+            <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || card.type_thumbnail || null} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} onEnded={done || preview ? undefined : onComplete} />
+          </div>
+        )}
+
+        {/* The type's fixed picture (Studio thumbnail) as the card hero — every
+            card of the type shares the image; only the title varies. Video-ish
+            bands and Skills Course keep their own visual instead. */}
+        {!isVideo && !isSkillsJar && card.type_thumbnail && (
+          <div className="tld-player">
+            <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', borderRadius: 12 }} />
           </div>
         )}
 
         {isSkillsJar && <SkillsJarPanel card={card} preview={preview} onComplete={onComplete} />}
 
+        {blog && (
+          <div className="tld-player">
+            {/* Article header — the post thumbnail with the Blog ribbon + title; clicking opens the post. */}
+            <a className="tlv-frame tlv-poster tlv-bloglink" href={blog.url} target="_blank" rel="noopener noreferrer" aria-label={`Read: ${blog.title || card.title}`}>
+              {blog.thumbnail && <img className="tlv-posterimg" src={blog.thumbnail} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+              <span className="tlv-postergrad" />
+              <span className="tlv-ribbon blue">Blog</span>
+              <span className="tlv-bigplay"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" /></svg></span>
+              {(blog.title || card.title) && <span className="tlv-postertitle">{blog.title || card.title}</span>}
+            </a>
+          </div>
+        )}
+
         <div className="tld-about">
-          {isVideo && <div className="tld-lab">About this {source ? 'video' : 'activity'}</div>}
+          {(isVideo || blog) && <div className="tld-lab">About this {blog ? 'post' : source ? 'video' : 'activity'}</div>}
           {card.description
             ? <p className="tld-desc">{card.description}</p>
             : <p className="tld-desc muted">No description yet.</p>}
@@ -115,7 +138,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         </div>
 
-        {card.type !== 'testimonial' && content && (content.summary || content.body_html || (content.questions && content.questions.length > 0) || content.reflection) && (
+        {card.type !== 'testimonial' && card.type !== 'blog' && content && (content.summary || content.body_html || (content.questions && content.questions.length > 0) || content.reflection) && (
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}
@@ -137,6 +160,19 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
               ? 'Watch the video, then mark it complete to earn your points.'
               : 'No video link is attached to this card yet. An admin can add one from Orchestration → Timeline.'}
           </div>
+        )}
+
+        {blog && (
+          <div className="tld-note" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <a className="tl-btn primary sm" href={blog.url} target="_blank" rel="noopener noreferrer">
+              Read the post
+              <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </a>
+            <span>Read it on the Colaberry blog, then mark this complete to earn your points.</span>
+          </div>
+        )}
+        {card.type === 'blog' && !blog && (
+          <div className="tld-note">No blog post is attached to this card yet. It will auto-match once the blog library is loaded.</div>
         )}
       </div>
 

@@ -132,6 +132,10 @@
 
 /* ===== Animated testimonial treatment (motion-safe) ===== */
 .tlv-ribbon,.tl-de .mthumb .mt-ribbon{overflow:hidden}
+/* Blog ribbon variant — deepdive blue instead of testimonial cherry */
+.tlv-ribbon.blue,.tl-de .mthumb .mt-ribbon.blue{background:#2E6A86}
+/* Blog article header link (drawer) — the whole poster opens the post */
+.tlv-bloglink{display:flex;cursor:pointer;text-decoration:none}
 @media (prefers-reduced-motion:no-preference){
   /* gloss sweep across the TESTIMONIAL ribbon */
   .tlv-ribbon::after,.tl-de .mthumb .mt-ribbon::after{content:'';position:absolute;top:0;left:-70%;width:55%;height:100%;
@@ -144,7 +148,7 @@
   .tlv-bigplay::before{content:'';position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 0 rgba(255,255,255,.55);animation:cbPlayPulse 2.6s ease-out infinite}
   @keyframes cbPlayPulse{to{box-shadow:0 0 0 20px rgba(255,255,255,0)}}
   /* subtle drift on the feed testimonial thumbnail */
-  .tl-de .mthumb.testimonial{animation:cbThumbDrift 20s ease-in-out infinite alternate}
+  .tl-de .mthumb.testimonial,.tl-de .mthumb.blog{animation:cbThumbDrift 20s ease-in-out infinite alternate}
   @keyframes cbThumbDrift{from{background-position:50% 47%}to{background-position:50% 55%}}
 }
 .tl-de .mthumb:hover .mt-open{transform:scale(1.07)} .tl-de .mthumb .mt-open svg{width:24px;height:24px;color:var(--cherry-deep)}

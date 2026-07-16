@@ -52,6 +52,12 @@ const podcastSourceSchema = z.object({
   mode: z.enum(['link', 'random']).nullable().optional(),
   category: z.string().max(64).nullable().optional(),
 }).nullable().optional();
+// Blog type: link mode shows one specific post; random mode auto-matches a post per
+// student (profile + the week they're on) from the training-site `blog_posts` library.
+const blogSourceSchema = z.object({
+  mode: z.enum(['link', 'random']).nullable().optional(),
+  url: z.string().max(2000).nullable().optional(),
+}).nullable().optional();
 
 const createSchema = z.object({
   type: z.string().min(1),
@@ -72,6 +78,7 @@ const createSchema = z.object({
   course: courseSchema,
   testimonial: testimonialSchema,
   podcast: podcastSourceSchema,
+  blog: blogSourceSchema,
 });
 
 const updateSchema = z.object({
@@ -93,6 +100,7 @@ const updateSchema = z.object({
   course: courseSchema,
   testimonial: testimonialSchema,
   podcast: podcastSourceSchema,
+  blog: blogSourceSchema,
 }).strict();
 
 // One-click: build a full video-card draft from a title (find a real video +
