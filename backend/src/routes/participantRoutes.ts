@@ -41,6 +41,7 @@ import {
 import {
   handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
+  handleListComments, handleAddComment,
 } from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
@@ -74,6 +75,9 @@ router.post('/api/portal/runtime/cards/:cardId/certificate', requireParticipant,
 router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, handleGetCertificate);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
+// Class comments — the shared FB-style thread under a card.
+router.get('/api/portal/runtime/cards/:cardId/comments', requireParticipant, handleListComments);
+router.post('/api/portal/runtime/cards/:cardId/comments', requireParticipant, handleAddComment);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);

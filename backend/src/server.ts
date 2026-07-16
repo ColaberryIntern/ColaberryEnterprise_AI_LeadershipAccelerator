@@ -508,6 +508,30 @@ async function ensurePointsSchema() {
   }
 }
 
+async function ensureCardCommentsSchema() {
+  // Class comments under Timeline cards (FB-style shared thread). Explicit
+  // idempotent create — sequelize.sync is disabled on this graph.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS timeline_card_comments (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       card_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       author_name VARCHAR(200) NOT NULL DEFAULT 'Student',
+       body TEXT NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_card_comments_card ON timeline_card_comments (card_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_card_comments_enrollment ON timeline_card_comments (enrollment_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] card comments schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureSubscriptionSchema() {
   // Student self-serve subscriptions. Explicit idempotent create (sequelize.sync
   // is disabled on this graph). One row per checkout; payment_ref is the
@@ -1417,6 +1441,8 @@ async function start(): Promise<void> {
   await ensureEnrollmentColumns();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
+  // Class comments under Timeline cards (idempotent).
+  await ensureCardCommentsSchema();
   // Student self-serve subscriptions (idempotent).
   await ensureSubscriptionSchema();
   // Open house events (idempotent).

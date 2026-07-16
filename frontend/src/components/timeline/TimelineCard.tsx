@@ -1,11 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
+import VideoEmbed from './VideoEmbed';
+import CardComments from './CardComments';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
  * Design E. One presentational component renders every curriculum type; the
  * card's `render_band` picks the icon + colour, `student_label` names it, and
  * `points` drives the XP badge. Shared primitive owned by the Classroom tab.
+ *
+ * Interaction contract: ▶ on a playable card plays the video INLINE, right in
+ * the tile (FB-style, no panel). The "Open" button is the ONLY way to pull up
+ * the right-side detail panel.
  */
 
 export interface TimelineFeedCard {
@@ -124,7 +130,7 @@ interface Props {
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
   const done = card.status === 'completed';
   const locked = card.status === 'locked';
@@ -139,12 +145,16 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   // default image for every card; the Design-E gradient remains the last-resort
   // fallback. Darkened so the overlay text stays legible.
   // Playable = a real video/audio source is attached. Only playable cards get
-  // the ▶ affordance; everything else shows an "Open" pill (right-panel intent).
-  const playable = !!parseVideoUrl(card.video?.url);
+  // the ▶ affordance — and ▶ plays INLINE in the tile (never opens the panel);
+  // everything else shows an "Open" pill (right-panel intent).
+  const source = parseVideoUrl(card.video?.url);
+  const playable = !!source;
+  const [inlinePlaying, setInlinePlaying] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const ownImage =
     (card.image && card.image.trim()) ||
     card.video?.poster ||
-    videoThumbnail(parseVideoUrl(card.video?.url));
+    videoThumbnail(source);
   const posterUrl = ownImage || card.type_thumbnail_url || null;
   const posterStyle: React.CSSProperties = posterUrl
     ? {
@@ -154,11 +164,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
       }
     : { background: KIND_GRADIENT[v.kind] };
 
-  // ONE uniform 16:9 tile for EVERY card. The bottom-right ▶ opens the detail
-  // drawer (pop-out from the right) where the full assignment lives — the video
-  // plays there, content/quiz/reflection render there, the SkillsJar course +
-  // certificate upload happen there. Same size, same open-from-the-right action
-  // on every card in the feed.
+  // ONE uniform 16:9 tile for EVERY card. Playable cards play INLINE on click
+  // (the tile swaps to the live player — FB-style, no panel). The footer "Open"
+  // button (and the Open pill on non-playable tiles) is the ONLY way to pull up
+  // the right-side detail panel, where content/quiz/reflection render and the
+  // SkillsJar course + certificate upload happen.
   const metaText = isSkillsJar
     ? 'External course · certificate required'
     : metaLine || (v.kind === 'video' ? 'video' : '');
@@ -200,8 +210,26 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
         </button>
       </div>
     </div>
+  ) : playable && inlinePlaying ? (
+    // ▶ was clicked — the tile IS the player now (in-feed playback, no panel).
+    <div className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}>
+      <VideoEmbed
+        source={source}
+        title={card.video?.title || shortTitle}
+        poster={ownImage}
+        autoplay
+        badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+        onEnded={done || !onComplete ? undefined : () => onComplete(card)}
+      />
+    </div>
   ) : (
-    <button type="button" className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
+    <button
+      type="button"
+      className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}`}
+      style={posterStyle}
+      onClick={() => !locked && (playable ? setInlinePlaying(true) : onOpen?.(card))}
+      aria-label={playable ? `Play ${card.title}` : `Open ${card.title}`}
+    >
       {watermark}
       {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
@@ -236,7 +264,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
         <button type="button" className={`like${liked ? ' liked' : ''}`} onClick={() => onLike?.(card)}>
           <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg> {likes}
         </button>
-        <button type="button" className="cmt"><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment</button>
+        <button type="button" className={`cmt${showComments ? ' liked' : ''}`} onClick={() => setShowComments((s) => !s)}>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment
+        </button>
         <span className="spacer" />
         {done
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
@@ -246,6 +276,8 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
                 <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
               </button>}
       </div>
+      {/* The class thread — toggled by the Comment button, shared with the workspace. */}
+      {showComments && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
     </div>
   );
 };

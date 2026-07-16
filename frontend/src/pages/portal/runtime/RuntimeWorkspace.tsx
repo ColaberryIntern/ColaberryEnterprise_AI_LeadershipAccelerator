@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { runtimeApi, RtOpen, Readiness, PromptEval } from './runtimeApi';
 import VideoEmbed from '../../../components/timeline/VideoEmbed';
-import { parseVideoUrl } from '../../../utils/videoEmbed';
+import CardComments from '../../../components/timeline/CardComments';
+import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 
 /**
@@ -103,7 +104,7 @@ const RuntimeWorkspace: React.FC = () => {
         {/* CENTER — activity */}
         <main className="rt-mid">
           {isVideo && (
-            <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : null} />
+            <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.video?.title || card.title} poster={card.video?.poster || videoThumbnail(parseVideoUrl(card.video?.url))} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} />
           )}
 
           {isLab && (
@@ -156,6 +157,9 @@ const RuntimeWorkspace: React.FC = () => {
             <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && mentorInput.trim() && ask('ask', mentorInput)} placeholder="Ask your mentor…" />
             <button className="rt-btn pri" disabled={busy === 'mentor' || !mentorInput.trim()} onClick={() => ask('ask', mentorInput)}>Send</button>
           </div>
+          {/* Class comments — the same shared thread the feed card shows, right
+              next to the AI Mentor so students see each other's take while working. */}
+          <div style={{ padding: '0 14px 14px' }}><CardComments cardId={card.id} /></div>
         </aside>
       </div>
 
