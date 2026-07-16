@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PortalShell from '../today/PortalShell';
 import '../today/TodayShell.css';
 import '../feed/feed.css';
 import './community.css';
+import LevelBadge from './LevelBadge';
 import {
   fetchPosts, createPost, togglePin as apiTogglePin, fetchComments, createComment,
   togglePostLike, toggleCommentLike, fetchMyProfile, fetchMembers, pingPresence,
+  fetchLeaderboard, levelProgress,
   CommunityPost, CommunityComment, CommunityMemberProfile, COMMUNITY_CATEGORIES,
+  LeaderboardEntry, LeaderboardPeriod,
 } from '../../../services/communityApi';
 
 function initials(name: string): string {
@@ -44,6 +47,18 @@ const CommentRow: React.FC<{
         </button>
         {!isReply && onReply && <button type="button" onClick={() => onReply(comment.id)}>Reply</button>}
       </div>
+    </div>
+  </div>
+);
+
+const LockedPostBody: React.FC<{ minLevel: number }> = ({ minLevel }) => (
+  <div className="cm-locked-card">
+    <span className="cm-locked-ic">
+      <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" /></svg>
+    </span>
+    <div className="cm-locked-body">
+      <LevelBadge level={minLevel} size="sm" />
+      <p>This post stays hidden until you reach level {minLevel}.</p>
     </div>
   </div>
 );
@@ -134,20 +149,26 @@ const PostCard: React.FC<{
         )}
       </div>
 
-      <div className="fc-body"><p className="cm-post-body">{post.body}</p></div>
+      {post.locked ? (
+        <div className="fc-body"><LockedPostBody minLevel={post.min_level} /></div>
+      ) : (
+        <div className="fc-body"><p className="cm-post-body">{post.body}</p></div>
+      )}
 
-      <div className="fc-foot">
-        <button className={`like${liked ? ' liked' : ''}`} onClick={doLike} type="button" aria-label="Like">
-          <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg>
-          <span>{likeCount}</span>
-        </button>
-        <button className="cmt" type="button" aria-label="Comment" onClick={toggleThread}>
-          <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
-          <span>{post.comment_count > 0 ? `${post.comment_count} comment${post.comment_count === 1 ? '' : 's'}` : 'Comment'}</span>
-        </button>
-      </div>
+      {!post.locked && (
+        <div className="fc-foot">
+          <button className={`like${liked ? ' liked' : ''}`} onClick={doLike} type="button" aria-label="Like">
+            <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg>
+            <span>{likeCount}</span>
+          </button>
+          <button className="cmt" type="button" aria-label="Comment" onClick={toggleThread}>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+            <span>{post.comment_count > 0 ? `${post.comment_count} comment${post.comment_count === 1 ? '' : 's'}` : 'Comment'}</span>
+          </button>
+        </div>
+      )}
 
-      {threadOpen && (
+      {threadOpen && !post.locked && (
         <div className="cm-thread">
           {comments === null && <div className="cm-empty">Loading…</div>}
           {comments !== null && comments.length === 0 && <div className="cm-empty">No comments yet — be the first to reply.</div>}
@@ -183,6 +204,8 @@ const CommunityPage: React.FC = () => {
   const [posting, setPosting] = useState(false);
   const [myProfile, setMyProfile] = useState<CommunityMemberProfile | null>(null);
   const [members, setMembers] = useState<CommunityMemberProfile[] | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[] | null>(null);
+  const [lbPeriod, setLbPeriod] = useState<LeaderboardPeriod>('30d');
   const pingRef = useRef<number | null>(null);
 
   const loadPosts = useCallback(async (cat: string) => {
@@ -196,6 +219,11 @@ const CommunityPage: React.FC = () => {
     fetchMyProfile().then(setMyProfile).catch(() => {});
     fetchMembers().then(setMembers).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    setLeaderboard(null);
+    fetchLeaderboard(lbPeriod).then(setLeaderboard).catch(() => setLeaderboard([]));
+  }, [lbPeriod]);
 
   // Lite poll-presence: ping on mount, then every 45s while this tab is open.
   useEffect(() => {
@@ -218,8 +246,6 @@ const CommunityPage: React.FC = () => {
   const handlePostChanged = (updated: CommunityPost) => {
     setPosts((prev) => (prev ? prev.map((p) => (p.id === updated.id ? updated : p)) : prev));
   };
-
-  const leaderboard = useMemo(() => (members || []).slice(0, 10), [members]);
 
   return (
     <PortalShell>
@@ -268,12 +294,50 @@ const CommunityPage: React.FC = () => {
         </div>
 
         <aside className="te-side">
+          {myProfile && (
+            <div className="te-card cm-profile-card">
+              <div className="cm-profile-top">
+                <span className="cm-avatar" style={{ width: 44, height: 44, fontSize: 15 }}>{initials(myProfile.display_name)}</span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div className="cm-profile-name">{myProfile.display_name}</div>
+                  <LevelBadge level={myProfile.level} size="sm" />
+                </div>
+              </div>
+              {(() => {
+                const { next, pctToNext } = levelProgress(myProfile.points);
+                return (
+                  <div className="cm-lvl-progress">
+                    <div className="cm-lvl-progress-row">
+                      <span>{next ? `${next.min - myProfile.points} pts to Level ${next.level} · ${next.name}` : 'Max level reached'}</span>
+                      <b>{myProfile.points}{next ? ` / ${next.min}` : ''}</b>
+                    </div>
+                    <div className="cm-lvl-track"><i style={{ width: `${pctToNext}%` }} /></div>
+                  </div>
+                );
+              })()}
+              <div className="cm-profile-stats">
+                <div className="cm-profile-stat"><b>{myProfile.points}</b><span>Points</span></div>
+                <div className="cm-profile-stat"><b>{myProfile.level}</b><span>Level</span></div>
+              </div>
+            </div>
+          )}
+
           <div className="te-card te-scard">
-            <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Leaderboard</h3>
-            {leaderboard.length === 0 && <div className="cm-empty">No activity yet</div>}
-            {leaderboard.map((m, i) => (
-              <div key={m.id} className={`cm-leader-row${myProfile?.id === m.id ? ' me' : ''}`}>
-                <span className="cm-leader-rank">{i + 1}</span>
+            <div className="cm-leader-head">
+              <h3 style={{ margin: 0 }}><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Leaderboard</h3>
+              <div className="cm-lb-tabs" role="tablist" aria-label="Leaderboard period">
+                {(['7d', '30d', 'all_time'] as LeaderboardPeriod[]).map((p) => (
+                  <button key={p} type="button" role="tab" className={lbPeriod === p ? 'active' : ''} onClick={() => setLbPeriod(p)}>
+                    {p === 'all_time' ? 'All-time' : p}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {leaderboard === null && <div className="cm-empty">Loading…</div>}
+            {leaderboard !== null && leaderboard.length === 0 && <div className="cm-empty">No activity yet</div>}
+            {leaderboard?.map((m) => (
+              <div key={m.member_id} className={`cm-leader-row${myProfile?.id === m.member_id ? ' me' : ''}`}>
+                <span className="cm-leader-rank">{m.rank}</span>
                 <span className="cm-avatar sm">{initials(m.display_name)}</span>
                 <span className="cm-leader-name">{m.display_name}</span>
                 <span className="cm-leader-pts">{m.points} pts</span>
@@ -289,6 +353,7 @@ const CommunityPage: React.FC = () => {
               <div key={m.id} className="cm-contact-row">
                 <span className="cm-avatar sm">{initials(m.display_name)}</span>
                 <span className="cm-contact-name">{m.display_name}</span>
+                <LevelBadge level={m.level} size="sm" />
                 <span className={`cm-dot ${m.presence}`} title={m.presence} />
               </div>
             ))}
