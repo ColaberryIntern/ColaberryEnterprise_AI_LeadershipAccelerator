@@ -115,7 +115,7 @@ describe('card image (write + feed read)', () => {
 describe('videoFromMetadata (feed read)', () => {
   it('reads a stored video, defaulting missing extras to null', () => {
     expect(videoFromMetadata({ authored: true, video: { url: 'https://vimeo.com/76979871' } }))
-      .toEqual({ url: 'https://vimeo.com/76979871', presenter: null, poster: null });
+      .toEqual({ url: 'https://vimeo.com/76979871', presenter: null, poster: null, title: null });
   });
   it('returns null when absent, malformed, or url-less', () => {
     expect(videoFromMetadata(null)).toBeNull();

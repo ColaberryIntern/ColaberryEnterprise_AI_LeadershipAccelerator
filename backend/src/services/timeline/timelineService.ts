@@ -11,6 +11,8 @@ import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineC
 import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType } from './typeRegistry';
+import { selectTestimonialForEnrollment } from './networkVideoService';
+import { selectPodcastForEnrollment } from './podcastMediaService';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -18,6 +20,7 @@ export interface FeedVideo {
   url: string;
   presenter: string | null;
   poster: string | null;
+  title?: string | null;   // the specific video's own title — overlaid on the poster (personalized picks)
 }
 
 /** AI-generated student content saved onto the card (by the Timeline editor's
@@ -60,6 +63,7 @@ export interface FeedCard {
   course: FeedCourse | null;          // Skills Course link (skills_jar)
   image: string | null;               // the item's OWN image (blog cover, testimonial still) — tiles use it over the generic type visual
   capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
+  type_thumbnail_url: string | null;  // the type's banner — the card's DEFAULT image (own media poster overrides it)
 }
 
 /** PURE — normalize a capabilities blob (JSONB, may be junk) into a string[]. */
@@ -89,6 +93,7 @@ export function videoFromMetadata(metadata: any): FeedVideo | null {
     url: v.url.trim(),
     presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
     poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
+    title: typeof v.title === 'string' && v.title.trim() ? v.title.trim() : null,
   };
 }
 
@@ -178,8 +183,9 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
 
   // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
   // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
-  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
+  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
   const capsBySlug = new Map(typeDefs.map((t) => [t.slug, normalizeCapabilities(t.capabilities)]));
+  const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, t.thumbnail_url || null]));
 
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
@@ -207,8 +213,43 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       course: courseFromMetadata(card.metadata),
       image: imageFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
+      type_thumbnail_url: thumbBySlug.get(card.type) || null,
     };
   });
+
+  // Resolve per-student random testimonials (personalized, non-repeating). A
+  // testimonial card in "random" mode carries no fixed metadata.video — instead we
+  // pick a video this student hasn't seen and record it. Sequential (not parallel)
+  // so two random cards in the same feed can't both claim the same video.
+  for (let i = 0; i < feedCards.length; i++) {
+    const fc = feedCards[i];
+    const card = cards[i];
+    // Any testimonial card WITHOUT a fixed pasted video pulls a matched testimonial
+    // from our library (per student, non-repeating). A pasted link keeps its own video.
+    if (fc.type === 'testimonial' && !fc.video) {
+      const picked = await selectTestimonialForEnrollment(enrollmentId, card);
+      if (picked) {
+        // The picked testimonial IS the card now — its title + description take
+        // over the authored placeholder, and no stale AI lesson notes are shown.
+        fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+    // Any podcast card WITHOUT a fixed pasted link pulls a personalized episode from
+    // the Buzzsprout catalog (per student, non-repeating), recorded in podcast_views.
+    // A pasted link keeps its own video. Exact sibling of the testimonial block above.
+    if (fc.type === 'podcast' && !fc.video) {
+      const picked = await selectPodcastForEnrollment(enrollmentId, card);
+      if (picked) {
+        fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+  }
 
   return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
 }

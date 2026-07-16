@@ -86,6 +86,7 @@ interface TypeDef {
   learning_xp: number; builder_xp: number; community_xp: number; competencies: string[]; event: boolean;
   capabilities?: string[];   // the type's Parts — gate the preview's optional sections
   launched?: boolean;        // Studio lifecycle "published" + active — only these can be ADDED
+  thumbnail_url?: string | null;   // the type's banner — the card's DEFAULT image in previews
 }
 interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[] }
 
@@ -93,9 +94,9 @@ const pts = (p: Card['points']) => (p?.learning || 0) + (p?.builder || 0) + (p?.
 
 // ── one Facebook-style feed card (draggable) with inline play + admin actions ──
 const SortableCard: React.FC<{
-  card: Card; band?: string; studentLabel?: string; onEdit: (c: Card) => void; onClone: (c: Card) => void;
+  card: Card; band?: string; studentLabel?: string; typeThumbUrl?: string | null; onEdit: (c: Card) => void; onClone: (c: Card) => void;
   onDelete: (c: Card) => void; onPublish: (c: Card) => void;
-}> = ({ card, band, studentLabel, onEdit, onClone, onDelete, onPublish }) => {
+}> = ({ card, band, studentLabel, typeThumbUrl, onEdit, onClone, onDelete, onPublish }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const published = card.visibility === 'published';
   const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition };
@@ -109,6 +110,7 @@ const SortableCard: React.FC<{
     difficulty: card.difficulty, estimated_time: card.estimated_time, week: card.week,
     points: card.points, video: card.metadata?.video, course: (card.metadata as any)?.course,
     experience: (card.metadata as any)?.content, image: (card.metadata as any)?.image || null,
+    thumbnail_url: typeThumbUrl,
   });
   return (
     <div ref={setNodeRef} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
@@ -138,9 +140,9 @@ const SortableCard: React.FC<{
 
 // ── one bucket section (full width, vertical) ────────────────────────────────
 const BucketSection: React.FC<{
-  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
+  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; thumbOf: (type: string) => string | null; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
   cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel'>;
-}> = ({ bucket, cards, bandOf, labelOf, onReorder, onAdd, cardActions }) => {
+}> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, cardActions }) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -169,7 +171,7 @@ const BucketSection: React.FC<{
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {cards.length === 0
             ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
-            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} {...cardActions} />)}
+            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} typeThumbUrl={thumbOf(c.type)} {...cardActions} />)}
         </SortableContext>
       </DndContext>
     </div>
@@ -192,6 +194,16 @@ const EditDrawer: React.FC<{
   const isSkillsJar = band === 'skills_jar';
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
   const setCourse = (patch: Partial<CardCourse>) => onChange({ course: { ...(draft.course || {}), ...patch } });
+  // Testimonials + Podcast types: one set video ("link") or a personalized pick per student ("random").
+  const isTestimonial = draft.type === 'testimonial';
+  const isPodcast = draft.type === 'podcast';
+  const isPersonalizable = isTestimonial || isPodcast;
+  const tMode: 'link' | 'random' = (draft.metadata as any)?.mode === 'random' ? 'random' : 'link';
+  const tCategory = isPodcast
+    ? ((draft.metadata as any)?.podcast_category || '')
+    : ((draft.metadata as any)?.testimonial_category || 'testimonial');
+  const setTestimonial = (mode: 'link' | 'random', category = tCategory) =>
+    onChange({ metadata: { ...(draft.metadata || {}), mode, ...(isPodcast ? { podcast_category: category } : { testimonial_category: category }) } });
   // The preview IS the student drawer: build the same synthetic card the Studio
   // preview uses and render the shared <CardDetailBody preview/> — one renderer.
   const previewCard = adaptToFeedCard({
@@ -201,6 +213,7 @@ const EditDrawer: React.FC<{
     difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
     points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
     course: draft.course, image: draft.image || null, capabilities: typeDef?.capabilities,
+    thumbnail_url: typeDef?.thumbnail_url,
   });
   return (
     <div className="te-scrim" onClick={onClose}>
@@ -285,7 +298,37 @@ const EditDrawer: React.FC<{
             </label>
           )}
 
-          {isVideo && (
+          {isPersonalizable && (
+            <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#367895', marginBottom: 8 }}>
+                {isPodcast ? '🎙 Podcast source' : '★ Testimonial source'} <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· one set {isPodcast ? 'episode' : 'video'}, or a personalized pick per student</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: tMode === 'random' ? 10 : 0 }}>
+                {(['link', 'random'] as const).map((m) => (
+                  <button key={m} type="button" onClick={() => setTestimonial(m)}
+                    style={{ flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13,
+                      border: tMode === m ? '2px solid #367895' : '1px solid #CDD8DC',
+                      background: tMode === m ? '#E4F1F5' : '#fff', color: tMode === m ? '#1F5266' : '#4A4A4A' }}>
+                    {m === 'link' ? 'Paste a link' : 'Random · personalized'}
+                  </button>
+                ))}
+              </div>
+              {tMode === 'random' && (
+                <>
+                  <label style={lbl}>Library category{isPodcast ? ' (optional)' : ''}
+                    <input style={inp} value={tCategory} onChange={(e) => setTestimonial('random', e.target.value)} placeholder={isPodcast ? 'blank = whole catalog' : 'testimonial'} />
+                  </label>
+                  <p style={{ margin: '4px 2px 0', fontSize: 12, color: '#6A6A6A' }}>
+                    {isPodcast
+                      ? 'Each student hears an episode matched to what we know about them (role / goals), never the same one twice — and every listen is tracked per student.'
+                      : 'Each student sees a testimonial matched to what we know about them (industry / role), and never the same one twice.'}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          {isVideo && !(isPersonalizable && tMode === 'random') && (
             <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
               <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#367895', marginBottom: 8 }}>
                 ▶ Video &amp; playback <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· the link this card plays in-app</span>
@@ -453,6 +496,11 @@ const TimelineEditorTab: React.FC = () => {
     const t = board?.types.find((x) => x.slug === type);
     return t?.label || type.replace(/_/g, ' ');
   }, [board]);
+  // slug -> the type's banner image — the card's DEFAULT visual (own media wins).
+  const thumbOf = useCallback((type: string): string | null => {
+    const t = board?.types.find((x) => x.slug === type);
+    return t?.thumbnail_url || null;
+  }, [board]);
 
   const weekCards = useMemo(
     () => (board?.cards || []).filter((c) => (typeof c.week === 'number' ? c.week : null) === week),
@@ -502,7 +550,17 @@ const TimelineEditorTab: React.FC = () => {
     try {
       // Per-card "unique" data (the video/link) rides along as `video`; the API
       // merges it into metadata.video, which the student feed + Runtime read.
-      const videoPayload = draft.video && (draft.video.url || '').trim() ? draft.video : null;
+      // Testimonials type: link mode plays a set video; random mode picks a
+      // matched testimonial per student, so no fixed video is stored.
+      const srcMode = (draft.type === 'testimonial' || draft.type === 'podcast')
+        ? ((draft.metadata as any)?.mode === 'random' ? 'random' : 'link') : null;
+      const testimonialPayload = draft.type === 'testimonial' && srcMode
+        ? { mode: srcMode, category: (draft.metadata as any)?.testimonial_category || 'testimonial' } : null;
+      const podcastPayload = draft.type === 'podcast' && srcMode
+        ? { mode: srcMode, category: (draft.metadata as any)?.podcast_category || null } : null;
+      const videoPayload = srcMode === 'random'
+        ? null
+        : (draft.video && (draft.video.url || '').trim() ? draft.video : null);
       // AI-generated (or authored) student content rides along in metadata.content
       // so "Generate content → Save" persists exactly what the preview showed.
       const contentPayload = (draft.metadata as any)?.content || null;
@@ -514,7 +572,8 @@ const TimelineEditorTab: React.FC = () => {
           type: draft.type, title: draft.title, subtitle: draft.subtitle || null,
           description: draft.description || null, week: draft.week ?? null, bucket: draft.bucket,
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
-          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload,
+          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload, testimonial: testimonialPayload,
+          ...(draft.type === 'podcast' ? { podcast: podcastPayload } : {}),
           image: imagePayload, program_id: courseId || null,
         });
       } else if (draft.id) {
@@ -522,7 +581,9 @@ const TimelineEditorTab: React.FC = () => {
           title: draft.title, subtitle: draft.subtitle || null, description: draft.description || null,
           week: draft.week ?? null, bucket: draft.bucket, difficulty: draft.difficulty,
           estimated_time: draft.estimated_time ?? null, points: draft.points, visibility: draft.visibility,
-          video: videoPayload, content: contentPayload, course: coursePayload, image: imagePayload,
+          video: videoPayload, content: contentPayload, course: coursePayload, testimonial: testimonialPayload,
+          ...(draft.type === 'podcast' ? { podcast: podcastPayload } : {}),
+          image: imagePayload,
         });
       }
       setDraft(null);
@@ -708,7 +769,7 @@ const TimelineEditorTab: React.FC = () => {
           </div>
 
           {BUCKETS.map((b) => (
-            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} onReorder={onReorder} onAdd={openAdd}
+            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} thumbOf={thumbOf} onReorder={onReorder} onAdd={openAdd}
               cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish }} />
           ))}
         </>

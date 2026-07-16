@@ -26,11 +26,12 @@ export interface TimelineFeedCard {
   status: 'locked' | 'available' | 'in_progress' | 'completed';
   quiz_score: number | null;
   completed_at: string | null;
-  video?: { url: string; presenter: string | null; poster: string | null } | null;
+  video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
+  type_thumbnail_url?: string | null;   // the type's banner — the card's DEFAULT image (own media poster overrides it)
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -132,17 +133,19 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  // Poster background: any card with its OWN image shows it (darkened so the
-  // overlay text stays legible) — an explicit card image (blog cover), the
-  // video's saved poster, or a thumbnail derived from the video URL (YouTube).
-  // Only cards with none of those fall back to the generic Design-E gradient.
+  // Poster background precedence: the item's OWN image wins — an explicit card
+  // image (blog cover), the video's saved poster, or a thumbnail derived from
+  // the video URL (YouTube). Otherwise the curriculum type's AI banner is the
+  // default image for every card; the Design-E gradient remains the last-resort
+  // fallback. Darkened so the overlay text stays legible.
   const ownImage =
     (card.image && card.image.trim()) ||
     card.video?.poster ||
     videoThumbnail(parseVideoUrl(card.video?.url));
-  const posterStyle: React.CSSProperties = ownImage
+  const posterUrl = ownImage || card.type_thumbnail_url || null;
+  const posterStyle: React.CSSProperties = posterUrl
     ? {
-        backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${ownImage})`,
+        backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterUrl})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }
@@ -172,9 +175,15 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
     else onOpen?.(card);
   };
 
+  // The big watermark icon only decorates gradient tiles — real artwork
+  // (own poster or type banner) doesn't need it and reads cleaner without.
+  const watermark = posterUrl ? null : (
+    <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+  );
+
   const media = isSkillsJar ? (
     <div className="mthumb skilljar" style={posterStyle}>
-      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+      {watermark}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
       <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
@@ -187,10 +196,12 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
       </div>
     </div>
   ) : (
-    <button type="button" className={`mthumb${done ? ' done' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
-      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+    <button type="button" className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
+      {watermark}
+      {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
+      {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
+      <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>
       <span className="mt-open">{done
         ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
         : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>

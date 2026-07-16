@@ -40,13 +40,19 @@ export function parseVideoUrl(raw: string | null | undefined): VideoSource | nul
   const wistia = url.match(/(?:wistia\.com|wi\.st)\/(?:medias|embed(?:\/iframe)?)\/([\w-]+)/);
   if (wistia) return src('wistia', 'iframe', wistia[1], `https://fast.wistia.net/embed/iframe/${wistia[1]}`, url);
 
-  if (/\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(url)) return src('file', 'file', url, url, url);
+  if (/\.(mp4|webm|ogg|mov|m4v|mp3|m4a|aac|wav)(\?.*)?$/i.test(url)) return src('file', 'file', url, url, url);
 
   return src('unknown', 'link', url, url, url);
 }
 
 function src(provider: VideoProvider, kind: VideoKind, id: string, embedUrl: string, originalUrl: string): VideoSource {
   return { provider, kind, id, embedUrl, originalUrl };
+}
+
+/** True when a direct-file URL is audio-only (e.g. a podcast episode's .mp3) —
+ *  rendered with an <audio> player instead of <video>. */
+export function isAudioUrl(url?: string | null): boolean {
+  return !!url && /\.(mp3|m4a|aac|wav)(\?.*)?$/i.test(url);
 }
 
 /** Human label for a provider (for the fallback "watch on X" link). */

@@ -41,6 +41,8 @@ export interface CreateCardInput {
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
   image?: string | null;   // the item's OWN display image (blog cover etc.) — tiles show it over the generic type visual
+  testimonial?: { mode?: string | null; category?: string | null } | null;   // Testimonials type: link vs random personalized
+  podcast?: { mode?: string | null; category?: string | null } | null;       // Podcast type: link vs random personalized episode
 }
 
 /** PURE — normalize an author's image URL into the stored metadata shape (a
@@ -80,6 +82,29 @@ export function buildCourseMeta(course: CreateCardInput['course']): { name: stri
   const url = str(course.url);
   if (!name && !url) return null;
   return { name, url };
+}
+
+/** PURE — normalize the Testimonials source config into the stored metadata
+ *  shape (top-level `mode` + `testimonial_category`), or null when no valid mode.
+ *  `random` = pick a matched testimonial per student; `link` = play a set video. */
+export function buildTestimonialMeta(testimonial: CreateCardInput['testimonial']): { mode: 'link' | 'random'; testimonial_category: string } | null {
+  if (!testimonial || typeof testimonial !== 'object') return null;
+  const mode = testimonial.mode === 'random' ? 'random' : testimonial.mode === 'link' ? 'link' : null;
+  if (!mode) return null;
+  const cat = typeof testimonial.category === 'string' && testimonial.category.trim() ? testimonial.category.trim().toLowerCase() : 'testimonial';
+  return { mode, testimonial_category: cat };
+}
+
+/** PURE — normalize the Podcast source config into the stored metadata shape
+ *  (top-level `mode` + optional `podcast_category`), or null when no valid mode.
+ *  `random` = pick a matched episode per student from the `podcasts` catalog
+ *  (blank category = the whole catalog); `link` = play a pasted video/episode. */
+export function buildPodcastMeta(podcast: CreateCardInput['podcast']): { mode: 'link' | 'random'; podcast_category?: string } | null {
+  if (!podcast || typeof podcast !== 'object') return null;
+  const mode = podcast.mode === 'random' ? 'random' : podcast.mode === 'link' ? 'link' : null;
+  if (!mode) return null;
+  const cat = typeof podcast.category === 'string' && podcast.category.trim() ? podcast.category.trim().toLowerCase() : '';
+  return cat ? { mode, podcast_category: cat } : { mode };
 }
 
 /**
@@ -123,6 +148,8 @@ export function composeCardAttributes(
       ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content), content_at: new Date().toISOString() } : {}),
       ...(buildCourseMeta(input.course) ? { course: buildCourseMeta(input.course) } : {}),
       ...(buildImageMeta(input.image) ? { image: buildImageMeta(input.image) } : {}),
+      ...(buildTestimonialMeta(input.testimonial) || {}),   // top-level mode + testimonial_category
+      ...(buildPodcastMeta(input.podcast) || {}),           // top-level mode + optional podcast_category
     },
   };
 }
@@ -149,7 +176,7 @@ export async function listTimeline(programId?: string | null) {
   // CurriculumTypeDefinition (what the Studio edits), keyed by slug — merged in
   // so the editor's preview gates sections like the live render, and so the
   // "Add card" picker can be limited to APPROVED types.
-  const defRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'approved', 'is_active'] });
+  const defRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'approved', 'is_active', 'thumbnail_url'] });
   const defBySlug = new Map(defRows.map((c: any) => [c.slug, c]));
   // ALL authorable types are returned (existing cards of unapproved types still
   // need labels/bands); `launched` marks the ones staff may ADD — the same
@@ -165,6 +192,9 @@ export async function listTimeline(programId?: string | null) {
         competencies: t.competencies, event: !!t.event,
         capabilities: row ? normalizeCapabilities(row.capabilities) : [],
         launched: !!row && row.approved === true && row.is_active !== false,
+        // The type's banner — so the editor previews carry the same default image
+        // the student feed shows (feed cards get it as type_thumbnail_url).
+        thumbnail_url: (row && typeof row.thumbnail_url === 'string' && row.thumbnail_url.trim()) ? row.thumbnail_url : null,
       };
     });
   return { scope: 'global', buckets: BUCKETS, cards, types };
@@ -214,11 +244,26 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
   // Video + content live in the metadata blob; merge them (setting/clearing each
   // key) without disturbing other metadata. Start from the latest metadata (or
   // whatever a prior branch already staged in clean.metadata).
-  if ('video' in patch || 'content' in patch || 'course' in patch || 'image' in patch) {
+  if ('video' in patch || 'content' in patch || 'course' in patch || 'image' in patch || 'testimonial' in patch || 'podcast' in patch) {
     const meta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
     if ('video' in patch) {
       const v = buildVideoMeta(patch.video);
       if (v) meta.video = v; else delete meta.video;
+    }
+    if ('testimonial' in patch) {
+      const t = buildTestimonialMeta(patch.testimonial);
+      if (t) { meta.mode = t.mode; meta.testimonial_category = t.testimonial_category; }
+      else { delete meta.mode; delete meta.testimonial_category; }
+    }
+    // NOTE: runs after the testimonial branch — a podcast save carries testimonial:null
+    // (which clears meta.mode) and then podcast re-sets it. The editor only ever sends
+    // the `podcast` key for podcast-type cards, so testimonial cards are never touched here.
+    if ('podcast' in patch) {
+      const p = buildPodcastMeta(patch.podcast);
+      if (p) {
+        meta.mode = p.mode;
+        if (p.podcast_category) meta.podcast_category = p.podcast_category; else delete meta.podcast_category;
+      } else { delete meta.mode; delete meta.podcast_category; }
     }
     if ('content' in patch) {
       const c = buildContentMeta(patch.content);

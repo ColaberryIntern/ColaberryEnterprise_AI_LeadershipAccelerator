@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { VideoSource, providerLabel, withAutoplay } from '../../utils/videoEmbed';
+import { VideoSource, providerLabel, withAutoplay, isAudioUrl } from '../../utils/videoEmbed';
 
 /**
  * VideoEmbed — plays a lesson video in-app from any supported link (YouTube,
@@ -14,14 +14,19 @@ interface Props {
   title?: string;
   poster?: string | null;
   onEnded?: () => void;
+  /** A corner ribbon label drawn over the poster (e.g. "Testimonial") so the card
+   *  type is always visible on the thumbnail. */
+  badge?: string | null;
 }
 
 const PlayIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
 );
 
-const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded }) => {
+const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge }) => {
   const [playing, setPlaying] = useState(false);
+
+  const ribbon = badge ? <span className="tlv-ribbon">{badge}</span> : null;
 
   if (!source) {
     return <div className="tlv-none">No video is attached to this card yet.</div>;
@@ -31,6 +36,7 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded }) => {
   if (source.kind === 'link') {
     return (
       <div className="tlv-frame tlv-link">
+        {ribbon}
         <div className="tlv-linkbody">
           <p>This video is hosted on {providerLabel(source.provider)}.</p>
           <a className="tl-btn primary sm" href={source.originalUrl} target="_blank" rel="noopener noreferrer">
@@ -47,6 +53,7 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded }) => {
       <button type="button" className="tlv-frame tlv-poster" onClick={() => setPlaying(true)} aria-label={`Play ${title || 'video'}`}>
         {poster && <img className="tlv-posterimg" src={poster} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
         <span className="tlv-postergrad" />
+        {ribbon}
         <span className="tlv-bigplay"><PlayIcon /></span>
         {title && <span className="tlv-postertitle">{title}</span>}
       </button>
@@ -54,6 +61,21 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded }) => {
   }
 
   if (source.kind === 'file') {
+    // Audio-only episode (podcast .mp3) — keep the artwork as the backdrop with an
+    // in-app audio player; `onEnded` still auto-completes like direct-file video.
+    if (isAudioUrl(source.embedUrl)) {
+      return (
+        <div className="tlv-frame" style={{ position: 'relative' }}>
+          {poster && <img className="tlv-posterimg" src={poster} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />}
+          <span className="tlv-postergrad" />
+          {ribbon}
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '10px 12px', display: 'grid', gap: 6 }}>
+            {title && <span className="tlv-postertitle" style={{ position: 'static' }}>{title}</span>}
+            <audio style={{ width: '100%' }} src={source.embedUrl} controls autoPlay onEnded={onEnded} />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="tlv-frame">
         <video className="tlv-media" src={source.embedUrl} controls autoPlay onEnded={onEnded}>

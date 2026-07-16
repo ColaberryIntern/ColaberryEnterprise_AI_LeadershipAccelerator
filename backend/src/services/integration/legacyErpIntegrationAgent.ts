@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { env } from '../../config/env';
 import { retrieveData, pushUpdate } from './legacyErpClient';
 import { authorizeAgentAction } from '../agentAuthorizationService';
+import { startRealtimeSync, type RealtimeSyncOptions } from './realtimeSyncEngine';
 import type { AgentExecutionResult, AgentAction } from '../agents/types';
 import type { ErpModuleConfig, ErpUpdateRequest } from './types';
 
@@ -188,4 +189,16 @@ export async function runLegacyErpPushAgent(
     duration_ms: Date.now() - startTime,
     entities_processed: entitiesProcessed,
   };
+}
+
+// ─── Real-time sync runner (STORY-003) ────────────────────────────────────────
+
+/**
+ * Start listening for platform-change events and sync each one to its legacy ERP module
+ * in real time. Unlike the two runners above, this isn't a one-shot batch -- it's a
+ * standing subscription, so it returns an unsubscribe function instead of an
+ * AgentExecutionResult. Call the returned function to stop listening.
+ */
+export function startLegacyErpRealtimeSyncAgent(options?: RealtimeSyncOptions): () => void {
+  return startRealtimeSync(parseModuleConfig(), options);
 }

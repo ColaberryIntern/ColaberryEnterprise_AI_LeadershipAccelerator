@@ -127,6 +127,26 @@
 .tl-de .mthumb .mt-meta b{display:block;font-size:15px;line-height:1.2;text-shadow:0 1px 4px rgba(0,0,0,.3)}
 .tl-de .mthumb .mt-meta span{font-size:12px;font-family:var(--mono);opacity:.9}
 .tl-de .mthumb .mt-open{position:absolute;right:16px;bottom:14px;z-index:3;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.32);transition:transform .16s var(--ease)}
+/* Testimonial watermark ribbon on the feed thumbnail (top-right, clear of the type chip) */
+.tl-de .mthumb .mt-ribbon{position:absolute;top:15px;right:-42px;z-index:3;transform:rotate(45deg);background:var(--cherry-deep,#a4161a);color:#fff;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:4px 48px;box-shadow:0 2px 6px rgba(0,0,0,.35);pointer-events:none;white-space:nowrap}
+
+/* ===== Animated testimonial treatment (motion-safe) ===== */
+.tlv-ribbon,.tl-de .mthumb .mt-ribbon{overflow:hidden}
+@media (prefers-reduced-motion:no-preference){
+  /* gloss sweep across the TESTIMONIAL ribbon */
+  .tlv-ribbon::after,.tl-de .mthumb .mt-ribbon::after{content:'';position:absolute;top:0;left:-70%;width:55%;height:100%;
+    background:linear-gradient(120deg,transparent,rgba(255,255,255,.6),transparent);animation:cbRibbonGloss 3.6s ease-in-out infinite}
+  @keyframes cbRibbonGloss{0%,55%{left:-70%}100%{left:135%}}
+  /* slow ken-burns on the detail-drawer poster image */
+  .tlv-posterimg{animation:cbKenburns 22s ease-in-out infinite alternate;transform-origin:58% 42%;will-change:transform}
+  @keyframes cbKenburns{from{transform:scale(1)}to{transform:scale(1.09)}}
+  /* gentle idle pulse ring behind the big play button */
+  .tlv-bigplay::before{content:'';position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 0 rgba(255,255,255,.55);animation:cbPlayPulse 2.6s ease-out infinite}
+  @keyframes cbPlayPulse{to{box-shadow:0 0 0 20px rgba(255,255,255,0)}}
+  /* subtle drift on the feed testimonial thumbnail */
+  .tl-de .mthumb.testimonial{animation:cbThumbDrift 20s ease-in-out infinite alternate}
+  @keyframes cbThumbDrift{from{background-position:50% 47%}to{background-position:50% 55%}}
+}
 .tl-de .mthumb:hover .mt-open{transform:scale(1.07)} .tl-de .mthumb .mt-open svg{width:24px;height:24px;color:var(--cherry-deep)}
 .tl-de .mthumb.done .mt-open{background:var(--leaf-action)} .tl-de .mthumb.done .mt-open svg{color:#fff}
 .tl-de .vframe{position:relative;border-radius:var(--r-12);aspect-ratio:16/9;overflow:hidden;display:flex;align-items:center;justify-content:center;width:100%;cursor:pointer}
@@ -255,6 +275,10 @@
 .tlv-poster:hover .tlv-bigplay{transform:scale(1.08)} .tlv-bigplay svg{width:30px;height:30px;color:var(--cherry-deep);margin-left:4px}
 .tlv-postertitle{position:absolute;left:16px;bottom:14px;z-index:2;color:#fff;font-weight:700;font-size:15px;
   text-shadow:0 1px 6px rgba(0,0,0,.5);max-width:80%;text-align:left}
+/* Diagonal corner ribbon (e.g. "Testimonial") — clipped by the frame's overflow:hidden */
+.tlv-ribbon{position:absolute;top:15px;left:-42px;z-index:3;transform:rotate(-45deg);
+  background:var(--cherry-deep,#a4161a);color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.09em;
+  text-transform:uppercase;padding:4px 48px;box-shadow:0 2px 6px rgba(0,0,0,.35);pointer-events:none;white-space:nowrap}
 .tlv-link{background:var(--surface-sunken);border:1px solid var(--border-subtle)}
 .tlv-linkbody{position:relative;z-index:2;text-align:center;color:var(--text-body);padding:20px}
 .tlv-linkbody p{margin:0 0 12px;font-size:14px}
