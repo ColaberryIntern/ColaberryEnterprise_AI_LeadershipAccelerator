@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, July 16, 2026 at 8:07 AM</div>
-    <div><span class="sid">CC-20260716-k3v7</span><span class="count">3 changes</span></div>
+    <div class="meta">Generated Thursday, July 16, 2026 at 8:50 AM</div>
+    <div><span class="sid">CC-20260716-k3v7</span><span class="count">4 changes</span></div>
   </header>
   <main>
     
@@ -101,6 +101,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">DB `accelerator_dev1` — 42/42 `curriculum_type_definitions` rows carry `/thumbnails/curriculum-types/&lt;slug&gt;.jpg`. Playwright (minted 1h admin+participant JWTs in-container): Experience Studio grid (Approved-only off) = 42 cards / 42 images loaded (naturalWidth&gt;0) / 42 AI banners / 0 fallbacks, full-page screenshot clean; portal Today feed = 5 tiles: 4 type banners + 1 own media poster + 0 gradients; portal Classroom (Week 0) = 10 tiles: 7 type banners + 3 own posters (podcast/testimonial keep their episode art) + 0 gradients — the exact override precedence requested. Static asset probe: 200 image/jpeg on :9999.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Dev 1 (:9999) now runs from `/opt/acc-thumbs` (main + this branch, cut from b27ecc71 = latest main incl. PR #251). Prod deploy deliberately NOT done (after-hours rule + PR review). VPS scratch `/root/thumb-gen` retained for regeneration convenience (raws + prompts, no secrets).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Merged to main + PROD deploy of the curriculum-type banners (launch-day, at Ali&#39;s direction)**</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">reconciled the branch with overnight main (PRs #255 blog type, #256 overview roster+renderer, #257 type_thumbnail fallback) — unified on main&#39;s `type_thumbnail` field end-to-end, extended #257&#39;s media/blog-only fallback to EVERY card kind per Ali&#39;s directive, kept the 42-banner `AI_THUMBNAILS` seed map, pointed Overview&#39;s `OVERVIEW_THUMBNAIL_URL` + prompt-driven thumbnail renderer at the AI banner (vista svg superseded, left on disk); dropped my parallel `type_thumbnail_url` field. Merged PR #254 → main `7e697e58` (admin merge; no CI checks reported on the branch). Prod deploy: tree verified clean (0 tracked modifications) + HEAD==origin/main pre-build, disk 37%, `docker compose -f docker-compose.production.yml up -d --build backend nginx`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">post-merge gates all green (backend seed suite 4/4, frontend format contract 5/5, backend tsc 5.7.3 clean, frontend tsc 0 project errors). Prod live: backend &quot;Server running on port 3001 [production]&quot;; `accelerator_prod` 42/42 `curriculum_type_definitions` with `/thumbnails/curriculum-types/&lt;slug&gt;.jpg`, none missing; asset probe via Cloudflare 200 image/jpeg; Playwright admin check on enterprise.colaberry.ai Experience Studio (Approved-only off) = 42 cards / 42 images loaded / 0 fallbacks. Participant-feed mechanics NOT re-exercised on prod (getFeed writes real per-student testimonial/podcast pick ledgers) — proven on Dev 1 with identical code earlier this session.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Launch-day prod deploy at Ali&#39;s explicit &quot;push to prod&quot; (supersedes the after-hours default for this change). Homepage 200 post-deploy.</span></div>
           
         </div>
       </article>
