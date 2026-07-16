@@ -309,6 +309,11 @@ System Blueprint UX overhaul — transforming the portal from dashboard-first to
 ## Completed Work
 
 ### Podcast personalization — auto-pick a matched episode per student + listen tracking (2026-07-16)
+- [x] **Timeline cards fall back to the type's Experience Studio thumbnail when they have no poster (Ali: podcast card had no image on the student timeline)**
+  - Date: 2026-07-16
+  - Session: CC-20260715-p3k8
+  - What changed: `timelineService.getFeed` now sends `type_thumbnail` (from `CurriculumTypeDefinition.thumbnail_url`, already queried for capabilities) on every feed card; `TimelineCard.tsx` poster background and `CardDetailBody.tsx` player poster use `card.video?.poster || card.type_thumbnail` (card's own art always wins); `server.ts ensurePodcastSchema()` seeds the Podcast type's Studio thumbnail with the show's channel artwork ONLY when unset, so an admin-set Studio thumbnail overrides.
+  - Verification: TS/TSX transpile clean; PR CI (tsc backend+frontend, jest, secret scan); visual check on the student timeline post-deploy.
 - [x] **Podcast timeline card now works "just like testimonials": personalized, non-repeating episode per student (by match or subject category) with per-student listen tracking**
   - Date: 2026-07-16
   - Session: CC-20260715-p3k8

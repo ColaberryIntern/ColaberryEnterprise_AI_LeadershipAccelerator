@@ -29,6 +29,7 @@ export interface TimelineFeedCard {
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail — fallback art when the card has no poster
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -131,11 +132,14 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
   // Poster background: a video card uses its own poster image (darkened so the
-  // overlay text stays legible); every other kind uses its Design-E gradient.
+  // overlay text stays legible), falling back to the type's Experience Studio
+  // thumbnail when the card has no poster of its own; every other kind uses its
+  // Design-E gradient.
+  const posterArt = v.kind === 'video' ? (card.video?.poster || card.type_thumbnail || null) : null;
   const posterStyle: React.CSSProperties =
-    v.kind === 'video' && card.video?.poster
+    posterArt
       ? {
-          backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${card.video.poster})`,
+          backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterArt})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
         }
