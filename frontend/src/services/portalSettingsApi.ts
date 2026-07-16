@@ -25,11 +25,33 @@ export interface SettingsResume {
   size_bytes: number;
   uploaded_at: string | null;
 }
+export interface SettingsPersonalization {
+  industry: string | null;
+  role: string | null;
+  seniority: string | null;
+  years_experience: string | null;
+  location: string | null;
+  goals: string | null;
+  skills: string | null;
+}
+export interface SettingsPreferences {
+  email_updates: boolean;
+  event_reminders: boolean;
+  weekly_digest: boolean;
+  community_visible: boolean;
+  timezone: string | null;
+  weekly_hours: string | null;
+  primary_goal: string | null;
+  preferred_contact: string | null;
+  experience_level: string | null;
+}
 export interface SettingsView {
   account: SettingsAccount;
   profile: SettingsProfile;
   avatar_data_url: string | null;
   resume: SettingsResume | null;
+  personalization: SettingsPersonalization;
+  preferences: SettingsPreferences;
 }
 
 export interface ProfilePatch {
@@ -39,6 +61,8 @@ export interface ProfilePatch {
   company_size?: string;
   phone?: string;
   linkedin_url?: string;
+  personalization?: Partial<SettingsPersonalization>;
+  preferences?: Partial<SettingsPreferences>;
 }
 
 // The shell reads the avatar from here for an instant, flash-free paint; the

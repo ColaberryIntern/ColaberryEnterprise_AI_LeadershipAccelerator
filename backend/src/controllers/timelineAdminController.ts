@@ -11,6 +11,7 @@ import {
 import { generateCardContent } from '../services/timeline/cardContentService';
 import { generateVideoDraft } from '../services/timeline/videoDraftService';
 import { generateCourseDraft } from '../services/timeline/courseDraftService';
+import { getBlueprintContext } from '../services/timeline/blueprintContext';
 
 const bucketEnum = z.enum(['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance']);
 const visibilityEnum = z.enum(['draft', 'scheduled', 'published', 'archived']);
@@ -85,6 +86,8 @@ const videoDraftSchema = z.object({
   title: z.string().max(500).nullable().optional(),
   subtitle: z.string().max(500).nullable().optional(),
   description: z.string().nullable().optional(),
+  program_id: z.string().uuid().nullable().optional(),
+  week: z.number().int().nullable().optional(),
   video: videoSchema,
   anchor: z.enum(['title', 'video']).optional(),
 });
@@ -92,6 +95,8 @@ const videoDraftSchema = z.object({
 const courseDraftSchema = z.object({
   type: z.string().min(1),
   url: z.string().min(1).max(2000),
+  program_id: z.string().uuid().nullable().optional(),
+  week: z.number().int().nullable().optional(),
 });
 
 const reorderSchema = z.object({
@@ -109,9 +114,9 @@ function fail(res: Response, err: any, next: NextFunction) {
   return next(err);
 }
 
-export async function handleListTimeline(_req: Request, res: Response, next: NextFunction) {
+export async function handleListTimeline(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await listTimeline());
+    res.json(await listTimeline((req.query.program_id as string) || undefined));
   } catch (err) { fail(res, err, next); }
 }
 
@@ -173,5 +178,15 @@ export async function handleGenerateCourseDraft(req: Request, res: Response, nex
   try {
     const b = courseDraftSchema.parse(req.body);
     res.json(await generateCourseDraft(b));
+  } catch (err) { fail(res, err, next); }
+}
+
+// Read-only: the week's Blueprint context that gets auto-injected into every
+// generator for this (course, week). Powers the grayed-out "week context" block.
+export async function handleGetBlueprintContext(req: Request, res: Response, next: NextFunction) {
+  try {
+    const programId = (req.query.program_id as string) || undefined;
+    const week = req.query.week != null && req.query.week !== '' ? Number(req.query.week) : undefined;
+    res.json(await getBlueprintContext(programId, week));
   } catch (err) { fail(res, err, next); }
 }

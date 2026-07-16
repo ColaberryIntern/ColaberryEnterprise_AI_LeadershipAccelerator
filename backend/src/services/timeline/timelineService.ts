@@ -105,6 +105,7 @@ export interface TimelineFeed {
   cohort_id: string | null;
   buckets: string[];
   cards: FeedCard[];
+  is_explorer?: boolean;   // true = free Explorer tier (Week 0 only) — drives the enroll upsell
 }
 
 /**
@@ -154,7 +155,13 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return { cohort_id: null, buckets: [...BUCKET_ORDER], cards: [] };
   }
 
-  const cards = await getGlobalCards();
+  // Free lead-magnet gate: Explorers (unenrolled prospects) get ONLY the Week 0
+  // "AI Preview" tier for free; paid enrollments see the full curriculum. Gated
+  // here so the paid weeks stay behind enrollment.
+  const isExplorer = (enrollment as any).enrollment_type === 'explorer';
+  const allCards = await getGlobalCards();
+  const cards = isExplorer ? allCards.filter((c) => c.week === 0) : allCards;
+
   const progressRows = await TimelineCardProgress.findAll({
     where: { enrollment_id: enrollmentId, card_id: { [Op.in]: cards.map((c) => c.id) } },
   });
@@ -193,5 +200,5 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     };
   });
 
-  return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards };
+  return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
 }

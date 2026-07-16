@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
+import { SetPortfolioSharingSchema } from '../schemas/portfolioShareSchema';
 
 const router = Router();
 
@@ -464,6 +465,44 @@ router.get('/api/portal/project/portfolio', requireParticipant, async (req: Requ
   } catch (err: any) {
     console.error('[ProjectRoutes] GET /project/portfolio error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/portal/project/portfolio/share
+ * Read the current sharing state (token + enabled) for the participant's project.
+ */
+router.get('/api/portal/project/portfolio/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { getPortfolioSharing } = await import('../services/portfolioShareService');
+    const result = await getPortfolioSharing(enrollmentId);
+    res.json(result);
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404 : 500;
+    console.error('[ProjectRoutes] GET /project/portfolio/share error:', err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/portal/project/portfolio/share
+ * Enable/disable the public, unauthenticated shareable portfolio link.
+ * Idempotent — repeat calls with the same `enabled` value are a no-op.
+ */
+router.post('/api/portal/project/portfolio/share', requireParticipant, async (req: Request, res: Response) => {
+  try {
+    const parsed = SetPortfolioSharingSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+    const enrollmentId = req.participant!.sub;
+    const { setPortfolioSharing } = await import('../services/portfolioShareService');
+    const result = await setPortfolioSharing(enrollmentId, parsed.data.enabled);
+    res.json(result);
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404 : 500;
+    console.error('[ProjectRoutes] POST /project/portfolio/share error:', err.message);
+    res.status(status).json({ error: err.message });
   }
 });
 

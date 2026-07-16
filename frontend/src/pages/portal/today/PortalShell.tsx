@@ -5,11 +5,12 @@ import { fetchPoints, fetchSchedule, levelFor, PointsSummary, OnboardingSchedule
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import BuildToast from '../projects/BuildToast';
+import { useIsExplorer } from '../useIsExplorer';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
-// icon per item. Today / Path / Schedule / Projects / Classroom are built and
-// navigate; Cert Prep / Community / Group Chat / Portfolio are deferred past
-// the P0 launch fence and render as a dimmed "Soon" item.
+// icon per item. Today / Path / Schedule / Projects / Classroom / Community are
+// built and navigate; Cert Prep / Group Chat / Portfolio are deferred past the
+// P0 launch fence and render as a dimmed "Soon" item.
 type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean };
 type NavGroup = { grp: string; items: NavItem[] };
 
@@ -45,7 +46,7 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     grp: 'Belong',
     items: [
-      { label: 'Community', soon: true, icon: (
+      { label: 'Community', to: '/portal/community', icon: (
         <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="2" /><path d="M3 19c0-3 3-5 6-5s6 2 6 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M16 7a3 3 0 0 1 0 6M18 19c0-2-1-3.5-2.5-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },
       { label: 'Group Chat', soon: true, icon: (
@@ -72,6 +73,7 @@ type PortalShellProps = {
  */
 const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const location = useLocation();
+  const isExplorer = useIsExplorer();   // Explorer = demo tier — shows a Demo pill on Projects
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
@@ -183,6 +185,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
                   <span className="ic">{n.icon}</span>
                   <span className="lb">{n.label}</span>
                   {n.label === 'Today' && !!todayBadge && todayBadge > 0 && <span className="badge">{todayBadge}</span>}
+                  {n.label === 'Projects' && isExplorer && <span className="te-soon" style={{ background: '#E8920C', color: '#fff', fontWeight: 700 }}>Demo</span>}
                   {n.soon && <span className="te-soon">Soon</span>}
                 </>
               );

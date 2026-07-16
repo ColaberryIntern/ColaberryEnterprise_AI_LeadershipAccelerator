@@ -342,6 +342,7 @@ function PortalLessonPage() {
         onStepStatusChange={setStepStatuses}
         quizResponses={instance.quiz_responses_json}
         taskData={instance.structured_responses_json?.task_progress}
+        surveyResponses={instance.reflection_responses_json}
       />
 
       {/* Bottom Sticky Bar */}

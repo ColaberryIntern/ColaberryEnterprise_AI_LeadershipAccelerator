@@ -128,9 +128,13 @@ async function nextOrderInLane(week: number | null, bucket: string): Promise<num
 }
 
 /** Admin view: the whole global curriculum (all visibilities) + the type registry. */
-export async function listTimeline() {
+export async function listTimeline(programId?: string | null) {
+  // The timeline is course-scoped (one curriculum per course, shared across that
+  // course's cohorts) — cohort_id stays null; program_id selects the course.
+  const where: Record<string, any> = { cohort_id: null };
+  if (programId) where.program_id = programId;
   const cards = await TimelineCard.findAll({
-    where: { cohort_id: null },
+    where,
     order: [['week', 'ASC'], ['bucket', 'ASC'], ['order', 'ASC']],
   });
   // The type's Parts (capabilities) live on the DB CurriculumTypeDefinition

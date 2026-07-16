@@ -27,6 +27,37 @@ async function connectCcpp(): Promise<sql.ConnectionPool> {
   return pool;
 }
 
+/**
+ * True if this email already registered for the Open House on Eventbrite —
+ * read from the CCPP `EventBrite_EventAttendees` mirror. Lets the portal stop
+ * asking someone to RSVP for an event they've already signed up for. Fails
+ * SOFT (returns false) when CCPP is unreachable, so it never blocks the schedule.
+ */
+export async function isEmailRegisteredForOpenHouse(
+  email: string,
+  eventId: string = OPEN_HOUSE_EVENT_ID,
+): Promise<boolean> {
+  const e = (email || '').trim().toLowerCase();
+  if (!e) return false;
+  let pool: sql.ConnectionPool | null = null;
+  try {
+    pool = await connectCcpp();
+    const result = await pool
+      .request()
+      .input('eventId', sql.VarChar, eventId)
+      .input('email', sql.VarChar, e)
+      .query<{ n: number }>(`
+        SELECT COUNT(*) AS n FROM EventBrite_EventAttendees
+        WHERE EventId = @eventId AND LOWER(Email) = @email
+      `);
+    return (result.recordset?.[0]?.n || 0) > 0;
+  } catch {
+    return false;
+  } finally {
+    if (pool) { try { await pool.close(); } catch { /* ignore */ } }
+  }
+}
+
 export interface OnboardSummary {
   eventId: string;
   dryRun: boolean;

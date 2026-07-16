@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import Drawer from '../../../components/workspace/Drawer';
 import { StudentProject, ProjectTask, markTaskDone, skipTask, isTaskBlocked } from './projectsStore';
 import { buildProjectTaskPrompt } from './projectWorkspacePrompt';
+import { useIsExplorer } from '../useIsExplorer';
 import {
   DELIVERY_MODES, DeliveryModeId, loadDeliveryMode, saveDeliveryMode,
 } from '../../../services/deliveryModes';
@@ -48,6 +49,7 @@ function saveNotes(projectId: string, taskId: string, notes: string): void {
 }
 
 const ProjectWorkspaceDrawer: React.FC<Props> = ({ project, task, open, onClose }) => {
+  const demo = useIsExplorer();
   const [modeId, setModeId] = useState<DeliveryModeId>(() => loadDeliveryMode());
   const [notes, setNotes] = useState<string>('');
   const [copied, setCopied] = useState(false);
@@ -136,18 +138,19 @@ const ProjectWorkspaceDrawer: React.FC<Props> = ({ project, task, open, onClose 
   // keeping a consistent 4-button footer. Wrapped in `.pj-root` so the
   // `.pj-root`-scoped `.pw-act` rules resolve (the Drawer renders the footer at
   // the document root, outside the page's own `.pj-root`).
+  const lock = demo ? 'Demo — enroll to build for real' : undefined;
   const footer = (
     <div className="pj-root pw-acts" style={{ margin: 0 }}>
-      <button type="button" className={`pw-act copy${copied ? ' ok' : ''}`} onClick={copyPrompt}>
+      <button type="button" className={`pw-act copy${copied ? ' ok' : ''}`} onClick={copyPrompt} disabled={demo} title={lock}>
         {copied ? 'Copied' : 'Copy Prompt'}
       </button>
       {!done && (
-        <button type="button" className="pw-act done" onClick={() => { markTaskDone(project.id, task.id); onClose(); }}>
+        <button type="button" className="pw-act done" onClick={() => { markTaskDone(project.id, task.id); onClose(); }} disabled={demo} title={lock}>
           Mark Done
         </button>
       )}
       {!done && (
-        <button type="button" className="pw-act skip" onClick={() => { skipTask(project.id, task.id); onClose(); }}>
+        <button type="button" className="pw-act skip" onClick={() => { skipTask(project.id, task.id); onClose(); }} disabled={demo} title={lock}>
           Skip
         </button>
       )}

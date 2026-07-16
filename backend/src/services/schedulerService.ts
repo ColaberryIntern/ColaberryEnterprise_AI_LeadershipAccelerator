@@ -23,6 +23,7 @@ import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
 import { logCommunication } from './communicationLogService';
+import { buildUnsubscribeUrl } from './unsubscribeTokenService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import {
   getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
@@ -1047,10 +1048,17 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   // footer rendered by the wrapper is not duplicated.
   emailBody = emailBody.replace(/<p[^>]*>[^<]*Reply STOP[^<]*<\/p>/gi, '');
 
+  // Signed one-click unsubscribe URL (RFC 8058). Bound to this lead + its email so it
+  // can be honored automatically without a human sweeping the inbox. Only built when we
+  // have both a lead id and recipient address; otherwise we fall back to the mailto below.
+  const unsubscribeUrl = (action.lead_id && action.to_email)
+    ? buildUnsubscribeUrl(action.lead_id, action.to_email)
+    : '';
+
   // Executive outreach: minimal wrapper (personal email feel, no corporate footer)
   let html = campaignType === 'executive_outreach'
-    ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id })
-    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, senderName, senderEmail });
+    ? wrapPersonalEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, unsubscribeUrl })
+    : wrapEmailHtml(emailBody, { campaignId: action.campaign_id, campaignType, leadId: action.lead_id, senderName, senderEmail, unsubscribeUrl });
 
   // Deterministic validator for Ali personal emails — ensure no corporate artifacts
   if (campaignType === 'executive_outreach') {
@@ -1105,7 +1113,18 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       // the War Room shows zero engagement even when emails are opened. Clicks are
       // wrapped by account default, but we set clicks_all explicitly for determinism.
       'X-MC-Track': 'opens,clicks_all',
-      'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
+      // RFC 8058 one-click unsubscribe: when we have a signed link, advertise the
+      // https endpoint first (Gmail/Apple honor this button and POST to it directly),
+      // keeping the mailto as a fallback for older clients. Without a link (no lead
+      // id) we degrade to the mailto-only header, which the Inbox COS scanner sweeps.
+      ...(unsubscribeUrl
+        ? {
+            'List-Unsubscribe': `<${unsubscribeUrl}>, <mailto:${senderEmail}?subject=unsubscribe>`,
+            'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+          }
+        : {
+            'List-Unsubscribe': `<mailto:${senderEmail}?subject=unsubscribe>`,
+          }),
       'X-MC-Tags': action.campaign_id ? `campaign-sequence,${mcMetadata.trigger || 'campaign'}` : 'campaign-sequence',
     },
   };
@@ -1464,7 +1483,7 @@ function injectCampaignTracking(
 }
 
 /** Minimal wrapper for personal emails — no corporate footer, no unsubscribe, looks like Gmail/Outlook */
-function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number }): string {
+function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; campaignType?: string; leadId?: number; unsubscribeUrl?: string }): string {
   // Aggressively strip ANY team/company sign-offs the AI generates
   let cleaned = body
     // Strip "The Colaberry Enterprise AI team" and all variants (with or without HTML tags)
@@ -1490,6 +1509,12 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
   if (tracking?.leadId) { advisorParams.push(`lid=${tracking.leadId}`); }
   const advisorUrl = 'https://advisor.colaberry.ai/advisory/' + (advisorParams.length ? '?' + advisorParams.join('&') : '');
 
+  // Subtle, single-line opt-out. Keeps the personal-email feel while satisfying the
+  // "clear and conspicuous" opt-out requirement — a visible link, not just a header.
+  const unsubLine = tracking?.unsubscribeUrl
+    ? `<p style="font-size: 11px; color: #cbd5e0; margin-top: 14px;"><a href="${tracking.unsubscribeUrl}" style="color: #cbd5e0; text-decoration: underline;">Unsubscribe</a></p>`
+    : '';
+
   // Gmail-style plain email: Arial 14px, #222 text, no special formatting
   return `
 <!DOCTYPE html>
@@ -1501,6 +1526,7 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
   <div style="max-width: 600px; padding: 12px 0;">
     ${cleaned}
     <p style="font-size: 12px; color: #a0aec0; margin-top: 16px;">PS - Curious what AI could look like at your company? <a href="${advisorUrl}" style="color: #3b82f6;">Try our 5-minute AI org designer</a></p>
+    ${unsubLine}
   </div>
 </body>
 </html>
@@ -1509,7 +1535,7 @@ function wrapPersonalEmailHtml(body: string, tracking?: { campaignId?: string; c
 
 function wrapEmailHtml(
   body: string,
-  tracking?: { campaignId?: string; campaignType?: string; leadId?: number; senderName?: string; senderEmail?: string },
+  tracking?: { campaignId?: string; campaignType?: string; leadId?: number; senderName?: string; senderEmail?: string; unsubscribeUrl?: string },
 ): string {
   const senderName = tracking?.senderName || 'Colaberry Enterprise AI';
   const senderEmail = tracking?.senderEmail || env.emailFrom;
@@ -1554,7 +1580,7 @@ function wrapEmailHtml(
     </table>
     <div style="margin-top:28px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:12px;color:#a0aec0;line-height:1.5;">
       Colaberry Inc., 200 Chisholm Place, Suite 200, Plano, TX 75075<br>
-      Not relevant? Reply &ldquo;unsubscribe&rdquo; or <a href="mailto:${senderEmail}?subject=unsubscribe" style="color:#a0aec0;">click here to opt out</a>.
+      Not relevant? <a href="${tracking?.unsubscribeUrl || `mailto:${senderEmail}?subject=unsubscribe`}" style="color:#a0aec0;">Unsubscribe</a> or reply &ldquo;unsubscribe&rdquo;.
     </div>
   </div>
 </body>
@@ -2706,6 +2732,27 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Portfolio GitHub sync agent: daily at 02:15 UTC');
+
+  // ── Architect Evaluation Agent (weekly, Saturday 06:00 UTC) ──────────────────
+  // Evaluates each active student's project progress using ProjectDna +
+  // StudentGithubActivity + lesson completion. Upserts one row per
+  // (enrollment_id, week_number) in architect_evaluations — safe to re-run.
+  cron.schedule('0 6 * * 6', () => {
+    instrumentCronJob('ArchitectEvaluationAgent', async () => {
+      const { runArchitectEvaluationAgent } = await import('./agents/architectEvaluationAgent');
+      const result = await runArchitectEvaluationAgent();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'architect_evaluation_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Architect evaluation error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Architect evaluation agent: weekly Saturday at 06:00 UTC');
 }
 
 // ---------------------------------------------------------------------------

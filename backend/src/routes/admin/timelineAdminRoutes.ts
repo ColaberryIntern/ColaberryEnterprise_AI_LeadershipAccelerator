@@ -7,13 +7,15 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListTimeline, handleCreateCard, handleUpdateCard,
   handleDeleteCard, handleReorderCards, handleCloneCard, handleGenerateCardContent,
-  handleGenerateVideoDraft, handleGenerateCourseDraft,
+  handleGenerateVideoDraft, handleGenerateCourseDraft, handleGetBlueprintContext,
 } from '../../controllers/timelineAdminController';
 
 const router = Router();
 
 // Board: the whole shared curriculum (all batches) + the authorable type registry.
 router.get('/api/admin/orchestration/timeline', requireAdmin, handleListTimeline);
+// Read-only week Blueprint context (auto-injected into every generator).
+router.get('/api/admin/orchestration/timeline/blueprint-context', requireAdmin, handleGetBlueprintContext);
 
 // Card CRUD + reorder/clone.
 router.post('/api/admin/orchestration/timeline/cards', requireAdmin, handleCreateCard);

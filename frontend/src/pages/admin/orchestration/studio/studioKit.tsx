@@ -113,6 +113,10 @@ export const PreviewFrame: React.FC<{ title: string; html: string; width: number
 export const studioCss = `
   .es-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
   .es-title{font-size:15px;font-weight:700}.es-sub{font-size:12px;color:#8A8A8A}.es-muted{font-size:11px;color:#A0A0A0}
+  .es-nameedit{display:inline-flex;align-items:center;gap:5px;padding:3px 6px 3px 9px;border:1px solid #CBD2D8;border-radius:8px;background:#F7F9FA}
+  .es-nameedit:focus-within{border-color:#367895;background:#fff;box-shadow:0 0 0 3px rgba(54,120,149,.12)}
+  .es-nameedit .es-pen{width:13px;height:13px;color:#8A97A2;flex:none}
+  .es-titlein{font-family:inherit;font-size:16px;font-weight:700;color:#1A1A1A;border:none;background:transparent;padding:0;min-width:110px;max-width:320px;outline:none}
   .es-err{background:#FDECEC;color:#C20E1E;padding:8px 12px;border-radius:8px;font-size:13px;margin-bottom:12px}
   .es-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px}
   .es-card{position:relative;border:1px solid #E4E4E4;border-radius:12px;padding:14px;cursor:pointer;background:#fff;transition:.12s}

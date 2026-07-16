@@ -25,6 +25,72 @@ export interface PromotionOutcome {
   verdict: PromotionVerdict;
 }
 
+export interface PromotionStatus {
+  level: string;
+  rank: number;
+  readiness: number;
+  next_level: string | null;
+  at_max: boolean;
+  gaps: string[];
+}
+
+/**
+ * Read-only view of where a student stands against the NEXT level's gate — the
+ * current level, readiness, and the explicit remaining gaps. Unlike
+ * `evaluateForEnrollment`, this NEVER writes (safe for GET drill-downs). Returns
+ * a permissive/empty status if progression isn't provisioned for this student.
+ */
+export async function getPromotionStatus(enrollmentId: string): Promise<PromotionStatus> {
+  const [current] = await StudentLevel.findOrCreate({
+    where: { enrollment_id: enrollmentId },
+    defaults: { enrollment_id: enrollmentId, level_slug: 'builder', rank: 0 },
+  });
+
+  const competencyRows = await StudentCompetency.findAll({ where: { enrollment_id: enrollmentId } });
+  const readiness = computeReadiness(competencyRows.map((c) => ({ domain_id: c.domain_id, confidence: c.confidence, weight: 1 })));
+  const domainCfg = await BuilderLevel.findOne({ where: { rank: current.rank + 1, is_active: true } });
+
+  if (!domainCfg) {
+    return { level: current.level_slug, rank: current.rank, readiness, next_level: null, at_max: true, gaps: [] };
+  }
+
+  const evidence = await EvidenceRecord.findAll({ where: { enrollment_id: enrollmentId, validated: true } });
+  const bySource = (t: string) => evidence.filter((e) => e.source_type === t).length;
+  const attendance = await AttendanceRecord.count({ where: { enrollment_id: enrollmentId, status: 'present' } });
+
+  const input: PromotionInput = {
+    competencies: competencyRows.map((c) => ({ domain_id: c.domain_id, confidence: c.confidence })),
+    evidence_count: evidence.length,
+    artifact_count: bySource('artifact'),
+    github_count: bySource('github_commit') + bySource('github_pr'),
+    evaluation_count: bySource('instructor_review') + bySource('peer_review'),
+    implementation_count: bySource('implementation') + bySource('deliverable'),
+    attendance_count: attendance,
+    ai_approved: !domainCfg.requires_ai_approval, // assume the AI gate is the last unmet step; don't call the approver on a read
+  };
+  const gate: LevelGate = {
+    slug: domainCfg.slug,
+    required_competencies: (domainCfg.required_competencies || []) as LevelGate['required_competencies'],
+    min_evidence: domainCfg.min_evidence,
+    min_artifacts: domainCfg.min_artifacts,
+    min_github: domainCfg.min_github,
+    min_evaluations: domainCfg.min_evaluations,
+    min_implementation: domainCfg.min_implementation,
+    min_attendance: domainCfg.min_attendance,
+    requires_ai_approval: domainCfg.requires_ai_approval,
+  };
+
+  const verdict = evaluatePromotion(input, gate);
+  return {
+    level: current.level_slug,
+    rank: current.rank,
+    readiness,
+    next_level: domainCfg.slug,
+    at_max: false,
+    gaps: verdict.gaps,
+  };
+}
+
 export async function evaluateForEnrollment(
   enrollmentId: string,
   aiApprover: AiApprover = defaultAiApprover

@@ -8,6 +8,7 @@
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL, MODEL_PRICING } from './costEstimationService';
+import { getBlueprintContext } from '../timeline/blueprintContext';
 
 /**
  * The complete, ordered set of testable prompt stages — the ONE source of truth.
@@ -44,6 +45,7 @@ export interface TestResult {
 
 export async function testPrompt(
   slug: string, kind: PromptKind, variables: Record<string, string> = {}, model: string = DEFAULT_MODEL,
+  programId?: string | null, week?: number | null,
 ): Promise<TestResult> {
   const c = await CurriculumTypeDefinition.findOne({ where: { slug } });
   if (!c) throw Object.assign(new Error(`Component "${slug}" not found`), { status: 404 });
@@ -51,6 +53,8 @@ export async function testPrompt(
   if (!template) throw Object.assign(new Error(`Component "${slug}" has no ${kind} prompt`), { status: 400 });
 
   const resolved = resolvePrompt(template, variables);
+  // Auto-include the week's Blueprint context when the author picked a week.
+  const bp = await getBlueprintContext(programId, week);
   const client = getInstrumentedOpenAI({ workflow_id: 'experience_builder_prompt_test' });
   const temperature = 0.7;
 
@@ -58,7 +62,7 @@ export async function testPrompt(
   const res = await client.chat.completions.create({
     model,
     messages: [
-      { role: 'system', content: 'You are an AI curriculum component. Produce exactly what the prompt asks — no preamble.' },
+      { role: 'system', content: `${bp ? bp.prompt_text + '\n\n' : ''}You are an AI curriculum component. Produce exactly what the prompt asks — no preamble.` },
       { role: 'user', content: resolved },
     ],
     temperature,

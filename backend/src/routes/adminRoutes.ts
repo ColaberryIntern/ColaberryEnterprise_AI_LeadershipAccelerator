@@ -7,6 +7,7 @@ import campaignRoutes from './admin/campaignRoutes';
 import insightRoutes from './admin/insightRoutes';
 import settingsRoutes from './admin/settingsRoutes';
 import acceleratorRoutes from './admin/acceleratorRoutes';
+import kbRoutes from './admin/kbRoutes';
 import orchestrationRoutes from './admin/orchestrationRoutes';
 import timelineAdminRoutes from './admin/timelineAdminRoutes';
 import componentRoutes from './admin/componentRoutes';
@@ -75,6 +76,7 @@ import anthropicRoutes from './admin/anthropicRoutes';
 import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
 import mentorReviewRoutes from './admin/mentorReviewRoutes';
 import trustRoutes from './admin/trustRoutes';
+import communityModerationRoutes from './admin/communityModerationRoutes';
 
 const router = Router();
 
@@ -86,6 +88,7 @@ router.use(campaignRoutes);
 router.use(insightRoutes);
 router.use(settingsRoutes);
 router.use(acceleratorRoutes);
+router.use(kbRoutes);
 router.use(orchestrationRoutes);
 router.use(timelineAdminRoutes);
 router.use(componentRoutes);
@@ -154,5 +157,6 @@ router.use(anthropicRoutes);
 router.use(qrAnalyticsRoutes);
 router.use(mentorReviewRoutes);
 router.use(trustRoutes);
+router.use(communityModerationRoutes);
 
 export default router;

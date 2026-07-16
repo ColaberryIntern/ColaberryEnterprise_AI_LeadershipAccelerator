@@ -71,14 +71,6 @@ export function countdown(targetMs: number | null, nowMs: number): { d: number; 
   };
 }
 
-// ── daily streak (client-side; localStorage). Points for streaks are a backend
-// follow-up — this only tracks day-over-day visits for the Today card. ──
-export type StreakState = { count: number; lastClaim: string; week: boolean[] };
-const STREAK_KEY = 'te_streak_v1';
-export function todayKey(): string { const d = new Date(); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
-export function dowMonFirst(): number { return (new Date().getDay() + 6) % 7; } // Mon=0 … Sun=6
-export function loadStreak(): StreakState {
-  try { const raw = localStorage.getItem(STREAK_KEY); if (raw) return JSON.parse(raw) as StreakState; } catch { /* ignore */ }
-  return { count: 0, lastClaim: '', week: [false, false, false, false, false, false, false] };
-}
-export function saveStreak(s: StreakState): void { try { localStorage.setItem(STREAK_KEY, JSON.stringify(s)); } catch { /* ignore */ } }
+// The daily streak is now server-authoritative (see backend streakService +
+// `/api/portal/streak`). The old localStorage streak helpers were removed —
+// TodayShell reads `fetchStreak()` / `claimDailyStreak()` from onboardingApi.

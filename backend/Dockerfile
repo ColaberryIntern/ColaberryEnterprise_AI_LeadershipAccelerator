@@ -13,13 +13,17 @@ RUN NODE_OPTIONS="--max-old-space-size=4096" npm run build:backend
 
 FROM node:20-bookworm-slim
 WORKDIR /app
-COPY --from=builder /app/backend/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/backend/package.json ./
-COPY --from=builder /app/frontend/src/pages ./frontend/src/pages
-ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
-RUN npx playwright install --with-deps chromium
-RUN mkdir -p /app/uploads/strategy-prep /data/screenshots /data/browser-profiles
+
+# --- Layers below have no dependency on app source, only on OS packages or
+# on node_modules (which itself only changes when package.json/lock change —
+# npm ci runs before COPY backend/ in the builder stage). Keeping them ahead
+# of the COPY --from=builder /app/backend/dist step below means an ordinary
+# code-only change no longer invalidates them: Docker's cache is linear, so
+# once one layer misses, every later layer in the stage rebuilds regardless
+# of whether its own inputs changed. Before this reorder, dist (which changes
+# on every commit) was copied first, so xvfb/git/curl/gnupg, the Docker CLI +
+# compose plugin, and the Playwright Chromium download were all re-fetched on
+# every single build — multiple minutes of unrelated work per rebuild.
 RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc git ca-certificates curl gnupg && rm -rf /var/lib/apt/lists/*
 # Install docker CLI + compose plugin so the backend can provision preview stacks
 # via the mounted /var/run/docker.sock. Only the CLI — the daemon lives on the host.
@@ -30,6 +34,21 @@ RUN install -m 0755 -d /etc/apt/keyrings \
     && apt-get update \
     && apt-get install -y --no-install-recommends docker-ce-cli docker-buildx-plugin docker-compose-plugin \
     && rm -rf /var/lib/apt/lists/*
+
+# Playwright's browser binary version is pinned to the installed npm package
+# version, so this needs node_modules present — but node_modules is cached
+# independently of source-only changes (see comment above).
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/backend/package.json ./
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN npx playwright install --with-deps chromium
+
+# --- Only these layers depend on app source, so they're last: an ordinary
+# commit invalidates from here down, not the installs above.
+COPY --from=builder /app/backend/dist ./dist
+COPY --from=builder /app/frontend/src/pages ./frontend/src/pages
+RUN mkdir -p /app/uploads/strategy-prep /data/screenshots /data/browser-profiles
+
 ENV NODE_ENV=production
 ENV DISPLAY=:99
 EXPOSE 3001

@@ -10,6 +10,8 @@ import api from '../../../utils/api';
 import CardDetailBody from '../../../components/timeline/CardDetailBody';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
 import AutofillButton from '../../../components/common/AutofillButton';
+import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
+import BlueprintDefaults from './BlueprintDefaults';
 import '../../../components/timeline/timeline.css';
 
 /**
@@ -180,8 +182,9 @@ const BucketSection: React.FC<{
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }; types: TypeDef[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
+  bpContext: BlueprintContextDTO | null;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => void; onSave: () => void; onClose: () => void;
-}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, onChange, onSave, onClose }) => {
+}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
@@ -308,6 +311,10 @@ const EditDrawer: React.FC<{
             </div>
           )}
 
+          {/* Auto-included Blueprint context — LOCKED to this card's week (no picker,
+              no drill-down). Sits right above the Week field it follows; always shown so
+              every curriculum type carries the section. Shared with the Studio via <BlueprintDefaults>. */}
+          <BlueprintDefaults ctx={bpContext} week={draft.week ?? null} locked />
           <div style={{ display: 'flex', gap: 10 }}>
             <label style={{ ...lbl, flex: 1 }}>Week
               <input type="number" style={inp} value={draft.week ?? ''} onChange={(e) => onChange({ week: e.target.value === '' ? null : Number(e.target.value) })} />
@@ -359,6 +366,8 @@ const inp: React.CSSProperties = { padding: '8px 10px', border: '1px solid #D8D8
 
 // ── main tab ─────────────────────────────────────────────────────────────────
 const TimelineEditorTab: React.FC = () => {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseId, setCourseId] = useState<string>('');
   const [board, setBoard] = useState<Board | null>(null);
   const [week, setWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -368,17 +377,43 @@ const TimelineEditorTab: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course'>('');
+  const [bpContext, setBpContext] = useState<BlueprintContextDTO | null>(null);
+
+  // Load the courses once and default to the AI Systems Architect Accelerator —
+  // the Timeline is scoped to one course.
+  useEffect(() => {
+    (async () => {
+      try {
+        const cs = await composerApi.courses();
+        setCourses(cs);
+        const def = cs.find((c) => /architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
+        setCourseId(def?.id || '');
+      } catch { setError('Failed to load courses'); }
+    })();
+  }, []);
 
   const loadBoard = useCallback(async () => {
+    if (!courseId) return;
     setLoading(true); setError('');
     try {
-      const r = await api.get('/api/admin/orchestration/timeline');
+      const r = await api.get('/api/admin/orchestration/timeline', { params: { program_id: courseId } });
       setBoard(r.data as Board);
     } catch { setError('Failed to load the curriculum'); }
     finally { setLoading(false); }
-  }, []);
+  }, [courseId]);
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
+
+  // The week's Blueprint that's auto-injected into every generator for this card —
+  // fetched read-only so the editor can show it grayed out.
+  useEffect(() => {
+    if (!draft || draft.week == null || !courseId) { setBpContext(null); return; }
+    let cancelled = false;
+    api.get('/api/admin/orchestration/timeline/blueprint-context', { params: { program_id: courseId, week: draft.week } })
+      .then((r) => { if (!cancelled) setBpContext(r.data || null); })
+      .catch(() => { if (!cancelled) setBpContext(null); });
+    return () => { cancelled = true; };
+  }, [draft?.week, courseId, Boolean(draft)]);
 
   const weeks = useMemo(() => {
     const s = new Set<number | null>();
@@ -419,10 +454,10 @@ const TimelineEditorTab: React.FC = () => {
     } catch { setError('Reorder failed'); loadBoard(); }
   };
 
-  const openAdd = (bucket: Bucket) => {
+  const openAdd = (bucket: Bucket, wk?: number | null) => {
     const def = board?.types.find((t) => t.bucket === bucket) || board?.types[0];
     setIsNew(true);
-    setDraft({ type: def?.slug, title: '', bucket, week, difficulty: def?.difficulty || 'core',
+    setDraft({ type: def?.slug, title: '', bucket, week: wk !== undefined ? wk : week, difficulty: def?.difficulty || 'core',
       points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'draft' });
   };
   const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined }); };
@@ -461,6 +496,7 @@ const TimelineEditorTab: React.FC = () => {
           description: draft.description || null, week: draft.week ?? null, bucket: draft.bucket,
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
           points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload,
+          program_id: courseId || null,
         });
       } else if (draft.id) {
         await api.put(`/api/admin/orchestration/timeline/cards/${draft.id}`, {
@@ -514,7 +550,7 @@ const TimelineEditorTab: React.FC = () => {
       if (!(draft.course?.url || '').trim()) return;
       setGenBusy('course'); setError('');
       try {
-        const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: draft.type, url: draft.course!.url });
+        const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: draft.type, url: draft.course!.url, program_id: courseId || null, week: draft.week ?? null });
         const g = r.data || {};
         setDraft((d) => d && ({
           ...d,
@@ -537,6 +573,7 @@ const TimelineEditorTab: React.FC = () => {
       const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
         type: draft.type, title: draft.title || null,
         subtitle: draft.subtitle || null, description: draft.description || null,
+        program_id: courseId || null, week: draft.week ?? null,
         video: draft.video || null, anchor,
       });
       const g = r.data || {};
@@ -622,9 +659,18 @@ const TimelineEditorTab: React.FC = () => {
         .te-lessonframe{width:100%;height:300px;border:1px solid #E4E4E4;border-radius:9px;background:#fff;display:block}
       `}</style>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1A1A' }}>Class curriculum</div>
-        <div style={{ fontSize: 12, color: '#8A8A8A' }}>your students' timeline · every batch sees it</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1A1A' }}>Course</div>
+        <select
+          style={{ fontSize: 13, fontWeight: 700, padding: '6px 12px', border: '1px solid #CBD2D8', borderRadius: 8, background: '#fff', color: '#1A1A1A', cursor: 'pointer' }}
+          value={courseId}
+          onChange={(e) => setCourseId(e.target.value)}
+          title="The Timeline is scoped to one course. Add courses in the Curriculum Composer."
+        >
+          {courses.length === 0 && <option value="">— loading —</option>}
+          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <div style={{ fontSize: 12, color: '#8A8A8A' }}>this course's student timeline · every batch sees it</div>
         {board && <div style={{ fontSize: 12, color: '#8A8A8A', marginLeft: 'auto' }}><b style={{ color: '#1A1A1A' }}>{board.cards.length}</b> cards · <b style={{ color: '#3C7A26' }}>{publishedCount}</b> live</div>}
       </div>
 
@@ -635,10 +681,11 @@ const TimelineEditorTab: React.FC = () => {
         <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
             {weeks.nums.map((w) => (
-              <button key={w} className={`tl-wk ${week === w ? 'on' : ''}`} onClick={() => setWeek(w)}>Week {w}</button>
+              <button key={w} className={`tl-wk ${week === w ? 'on' : ''}`} onClick={() => setWeek(w)}>{w === 0 ? 'Wk 0 · Free' : `Week ${w}`}</button>
             ))}
             {weeks.hasUnscheduled && <button className={`tl-wk ${week === null ? 'on' : ''}`} onClick={() => setWeek(null)}>Unscheduled</button>}
-            <button className="tl-wk" onClick={() => { const next = (weeks.nums[weeks.nums.length - 1] || 0) + 1; setWeek(next); openAdd('learn'); }}>+ Week</button>
+            {!weeks.nums.includes(0) && <button className="tl-wk" onClick={() => { setWeek(0); openAdd('learn', 0); }}>+ Free Preview (Wk 0)</button>}
+            <button className="tl-wk" onClick={() => { const next = (weeks.nums[weeks.nums.length - 1] || 0) + 1; setWeek(next); openAdd('learn', next); }}>+ Week</button>
           </div>
 
           {BUCKETS.map((b) => (
@@ -650,7 +697,7 @@ const TimelineEditorTab: React.FC = () => {
 
       {draft && (
         <EditDrawer draft={draft} types={board?.types || []} isNew={isNew} saving={saving}
-          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent}
+          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext}
           onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} />
       )}
     </div>

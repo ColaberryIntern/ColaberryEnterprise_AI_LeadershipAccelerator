@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { NewBuildAnswers, BuildSize } from './projectsStore';
+import { useIsExplorer } from '../useIsExplorer';
 
 // "Start a new build" — the questionnaire that shapes an idea into a project.
 // Three steps: (1) idea + size, (2) a few sharpening questions, (3) a generated
@@ -15,6 +16,7 @@ const SIZES: { key: BuildSize; title: string; time: string; desc: string }[] = [
 const STEPS = ['Your idea', 'Sharpen it', 'Your plan'];
 
 const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void }> = ({ onCreate }) => {
+  const demo = useIsExplorer();
   const [step, setStep] = useState(1);
   const [idea, setIdea] = useState('An AI agent that triages my support inbox and drafts replies');
   const [name, setName] = useState('');
@@ -40,8 +42,8 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void }> = ({ o
       {step === 1 && (
         <div className="card pjw-pane">
           <h3>What do you want to build?</h3>
-          <p className="lead">Describe it in a sentence or two. Don't worry about being precise — the next step sharpens it with you.</p>
-          <textarea value={idea} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 92 }} placeholder="e.g. An AI agent that triages my support inbox and drafts replies" />
+          <p className="lead">Tell us everything — the whole idea, who it's for, what it should do, every capability and edge you can think of. Don't hold back or worry about being precise; the more you pour out here, the better we shape it. The next step sharpens it with you.</p>
+          <textarea value={idea} onChange={(e) => setIdea(e.target.value)} style={{ minHeight: 240 }} placeholder={"e.g. An AI agent that triages my support inbox and drafts replies.\n\nGo further — what would make it great? Who uses it, what data would it touch, what should it automate, what would 'done' look like, what have you always wished existed? Brain-dump it all."} />
           <label className="pjw-label">Give it a name (optional)</label>
           <input className="txt" value={name} onChange={(e) => setName(e.target.value)} placeholder="Leave blank and we'll name it from your idea" />
           <label className="pjw-label">How big is what you're building?</label>
@@ -108,10 +110,11 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void }> = ({ o
           <div className="pjw-gentask"><span className="chip" style={{ background: 'rgba(251,40,50,.12)', color: '#E5121D' }}><span className="sw" style={{ background: '#FB2832' }} />Task</span><div><b>Implement the {primary} read tool</b></div></div>
           <div className="pjw-gentask"><span className="chip" style={{ background: 'rgba(251,40,50,.12)', color: '#E5121D' }}><span className="sw" style={{ background: '#FB2832' }} />Task</span><div><b>Add the safety guardrail + reliability</b></div></div>
 
+          {demo && <div className="small" style={{ margin: '4px 0 -2px', color: '#B5710A' }}>This is a demo — you can shape the whole build, but enroll to actually create it.</div>}
           <div className="pjw-actions">
             <button className="btn ghost" onClick={() => setStep(2)}>Back</button>
-            <button className="btn primary grow" onClick={() => onCreate(answers)}>
-              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg> Confirm &amp; build in background
+            <button className="btn primary grow" onClick={() => onCreate(answers)} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>
+              <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg> {demo ? 'Enroll to build for real' : 'Confirm & build in background'}
             </button>
           </div>
         </div>

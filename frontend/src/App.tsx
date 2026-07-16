@@ -15,6 +15,7 @@ import FreightBrokerageLandingPage from './pages/FreightBrokerageLandingPage';
 import AIXceleratorLandingPage from './pages/AIXceleratorLandingPage';
 import AIPilotLandingPage from './pages/AIPilotLandingPage';
 import AIPilotVerticalPage from './pages/AIPilotVerticalPage';
+import PublicPortfolioPage from './pages/PublicPortfolioPage';
 import GlobalCoryWidget from './components/GlobalCoryWidget';
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
         <Route path="/ai-pilot/transport" element={<AIPilotVerticalPage variantKey="transport" />} />
         <Route path="/ai-pilot/construction" element={<AIPilotVerticalPage variantKey="construction" />} />
         <Route path="/ai-pilot/care" element={<AIPilotVerticalPage variantKey="care" />} />
+        <Route path="/portfolio/share/:token" element={<PublicPortfolioPage />} />
         {adminRoutes}
         {portalRoutes}
         {referralRoutes}

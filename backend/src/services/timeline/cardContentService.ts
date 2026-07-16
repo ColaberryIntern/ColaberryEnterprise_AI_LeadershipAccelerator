@@ -7,6 +7,7 @@
  * previews. Reuses the runtimePreview generation pattern (componentAiService).
  */
 import TimelineCard from '../../models/TimelineCard';
+import { getBlueprintContext } from './blueprintContext';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolvePrompt } from '../components/promptTesterService';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
@@ -50,6 +51,7 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
 
   const def = await CurriculumTypeDefinition.findOne({ where: { slug: card.type } });
   const gen = def ? ((def as any).generation_prompt as string | null) : null;
+  const bp = await getBlueprintContext((card as any).program_id, card.week);
   const vars = buildVars(card);
   const resolved = gen
     ? resolvePrompt(gen, vars)
@@ -59,7 +61,7 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
   const res = await client.chat.completions.create({
     model, temperature: 0.6, max_tokens: 1600, response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: `You render the "${def?.student_label || card.type}" activity into the exact content a student sees on this card. Return STRICT json.` },
+      { role: 'system', content: `${bp ? bp.prompt_text + '\n\n' : ''}You render the "${def?.student_label || card.type}" activity into the exact content a student sees on this card. Return STRICT json.` },
       { role: 'user', content: `Produce the student content as json with keys: title, summary, body_html (clean self-contained HTML, no scripts), questions (string[]), reflection (string).\n\nInstruction:\n${resolved}` },
     ],
   });

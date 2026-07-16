@@ -36,8 +36,12 @@ export function assessPlan(bp: CurriculumBlueprint, plan: CurriculumPlan, aiConf
   return { validation, evidence, journey, dna, recommendations, dependencies };
 }
 
-export async function listBlueprints() {
-  const rows = await CurriculumBlueprint.findAll({ order: [['updated_at', 'DESC']] });
+export async function listBlueprints(programId?: string | null) {
+  // Scoped to a course (program) when provided — the Composer works one course at
+  // a time. Ordered by week so the dropdown reads Wk 1 -> Wk N.
+  const where: Record<string, any> = {};
+  if (programId) where.program_id = programId;
+  const rows = await CurriculumBlueprint.findAll({ where, order: [['week', 'ASC'], ['updated_at', 'DESC']] });
   return rows.map((r) => r.toJSON());
 }
 

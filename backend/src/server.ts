@@ -10,6 +10,7 @@ import healthRoutes from './routes/healthRoutes';
 import leadRoutes from './routes/leadRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import webhookRoutes from './routes/webhookRoutes';
+import unsubscribeRoutes from './routes/unsubscribeRoutes';
 import adminRoutes from './routes/adminRoutes';
 import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
@@ -19,6 +20,9 @@ import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
+import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
+import buildArtifactRoutes from './routes/buildArtifactRoutes';
+import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
 import { UPLOAD_DIR } from './config/upload';
@@ -49,6 +53,10 @@ app.use(traceMiddleware);
 // Webhook routes — each sub-route handles its own body parsing
 app.use(webhookRoutes);
 
+// Public one-click unsubscribe — mounted before the JSON parser; the POST
+// (RFC 8058 one-click) handles its own urlencoded body parsing.
+app.use(unsubscribeRoutes);
+
 // Preview proxy — mounted BEFORE the JSON parser so request bodies pass through
 // raw to upstream preview stacks.
 app.use('/preview', previewProxyMiddleware());
@@ -63,6 +71,9 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+app.use(showcaseArtifactRoutes);
+app.use(buildArtifactRoutes);
+app.use(publicPortfolioRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
@@ -493,6 +504,40 @@ async function ensurePointsSchema() {
       await sequelize.query(sql);
     } catch (err: any) {
       console.warn('[DB] points schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureSubscriptionSchema() {
+  // Student self-serve subscriptions. Explicit idempotent create (sequelize.sync
+  // is disabled on this graph). One row per checkout; payment_ref is the
+  // PaySimple external_id used to activate on the payment webhook.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS subscriptions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       plan VARCHAR(20) NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       amount_cents INTEGER NOT NULL DEFAULT 0,
+       payment_ref VARCHAR(120) NOT NULL,
+       paysimple_customer_id VARCHAR(120),
+       paysimple_payment_id VARCHAR(120),
+       started_at TIMESTAMPTZ,
+       current_period_end TIMESTAMPTZ,
+       canceled_at TIMESTAMPTZ,
+       cancel_reason TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_payment_ref_unique ON subscriptions (payment_ref)`,
+    `CREATE INDEX IF NOT EXISTS idx_subscriptions_enrollment ON subscriptions (enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] subscription schema stmt skipped:', err?.message);
     }
   }
 }
@@ -1290,6 +1335,8 @@ async function start(): Promise<void> {
   await ensureEnrollmentColumns();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
+  // Student self-serve subscriptions (idempotent).
+  await ensureSubscriptionSchema();
   // Open house events (idempotent).
   await ensureOpenHouseSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).
@@ -1319,11 +1366,13 @@ async function start(): Promise<void> {
       const TimelineCard = (await import('./models/TimelineCard')).default;
       const TimelineCardProgress = (await import('./models/TimelineCardProgress')).default;
       const CurriculumTypeDefinition = (await import('./models/CurriculumTypeDefinition')).default;
+      const Subscription = (await import('./models/Subscription')).default;
       const r = await reconcileMissingColumns([
         Enrollment,
         TimelineCard,
         TimelineCardProgress,
         CurriculumTypeDefinition,
+        Subscription,
       ]);
       if (r.added.length) {
         console.log(
@@ -1343,6 +1392,11 @@ async function start(): Promise<void> {
       const { seedCurriculumTypeDefinitions } = await import('./services/timeline/typeSeeder');
       const r = await seedCurriculumTypeDefinitions();
       console.log(`[TimelineEngine] curriculum types seeded: ${r.created} created, ${r.updated} updated`);
+      // Layer human-authored config (generation prompt, thumbnail, Parts, contracts)
+      // on top of the freshly-seeded type registry. Idempotent; keyed on slug.
+      const { seedComponentAuthoring } = await import('./seeds/seedComponentAuthoring');
+      const authoring = await seedComponentAuthoring();
+      console.log(`[TimelineEngine] component authoring applied: ${authoring.updated.length} updated${authoring.missing.length ? `, missing: ${authoring.missing.join(',')}` : ''}`);
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);

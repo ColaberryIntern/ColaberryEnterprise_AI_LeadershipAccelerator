@@ -349,6 +349,8 @@ export async function generateExecutiveDeliverable(
       implementation: [],
       total_artifacts: 0,
       average_score: null,
+      weekly_artifacts: [],
+      readiness_score: null,
     };
 
     const roi = estimateROI(minimalMetadata, emptyPortfolio);
