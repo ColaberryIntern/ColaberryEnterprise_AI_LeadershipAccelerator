@@ -210,8 +210,9 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   for (let i = 0; i < feedCards.length; i++) {
     const fc = feedCards[i];
     const card = cards[i];
-    const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
-    if (fc.type === 'testimonial' && meta.mode === 'random' && !fc.video) {
+    // Any testimonial card WITHOUT a fixed pasted video pulls a matched testimonial
+    // from our library (per student, non-repeating). A pasted link keeps its own video.
+    if (fc.type === 'testimonial' && !fc.video) {
       const picked = await selectTestimonialForEnrollment(enrollmentId, card);
       if (picked) {
         // The picked testimonial IS the card now — its title + description take
