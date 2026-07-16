@@ -54,6 +54,15 @@ export function providerLabel(p: VideoProvider): string {
   return { youtube: 'YouTube', vimeo: 'Vimeo', loom: 'Loom', wistia: 'Wistia', file: 'source', unknown: 'source' }[p];
 }
 
+/** PURE — a derivable still image for a video source, or null. YouTube exposes
+ *  deterministic thumbnail URLs per video id; other providers need an API call,
+ *  so cards there rely on an explicitly saved poster instead. */
+export function videoThumbnail(source: VideoSource | null): string | null {
+  if (!source) return null;
+  if (source.provider === 'youtube') return `https://img.youtube.com/vi/${source.id}/hqdefault.jpg`;
+  return null;
+}
+
 /** Add autoplay to an iframe embed url in the provider's own dialect. */
 export function withAutoplay(source: VideoSource): string {
   if (source.kind !== 'iframe') return source.embedUrl;

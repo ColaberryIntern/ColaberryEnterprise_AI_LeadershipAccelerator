@@ -108,7 +108,7 @@ const SortableCard: React.FC<{
     subtitle: card.subtitle, description: card.description,
     difficulty: card.difficulty, estimated_time: card.estimated_time, week: card.week,
     points: card.points, video: card.metadata?.video, course: (card.metadata as any)?.course,
-    experience: (card.metadata as any)?.content,
+    experience: (card.metadata as any)?.content, image: (card.metadata as any)?.image || null,
   });
   return (
     <div ref={setNodeRef} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
@@ -181,10 +181,10 @@ const BucketSection: React.FC<{
 // component the student drawer uses) via adaptToFeedCard, so the editor preview
 // is the classroom, pixel for pixel — no separate lessonDoc/markup to drift.
 const EditDrawer: React.FC<{
-  draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }; types: TypeDef[]; isNew: boolean; saving: boolean;
+  draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }; types: TypeDef[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
   bpContext: BlueprintContextDTO | null;
-  onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => void; onSave: () => void; onClose: () => void;
+  onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => void; onSave: () => void; onClose: () => void;
 }> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
@@ -200,7 +200,7 @@ const EditDrawer: React.FC<{
     subtitle: draft.subtitle, description: draft.description,
     difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
     points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
-    course: draft.course, capabilities: typeDef?.capabilities,
+    course: draft.course, image: draft.image || null, capabilities: typeDef?.capabilities,
   });
   return (
     <div className="te-scrim" onClick={onClose}>
@@ -275,6 +275,15 @@ const EditDrawer: React.FC<{
           <label style={lbl}>Description
             <textarea style={{ ...inp, minHeight: 64 }} value={draft.description || ''} onChange={(e) => onChange({ description: e.target.value })} placeholder="(optional)" />
           </label>
+
+          {/* Non-video items (blogs etc.) carry their OWN picture here — it becomes
+              the card's tile image on the student timeline. Video types use the
+              Poster field in the Video block instead (or the YouTube thumbnail). */}
+          {!isVideo && !isSkillsJar && (
+            <label style={lbl}>Image URL — the item&apos;s own picture (shown on its timeline tile)
+              <input style={inp} value={draft.image || ''} onChange={(e) => onChange({ image: e.target.value })} placeholder="(optional) https://…/cover.jpg" />
+            </label>
+          )}
 
           {isVideo && (
             <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
@@ -378,7 +387,7 @@ const TimelineEditorTab: React.FC = () => {
   const [week, setWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) | null>(null);
+  const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
@@ -468,9 +477,9 @@ const TimelineEditorTab: React.FC = () => {
     setDraft({ type: def?.slug, title: '', bucket, week: wk !== undefined ? wk : week, difficulty: def?.difficulty || 'core',
       points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'draft' });
   };
-  const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined }); };
+  const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined, image: (c.metadata as any)?.image || undefined }); };
 
-  const onDraftChange = (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => {
+  const onDraftChange = (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => {
     setDraft((d) => {
       if (!d) return d;
       const next = { ...d, ...patch };
@@ -498,20 +507,22 @@ const TimelineEditorTab: React.FC = () => {
       // so "Generate content → Save" persists exactly what the preview showed.
       const contentPayload = (draft.metadata as any)?.content || null;
       const coursePayload = draft.course && ((draft.course.name || '').trim() || (draft.course.url || '').trim()) ? draft.course : null;
+      // The item's own picture (blog cover etc.) — merged into metadata.image.
+      const imagePayload = (draft.image || '').trim() || null;
       if (isNew) {
         await api.post('/api/admin/orchestration/timeline/cards', {
           type: draft.type, title: draft.title, subtitle: draft.subtitle || null,
           description: draft.description || null, week: draft.week ?? null, bucket: draft.bucket,
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
           points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload,
-          program_id: courseId || null,
+          image: imagePayload, program_id: courseId || null,
         });
       } else if (draft.id) {
         await api.put(`/api/admin/orchestration/timeline/cards/${draft.id}`, {
           title: draft.title, subtitle: draft.subtitle || null, description: draft.description || null,
           week: draft.week ?? null, bucket: draft.bucket, difficulty: draft.difficulty,
           estimated_time: draft.estimated_time ?? null, points: draft.points, visibility: draft.visibility,
-          video: videoPayload, content: contentPayload, course: coursePayload,
+          video: videoPayload, content: contentPayload, course: coursePayload, image: imagePayload,
         });
       }
       setDraft(null);

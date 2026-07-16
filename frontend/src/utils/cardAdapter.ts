@@ -23,6 +23,7 @@ export interface AdaptInput {
   points?: { learning?: number; builder?: number; community?: number };
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   videoUrl?: string;
+  image?: string | null;   // the item's OWN image (blog cover etc.) — overrides the generic type visual
   experience?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Skills Course (skills_jar)
   capabilities?: string[] | null;   // the type's Parts — carried so the preview gates sections like the live render
@@ -52,6 +53,7 @@ export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {
     quiz_score: null,
     completed_at: null,
     video: url ? { url, presenter: input.video?.presenter || null, poster: input.video?.poster || null } : null,
+    image: typeof input.image === 'string' && input.image.trim() ? input.image.trim() : null,
     content: hasContent ? { summary: exp.summary, body_html: exp.body_html, questions: exp.questions, reflection: exp.reflection } : null,
     course: input.course && (input.course.name || input.course.url)
       ? { name: input.course.name || null, url: input.course.url || null } : null,

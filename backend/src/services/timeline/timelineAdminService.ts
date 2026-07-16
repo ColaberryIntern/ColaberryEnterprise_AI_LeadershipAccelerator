@@ -40,6 +40,13 @@ export interface CreateCardInput {
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
+  image?: string | null;   // the item's OWN display image (blog cover etc.) — tiles show it over the generic type visual
+}
+
+/** PURE — normalize an author's image URL into the stored metadata shape (a
+ *  trimmed url string), or null when empty. */
+export function buildImageMeta(image: CreateCardInput['image']): string | null {
+  return typeof image === 'string' && image.trim() ? image.trim() : null;
 }
 
 /** PURE — normalize an author's video input into the stored metadata shape, or
@@ -115,6 +122,7 @@ export function composeCardAttributes(
       ...(buildVideoMeta(input.video) ? { video: buildVideoMeta(input.video) } : {}),
       ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content), content_at: new Date().toISOString() } : {}),
       ...(buildCourseMeta(input.course) ? { course: buildCourseMeta(input.course) } : {}),
+      ...(buildImageMeta(input.image) ? { image: buildImageMeta(input.image) } : {}),
     },
   };
 }
@@ -206,7 +214,7 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
   // Video + content live in the metadata blob; merge them (setting/clearing each
   // key) without disturbing other metadata. Start from the latest metadata (or
   // whatever a prior branch already staged in clean.metadata).
-  if ('video' in patch || 'content' in patch || 'course' in patch) {
+  if ('video' in patch || 'content' in patch || 'course' in patch || 'image' in patch) {
     const meta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
     if ('video' in patch) {
       const v = buildVideoMeta(patch.video);
@@ -221,6 +229,10 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
     if ('course' in patch) {
       const co = buildCourseMeta(patch.course);
       if (co) meta.course = co; else delete meta.course;
+    }
+    if ('image' in patch) {
+      const img = buildImageMeta(patch.image);
+      if (img) meta.image = img; else delete meta.image;
     }
     clean.metadata = meta;
   }

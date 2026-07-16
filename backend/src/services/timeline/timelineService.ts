@@ -58,6 +58,7 @@ export interface FeedCard {
   video: FeedVideo | null;
   content: FeedContent | null;
   course: FeedCourse | null;          // Skills Course link (skills_jar)
+  image: string | null;               // the item's OWN image (blog cover, testimonial still) — tiles use it over the generic type visual
   capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
 }
 
@@ -89,6 +90,14 @@ export function videoFromMetadata(metadata: any): FeedVideo | null {
     presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
     poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
   };
+}
+
+/** PURE — the card's own display image from its metadata blob, or null. Set by
+ *  the Timeline editor (Image URL) for non-video items like blogs; video-band
+ *  cards usually carry theirs on video.poster instead. */
+export function imageFromMetadata(metadata: any): string | null {
+  const img = metadata && typeof metadata === 'object' ? metadata.image : null;
+  return typeof img === 'string' && img.trim() ? img.trim() : null;
 }
 
 /** PURE — a typed Skills Course link from a card's metadata blob, or null when
@@ -196,6 +205,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       video: videoFromMetadata(card.metadata),
       content: contentFromMetadata(card.metadata),
       course: courseFromMetadata(card.metadata),
+      image: imageFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
     };
   });

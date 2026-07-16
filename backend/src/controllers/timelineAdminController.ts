@@ -40,6 +40,8 @@ const courseSchema = z.object({
   name: z.string().max(300).nullable().optional(),
   url: z.string().max(2000).nullable().optional(),
 }).nullable().optional();
+// The item's OWN display image (blog cover etc.) — metadata.image.
+const imageSchema = z.string().max(2000).nullable().optional();
 
 const createSchema = z.object({
   type: z.string().min(1),
@@ -58,6 +60,7 @@ const createSchema = z.object({
   video: videoSchema,
   content: contentSchema,
   course: courseSchema,
+  image: imageSchema,
 });
 
 const updateSchema = z.object({
@@ -77,6 +80,7 @@ const updateSchema = z.object({
   video: videoSchema,
   content: contentSchema,
   course: courseSchema,
+  image: imageSchema,
 }).strict();
 
 // One-click: build a full video-card draft from a title (find a real video +

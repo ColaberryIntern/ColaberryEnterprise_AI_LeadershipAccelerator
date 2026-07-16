@@ -3,8 +3,8 @@
  * DB-touching functions (create/reorder/clone) are covered by integration; this
  * pins the registry-default + author-override logic that everything relies on.
  */
-import { composeCardAttributes, buildVideoMeta, CreateCardInput } from '../timelineAdminService';
-import { videoFromMetadata } from '../timelineService';
+import { composeCardAttributes, buildVideoMeta, buildImageMeta, CreateCardInput } from '../timelineAdminService';
+import { videoFromMetadata, imageFromMetadata } from '../timelineService';
 import { resolveOrThrow } from '../typeRegistry';
 
 const COHORT = '11111111-1111-1111-1111-111111111111';
@@ -87,6 +87,28 @@ describe('buildVideoMeta', () => {
     expect(buildVideoMeta({ url: '   ' })).toBeNull();
     expect(buildVideoMeta(null)).toBeNull();
     expect(buildVideoMeta(undefined)).toBeNull();
+  });
+});
+
+describe('card image (write + feed read)', () => {
+  it('stores an authored image url in metadata.image (trimmed)', () => {
+    const def = resolveOrThrow('blog');
+    const attrs = composeCardAttributes(def, {
+      cohort_id: COHORT, type: 'blog', image: '  https://cdn.example.com/cover.jpg  ',
+    }, 0);
+    expect(attrs.metadata).toEqual({ authored: true, image: 'https://cdn.example.com/cover.jpg' });
+  });
+  it('buildImageMeta returns null for empty / non-string input', () => {
+    expect(buildImageMeta('   ')).toBeNull();
+    expect(buildImageMeta(null)).toBeNull();
+    expect(buildImageMeta(undefined)).toBeNull();
+  });
+  it('imageFromMetadata reads it back for the student feed, null when absent', () => {
+    expect(imageFromMetadata({ authored: true, image: ' https://cdn.example.com/cover.jpg ' }))
+      .toBe('https://cdn.example.com/cover.jpg');
+    expect(imageFromMetadata({ authored: true })).toBeNull();
+    expect(imageFromMetadata(null)).toBeNull();
+    expect(imageFromMetadata({ image: 42 })).toBeNull();
   });
 });
 

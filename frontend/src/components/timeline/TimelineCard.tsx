@@ -1,4 +1,5 @@
 import React from 'react';
+import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
@@ -26,6 +27,7 @@ export interface TimelineFeedCard {
   quiz_score: number | null;
   completed_at: string | null;
   video?: { url: string; presenter: string | null; poster: string | null } | null;
+  image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
@@ -130,16 +132,21 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  // Poster background: a video card uses its own poster image (darkened so the
-  // overlay text stays legible); every other kind uses its Design-E gradient.
-  const posterStyle: React.CSSProperties =
-    v.kind === 'video' && card.video?.poster
-      ? {
-          backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${card.video.poster})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }
-      : { background: KIND_GRADIENT[v.kind] };
+  // Poster background: any card with its OWN image shows it (darkened so the
+  // overlay text stays legible) — an explicit card image (blog cover), the
+  // video's saved poster, or a thumbnail derived from the video URL (YouTube).
+  // Only cards with none of those fall back to the generic Design-E gradient.
+  const ownImage =
+    (card.image && card.image.trim()) ||
+    card.video?.poster ||
+    videoThumbnail(parseVideoUrl(card.video?.url));
+  const posterStyle: React.CSSProperties = ownImage
+    ? {
+        backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${ownImage})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    : { background: KIND_GRADIENT[v.kind] };
 
   // ONE uniform 16:9 tile for EVERY card. The bottom-right ▶ opens the detail
   // drawer (pop-out from the right) where the full assignment lives — the video

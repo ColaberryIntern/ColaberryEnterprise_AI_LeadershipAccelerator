@@ -3,7 +3,7 @@ import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
 import VideoEmbed from './VideoEmbed';
 import SkillsJarPanel from './SkillsJarPanel';
-import { parseVideoUrl } from '../../utils/videoEmbed';
+import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -94,8 +94,13 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
         {isVideo && (
           <div className="tld-player">
-            <VideoEmbed source={source} title={card.title} poster={card.video?.poster || null} onEnded={done || preview ? undefined : onComplete} />
+            <VideoEmbed source={source} title={card.title} poster={card.video?.poster || videoThumbnail(source)} onEnded={done || preview ? undefined : onComplete} />
           </div>
+        )}
+
+        {/* Non-video items with their OWN image (blog cover etc.) show it as a hero. */}
+        {!isVideo && card.image && (
+          <img className="tld-hero" src={card.image} alt="" loading="lazy" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
         )}
 
         {isSkillsJar && <SkillsJarPanel card={card} preview={preview} onComplete={onComplete} />}
