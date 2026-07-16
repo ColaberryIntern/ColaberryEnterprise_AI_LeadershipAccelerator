@@ -10,6 +10,8 @@ import { getPointsSummary } from '../services/pointsService';
 import { getStreak, claimStreak } from '../services/streakService';
 import { getPointsDrilldown } from '../services/pointsDrilldownService';
 import { getSubscription, startCheckout, cancelSubscription, confirmCheckout } from '../services/subscriptionService';
+import { getEnrollmentView, selectCohort, SelectCohortReason } from '../services/portalEnrollmentService';
+import { z } from 'zod';
 import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
 import Enrollment from '../models/Enrollment';
@@ -84,6 +86,39 @@ export async function handleCancelSubscription(req: Request, res: Response, next
     if (!reason) return res.status(400).json({ error: 'A cancellation reason is required' });
     const result = await cancelSubscription(req.participant!.sub, reason);
     if (!result.ok) return res.status(409).json({ error: result.reason });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// ─── Enrollment (class-date selection) — enrolling reserves a spot; paying locks it ───
+
+const SelectCohortSchema = z.object({ cohort_id: z.string().uuid('cohort_id must be a UUID') });
+
+const SELECT_COHORT_STATUS: Record<SelectCohortReason, number> = {
+  enrollment_not_found: 404,
+  cohort_not_found: 404,
+  cohort_closed: 400,
+  cohort_not_selectable: 400,
+  cohort_started: 400,
+  locked_after_payment: 409,
+};
+
+export async function handleGetEnrollment(req: Request, res: Response, next: NextFunction) {
+  try {
+    const view = await getEnrollmentView(req.participant!.sub);
+    if (!view) return res.status(404).json({ error: 'Enrollment not found' });
+    res.json(view);
+  } catch (err) { next(err); }
+}
+
+export async function handleSelectEnrollmentCohort(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = SelectCohortSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'cohort_id is required' });
+    }
+    const result = await selectCohort(req.participant!.sub, parsed.data.cohort_id);
+    if (!result.ok) return res.status(SELECT_COHORT_STATUS[result.reason]).json({ error: result.reason });
     res.json(result);
   } catch (err) { next(err); }
 }

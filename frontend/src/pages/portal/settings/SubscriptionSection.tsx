@@ -3,6 +3,7 @@ import {
   fetchSubscription, startSubscriptionCheckout, cancelSubscription, confirmSubscriptionCheckout,
   SubscriptionView, PlanId,
 } from '../../../services/subscriptionApi';
+import { formatClassDate } from '../../../services/portalEnrollmentApi';
 
 /**
  * SubscriptionSection — the Settings billing block.
@@ -120,6 +121,16 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
       <p className="set-sub" style={{ gridColumn: '1 / -1', margin: '6px 0 0' }}>
         Secure checkout by PaySimple — pay by card or bank. You’ll be enrolled and everything unlocks the moment your payment clears.
       </p>
+      {view.class_start?.is_future && (
+        <div className="set-enroll-callout" style={{ gridColumn: '1 / -1' }}>
+          <div className="ttl">Pay early, lose nothing</div>
+          <p>
+            Your subscription month starts on your <b>class start date ({formatClassDate(view.class_start.start_date)})</b>,
+            not the day you pay. Paying now locks your seat — your first month still runs
+            from {formatClassDate(view.class_start.start_date)}.
+          </p>
+        </div>
+      )}
     </div>
   );
 
@@ -184,7 +195,8 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
               <div className="fact"><span className="k">Next payment</span><span className="v">{fmtDate(sub.next_payment.date)} · in {sub.next_payment.in_days} day{sub.next_payment.in_days === 1 ? '' : 's'}</span></div>
             )}
             <div className="fact"><span className="k">Access through</span><span className="v">{fmtDate(sub.current_period_end)}</span></div>
-            {sub.started_at && <div className="fact"><span className="k">Started</span><span className="v">{fmtDate(sub.started_at)}</span></div>}
+            {/* Billing is anchored to class start — an early payer's period hasn't started yet. */}
+            {sub.started_at && <div className="fact"><span className="k">{new Date(sub.started_at).getTime() > Date.now() ? 'Starts' : 'Started'}</span><span className="v">{fmtDate(sub.started_at)}</span></div>}
           </div>
 
           {!showCancel
