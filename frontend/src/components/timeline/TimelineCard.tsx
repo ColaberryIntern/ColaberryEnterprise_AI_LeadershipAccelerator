@@ -120,11 +120,13 @@ interface Props {
   onOpen?: (card: TimelineFeedCard) => void;
   onLike?: (card: TimelineFeedCard) => void;
   onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
+  /** Comment button: jump straight into the card's workspace (where the cohort comments live). */
+  onComments?: (card: TimelineFeedCard) => void;
   likes?: number;
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onComments, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
   // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE.
   const podcastAudio = card.type === 'podcast' && card.video?.url && isAudioUrl(card.video.url) ? card.video.url : null;
@@ -259,7 +261,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
         <button type="button" className={`like${liked ? ' liked' : ''}`} onClick={() => onLike?.(card)}>
           <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg> {likes}
         </button>
-        <button type="button" className="cmt"><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment</button>
+        <button type="button" className="cmt" onClick={() => !locked && onComments?.(card)}><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment</button>
         <span className="spacer" />
         {done
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
