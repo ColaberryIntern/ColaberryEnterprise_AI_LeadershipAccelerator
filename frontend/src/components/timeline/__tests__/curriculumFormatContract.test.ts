@@ -93,4 +93,12 @@ describe('curriculum format contract (Experience Studio demo === Classroom timel
     expect(adaptToFeedCard({ label: 'x' }).render_band).toBe('overview');
     expect('overview' in BAND).toBe(true);
   });
+
+  it('adaptToFeedCard carries the type banner through as type_thumbnail_url (default card image)', () => {
+    // The type's AI banner is the card's DEFAULT image on the timeline; a media
+    // card's own poster (video/podcast/testimonial pick) overrides it at render.
+    const url = '/thumbnails/curriculum-types/overview.jpg';
+    expect(adaptToFeedCard({ label: 'x', thumbnail_url: url }).type_thumbnail_url).toBe(url);
+    expect(adaptToFeedCard({ label: 'x' }).type_thumbnail_url).toBeNull();
+  });
 });

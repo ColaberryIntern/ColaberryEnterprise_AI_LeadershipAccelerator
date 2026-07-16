@@ -33,6 +33,9 @@ const THUMBNAIL_SLUGS = [
   'community_discussion', 'presentation', 'study_session', 'demo',
   'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',
+  // legacy pre-registry types (seedCurriculumTypeDefinitions.ts) still shown
+  // in the Experience Studio grid
+  'executive_reality_check', 'prompt_template', 'ai_strategy',
 ];
 
 const thumbnailUrlFor = (slug: string): string => `/thumbnails/curriculum-types/${slug}.jpg`;
