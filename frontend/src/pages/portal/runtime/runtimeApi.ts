@@ -9,6 +9,7 @@ export interface RtCard {
   id: string; type: string; title: string; subtitle?: string | null; description?: string | null;
   student_label: string; render_band: string; estimated_time?: number | null; competencies?: any;
   evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
+  blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 

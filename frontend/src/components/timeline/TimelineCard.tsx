@@ -28,6 +28,7 @@ export interface TimelineFeedCard {
   video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
+  blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
   type_thumbnail?: string | null;   // the type's Experience Studio thumbnail — fallback art when the card has no poster
 }
@@ -131,19 +132,21 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  // Poster background: a video card uses its own poster image (darkened so the
-  // overlay text stays legible), falling back to the type's Experience Studio
-  // thumbnail when the card has no poster of its own; every other kind uses its
-  // Design-E gradient.
-  const posterArt = v.kind === 'video' ? (card.video?.poster || card.type_thumbnail || null) : null;
-  const posterStyle: React.CSSProperties =
-    posterArt
-      ? {
-          backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterArt})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }
-      : { background: KIND_GRADIENT[v.kind] };
+  // Poster background: a video card uses its own poster image, a blog card its
+  // post thumbnail (both darkened so the overlay text stays legible), and a
+  // media/blog card without its own art falls back to the type's Experience
+  // Studio thumbnail; every other kind uses its Design-E gradient.
+  const posterImg =
+    (v.kind === 'video' && card.video?.poster) ||
+    (card.type === 'blog' && card.blog?.thumbnail) ||
+    ((v.kind === 'video' || card.type === 'blog') && card.type_thumbnail) || null;
+  const posterStyle: React.CSSProperties = posterImg
+    ? {
+        backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterImg})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    : { background: KIND_GRADIENT[v.kind] };
 
   // ONE uniform 16:9 tile for EVERY card. The bottom-right ▶ opens the detail
   // drawer (pop-out from the right) where the full assignment lives — the video
@@ -184,12 +187,13 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
       </div>
     </div>
   ) : (
-    <button type="button" className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
+    <button type="button" className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
       <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
       {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
+      {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>
+      <span className="mt-meta"><b>{card.video?.title || card.blog?.title || shortTitle}</b><span>{metaText}</span></span>
       <span className="mt-open">{done
         ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
         : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>

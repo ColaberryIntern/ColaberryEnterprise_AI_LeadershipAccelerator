@@ -840,6 +840,51 @@ async function ensurePodcastSchema() {
   }
 }
 
+// Blog library (training.colaberry.com/blog) + per-student read ledger — powers the
+// Blog type's auto-match mode (see blogMediaService / blogIngestionService). Raw
+// idempotent DDL with DB-side defaults, sibling of ensureNetworkVideoSchema.
+// Order matters: blog_post_views references blog_posts(id).
+async function ensureBlogSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS blog_posts (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       source VARCHAR(64) NOT NULL DEFAULT 'training-blog',
+       slug VARCHAR(300) NOT NULL UNIQUE,
+       title TEXT,
+       excerpt TEXT,
+       author VARCHAR(200),
+       url TEXT,
+       thumbnail_url TEXT,
+       published_at TIMESTAMPTZ,
+       hubspot_post_id VARCHAR(64),
+       tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+       is_active BOOLEAN NOT NULL DEFAULT TRUE,
+       ingested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_blog_posts_active ON blog_posts (is_active)`,
+    `CREATE INDEX IF NOT EXISTS idx_blog_posts_tags ON blog_posts USING gin (tags)`,
+    `CREATE TABLE IF NOT EXISTS blog_post_views (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       blog_post_id UUID NOT NULL REFERENCES blog_posts(id) ON DELETE CASCADE,
+       first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       seen_count INTEGER NOT NULL DEFAULT 1,
+       last_timeline_card_id UUID,
+       context JSONB NOT NULL DEFAULT '{}'::jsonb,
+       UNIQUE (enrollment_id, blog_post_id)
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_bpv_enrollment ON blog_post_views (enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_bpv_enrollment_card ON blog_post_views (enrollment_id, last_timeline_card_id)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Blog schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Blog schema ensured');
+}
+
 // Enhance the existing (stub) `testimonial` curriculum type into the working
 // "Testimonials" type: relabel, publish its link-vs-random settings schema, and
 // mark it approved for the Composer. Idempotent; runs after the type is seeded.
@@ -1456,6 +1501,12 @@ async function start(): Promise<void> {
   await ensureNetworkVideoSchema();
   // Podcast Library (Podcast random personalized mode) — catalog + per-enrollment listen ledger.
   await ensurePodcastSchema();
+  // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
+  // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
+  await ensureBlogSchema();
+  import('./services/blog/blogIngestionService')
+    .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
+    .catch((err: any) => console.warn('[DB] Blog boot refresh skipped:', err?.message?.split('\n')[0]));
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();
