@@ -43,6 +43,26 @@ export interface ErpUpdateResult {
   durationMs: number;
 }
 
+export interface PlatformChangeEvent {
+  module: string;
+  endpoint: string;
+  method: 'PUT' | 'PATCH' | 'POST';
+  changeType: 'create' | 'update' | 'delete';
+  payload: Record<string, unknown>;
+  callerRole: string;           // REQ-003: role attributed to the change
+  correlationId: string;
+}
+
+export interface RealtimeSyncResult {
+  module: string;
+  endpoint: string;
+  correlationId: string;
+  synced: boolean;
+  heldForApproval: boolean;
+  attempts: number;
+  durationMs: number;
+}
+
 export interface OAuthTokenCache {
   accessToken: string;
   expiresAt: number;
