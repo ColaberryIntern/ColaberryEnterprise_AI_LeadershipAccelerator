@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { runtimeApi, RtOpen, Readiness, PromptEval } from './runtimeApi';
 import VideoEmbed from '../../../components/timeline/VideoEmbed';
+import { lessonDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 
@@ -43,7 +44,7 @@ const RuntimeWorkspace: React.FC = () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
         setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed');
-        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
       } catch { setError('Could not open this activity.'); }
     })();
   }, [cardId]);
@@ -55,6 +56,9 @@ const RuntimeWorkspace: React.FC = () => {
   const isVideo = VIDEO_BANDS.includes(band);
   const isLab = band === 'promptlab';
   const isReflect = ['reflection', 'survey', 'question'].includes(band);
+  // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
+  // beats the card's raw title everywhere the student sees it.
+  const displayTitle = card?.content?.title || card?.title || '';
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -95,13 +99,22 @@ const RuntimeWorkspace: React.FC = () => {
       <style>{runtimeCss}</style>
       <header className="rt-top">
         <button className="rt-back" onClick={() => navigate('/portal/classroom')} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
-        <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{card.title}</div></div>
+        <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
         <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>
       </header>
 
       <div className="rt-body">
         {/* CENTER — activity */}
         <main className="rt-mid">
+          {/* Hero — the type's picture with the lesson title ON the image (video bands keep their player). */}
+          {!isVideo && card.type_thumbnail && (
+            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+              <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
+              <div style={{ position: 'absolute', left: 16, right: 16, bottom: 12, color: '#fff', fontWeight: 800, fontSize: 20, lineHeight: 1.25, textShadow: '0 1px 3px rgba(0,0,0,.45)' }}>{displayTitle}</div>
+            </div>
+          )}
+
           {isVideo && (
             <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : null} />
           )}
@@ -130,8 +143,15 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
 
+          {/* The workspace OPENS with the saved lesson (same content as the card drawer),
+              so the student reads it here and asks the Mentor about it. */}
           {!isVideo && !isLab && !isReflect && (
-            <div className="rt-card">{card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}</div>
+            <div className="rt-card">
+              {card.content?.summary && <p>{card.content.summary}</p>}
+              {card.content?.body_html
+                ? <iframe title="Lesson" sandbox="" srcDoc={lessonDoc(card.content.body_html)} style={{ width: '100%', border: 0, minHeight: 420, background: '#fff', borderRadius: 8 }} />
+                : card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
+            </div>
           )}
 
           {artifact && <div className="rt-artifact"><div className="rt-lab">Portfolio artifact created</div><b>{artifact.title}</b><p className="rt-muted">{artifact.summary}</p></div>}
