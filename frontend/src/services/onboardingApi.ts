@@ -38,8 +38,16 @@ export interface OnboardingSchedule {
   is_explorer?: boolean;   // free Explorer tier — drives the Today conversion funnel
 }
 
+export interface ResumeProfileFields {
+  full_name?: string; title?: string; company?: string; company_size?: string; phone?: string; linkedin_url?: string;
+}
+export interface ResumePersonalization {
+  industry?: string; role?: string; seniority?: string; years_experience?: string; skills?: string; goals?: string; location?: string; ai_maturity_level?: string;
+}
 export interface OnboardingProfileView {
   prefill: Record<string, any>;
+  profile?: ResumeProfileFields;
+  personalization?: ResumePersonalization;
   linkedin_url: string | null;
   has_resume: boolean;
 }
@@ -125,7 +133,7 @@ export async function rsvpOpenHouse(id: string): Promise<{ ok: boolean; awarded?
 
 export async function ingestBackground(
   body: { resume_text?: string; linkedin_url?: string },
-): Promise<{ ok: boolean; parsed: boolean; prefill: Record<string, any>; linkedin_url: string | null }> {
+): Promise<{ ok: boolean; parsed: boolean; prefill: Record<string, any>; profile?: ResumeProfileFields; personalization?: ResumePersonalization; linkedin_url: string | null }> {
   const { data } = await portalApi.post('/api/portal/onboarding/ingest-background', body);
   return data;
 }

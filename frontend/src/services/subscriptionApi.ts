@@ -48,3 +48,10 @@ export async function cancelSubscription(reason: string): Promise<{ ok: boolean;
   const { data } = await portalApi.post('/api/portal/subscription/cancel', { reason });
   return data;
 }
+
+/** Called when the user returns from checkout — reports current status (and, on
+ *  dev, activates the recent pending sub). The Settings page polls this. */
+export async function confirmSubscriptionCheckout(): Promise<{ activated: boolean; view: SubscriptionView }> {
+  const { data } = await portalApi.post('/api/portal/subscription/confirm');
+  return data;
+}

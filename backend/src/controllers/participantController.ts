@@ -9,7 +9,7 @@ import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
 import { getStreak, claimStreak } from '../services/streakService';
 import { getPointsDrilldown } from '../services/pointsDrilldownService';
-import { getSubscription, startCheckout, cancelSubscription } from '../services/subscriptionService';
+import { getSubscription, startCheckout, cancelSubscription, confirmCheckout } from '../services/subscriptionService';
 import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
 import Enrollment from '../models/Enrollment';
@@ -68,6 +68,13 @@ export async function handleStartSubscriptionCheckout(req: Request, res: Respons
       : result.reason === 'enrollment_not_found' ? 404
       : result.reason === 'unknown_plan' ? 400 : 502;
     return res.status(status).json({ error: result.reason, message: result.message });
+  } catch (err) { next(err); }
+}
+
+export async function handleConfirmCheckout(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await confirmCheckout(req.participant!.sub);
+    res.json(result);
   } catch (err) { next(err); }
 }
 

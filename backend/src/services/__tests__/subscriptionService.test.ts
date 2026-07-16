@@ -1,5 +1,5 @@
 import {
-  PLANS, isSubscriptionRef, isNonPayingCohortName, getSubscription, startCheckout, activateByRef, cancelSubscription,
+  PLANS, planChargeAmount, isSubscriptionRef, isNonPayingCohortName, getSubscription, startCheckout, activateByRef, cancelSubscription, confirmCheckout,
 } from '../subscriptionService';
 import { Enrollment, Cohort, Subscription } from '../../models';
 import { findOrCreateCustomer, createPaymentLink } from '../paysimpleService';
@@ -25,8 +25,14 @@ describe('subscriptionService', () => {
   });
 
   describe('plans + helpers', () => {
-    it('offers annual $1,788 and monthly $199', () => {
+    it('derives the annual charge as per_month × 12, monthly as per_month', () => {
+      // Test amounts now; the ×12 rule keeps real prices correct on swap-in.
+      expect(planChargeAmount({ per_month: 0.15, cadence: 'year' })).toBe(1.8);
+      expect(planChargeAmount({ per_month: 0.19, cadence: 'month' })).toBe(0.19);
+      expect(planChargeAmount({ per_month: 149, cadence: 'year' })).toBe(1788);
+      expect(planChargeAmount({ per_month: 199, cadence: 'month' })).toBe(199);
       expect(PLANS.annual.price).toBe(1788);
+      expect(PLANS.annual.amount_cents).toBe(178800);
       expect(PLANS.annual.per_month).toBe(149);
       expect(PLANS.monthly.price).toBe(199);
     });
@@ -105,6 +111,8 @@ describe('subscriptionService', () => {
       expect(created.status).toBe('pending');
       expect(created.payment_ref).toMatch(/^SUB-e1-/);
       expect(created.amount_cents).toBe(178800);
+      // Checkout requests the real plan amount (test mode reduces it to $0.01 on dev).
+      expect((createPaymentLink as jest.Mock).mock.calls[0][0]).toMatchObject({ amount: 1788 });
     });
   });
 
@@ -148,6 +156,53 @@ describe('subscriptionService', () => {
       await activateByRef('SUB-e1-1', {}, NOW);
       expect(enrollment.update.mock.calls[0][0].cohort_id).toBe('existing');
       expect(Cohort.findAll).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('confirmCheckout', () => {
+    afterEach(() => { delete process.env.SUBSCRIPTION_ALLOW_RETURN_ACTIVATE; });
+
+    it('reports active without re-activating when already active', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([
+        { plan: 'annual', status: 'active', amount_cents: 180, started_at: new Date(NOW), current_period_end: new Date(NOW + 300 * 864e5), cancel_reason: null },
+      ]);
+      const r = await confirmCheckout('e1', NOW);
+      expect(r.activated).toBe(false);
+      expect(r.view.subscription?.status).toBe('active');
+    });
+
+    it('does NOT activate a pending sub when the dev flag is off (prod relies on the webhook)', async () => {
+      delete process.env.SUBSCRIPTION_ALLOW_RETURN_ACTIVATE;
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'explorer' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([]); // nothing active
+      const pending = { status: 'pending', created_at: new Date(NOW), payment_ref: 'SUB-x', update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(pending);
+      const r = await confirmCheckout('e1', NOW);
+      expect(r.activated).toBe(false);
+      expect(pending.update).not.toHaveBeenCalled();
+    });
+
+    it('activates the recent pending sub when the dev flag is on', async () => {
+      process.env.SUBSCRIPTION_ALLOW_RETURN_ACTIVATE = 'true';
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'explorer', cohort_id: 'c', enrolled_at: null, update: jest.fn() });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([]); // currentSubscription: none active
+      const pending = { status: 'pending', plan: 'annual', enrollment_id: 'e1', created_at: new Date(NOW), payment_ref: 'SUB-x', paysimple_payment_id: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(pending);
+      const r = await confirmCheckout('e1', NOW);
+      expect(r.activated).toBe(true);
+      expect(pending.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'active' }));
+    });
+
+    it('ignores a stale pending sub (older than the window) even with the flag on', async () => {
+      process.env.SUBSCRIPTION_ALLOW_RETURN_ACTIVATE = 'true';
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'explorer' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([]);
+      const stale = { status: 'pending', created_at: new Date(NOW - 60 * 60 * 1000), payment_ref: 'SUB-x', update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(stale);
+      const r = await confirmCheckout('e1', NOW);
+      expect(r.activated).toBe(false);
+      expect(stale.update).not.toHaveBeenCalled();
     });
   });
 

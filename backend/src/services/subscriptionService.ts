@@ -31,17 +31,25 @@ export interface PlanConfig {
   blurb: string;
 }
 
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
+/** The amount actually charged for a plan: per-month × 12 for annual, per-month
+ *  for monthly. Single source of truth so real prices ($149 / $199) drop in by
+ *  editing per_month only. */
+export function planChargeAmount(cfg: Pick<PlanConfig, 'per_month' | 'cadence'>): number {
+  return round2(cfg.cadence === 'year' ? cfg.per_month * 12 : cfg.per_month);
+}
+
+/** Build a plan from its per-month rate; price + amount_cents are derived. */
+function makePlan(id: SubscriptionPlan, label: string, per_month: number, cadence: 'year' | 'month', period_days: number, blurb: string): PlanConfig {
+  const price = planChargeAmount({ per_month, cadence });
+  return { id, label, per_month, cadence, period_days, blurb, price, amount_cents: Math.round(price * 100) };
+}
+
+// Real prices: annual $149/mo → $1,788/yr (per_month × 12), monthly $199/mo.
 export const PLANS: Record<SubscriptionPlan, PlanConfig> = {
-  annual: {
-    id: 'annual', label: 'Annual', price: 1788, amount_cents: 178800, cadence: 'year',
-    per_month: 149, period_days: 365,
-    blurb: 'Best value — just $149/mo, billed once a year. Full access to the program.',
-  },
-  monthly: {
-    id: 'monthly', label: 'Monthly', price: 199, amount_cents: 19900, cadence: 'month',
-    per_month: 199, period_days: 30,
-    blurb: 'Month-to-month at $199/mo. Cancel anytime.',
-  },
+  annual: makePlan('annual', 'Annual', 149, 'year', 365, 'Best value — pay once a year for full access to the program.'),
+  monthly: makePlan('monthly', 'Monthly', 199, 'month', 30, 'Month-to-month. Cancel anytime.'),
 };
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -142,7 +150,9 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) return { ok: false, reason: 'enrollment_not_found' };
 
-  const externalId = `${SUB_PREFIX}${enrollmentId}-${nowMs}`;
+  // PaySimple caps external_id at 50 chars. UUID-with-dashes (36) + prefix +
+  // timestamp overflowed (54); use the dashless hex (32) + base36 time → ~45.
+  const externalId = `${SUB_PREFIX}${enrollmentId.replace(/-/g, '')}-${nowMs.toString(36)}`;
   const nameParts = (enrollment.full_name || '').trim().split(/\s+/);
   const firstName = nameParts[0] || enrollment.full_name || 'Student';
   const lastName = nameParts.slice(1).join(' ') || '-';
@@ -158,7 +168,10 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
     const link = await createPaymentLink({
       externalId,
       cohortName: `${cfg.label} plan`,
-      amount: cfg.price,
+      // Real plan amount on prod (live mode). On dev (PAYMENT_MODE=test) the
+      // service reduces this to $0.01 so checkout can be tested without a real
+      // $1,788/$199 charge.
+      amount: planChargeAmount(cfg),
       customerFirstName: firstName,
       customerLastName: lastName,
       customerEmail: enrollment.email,
@@ -249,4 +262,34 @@ export async function cancelSubscription(enrollmentId: string, reason: string, n
     updated_at: now,
   });
   return { ok: true, access_until: sub.current_period_end ? new Date(sub.current_period_end).toISOString() : null };
+}
+
+const RETURN_ACTIVATE_WINDOW_MS = 30 * 60 * 1000; // only a checkout started in the last 30 min
+
+/**
+ * Called when the student returns from the PaySimple checkout (the app polls
+ * this). On PROD, activation is driven by the signed webhook — this just reports
+ * the current status so the UI updates once that lands. On DEV (env flag
+ * `SUBSCRIPTION_ALLOW_RETURN_ACTIVATE=true`), where the webhook can't reach the
+ * instance, it activates the most-recent pending subscription so the flow can be
+ * tested end-to-end. The flag is OFF in production, so no unpaid activation.
+ */
+export async function confirmCheckout(enrollmentId: string, nowMs: number = Date.now()): Promise<{ activated: boolean; view: SubscriptionView }> {
+  const current = await currentSubscription(enrollmentId);
+  if (current && current.status === 'active') {
+    return { activated: false, view: await getSubscription(enrollmentId, nowMs) };
+  }
+
+  if (process.env.SUBSCRIPTION_ALLOW_RETURN_ACTIVATE === 'true') {
+    const pending = await Subscription.findOne({
+      where: { enrollment_id: enrollmentId, status: 'pending' },
+      order: [['created_at', 'DESC']],
+    });
+    if (pending && (nowMs - new Date(pending.created_at).getTime()) < RETURN_ACTIVATE_WINDOW_MS) {
+      await activateByRef(pending.payment_ref, {}, nowMs);
+      return { activated: true, view: await getSubscription(enrollmentId, nowMs) };
+    }
+  }
+
+  return { activated: false, view: await getSubscription(enrollmentId, nowMs) };
 }
