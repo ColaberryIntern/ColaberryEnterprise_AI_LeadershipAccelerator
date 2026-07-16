@@ -26,6 +26,7 @@ export interface AdaptInput {
   experience?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Skills Course (skills_jar)
   capabilities?: string[] | null;   // the type's Parts — carried so the preview gates sections like the live render
+  thumbnail_url?: string | null;    // the type's fixed picture — hero image on non-video cards
 }
 
 export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {
@@ -38,6 +39,7 @@ export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {
     type: input.slug || 'preview',
     student_label: input.student_label || input.label || 'Activity',
     render_band: input.render_band || 'overview',
+    thumbnail_url: input.thumbnail_url ?? null,
     title: exp.title || input.label || 'Untitled',
     subtitle: input.subtitle ?? null,
     description: input.description ?? null,

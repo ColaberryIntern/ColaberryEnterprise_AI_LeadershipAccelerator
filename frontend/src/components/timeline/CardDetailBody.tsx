@@ -100,6 +100,15 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         )}
 
+        {/* The type's fixed picture (Studio thumbnail) as the card hero — every
+            card of the type shares the image; only the title varies. Video-ish
+            bands and Skills Course keep their own visual instead. */}
+        {!isVideo && !isSkillsJar && card.thumbnail_url && (
+          <div className="tld-player">
+            <img src={card.thumbnail_url} alt="" style={{ width: '100%', display: 'block', borderRadius: 12 }} />
+          </div>
+        )}
+
         {isSkillsJar && <SkillsJarPanel card={card} preview={preview} onComplete={onComplete} />}
 
         <div className="tld-about">

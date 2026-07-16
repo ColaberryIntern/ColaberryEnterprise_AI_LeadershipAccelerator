@@ -153,8 +153,9 @@ export async function listTimeline(programId?: string | null) {
   // The type's Parts (capabilities) live on the DB CurriculumTypeDefinition
   // (what the Studio "Parts" panel edits), keyed by slug — merged in so the
   // editor's "finished product" preview gates sections like the live render.
-  const capRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
+  const capRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
   const capsBySlug = new Map(capRows.map((c) => [c.slug, normalizeCapabilities(c.capabilities)]));
+  const thumbBySlug = new Map(capRows.map((c) => [c.slug, (c as any).thumbnail_url || null]));
   // Authorable types only — system types are engine-emitted, not hand-placed.
   const types = allTypes()
     .filter((t) => !t.system)
@@ -164,6 +165,7 @@ export async function listTimeline(programId?: string | null) {
       learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
       competencies: t.competencies, event: !!t.event,
       capabilities: capsBySlug.get(t.slug) || [],
+      thumbnail_url: thumbBySlug.get(t.slug) || null,
     }));
   return { scope: 'global', buckets: BUCKETS, cards, types };
 }

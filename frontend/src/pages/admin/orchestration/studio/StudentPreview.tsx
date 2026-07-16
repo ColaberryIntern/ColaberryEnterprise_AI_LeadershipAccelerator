@@ -20,13 +20,14 @@ interface Props {
   poster?: string;
   course?: { name: string | null; url: string | null } | null;
   parts?: string[] | null;
+  thumbnail?: string | null;   // the type's fixed picture — hero on non-video cards
 }
 
-const StudentPreview: React.FC<Props> = ({ band, label, experience, videoUrl, presenter, poster, course, parts }) => {
+const StudentPreview: React.FC<Props> = ({ band, label, experience, videoUrl, presenter, poster, course, parts, thumbnail }) => {
   const card = adaptToFeedCard({
     render_band: band, label, student_label: label, experience,
     video: { url: videoUrl || null, presenter: presenter || null, poster: poster || null },
-    course, capabilities: parts,
+    course, capabilities: parts, thumbnail_url: thumbnail ?? null,
   });
   return (
     <div className="tl-de">

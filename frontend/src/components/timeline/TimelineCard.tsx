@@ -29,6 +29,7 @@ export interface TimelineFeedCard {
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
+  thumbnail_url?: string | null;   // the type's fixed picture — hero image on non-video cards
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
