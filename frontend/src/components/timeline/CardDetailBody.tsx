@@ -48,8 +48,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   useEffect(() => { setContent(card.content || null); }, [card.id, card.content]);
   useEffect(() => {
     if (preview) return;
-    // Testimonials present the picked video's own description — never AI lesson notes.
-    if (card.type === 'testimonial') return;
+    // Testimonials + podcasts present the picked item's own description — never AI lesson notes.
+    if (card.type === 'testimonial' || card.type === 'podcast') return;
     // Only content-bearing cards refresh (video, or anything that already has content).
     const contentBearing = ['media', 'live_class', 'video_feedback'].includes(card.render_band) || !!card.content;
     if (!contentBearing) return;
@@ -96,7 +96,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
         {isVideo && (
           <div className="tld-player">
-            <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : null} onEnded={done || preview ? undefined : onComplete} />
+            <VideoEmbed source={source} title={card.video?.title || card.title} poster={card.video?.poster || null} badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null} onEnded={done || preview ? undefined : onComplete} />
           </div>
         )}
 

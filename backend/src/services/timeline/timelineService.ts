@@ -12,6 +12,7 @@ import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType } from './typeRegistry';
 import { selectTestimonialForEnrollment } from './networkVideoService';
+import { selectPodcastForEnrollment } from './podcastMediaService';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -217,6 +218,18 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       if (picked) {
         // The picked testimonial IS the card now — its title + description take
         // over the authored placeholder, and no stale AI lesson notes are shown.
+        fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+    // Any podcast card WITHOUT a fixed pasted link pulls a personalized episode from
+    // the Buzzsprout catalog (per student, non-repeating), recorded in podcast_views.
+    // A pasted link keeps its own video. Exact sibling of the testimonial block above.
+    if (fc.type === 'podcast' && !fc.video) {
+      const picked = await selectPodcastForEnrollment(enrollmentId, card);
+      if (picked) {
         fc.video = picked.video;
         if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
         if (picked.description) fc.description = picked.description;

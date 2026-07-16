@@ -41,6 +41,7 @@ export interface CreateCardInput {
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
   testimonial?: { mode?: string | null; category?: string | null } | null;   // Testimonials type: link vs random personalized
+  podcast?: { mode?: string | null; category?: string | null } | null;       // Podcast type: link vs random personalized episode
 }
 
 /** PURE — normalize an author's video input into the stored metadata shape, or
@@ -87,6 +88,18 @@ export function buildTestimonialMeta(testimonial: CreateCardInput['testimonial']
   return { mode, testimonial_category: cat };
 }
 
+/** PURE — normalize the Podcast source config into the stored metadata shape
+ *  (top-level `mode` + optional `podcast_category`), or null when no valid mode.
+ *  `random` = pick a matched episode per student from the `podcasts` catalog
+ *  (blank category = the whole catalog); `link` = play a pasted video/episode. */
+export function buildPodcastMeta(podcast: CreateCardInput['podcast']): { mode: 'link' | 'random'; podcast_category?: string } | null {
+  if (!podcast || typeof podcast !== 'object') return null;
+  const mode = podcast.mode === 'random' ? 'random' : podcast.mode === 'link' ? 'link' : null;
+  if (!mode) return null;
+  const cat = typeof podcast.category === 'string' && podcast.category.trim() ? podcast.category.trim().toLowerCase() : '';
+  return cat ? { mode, podcast_category: cat } : { mode };
+}
+
 /**
  * PURE — compose the DB attributes for a new card from its type registry entry
  * plus author overrides. No I/O, fully unit-testable. `order` is supplied by the
@@ -128,6 +141,7 @@ export function composeCardAttributes(
       ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content), content_at: new Date().toISOString() } : {}),
       ...(buildCourseMeta(input.course) ? { course: buildCourseMeta(input.course) } : {}),
       ...(buildTestimonialMeta(input.testimonial) || {}),   // top-level mode + testimonial_category
+      ...(buildPodcastMeta(input.podcast) || {}),           // top-level mode + optional podcast_category
     },
   };
 }
@@ -207,6 +221,16 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
       const t = buildTestimonialMeta(patch.testimonial);
       if (t) { meta.mode = t.mode; meta.testimonial_category = t.testimonial_category; }
       else { delete meta.mode; delete meta.testimonial_category; }
+    }
+    // NOTE: runs after the testimonial branch — a podcast save carries testimonial:null
+    // (which clears meta.mode) and then podcast re-sets it. The editor only ever sends
+    // the `podcast` key for podcast-type cards, so testimonial cards are never touched here.
+    if ('podcast' in patch) {
+      const p = buildPodcastMeta(patch.podcast);
+      if (p) {
+        meta.mode = p.mode;
+        if (p.podcast_category) meta.podcast_category = p.podcast_category; else delete meta.podcast_category;
+      } else { delete meta.mode; delete meta.podcast_category; }
     }
     if ('content' in patch) {
       const c = buildContentMeta(patch.content);
