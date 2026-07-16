@@ -27,7 +27,7 @@ export interface AdaptInput {
   course?: { name?: string | null; url?: string | null } | null;   // Skills Course (skills_jar)
   blog?: { url?: string | null; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type)
   capabilities?: string[] | null;   // the type's Parts — carried so the preview gates sections like the live render
-  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail — hero on non-video cards
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — carried so previews show the card's default image
 }
 
 export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {

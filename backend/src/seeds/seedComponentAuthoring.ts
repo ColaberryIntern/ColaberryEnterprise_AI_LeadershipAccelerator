@@ -17,14 +17,42 @@ import CurriculumTypeDefinition, { CurriculumTypeDefinitionAttributes } from '..
 
 type AuthoredFields = Partial<CurriculumTypeDefinitionAttributes>;
 
+// ── AI banner thumbnails ─────────────────────────────────────────────────────
+// One unique AI-generated banner per curriculum type (consistent enterprise art
+// direction + a small Colaberry wordmark chip), shipped as static assets in
+// frontend/public/thumbnails/curriculum-types/ and served by the frontend build
+// at /thumbnails/curriculum-types/<slug>.jpg. Replaces the deterministic
+// gradient templateThumbnail() SVGs (and the earlier hand-drawn Overview vista
+// — frontend/public/thumbnails/overview-vista.svg stays on disk but the AI
+// banner supersedes it as Overview's picture).
+// Regeneration pipeline: scripts/curriculum-type-thumbnails/ (see its README).
+const THUMBNAIL_SLUGS = [
+  'announcement', 'overview', 'live_class', 'event', 'video', 'testimonial',
+  'podcast', 'blog', 'warmup', 'knowledge_check', 'survey', 'prompt_lab',
+  'deep_dive', 'prompt_challenge', 'implementation_task', 'artifact_submission',
+  'ai_video_feedback', 'mock_interview', 'anthropic_skills_jar',
+  'certification_exercise', 'evaluation', 'question', 'discussion',
+  'project_task', 'build_story', 'github_sync', 'reflection',
+  'community_discussion', 'presentation', 'study_session', 'demo',
+  'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
+  'milestone', 'achievement', 'daily_streak', 'completion_badge',
+  // legacy pre-registry types (seedCurriculumTypeDefinitions.ts) still shown
+  // in the Experience Studio grid
+  'executive_reality_check', 'prompt_template', 'ai_strategy',
+];
+
+const thumbnailUrlFor = (slug: string): string => `/thumbnails/curriculum-types/${slug}.jpg`;
+
+const AI_THUMBNAILS: Record<string, AuthoredFields> = Object.fromEntries(
+  THUMBNAIL_SLUGS.map((slug) => [slug, { thumbnail_url: thumbnailUrlFor(slug) }]),
+);
+
 // ── overview ─────────────────────────────────────────────────────────────────
-// Fixed teal "vista" watermark (aerial view over land + water). Lives as a real
-// static asset — frontend/public/thumbnails/overview-vista.svg — served at this
-// short URL, so BOTH the Library <img> and the prompt-driven thumbnail renderer
-// can reference the exact same picture (an LLM can copy a short URL verbatim;
-// it cannot reliably reproduce a 3.4KB data-URI). Ships in the same deploy as
-// this seed, so the switch from the interim data-URI is atomic.
-const OVERVIEW_THUMBNAIL_URL = '/thumbnails/overview-vista.svg';
+// Overview's picture is its AI banner (short static URL, so BOTH the Library
+// <img> and the prompt-driven thumbnail renderer reference the exact same
+// picture — an LLM can copy a short URL verbatim; it cannot reliably reproduce
+// a data-URI).
+const OVERVIEW_THUMBNAIL_URL = thumbnailUrlFor('overview');
 
 // Zero author input: the runtime prepends the week's Blueprint ("WEEK CONTEXT",
 // see getBlueprintContext) and — for SECTION_ROSTER_TYPES — the week's actual
@@ -62,6 +90,7 @@ const OVERVIEW_THUMBNAIL_RENDERER = [
 
 /** slug -> authored fields layered on top of the registry defaults. */
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
+  ...AI_THUMBNAILS,
   overview: {
     student_label: 'Overview',
     category: 'Learn',

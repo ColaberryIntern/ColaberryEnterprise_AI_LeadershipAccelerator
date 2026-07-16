@@ -30,7 +30,7 @@ export interface TimelineFeedCard {
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
-  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail — hero on non-video cards; fallback art when no poster
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -132,17 +132,18 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  // Poster background: a video card uses its own poster image, a blog card its
-  // post thumbnail (both darkened so the overlay text stays legible), and a
-  // media/blog card without its own art falls back to the type's Experience
-  // Studio thumbnail; every other kind uses its Design-E gradient.
-  const posterImg =
+  // Poster background precedence: a card's OWN art wins — a video card's poster
+  // (incl. podcast episode art / picked testimonial), a blog card's post
+  // thumbnail; otherwise EVERY card defaults to its curriculum type's AI banner
+  // (the Experience Studio thumbnail); the Design-E gradient is the last-resort
+  // fallback. Darkened so the overlay text stays legible.
+  const ownPoster =
     (v.kind === 'video' && card.video?.poster) ||
-    (card.type === 'blog' && card.blog?.thumbnail) ||
-    ((v.kind === 'video' || card.type === 'blog') && card.type_thumbnail) || null;
-  const posterStyle: React.CSSProperties = posterImg
+    (card.type === 'blog' && card.blog?.thumbnail) || null;
+  const posterUrl = ownPoster || card.type_thumbnail || null;
+  const posterStyle: React.CSSProperties = posterUrl
     ? {
-        backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterImg})`,
+        backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterUrl})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
       }
@@ -172,9 +173,15 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
     else onOpen?.(card);
   };
 
+  // The big watermark icon only decorates gradient tiles — real artwork
+  // (own poster or type banner) doesn't need it and reads cleaner without.
+  const watermark = posterUrl ? null : (
+    <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+  );
+
   const media = isSkillsJar ? (
     <div className="mthumb skilljar" style={posterStyle}>
-      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+      {watermark}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
       <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
@@ -188,7 +195,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
     </div>
   ) : (
     <button type="button" className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
-      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+      {watermark}
       {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
       {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
