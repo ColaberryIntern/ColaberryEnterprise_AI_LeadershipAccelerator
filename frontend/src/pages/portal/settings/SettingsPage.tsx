@@ -11,6 +11,7 @@ import {
   SettingsView, SettingsPreferences,
 } from '../../../services/portalSettingsApi';
 import SubscriptionSection from './SubscriptionSection';
+import EnrollmentSection from './EnrollmentSection';
 import PointsDrilldown from '../points/PointsDrilldown';
 import './SettingsPage.css';
 
@@ -28,8 +29,9 @@ const DEFAULT_PREFS: SettingsPreferences = {
   timezone: null, weekly_hours: null, primary_goal: null, preferred_contact: null, experience_level: null,
 };
 
-type SetTab = 'subscription' | 'profile' | 'points' | 'preferences' | 'account';
+type SetTab = 'enrollment' | 'subscription' | 'profile' | 'points' | 'preferences' | 'account';
 const SET_TABS: { id: SetTab; label: string }[] = [
+  { id: 'enrollment', label: 'Enrollment' },
   { id: 'subscription', label: 'Subscription' },
   { id: 'profile', label: 'Profile' },
   { id: 'points', label: 'Points' },
@@ -58,7 +60,9 @@ const SettingsPage: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try { return (localStorage.getItem('te-theme') as 'light' | 'dark') || 'light'; } catch { return 'light'; }
   });
-  const [tab, setTab] = useState<SetTab>('subscription');
+  // Enrollment first: Open House visitors land here to pick their class date
+  // (enroll), then lock the seat on the Subscription tab (pay).
+  const [tab, setTab] = useState<SetTab>('enrollment');
   const avatarRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLInputElement>(null);
 
@@ -255,6 +259,8 @@ const SettingsPage: React.FC = () => {
         </div>
 
         <div className="set-panel">
+        {tab === 'enrollment' && <EnrollmentSection onToast={flash} onGoToSubscription={() => setTab('subscription')} />}
+
         {tab === 'subscription' && <SubscriptionSection onToast={flash} />}
 
         {tab === 'profile' && (<>

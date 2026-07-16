@@ -1,5 +1,6 @@
 import {
   PLANS, planChargeAmount, isSubscriptionRef, isNonPayingCohortName, getSubscription, startCheckout, activateByRef, cancelSubscription, confirmCheckout,
+  billingAnchorMs, periodEndMs,
 } from '../subscriptionService';
 import { Enrollment, Cohort, Subscription } from '../../models';
 import { findOrCreateCustomer, createPaymentLink } from '../paysimpleService';
@@ -22,6 +23,9 @@ describe('subscriptionService', () => {
     (env as any).paysimpleApiUser = 'u';
     (env as any).paysimpleApiKey = 'k';
     (env as any).paymentMode = 'test';
+    // Defaults: no cohorts configured. Tests override per-case.
+    (Cohort.findAll as jest.Mock).mockResolvedValue([]);
+    (Cohort.findByPk as jest.Mock).mockResolvedValue(null);
   });
 
   describe('plans + helpers', () => {
@@ -49,6 +53,29 @@ describe('subscriptionService', () => {
     });
   });
 
+  describe('billing anchor', () => {
+    it('anchors an early payment on the class start date', () => {
+      // NOW is July 15 — class starts July 23, so the period starts July 23.
+      expect(billingAnchorMs(NOW, '2026-07-23')).toBe(Date.UTC(2026, 6, 23));
+    });
+    it('anchors on payment time once class has started', () => {
+      expect(billingAnchorMs(NOW, '2026-07-01')).toBe(NOW);
+      expect(billingAnchorMs(NOW, '2026-07-15')).toBe(NOW); // class day, later that day
+    });
+    it('falls back to payment time without a valid class date', () => {
+      expect(billingAnchorMs(NOW, null)).toBe(NOW);
+      expect(billingAnchorMs(NOW, undefined)).toBe(NOW);
+      expect(billingAnchorMs(NOW, 'not-a-date')).toBe(NOW);
+    });
+    it('computes period end as +1 calendar month/year with end-of-month clamping', () => {
+      expect(periodEndMs(Date.UTC(2026, 6, 23), 'month')).toBe(Date.UTC(2026, 7, 23));  // 7/23 → 8/23
+      expect(periodEndMs(Date.UTC(2026, 11, 15), 'month')).toBe(Date.UTC(2027, 0, 15)); // year boundary
+      expect(periodEndMs(Date.UTC(2027, 0, 31), 'month')).toBe(Date.UTC(2027, 1, 28));  // Jan 31 → Feb 28
+      expect(periodEndMs(Date.UTC(2026, 6, 23), 'year')).toBe(Date.UTC(2027, 6, 23));
+      expect(periodEndMs(Date.UTC(2028, 1, 29), 'year')).toBe(Date.UTC(2029, 1, 28));   // leap day → Feb 28
+    });
+  });
+
   describe('getSubscription', () => {
     it('an Explorer with no plan needs a subscription', async () => {
       (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'explorer' });
@@ -68,6 +95,18 @@ describe('subscriptionService', () => {
       expect(v.subscription?.status).toBe('active');
       expect(v.subscription?.next_payment?.in_days).toBe(20);
       expect(v.needs_subscription).toBe(false);
+    });
+
+    it('reports the class the payment counts toward (class_start)', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'explorer' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([]);
+      (Cohort.findAll as jest.Mock).mockResolvedValue([
+        { id: 'c-july', name: 'Cohort - July 2026', status: 'open', start_date: '2026-07-23' },
+      ]);
+      const v = await getSubscription('e1', NOW); // July 15 — class is still ahead
+      expect(v.class_start).toEqual({
+        cohort_id: 'c-july', cohort_name: 'Cohort - July 2026', start_date: '2026-07-23', is_future: true,
+      });
     });
 
     it('a canceled plan retains access until the period end', async () => {
@@ -140,7 +179,9 @@ describe('subscriptionService', () => {
 
       const subUpdate = sub.update.mock.calls[0][0];
       expect(subUpdate.status).toBe('active');
-      expect(subUpdate.current_period_end.getTime()).toBe(NOW + 30 * 864e5);
+      // No class start date on the cohort → anchored on payment time, +1 calendar month.
+      expect(subUpdate.started_at.getTime()).toBe(NOW);
+      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 15, 12));
       const enrUpdate = enrollment.update.mock.calls[0][0];
       expect(enrUpdate.enrollment_type).toBe('standard'); // drops the Week-0 gate
       expect(enrUpdate.tier).toBe('member');
@@ -156,6 +197,50 @@ describe('subscriptionService', () => {
       await activateByRef('SUB-e1-1', {}, NOW);
       expect(enrollment.update.mock.calls[0][0].cohort_id).toBe('existing');
       expect(Cohort.findAll).not.toHaveBeenCalled();
+    });
+
+    it('anchors the period on the class start date when paying early (pay 7/20 → month runs 7/23 → 8/23)', async () => {
+      const payTime = Date.UTC(2026, 6, 20, 15); // July 20, class starts July 23
+      const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const enrollment = { cohort_id: 'c-july', enrolled_at: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'c-july', name: 'Cohort - July 2026', start_date: '2026-07-23' });
+      await activateByRef('SUB-e1-1', { amount: 199 }, payTime);
+
+      const subUpdate = sub.update.mock.calls[0][0];
+      expect(subUpdate.started_at.getTime()).toBe(Date.UTC(2026, 6, 23));            // class day, not pay day
+      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 7, 23));    // 8/23, not 8/20
+      // The enrollment still records the real payment date.
+      expect(enrollment.update.mock.calls[0][0].enrolled_at.getTime()).toBe(payTime);
+    });
+
+    it('anchors on payment time when the class has already started', async () => {
+      const payTime = Date.UTC(2026, 7, 1, 10); // Aug 1, class started July 23
+      const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const enrollment = { cohort_id: 'c-july', enrolled_at: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'c-july', name: 'Cohort - July 2026', start_date: '2026-07-23' });
+      await activateByRef('SUB-e1-1', {}, payTime);
+
+      const subUpdate = sub.update.mock.calls[0][0];
+      expect(subUpdate.started_at.getTime()).toBe(payTime);
+      expect(subUpdate.current_period_end.getTime()).toBe(Date.UTC(2026, 8, 1, 10));
+    });
+
+    it('reroutes a paying Explorer out of the Explorer bucket into the paid cohort', async () => {
+      const sub = { status: 'pending', plan: 'monthly', enrollment_id: 'e1', paysimple_payment_id: null, update: jest.fn() };
+      const enrollment = { cohort_id: 'c-explorer', enrolled_at: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'c-explorer', name: 'Explorer — Prospects', start_date: '2026-05-01' });
+      (Cohort.findAll as jest.Mock).mockResolvedValue([{ id: 'c-july', name: 'Cohort - July 2026', status: 'open', start_date: '2026-07-23' }]);
+      await activateByRef('SUB-e1-1', {}, NOW); // July 15
+
+      expect(enrollment.update.mock.calls[0][0].cohort_id).toBe('c-july'); // not the Explorer bucket
+      // ...and the anchor uses the PAID cohort's start date, not the bucket's.
+      expect(sub.update.mock.calls[0][0].started_at.getTime()).toBe(Date.UTC(2026, 6, 23));
     });
   });
 

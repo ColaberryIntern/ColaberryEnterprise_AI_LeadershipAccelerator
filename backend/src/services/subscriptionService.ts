@@ -57,6 +57,40 @@ const SUB_PREFIX = 'SUB-';
 export const isSubscriptionRef = (externalId: string | undefined | null): boolean =>
   !!externalId && externalId.startsWith(SUB_PREFIX);
 
+/**
+ * Billing anchor: paying early never costs time. If the payment lands BEFORE
+ * the class start date, the billing period starts on the class start date —
+ * pay on 7/20 for a class starting 7/23 and the month runs 7/23 → 8/23, not
+ * 7/20 → 8/20. If payment lands on/after class start, it anchors on payment
+ * time as before. `cohortStartDate` is the cohorts.start_date DATEONLY
+ * ('YYYY-MM-DD'), parsed as UTC midnight; missing/invalid dates fall back to
+ * payment time (never blocks an activation).
+ */
+export function billingAnchorMs(paymentMs: number, cohortStartDate?: string | null): number {
+  if (!cohortStartDate) return paymentMs;
+  const startMs = Date.parse(`${String(cohortStartDate).slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(startMs)) return paymentMs;
+  return Math.max(paymentMs, startMs);
+}
+
+/**
+ * End of a billing period: +1 calendar month (monthly) or +1 calendar year
+ * (annual) from the anchor — "a month" means the same day next month (7/23 →
+ * 8/23), clamped to the last day when the target month is shorter (1/31 →
+ * 2/28). Calendar math replaces the old fixed 30/365-day window so the period
+ * end matches what a subscriber expects.
+ */
+export function periodEndMs(anchorMs: number, cadence: 'year' | 'month'): number {
+  const d = new Date(anchorMs);
+  const targetYear = cadence === 'year' ? d.getUTCFullYear() + 1 : d.getUTCFullYear();
+  const targetMonth = cadence === 'year' ? d.getUTCMonth() : d.getUTCMonth() + 1;
+  const lastDayOfTarget = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  return Date.UTC(
+    targetYear, targetMonth, Math.min(d.getUTCDate(), lastDayOfTarget),
+    d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds(),
+  );
+}
+
 /** A cohort a PAYING subscriber must never be dropped into: demo/test fixtures,
  *  or the free Explorer / prospect holding cohorts. */
 export function isNonPayingCohortName(name: string | null | undefined): boolean {
@@ -72,8 +106,26 @@ async function resolveTargetCohort(): Promise<Cohort | null> {
     const c = await Cohort.findByPk(override);
     if (c) return c;
   }
-  const open = await Cohort.findAll({ where: { status: 'open' }, order: [['start_date', 'ASC']], limit: 10 });
+  const open = (await Cohort.findAll({ where: { status: 'open' }, order: [['start_date', 'ASC']], limit: 10 })) || [];
   return open.find((c: any) => !isNonPayingCohortName(c.name)) || null;
+}
+
+/**
+ * The paid cohort this enrollment lands in on payment: the student's own
+ * selection (Settings → Enrollment tab sets enrollment.cohort_id) when it is a
+ * real paid cohort; the default target when they have none. An Explorer whose
+ * cohort_id points at the Explorer/prospect/demo bucket is REROUTED to the real
+ * paid cohort — previously a paying Explorer silently stayed in the Explorer
+ * bucket. An unknown cohort_id (row deleted) is left untouched (no reroute).
+ */
+async function resolvePaidCohortFor(enrollment: { cohort_id?: string | null } | null): Promise<Cohort | null> {
+  if (enrollment?.cohort_id) {
+    const current = await Cohort.findByPk(enrollment.cohort_id);
+    if (!current) return null; // conservative: keep the assignment we can't inspect
+    if (!isNonPayingCohortName((current as any).name)) return current;
+    // Explorer/demo bucket → fall through to the real paid cohort.
+  }
+  return resolveTargetCohort();
 }
 
 /** The student's current subscription = newest non-failed row. */
@@ -89,6 +141,10 @@ async function currentSubscription(enrollmentId: string): Promise<Subscription |
 export interface SubscriptionView {
   plans: PlanConfig[];
   needs_subscription: boolean;   // true for Explorers with no active plan
+  /** The class the student's payment counts toward — powers the "your billing
+   *  month starts on your class start date" note. Null when no paid cohort is
+   *  configured. is_future = class hasn't started yet (early-pay anchor applies). */
+  class_start: null | { cohort_id: string; cohort_name: string; start_date: string; is_future: boolean };
   subscription: null | {
     plan: SubscriptionPlan;
     status: string;
@@ -103,13 +159,26 @@ export interface SubscriptionView {
 }
 
 export async function getSubscription(enrollmentId: string, nowMs: number = Date.now()): Promise<SubscriptionView> {
-  const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['enrollment_type'] });
+  const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['enrollment_type', 'cohort_id'] });
   const isExplorer = (enrollment as any)?.enrollment_type === 'explorer';
   const sub = await currentSubscription(enrollmentId);
   const plans = [PLANS.annual, PLANS.monthly];
 
+  // The class this student's payment counts toward (their selection, else the
+  // default target cohort) — lets the UI explain the early-pay billing anchor.
+  const paidCohort = enrollment ? await resolvePaidCohortFor(enrollment as any) : null;
+  const startDate = paidCohort && (paidCohort as any).start_date ? String((paidCohort as any).start_date).slice(0, 10) : null;
+  const class_start = paidCohort && startDate
+    ? {
+        cohort_id: (paidCohort as any).id,
+        cohort_name: (paidCohort as any).name,
+        start_date: startDate,
+        is_future: Date.parse(`${startDate}T00:00:00Z`) > nowMs,
+      }
+    : null;
+
   if (!sub || sub.status === 'pending') {
-    return { plans, needs_subscription: isExplorer, subscription: null };
+    return { plans, needs_subscription: isExplorer, class_start, subscription: null };
   }
 
   const periodEnd = sub.current_period_end ? new Date(sub.current_period_end) : null;
@@ -122,6 +191,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
   return {
     plans,
     needs_subscription: isExplorer && !active,
+    class_start,
     subscription: {
       plan: sub.plan,
       status: sub.status,
@@ -213,11 +283,20 @@ export async function activateByRef(
 
   const cfg = PLANS[sub.plan] || PLANS.monthly;
   const now = new Date(nowMs);
-  const periodEnd = new Date(nowMs + cfg.period_days * DAY_MS);
+
+  // Anchor the billing period to the class start date: the student's paid
+  // cohort is resolved FIRST so an early payment starts its period on class
+  // day (pay 7/20, class 7/23 → period 7/23 → 8/23). Paying early only locks
+  // the seat sooner — it never shortens the first month.
+  const enrollment = await Enrollment.findByPk(sub.enrollment_id);
+  const cohort = enrollment ? await resolvePaidCohortFor(enrollment) : null;
+  const cohortStart = cohort && (cohort as any).start_date ? String((cohort as any).start_date) : null;
+  const anchorMs = billingAnchorMs(nowMs, cohortStart);
+  const periodEnd = new Date(periodEndMs(anchorMs, cfg.cadence));
 
   await sub.update({
     status: 'active',
-    started_at: now,
+    started_at: new Date(anchorMs),
     current_period_end: periodEnd,
     paysimple_payment_id: opts.paymentId != null ? String(opts.paymentId) : sub.paysimple_payment_id,
     canceled_at: null,
@@ -227,19 +306,17 @@ export async function activateByRef(
 
   // Convert Explorer → paying member. Flipping enrollment_type off 'explorer'
   // drops the Week-0 timeline gate and the Projects demo lock automatically.
-  const enrollment = await Enrollment.findByPk(sub.enrollment_id);
   if (enrollment) {
-    const cohort = enrollment.cohort_id ? null : await resolveTargetCohort();
     await enrollment.update({
       enrollment_type: 'standard',
       tier: 'member',
       payment_status: 'paid',
       status: 'active',
       portal_enabled: true,
-      cohort_id: enrollment.cohort_id || (cohort ? cohort.id : enrollment.cohort_id),
+      cohort_id: cohort ? cohort.id : enrollment.cohort_id,
       amount_paid: typeof opts.amount === 'number' && opts.amount > 0 ? opts.amount : cfg.price,
       payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
-      enrolled_at: enrollment.enrolled_at || now,
+      enrolled_at: enrollment.enrolled_at || now, // actual payment date, not the anchor
     });
   }
   return sub;
