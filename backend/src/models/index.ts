@@ -152,6 +152,7 @@ import Project from './Project';
 import ProjectArtifact from './ProjectArtifact';
 import ShowcaseArtifact from './ShowcaseArtifact';
 import Artifact from './Artifact';
+import BuildLogDraft from './BuildLogDraft';
 import ProposedAgentAction from './ProposedAgentAction';
 import AgentWriteAudit from './AgentWriteAudit';
 import StrategicInitiative from './StrategicInitiative';
@@ -217,6 +218,7 @@ import InboxStyleProfile from './InboxStyleProfile';
 import InboxLearningEvent from './InboxLearningEvent';
 import InboxDigestLog from './InboxDigestLog';
 import InboxAuditLog from './InboxAuditLog';
+import CoraReplyLog from './CoraReplyLog';
 import InboxOpportunityScore from './InboxOpportunityScore';
 import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
 import InboxSurfacePreference from './InboxSurfacePreference';
@@ -299,6 +301,8 @@ import CommunityLike from './CommunityLike';
 import CommunityPostReport from './CommunityPostReport';
 import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
 import CommunityPointsEvent from './CommunityPointsEvent';
+import CommunityNotification from './CommunityNotification';
+import CommunityDigestLog from './CommunityDigestLog';
 import CommunityEvent from './CommunityEvent';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
@@ -752,6 +756,11 @@ ShowcaseArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' })
 Project.hasMany(Artifact, { foreignKey: 'project_id', as: 'artifacts', onDelete: 'CASCADE' });
 Artifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+Project.hasMany(BuildLogDraft, { foreignKey: 'project_id', as: 'buildLogDrafts', onDelete: 'CASCADE' });
+BuildLogDraft.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+Artifact.hasOne(BuildLogDraft, { foreignKey: 'source_artifact_id', as: 'buildLogDraft' });
+BuildLogDraft.belongsTo(Artifact, { foreignKey: 'source_artifact_id', as: 'sourceArtifact' });
+
 ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
 
@@ -1073,6 +1082,7 @@ export {
   ProjectArtifact,
   ShowcaseArtifact,
   Artifact,
+  BuildLogDraft,
   ProposedAgentAction,
   AgentWriteAudit,
   StrategicInitiative,
@@ -1115,6 +1125,7 @@ export {
   InboxLearningEvent,
   InboxDigestLog,
   InboxAuditLog,
+  CoraReplyLog,
   InboxOpportunityScore,
   InboxFalseNegativeFeedback,
   InboxSurfacePreference,
@@ -1198,6 +1209,8 @@ export {
   CommunityPostReport,
   CommunityLeaderboardEntry,
   CommunityPointsEvent,
+  CommunityNotification,
+  CommunityDigestLog,
   CommunityEvent,
   StudentPointsEvent,
   OpenHouseEvent,
@@ -1293,6 +1306,13 @@ CommunityLeaderboardEntry.belongsTo(CommunityMember, { foreignKey: 'member_id', 
 
 CommunityMember.hasMany(CommunityPointsEvent, { foreignKey: 'member_id', as: 'pointsEvents' });
 CommunityPointsEvent.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityMember.hasMany(CommunityNotification, { foreignKey: 'member_id', as: 'notifications' });
+CommunityNotification.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+CommunityNotification.belongsTo(CommunityMember, { foreignKey: 'actor_member_id', as: 'actor' });
+
+CommunityMember.hasMany(CommunityDigestLog, { foreignKey: 'member_id', as: 'digestLogs' });
+CommunityDigestLog.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
 
 Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
 CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });

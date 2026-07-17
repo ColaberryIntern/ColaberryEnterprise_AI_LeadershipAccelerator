@@ -19,6 +19,7 @@ jest.mock('../../models/CommunityPostReport', () => ({ findOrCreate: jest.fn(), 
 jest.mock('../../models/CommunityComment', () => ({}));
 jest.mock('../../models/CommunityLike', () => ({}));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
+jest.mock('../../models/CommunityNotification', () => ({}));
 
 import { reportPost } from '../../services/communityService';
 import { listReportedPosts, removePost } from '../../services/communityModerationService';

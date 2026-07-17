@@ -6,6 +6,7 @@ class ArchitectEvaluation extends Model {
   declare enrollment_id: string;
   declare week_number: number;
   declare overall_score: number | null;
+  declare interview_score: number | null;
   declare progress_summary: string | null;
   declare strengths: string[];
   declare next_steps: string[];
@@ -21,6 +22,9 @@ ArchitectEvaluation.init(
     enrollment_id:    { type: DataTypes.UUID, allowNull: false },
     week_number:      { type: DataTypes.INTEGER, allowNull: false },
     overall_score:    { type: DataTypes.INTEGER, allowNull: true },
+    // Mirrors interview_sessions.total_score for the same enrollment+week
+    // (BC #10088637794) — null when no interview was completed that week.
+    interview_score:  { type: DataTypes.INTEGER, allowNull: true },
     progress_summary: { type: DataTypes.TEXT, allowNull: true },
     strengths:        { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
     next_steps:       { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },

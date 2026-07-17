@@ -6,11 +6,13 @@
 jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
 jest.mock('../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../models/CommunityPost', () => ({ create: jest.fn(), findAll: jest.fn(), findByPk: jest.fn() }));
+jest.mock('../../models/CommunityNotification', () => ({ bulkCreate: jest.fn() }));
 
 import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
+import CommunityNotification from '../../models/CommunityNotification';
 
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
@@ -18,6 +20,7 @@ const findAllMembers = CommunityMember.findAll as jest.Mock;
 const createPostMock = CommunityPost.create as jest.Mock;
 const findAllPosts = CommunityPost.findAll as jest.Mock;
 const findByPkPost = CommunityPost.findByPk as jest.Mock;
+const bulkCreateNotifications = CommunityNotification.bulkCreate as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -89,6 +92,7 @@ describe('createPost', () => {
     expect(createPostMock).toHaveBeenCalledWith(
       expect.objectContaining({ member_id: memberId, cohort_id: cohortId, body: 'Shipped my requirements today!' })
     );
+    expect(bulkCreateNotifications).not.toHaveBeenCalled();
   });
 
   it('failure path: rejects a mention outside the author\'s cohort', async () => {
@@ -123,6 +127,9 @@ describe('createPost', () => {
     const result = await createPost(enrollmentId, { body: 'cc @peer', mentioned_member_ids: ['peer-member'] });
 
     expect(result.mentioned_member_ids).toEqual(['peer-member']);
+    expect(bulkCreateNotifications).toHaveBeenCalledWith([
+      { member_id: 'peer-member', actor_member_id: memberId, notification_type: 'mention', source_type: 'post', source_id: 'post-2' },
+    ]);
   });
 
   it('happy path (REQ-C4): passes min_level through to the created post, defaulting to 0 when omitted', async () => {
