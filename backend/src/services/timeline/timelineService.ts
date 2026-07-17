@@ -148,7 +148,7 @@ export interface TimelineFeed {
   cohort_id: string | null;
   buckets: string[];
   cards: FeedCard[];
-  is_explorer?: boolean;   // true = free Explorer tier (Week 0 only) — drives the enroll upsell
+  is_explorer?: boolean;   // true = free Explorer tier — drives the enroll upsell (content gate is EXPLORER_WEEK0_ONLY, off by default)
 }
 
 /**
@@ -198,12 +198,15 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return { cohort_id: null, buckets: [...BUCKET_ORDER], cards: [] };
   }
 
-  // Free lead-magnet gate: Explorers (unenrolled prospects) get ONLY the Week 0
-  // "AI Preview" tier for free; paid enrollments see the full curriculum. Gated
-  // here so the paid weeks stay behind enrollment.
+  // Free lead-magnet gate: Explorers (unenrolled prospects) normally get ONLY the
+  // Week 0 "AI Preview" tier; paid enrollments see the full curriculum.
+  // LAUNCH POLICY (2026-07, temporary): anyone who signs up gets FULL free access,
+  // so Explorers see the same curriculum as paid. Re-enable the free-preview gate
+  // by setting EXPLORER_WEEK0_ONLY=true (then Explorers see Week 0 only again).
   const isExplorer = (enrollment as any).enrollment_type === 'explorer';
+  const gateExplorersToWeek0 = process.env.EXPLORER_WEEK0_ONLY === 'true';
   const allCards = await getGlobalCards();
-  const cards = isExplorer ? allCards.filter((c) => c.week === 0) : allCards;
+  const cards = (isExplorer && gateExplorersToWeek0) ? allCards.filter((c) => c.week === 0) : allCards;
 
   const progressRows = await TimelineCardProgress.findAll({
     where: { enrollment_id: enrollmentId, card_id: { [Op.in]: cards.map((c) => c.id) } },
