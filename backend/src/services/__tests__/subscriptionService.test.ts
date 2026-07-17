@@ -2,7 +2,7 @@ import {
   PLANS, planChargeAmount, isSubscriptionRef, isNonPayingCohortName, getSubscription, startCheckout, activateByRef, cancelSubscription, confirmCheckout,
   billingAnchorMs, periodEndMs,
 } from '../subscriptionService';
-import { Enrollment, Cohort, Subscription } from '../../models';
+import { Enrollment, Cohort, Subscription, AccountCredit } from '../../models';
 import { findOrCreateCustomer, createPaymentLink } from '../paysimpleService';
 import { env } from '../../config/env';
 
@@ -11,6 +11,7 @@ jest.mock('../../models', () => ({
   Enrollment: { findByPk: jest.fn() },
   Cohort: { findByPk: jest.fn(), findAll: jest.fn() },
   Subscription: { findAll: jest.fn(), findOne: jest.fn(), create: jest.fn() },
+  AccountCredit: { findAll: jest.fn(), update: jest.fn() },
 }));
 jest.mock('../paysimpleService', () => ({ findOrCreateCustomer: jest.fn(), createPaymentLink: jest.fn() }));
 jest.mock('../openHouseService', () => ({ isDemoCohortName: (n: string) => /demo|test|sandbox/i.test(n || '') }));
@@ -26,6 +27,8 @@ describe('subscriptionService', () => {
     // Defaults: no cohorts configured. Tests override per-case.
     (Cohort.findAll as jest.Mock).mockResolvedValue([]);
     (Cohort.findByPk as jest.Mock).mockResolvedValue(null);
+    // Default: no account credit. Credit tests override per-case.
+    (AccountCredit.findAll as jest.Mock).mockResolvedValue([]);
   });
 
   describe('plans + helpers', () => {
@@ -109,6 +112,14 @@ describe('subscriptionService', () => {
       });
     });
 
+    it('reports available account credit (the $50 Open House deposit)', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'explorer' });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([]);
+      (AccountCredit.findAll as jest.Mock).mockResolvedValue([{ amount_cents: 5000 }]);
+      const v = await getSubscription('e1', NOW);
+      expect(v.available_credit_cents).toBe(5000);
+    });
+
     it('a canceled plan retains access until the period end', async () => {
       (Enrollment.findByPk as jest.Mock).mockResolvedValue({ enrollment_type: 'standard' });
       (Subscription.findAll as jest.Mock).mockResolvedValue([
@@ -145,13 +156,29 @@ describe('subscriptionService', () => {
       (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
       (Subscription.create as jest.Mock).mockResolvedValue({});
       const r = await startCheckout('e1', 'annual', NOW);
-      expect(r).toEqual({ ok: true, payment_link: 'https://pay.example/abc', plan: 'annual', amount: 1788 });
+      expect(r).toEqual({ ok: true, payment_link: 'https://pay.example/abc', plan: 'annual', amount: 1788, full_amount: 1788, applied_credit: 0 });
       const created = (Subscription.create as jest.Mock).mock.calls[0][0];
       expect(created.status).toBe('pending');
       expect(created.payment_ref).toMatch(/^SUB-e1-/);
       expect(created.amount_cents).toBe(178800);
+      expect(created.applied_credit_cents).toBe(0);
       // Checkout requests the real plan amount (test mode reduces it to $0.01 on dev).
       expect((createPaymentLink as jest.Mock).mock.calls[0][0]).toMatchObject({ amount: 1788 });
+    });
+
+    it('applies an available $50 credit to the charge and records it on the pending sub', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ full_name: 'Ada Lovelace', email: 'ada@x.io', company: 'X' });
+      (findOrCreateCustomer as jest.Mock).mockResolvedValue({ Id: 42 });
+      (createPaymentLink as jest.Mock).mockResolvedValue({ id: 'pl_1', payment_link: 'https://pay.example/abc' });
+      (Subscription.create as jest.Mock).mockResolvedValue({});
+      (AccountCredit.findAll as jest.Mock).mockResolvedValue([{ id: 'cr1', amount_cents: 5000 }]); // $50 available
+      const r = await startCheckout('e1', 'monthly', NOW);
+      // $199 monthly − $50 credit = $149 charged today; recurring price unchanged.
+      expect(r).toMatchObject({ ok: true, amount: 149, full_amount: 199, applied_credit: 50 });
+      expect((createPaymentLink as jest.Mock).mock.calls[0][0].amount).toBe(149);
+      const created = (Subscription.create as jest.Mock).mock.calls[0][0];
+      expect(created.amount_cents).toBe(19900);        // full recurring price kept
+      expect(created.applied_credit_cents).toBe(5000); // credit recorded for consumption on settle
     });
   });
 
@@ -187,6 +214,21 @@ describe('subscriptionService', () => {
       expect(enrUpdate.tier).toBe('member');
       expect(enrUpdate.payment_status).toBe('paid');
       expect(enrUpdate.cohort_id).toBe('c-july');
+    });
+
+    it('consumes the applied account credit when the payment settles', async () => {
+      const sub = { id: 'sub1', status: 'pending', plan: 'monthly', enrollment_id: 'e1', applied_credit_cents: 5000, paysimple_payment_id: null, update: jest.fn() };
+      const enrollment = { cohort_id: 'c-july', enrolled_at: null, update: jest.fn() };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(sub);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(enrollment);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue({ id: 'c-july', name: 'Cohort - July 2026', start_date: '2026-07-23' });
+      // consume: idempotency guard finds none applied, then one $50 row available.
+      (AccountCredit.findAll as jest.Mock).mockResolvedValueOnce([]).mockResolvedValueOnce([{ id: 'cr1', amount_cents: 5000 }]);
+      await activateByRef('SUB-e1-1', { amount: 149 }, NOW);
+      const [vals, opts] = (AccountCredit.update as jest.Mock).mock.calls[0];
+      expect(vals.status).toBe('applied');
+      expect(vals.applied_subscription_id).toBe('sub1');
+      expect(opts.where).toEqual({ id: ['cr1'] });
     });
 
     it('keeps an existing cohort assignment on activation', async () => {
