@@ -9,6 +9,8 @@ export interface PaymentLookup {
   amount_cents: number;
   refundable_cents: number;
   method: 'refund' | 'void';
+  refundable_now: boolean;       // false when a refund must wait for settlement
+  settles_on: string | null;     // estimated settle date (YYYY-MM-DD)
   email: string | null;
   name: string;
 }

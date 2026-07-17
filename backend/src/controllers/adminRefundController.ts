@@ -6,6 +6,8 @@ const STATUS_BY_REASON: Record<string, number> = {
   payment_not_found: 404,
   already_reversed: 409,
   invalid_amount: 400,
+  partial_unsupported: 400,
+  not_settled: 409,
   paysimple_error: 502,
 };
 

@@ -12,7 +12,6 @@ export default function AdminRefundsPage() {
   const [loading, setLoading] = useState(true);
   const [paymentId, setPaymentId] = useState('');
   const [lookup, setLookup] = useState<PaymentLookup | null>(null);
-  const [amount, setAmount] = useState('');           // dollars; blank = full remaining
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +33,6 @@ export default function AdminRefundsPage() {
     try {
       const p = await lookupPayment(id);
       setLookup(p);
-      setAmount((p.refundable_cents / 100).toFixed(2));
     } catch (err: any) {
       const code = err?.response?.data?.error;
       setError(code === 'payment_not_found' ? 'No PaySimple payment found with that ID.'
@@ -46,22 +44,23 @@ export default function AdminRefundsPage() {
   const onRefund = async () => {
     if (!lookup) return;
     setError(null); setNotice(null);
-    const amt = amount.trim() ? Number(amount) : undefined;
-    if (amt != null && (!Number.isFinite(amt) || amt <= 0)) { setError('Amount must be a positive dollar amount'); return; }
-    const label = `${lookup.method === 'void' ? 'void' : 'refund'} of ${amt != null ? money(Math.round(amt * 100)) : money(lookup.refundable_cents)} for ${lookup.name || lookup.email || lookup.id}`;
-    if (!window.confirm(`Confirm ${label}? This moves money via PaySimple and cannot be undone here.`)) return;
+    const label = `${lookup.method === 'void' ? 'void' : 'refund'} of ${money(lookup.refundable_cents)} for ${lookup.name || lookup.email || lookup.id}`;
+    if (!window.confirm(`Confirm full ${label}? This moves money via PaySimple and cannot be undone here.`)) return;
     setBusy(true);
     try {
-      const { refund } = await issueRefund({ payment_id: lookup.id, amount: amt, reason: reason.trim() || undefined });
+      const { refund } = await issueRefund({ payment_id: lookup.id, reason: reason.trim() || undefined });
       setNotice(`${refund.method === 'void' ? 'Voided' : 'Refunded'} ${money(refund.amount_cents)}${refund.voided_credit_cents ? ` · voided ${money(refund.voided_credit_cents)} account credit` : ''}.`);
-      setLookup(null); setPaymentId(''); setAmount(''); setReason('');
+      setLookup(null); setPaymentId(''); setReason('');
       fetchRefunds();
     } catch (err: any) {
       const code = err?.response?.data?.error;
+      const msg = err?.response?.data?.message;
       setError(code === 'already_reversed' ? 'That payment was already voided/refunded.'
-        : code === 'invalid_amount' ? (err?.response?.data?.message || 'That amount exceeds the refundable balance.')
-        : code === 'paysimple_error' ? `PaySimple refused the refund: ${err?.response?.data?.message || 'unknown error'}`
-        : err?.response?.data?.message || 'Refund failed.');
+        : code === 'not_settled' ? (msg || 'That payment has not settled yet — refund it after it settles.')
+        : code === 'partial_unsupported' ? (msg || 'Partial refunds are not supported.')
+        : code === 'invalid_amount' ? (msg || 'That exceeds the refundable balance.')
+        : code === 'paysimple_error' ? `PaySimple refused the refund: ${msg || 'unknown error'}`
+        : msg || 'Refund failed.');
       fetchRefunds(); // a failed row is recorded — surface it
     } finally { setBusy(false); }
   };
@@ -121,20 +120,22 @@ export default function AdminRefundsPage() {
               <div className="col-md-2"><div className="small text-muted">Amount</div><div className="fw-semibold">{money(lookup.amount_cents)}</div></div>
               <div className="col-md-2"><div className="small text-muted">Status</div><div><StatusBadge label={lookup.status} tone="neutral" /></div></div>
               <div className="col-md-2"><div className="small text-muted">Refundable</div><div className="fw-semibold">{money(lookup.refundable_cents)}</div></div>
-              <div className="col-md-3"><div className="small text-muted">Method</div><div><StatusBadge label={lookup.method === 'void' ? 'void (in window)' : 'refund'} tone={lookup.method === 'void' ? 'info' : 'primary'} /></div></div>
+              <div className="col-md-3"><div className="small text-muted">Method</div><div><StatusBadge label={lookup.method === 'void' ? 'void (in window)' : 'refund (full)'} tone={lookup.method === 'void' ? 'info' : 'primary'} /></div></div>
             </div>
-            <div className="row g-2 mt-1">
-              <div className="col-md-3">
-                <label className="form-label small fw-medium">Amount ($)</label>
-                <input className="form-control form-control-sm" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="full remaining" />
+            {!lookup.refundable_now && lookup.refundable_cents > 0 && (
+              <div className="alert alert-warning py-2 mt-2 mb-0">
+                This payment is <strong>{lookup.status}</strong> and hasn’t settled yet
+                {lookup.settles_on ? <> — a refund can be issued after it settles (<strong>~{lookup.settles_on}</strong>).</> : ' — a refund can be issued once it settles.'}
               </div>
-              <div className="col-md-6">
+            )}
+            <div className="row g-2 mt-1">
+              <div className="col-md-8">
                 <label className="form-label small fw-medium">Reason (optional)</label>
                 <input className="form-control form-control-sm" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. duplicate charge, customer request" />
               </div>
-              <div className="col-md-3 d-flex align-items-end">
-                <button className="btn btn-sm btn-danger w-100" disabled={busy || lookup.refundable_cents <= 0} onClick={onRefund}>
-                  {busy ? 'Processing…' : (lookup.method === 'void' ? 'Void payment' : 'Issue refund')}
+              <div className="col-md-4 d-flex align-items-end">
+                <button className="btn btn-sm btn-danger w-100" disabled={busy || !lookup.refundable_now} onClick={onRefund}>
+                  {busy ? 'Processing…' : (lookup.method === 'void' ? `Void ${money(lookup.refundable_cents)}` : `Refund ${money(lookup.refundable_cents)}`)}
                 </button>
               </div>
             </div>
