@@ -17,6 +17,7 @@ export const PINNED_LINKS: NavLink[] = [
 export const NAV_GROUPS: NavGroup[] = [
   { label: 'Revenue', links: [
     { path: '/admin/revenue', label: 'Revenue', icon: 'money-dollar-circle-line' },
+    { path: '/admin/refunds', label: 'Refunds', icon: 'refund-2-line' },
     { path: '/admin/pipeline', label: 'Pipeline', icon: 'filter-3-line' },
     { path: '/admin/opportunities', label: 'Opportunities', icon: 'line-chart-line' },
     { path: '/admin/leads', label: 'Leads', icon: 'group-line' },
