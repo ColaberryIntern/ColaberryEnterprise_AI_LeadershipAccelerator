@@ -10,6 +10,17 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Dashboard Revenue = real collected cash (PaySimple) + per-participant paid amount on Accelerator (2026-07-17)
+- [x] **Revenue KPI now sums actual amount_paid instead of count × $4,500; Accelerator Participants show each person's paid amount**
+  - Date: 2026-07-17
+  - Session: CC-20260717-p4x8
+  - What changed:
+    - `backend/src/services/cohortService.ts` — `getDashboardStats()` `totalRevenue` changed from `paidEnrollments * 4500` (hardcoded, retired price) to `Enrollment.sum('amount_paid', { where: { payment_status: 'paid', enrollment_type != 'explorer' } }) || 0` — actual collected cash. `amount_paid` is already populated straight from the PaySimple flow: `markEnrollmentPaid` (webhook `amount`) and subscription `activateByRef` (plan charge). So this reads real money received, per person, with no new tables/sync.
+    - `frontend/src/pages/admin/AdminAcceleratorPage.tsx` — Participants table Payment cell now renders `amount_paid` under the badge ("$1,788 paid"), and `EnrollmentInfo` gains `amount_paid?: number`. `listCohortEnrollments` already returns the full enrollment JSON (incl. `amount_paid`), so no backend list change was needed.
+  - Why: Ali after the 2026-07-16 open house — "payments will be made in PaySimple; make sure they flow through to Revenue and I can see who paid what," + per-participant paid amount on the Accelerator page.
+  - Verification: Static self-review against prod code (`Enrollment.amount_paid` numeric column confirmed present and populated by `markEnrollmentPaid`/`activateByRef`; `Enrollment.sum` returns number, `|| 0` guards null; frontend renders only when `amount_paid > 0`, matching the existing utm text style). Full `tsc --noEmit` + Dev 1 deploy verification via the Docker gate (no local toolchain on this host). Branch `workstream/paysimple-revenue` off origin/main.
+  - Notes: **Course-corrected mid-session.** Initial exploration mapped a STALE local branch (`chapter-quality-and-worker`, HEAD 725 commits behind origin/main) where the webhook discarded the amount and no amount field existed, and I over-built a payments-ledger + PaySimple-API-sync for that false premise. Reading origin/main (prod) showed prod ALREADY captures `amount_paid` + has a `Subscription` model handling the $149/$199 plans — so the correct fix is this 2-file change. The API-sync-matched-by-email idea remains a future option ONLY if payments are ever set up directly in PaySimple outside our checkout (then amount_paid wouldn't be captured). Revenue will read real collected cash (near $0 until the open-house cohort's payments settle), replacing the fictitious $76,500.
+
 ### Classroom timeline — uniform card size + Anthropic/SkillsJar play+Open; Studio↔timeline format contract (2026-07-13)
 - [x] **On top of PR #225's uniform 16:9 tiles: the Anthropic Skills Course card gets an external "Open" link beside ▶, plus a Studio↔timeline format contract for all curriculum types**
   - Date: 2026-07-13

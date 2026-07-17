@@ -138,8 +138,19 @@ export async function getDashboardStats() {
     (c) => c.status === 'open' && new Date(c.start_date) > new Date()
   ).length;
 
+  // Actual collected cash: sum of amount_paid across paid, non-Explorer
+  // enrollments. amount_paid is populated straight from the PaySimple payment
+  // flow — markEnrollmentPaid (webhook amount) and subscription activateByRef
+  // (plan charge) — so this is real money received, not the old count * $4,500
+  // estimate (that unit price was retired in the $149/mo offer pivot). Rows with
+  // no amount_paid (legacy/unset) contribute 0; SUM(null) coalesces to 0.
+  const collectedRevenue =
+    (await Enrollment.sum('amount_paid', {
+      where: { payment_status: 'paid', ...notExplorer } as any,
+    })) || 0;
+
   return {
-    totalRevenue: paidEnrollments * 4500,
+    totalRevenue: collectedRevenue,
     totalEnrollments,
     paidEnrollments,
     pendingInvoice,
