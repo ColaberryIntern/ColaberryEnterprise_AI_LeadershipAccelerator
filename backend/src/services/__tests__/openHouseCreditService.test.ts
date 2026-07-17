@@ -125,6 +125,21 @@ describe('openHouseCreditService', () => {
       expect(summary.credits_granted).toBe(2);
       expect(summary.credited_cents).toBe(10000);
     });
+
+    it('sums ACTUAL amounts when a payer paid more than $50 (full-year payer)', async () => {
+      (Cohort.findOne as jest.Mock).mockResolvedValue(JULY);
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([{ id: 'e1', cohort_id: 'c-july', update: jest.fn() }]);
+      const summary = await grantOpenHouseCreditsBatch(
+        [
+          { email: 'a@x.com', sourceEventId: 'ps-1', amountCents: 5000 },     // $50 deposit
+          { email: 'a@x.com', sourceEventId: 'ps-2', amountCents: 178800 },   // + $1,788 annual
+        ],
+        { grantedBy: 'oh', apply: true },
+      );
+      expect(summary.credits_granted).toBe(2);
+      expect(summary.credited_cents).toBe(183800); // $1,838, not 2×$50
+      expect(summary.outcomes[1].amountCents).toBe(178800);
+    });
   });
 
   describe('resolveDepositCohort', () => {
