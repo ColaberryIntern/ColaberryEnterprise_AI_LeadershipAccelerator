@@ -12,6 +12,7 @@ export interface RtCard {
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
   type_thumbnail?: string | null;   // the type's picture — hero banner with the title overlaid
+  week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 

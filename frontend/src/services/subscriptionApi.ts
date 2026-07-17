@@ -34,6 +34,9 @@ export interface SubscriptionView {
   /** The class this payment counts toward — billing is anchored to its start
    *  date, so paying early never shortens the first period. */
   class_start: { cohort_id: string; cohort_name: string; start_date: string; is_future: boolean } | null;
+  /** Unspent account credit (e.g. the $50 Open House deposit) applied to the
+   *  next payment. 0 when none. */
+  available_credit_cents: number;
   subscription: SubscriptionState | null;
 }
 
@@ -42,7 +45,7 @@ export async function fetchSubscription(): Promise<SubscriptionView> {
   return data;
 }
 
-export async function startSubscriptionCheckout(plan: PlanId): Promise<{ payment_link: string; plan: PlanId; amount: number }> {
+export async function startSubscriptionCheckout(plan: PlanId): Promise<{ payment_link: string; plan: PlanId; amount: number; full_amount?: number; applied_credit?: number }> {
   const { data } = await portalApi.post('/api/portal/subscription/checkout', { plan });
   return data;
 }

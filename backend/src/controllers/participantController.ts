@@ -65,7 +65,7 @@ export async function handleStartSubscriptionCheckout(req: Request, res: Respons
       return res.status(400).json({ error: 'plan must be "annual" or "monthly"' });
     }
     const result = await startCheckout(req.participant!.sub, plan);
-    if (result.ok) return res.json({ payment_link: result.payment_link, plan: result.plan, amount: result.amount });
+    if (result.ok) return res.json({ payment_link: result.payment_link, plan: result.plan, amount: result.amount, full_amount: result.full_amount, applied_credit: result.applied_credit });
     const status = result.reason === 'billing_unconfigured' ? 503
       : result.reason === 'enrollment_not_found' ? 404
       : result.reason === 'unknown_plan' ? 400 : 502;
