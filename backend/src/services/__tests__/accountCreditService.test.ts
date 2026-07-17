@@ -1,7 +1,7 @@
 import {
   MIN_CHARGE_CENTS, selectCreditsUpTo, creditApplyTarget,
   getAvailableCreditCents, availableCreditRows, planCreditPreview,
-  grantCredit, consumeCreditsForSubscription,
+  grantCredit, consumeCreditsForSubscription, voidCreditBySourceEvent,
 } from '../accountCreditService';
 import { AccountCredit } from '../../models';
 
@@ -97,6 +97,27 @@ describe('accountCreditService', () => {
       expect(await consumeCreditsForSubscription('e1', 'sub1', 0, NOW)).toBe(0);
       (AccountCredit.findAll as jest.Mock).mockResolvedValueOnce([]).mockResolvedValueOnce([]);
       expect(await consumeCreditsForSubscription('e1', 'sub1', 5000, NOW)).toBe(0);
+      expect(AccountCredit.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('voidCreditBySourceEvent', () => {
+    it('voids available credits for the source and reports already-applied ones', async () => {
+      (AccountCredit.findAll as jest.Mock).mockResolvedValue([
+        { id: 'a', amount_cents: 5000, status: 'available' },
+        { id: 'b', amount_cents: 5000, status: 'applied' }, // already spent — can't void
+      ]);
+      const r = await voidCreditBySourceEvent('ps-payment-154860344', NOW);
+      expect(r).toEqual({ voidedCents: 5000, alreadyAppliedCents: 5000 });
+      const [vals, opts] = (AccountCredit.update as jest.Mock).mock.calls[0];
+      expect(vals.status).toBe('void');
+      expect(opts.where).toEqual({ id: ['a'] });
+    });
+
+    it('no-ops when the source has no available credit', async () => {
+      (AccountCredit.findAll as jest.Mock).mockResolvedValue([]);
+      const r = await voidCreditBySourceEvent('ps-payment-nope', NOW);
+      expect(r).toEqual({ voidedCents: 0, alreadyAppliedCents: 0 });
       expect(AccountCredit.update).not.toHaveBeenCalled();
     });
   });

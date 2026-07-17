@@ -136,3 +136,25 @@ export async function consumeCreditsForSubscription(
   );
   return appliedCents;
 }
+
+/**
+ * Void the credit(s) granted by a specific source event (e.g. a refunded
+ * PaySimple payment `ps-payment-<id>`). Only `available` credits are voided —
+ * a credit already `applied` to a paid subscription can't be clawed back here
+ * and is left as-is (reported separately). Returns { voidedCents, appliedCents }
+ * where appliedCents is any already-spent credit for that source. Idempotent.
+ */
+export async function voidCreditBySourceEvent(sourceEventId: string, nowMs: number = Date.now()): Promise<{ voidedCents: number; alreadyAppliedCents: number }> {
+  const rows = await AccountCredit.findAll({ where: { source_event_id: sourceEventId } });
+  const available = rows.filter((r) => r.status === 'available');
+  const applied = rows.filter((r) => r.status === 'applied');
+  const voidedCents = available.reduce((s, r) => s + (r.amount_cents || 0), 0);
+  if (available.length) {
+    const now = new Date(nowMs);
+    await AccountCredit.update(
+      { status: 'void', updated_at: now },
+      { where: { id: available.map((r) => r.id) } },
+    );
+  }
+  return { voidedCents, alreadyAppliedCents: applied.reduce((s, r) => s + (r.amount_cents || 0), 0) };
+}

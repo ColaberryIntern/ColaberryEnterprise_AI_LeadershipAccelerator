@@ -575,6 +575,39 @@ async function ensureAccountCreditSchema() {
   }
 }
 
+async function ensureRefundSchema() {
+  // Admin-issued PaySimple refunds/voids. Ledger row per attempt; written
+  // pending before the API call so a mid-flight crash is visible (no silent
+  // double-refund). Idempotent create — safe to re-run.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS refunds (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID,
+       paysimple_payment_id VARCHAR(120) NOT NULL,
+       paysimple_refund_id VARCHAR(120),
+       amount_cents INTEGER NOT NULL,
+       method VARCHAR(20) NOT NULL DEFAULT 'refund',
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       reason TEXT,
+       customer_email VARCHAR(255),
+       voided_credit_cents INTEGER NOT NULL DEFAULT 0,
+       issued_by VARCHAR(120),
+       error TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_refunds_payment ON refunds (paysimple_payment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_refunds_status ON refunds (status)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] refund schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureFreeTierSchema() {
   // Free/guest tier support: a `tier` column on enrollments, and a nullable
   // cohort_id so self-serve free (non-member) accounts can exist without a
@@ -1560,6 +1593,8 @@ async function start(): Promise<void> {
   await ensureSubscriptionSchema();
   // Account credits — Open House $50 deposits applied to next payment (idempotent).
   await ensureAccountCreditSchema();
+  // Admin-issued refunds/voids (idempotent).
+  await ensureRefundSchema();
   // Open house events (idempotent).
   await ensureOpenHouseSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).
@@ -1605,6 +1640,7 @@ async function start(): Promise<void> {
       const CurriculumTypeDefinition = (await import('./models/CurriculumTypeDefinition')).default;
       const Subscription = (await import('./models/Subscription')).default;
       const AccountCredit = (await import('./models/AccountCredit')).default;
+      const Refund = (await import('./models/Refund')).default;
       const r = await reconcileMissingColumns([
         Enrollment,
         TimelineCard,
@@ -1612,6 +1648,7 @@ async function start(): Promise<void> {
         CurriculumTypeDefinition,
         Subscription,
         AccountCredit,
+        Refund,
       ]);
       if (r.added.length) {
         console.log(

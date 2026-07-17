@@ -181,6 +181,55 @@ export async function deletePaymentLink(linkId: string): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Payments — lookup, void, refund (API v4)                           */
+/* ------------------------------------------------------------------ */
+
+export interface PaySimplePayment {
+  Id: number;
+  Status: string;                 // Authorized | Posted | Settled | Failed | Voided | Refunded | ...
+  Amount: number;
+  CustomerId?: number;
+  CustomerFirstName?: string;
+  CustomerLastName?: string;
+  PaymentDate?: string;
+  ActualSettledDate?: string | null;
+  CanVoidUntil?: string | null;   // void allowed only while now < CanVoidUntil
+}
+
+/** Fetch a single payment. Used to read the amount/status/void-window before a refund. */
+export async function getPayment(paymentId: string | number): Promise<PaySimplePayment> {
+  return apiRequest<PaySimplePayment>('GET', `/v4/payment/${paymentId}`);
+}
+
+/** Fetch a customer by id (to resolve the payer email for a payment). Null on error. */
+export async function getCustomerById(customerId: string | number): Promise<PaySimpleCustomer | null> {
+  try {
+    return await apiRequest<PaySimpleCustomer>('GET', `/v4/customer/${customerId}`);
+  } catch {
+    return null;
+  }
+}
+
+/** True while the payment can still be voided (full reversal, no fee). */
+export function isVoidable(payment: Pick<PaySimplePayment, 'CanVoidUntil'>, nowMs: number = Date.now()): boolean {
+  if (!payment.CanVoidUntil) return false;
+  const until = Date.parse(payment.CanVoidUntil);
+  return Number.isFinite(until) && until > nowMs;
+}
+
+/** Void an unsettled payment (full reversal). PaySimple: PUT /v4/payment/{id}/void. */
+export async function voidPayment(paymentId: string | number): Promise<any> {
+  return apiRequest('PUT', `/v4/payment/${paymentId}/void`);
+}
+
+/** Refund a posted/settled payment. Full when `amount` omitted, else partial.
+ *  PaySimple: POST /v4/payment/{id}/refund. */
+export async function refundPayment(params: { paymentId: string | number; amount?: number }): Promise<any> {
+  const body = params.amount != null ? { Amount: Math.round(params.amount * 100) / 100 } : undefined;
+  return apiRequest('POST', `/v4/payment/${params.paymentId}/refund`, body);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Full Enrollment Flow                                               */
 /* ------------------------------------------------------------------ */
 
