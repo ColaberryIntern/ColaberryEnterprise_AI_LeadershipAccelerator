@@ -50,7 +50,7 @@ const RuntimeWorkspace: React.FC = () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
         setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null);
-        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
         // Every card type has a cohort comment thread in its workspace.
         runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
       } catch { setError('Could not open this activity.'); }
@@ -66,7 +66,7 @@ const RuntimeWorkspace: React.FC = () => {
   const isReflect = ['reflection', 'survey', 'question'].includes(band);
   // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
   // beats the card's raw title everywhere the student sees it.
-  const displayTitle = card?.content?.title || card?.title || '';
+  const displayTitle = card?.week_title || card?.content?.title || card?.title || '';
   // Watch gate: report play heartbeats while not yet completed; the "Mark complete"
   // button stays disabled until the server confirms the 75% threshold is met.
   const onWatchBeat: ((beat: WatchBeatPayload) => void) | undefined = card && !completed
