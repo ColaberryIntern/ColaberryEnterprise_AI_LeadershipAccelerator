@@ -55,6 +55,7 @@ async function run() {
 
   for (const o of summary.outcomes) {
     const bits = [
+      `$${(o.amountCents / 100).toFixed(2)}`.padStart(9),
       o.matched.padEnd(8),
       o.creditGranted ? 'credit+' : (o.creditAlreadyPresent ? 'credit=' : 'credit·'),
       o.cohortSet ? 'cohort+' : 'cohort·',
