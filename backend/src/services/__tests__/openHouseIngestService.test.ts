@@ -102,5 +102,20 @@ describe('openHouseIngestService', () => {
       expect(summary.by_status.paid).toBe(1);      // strongest signal wins
       expect(lead.update).toHaveBeenCalledWith(expect.objectContaining({ lead_temperature: 'qualified' }));
     });
+
+    it('does not abort on one bad row — records the failure and continues', async () => {
+      const good = { id: 1, lead_temperature: 'cold', update: jest.fn() };
+      (Lead.findOne as jest.Mock)
+        .mockResolvedValueOnce({ id: 2, lead_temperature: 'cold', update: jest.fn().mockRejectedValue(new Error('lower(email) must be unique')) }) // bad legacy dup
+        .mockResolvedValueOnce(good);
+      const summary = await ingestOpenHouseBatch([
+        { email: 'dup@x.io', attended: true },
+        { email: 'ok@x.io', attended: true },
+      ], { apply: true });
+      expect(summary.failed).toBe(1);
+      expect(summary.failures[0].email).toBe('dup@x.io');
+      expect(good.update).toHaveBeenCalled();       // the good row still processed
+      expect(summary.total).toBe(2);
+    });
   });
 });
