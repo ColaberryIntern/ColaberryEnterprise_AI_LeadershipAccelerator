@@ -24,6 +24,16 @@ export function totalPoints(p: TimelineFeedCard['points']): number {
   return (p.learning || 0) + (p.builder || 0) + (p.community || 0);
 }
 
+/** Strip <script>/<style>/inline-handlers/javascript: from AI HTML. Defense-in-depth:
+ *  reader content also renders in an opaque-origin iframe that cannot reach the parent. */
+function stripUnsafe(html: string): string {
+  return String(html || '')
+    .replace(/<\s*script[\s\S]*?<\s*\/\s*script\s*>/gi, '')
+    .replace(/<\s*style[\s\S]*?<\s*\/\s*style\s*>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, '$1="#"');
+}
+
 /** Wrap AI body_html in a minimal styled doc for a SANDBOXED iframe (no scripts run → inert/safe). */
 export function lessonDoc(bodyHtml: string): string {
   return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
@@ -33,6 +43,42 @@ export function lessonDoc(bodyHtml: string): string {
     pre,code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:#F5F5F5;border-radius:6px}
     pre{padding:10px;overflow:auto} code{padding:1px 4px}
   </style>${bodyHtml}`;
+}
+
+/** Immersive Self Study reader: a warm full-height reading with a STICKY top nav
+ *  (built from <section id data-nav>), scrollspy active-highlight, a progress line, and
+ *  smooth click-to-scroll. Rendered in a sandbox="allow-scripts" iframe whose origin is
+ *  opaque (no allow-same-origin), so its scripts cannot touch the parent page, cookies,
+ *  or storage. Content is script/style-stripped (stripUnsafe) as defense-in-depth. */
+export function readerDoc(bodyHtml: string): string {
+  const body = stripUnsafe(bodyHtml);
+  const js = "(function(){var secs=[].slice.call(document.querySelectorAll('section[id]'));var nav=document.getElementById('nav');if(!nav)return;if(!secs.length){nav.style.display='none';return;}var map={};secs.forEach(function(s){var label=s.getAttribute('data-nav');if(!label){var h=s.querySelector('h2,h3');label=h?h.textContent:s.id;}var a=document.createElement('a');a.textContent=label;a.href='#'+s.id;a.addEventListener('click',function(e){e.preventDefault();var el=document.getElementById(s.id);if(!el)return;var y=(window.pageYOffset||document.documentElement.scrollTop)+el.getBoundingClientRect().top-50;window.scrollTo({top:y,behavior:'smooth'});});nav.appendChild(a);map[s.id]=a;});var bar=document.querySelector('#pbar>i');var t=false;function sc(){var d=document.documentElement;var m=d.scrollHeight-d.clientHeight;if(bar)bar.style.width=(m>0?((window.pageYOffset||d.scrollTop)/m*100):0)+'%';t=false;}window.addEventListener('scroll',function(){if(!t){requestAnimationFrame(sc);t=true;}},{passive:true});sc();if('IntersectionObserver' in window){var spy=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){Object.keys(map).forEach(function(k){map[k].classList.remove('active');});var a=map[e.target.id];if(a){a.classList.add('active');a.scrollIntoView({inline:'nearest',block:'nearest'});}}});},{rootMargin:'-10% 0px -72% 0px',threshold:0});secs.forEach(function(s){spy.observe(s);});}})();";
+  return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
+    html{scroll-behavior:smooth}
+    body{font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#F7F4EE;color:#1a1a1a;font-size:15px;line-height:1.62}
+    #pbar{position:sticky;top:0;height:3px;z-index:6;background:transparent}
+    #pbar>i{display:block;height:100%;width:0;background:#FB2832;transition:width .08s linear}
+    #nav{position:sticky;top:3px;z-index:5;display:flex;gap:7px;overflow-x:auto;padding:11px 16px;background:rgba(247,244,238,.94);border-bottom:1px solid #DDD6C9;scrollbar-width:none}
+    #nav::-webkit-scrollbar{display:none}
+    #nav a{flex:none;font:600 12.5px/1 Roboto,sans-serif;color:#4a4a4a;background:#FDFCFA;border:1px solid #DDD6C9;border-radius:999px;padding:8px 13px;text-decoration:none;white-space:nowrap;cursor:pointer}
+    #nav a:hover{border-color:#2E6A86;color:#1a1a1a}
+    #nav a.active{background:#c20e1e;border-color:#c20e1e;color:#fff}
+    .ss{padding:16px 18px 44px}
+    .ss section{scroll-margin-top:56px;padding-top:16px;margin-top:16px;border-top:1px solid #DDD6C9}
+    .ss section:first-child{border-top:0;margin-top:0;padding-top:4px}
+    .ss h2{font-size:19px;margin:0 0 6px;font-weight:700} .ss .lead{font-weight:500;font-size:15.5px;margin:0 0 10px}
+    .ss p{margin:0 0 11px} .ss ul,.ss ol{padding-left:20px;margin:0 0 11px} .ss li{margin:5px 0}
+    .ss .term{background:#FDFCFA;border:1px solid #DDD6C9;border-left:4px solid #367895;border-radius:12px;padding:12px 15px;margin:13px 0}
+    .ss .term h3,.ss .term h4{font-size:15.5px;color:#c20e1e;margin:0 0 5px;font-weight:700}
+    .ss .why{color:#4a4a4a} .ss .why b{color:#1a1a1a}
+    .ss .warn{background:#FDFCFA;border:1px solid #DDD6C9;border-left:4px solid #FB2832;border-radius:12px;padding:12px 15px;margin:14px 0} .ss .warn b{color:#c20e1e}
+    .ss table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14.5px}
+    .ss th,.ss td{border:1px solid #DDD6C9;padding:8px 11px;text-align:left;vertical-align:top} .ss th{background:#EFEBE4;font-weight:700}
+    @media(prefers-color-scheme:dark){body{background:#231f1b;color:#ece7e0}#nav{background:rgba(35,31,27,.94);border-color:#3a342e}#nav a{background:#2c2723;border-color:#3a342e;color:#c9beb2}#nav a.active{color:#231f1b;background:#ff6b83;border-color:#ff6b83}.ss section{border-color:#3a342e}.ss .term,.ss .warn{background:#2c2723;border-color:#3a342e}.ss .term h3,.ss .term h4,.ss .warn b{color:#ff6b83}.ss .why{color:#a89f94}.ss th{background:#2c2723}.ss th,.ss td{border-color:#3a342e}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}#pbar>i{transition:none}}
+  </style>
+  <div id="pbar"><i></i></div><nav id="nav"></nav><main class="ss">${body}</main>
+  <script>${js}</script>`;
 }
 
 interface Props {
@@ -70,6 +116,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isSkillsJar = card.render_band === 'skills_jar';
   const isSurvey = card.render_band === 'survey';   // bespoke live survey experience
   const isAssessment = card.render_band === 'quiz' || card.render_band === 'evaluation';   // interactive Knowledge Check / Evaluation
+  const isReader = card.render_band === 'warmup';   // Self Study: immersive reader (sticky nav + scrollspy + progress)
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
@@ -232,7 +279,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}
-            {content.body_html && <iframe className="tld-lessonframe" title="Lesson content" sandbox="" srcDoc={lessonDoc(content.body_html)} />}
+            {content.body_html && <iframe className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'} title="Lesson content" sandbox={isReader ? 'allow-scripts' : ''} srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)} />}
             {Array.isArray(content.questions) && content.questions.length > 0 && (
               <><div className="tld-sublab">Questions to consider</div>
                 <ul className="tld-alist">{content.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></>
