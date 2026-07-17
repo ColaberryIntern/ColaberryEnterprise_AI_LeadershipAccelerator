@@ -56,6 +56,7 @@ interface EnrollmentInfo {
   status: string;
   payment_status?: string;
   payment_method?: string;
+  amount_paid?: number;
   portal_enabled?: boolean;
   created_at?: string;
   enrollment_type?: string;
@@ -673,7 +674,14 @@ function AdminAcceleratorPage() {
                           )}
                           {e.utm_campaign && <div className="text-muted" style={{ fontSize: '0.72rem' }}>{e.utm_campaign}</div>}
                         </td>
-                        <td>{paymentBadge(e.payment_status || 'failed')}</td>
+                        <td>
+                          {paymentBadge(e.payment_status || 'failed')}
+                          {typeof e.amount_paid === 'number' && e.amount_paid > 0 ? (
+                            <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                              ${e.amount_paid.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} paid
+                            </div>
+                          ) : null}
+                        </td>
                         <td>
                           <div className="d-flex gap-1 align-items-center">
                             {e.portal_enabled ? (

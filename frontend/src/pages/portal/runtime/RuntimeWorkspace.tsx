@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment } from './runtimeApi';
 import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
+import AssessmentPanel from './AssessmentPanel';
 import { lessonDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
@@ -66,6 +67,7 @@ const RuntimeWorkspace: React.FC = () => {
   const isVideo = VIDEO_BANDS.includes(band);
   const isLab = band === 'promptlab';
   const isSurvey = band === 'survey';   // captured via the interactive SurveyForm
+  const isAssessment = band === 'quiz' || band === 'evaluation';   // Knowledge Check + Evaluation, self-contained
   const isReflect = ['reflection', 'question'].includes(band);
   // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
   // beats the card's raw title everywhere the student sees it. Curriculum titles
@@ -208,7 +210,13 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* The workspace OPENS with the saved lesson (same content as the card drawer),
               so the student reads it here and asks the Mentor about it. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && (
+          {/* Knowledge Check (quiz) + Evaluation — self-contained assessment flow,
+              handles its own scoring, 75% gate, and completion. */}
+          {isAssessment && (
+            <AssessmentPanel cardId={card.id} onCompleted={(r) => { if (r) { setReadiness(r); setCompleted(true); } }} />
+          )}
+
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.content?.body_html
@@ -219,9 +227,9 @@ const RuntimeWorkspace: React.FC = () => {
 
           {artifact && <div className="rt-artifact"><div className="rt-lab">Portfolio artifact created</div><b>{artifact.title}</b><p className="rt-muted">{artifact.summary}</p></div>}
 
-          {/* Surveys complete via their own "Save & mark complete" (answers must be
+          {/* Surveys + assessments complete via their own flow (answers/score must be
               stored first), so the generic completion bar is hidden for them. */}
-          {!isSurvey && (
+          {!isSurvey && !isAssessment && (
             <div className="rt-complete">
               {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
                 : <button
