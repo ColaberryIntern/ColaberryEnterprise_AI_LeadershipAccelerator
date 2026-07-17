@@ -99,7 +99,17 @@ export async function reconcileOpenHousePayer(
   if (!email) { out.note = 'no email — cannot match an account'; return out; }
   if (!payer.sourceEventId) { out.note = 'no sourceEventId — cannot grant idempotently'; return out; }
 
-  let enrollment = await Enrollment.findOne({ where: { email: { [Op.iLike]: email } } });
+  // A payer may have several enrollments (stale April/November rows alongside the
+  // July one). The $50 held a JULY seat, so the credit must land on the enrollment
+  // in the target cohort — prefer it, else the most-recently-created match. Using
+  // findOne here would attach the credit to an arbitrary (possibly wrong) row.
+  const matches = await Enrollment.findAll({ where: { email: { [Op.iLike]: email } }, order: [['created_at', 'DESC']] });
+  let enrollment: Enrollment | null = matches.length
+    ? ((opts.cohort && matches.find((m) => m.cohort_id === opts.cohort!.id)) || matches[0])
+    : null;
+  if (matches.length > 1 && enrollment) {
+    out.note = `${matches.length} enrollments matched — credited ${enrollment.id.slice(0, 8)}${opts.cohort && enrollment.cohort_id === opts.cohort.id ? ' (target cohort)' : ''}`;
+  }
 
   if (!enrollment) {
     out.matched = 'created';

@@ -3,7 +3,7 @@ import { Enrollment, Cohort, AccountCredit } from '../../models';
 import { grantCredit } from '../accountCreditService';
 
 jest.mock('../../models', () => ({
-  Enrollment: { findOne: jest.fn(), create: jest.fn() },
+  Enrollment: { findAll: jest.fn(), create: jest.fn() },
   Cohort: { findByPk: jest.fn(), findOne: jest.fn(), findAll: jest.fn() },
   AccountCredit: { findOne: jest.fn() },
 }));
@@ -27,7 +27,7 @@ describe('openHouseCreditService', () => {
 
   describe('reconcileOpenHousePayer (apply)', () => {
     it('grants credit + reserves the July seat for a brand-new payer', async () => {
-      (Enrollment.findOne as jest.Mock).mockResolvedValue(null);
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([]);
       (Enrollment.create as jest.Mock).mockResolvedValue({ id: 'e-new' });
       const o = await reconcileOpenHousePayer(payer, { cohort: JULY as any, grantedBy: 'oh', apply: true });
       expect(o.matched).toBe('created');
@@ -43,7 +43,7 @@ describe('openHouseCreditService', () => {
 
     it('places an existing Explorer-bucket enrollment into July + grants credit', async () => {
       const enr = { id: 'e1', cohort_id: 'c-explorer', update: jest.fn() };
-      (Enrollment.findOne as jest.Mock).mockResolvedValue(enr);
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([enr]);
       const o = await reconcileOpenHousePayer(payer, { cohort: JULY as any, grantedBy: 'oh', apply: true });
       expect(o.matched).toBe('existing');
       expect(o.cohortSet).toBe(true);
@@ -53,15 +53,27 @@ describe('openHouseCreditService', () => {
 
     it('leaves an enrollment already in a real paid cohort where it is', async () => {
       const enr = { id: 'e1', cohort_id: 'c-july', update: jest.fn() };
-      (Enrollment.findOne as jest.Mock).mockResolvedValue(enr);
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([enr]);
       const o = await reconcileOpenHousePayer(payer, { cohort: JULY as any, grantedBy: 'oh', apply: true });
       expect(o.cohortSet).toBe(false);
       expect(enr.update).not.toHaveBeenCalled();
       expect(o.creditGranted).toBe(true);
     });
 
+    it('picks the TARGET-cohort enrollment when a payer has duplicates across cohorts', async () => {
+      // Payer has a stale April row (newer) AND the July row — credit must land on July.
+      const april = { id: 'e-apr', cohort_id: 'c-april', update: jest.fn() };
+      const july = { id: 'e-jul', cohort_id: 'c-july', update: jest.fn() };
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([april, july]); // newest-first order
+      const o = await reconcileOpenHousePayer(payer, { cohort: JULY as any, grantedBy: 'oh', apply: true });
+      expect(o.enrollmentId).toBe('e-jul');
+      expect((grantCredit as jest.Mock).mock.calls[0][0].enrollmentId).toBe('e-jul');
+      expect(o.note).toMatch(/2 enrollments matched/);
+      expect(o.cohortSet).toBe(false); // already the target cohort
+    });
+
     it('reports credit already present (idempotent grant)', async () => {
-      (Enrollment.findOne as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c-july', update: jest.fn() });
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([{ id: 'e1', cohort_id: 'c-july', update: jest.fn() }]);
       (grantCredit as jest.Mock).mockResolvedValue({ granted: false, credit: { id: 'cr1' } });
       const o = await reconcileOpenHousePayer(payer, { cohort: JULY as any, grantedBy: 'oh', apply: true });
       expect(o.creditGranted).toBe(false);
@@ -71,14 +83,14 @@ describe('openHouseCreditService', () => {
     it('skips a payer with no email', async () => {
       const o = await reconcileOpenHousePayer({ email: '', sourceEventId: 'OH716-x' }, { cohort: JULY as any, grantedBy: 'oh', apply: true });
       expect(o.matched).toBe('skipped');
-      expect(Enrollment.findOne).not.toHaveBeenCalled();
+      expect(Enrollment.findAll).not.toHaveBeenCalled();
       expect(grantCredit).not.toHaveBeenCalled();
     });
   });
 
   describe('reconcileOpenHousePayer (dry run)', () => {
     it('writes nothing but predicts the outcome', async () => {
-      (Enrollment.findOne as jest.Mock).mockResolvedValue(null);
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([]);
       const o = await reconcileOpenHousePayer(payer, { cohort: JULY as any, grantedBy: 'oh', apply: false });
       expect(o.matched).toBe('created');
       expect(o.cohortSet).toBe(true);
@@ -88,7 +100,7 @@ describe('openHouseCreditService', () => {
     });
 
     it('dry run detects an already-present credit', async () => {
-      (Enrollment.findOne as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c-july', update: jest.fn() });
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([{ id: 'e1', cohort_id: 'c-july', update: jest.fn() }]);
       (AccountCredit.findOne as jest.Mock).mockResolvedValue({ id: 'existing' });
       const o = await reconcileOpenHousePayer(payer, { cohort: JULY as any, grantedBy: 'oh', apply: false });
       expect(o.creditAlreadyPresent).toBe(true);
@@ -99,9 +111,9 @@ describe('openHouseCreditService', () => {
   describe('grantOpenHouseCreditsBatch', () => {
     it('summarizes across payers', async () => {
       (Cohort.findOne as jest.Mock).mockResolvedValue(JULY); // resolveDepositCohort by name
-      (Enrollment.findOne as jest.Mock)
-        .mockResolvedValueOnce({ id: 'e1', cohort_id: 'c-july', update: jest.fn() })   // existing, in July
-        .mockResolvedValueOnce(null);                                                   // new
+      (Enrollment.findAll as jest.Mock)
+        .mockResolvedValueOnce([{ id: 'e1', cohort_id: 'c-july', update: jest.fn() }])   // existing, in July
+        .mockResolvedValueOnce([]);                                                       // new
       (Enrollment.create as jest.Mock).mockResolvedValue({ id: 'e2' });
       const summary = await grantOpenHouseCreditsBatch(
         [{ email: 'a@x.com', sourceEventId: 'OH716-a' }, { email: 'b@x.com', sourceEventId: 'OH716-b' }],
