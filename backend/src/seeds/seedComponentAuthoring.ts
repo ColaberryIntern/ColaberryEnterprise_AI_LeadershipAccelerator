@@ -254,8 +254,9 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     badge_class: 'bg-info',
     estimated_time: 5,
     // Code-driven assessment (AssessmentPanel + assessmentService). Questions are
-    // auto-generated from the week blueprint — no author input, no Part gate.
-    capabilities: [],
+    // auto-generated from the week blueprint — no author input. Parts signal what
+    // the student gets (the panel is code-driven, so they don't gate behavior).
+    capabilities: ['quiz', 'scoring', 'ai_chat'],
     inputs: [],
     variable_keys: [],
     outputs: [
@@ -275,7 +276,7 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     icon: 'bi-clipboard-check',
     badge_class: 'bg-danger',
     estimated_time: 12,
-    capabilities: [],
+    capabilities: ['quiz', 'scoring', 'ai_chat', 'retry'],
     inputs: [],
     variable_keys: [],
     outputs: [
