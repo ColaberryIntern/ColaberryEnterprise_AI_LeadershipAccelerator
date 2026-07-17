@@ -10,6 +10,8 @@ import api from '../../../utils/api';
 import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
+import MermaidDiagram from '../../../components/visuals/MermaidDiagram';
+import { buildBucketMermaid, MAX_NODES } from '../../../utils/bucketMermaid';
 import AutofillButton from '../../../components/common/AutofillButton';
 import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
 import BlueprintDefaults from './BlueprintDefaults';
@@ -116,7 +118,7 @@ const SortableCard: React.FC<{
     type_thumbnail: typeThumbUrl,
   });
   return (
-    <div ref={setNodeRef} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
+    <div ref={setNodeRef} id={`te-card-${card.id}`} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
       <div className="te-chead">
         <span {...attributes} {...listeners} className="te-drag" title="Drag to reorder">⋮⋮</span>
         <TypeThumb band={band} size={38} />
@@ -141,11 +143,18 @@ const SortableCard: React.FC<{
   );
 };
 
-// ── one bucket section (full width, vertical) ────────────────────────────────
+// ── one bucket section (collapsible) ─────────────────────────────────────────
+// Collapsed BY DEFAULT: instead of the full card list, a collapsed bucket shows a
+// click-to-expand Mermaid map of the cards loaded in it — a wide, glanceable
+// overview of what curriculum sits in this lane (green = live, grey = draft).
+// Clicking the map (or the header caret) expands to the full, drag-to-reorder
+// editable cards.
 const BucketSection: React.FC<{
   bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; thumbOf: (type: string) => string | null; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
   cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel' | 'typeThumbUrl'>;
 }> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, cardActions }) => {
+  const [collapsed, setCollapsed] = useState(true);   // collapse by default
+  const [focusCardId, setFocusCardId] = useState<string | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -159,24 +168,84 @@ const BucketSection: React.FC<{
     if (oldI < 0 || newI < 0) return;
     onReorder(bucket, arrayMove(ids, oldI, newI));
   };
+  // After a specific card is picked from the collapsed map, the lane expands and
+  // this jumps to (and briefly flashes) that exact card instead of the top.
+  useEffect(() => {
+    if (collapsed || !focusCardId) return;
+    const el = document.getElementById(`te-card-${focusCardId}`);
+    if (!el) { setFocusCardId(null); return; }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('te-card-flash');
+    const t = setTimeout(() => { el.classList.remove('te-card-flash'); setFocusCardId(null); }, 1600);
+    return () => clearTimeout(t);
+  }, [collapsed, focusCardId]);
+  // Click on the collapsed map: on a card NODE → expand and jump to that exact
+  // card; on empty space / the caption → just expand. Node ids come back as
+  // mermaid's `flowchart-<nodeId>-<n>` group ids (n0…, or `more` for the overflow).
+  const onMapClick = (e: React.MouseEvent) => {
+    const g = (e.target as Element).closest('g.node');
+    const nodeId = g?.id.match(/^flowchart-(.+)-\d+$/)?.[1] ?? null;
+    let idx = -1;
+    if (nodeId === 'more') idx = MAX_NODES;                        // first hidden card
+    else if (nodeId) { const m = nodeId.match(/^n(\d+)$/); if (m) idx = Number(m[1]); }
+    setCollapsed(false);
+    const target = idx >= 0 ? cards[idx] : undefined;
+    if (target) setFocusCardId(target.id);
+  };
+  // Built only while collapsed; deterministic so <MermaidDiagram> won't re-render
+  // for unchanged data. The overview reuses the card band icons.
+  const chart = collapsed && cards.length > 0
+    ? buildBucketMermaid(cards, (type) => bandIcon(bandOf(type)))
+    : '';
   return (
     <div style={{ marginBottom: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-        <span style={{ width: 8, height: 8, borderRadius: 2, background: BUCKET_COLOR[bucket], flex: 'none' }} />
-        <span style={{ fontSize: 12, fontWeight: 800, color: BUCKET_COLOR[bucket], textTransform: 'uppercase', letterSpacing: '.05em' }}>
-          {BUCKET_LABEL[bucket]}
-        </span>
-        <span style={{ fontSize: 12, color: '#B0B0B0', fontWeight: 600 }}>{cards.length}</span>
+        <button
+          type="button"
+          onClick={() => setCollapsed((v) => !v)}
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? 'Expand' : 'Collapse'} the ${BUCKET_LABEL[bucket]} section`}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
+        >
+          <span aria-hidden style={{ display: 'inline-block', width: 10, fontSize: 10, color: BUCKET_COLOR[bucket], transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .15s ease' }}>▶</span>
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: BUCKET_COLOR[bucket], flex: 'none' }} />
+          <span style={{ fontSize: 12, fontWeight: 800, color: BUCKET_COLOR[bucket], textTransform: 'uppercase', letterSpacing: '.05em' }}>
+            {BUCKET_LABEL[bucket]}
+          </span>
+          <span style={{ fontSize: 12, color: '#B0B0B0', fontWeight: 600 }}>{cards.length}</span>
+        </button>
         <span style={{ flex: 1, height: 1, background: '#EEE' }} />
         <button className="tl-mini" onClick={() => onAdd(bucket)}>+ Add card</button>
       </div>
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-        <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-          {cards.length === 0
-            ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
-            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} typeThumbUrl={thumbOf(c.type)} {...cardActions} />)}
-        </SortableContext>
-      </DndContext>
+
+      {collapsed ? (
+        cards.length === 0 ? (
+          <div style={{ fontSize: 12, color: '#C4C4C4', padding: '2px 0 8px 20px' }}>No cards yet — “+ Add card” to start this lane.</div>
+        ) : (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={onMapClick}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(false); } }}
+            title="Click a card to jump straight to it, or anywhere else to open the section"
+            className="te-minimap"
+          >
+            <MermaidDiagram
+              chart={chart}
+              caption={`${BUCKET_LABEL[bucket]} · ${cards.length} card${cards.length === 1 ? '' : 's'} loaded — click to edit`}
+              id={`te-minimap-${bucket}`}
+            />
+          </div>
+        )
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            {cards.length === 0
+              ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
+              : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} typeThumbUrl={thumbOf(c.type)} {...cardActions} />)}
+          </SortableContext>
+        </DndContext>
+      )}
     </div>
   );
 };
@@ -788,6 +857,17 @@ const TimelineEditorTab: React.FC = () => {
         .tl-vwrap .tlv-link,.tl-vwrap .tlv-none{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:#F5F5F5;border:1px solid #E4E4E4;border-radius:10px;color:#8A8A8A;padding:16px;font-size:12.5px}
         .tl-vwrap .tl-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;border:1px solid #367895;background:#367895;color:#fff;text-decoration:none;cursor:pointer}
         .te-lessonframe{width:100%;height:300px;border:1px solid #E4E4E4;border-radius:9px;background:#fff;display:block}
+        /* Collapsed-section overview map — click anywhere to expand into the editor. */
+        .te-minimap{cursor:pointer;border-radius:12px;transition:box-shadow .15s ease}
+        .te-minimap:hover{box-shadow:0 0 0 2px rgba(54,120,149,.25)}
+        .te-minimap:focus-visible{outline:2px solid #367895;outline-offset:2px}
+        .te-minimap .cb-mermaid{cursor:pointer}
+        /* Individual map nodes are click targets that jump to their exact card. */
+        .te-minimap g.node{cursor:pointer}
+        .te-minimap g.node:hover{opacity:.82}
+        /* Brief highlight on the card a map node jumped you to. */
+        .te-card-flash{animation:te-flash 1.6s ease}
+        @keyframes te-flash{0%,18%{box-shadow:0 0 0 3px rgba(54,120,149,.55)}100%{box-shadow:0 1px 2px rgba(0,0,0,.03)}}
         /* Cards in the lanes ARE the student card — hide the student-only social
            row (Like/Comment) in the admin context; keep the Open CTA. */
         .te-media .fc-foot .like,.te-media .fc-foot .cmt{display:none}
