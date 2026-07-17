@@ -11,6 +11,7 @@ import OpenAI from 'openai';
 import { Op } from 'sequelize';
 import { buildCoraSystemPromptFromDB, getCourseBySlug } from '../kbService';
 import { logAuditEvent } from './inboxAuditService';
+import { emitAlert } from '../alertService';
 import CoraReplyLog from '../../models/CoraReplyLog';
 import InboxAuditLog from '../../models/InboxAuditLog';
 
@@ -199,6 +200,25 @@ export async function handleCoraInquiry(email: {
       actor: 'cora',
       reasoning: reason,
       metadata: { thread_key: threadKey, max_sends: CIRCUIT_BREAKER_MAX_SENDS, window_ms: CIRCUIT_BREAKER_WINDOW_MS },
+    });
+    // Ops alerting (BC #10099862873 P0): the audit row above is discoverable
+    // only if someone opens the inbox dashboard — this is the exact gap that
+    // let the 2026-07-14 mail-loop incident run unnoticed. emitAlert()'s own
+    // 1h title+type dedup keeps repeat trips from re-paging Ali.
+    emitAlert({
+      type: 'critical',
+      severity: 5,
+      title: 'Circuit Breaker Tripped: cora_circuit_breaker',
+      description:
+        'Cora has stopped auto-replying to support inbox emails; inbound questions are piling up unanswered. ' +
+        `Send ceiling (${CIRCUIT_BREAKER_MAX_SENDS} replies / ${CIRCUIT_BREAKER_WINDOW_MS / 60_000}min) was hit. ` +
+        'Recommended action: check the inbox dashboard for a reply loop or traffic spike before raising the ceiling.',
+      sourceType: 'system',
+      impactArea: 'support_inbox',
+      urgency: 'immediate',
+      metadata: { thread_key: threadKey, max_sends: CIRCUIT_BREAKER_MAX_SENDS, window_ms: CIRCUIT_BREAKER_WINDOW_MS },
+    }).catch((err: any) => {
+      console.error(`${LOG_PREFIX} emitAlert failed for circuit breaker trip: ${err.message}`);
     });
     return { archive: false, handoffReason: 'cora_circuit_breaker_tripped' };
   }

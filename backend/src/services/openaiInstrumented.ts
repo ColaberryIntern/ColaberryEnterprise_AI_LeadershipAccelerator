@@ -3,6 +3,7 @@ import { redactSensitive } from '../utils/piiRedaction';
 import { computeCostUsd } from '../utils/aiCost';
 import { emitAiEvent } from './aiEventService';
 import { ensureTraceId } from '../utils/requestContext';
+import { classifyError } from '../utils/errorClassifier';
 
 /**
  * Instrumented OpenAI client factory (TBI audit P1-2).
@@ -87,7 +88,7 @@ export function getInstrumentedOpenAI(
         workflow_id: context.workflow_id ?? null, agent_id: context.agent_id ?? null,
         user_id: context.user_id ?? null, trace_id: traceId,
         model, duration_ms: Date.now() - t0,
-        error_class: err?.name || 'Error', metadata: { message: err?.message },
+        error_class: classifyError(err), metadata: { message: err?.message },
       }).catch(() => {});
       throw err;
     }
