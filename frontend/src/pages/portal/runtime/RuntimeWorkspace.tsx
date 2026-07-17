@@ -5,7 +5,7 @@ import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/Video
 import { lessonDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
-import SurveyForm from './SurveyForm';
+import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -181,12 +181,17 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
 
-          {/* Weekly feedback survey — the interactive, captured-and-stored form. */}
+          {/* Weekly feedback survey — the bespoke live experience (same component
+              the right-side drawer uses), captured + stored on submit. */}
           {isSurvey && (
-            <div>
-              {card.content?.summary && <p style={{ marginTop: 0 }}>{card.content.summary}</p>}
-              <SurveyForm cardId={card.id} completed={completed} busy={busy === 'complete'} onSubmit={complete} />
-            </div>
+            <CardSurveyExperience
+              cardId={card.id}
+              questions={card.content?.questions || []}
+              openPrompt={card.content?.reflection || null}
+              title={card.content?.title || card.title}
+              completed={completed}
+              onComplete={complete}
+            />
           )}
 
           {isReflect && (
