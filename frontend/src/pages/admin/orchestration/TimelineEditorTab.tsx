@@ -11,7 +11,7 @@ import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/Tim
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
 import MermaidDiagram from '../../../components/visuals/MermaidDiagram';
-import { buildBucketMermaid, MAX_NODES } from '../../../utils/bucketMermaid';
+import { buildBucketMermaid, nodeIdFromMermaidGroupId, MAX_NODES } from '../../../utils/bucketMermaid';
 import AutofillButton from '../../../components/common/AutofillButton';
 import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
 import BlueprintDefaults from './BlueprintDefaults';
@@ -180,11 +180,11 @@ const BucketSection: React.FC<{
     return () => clearTimeout(t);
   }, [collapsed, focusCardId]);
   // Click on the collapsed map: on a card NODE → expand and jump to that exact
-  // card; on empty space / the caption → just expand. Node ids come back as
-  // mermaid's `flowchart-<nodeId>-<n>` group ids (n0…, or `more` for the overflow).
+  // card; on empty space / the caption → just expand. The clicked mermaid node
+  // group's DOM id carries our node id (n0…, or `more` for the overflow).
   const onMapClick = (e: React.MouseEvent) => {
     const g = (e.target as Element).closest('g.node');
-    const nodeId = g?.id.match(/^flowchart-(.+)-\d+$/)?.[1] ?? null;
+    const nodeId = nodeIdFromMermaidGroupId(g?.id);
     let idx = -1;
     if (nodeId === 'more') idx = MAX_NODES;                        // first hidden card
     else if (nodeId) { const m = nodeId.match(/^n(\d+)$/); if (m) idx = Number(m[1]); }
