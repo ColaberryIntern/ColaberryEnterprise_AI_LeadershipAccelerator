@@ -34,8 +34,12 @@ function PortalLayout() {
   // Curriculum/coaching live at the end (orthogonal to the build loop).
   // Version-labelled and duplicated entries remain routed for rollback,
   // but are not surfaced here.
-  const navItems: Array<{ to: string; label: string; icon: string; gateKey: keyof OnboardingGates }> = [
+  // gateKey is optional — items without one (e.g. Community) are always
+  // enabled, since they aren't part of the requirements->code onboarding
+  // sequence the other tabs gate on.
+  const navItems: Array<{ to: string; label: string; icon: string; gateKey?: keyof OnboardingGates }> = [
     { to: '/portal/home',                label: 'Home',      icon: 'bi-house',           gateKey: 'home' },
+    { to: '/portal/community',           label: 'Community', icon: 'bi-people' },
     { to: '/portal/visual-workspace',    label: 'Critique',  icon: 'bi-bullseye',        gateKey: 'critique' },
     { to: '/portal/project/blueprint',   label: 'Blueprint', icon: 'bi-map',             gateKey: 'blueprint' },
     { to: '/portal/project/system',      label: 'System',    icon: 'bi-grid-3x3-gap',    gateKey: 'system' },
@@ -88,7 +92,7 @@ function PortalLayout() {
             ) : (
               <ul className="navbar-nav me-auto mb-2 mb-lg-0">
                 {navItems.map((item) => {
-                  const enabled = !gates || gates[item.gateKey] !== false;
+                  const enabled = !item.gateKey || !gates || gates[item.gateKey] !== false;
                   if (!enabled) {
                     return (
                       <li className="nav-item" key={item.to}>

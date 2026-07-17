@@ -55,6 +55,7 @@ import {
   RunMyDayMode,
   type StudentQueueItem,
 } from './CoryHomeParts';
+import CommunityHomeWidget from './CommunityHomeWidget';
 
 const SEVERITY_COLOR: Record<BlockerEntry['severity'], string> = {
   low: 'var(--color-info)',
@@ -671,6 +672,9 @@ const CoryHome: React.FC = () => {
           footer. Shows synthesis age, last-touched age, last-critique age, and
           confidence — all sourced from state + memory + sessionStorage. */}
       <OperationalHistoryStrip state={state} memory={memory} />
+
+      {/* Community — feed snippet, points/level, who's online (REQ-C11) */}
+      <CommunityHomeWidget />
 
       {/* Run My Day overlay — full-screen walk mode for the student build queue */}
       {walkMode && studentQueue.length > 0 && (
