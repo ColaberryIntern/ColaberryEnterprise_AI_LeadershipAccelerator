@@ -8931,6 +8931,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: jest 12/12 (ingest 10 incl. case-insensitive lookup path; sync 2: CCPP row→warm-participant mapping + junk filter + ingest call). Backend tsc 0 errors in changed files. Scope check on prod: all-time OH registrants = 6,429 (rejected — would flood CRM); recent (last 120d) = 217, 2026-named events = 81 → sync window keeps it to the current campaign.
   - Notes: Branch `workstream/eventbrite-oh-sync` off main. Backfill run + daily host-cron scheduling pending after deploy. `rackyfutwi` is NOT a duplicate — single lead 8337, fixed by the lookup change.
 
+- [x] KB: push the refund/cancellation policy live (remove DRAFT/pending caveats)
+  - Date: 2026-07-17
+  - Session: CC-20260717-k4p9
+  - What changed: Ali: "push the cancel policy." Flipped the 11 refund/cancellation policy entries in `frontend/public/knowledge/sales/kb-data.js` from `confidence:"drafted-verify"` → `"grounded"` and stripped the "pending final approval / DRAFT / proposed and pending / pending sign-off" caveats from their `detail` (the answers already stated the terms cleanly; only the detail carried the draft caveat). Entries: sales-8/13/14/22/36/51/52/54/70/76 (+ removed the "pending sign-off" note from sales-57). Regenerated kb.json (214 entries). Policy now live: monthly cancel-anytime (access through paid month, no partial refund); annual 14-day money-back from the 7/23 kickoff, then non-refundable but active the full year with founding rate locked.
+  - Verification: 0 refund/cancel entries left with a draft/pending marker; kb.json regenerated. Deploys via the nginx build (frontend/public/knowledge is baked into the CRA image).
+  - Notes: Branch `workstream/kb-cancel-policy-live` off main.
 ### Revenue includes Open House $50 deposits (account_credits), aligned with main's deposit model (2026-07-17)
 - [x] **Dashboard Revenue = SUM(enrollments.amount_paid paid) + SUM(account_credits available); Open House $50 "hold-your-spot" deposits now count**
   - Date: 2026-07-17
