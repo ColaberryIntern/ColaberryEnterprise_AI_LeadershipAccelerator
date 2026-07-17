@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 3:05 PM</div>
-    <div><span class="sid">CC-20260717-x8k4</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Friday, July 17, 2026 at 3:45 PM</div>
+    <div><span class="sid">CC-20260717-x8k4</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -87,6 +87,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` 0 new errors (only the 3 baseline `@dnd-kit` resolution errors); jest 8/8; the Docker CRA prod build (nginx) compiled clean and the dev `:9999` bundle serves the new code.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/timeline-collapsible-mermaid`. Ali (DRI) directed a same-day PROD deploy of this Timeline work (frontend-only → nginx), overriding the after-hours norm.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Orchestration Timeline: Mermaid overview wraps into rows of 3 (+ fix node-click card jump)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: with 5-6 cards the collapsed Mermaid map crammed everything onto one row — cap it at 3 per row and wrap down. `frontend/src/utils/bucketMermaid.ts`: the lane now emits each row of ≤ROW_SIZE (3) nodes as its OWN left-to-right chain with no cross-row edge; disconnected same-rank chains make mermaid stack them into an aligned grid. ALSO fixed a latent bug the headless render exposed: rendered mermaid node group DOM ids are `&lt;renderId&gt;-flowchart-&lt;nodeId&gt;-&lt;counter&gt;` (the renderId prefix varies), but the click handler&#39;s regex was start-anchored (`^flowchart-…`) so it never matched once the prefix was present — clicking a specific node silently just expanded to the top instead of jumping to that card. Extracted `nodeIdFromMermaidGroupId()` (prefix-agnostic, tail-matched) and used it in TimelineEditorTab&#39;s `onMapClick`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` 0 new errors; jest 12/12 (added a row-wrap test + 3 node-id-parser tests); **Playwright headless render** of the exact mermaid output confirmed the wrap — 5→[3,2], 6→[3,3], 8→[3,3,2], 3→[3]; Docker CRA prod build compiled clean.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/timeline-collapsible-mermaid`. Same-day PROD deploy per Ali&#39;s direction. The node-click-jump was shipped broken in the prior deploy (unnoticed) and is fixed here.</span></div>
           
         </div>
       </article>
