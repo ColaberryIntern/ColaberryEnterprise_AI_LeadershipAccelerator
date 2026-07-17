@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, July 16, 2026 at 2:35 PM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">64 changes</span></div>
+    <div class="meta">Generated Friday, July 17, 2026 at 7:36 AM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">65 changes</span></div>
   </header>
   <main>
     
@@ -1017,6 +1017,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0, frontend tsc 0; curriculumFormatContract 5/5; backend timeline+podcast+runtime suites 91/91. PROD after deploy: site 200, bundle carries mt-openpill/&quot;Write a comment&quot;/hqdefault probes, backend dist has imageFromMetadata + assertTypeLaunched; boot ensured comment/blog/podcast tables.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Prod deploy authorized by Ali mid-day (&quot;deploy now&quot;) — overrides the after-hours default for this deploy. Dev 1 redeployed from the same commit so all environments match; future sessions deploying main now deploy the union (ends the overwrite churn).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">65</span>
+          <h2>Timeline card footer: single Open (off the image) + a Workspace shortcut next to Comment</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali (screenshot: a card showed an &quot;Open →&quot; pill on the image AND an Open button in the footer) — &quot;We should not have 2 open buttons. Keep the open that is not on the actual image. Then next to the comment button, add a workstation button so they can easily get to that.&quot; (1) Removed the on-image &quot;Open →&quot; pill (mt-openpill) from non-playable tiles — the footer Open (labs: &quot;Start&quot;) is now the single Open; playable tiles still show ▶ (plays inline, a distinct action) and completed tiles show ✓. (2) Added a &quot;Workspace&quot; button in the card footer beside Comment that opens the full runtime workspace (video + AI Mentor + comments) — new optional onWorkspace prop on TimelineCard + TimelineFeed, wired to navigate(/portal/runtime/:id) in ClassroomPage and TodayShell; hidden when locked and in the admin editor (no onWorkspace passed there). Files: frontend/src/components/timeline/TimelineCard.tsx, TimelineFeed.tsx; pages/portal/ClassroomPage.tsx, today/TodayShell.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; backend tsc 0; curriculumFormatContract 5/5. PROD after deploy: cards show one Open (footer), no on-image Open pill; Workspace button next to Comment jumps to the runtime.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Merged main first (open house runbook #271, Settings Enrollment tab #265, nginx /openhouse route #267) as a proper merge commit.</span></div>
           
         </div>
       </article>
