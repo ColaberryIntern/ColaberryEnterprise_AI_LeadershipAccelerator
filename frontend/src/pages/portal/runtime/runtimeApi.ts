@@ -12,6 +12,7 @@ export interface RtCard {
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
   type_thumbnail?: string | null;   // the type's picture — hero banner with the title overlaid
+  week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 
@@ -27,6 +28,9 @@ export interface Readiness {
 export interface PromptEval { score: number; architect_score: number; strengths: string[]; gaps: string[]; suggestions: string[]; better_prompt: string }
 export interface MentorReply { reply: string; kind: string }
 export interface CardComment { id: string; body: string; author: string; mine: boolean; created_at: string }
+export interface SurveyAnswerItem { question: string; rating: number | null; comment: string | null }
+export interface SurveyAnswers { items: SurveyAnswerItem[]; open: string | null }
+export interface SurveyView { questions: string[]; open_prompt: string | null; answers: SurveyAnswers | null }
 
 export const runtimeApi = {
   open: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}`).then((r) => r.data as RtOpen),
@@ -41,4 +45,7 @@ export const runtimeApi = {
   saveNote: (cardId: string, body: string, kind = 'note') => portalApi.post('/api/portal/runtime/notebook', { card_id: cardId, kind, body }).then((r) => r.data),
   comments: (cardId: string) => portalApi.get(`/api/portal/classroom/cards/${cardId}/comments`).then((r) => r.data as { comments: CardComment[] }),
   comment: (cardId: string, body: string) => portalApi.post(`/api/portal/classroom/cards/${cardId}/comments`, { body }).then((r) => r.data as { comment: CardComment }),
+  survey: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/survey`).then((r) => r.data as SurveyView),
+  saveSurvey: (cardId: string, payload: { items: Array<{ index: number; rating: number | null; comment?: string | null }>; open?: string | null }) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/survey`, payload).then((r) => r.data as { saved: true; answers: SurveyAnswers }),
 };
