@@ -1,8 +1,9 @@
 // bucketMermaid — build a compact Mermaid flowchart summarizing the cards loaded
 // in one Orchestration Timeline bucket (Pre-Class, Learn, …). Used by the
 // Timeline editor's COLLAPSED section view: instead of the full card list, a
-// collapsed bucket shows this left-to-right "what's loaded here" map, which the
-// author clicks to expand back into the editable cards.
+// collapsed bucket shows this "what's loaded here" map — cards left-to-right,
+// wrapped into rows of at most ROW_SIZE — which the author clicks to expand back
+// into the editable cards.
 //
 // Pure + deterministic: equal input produces an equal string, so <MermaidDiagram>
 // (which keys its render effect on the chart string VALUE) never re-runs for
@@ -22,6 +23,12 @@ export interface MermaidCardLike {
 // the first hidden card.
 export const MAX_NODES = 8;
 
+// Wrap the lane into rows of at most this many nodes so a busy lane reads as a
+// grid instead of one cramped, scaled-down line. Each row is emitted as its own
+// (disconnected) left-to-right chain; chains sharing the same ranks make mermaid's
+// layout stack them into aligned rows.
+const ROW_SIZE = 3;
+
 /**
  * Sanitize a card title into a safe Mermaid node label. Mermaid's parser is
  * finicky even inside quoted labels, so we strip the characters it treats as
@@ -37,6 +44,18 @@ export function mermaidLabel(raw: string): string {
     .trim();
   const capped = cleaned.length > 40 ? `${cleaned.slice(0, 39)}…` : cleaned;
   return capped || 'Untitled';
+}
+
+/**
+ * Extract our node id (`n<i>` or `more`) from a rendered mermaid node group's DOM
+ * id, so a click on the collapsed map can map back to a card. Mermaid ids look
+ * like `<renderId>-flowchart-<nodeId>-<counter>` where the renderId prefix and the
+ * trailing counter vary, so we match our node id at the TAIL rather than anchoring
+ * at the start (an earlier start-anchored regex silently matched nothing once the
+ * renderId prefix was present). Returns null for edges / non-node elements.
+ */
+export function nodeIdFromMermaidGroupId(domId: string | null | undefined): string | null {
+  return (domId || '').match(/(n\d+|more)(?:-\d+)?$/)?.[1] ?? null;
 }
 
 /**
@@ -57,14 +76,21 @@ export function buildBucketMermaid(
     lines.push(`  n${i}["${label}"]:::${cls}`);
   });
 
-  // The chain of node ids to wire together left-to-right (+ an overflow node).
-  const chain: string[] = shown.map((_, i) => `n${i}`);
+  // The ordered node ids (+ an overflow node when capped).
+  const ids: string[] = shown.map((_, i) => `n${i}`);
   if (cards.length > MAX_NODES) {
     lines.push(`  more["+${cards.length - MAX_NODES} more"]:::more`);
-    chain.push('more');
+    ids.push('more');
   }
-  for (let i = 0; i < chain.length - 1; i += 1) {
-    lines.push(`  ${chain[i]} --> ${chain[i + 1]}`);
+  // Wire each row of up to ROW_SIZE nodes as its OWN left-to-right chain, with NO
+  // edge between rows. Disconnected same-rank chains make mermaid stack them into
+  // a grid, so the lane wraps to a new row after ROW_SIZE cards instead of
+  // squeezing everything onto one line.
+  for (let r = 0; r < ids.length; r += ROW_SIZE) {
+    const row = ids.slice(r, r + ROW_SIZE);
+    for (let i = 0; i < row.length - 1; i += 1) {
+      lines.push(`  ${row[i]} --> ${row[i + 1]}`);
+    }
   }
 
   // Green = published/live, grey = draft, hollow = the overflow node.
