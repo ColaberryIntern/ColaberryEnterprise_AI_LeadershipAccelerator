@@ -10,6 +10,7 @@ import { startRequirementsGeneration } from '../services/requirementsGenerationS
 import {
   handleFreeSignup, handleGetPoints, handleGetPointsDrilldown, handleGetStreak, handleClaimStreak,
   handleGetSubscription, handleStartSubscriptionCheckout, handleCancelSubscription, handleConfirmCheckout,
+  handleGetEnrollment, handleSelectEnrollmentCohort,
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
@@ -97,6 +98,9 @@ router.get('/api/portal/points', requireParticipant, handleGetPoints);
 router.get('/api/portal/points/drilldown', requireParticipant, handleGetPointsDrilldown);
 router.get('/api/portal/streak', requireParticipant, handleGetStreak);
 router.post('/api/portal/streak/claim', requireParticipant, handleClaimStreak);
+// Enrollment (class-date selection) — enrolling reserves a spot; payment locks it.
+router.get('/api/portal/enrollment', requireParticipant, handleGetEnrollment);
+router.post('/api/portal/enrollment', requireParticipant, handleSelectEnrollmentCohort);
 router.get('/api/portal/subscription', requireParticipant, handleGetSubscription);
 router.post('/api/portal/subscription/checkout', requireParticipant, handleStartSubscriptionCheckout);
 router.post('/api/portal/subscription/confirm', requireParticipant, handleConfirmCheckout);

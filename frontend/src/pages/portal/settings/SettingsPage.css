@@ -253,3 +253,21 @@
   font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em;
   color: var(--cherry, #FB2832); margin-left: 5px; vertical-align: middle;
 }
+
+/* Enrollment tab — class-date facts (mirrors .set-sub-facts) */
+.set-enroll-facts { display: flex; flex-direction: column; margin: 12px 0 6px; }
+.set-enroll-facts .fact {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--color-border, #F0F0EE); font-size: 13.5px;
+}
+.set-enroll-facts .fact:last-child { border-bottom: none; }
+.set-enroll-facts .fact .k { color: var(--color-text-light, #6B6B6B); }
+.set-enroll-facts .fact .v { font-weight: 700; color: var(--color-text, #1A1A1A); }
+
+/* Enrollment tab — "pay early without penalty" callout */
+.set-enroll-callout {
+  margin-top: 18px; padding: 14px 16px; border-radius: 10px;
+  background: rgba(91,166,60,.06); border: 1px solid rgba(91,166,60,.28);
+}
+.set-enroll-callout .ttl { font-size: 13px; font-weight: 800; color: #3C7A26; margin-bottom: 4px; }
+.set-enroll-callout p { font-size: 12.5px; color: var(--color-text, #1A1A1A); line-height: 1.55; margin: 0; }

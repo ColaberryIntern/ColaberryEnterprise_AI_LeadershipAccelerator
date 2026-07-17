@@ -31,6 +31,9 @@ export interface SubscriptionState {
 export interface SubscriptionView {
   plans: PlanConfig[];
   needs_subscription: boolean;
+  /** The class this payment counts toward — billing is anchored to its start
+   *  date, so paying early never shortens the first period. */
+  class_start: { cohort_id: string; cohort_name: string; start_date: string; is_future: boolean } | null;
   subscription: SubscriptionState | null;
 }
 
