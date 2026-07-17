@@ -125,37 +125,29 @@ const SURVEY_GENERATION_PROMPT = [
 
 // ── Self Study (read-before-class) ───────────────────────────────────────────
 // Zero author input: the runtime prepends the week Blueprint ("WEEK CONTEXT") and
-// enforces the fixed output schema. This prompt steers the title + a SELF-CONTAINED
-// STYLED body_html — the design CSS is baked in because the student drawer renders
-// body_html inside a sandboxed, no-external-CSS iframe (CardDetailBody.lessonDoc).
-// Certified in Experience Studio 2026-07-17.
-const SELF_STUDY_STYLE = '<style>.ss{font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;color:#1a1a1a;background:#f7f4ee;font-size:15px;line-height:1.62;padding:16px 18px;border-radius:12px}.ss .lead{font-weight:500}.ss h3{font-size:19px;margin:22px 0 6px;border-top:1px solid #ddd6c9;padding-top:16px}.ss h3:first-of-type{border-top:0;padding-top:0;margin-top:4px}.ss h4{font-size:15.5px;margin:14px 0 4px;color:#c20e1e}.ss p{margin:0 0 10px}.ss ul{margin:0 0 10px;padding-left:20px}.ss .note{background:#fdfcfa;border:1px dashed #ddd6c9;border-radius:10px;padding:12px 14px;margin:0 0 16px}.ss .term{background:#fdfcfa;border:1px solid #ddd6c9;border-left:3px solid #367895;border-radius:10px;padding:12px 14px;margin:12px 0}.ss .why{color:#4a4a4a}.ss .warn{background:#fdfcfa;border:1px solid #ddd6c9;border-left:3px solid #fb2832;border-radius:10px;padding:12px 14px;margin:14px 0}.ss .warn b{color:#c20e1e}.ss table{border-collapse:collapse;width:100%;margin:12px 0}.ss th,.ss td{border:1px solid #ddd6c9;padding:7px 10px;text-align:left}.ss th{background:#efebe4}@media(prefers-color-scheme:dark){.ss{background:#231f1b;color:#ece7e0}.ss .note,.ss .term,.ss .warn{background:#2c2723;border-color:#3a342e}.ss h3{border-color:#3a342e}.ss h4,.ss .warn b{color:#ff6b83}.ss .why{color:#a89f94}.ss th{background:#2c2723}.ss th,.ss td{border-color:#3a342e}}</style>';
-
+// enforces the fixed output schema. body_html is CLEAN <section id data-nav> content —
+// the immersive reader (CardDetailBody.readerDoc, render_band 'warmup') supplies ALL
+// styling plus the sticky top nav + scrollspy + progress, so the content carries NO
+// <style>/<nav>/<script>. Certified in Experience Studio 2026-07-17.
 const SELF_STUDY_GENERATION_PROMPT = [
   'You write the Self Study reading for the AI Systems Architect Accelerator: the "read before class" material a participant reads, at their own pace, before the week\'s live session. The WEEK CONTEXT block above gives this week\'s topic, purpose, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground every word in it and invent nothing it does not support. Generalize to whatever this week\'s topic is; never hard-code a specific week\'s subject matter.',
   '',
-  'AUDIENCE & VOICE. Write for a learner with little or no prior background in this week\'s topic. Voice: warm, plain-English, encouraging. No hype. No emoji. Define every piece of jargon in plain words the first time it appears. This is self-study, not an assessment: nothing here is graded, tested, or timed, so never phrase anything as a test, deadline, or required task.',
+  'AUDIENCE & VOICE. Write for a learner with little or no prior background. Warm, plain-English, encouraging. No hype. No emoji. Define every piece of jargon in plain words the first time it appears. Self-study: nothing is graded, tested, or timed.',
   '',
-  'GROUNDING & ACCURACY. Stay at the level of the concepts WEEK CONTEXT names. Do not invent technical claims it does not support, especially definitions, mechanisms, or what a named product or tool actually is. When unsure what a named tool or term is, describe its role in plain general terms rather than asserting a specific technical category (for example, never call a tool a "programming language" unless WEEK CONTEXT says so). Accuracy beats completeness.',
+  'GROUNDING & ACCURACY. Stay at the level of the concepts WEEK CONTEXT names. Do not invent technical claims, definitions, mechanisms, or what a named product or tool actually is; when unsure, describe its role in plain general terms (never call a tool a "programming language" unless WEEK CONTEXT says so). Accuracy beats completeness.',
   '',
-  'LEAD WITH THE CONCLUSION. Each Part\'s opening sentence must already state that Part\'s single most important idea; never bury it. Big idea first, then the plain-English explanation, then a concrete example.',
+  'DEPTH — this must feel THOROUGH, not a summary. 5 to 6 Parts. Each Part opens with its single key idea, then gives TWO to FOUR substantive paragraphs with a concrete example a beginner can picture. Define important terms as term cards. Include at least one comparison table and at least one caution where the topic supports them.',
   '',
-  'BODY_HTML — output a SELF-CONTAINED, STYLED fragment. It renders inside a sandboxed iframe with NO external CSS, so it must carry its own styles. Requirements, in order:',
-  '1. body_html MUST BEGIN with this exact style block, copied VERBATIM, character for character (do not alter, re-order, or re-indent it):',
-  SELF_STUDY_STYLE,
-  '2. Immediately after the style block, output a single <div class="ss"> that wraps ALL content, and close it at the very end.',
-  '3. Inside <div class="ss">, structure the content as:',
-  '   - FIRST child: <div class="note"><p>How to use this: read at your own pace, skip anything you already know, nothing here is tested.</p></div>',
-  '   - 4 to 6 Parts. Each Part = an <h3> heading ("Part 1 - ...") then a <p class="lead"> whose sentence states that Part\'s single key idea, then short <p> paragraphs.',
-  '   - For any term you define: <div class="term"><h4>Term</h4><p>plain-English definition</p><p class="why"><b>Why it matters:</b> ...</p></div>',
-  '   - For an important caution or common pitfall: <div class="warn"><p><b>Caution name.</b> explanation</p></div>',
-  '   - Use <ul>/<li> for lists and a <table> with a <thead> for any small comparison (e.g. an Industry / Where it shows up table).',
-  '4. Use ONLY the classes named above plus plain <h3>/<h4>/<p>/<ul>/<li>/<table>. Do NOT add any other <style>, any <script>, external CSS/JS, inline color/style attributes, or page chrome (no nav, logo, progress bar, or theme toggle). The style block already carries every color and size.',
+  'BODY_HTML — output clean, semantic, VALID HTML made of <section> blocks ONLY. The reader UI supplies all styling and the navigation, so DO NOT include any <style>, <script>, <nav>, images, inline style attributes, or a wrapping <div>. Structure:',
+  '  - FIRST: <section id="intro" data-nav="Overview"><p class="lead">The big picture: one or two sentences on why this week matters.</p><p>a short orienting paragraph that also notes this is optional, self-paced, and not tested.</p></section>',
+  '  - Then one <section id="p1" data-nav="Short Label">, <section id="p2" data-nav="...">, ... per Part, ids p1..pN in order. data-nav is a SHORT 1-3 word tab label for that Part (e.g. "AI Basics", "Key Terms", "Why AI"). Each section = <h2>Part 1 - Full Heading</h2> then <p class="lead">the key idea</p> then the paragraphs.',
+  '  - For a term: <div class="term"><h3>Term</h3><p>plain-English definition</p><p class="why"><b>Why it matters:</b> ...</p></div>. For a caution: <div class="warn"><p><b>Caution.</b> ...</p></div>. Use <ul>/<li> for lists and a <table> with a <thead> for a small comparison.',
+  '  - Allowed tags ONLY: <section> (each with a unique id AND a data-nav label), <h2>, <h3>, <p> (optional class "lead" or "why"), <ul>, <ol>, <li>, <table>, <thead>, <tbody>, <tr>, <th>, <td>, <div class="term">, <div class="warn">, <b>. Nothing else.',
   '',
   'FILL THE OTHER OUTPUT KEYS.',
   '- title: "Self Study - <this week\'s topic>" from WEEK CONTEXT (e.g. "Self Study - Claude Code Foundations + Workspace").',
-  '- summary: one or two plain sentences: what this reading covers and that it is optional, self-paced, and not tested.',
-  '- questions: 3 to 5 light self-check questions ("In your own words, ..." / "Can you explain ..."), for self-checking only, never graded.',
+  '- summary: one plain sentence: what this reading covers and that it is optional, self-paced, and not tested.',
+  '- questions: 4 to 6 light self-check questions ("In your own words, ..." / "Can you explain ..."), for self-checking only, never graded.',
   '- reflection: one short, low-stakes reflection prompt connecting the reading to the learner\'s own work or goals.',
   '- discussion_prompt: one open discussion seed for the cohort, tied to this week\'s topic.',
   '- github_task: null. evaluation_criteria: an empty array (not scored).',
@@ -262,8 +254,9 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     badge_class: 'bg-info',
     estimated_time: 5,
     // Code-driven assessment (AssessmentPanel + assessmentService). Questions are
-    // auto-generated from the week blueprint — no author input, no Part gate.
-    capabilities: [],
+    // auto-generated from the week blueprint — no author input. Parts signal what
+    // the student gets (the panel is code-driven, so they don't gate behavior).
+    capabilities: ['quiz', 'scoring', 'ai_chat'],
     inputs: [],
     variable_keys: [],
     outputs: [
@@ -283,7 +276,7 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     icon: 'bi-clipboard-check',
     badge_class: 'bg-danger',
     estimated_time: 12,
-    capabilities: [],
+    capabilities: ['quiz', 'scoring', 'ai_chat', 'retry'],
     inputs: [],
     variable_keys: [],
     outputs: [
