@@ -1,5 +1,12 @@
+import { fn, col, where } from 'sequelize';
 import { Lead, Activity, LeadTemperatureHistory } from '../models';
 import { logActivity } from './activityService';
+
+/** Case-insensitive email match. The leads unique index is on lower(email), but
+ *  a plain `where: { email }` is case-sensitive in Postgres — so a stored
+ *  "Foo@x.io" would be missed and a lowercase re-insert would then collide with
+ *  the index. Match on lower(email) instead. */
+const emailWhere = (email: string) => where(fn('lower', col('email')), email);
 
 /**
  * openHouseIngestService — fold last night's Open House event data into the CRM.
@@ -66,7 +73,7 @@ export async function ingestOpenHouseParticipant(p: OhParticipant, opts: { apply
   const out: IngestOutcome = { email: p.email, status, lead: 'skipped', previousTemp: null, newTemp: targetTemp, raised: false, activityLogged: false };
   if (!email) { out.note = 'no email'; return out; }
 
-  let lead = await Lead.findOne({ where: { email } });
+  let lead = await Lead.findOne({ where: emailWhere(email) });
   const currentTemp = lead ? (lead as any).lead_temperature || 'cold' : null;
   const newTemp = higherTemp(currentTemp || 'cold', targetTemp);
   out.previousTemp = currentTemp;
