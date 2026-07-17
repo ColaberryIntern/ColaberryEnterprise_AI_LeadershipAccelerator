@@ -18,7 +18,9 @@ export interface MermaidCardLike {
 // Cap the nodes drawn before folding the rest into a single "+N more" node. The
 // diagram is scaled to fit the ~720px editor column, so too many nodes turn
 // illegible; 8 keeps each node readable while still showing the shape of the lane.
-const MAX_NODES = 8;
+// Exported so the editor's node-click handler can map the "+N more" node back to
+// the first hidden card.
+export const MAX_NODES = 8;
 
 /**
  * Sanitize a card title into a safe Mermaid node label. Mermaid's parser is

@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 11:46 AM</div>
-    <div><span class="sid">CC-20260717-x8k4</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Friday, July 17, 2026 at 3:05 PM</div>
+    <div><span class="sid">CC-20260717-x8k4</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -72,6 +72,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` clean — 0 new errors (only the 3 pre-existing `@dnd-kit` exports-map resolution errors, proven identical on the pristine HEAD tree — a raw-tsc artifact; the CRA build resolves them). jest 8/8 for bucketMermaid (label sanitize/truncate/fallback; LR nodes + visibility class; +N more overflow; single-node no-edge; title fallback).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/timeline-collapsible-mermaid` off origin/main (prod 6d0c2f2b), built in an isolated worktree — the local checkout was on an unrelated, far-behind branch that lacks the Timeline UI. Not deployed; awaiting review/merge. TimelineEditorTab is a grandfathered oversize file (851 lines) — kept the new logic in a separate util rather than grow it; a full component split would be a &gt;25% rewrite (out of scope).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Orchestration Timeline: Mermaid map nodes jump to the exact card (not the top of the list)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: clicking a specific card in the collapsed Mermaid map should open THAT card, not default to the top of the expanded list. `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx`: each card&#39;s root now carries a stable DOM id (`te-card-&lt;id&gt;`); the collapsed map wrapper&#39;s click reads the clicked mermaid node group id (`flowchart-&lt;nodeId&gt;-&lt;n&gt;`) → maps `n&lt;i&gt;` → cards[i] and `more` → the first hidden card → expands the lane and `scrollIntoView({block:&#39;center&#39;})` on that exact card with a 1.6s highlight flash; clicking empty map space / the caption still just expands. Exported `MAX_NODES` from `bucketMermaid.ts` for the &quot;+N more&quot; → first-hidden mapping; added node cursor/hover + `.te-card-flash` CSS. No shared-component change — the SVG lives inside the `.te-minimap` wrapper, so the node-hit-test handler is local.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` 0 new errors (only the 3 baseline `@dnd-kit` resolution errors); jest 8/8; the Docker CRA prod build (nginx) compiled clean and the dev `:9999` bundle serves the new code.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/timeline-collapsible-mermaid`. Ali (DRI) directed a same-day PROD deploy of this Timeline work (frontend-only → nginx), overriding the after-hours norm.</span></div>
           
         </div>
       </article>
