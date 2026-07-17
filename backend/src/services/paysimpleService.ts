@@ -136,11 +136,14 @@ export async function createPaymentLink(params: {
   customerFirstName: string;
   customerLastName: string;
   customerEmail: string;
+  // When true, charge `amount` verbatim even in test mode (used by subscriptions,
+  // which set their own small test amounts). Otherwise test mode forces $0.01.
+  exactAmount?: boolean;
 }): Promise<HostedPaymentLink> {
-  const amount = isTestMode() ? 0.01 : params.amount;
+  const amount = (isTestMode() && !params.exactAmount) ? 0.01 : params.amount;
 
   if (isTestMode()) {
-    console.log(`[PaySimple] TEST MODE ACTIVE - $${amount} transaction (production: $${params.amount})`);
+    console.log(`[PaySimple] TEST MODE${params.exactAmount ? ' (exact amount)' : ''} - $${amount} transaction (list price: $${params.amount})`);
   }
 
   const result = await apiRequest<HostedPaymentLink>('POST', '/ps/payment_link', {

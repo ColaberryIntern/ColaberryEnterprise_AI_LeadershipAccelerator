@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
+import { useIsExplorer } from '../useIsExplorer';
 import ProjectPreview from './ProjectPreview';
 import ProjectInterior from './ProjectInterior';
 import NextSessionStrip from './NextSessionStrip';
@@ -52,12 +53,14 @@ function BuildCard({ p, onOpen }: { p: StudentProject; onOpen: () => void }) {
 
 const ProjectsPage: React.FC = () => {
   const projects = useProjectsList();
+  const demo = useIsExplorer();   // Explorer = demo mode: no real builds get created
   const [view, setView] = useState<View>({ kind: 'overview' });
 
   const active = (view.kind === 'preview' || view.kind === 'interior') ? projects.find((p) => p.id === view.id) : null;
   const openInterior = (id: string) => { setView({ kind: 'interior', id }); window.scrollTo(0, 0); };
 
   const handleCreate = (a: NewBuildAnswers) => {
+    if (demo) return;   // demo — the wizard's create button is disabled; guard the store too
     const id = createProjectFromAnswers(a);
     setView({ kind: 'preview', id });
     window.scrollTo(0, 0);
@@ -122,6 +125,16 @@ const ProjectsPage: React.FC = () => {
         <div className="sub">Your builds live here — every project you ship, as lists and tasks in the same feed you see across the platform.</div>
       </div>
 
+      {demo && (
+        <div className="te-card" style={{ borderLeft: '3px solid var(--cherry)', padding: '12px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" style={{ flex: 'none', color: 'var(--cherry)' }}><path d="M12 9v4M12 17h.01M10.3 3.9L2 18a2 2 0 0 0 1.7 3h16.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 700 }}>Projects are a demo</div>
+            <div className="small">Explore how a real build works — click around the lists and tasks. Running prompts, marking done, and creating a build unlock when you enroll. (Your demo builds reset when you enroll.)</div>
+          </div>
+        </div>
+      )}
+
       <div className="te-grid">
         <div>
           {/* hero: your next step */}
@@ -132,7 +145,7 @@ const ProjectsPage: React.FC = () => {
               <p>{primaryNext.task.what || 'Pick this up next to keep your build moving.'}</p>
               <div className="pjw-actions" style={{ marginTop: 0 }}>
                 <button className="te-btn cherry" onClick={() => openInterior(primary.id)}>Open your build</button>
-                {primaryNext.task.prompt && <button className="te-btn ghost" onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(primaryNext.task.prompt!); }}>Copy prompt</button>}
+                {primaryNext.task.prompt && <button className="te-btn ghost" onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(primaryNext.task.prompt!); }} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>Copy prompt</button>}
               </div>
             </div>
           ) : primary ? (

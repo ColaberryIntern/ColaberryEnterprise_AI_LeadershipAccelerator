@@ -7,9 +7,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import api from '../../../utils/api';
-import CardDetailBody from '../../../components/timeline/CardDetailBody';
+import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
 import AutofillButton from '../../../components/common/AutofillButton';
+import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
+import BlueprintDefaults from './BlueprintDefaults';
 import '../../../components/timeline/timeline.css';
 
 /**
@@ -83,6 +86,8 @@ interface TypeDef {
   slug: string; label: string; bucket: Bucket; render_band: string; difficulty: string;
   learning_xp: number; builder_xp: number; community_xp: number; competencies: string[]; event: boolean;
   capabilities?: string[];   // the type's Parts — gate the preview's optional sections
+  launched?: boolean;        // Studio "✓ Approved for curriculum" + active — only these can be ADDED
+  thumbnail_url?: string | null;   // the type's banner — the card's DEFAULT image in previews
 }
 interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[] }
 
@@ -90,22 +95,25 @@ const pts = (p: Card['points']) => (p?.learning || 0) + (p?.builder || 0) + (p?.
 
 // ── one Facebook-style feed card (draggable) with inline play + admin actions ──
 const SortableCard: React.FC<{
-  card: Card; band?: string; studentLabel?: string; onEdit: (c: Card) => void; onClone: (c: Card) => void;
-  onDelete: (c: Card) => void; onPublish: (c: Card) => void;
-}> = ({ card, band, studentLabel, onEdit, onClone, onDelete, onPublish }) => {
+  card: Card; band?: string; studentLabel?: string; typeThumbUrl?: string | null; onEdit: (c: Card) => void; onClone: (c: Card) => void;
+  onDelete: (c: Card) => void; onPublish: (c: Card) => void; onPreview: (c: TimelineFeedCard) => void;
+}> = ({ card, band, studentLabel, typeThumbUrl, onEdit, onClone, onDelete, onPublish, onPreview }) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
   const published = card.visibility === 'published';
   const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition };
-  // Every card renders the SAME student view inline (the shared CardDetailBody),
-  // so the timeline == the edit preview == what the student sees — one size,
-  // one render, for every type (not just video).
+  // Every card renders as the REAL student card (16:9 image tile + short copy);
+  // the LONG details live behind the tile's ▶/Open, which pulls up the student's
+  // right-side popup. Runtime-personalized items (random testimonials/podcasts)
+  // show their STORED image here — only students see their personalized pick.
   const previewCard = adaptToFeedCard({
     slug: card.type, render_band: band, label: card.title,
     student_label: studentLabel || card.type.replace(/_/g, ' '),
     subtitle: card.subtitle, description: card.description,
     difficulty: card.difficulty, estimated_time: card.estimated_time, week: card.week,
     points: card.points, video: card.metadata?.video, course: (card.metadata as any)?.course,
-    experience: (card.metadata as any)?.content,
+    blog: (card.metadata as any)?.blog,
+    experience: (card.metadata as any)?.content, image: (card.metadata as any)?.image || null,
+    type_thumbnail: typeThumbUrl,
   });
   return (
     <div ref={setNodeRef} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
@@ -120,7 +128,7 @@ const SortableCard: React.FC<{
       </div>
 
       <div className="te-media">
-        <div className="tl-de"><div className="tld-inlinepanel"><CardDetailBody card={previewCard} preview /></div></div>
+        <div className="tl-de"><TimelineCard card={previewCard} onOpen={() => onPreview(previewCard)} /></div>
       </div>
 
       <div className="te-foot">
@@ -135,9 +143,9 @@ const SortableCard: React.FC<{
 
 // ── one bucket section (full width, vertical) ────────────────────────────────
 const BucketSection: React.FC<{
-  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
-  cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel'>;
-}> = ({ bucket, cards, bandOf, labelOf, onReorder, onAdd, cardActions }) => {
+  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; thumbOf: (type: string) => string | null; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
+  cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel' | 'typeThumbUrl'>;
+}> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, cardActions }) => {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -166,7 +174,7 @@ const BucketSection: React.FC<{
         <SortableContext items={ids} strategy={verticalListSortingStrategy}>
           {cards.length === 0
             ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
-            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} {...cardActions} />)}
+            : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} typeThumbUrl={thumbOf(c.type)} {...cardActions} />)}
         </SortableContext>
       </DndContext>
     </div>
@@ -174,29 +182,48 @@ const BucketSection: React.FC<{
 };
 
 // ── right-side create / edit drawer (like the student detail panel) ──────────
-// The "finished product" preview renders the SHARED <CardDetailBody> (the exact
-// component the student drawer uses) via adaptToFeedCard, so the editor preview
-// is the classroom, pixel for pixel — no separate lessonDoc/markup to drift.
+// The "finished product" preview renders the REAL student <TimelineCard> (16:9
+// tile) via adaptToFeedCard; the full details open in the student's right-side
+// popup (CardDetailDrawer preview) — one renderer, nothing to drift.
 const EditDrawer: React.FC<{
-  draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }; types: TypeDef[]; isNew: boolean; saving: boolean;
+  draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }; types: TypeDef[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
-  onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => void; onSave: () => void; onClose: () => void;
-}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, onChange, onSave, onClose }) => {
+  bpContext: BlueprintContextDTO | null;
+  onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => void; onSave: () => void; onClose: () => void;
+  onPreview: (c: TimelineFeedCard) => void;
+}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose, onPreview }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
   const isSkillsJar = band === 'skills_jar';
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
   const setCourse = (patch: Partial<CardCourse>) => onChange({ course: { ...(draft.course || {}), ...patch } });
-  // The preview IS the student drawer: build the same synthetic card the Studio
-  // preview uses and render the shared <CardDetailBody preview/> — one renderer.
+  // Testimonials + Podcast types: one set video ("link") or a personalized pick per student ("random").
+  const isTestimonial = draft.type === 'testimonial';
+  const isPodcast = draft.type === 'podcast';
+  const isBlog = draft.type === 'blog';
+  const isPersonalizable = isTestimonial || isPodcast || isBlog;
+  const tMode: 'link' | 'random' = (draft.metadata as any)?.mode === 'random' ? 'random' : 'link';
+  const tCategory = isPodcast
+    ? ((draft.metadata as any)?.podcast_category || '')
+    : ((draft.metadata as any)?.testimonial_category || 'testimonial');
+  const setTestimonial = (mode: 'link' | 'random', category = tCategory) =>
+    onChange({ metadata: { ...(draft.metadata || {}), mode, ...(isBlog ? {} : isPodcast ? { podcast_category: category } : { testimonial_category: category }) } });
+  // Blog link mode: the pasted post URL lives in metadata.blog.url (enriched with
+  // title/thumbnail from the blog_posts library at save time, server-side).
+  const blogUrl = ((draft.metadata as any)?.blog?.url || '') as string;
+  const setBlogUrl = (url: string) =>
+    onChange({ metadata: { ...(draft.metadata || {}), mode: 'link', blog: url.trim() ? { url } : undefined } });
+  // The preview IS the student card: build the same synthetic card the Studio
+  // preview uses; the tile's ▶/Open pulls up the real student popup.
   const previewCard = adaptToFeedCard({
     slug: draft.type, render_band: band,
     label: draft.title || typeDef?.label, student_label: typeDef?.label,
     subtitle: draft.subtitle, description: draft.description,
     difficulty: draft.difficulty, estimated_time: draft.estimated_time, week: draft.week,
     points: draft.points, video: draft.video, experience: draft.metadata?.content || null,
-    course: draft.course, capabilities: typeDef?.capabilities,
+    course: draft.course, blog: (draft.metadata as any)?.blog, image: draft.image || null,
+    capabilities: typeDef?.capabilities, type_thumbnail: typeDef?.thumbnail_url ?? null,
   });
   return (
     <div className="te-scrim" onClick={onClose}>
@@ -215,20 +242,28 @@ const EditDrawer: React.FC<{
             <label style={lbl}>Type
               <select style={inp} value={draft.type || ''} onChange={(e) => onChange({ type: e.target.value })}>
                 <option value="" disabled>Choose a type…</option>
-                {types.map((t) => <option key={t.slug} value={t.slug}>{t.label}</option>)}
+                {/* Only APPROVED types (the Studio's "✓ Approved for curriculum"
+                    flag — same gate as the Composer) can be hand-placed. */}
+                {types.filter((t) => t.launched).map((t) => <option key={t.slug} value={t.slug}>{t.label}</option>)}
               </select>
+              <span style={{ fontSize: 11, color: '#8A8A8A', marginTop: 4, display: 'block' }}>
+                Only types approved for curriculum appear here. Approve a type in the Experience Studio.
+              </span>
             </label>
           )}
 
-          {/* FINISHED PRODUCT — play it, resize, then toy with the controls below */}
+          {/* FINISHED PRODUCT — the student's card (16:9 tile); the full details
+              open in the student's right-side popup via ▶/Open. */}
           {draft.type && (
             <div style={{ marginBottom: 18 }}>
               <div className="te-plabel">Finished product · what the student sees</div>
               <div className="tl-de">
-                <div className="tld-inlinepanel">
-                  <CardDetailBody card={previewCard} preview />
-                </div>
+                <TimelineCard card={previewCard} onOpen={() => onPreview(previewCard)} />
               </div>
+              <button type="button" className="te-act" style={{ width: '100%', justifyContent: 'center', padding: '9px 12px', marginBottom: 8 }}
+                onClick={() => onPreview(previewCard)}>
+                Open the student view — full details →
+              </button>
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button type="button" className="te-act" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
                   disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
@@ -267,7 +302,55 @@ const EditDrawer: React.FC<{
             <textarea style={{ ...inp, minHeight: 64 }} value={draft.description || ''} onChange={(e) => onChange({ description: e.target.value })} placeholder="(optional)" />
           </label>
 
-          {isVideo && (
+          {/* Non-video items (blogs etc.) carry their OWN picture here — it becomes
+              the card's tile image on the student timeline. Video types use the
+              Poster field in the Video block instead (or the YouTube thumbnail). */}
+          {!isVideo && !isSkillsJar && (
+            <label style={lbl}>Image URL — the item&apos;s own picture (shown on its timeline tile)
+              <input style={inp} value={draft.image || ''} onChange={(e) => onChange({ image: e.target.value })} placeholder="(optional) https://…/cover.jpg" />
+            </label>
+          )}
+
+          {isPersonalizable && (
+            <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
+              <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#367895', marginBottom: 8 }}>
+                {isPodcast ? '🎙 Podcast source' : isBlog ? '📖 Blog source' : '★ Testimonial source'} <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· one set {isPodcast ? 'episode' : isBlog ? 'post' : 'video'}, or a personalized pick per student</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, marginBottom: tMode === 'random' || (isBlog && tMode === 'link') ? 10 : 0 }}>
+                {(['link', 'random'] as const).map((m) => (
+                  <button key={m} type="button" onClick={() => setTestimonial(m)}
+                    style={{ flex: 1, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 13,
+                      border: tMode === m ? '2px solid #367895' : '1px solid #CDD8DC',
+                      background: tMode === m ? '#E4F1F5' : '#fff', color: tMode === m ? '#1F5266' : '#4A4A4A' }}>
+                    {m === 'link' ? 'Paste a link' : 'Random · personalized'}
+                  </button>
+                ))}
+              </div>
+              {isBlog && tMode === 'link' && (
+                <label style={{ ...lbl, marginBottom: 0 }}>Blog post URL
+                  <input style={inp} value={blogUrl} onChange={(e) => setBlogUrl(e.target.value)} placeholder="https://training.colaberry.com/blog/…" />
+                </label>
+              )}
+              {tMode === 'random' && (
+                <>
+                  {!isBlog && (
+                    <label style={lbl}>Library category{isPodcast ? ' (optional)' : ''}
+                      <input style={inp} value={tCategory} onChange={(e) => setTestimonial('random', e.target.value)} placeholder={isPodcast ? 'blank = whole catalog' : 'testimonial'} />
+                    </label>
+                  )}
+                  <p style={{ margin: '4px 2px 0', fontSize: 12, color: '#6A6A6A' }}>
+                    {isPodcast
+                      ? 'Each student hears an episode matched to what we know about them (role / goals), never the same one twice — and every listen is tracked per student.'
+                      : isBlog
+                        ? 'Each student gets a Colaberry blog post matched to their profile AND the week this card sits on — never the same post twice, every read tracked per student. New posts join the pool automatically each week.'
+                        : 'Each student sees a testimonial matched to what we know about them (industry / role), and never the same one twice.'}
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+
+          {isVideo && !(isPersonalizable && tMode === 'random') && (
             <div style={{ border: '1px solid #D4E3E8', borderRadius: 9, padding: '10px 12px', marginBottom: 12, background: '#F5FAFB' }}>
               <div style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em', color: '#367895', marginBottom: 8 }}>
                 ▶ Video &amp; playback <span style={{ fontWeight: 600, textTransform: 'none', letterSpacing: 0, color: '#8A8A8A' }}>· the link this card plays in-app</span>
@@ -308,6 +391,10 @@ const EditDrawer: React.FC<{
             </div>
           )}
 
+          {/* Auto-included Blueprint context — LOCKED to this card's week (no picker,
+              no drill-down). Sits right above the Week field it follows; always shown so
+              every curriculum type carries the section. Shared with the Studio via <BlueprintDefaults>. */}
+          <BlueprintDefaults ctx={bpContext} week={draft.week ?? null} locked />
           <div style={{ display: 'flex', gap: 10 }}>
             <label style={{ ...lbl, flex: 1 }}>Week
               <input type="number" style={inp} value={draft.week ?? ''} onChange={(e) => onChange({ week: e.target.value === '' ? null : Number(e.target.value) })} />
@@ -359,26 +446,56 @@ const inp: React.CSSProperties = { padding: '8px 10px', border: '1px solid #D8D8
 
 // ── main tab ─────────────────────────────────────────────────────────────────
 const TimelineEditorTab: React.FC = () => {
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [courseId, setCourseId] = useState<string>('');
   const [board, setBoard] = useState<Board | null>(null);
   const [week, setWeek] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) | null>(null);
+  const [draft, setDraft] = useState<(Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) | null>(null);
+  // The card whose STUDENT VIEW popup is open (the real right-side drawer).
+  const [studentView, setStudentView] = useState<TimelineFeedCard | null>(null);
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course'>('');
+  const [bpContext, setBpContext] = useState<BlueprintContextDTO | null>(null);
+
+  // Load the courses once and default to the AI Systems Architect Accelerator —
+  // the Timeline is scoped to one course.
+  useEffect(() => {
+    (async () => {
+      try {
+        const cs = await composerApi.courses();
+        setCourses(cs);
+        const def = cs.find((c) => /architect/i.test(c.name)) || cs.find((c) => c.is_active) || cs[0];
+        setCourseId(def?.id || '');
+      } catch { setError('Failed to load courses'); }
+    })();
+  }, []);
 
   const loadBoard = useCallback(async () => {
+    if (!courseId) return;
     setLoading(true); setError('');
     try {
-      const r = await api.get('/api/admin/orchestration/timeline');
+      const r = await api.get('/api/admin/orchestration/timeline', { params: { program_id: courseId } });
       setBoard(r.data as Board);
     } catch { setError('Failed to load the curriculum'); }
     finally { setLoading(false); }
-  }, []);
+  }, [courseId]);
 
   useEffect(() => { loadBoard(); }, [loadBoard]);
+
+  // The week's Blueprint that's auto-injected into every generator for this card —
+  // fetched read-only so the editor can show it grayed out.
+  useEffect(() => {
+    if (!draft || draft.week == null || !courseId) { setBpContext(null); return; }
+    let cancelled = false;
+    api.get('/api/admin/orchestration/timeline/blueprint-context', { params: { program_id: courseId, week: draft.week } })
+      .then((r) => { if (!cancelled) setBpContext(r.data || null); })
+      .catch(() => { if (!cancelled) setBpContext(null); });
+    return () => { cancelled = true; };
+  }, [draft?.week, courseId, Boolean(draft)]);
 
   const weeks = useMemo(() => {
     const s = new Set<number | null>();
@@ -403,6 +520,11 @@ const TimelineEditorTab: React.FC = () => {
     const t = board?.types.find((x) => x.slug === type);
     return t?.label || type.replace(/_/g, ' ');
   }, [board]);
+  // slug -> the type's banner image — the card's DEFAULT visual (own media wins).
+  const thumbOf = useCallback((type: string): string | null => {
+    const t = board?.types.find((x) => x.slug === type);
+    return t?.thumbnail_url || null;
+  }, [board]);
 
   const weekCards = useMemo(
     () => (board?.cards || []).filter((c) => (typeof c.week === 'number' ? c.week : null) === week),
@@ -419,15 +541,17 @@ const TimelineEditorTab: React.FC = () => {
     } catch { setError('Reorder failed'); loadBoard(); }
   };
 
-  const openAdd = (bucket: Bucket) => {
-    const def = board?.types.find((t) => t.bucket === bucket) || board?.types[0];
+  const openAdd = (bucket: Bucket, wk?: number | null) => {
+    // Default to a LAUNCHED type — unlaunched ones aren't offered in the picker.
+    const launched = (board?.types || []).filter((t) => t.launched);
+    const def = launched.find((t) => t.bucket === bucket) || launched[0];
     setIsNew(true);
-    setDraft({ type: def?.slug, title: '', bucket, week, difficulty: def?.difficulty || 'core',
+    setDraft({ type: def?.slug, title: '', bucket, week: wk !== undefined ? wk : week, difficulty: def?.difficulty || 'core',
       points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'draft' });
   };
-  const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined }); };
+  const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined, image: (c.metadata as any)?.image || undefined }); };
 
-  const onDraftChange = (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse }) => {
+  const onDraftChange = (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => {
     setDraft((d) => {
       if (!d) return d;
       const next = { ...d, ...patch };
@@ -450,24 +574,44 @@ const TimelineEditorTab: React.FC = () => {
     try {
       // Per-card "unique" data (the video/link) rides along as `video`; the API
       // merges it into metadata.video, which the student feed + Runtime read.
-      const videoPayload = draft.video && (draft.video.url || '').trim() ? draft.video : null;
+      // Testimonials type: link mode plays a set video; random mode picks a
+      // matched testimonial per student, so no fixed video is stored.
+      const srcMode = (draft.type === 'testimonial' || draft.type === 'podcast' || draft.type === 'blog')
+        ? ((draft.metadata as any)?.mode === 'random' ? 'random' : 'link') : null;
+      const testimonialPayload = draft.type === 'testimonial' && srcMode
+        ? { mode: srcMode, category: (draft.metadata as any)?.testimonial_category || 'testimonial' } : null;
+      const podcastPayload = draft.type === 'podcast' && srcMode
+        ? { mode: srcMode, category: (draft.metadata as any)?.podcast_category || null } : null;
+      const blogPayload = draft.type === 'blog' && srcMode
+        ? { mode: srcMode, url: srcMode === 'link' ? (((draft.metadata as any)?.blog?.url || '').trim() || null) : null } : null;
+      const videoPayload = srcMode === 'random'
+        ? null
+        : (draft.video && (draft.video.url || '').trim() ? draft.video : null);
       // AI-generated (or authored) student content rides along in metadata.content
       // so "Generate content → Save" persists exactly what the preview showed.
       const contentPayload = (draft.metadata as any)?.content || null;
       const coursePayload = draft.course && ((draft.course.name || '').trim() || (draft.course.url || '').trim()) ? draft.course : null;
+      // The item's own picture (blog cover etc.) — merged into metadata.image.
+      const imagePayload = (draft.image || '').trim() || null;
       if (isNew) {
         await api.post('/api/admin/orchestration/timeline/cards', {
           type: draft.type, title: draft.title, subtitle: draft.subtitle || null,
           description: draft.description || null, week: draft.week ?? null, bucket: draft.bucket,
           difficulty: draft.difficulty, estimated_time: draft.estimated_time ?? null,
-          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload,
+          points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload, testimonial: testimonialPayload,
+          ...(draft.type === 'podcast' ? { podcast: podcastPayload } : {}),
+          ...(draft.type === 'blog' ? { blog: blogPayload } : {}),
+          image: imagePayload, program_id: courseId || null,
         });
       } else if (draft.id) {
         await api.put(`/api/admin/orchestration/timeline/cards/${draft.id}`, {
           title: draft.title, subtitle: draft.subtitle || null, description: draft.description || null,
           week: draft.week ?? null, bucket: draft.bucket, difficulty: draft.difficulty,
           estimated_time: draft.estimated_time ?? null, points: draft.points, visibility: draft.visibility,
-          video: videoPayload, content: contentPayload, course: coursePayload,
+          video: videoPayload, content: contentPayload, course: coursePayload, testimonial: testimonialPayload,
+          ...(draft.type === 'podcast' ? { podcast: podcastPayload } : {}),
+          ...(draft.type === 'blog' ? { blog: blogPayload } : {}),
+          image: imagePayload,
         });
       }
       setDraft(null);
@@ -514,7 +658,7 @@ const TimelineEditorTab: React.FC = () => {
       if (!(draft.course?.url || '').trim()) return;
       setGenBusy('course'); setError('');
       try {
-        const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: draft.type, url: draft.course!.url });
+        const r = await api.post('/api/admin/orchestration/timeline/generate-course-draft', { type: draft.type, url: draft.course!.url, program_id: courseId || null, week: draft.week ?? null });
         const g = r.data || {};
         setDraft((d) => d && ({
           ...d,
@@ -537,6 +681,7 @@ const TimelineEditorTab: React.FC = () => {
       const r = await api.post('/api/admin/orchestration/timeline/generate-video-draft', {
         type: draft.type, title: draft.title || null,
         subtitle: draft.subtitle || null, description: draft.description || null,
+        program_id: courseId || null, week: draft.week ?? null,
         video: draft.video || null, anchor,
       });
       const g = r.data || {};
@@ -620,11 +765,26 @@ const TimelineEditorTab: React.FC = () => {
         .tl-vwrap .tlv-link,.tl-vwrap .tlv-none{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;background:#F5F5F5;border:1px solid #E4E4E4;border-radius:10px;color:#8A8A8A;padding:16px;font-size:12.5px}
         .tl-vwrap .tl-btn{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:7px 12px;border-radius:7px;border:1px solid #367895;background:#367895;color:#fff;text-decoration:none;cursor:pointer}
         .te-lessonframe{width:100%;height:300px;border:1px solid #E4E4E4;border-radius:9px;background:#fff;display:block}
+        /* Cards in the lanes ARE the student card — hide the student-only social
+           row (Like/Comment) in the admin context; keep the Open CTA. */
+        .te-media .fc-foot .like,.te-media .fc-foot .cmt{display:none}
+        .te-media .tl-card.fcard,.te-dbody .tl-card.fcard{margin-bottom:6px;box-shadow:none;border:1px solid #E9E9E9}
+        /* The student-view popup must sit ABOVE the edit drawer (te-scrim z=1000). */
+        .te-studentpop .tld-scrim{z-index:1200}
       `}</style>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1A1A' }}>Class curriculum</div>
-        <div style={{ fontSize: 12, color: '#8A8A8A' }}>your students' timeline · every batch sees it</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: '#1A1A1A' }}>Course</div>
+        <select
+          style={{ fontSize: 13, fontWeight: 700, padding: '6px 12px', border: '1px solid #CBD2D8', borderRadius: 8, background: '#fff', color: '#1A1A1A', cursor: 'pointer' }}
+          value={courseId}
+          onChange={(e) => setCourseId(e.target.value)}
+          title="The Timeline is scoped to one course. Add courses in the Curriculum Composer."
+        >
+          {courses.length === 0 && <option value="">— loading —</option>}
+          {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+        <div style={{ fontSize: 12, color: '#8A8A8A' }}>this course's student timeline · every batch sees it</div>
         {board && <div style={{ fontSize: 12, color: '#8A8A8A', marginLeft: 'auto' }}><b style={{ color: '#1A1A1A' }}>{board.cards.length}</b> cards · <b style={{ color: '#3C7A26' }}>{publishedCount}</b> live</div>}
       </div>
 
@@ -635,24 +795,32 @@ const TimelineEditorTab: React.FC = () => {
         <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
             {weeks.nums.map((w) => (
-              <button key={w} className={`tl-wk ${week === w ? 'on' : ''}`} onClick={() => setWeek(w)}>Week {w}</button>
+              <button key={w} className={`tl-wk ${week === w ? 'on' : ''}`} onClick={() => setWeek(w)}>{w === 0 ? 'Wk 0 · Free' : `Week ${w}`}</button>
             ))}
             {weeks.hasUnscheduled && <button className={`tl-wk ${week === null ? 'on' : ''}`} onClick={() => setWeek(null)}>Unscheduled</button>}
-            <button className="tl-wk" onClick={() => { const next = (weeks.nums[weeks.nums.length - 1] || 0) + 1; setWeek(next); openAdd('learn'); }}>+ Week</button>
+            {!weeks.nums.includes(0) && <button className="tl-wk" onClick={() => { setWeek(0); openAdd('learn', 0); }}>+ Free Preview (Wk 0)</button>}
+            <button className="tl-wk" onClick={() => { const next = (weeks.nums[weeks.nums.length - 1] || 0) + 1; setWeek(next); openAdd('learn', next); }}>+ Week</button>
           </div>
 
           {BUCKETS.map((b) => (
-            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} onReorder={onReorder} onAdd={openAdd}
-              cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish }} />
+            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} thumbOf={thumbOf} onReorder={onReorder} onAdd={openAdd}
+              cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish, onPreview: setStudentView }} />
           ))}
         </>
       )}
 
       {draft && (
         <EditDrawer draft={draft} types={board?.types || []} isNew={isNew} saving={saving}
-          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent}
-          onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} />
+          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext}
+          onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} onPreview={setStudentView} />
       )}
+
+      {/* The student's right-side popup — the EXACT drawer students get, opened
+          from any card tile's ▶/Open (and from the edit drawer). Sits above the
+          edit drawer (see .te-studentpop z-index override). */}
+      <div className="tl-de te-studentpop">
+        <CardDetailDrawer card={studentView} preview onClose={() => setStudentView(null)} />
+      </div>
     </div>
   );
 };

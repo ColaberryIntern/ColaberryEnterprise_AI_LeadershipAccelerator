@@ -152,7 +152,7 @@
 .pj-root .pw-act{display:inline-flex;align-items:center;gap:7px;border:1px solid transparent;cursor:pointer;
   font-size:13px;font-weight:700;padding:9px 16px;border-radius:var(--r-pill);font-family:inherit;transition:.14s;white-space:nowrap}
 .pj-root .pw-act svg{width:15px;height:15px;flex:none}
-.pj-root .pw-act:disabled{opacity:.55;cursor:not-allowed}
+.pj-root .pw-act:disabled{opacity:.4;cursor:not-allowed;filter:grayscale(.7)}
 /* Copy Prompt = berry/blue */
 .pj-root .pw-act.copy{background:#367895;color:#fff} .pj-root .pw-act.copy:hover{background:#2E6A86}
 .pj-root .pw-act.copy.ok{background:#5BA63C}

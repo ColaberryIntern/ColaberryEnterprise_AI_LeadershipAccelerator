@@ -10,8 +10,9 @@
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
+import { getBlueprintContext } from './blueprintContext';
 
-export interface CourseDraftInput { type: string; url: string }
+export interface CourseDraftInput { type: string; url: string; program_id?: string | null; week?: number | null }
 export interface CourseDraft {
   title: string;
   subtitle: string | null;
@@ -68,12 +69,13 @@ export async function generateCourseDraft(input: CourseDraftInput, model = DEFAU
 
   const def = await CurriculumTypeDefinition.findOne({ where: { slug: input.type } });
   const og = await fetchOg(url);
+  const bp = await getBlueprintContext(input.program_id, input.week);
 
   const client = getInstrumentedOpenAI({ workflow_id: 'timeline_course_draft' });
   const res = await client.chat.completions.create({
     model, temperature: 0.5, max_tokens: 1400, response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: 'You set up an external "Anthropic Skills Course" (delivered on SkillsJar) card for an AI Systems Architect student, from the course link and its page metadata. Return STRICT json.' },
+      { role: 'system', content: `${bp ? bp.prompt_text + '\n\n' : ''}You set up an external "Anthropic Skills Course" (delivered on SkillsJar) card for an AI Systems Architect student, from the course link and its page metadata. Return STRICT json.` },
       { role: 'user', content: `Course URL: ${url}\n${og.title ? `Page title: "${og.title}"\n` : ''}${og.description ? `Page description: "${og.description}"\n` : ''}` +
         `Return json with keys: class_name (string — the clean course name, e.g. "Introduction to MCP"), subtitle (string, short), description (string, 1-2 sentences telling the student to complete this course on SkillsJar then upload their completion certificate here to earn credit), estimated_time (integer minutes — best estimate), points (object { "learning": int, "builder": int, "community": int } — XP, learning-heavy for a course), summary (string), body_html (clean self-contained HTML overview of what the course covers + why it matters, no scripts), questions (string[]), reflection (string).` },
     ],

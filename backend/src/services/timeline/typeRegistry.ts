@@ -53,6 +53,10 @@ export const CARD_TYPES: CardTypeDef[] = [
   D({ slug: 'live_class', label: 'Live Class', student_label: 'Live Class', bucket: 'learn', render_band: 'live_class', learning_xp: 20, difficulty: 'core', competencies: ['communication'], prompt_pairs: ['concept'] }),
   D({ slug: 'event', label: 'Event', student_label: 'Event', bucket: 'pre_class', render_band: 'event', event: true }),
   D({ slug: 'video', label: 'Video', student_label: 'Video', bucket: 'learn', render_band: 'media', learning_xp: 15 }),
+  // Week 0 — free lead-magnet content (the "AI Preview" tier): social proof + light learning.
+  D({ slug: 'testimonial', label: 'Testimonial', student_label: 'Testimonial', bucket: 'pre_class', render_band: 'media', learning_xp: 5 }),
+  D({ slug: 'podcast', label: 'Podcast', student_label: 'Podcast', bucket: 'learn', render_band: 'media', learning_xp: 10 }),
+  D({ slug: 'blog', label: 'Blog', student_label: 'Blog', bucket: 'learn', render_band: 'deepdive', learning_xp: 10 }),
   D({ slug: 'warmup', label: 'Warm-up', student_label: 'Warm-up', bucket: 'pre_class', render_band: 'warmup', learning_xp: 10 }),
   D({ slug: 'knowledge_check', label: 'Knowledge Check', student_label: 'Knowledge Check', bucket: 'learn', render_band: 'quiz', learning_xp: 15, difficulty: 'core', ai_evaluation: true, prompt_pairs: ['kc'] }),
   D({ slug: 'survey', label: 'Survey', student_label: 'Survey', bucket: 'reflect', render_band: 'survey', learning_xp: 5, community_xp: 5 }),

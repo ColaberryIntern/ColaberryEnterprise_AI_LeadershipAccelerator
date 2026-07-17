@@ -16,6 +16,7 @@ import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolvePrompt } from '../components/promptTesterService';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
+import { getBlueprintContext } from './blueprintContext';
 
 const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 
@@ -24,6 +25,8 @@ export interface VideoDraftInput {
   title?: string | null;
   subtitle?: string | null;
   description?: string | null;
+  program_id?: string | null;   // the card's course — pulls the week's Blueprint context
+  week?: number | null;         // the card's week — pulls the week's Blueprint context
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   // Which field the author is anchoring on. The anchored field is PRESERVED and
   // every OTHER field is regenerated. 'title' (default) → keep the title, find a
@@ -126,6 +129,7 @@ async function resolveVideo(title: string, providedUrl: string | null | undefine
 async function generateText(
   def: CurriculumTypeDefinition | null, type: string,
   args: { title: string; videoTitle: string; anchor: 'title' | 'video' }, model: string,
+  blueprintText?: string | null,
 ) {
   const gen = def ? ((def as any).generation_prompt as string | null) : null;
   // What to anchor the writing on: the author's title, else the real video's title.
@@ -143,7 +147,7 @@ async function generateText(
   const res = await client.chat.completions.create({
     model, temperature: 0.6, max_tokens: 1600, response_format: { type: 'json_object' },
     messages: [
-      { role: 'system', content: `You write a course video card for an AI Systems Architect student. Return STRICT json.` },
+      { role: 'system', content: `${blueprintText ? blueprintText + '\n\n' : ''}You write a course video card for an AI Systems Architect student. Return STRICT json.` },
       { role: 'user', content: `${args.title ? `Card title: "${args.title}". ` : ''}${args.videoTitle ? `The chosen video is "${args.videoTitle}". ` : ''}\n${resolved}\n\nReturn json with keys: ${wantTitle ? 'title (a concise, specific card title for this video, e.g. "Video: <topic>"), ' : ''}subtitle (string, short), description (string, 1-2 sentences on what the video covers), estimated_time (integer: your best estimate of the video length in whole MINUTES), points (object { "learning": int, "builder": int, "community": int } — XP to award: learning is the main driver for a watch-and-learn video (typically 10-25), builder is 0 unless it prompts hands-on building, community is 0 unless it sparks discussion), summary (string), body_html (clean self-contained HTML lesson notes, no scripts), questions (string[]), reflection (string).` },
     ],
   });
@@ -199,7 +203,8 @@ export async function generateVideoDraft(input: VideoDraftInput, model = DEFAULT
     video = rv.url ? { url: rv.url, presenter: rv.presenter, poster: rv.poster } : null;
   }
 
-  const text = await generateText(def, input.type, { title: anchor === 'video' ? '' : title, videoTitle, anchor }, model);
+  const bp = await getBlueprintContext(input.program_id, input.week);
+  const text = await generateText(def, input.type, { title: anchor === 'video' ? '' : title, videoTitle, anchor }, model, bp?.prompt_text);
 
   return {
     // The anchored field is preserved by the caller; every other field is

@@ -23,9 +23,12 @@ export interface AdaptInput {
   points?: { learning?: number; builder?: number; community?: number };
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   videoUrl?: string;
+  image?: string | null;   // the item's OWN image (blog cover etc.) — overrides the generic type visual
   experience?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Skills Course (skills_jar)
+  blog?: { url?: string | null; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type)
   capabilities?: string[] | null;   // the type's Parts — carried so the preview gates sections like the live render
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — carried so previews show the card's default image
 }
 
 export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {
@@ -38,6 +41,7 @@ export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {
     type: input.slug || 'preview',
     student_label: input.student_label || input.label || 'Activity',
     render_band: input.render_band || 'overview',
+    type_thumbnail: input.type_thumbnail ?? null,
     title: exp.title || input.label || 'Untitled',
     subtitle: input.subtitle ?? null,
     description: input.description ?? null,
@@ -52,9 +56,12 @@ export function adaptToFeedCard(input: AdaptInput): TimelineFeedCard {
     quiz_score: null,
     completed_at: null,
     video: url ? { url, presenter: input.video?.presenter || null, poster: input.video?.poster || null } : null,
+    image: typeof input.image === 'string' && input.image.trim() ? input.image.trim() : null,
     content: hasContent ? { summary: exp.summary, body_html: exp.body_html, questions: exp.questions, reflection: exp.reflection } : null,
     course: input.course && (input.course.name || input.course.url)
       ? { name: input.course.name || null, url: input.course.url || null } : null,
+    blog: input.blog && input.blog.url
+      ? { url: input.blog.url, title: input.blog.title || null, excerpt: input.blog.excerpt || null, thumbnail: input.blog.thumbnail || null } : null,
     capabilities: Array.isArray(input.capabilities) ? input.capabilities.filter((c) => typeof c === 'string') : [],
   };
 }

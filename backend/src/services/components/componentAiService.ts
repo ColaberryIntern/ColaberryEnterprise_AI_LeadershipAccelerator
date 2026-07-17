@@ -21,6 +21,8 @@ import { DEFAULT_MODEL, MODEL_PRICING } from './costEstimationService';
 import { capabilityIds, CAPABILITY_MODULES } from './capabilityRegistry';
 import { resolveRecipe } from './recipeRegistry';
 import { resolvePrompt } from './promptTesterService';
+import { getBlueprintContext } from '../timeline/blueprintContext';
+import { getSectionCurriculumContext, SECTION_ROSTER_TYPES } from '../timeline/sectionCurriculumContext';
 
 function cost(model: string, res: any): number {
   const p = MODEL_PRICING[model] || MODEL_PRICING[DEFAULT_MODEL];
@@ -95,14 +97,23 @@ export async function coDesignComponent(slug: string, model = DEFAULT_MODEL) {
   return { score: r.parsed.score ?? null, recommendations: r.parsed.recommendations || [], usage: r.usage, cost_usd: r.cost_usd, runtime_ms: r.runtime_ms };
 }
 
-export async function runtimePreview(slug: string, variables: Record<string, string> = {}, model = DEFAULT_MODEL) {
+export async function runtimePreview(
+  slug: string, variables: Record<string, string> = {}, model = DEFAULT_MODEL,
+  programId?: string | null, week?: number | null,
+) {
   const c = await CurriculumTypeDefinition.findOne({ where: { slug } });
   if (!c) throw Object.assign(new Error(`Component "${slug}" not found`), { status: 404 });
   const gen = (c as any).generation_prompt as string | null;
   if (!gen) throw Object.assign(new Error('Component has no generation prompt'), { status: 400 });
   const resolved = resolvePrompt(gen, variables);
+  // Auto-include the week's Blueprint (topics, objectives, level) when the author
+  // has picked a "design for week N" context — same context the Timeline injects.
+  const bp = await getBlueprintContext(programId, week);
+  // Week-summary types (overview) also receive the week's ACTUAL activity roster
+  // so "what you'll cover" reflects the placed curriculum, not just objectives.
+  const roster = SECTION_ROSTER_TYPES.has(slug) ? await getSectionCurriculumContext(programId, week) : null;
   const system =
-    `You are the runtime that renders the "${c.student_label}" component into the exact experience a student sees. ` +
+    `${bp ? bp.prompt_text + '\n\n' : ''}${roster ? roster.prompt_text + '\n\n' : ''}You are the runtime that renders the "${c.student_label}" component into the exact experience a student sees. ` +
     'Return STRICT json.';
   const user =
     `Using this generation prompt, produce the full student experience as json with keys: ` +

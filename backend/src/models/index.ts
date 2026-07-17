@@ -1,5 +1,8 @@
 import Cohort from './Cohort';
 import Enrollment from './Enrollment';
+import Podcast from './Podcast';
+import PodcastView from './PodcastView';
+import TimelineCardComment from './TimelineCardComment';
 import AdminUser from './AdminUser';
 import Lead from './Lead';
 import AutomationLog from './AutomationLog';
@@ -282,6 +285,7 @@ import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
 import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
+import Subscription from './Subscription';
 
 // Knowledge Operations System — KB Unification
 import CoraKbCourse from './CoraKbCourse';
@@ -927,6 +931,10 @@ RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'st
 StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
 Enrollment.hasMany(StudentPointsEvent, { foreignKey: 'enrollment_id', as: 'pointsEvents', onDelete: 'CASCADE' });
 StudentPointsEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// Self-serve subscriptions (student billing).
+Enrollment.hasMany(Subscription, { foreignKey: 'enrollment_id', as: 'subscriptions', onDelete: 'CASCADE' });
+Subscription.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 Enrollment.hasOne(OnboardingProfile, { foreignKey: 'enrollment_id', as: 'onboardingProfile', onDelete: 'CASCADE' });
 OnboardingProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
@@ -976,7 +984,7 @@ ChallengeParticipant.hasOne(LeaderboardScore, { foreignKey: 'challenge_participa
 LeaderboardScore.belongsTo(ChallengeParticipant, { foreignKey: 'challenge_participant_id', as: 'participant' });
 
 export {
-  Cohort, Enrollment, AdminUser, Lead, AutomationLog,
+  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
@@ -1207,6 +1215,7 @@ export {
   StudentPointsEvent,
   OpenHouseEvent,
   OnboardingProfile,
+  Subscription,
   // Timeline Engine (Classroom rebuild)
   TimelineCard, TimelineCardProgress, TimelineEvent, PointsConfig,
   CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,

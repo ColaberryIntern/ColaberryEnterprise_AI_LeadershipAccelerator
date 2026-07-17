@@ -24,7 +24,11 @@ interface Feed {
   buckets: string[];
   cards: TimelineFeedCard[];
   progression?: Progression;
+  is_explorer?: boolean;   // free Explorer tier — Week 0 only, with an enroll upsell
 }
+
+// Week 0 is the free "AI Preview" tier; the rest are the paid Accelerator weeks.
+const wkLabel = (w: number | null): string => (w === 0 ? 'Free Preview' : w != null ? `Week ${w}` : 'Classroom');
 
 const titleCase = (s: string): string => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const readTheme = (): 'light' | 'dark' =>
@@ -134,17 +138,30 @@ const ClassroomPage: React.FC = () => {
     <div className="tl-de" data-theme={theme}>
       <div className="tl-top">
         <div>
-          <div className="tl-crumb">{week != null ? `Week ${week}` : 'Classroom'}</div>
-          <h1 className="tl-h1">Classroom{week != null ? ` — Week ${week}` : ''}</h1>
-          <div className="tl-sub">Your week as a feed. Watch, build, test, reflect — every item scores on-site and feeds your points. Complete each card to advance.</div>
+          <div className="tl-crumb">{wkLabel(week)}</div>
+          <h1 className="tl-h1">Classroom{week != null ? ` — ${wkLabel(week)}` : ''}</h1>
+          <div className="tl-sub">{feed.is_explorer
+            ? 'Your free AI Preview — watch testimonials, listen to podcasts, read, and try short lessons and quizzes. Enroll to unlock the full Accelerator.'
+            : 'Your week as a feed. Watch, build, test, reflect — every item scores on-site and feeds your points. Complete each card to advance.'}</div>
         </div>
         {themeBtn}
       </div>
 
+      {feed.is_explorer && (
+        <div className="tl-card tl-ac-berry" style={{ padding: '15px 18px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" style={{ flex: 'none' }}><path d="M4 8h16v8H4zM4 8l2-3h12l2 3M9 12h6" stroke="var(--cherry)" strokeWidth="2" strokeLinejoin="round" /></svg>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={{ fontWeight: 700 }}>You're on the free AI Preview</div>
+            <div className="tl-small">Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live classes, the community, and your certification.</div>
+          </div>
+          <button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/curriculum')}>Enroll to unlock →</button>
+        </div>
+      )}
+
       {weeks.length > 1 && (
         <div className="tl-weeknav">
           <button type="button" className="tl-arrow" disabled={wkIdx <= 0} onClick={() => setWeek(weeks[wkIdx - 1])} aria-label="Previous week"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
-          <div className="tl-wkmid"><div className="tl-wklbl">Week {week} of {weeks[weeks.length - 1]}</div></div>
+          <div className="tl-wkmid"><div className="tl-wklbl">{week === 0 ? 'Free Preview' : `Week ${week} of ${weeks[weeks.length - 1]}`}</div></div>
           <button type="button" className="tl-arrow" disabled={wkIdx >= weeks.length - 1} onClick={() => setWeek(weeks[wkIdx + 1])} aria-label="Next week"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
         </div>
       )}
@@ -163,7 +180,7 @@ const ClassroomPage: React.FC = () => {
 
           {weekCards.length === 0
             ? <div className="tl-empty">No cards here yet.</div>
-            : <TimelineFeed cards={weekCards} onOpen={openCard} onComplete={completeCard} />}
+            : <TimelineFeed cards={weekCards} onOpen={openCard} onComplete={completeCard} onComments={(c) => navigate(`/portal/runtime/${c.id}`)} />}
         </div>
 
         <aside className="tl-side">

@@ -1,0 +1,1014 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260708-q7m3 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Thursday, July 16, 2026 at 12:08 PM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">63 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Consolidate the Timeline Engine + Design-E Classroom onto the live :3098 platform branch</h2>
+          <span class="badge">2026-07-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ported the Timeline Engine (Classroom rebuild, Phases 1-2) off its own branch (workstream/classroom-timeline-engine) onto feature/project-workspace-drawer — the branch that actually runs the :3098 Design-E student platform (Today/Path/Projects/Classroom) — so the whole thing reseeds, admin-syncs, and deploys as ONE codebase instead of two divergent stacks. Method: `git checkout` of the engine&#39;s clean-add files only (10 progression/timeline models, services/timeline/*, services/progression/*, controllers/timelineController, 3 scripts, frontend components/timeline/* + ClassroomPage) — deliberately did NOT drag in that branch&#39;s unrelated churn (Ali Task Agent, Open House, StudentTasks, a 100-file frontend refactor). Then 6 surgical wiring edits on the platform&#39;s own newer files: models/index.ts (register 10 Timeline models + associations), server.ts (inject ensureTimelineEngineSchema — creates 7 timeline tables + additive ALTERs on curriculum_type_definitions, all idempotent — plus the flag-gated boot seed), models/CurriculumTypeDefinition.ts (14 additive nullable registry columns), routes/participantRoutes.ts (GET/POST /api/portal/classroom), frontend routes/portalRoutes.tsx (/portal/classroom route), pages/portal/today/PortalShell.tsx (repointed the Classroom nav from the legacy /portal/curriculum stub to /portal/classroom). Enhanced seedTimelineDemo with an optional SEED_COHORT_ID so an EXISTING cohort (the live Founding Cohort) can be populated, not just a throwaway demo cohort. Flag TIMELINE_ENGINE_ENABLED gates the whole thing (off =&gt; legacy path untouched).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` (in onb-test-backend, ts 4.9.5) = 0 errors in src (267 total are all node_modules @types/d3 + zod-v4 parse noise). Frontend `tsc --noEmit` (onb-test-fe) = 0 errors in my files (the only 2 are pre-existing recharts errors in admin IntelScatter/Waterfall charts). Live on :3098 after restart: boot logged &quot;[DB] Timeline Engine schema ensured&quot; + seeded 11 competency domains / 9 builder levels / 36 curriculum types; real HTTP GET /api/portal/classroom (via /api/portal/verify JWT) returned 200 with 17 cards across all 7 buckets {pre_class:2,learn:5,practice:2,build:3,reflect:1,share:2,advance:2} + progression block; POST .../cards/:id/complete moved a warm-up card available-&gt;completed and learning XP 0-&gt;10, and a second complete kept it at 10 (idempotent). Founding Cohort (79d87941…) seeded with its 17 cards so the logged-in student&#39;s Classroom is populated.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">On branch feature/project-workspace-drawer (11 ahead of main); dev consolidation only, NOT pushed/deployed to prod — the prod path is a later surgical promotion of this branch. server.ts + PortalShell.tsx were already carrying uncommitted Design-E Today/feed WIP (from an earlier untracked effort, not session b6y2); my edits layer on top so this commit necessarily includes those prior hunks. The 3 pure-WIP files I never touched (feed/feed.css, today/TodayShell.css, today/TodayShell.tsx) were deliberately left UNstaged. Next: admin Timeline Editor (Orchestration rebuild) — needs dnd-kit dependency approval.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Classroom render fix — route out of legacy PortalLayout, wrapped in PortalShell (Design E chrome)</h2>
+          <span class="badge">2026-07-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The consolidated Classroom rendered blank because /portal/classroom was nested inside the legacy &lt;PortalLayout&gt; block (which is empty on the Design-E branch). Moved the route OUT to sit beside /portal/today, /portal/path, /portal/projects, and wrapped ClassroomPage&#39;s content in &lt;PortalShell&gt; so it carries the same left-nav chrome as every other Design-E page. Two files: routes/portalRoutes.tsx (route relocation) + pages/portal/ClassroomPage.tsx (PortalShell wrap on all 4 render states).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">my standalone `tsc --noEmit` = 0 errors in these files; diagnostic build confirmed the route mounts. NOTE: the shared :3098 CRA dev server wedged repeatedly on incremental recompiles (Windows bind-mount + fork-ts-checker) during two concurrent sessions restarting it — code is correct; the render will appear once a clean compile settles.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Committed explicit paths only (ClassroomPage.tsx, portalRoutes.tsx); left the other session&#39;s uncommitted feed.css/TodayShell.* untouched. New-account-&gt;Today redirect already exists (PortalVerifyPage.tsx:29 + PortalFreeSignupPage.tsx:29 -&gt; /portal/today) from commit 8e34d638, so that deploy requirement is already met.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Deploy prep: fix 2 frontend CI typecheck blockers (recharts Formatter types)</h2>
+          <span class="badge">2026-07-08</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">IntelScatterChart.tsx + IntelWaterfallChart.tsx typed the Tooltip `formatter` param as `name?: string`, but recharts&#39; Formatter passes `NameType` (string | number) — a TS2322 that would fail the authoritative Frontend-typecheck CI gate on a PR to main. Widened both to `name?: any`. Pure type fix, no runtime change.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` in onb-test-fe (pending confirm) — these were the only 2 src errors.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deploy prep for promoting feature/project-workspace-drawer -&gt; main. Not the Classroom/Timeline feature; pre-existing admin-chart errors that blocked CI.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Admin Timeline Editor — Orchestration authors the Classroom curriculum</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Built the AUTHOR side of the Timeline Engine so /admin/orchestration can build the student Classroom. Backend: timelineAdminService (composeCardAttributes pure helper inherits type-registry defaults; create/update/delete/reorder/clone, system types blocked, progress rows cleaned on delete, reorder in a txn) + timelineAdminController (Zod-validated, admin-auth) + timelineAdminRoutes (GET cohort board, POST/PUT/DELETE cards, PUT reorder, POST clone) mounted in adminRoutes. Frontend: new &quot;Timeline&quot; tab in AdminOrchestrationPage — cohort + week selectors, 7 bucket lanes, add-card-from-registry, edit modal (title/week/bucket/difficulty/XP/visibility), dnd-kit within-lane drag reorder, clone/delete/publish toggle. Added @dnd-kit/core+sortable+utilities (approved).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 src errors; frontend tsc 0 errors; jest unit test for composeCardAttributes (registry defaults + overrides). Service-level integration test on :3098 dev: createCard(published) -&gt; appears in student getFeed (Prompt Lab/promptlab, registry XP+competencies applied); unpublish -&gt; disappears from feed; clone/reorder/delete all work; delete returns feed to baseline. CRA compiled successfully with dnd-kit.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Cross-lane moves are via the edit modal (bucket/week fields), within-lane via drag — chose reliable single-container dnd over fragile multi-container. Built + tested on dev only; NOT deployed to prod (awaiting review). Root package-lock synced for dnd-kit so prod npm ci passes. Dev container jest is broken (babel config) — tests validated via CI + the pure-fn test compiles under tsc.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Timeline curriculum is now GLOBAL (one shared curriculum for all batches) + no-scroll editor</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Per owner direction (&quot;all batches get the same curriculum; don&#39;t divide by batch; don&#39;t like scrolling&quot;). Backend: cards live at the global scope (cohort_id NULL); getFeed + initProgress return the global curriculum for ANY enrolled student regardless of cohort (getGlobalCards). Admin service/controller/routes are global — listTimeline() + /api/admin/orchestration/timeline (dropped /cohorts/:id/), createCard writes cohort_id NULL. Frontend TimelineEditorTab: removed the cohort selector, rebuilt the board as VERTICAL full-width bucket sections (no horizontal scroll) with within-bucket dnd-kit drag.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend + frontend tsc 0 errors. Dev: migrated to one global 17-card set; two students in DIFFERENT cohorts (Founding + Demo) both return the SAME 17 cards via /api/portal/classroom. listTimeline() returns scope=global, 17 cards, 32 types.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">cohort_id column kept nullable for a possible future per-cohort override. Dev ts-node-dev needed a cache clear to reload (bind-mount caching); prod runs compiled dist so N/A. Prod deploy will migrate existing per-cohort cards to one global set + enable the flag globally (drop the cohort allowlist).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>PHASE 1 — Curriculum Component Platform (Experience Builder)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Promoted curriculum_type_definitions into versioned AI Components. Additive migration (ensureExperienceBuilderSchema): 6 prompt columns (generation/renderer/evaluation/reflection/github/improvement) + thumbnail_url + preview_examples + variable_keys + cost/token/runtime estimate columns + component_version; new component_versions snapshot table. Services: costEstimationService (pure, table-driven pricing), componentService (list/get/update-with-version-snapshot/restore/refreshEstimates), promptTesterService (live LLM run of a prompt with variables), componentBackfill (default prompts from metadata, idempotent). APIs: GET/PUT /api/admin/components(/:slug), POST .../test, GET .../estimate, GET .../versions, POST .../versions/:v/restore, POST .../backfill (all requireAdmin). Frontend: ExperienceBuilderTab replaces the &quot;Types&quot; tab (renamed Experience Builder) — component-library grid + editor (6 prompt tabs) + variable inspector + live prompt tester + cost/runtime estimate + capability toggles + version history/restore. Decision: extend-in-place (not delete legacy) for backward compat + zero downtime (docs/architecture/experience-builder/PHASE_1.md).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 src errors; unit tests for cost estimation + prompt resolution. Dev integration: schema migrated, 39 components backfilled, update-&gt;v1-&gt;v2 snapshot, restore v1-&gt;v3, estimates refreshed ($0.000465/run est). Prompt tester wired (dev stack has no OpenAI key -&gt; verify live on prod). Frontend gate = CI.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">legacy Classroom/Timeline untouched (additive). Known Phase-1 polish gaps: thumbnail auto-gen, 3-device live preview frames, example-output gallery persistence (fields exist).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Experience Studio — AI-native upgrade of the Experience Builder</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Turned the CRUD-ish Experience Builder into an AI-native Studio. Model +7 fields (design_prompt + category/tags/status/learning_objectives/architect_domains/capabilities). New capabilityRegistry (25 composable modules) + recipeRegistry (12 templates). componentAiService: generateComponent (design a full component from a text request + recipe), coDesignComponent (AI review -&gt; ranked recommendations + one-click patches), runtimePreview (run the generation prompt -&gt; the complete student experience). createComponent (save AI drafts). APIs: /generate, POST create, /:slug/codesign, /:slug/preview, /capabilities, /recipes. UI: ExperienceStudioTab (tab renamed &quot;Experience Studio&quot;) with a visual 7-stage prompt pipeline, Generate-with-AI modal, Generate Preview -&gt; multi-device desktop/tablet/mobile iframes rendering the real generated experience, AI Co-Designer panel, output inspector, composable capability chips, versions. Backfill now composes capabilities from legacy flags + fills design_prompt + category + domains.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend + frontend tsc 0 errors. Dev (non-LLM): schema migrated (design_prompt/category/capabilities/status), 39 backfilled, prompt_lab caps=[portfolio,evaluation,evidence] from legacy flags, 25 caps + 12 recipes, create-from-draft works. AI features (generate/codesign/preview) need OpenAI -&gt; verified live on prod.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">additive/backward-compatible; legacy Classroom untouched. Still open (documented): component analytics w/ real usage, side-by-side version diff, thumbnail auto-gen, design-token centralization.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>Experience Studio — foundation pass (contracts, dependencies, analytics, thumbnails, version-diff, export)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Output Contracts (inputs/outputs/artifacts/evidence/portfolio/github/evaluation_type/completion_rules per component); Component Dependencies (dependencies field + dependencyService graph + CYCLE PREVENTION); ComponentAnalytics model + service (seeded demo metrics, no placeholders) + overview/dashboard; Thumbnail engine (deterministic branded SVG data-URI, template/custom); Version comparison (versionDiffService side-by-side diff); Export/Import package (colaberry-component@1); expanded AI Co-Designer (12 review dimensions); Prompt Debugger (model/temp/resolved-vars/rendered-prompt on stage test); lifecycle status + version_locked. UI: thumbnails on cards, library filters (category/difficulty/status/capability/domain), right-rail Analytics + Output Contracts + Dependencies(add/remove) + Export panels, prompt-debugger details. Backfill now fills contracts + thumbnails; migration adds all columns + component_analytics table.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend + frontend tsc 0 errors; unit tests (cycle detection, version diff, thumbnail determinism). Dev integration: 39 analytics seeded (8584 runtimes, 76.3% completion, $3.46 total), dep graph + cycle prevention, version compare (1 changed), export/import round-trip (48 fields), thumbnails present.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">additive/backward-compatible. Still open (honest): full 8-variant Renderer Engine (#1), design-system extraction refactor (#6), rendered diagram image files (#14) — documented in PHASE_1.md.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Experience Studio — Phase 1 close-out (Renderer Engine, Lifecycle, Sandbox, Version Compare, design-system extraction, docs)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Closed the remaining Phase-1 architecture. (1) Renderer Engine: new `renderers` JSONB column + rendererService (8 prompt-driven surfaces thumbnail/timeline/expanded/runtime/student/mobile/tablet/desktop; defaultRenderers, backfillRenderers, live renderSurface); APIs POST /:slug/render/:surface, POST /renderers/backfill, GET /renderers/surfaces; UI studio/RendererEngine.tsx (per-surface editor + live render + inspector). (13) Runtime Lifecycle: lifecycleService (10 states, pure currentState + canTransition + setLifecycle with transition validation; runtime states derived from analytics); APIs GET/PUT /:slug/lifecycle; UI studio/LifecycleStepper.tsx (visual stepper). (3) Sandbox: studio/Sandbox.tsx (Storybook-like — 7 stages + 8 renderers + runtime as runnable &quot;stories&quot; with per-story run history + retry). (5) Version Compare: studio/VersionCompare.tsx (side-by-side field diff of any 2 versions, changed/added/removed, restore). (6) Design System Extraction: studio/studioKit.tsx (Row/Panel/Lab/Chip/StatusPill/Btn/Field/PreviewFrame + one shared stylesheet + shared types/helpers) — ExperienceStudioTab now consumes it (kept under the 500-line ceiling). (2) Library polish: favorites (localStorage, sorted first), usage_count (from analytics, added to listComponents), estimated-minutes on cards. (14) Documentation: ARCHITECTURE.md with 10 real Mermaid diagrams (architecture/runtime/pipeline/renderer/lifecycle/capability/dependency/generation/estimation/versioning) + PHASE_1.md close-out section.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors under CI TypeScript 5.7.3 (local hoisted 4.9.5 hits unrelated d3-dispatch parse errors; dnd-kit installed locally to confirm clean); jest 20/20 pass incl. new rendererLifecycle.test.ts (renderer defaults determinism + 8-surface coverage + lifecycle state math + transition rules).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">additive/backward-compatible; legacy Classroom untouched (renderers column defaults &#39;{}&#39;). Still open (honest, deferred to Phase 3/4): analytics uses deterministic SEEDED metrics until real runtime traffic (recordRuntime wired but unfed at scale); marketplace is export/import/clone at API level (hosted registry UI later); full design-token centralization into tokens.css. Deploy + prod LLM verification pending (after-hours per deploy policy).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>Classroom: in-app video playback (drawer + embedded player from a YouTube/Vimeo/Loom/file link)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Reverse-engineered the Design-E video interaction into real, playable video. Clicking a Video card&#39;s play button now opens a right-slide detail drawer that previews the item (type, title, presenter, duration, points, description) AND plays it in-app — no redirect. New `frontend/src/utils/videoEmbed.ts` (pure parser → YouTube incl. youtu.be/shorts/embed, Vimeo, Loom, Wistia, direct mp4/webm; unknown → external-link fallback; withAutoplay). New `components/timeline/VideoEmbed.tsx` (poster→click→iframe/native-video embed; no player library, no new dep) + `CardDetailDrawer.tsx` (right drawer, esc/scrim close, explicit &quot;Mark watched · complete&quot; or auto-complete when a file video ends). `ClassroomPage` opens the drawer on card click instead of silently completing; completion is now an explicit action. `TimelineCard` gained an optional `video` field + poster image on the feed frame; drawer/player CSS added to timeline.css (scoped `.tld-*`/`.tlv-*`, `.tl-btn.ghost`). Backend: `FeedCard.video {url,presenter,poster}` exposed from card `metadata.video` via pure `videoFromMetadata`; admin authoring via `buildVideoMeta` + `CreateCardInput.video` in composeCardAttributes + updateCard (merges into metadata) + `video` Zod field on create/update schemas.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors (CI TS 5.7.3); backend jest 10/10 in timelineAdminService.test.ts (new: video metadata store/omit, buildVideoMeta trim/null, videoFromMetadata read/guards); frontend videoEmbed.test.ts (all providers + autoplay + null guards) validated (not in CI&#39;s backend-only pattern). Parser validated standalone across YouTube/Vimeo/Loom/Wistia/mp4/unknown.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">additive/backward-compatible — feed video defaults null; no schema migration (video lives in the existing `metadata` JSONB). No new npm dependency (native iframe/`&lt;video&gt;`). Behavior change (intended): opening any card now shows its drawer rather than instant-completing. Admin Timeline-editor URL field + prod demo-seed of a couple Video cards to follow at deploy.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>PHASE 2 — Curriculum Composer (AI Curriculum Operating System)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New Orchestration subsystem sitting between Experience Studio (untouched — the permanent Component Library) and the Timeline. An instructor describes an outcome; the AI Curriculum Architect assembles a week from REAL registry component types, scores it, recommends fixes, and — only when validation passes — publishes real Timeline cards. Backend (backend/src/services/composer/*): composerAi (LLM generate + Blueprint-aware fill + pure scaffold fallback, no-key safe), dependencyEngine (prereq ordering + graph), evidenceEngine (github/portfolio/xp/readiness/certification estimates), validationEngine (pass/warn/fail battery → Quality/Coverage/Readiness + publish gate), curriculumDna, architectJourney (7-stage north star), optimizationEngine (ranked one-click recs), blueprintService (CRUD+generate+assess), publishService (plan → real cards via timelineAdminService.createCard, gated). New model CurriculumBlueprint + ensureCurriculumComposerSchema migration (curriculum_blueprints table; no existing table touched). APIs /api/admin/composer/* (palette, architect-journey, generate, fill-card, blueprints CRUD, :id/generate, :id/validate, :id/publish). Frontend: new &quot;Curriculum Composer&quot; Orchestration tab — 4-pane workspace (Blueprint · Timeline Canvas · AI Architect · Evidence) + sticky validation/publish status bar + Architect Journey stepper; composerKit (design system + API client + primitives). Registered in AdminOrchestrationPage. Docs: docs/architecture/curriculum-composer/PHASE_2.md.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors (CI TS 5.7.3); backend jest 11/11 in composerEngines.test.ts (scaffold dependency-clean 15-card week, dependency ordering, evidence estimation, validation pass/fail + publish gate, journey mapping, DNA, optimization ranking). Prod demo (generate→validate→publish a real week) to run post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Experience Studio unmodified (integration-only). Every engine is pure/deterministic over PlanCard[] + the type registry; the LLM only assembles/fills and always has a scaffold fallback (works with no OpenAI key). Known v2 (documented in PHASE_2.md): analytics-fed continuous optimization, dedicated Event/Session Composer + Calendar UIs, program-scale multi-week planner, publish reconciliation/unpublish. Production readiness 7.5/10.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>PHASE 3 — Learning Runtime Intelligence (student AI runtime)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The AI-powered Student Runtime that CONSUMES the frozen Studio→Composer→Timeline→progression pipeline (never edits curriculum). Backend (backend/src/services/runtime/*): mentorService (Socratic AI Mentor — explain/hint/review, never hands over graded answers; AI-guided reflection prompts; video augmentation chapters/summary/quiz/flashcards; persists turns for memory), promptLabRuntime (write→run→AI evaluation: craft + Architect score + strengths/gaps/suggestions/better-prompt), employmentReadiness (PURE — 11 employer skill scores + band + &quot;what employers still need&quot;), certificationReadiness (PURE — competencies→Anthropic domains→pass probability + next activities), portfolioService (auto-generates an employable artifact on evidence completion — no manual portfolio), notebookService (notes/bookmarks/flashcards), runtimeService (openCard + completeActivity orchestration: onCardCompleted → auto artifact → recomputed readiness), runtimeAi helper. New models MentorTurn/PortfolioArtifact/RuntimeNote + ensureRuntimeSchema migration (3 tables; no existing table touched). Portal APIs /api/portal/runtime/* (open card, mentor, reflection, video-augment, prompt-lab, complete, readiness, notebook). Frontend: immersive /portal/runtime/:cardId workspace — activity center (Video via in-app player / Prompt Lab / AI-guided Reflection by render_band) + live AI Mentor rail + bottom Evidence &amp; Readiness bar (Employment/Certification/Architect Journey/GitHub/Portfolio); launched from the Classroom drawer&#39;s &quot;Enter workspace →&quot;. runtimeApi + runtimeKit. Docs: docs/architecture/learning-runtime/PHASE_3.md.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors (CI TS 5.7.3); backend jest 4/4 readiness.test.ts (employment band/gaps, certification domain mapping/pass-probability/next-activities). Prod demo (open card → coach → complete → evidence + portfolio + readiness) to run post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">consumes existing progression (onCardCompleted already updates competency + architect readiness); the two readiness engines are pure/deterministic, all LLM paths (mentor/prompt-lab/augment/portfolio) have graceful fallbacks so the runtime never dead-ends. Known v2 (PHASE_3.md): voice/camera mock interviews, social learning, full instructor dashboard, live GitHub OAuth, automatic adaptive regeneration, long-horizon misconception modeling. Production readiness 7/10.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">13</span>
+          <h2>Curriculum-inclusion approval gate (Experience Studio ↔ Composer)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Only APPROVED Experience Studio components can be used by the Curriculum Composer; approval is obvious in the Studio and accumulates over time. Backend: added `approved`/`approved_at`/`approved_by` to curriculum_type_definitions (additive ALTER in ensureExperienceBuilderSchema) with a first-run-only seed of the 16 core week activities (guarded by NOT EXISTS any approved, so it never fights hand edits). New PUT /api/admin/components/:slug/approval (handleSetApproval). composerAi: approvedSlugs()/approvedPalette(); generateCurriculum now lists ONLY approved types to the LLM, filters the LLM output to approved, and scaffoldPlan(approvedSet) filters to approved; publishService rejects any plan card whose type isn&#39;t approved (defense-in-depth); composer /palette returns approved-only. Frontend Experience Studio: green &quot;✓ Approved / Not approved&quot; badge on every card + left-accent + dimming for unapproved, an &quot;All approval / Approved only / Not approved&quot; filter, an &quot;N approved&quot; count in the header, and an &quot;Approve for curriculum&quot; toggle in the detail header (PUT approval). Composer thus can only assemble/publish approved activities.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors (CI TS 5.7.3); backend jest composerEngines.test.ts adds an approval-filter case (scaffoldPlan only includes approved). (Local jest flaky under long-session machine load; logic is pure + tsc-clean; runs green on a clean box.)</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">additive/backward-compatible. Baseline seed keeps the Composer working today; approve/unapprove any component from Experience Studio to grow the approved library. The already-published demo Week 4 is unaffected (its types are in the baseline).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>PHASE 4 — AI Operations Center (School Intelligence Platform)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">One executive Mission-Control page that answers what happened / why / what needs attention / what AI recommends / what actions — consuming the frozen Studio/Composer/Timeline/Runtime/Progression/Evidence systems READ-ONLY. Backend (backend/src/services/ops/*): schoolSignals (aggregate every active student via runtime studentSignals + readiness engines + enrollment/level rollups → one SchoolSignals vector), schoolHealth (PURE — 8 sub-scores admissions/learning/curriculum/employment/certification/revenue/community/operations + weighted overall + band), directors (7 AI Directors — Student Success/Career/Certification/Curriculum/Finance/Operations/Community — rule-based per-domain analysts emitting ranked recommendations with why/evidence/impact/confidence/action), executiveBriefing (LLM good-morning/priorities/risks/wins + deterministic fallback), digitalTwin (simulate a curriculum change against the Composer engines — predict quality/commits/portfolio/publishable deltas), opsService (homePayload orchestration + Work Queue persistence + global roster search). New model OpsRecommendation + ensureOpsCenterSchema (ops_recommendations; no existing table touched). APIs /api/admin/school/* (home, health, directors, work-queue GET/PUT, twin/simulate, search) — namespaced to avoid the pre-existing /api/admin/ops. Frontend: new top-level /admin/ops-center route + nav link; OperationsCenterPage (dark Mission Control) — Executive Briefing, School Health score + 8 sub-bars, Critical Alerts, AI Executive Team grid, Work Queue (Approve/Assign/Dismiss), Digital-Twin simulate, global search. Docs: docs/architecture/operations-center/PHASE_4.md.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors (CI TS 5.7.3); backend jest 6/6 ops.test.ts (school health 8 subs + band, directors full team + ranked recs, digital twin removal impact). Prod demo (executive home from live school data) to run post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">read-only consumption of prior phases (no upstream system modified). Aggregation computes live per active student (capped 200) — large schools should move to a nightly snapshot (documented). Known v2 (PHASE_4.md): AI Board debate UI, automation send (Basecamp/Slack/email), per-director deep-dive pages, operational timeline, snapshot-based scale. Production readiness 6.5/10.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>PHASE 5 — AI Workforce Operating System (+ theme system)</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The platform now presents an AI workforce of digital employees that runs the school on top of the frozen platform services (Studio/Composer/Timeline/Runtime/Evidence/Ops consumed READ-ONLY). Backend (backend/src/services/workforce/*): orgRegistry (12 AI employees — CEO → Chief of Staff → 10 Directors — each with mission/responsibilities/KPIs/supervisor + optional ops_domain mapping to a frozen Ops-Center director), workforceService (roster with live workload; per-employee office; Chief of Staff briefing consuming ops gatherSignals+runDirectors+generateBriefing; runDailyMeeting — idempotent per day — where each director speaks (headline + top rec), top recommendations become assigned WorkforceTasks, every participant&#39;s memory is written, and cross-department messages are sparked; task lifecycle; deterministic performance reviews; analytics). New models WorkforceTask/WorkforceMeeting/WorkforceMemory/WorkforceMessage + ensureWorkforceSchema (4 tables; no existing table touched). APIs /api/admin/workforce/* (roster, employee/:slug(+/review), briefing, meeting/daily, meetings, tasks GET/POST/PUT, messages, analytics). Theme system: themeKit (light-DEFAULT design tokens as CSS variables, full dark support, instant switch via data-theme, per-user localStorage persistence) scoped to the Workforce module. Frontend: new /admin/workforce route + nav link; WorkforceOSPage (Chief of Staff briefing + School Health, Daily Leadership Meeting with each Director speaking + action items assigned + cross-dept notes, org roster CEO→CoS→Directors with workload + click-to-open office drawer showing profile/responsibilities/KPIs/review/tasks/memory, workforce communication feed, analytics) with light/dark toggle. Docs: docs/architecture/workforce-os/PHASE_5.md.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors (CI TS 5.7.3); backend jest 5/5 org.test.ts (hierarchy integrity — CEO/CoS/Directors, ops_domain mapping, unique slugs, complete profiles). Prod demo (roster + daily meeting + tasks + messages) to run post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">consumes the Ops Center directors as the AI employees&#39; brains; no upstream system modified. Theme system ships light-default + dark for the Workforce module; retrofitting all legacy screens onto the tokens is a deliberately-scoped v2. Known v2 (PHASE_5.md): AI Marketplace install/import UI, human+AI team blending, richer memory types + real agent-to-agent dialogue, platform-wide theme retrofit. Production readiness 6/10.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">16</span>
+          <h2>PHASE 6 — Enterprise Intelligence Layer (&quot;the brain&quot;) + navigation/tab cleanup</h2>
+          <span class="badge">2026-07-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">A shared reasoning layer every module consumes — the Enterprise Memory Graph (every entity a node, every connection a first-class relationship) + shared services. Backend (backend/src/services/intelligence/*): graphService (upsertNode/relate/recordEvent/neighbors/graphStats — the graph primitives), ingestService (projects EVERY module into one connected graph: Composer blueprints → approved Studio components → Timeline cards → Students → Cohorts → Portfolio artifacts → AI employees/hierarchy → meetings → recommendations, with edges BELONGS_TO/GENERATED_BY/DERIVED_FROM/USES/REPORTS_TO/DISCUSSES/OWNED_BY), searchService (one global relationship-aware search + NL intents), reasoningService (directors reason over the graph; self-explaining explainNode walks the evidence path), decisionService (recommendation → traceable Decision with lifecycle proposed→reviewed→approved/rejected→implemented→measured + reason/evidence/alternatives/expected-vs-actual/lessons; written into the graph + org timeline). New models GraphNode/GraphEdge/GraphEvent/Decision + ensureIntelligenceSchema (4 tables; no existing table touched). APIs /api/admin/brain/* (ingest, graph/stats, search, node/:id, explain/:id, type/:type, reason/:domain, timeline, decisions GET/POST/:id/trace, PUT :id) — namespaced /brain to avoid the existing Cory /api/admin/intelligence. Nav/tab CLEANUP (user request): Operations Center merged into AI Organization (Mission Control is the AI Workforce home; nav item removed; /admin/ops-center redirects to /admin/workforce); Orchestration tabs pruned to the forward pipeline Curriculum Composer → Experience Studio → Timeline (+ Analytics, Health), retiring 10 legacy pre-redesign tabs (components retained); one new surface /admin/brain (Enterprise Intelligence). Frontend: EnterpriseIntelligencePage (reuses the shared Phase-5 themeKit tokens — light default + dark, no module theme) — global search → results → Knowledge Explorer drawer (a node&#39;s relationships + self-explaining trace), memory-graph stats, organizational timeline, Decision Engine log with lifecycle. Docs: docs/architecture/enterprise-intelligence/PHASE_6.md.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors (CI TS 5.7.3). Live prod validation (ingest → search → explain → reason → decision) at deploy — this integration-heavy layer is validated end-to-end on prod rather than by unit tests (the graph/search/decision paths are DB-bound).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">the ingest service IS the connection — Orchestration/Composer ↔ Experience Studio ↔ Timeline ↔ Runtime ↔ Organization are one connected graph. No upstream system modified (read-only projection). Known v2 (PHASE_6.md): embeddings semantic search, multi-tenant isolation, universal per-object Digital Twins, closed self-improvement loop, CDC ingest stream. Production readiness 6/10.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>Experience Studio UX remediation — make it versatile, obvious, Colaberry-clean</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Fixed the seven usability problems Ali reported after live-testing the Studio. (1) ROOT-CAUSE BUG — the Sandbox/Pipeline &quot;Invalid input&quot; 400: the Design stage existed in the UI but was rejected at the HTTP boundary because the controller&#39;s zod allow-list and the service&#39;s PromptKind list were two hand-maintained arrays that had drifted. Refactored to ONE exported source of truth (promptTesterService.PROMPT_KINDS); componentController.testSchema now derives z.enum(PROMPT_KINDS) so it can never drift again; exported FIELD. (2) Pipeline prompt editor now expands INLINE directly below the clicked step (accordion), not at the bottom of the page — the #1 request. (3) Detail tabs relabeled to plain English with hover hints: Preview · Prompts · Appearance · Test Lab · Status · History (was Pipeline/Renderers/Sandbox/Lifecycle/Versions), and a new Preview tab is now FIRST + the default on open. (4) Preview tab = &quot;The finished product&quot;: one button runs the whole pipeline and renders the live student experience on Desktop + Phone with a clear &quot;this is exactly what a student sees&quot; frame, an empty-state, and a &quot;How this reaches a student&quot; flow strip (Experience Studio → Curriculum Composer → Timeline → Student Runtime) that also states whether this component is approved-and-available. (5) Appearance (Renderers): plain-English explainer of what a renderer is, and the 8 surfaces grouped into &quot;What students see / Screen sizes / Library&quot; so the two that matter lead. (6) Test Lab (Sandbox) + Status (Lifecycle): each got a one-paragraph explainer — the Lifecycle one distinguishes the 4 states you set (Draft→Generated→Validated→Published) from the runtime states that light up automatically. (7) New scoped Colaberry-design CSS (es-help/es-stageedit/es-flow/es-empty/es-connect/es-grouplab) — teal #367895, calm greys, no new deps. Files: backend/src/services/components/promptTesterService.ts, backend/src/controllers/componentController.ts, frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx + studio/{studioKit,RendererEngine,Sandbox,LifecycleStepper}.tsx; test backend/src/__tests__/services/promptStages.test.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0 errors; frontend tsc 0 errors (CI TS 5.7.3); backend jest 4/4 promptStages.test.ts (stage-contract no-drift guard incl. Design regression + resolvePrompt). Live prod validation (open a component → Preview generates → run the Design story in Test Lab with no &quot;Invalid input&quot;) to run post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">display-logic + a one-value allow-list fix (low blast radius, reversible). The drift guard test is the self-strengthening piece — it fails loudly if any future stage is added to one list and not the other. No schema change, no new dependency.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">18</span>
+          <h2>Experience Studio Preview — play the actual video in-app (Video-type components)</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali opened the &quot;Video&quot; component&#39;s Preview and saw AI-written lesson TEXT, not a playable video — because runtimePreview only generates text (title/summary/body_html/questions) and the backend has no video/media-URL concept at all; video playback was a per-CARD frontend feature (card.video.url → &lt;VideoEmbed&gt;) only reachable in the student Classroom. Wired the real in-app player into the Studio Preview for video-type components: when a component&#39;s render_band is media|live_class|video_feedback (or it has the &#39;video&#39; capability), the Preview tab now shows a &quot;▶ The video the student plays&quot; URL field + the actual &lt;VideoEmbed&gt; player (same component students use — YouTube/Vimeo/Loom/Wistia/direct-file, in-app, no third-party lib), with the AI-generated notes/questions relabeled as &quot;shown beneath the video&quot;. Copy explains the model (real per-week URL is attached in the Composer; this field previews playback) and warns on unrecognized providers. Reused frontend/src/components/timeline/VideoEmbed.tsx + utils/videoEmbed.parseVideoUrl; added self-contained .es-video scoped CSS (the student tlv-* rules are token-dependent and scoped to the portal, so re-styled concretely for the admin page). Files: frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx, frontend/src/pages/admin/orchestration/studio/studioKit.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 errors (CI TS 5.7.3). Prod: confirmed the &quot;video&quot; component has render_band=media so the player path triggers. Live check (paste a YouTube link in the Video component&#39;s Preview → it plays in-app) to run post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no backend/schema change, reuses the existing student player (no new dependency). Preview URL is client-side only (a test URL), not persisted — the real per-week video is attached to the card in the Curriculum Composer/Timeline. Follow-up option if Ali wants it: persist a default video URL on the component + inherit it onto placed cards (that one is a small additive schema change).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>Timeline ↔ Experience Studio connection — type thumbnails + per-card &quot;unique&quot; controls (the video link)</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Answered Ali&#39;s &quot;how does Timeline connect to Experience Studio&quot; — every Timeline card IS a Studio type (card.type → curriculum_type_definitions.slug), now made visible + configurable. (1) THUMBNAIL: each card row (and the edit modal) shows a render_band-tinted type thumbnail (🎬 media, 🎥 live class, ⚡ prompt lab, ✍️ reflection, 📣 announcement, 🏗️ build story, … ~30 bands) so you can see what kind of event it is at a glance; the modal header labels it &quot;Experience Studio type · &lt;band&gt;&quot;. (2) PER-CARD &quot;MAKE IT UNIQUE&quot; CONTROLS: for video-band cards (media/live_class/video_feedback) the Add/Edit modal now has a &quot;▶ Video &amp; playback&quot; section — Video URL (+ presenter, poster) — the link THIS card plays in-app. Card rows show &quot;▶ video linked&quot; / &quot;⚠ no video yet&quot; so gaps are obvious. Saved via the existing create/update `video` field → metadata.video, which the student feed (timelineService) and Runtime (runtimeService) already read, so a link set here plays in the student Classroom immediately. Frontend-only: the backend (timelineAdminService buildVideoMeta + createSchema/updateSchema video) and student read path already existed; only the admin editor UI was missing. Files: frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 errors (CI TS 5.7.3). Prod confirmed: 3 video-band cards exist; 2 already carry metadata.video (play for students today), Week-4 &quot;Video: Prompt Engineering&quot; has none (now shows &quot;⚠ no video yet&quot; and is editable). Live check (Edit that card → paste URL → Save → student plays it) post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change, no new dependency. The per-card link is stored in metadata.video (JSONB) — the same slot the student player reads, so admin edit and student playback are the same source of truth. Follow-up (already scoped with Ali): faithful in-Studio replica of the student workspace in the Preview; and generalizing per-card controls to any type&#39;s variable_keys (links etc.) beyond video.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">20</span>
+          <h2>Video experience: inline play in the feed + richer detail drawer + Edit-card preview &amp; AI-fill</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Three Ali asks, all frontend-only. (A) INLINE PLAY — the Classroom feed card now plays the video in-app right where it sits: for a video card with a linked URL it renders the real &lt;VideoEmbed&gt; (press ▶, watch inline) instead of a poster that jumped to the drawer; the footer &quot;Open&quot; is now purely for the detail panel. (B) DRAWER DETAILS — CardDetailDrawer gained an &quot;About this video&quot; block UNDER the player: description + a facts row (presenter · length · points · level), so Open = video + details beneath it. (C) EDIT-CARD PREVIEW + AI FILL — the Timeline Add/Edit modal now shows a &quot;Finished product · what the student sees&quot; preview (type thumbnail + title/subtitle + the live in-app player for video types, or a &quot;no video linked yet&quot; warning + description), and a &quot;✦ Fill with AI&quot; button that calls the existing /api/admin/composer/fill-card (composerAi.fillCard) to populate subtitle/description/points/difficulty/estimated_time and, for media types, a suggested video_url — author reviews before saving. Reuse: de-scoped the VideoEmbed tlv-* CSS from .tl-de so the same player styles work in the feed, drawer, and (via scoped .tl-vwrap block) the admin modal; no player duplication. Files: frontend/src/components/timeline/{TimelineCard,CardDetailDrawer}.tsx + timeline.css, frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 errors (CI TS 5.7.3). Reuses the existing student &lt;VideoEmbed&gt; + parseVideoUrl and the existing composer fill-card endpoint (no backend change). Live check (feed card plays inline; Open shows details; Edit shows preview + AI-fill populates fields incl. a video URL) post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change, no new dependency. AI-fill result is a draft the author reviews/saves (deterministic scaffold fallback if the LLM is unavailable, inherited from fillCard). Still pending from earlier: faithful in-Studio replica of the full student workspace in the Experience Studio Preview.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>Timeline editor redesigned — FB-style feed + right-side edit drawer with live playable preview</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Reworked the Orchestration → Timeline author view to feel like the student timeline (Ali: &quot;in the spirit of FB, make this look like a timeline as well&quot;). (1) FEED CARDS — each card is now a big Facebook-style card (type thumbnail + title/subtitle + meta + LIVE/status badge) that PLAYS ITS VIDEO INLINE right in the feed (reuses the student &lt;VideoEmbed&gt;; non-linked video cards show a hero with a &quot;no video yet — Edit to add one&quot; note), with an admin action row on every card: ✎ Edit · Publish/Unpublish · Clone · Delete, plus the drag handle. (2) EDIT DRAWER — replaced the small centered modal with a right-SLIDING drawer (~620px, animates in from the right like the student detail panel), sticky header + sticky Save/Cancel footer, scrollable body. The drawer leads with a full-size &quot;Finished product · what the student sees&quot; preview — the video plays at proper 16/9 size — then the controls below (&quot;tweak and watch the preview update&quot;), so the author can play it and toy with the controls in one place. AI-fill + per-card video controls carried over. Frontend-only; no logic/handler/API change (same create/update/reorder/clone/publish + composer fill-card). File: frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 errors (CI TS 5.7.3). Live check (feed cards play inline; Edit slides a bigger panel from the right with a playable full-size preview) post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change, no new dependency (dnd-kit already present). Reuses the shared &lt;VideoEmbed&gt; via the scoped .tl-vwrap player styles. Still pending from earlier: faithful in-Studio replica of the full student workspace in the Experience Studio Preview.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">22</span>
+          <h2>Student video drawer: &quot;Make it interactive&quot; AI notes + Studio Preview made truthful</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Closed the disconnect Ali spotted — the Studio Preview showed &quot;notes &amp; questions beneath the video&quot; that the student never actually saw in the card drawer. Now the student card drawer (CardDetailDrawer) has a &quot;✦ Make it interactive&quot; button beneath the video that, on demand, generates and renders the AI study notes (summary · key moments · self-check) by calling the EXISTING runtime endpoint POST /api/portal/runtime/cards/:id/video-augment (mentorService.videoAugment) — the same generator the full Runtime Workspace uses; cardContext only needs the card so it works straight from the drawer (participant auth). So the details now DO reach the student, right beneath the video. Also relabeled the Experience Studio Preview video section to tell the truth (&quot;Interactive notes students generate beneath the video (Make it interactive)&quot;) so it no longer over-promises. Files: frontend/src/components/timeline/CardDetailDrawer.tsx + timeline.css (tld-augment/tld-sublab/tld-alist styles), frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 errors (CI TS 5.7.3). Reuses the existing video-augment endpoint (no backend change). Live check (open a video card in the Classroom → Make it interactive → summary/moments/quiz render) post-deploy.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change, no new dependency. Notes generate on demand (student taps the button) so there&#39;s no per-page-load AI cost — same trigger model as the workspace. This is the &quot;show notes in the student drawer&quot; option Ali chose over storing-on-card or relabel-only.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">23</span>
+          <h2>Interactive notes cached class-wide + Co-Designer &quot;Apply&quot; fixed</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two fixes from Ali&#39;s redesign feedback (Phases C+D of plan dapper-sniffing-knuth). (C) Interactive video notes are now generated ONCE and saved for the whole class: mentorService.videoAugment(card, force) returns card.metadata.augment if present (cost 0, cached:true), else generates + persists to metadata.augment via TimelineCard.update (preserving other metadata) so every later student reuses it instantly; cardContext now passes metadata; handleVideoAugment reads a force flag (admin/regenerate). Participant write is safe (shared, non-sensitive curriculum cache). (D) The Experience Studio AI Co-Designer &quot;Apply&quot; button actually works now: applyPatch filters the LLM patch to saveable fields, applies + PERSISTS immediately (shared buildPayload/persist helpers), and shows a green &quot;✓ Applied &amp; saved: &lt;fields&gt;&quot; confirmation; patches that target un-editable fields explain why instead of silently doing nothing. Files: backend/src/services/runtime/mentorService.ts + runtimeService.ts (cardContext metadata), backend/src/controllers/runtimeController.ts, frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx; test backend/src/__tests__/services/videoAugmentCache.test.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); backend jest 3/3 videoAugmentCache.test.ts (cache hit no LLM/no write, cache miss generates+saves preserving metadata, force regenerates). Live check post-deploy (student A generates notes → student B opens same card → instant cached; Co-Designer Review → Apply → green confirm + persisted).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">additive — reuses the metadata JSONB slot (like metadata.video); no schema change, no new dependency. First slice of the &quot;fully connect it&quot; redesign; next: Phase A (generate real card content students see) then Phase B (honest Studio flow).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">24</span>
+          <h2>Connect generation to real cards — students now see the AI content you preview (Phase A)</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The heart of the &quot;fully connect it&quot; redesign — AI-generated content now actually reaches students instead of being a throwaway Studio preview. Backend: new cardContentService.generateCardContent(cardId) loads the card, resolves its type&#39;s generation_prompt with the card&#39;s REAL inputs (title/description/metadata vars, falling back to a generic instruction if the type has no prompt), runs the LLM (same pattern as componentAiService.runtimePreview), and SAVES the result to card.metadata.content { summary, body_html, questions, reflection }. New endpoint POST /api/admin/orchestration/timeline/cards/:id/generate (requireAdmin). timelineService.getFeed now passes content through via contentFromMetadata() so the student feed carries it. Frontend: the Timeline card editor drawer gets a &quot;✦ Generate content&quot; button (existing cards) that calls the endpoint and renders the generated summary/body/questions in the &quot;Finished product&quot; preview; the student CardDetailDrawer renders card.content beneath the description for ALL card types — body_html in a SANDBOXED iframe (sandbox=&quot;&quot; runs no scripts, so any markup the model emits is inert; no dangerouslySetInnerHTML). So preview == classroom: what the author generates and previews is exactly what the student sees. Files: NEW backend/src/services/timeline/cardContentService.ts; backend/src/controllers/timelineAdminController.ts, routes/admin/timelineAdminRoutes.ts, services/timeline/timelineService.ts; frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx, components/timeline/CardDetailDrawer.tsx + TimelineCard.tsx + timeline.css; test backend/src/__tests__/services/cardContent.test.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); backend jest 3/3 cardContent.test.ts (contentFromMetadata ignores empty/garbage, surfaces only real fields, coerces question strings). Live check post-deploy (edit a card → Generate content → preview shows AI body → open as student → drawer shows the SAME content).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">additive — content persists in the existing metadata JSONB slot (metadata.content), no schema change, no new dependency. Reuses the runtimePreview generation pattern + the metadata storage pattern. body_html rendered via sandboxed iframe for XSS safety. Next: Phase B (honest Studio linear-flow preview + demote the 6 unwired prompts).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">25</span>
+          <h2>Experience Studio Prompts tab made honest (Phase B)</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Final slice of the &quot;fully connect it&quot; redesign — the Prompts tab now tells the truth about which prompts actually reach students, answering Ali&#39;s &quot;I don&#39;t understand how all these prompts make what we end up with.&quot; Audit finding: of the 7-stage pipeline (design/generation/renderer/evaluation/reflection/github/improvement), ONLY generation is wired to the student experience; the other 6 are authored + testable in the Test Lab but don&#39;t drive what students see (they&#39;re placeholders for future grading/reflection/GitHub features). The Prompts tab now: (1) leads with a plain-English note — &quot;only the Generation prompt writes what students actually see today; it&#39;s the instruction behind &#39;Generate content&#39; on a card&quot;; (2) badges Generation with a green ★ + &quot;students see this&quot; and the other six with &quot;not wired yet&quot;; so the pipeline stops implying all 7 steps build the output. Files: frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx + studio/studioKit.tsx (es-wired/es-unwired badges).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). Live check post-deploy (open any component → Prompts tab → Generation shows &quot;students see this&quot;, others &quot;not wired yet&quot;).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change, no new dependency. Completes the redesign: Studio is now honest about what&#39;s wired; the real generate→preview→student connection lives on the Timeline card (Phase A). The 6 unwired prompts are kept (testable + future) rather than deleted.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">26</span>
+          <h2>Experience Studio &quot;Flow&quot; view — one example threaded prompt → content → student card</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Fixed the &quot;the prompts don&#39;t match up with the product&quot; confusion. Root cause (audit): the Studio surfaces showed THREE different mismatched examples — Variables (topic=&quot;Context Engineering&quot;), Preview (generation → &quot;Week 2 Announcement…&quot;), and Appearance (RendererEngine hardcoded content=&quot;A short lesson on retrieval&quot;) — generation and rendering were independent pipelines with different samples. Redesigned the Preview tab into a single numbered FLOW that traces ONE example top-to-bottom: (1) Inputs (the variables + video link, editable inline) → (2) the Generation prompt (editable inline, badged &quot;students see this one&quot;) → (3) the content it produced → (4) the student&#39;s card (rendered from that same content, desktop + phone). One &quot;▶ Run the whole flow&quot; button runs it so steps 3 and 4 come from the SAME run (they&#39;re both derived from preview.experience, so they always match). Also fixed the Appearance mismatch: RendererEngine now renders the content generated in the Flow (genContent prop → merged.content) instead of a hardcoded sample, and the tab is honestly relabeled &quot;experimental card templating — not what students see today&quot; (the real student card is the Classroom render of metadata.content from the earlier Phase A). Files: frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx, studio/studioKit.tsx (es-flowstepbox/es-flownum/es-sublab/es-gencontent), studio/RendererEngine.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). Live check post-deploy (open a component → Preview/Flow → Run the whole flow → the prompt, the generated content, and the student card all show the same example).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change, no new dependency. Reuses runtimePreview (returns the experience) + frameHtml (renders it) + the shared vars state. Completes the &quot;make the flow make sense&quot; thread: the Studio now literally shows input → prompt → content → card as one chain.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">27</span>
+          <h2>Experience Studio: real per-band student preview + simple 4-pillar Build model (Phases 1-2)</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Reframed the Studio around what actually defines a type — Ali: &quot;the prompting should be about building the structure/look of the component; make it simple; a real way to control how it looks to the student.&quot; Audit: the student experience is entirely render_band-driven (media→video player+notes, promptlab→prompt workspace+eval, reflection→reflection flow, interview→nothing, else→text) but the Studio preview (frameHtml) showed a generic text article for ALL types — the mismatch Ali saw (student gets a video player; preview showed text). (Phase 1) New StudentPreview.tsx renders the REAL per-band student UI: video → the actual &lt;VideoEmbed&gt; player + notes + &quot;Make it interactive&quot;; promptlab → prompt-lab workspace (task + prompt box + eval scores); reflection/survey/question → reflection flow; interview → AI mock-interview flow (scenario + Q&amp;A); quiz/exam → knowledge check; reading/generic → reading card. Wired into the Flow&#39;s step 4 (desktop + phone), replacing the generic frameHtml iframe; it also respects the component&#39;s capabilities (parts) so toggling a capability shows/hides sections. body_html renders in a sandboxed iframe (XSS-safe). (Phase 2) Added a &quot;Build&quot; bar under the header naming the 4-pillar model every type shares: 1 Interaction (render_band + &quot;students get an in-app video player/…&quot;), 2 Parts (capability count → toggle in Capabilities panel, updates the preview live), 3 Content (AI generation), 4 Assessment (evaluation_type dropdown — none/AI/rubric/instructor/peer, now persisted). Files: NEW frontend/src/pages/admin/orchestration/studio/StudentPreview.tsx; frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx (step 4 → StudentPreview, Build bar, evaluation_type in save whitelist), studio/studioKit.tsx (sp-*/es-buildbar styles; frameHtml no longer used by the Flow).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). Live check post-deploy (open Video → preview shows the real player; open Prompt Lab → preview shows the lab workspace; toggle a capability → the preview section changes; set Assessment → persists on Save).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change (evaluation_type already in backend EDITABLE_FIELDS), no new dependency. Next (Phase 3): wire the capability toggles through the student feed so they show/hide sections for the ACTUAL student runtime; (Phase 4) build the interview band&#39;s real runtime UI + the Mock Interview and Lab types on this model.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">28</span>
+          <h2>Experience Studio: Video-first simplification — default view is real controls, overkill under Advanced</h2>
+          <span class="badge">2026-07-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Reverse-engineered the Video component per Ali&#39;s ask (&quot;simplest possible but really good control; get rid of what&#39;s not needed&quot;). Audit finding: for a video only the Generation prompt is wired; Evaluation (score a submission) / GitHub (analyze a repo) have no meaning for a video, Reflection is generated by the runtime itself, Design/Renderer/Improvement are authoring meta — the 7-prompt pipeline is a generic scaffold &quot;one level above&quot; the type. Appearance is experimental/unwired, Analytics is demo-seeded fake data, and Estimate/Output-Contracts/Dependencies/Package/Co-Designer are authoring metadata a video doesn&#39;t need. Wired + needed for a video: Preview (the Flow), Variables, Parts (capabilities), History. (Part B, frontend) Simplified the Studio detail view: TABS now default to &quot;Build &amp; Preview&quot; (the Flow) + History, with Prompts/Appearance/Test Lab/Status behind an &quot;Advanced ▸&quot; toggle. SIDEBAR keeps Variables + &quot;Parts · what the student gets&quot; up top; Co-Designer/Estimate/Analytics/Output-Contracts/Dependencies/Package/Versions collapse under an &quot;Advanced · component details&quot; disclosure. PARTS panel now shows only the capabilities that apply to the type (bandCaps(render_band) — video = 14 of 25: video/transcript/ai_chat/reflection/quiz/discussion/comments/likes/bookmarks/sharing/notifications/scoring/voice/camera) with a &quot;Show all 25&quot; toggle; toggling a part updates the preview. Files: frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx (bandCaps map, tab grouping, sidebar Advanced disclosure, Parts filter), studio/studioKit.tsx (es-adv/es-advtab styles). Part A (activate the video&#39;s capabilities data) applied to prod via the admin API after deploy.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). Live check post-deploy (open Video → default is Build&amp;Preview + Variables + Parts (relevant caps) ; everything else under Advanced; Parts drive the preview).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change (Advanced hides, does not delete — other types keep every tool; capabilities already an EDITABLE_FIELD). Answers Ali&#39;s conceptual questions in-product. Next: activate the video&#39;s capabilities (Part A), then generalize per-band relevance to other types, and Phase 3 (wire Part toggles to the live student runtime).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">29</span>
+          <h2>Experience Studio: ONE student render everywhere (Video) — Studio preview == editor preview == live drawer</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Fixed Ali&#39;s &quot;#4 What the student sees — these two items need to be in sync; the same parameters used in orchestration is what I should see in Experience Studio.&quot; A tough 3-agent audit (28 connection points) found the root cause: &quot;what the student sees&quot; was rendered by THREE drifting components — the Studio step-4 mock (StudentPreview), the REAL Classroom drawer (CardDetailDrawer), and the Timeline editor &quot;finished product&quot; — plus three separate lessonDoc() HTML wrappers, so they could only diverge further. Collapsed them to ONE renderer. NEW frontend/src/components/timeline/CardDetailBody.tsx is now the single source of truth for the card body (crumb+Week, points/status chiprow, presenter/length/level facts, the in-app VideoEmbed player, About-this-video, lesson notes, interactive notes, footer); `preview` disables the live-only calls (video-augment, auto-complete, Enter-workspace nav) for admin contexts. CardDetailDrawer is now a thin scrim+panel wrapper around it. NEW frontend/src/utils/cardAdapter.ts `adaptToFeedCard()` builds a synthetic TimelineFeedCard from a Studio component/draft + experience + video, so the previews render the REAL component. StudentPreview and the Timeline editor &quot;finished product&quot; both now render `&lt;CardDetailBody card={adaptToFeedCard(...)} preview/&gt;` inside a `.tl-de`/`.tld-inlinepanel` scope (timeline.css imported into the admin page) — the two mocks + their duplicate lessonDoc()s are deleted. Also fixed the audit&#39;s write-without-read defects (fields generated then never shown): CardDetailBody now renders content.reflection, augment.flashcards, and augment.reflection; mentorService.videoAugment stops generating prompt_challenge/github_task (never rendered for a plain video, so no more paid-for-then-hidden fields). Files: NEW components/timeline/CardDetailBody.tsx, utils/cardAdapter.ts; components/timeline/CardDetailDrawer.tsx + timeline.css (.tld-inlinepanel), pages/admin/orchestration/studio/StudentPreview.tsx + TimelineEditorTab.tsx; backend/src/services/runtime/mentorService.ts (augment prompt trim).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); backend jest 6/6 (videoAugmentCache.test.ts 3/3 + cardContent.test.ts 3/3). Live parity check post-deploy: open Video in the Studio → step-4 is pixel-for-pixel the Classroom drawer (crumb, chiprow, meta, About-this-video, facts, notes, footer); generate augment → flashcards + reflection now render (no hidden fields).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Phase 1 of the &quot;one student render&quot; plan — frontend render unification + one backend prompt trim, no schema change, no new dependency. Deploy nginx (frontend) + backend. Next: Phase 2 (wire type `capabilities` through timelineService.getFeed → CardDetailBody shows/hides sections so the Studio &quot;Parts&quot; toggles == the live student render); Phase 3 (publishService auto-calls generateCardContent on publish so auto-built cards ship with real metadata.content).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">30</span>
+          <h2>Experience Studio: Parts → live render (Phase 2) + on-demand video notes with 30-day TTL (Phase 3)</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Finished the &quot;everything in sync&quot; audit (CP25–CP28). Phase 2 — the type&#39;s Parts (capabilities) now reach the LIVE student render, so the Studio &quot;Parts&quot; toggles == what students actually get. Backend: FeedCard gains `capabilities` (timelineService.getFeed reads CurriculumTypeDefinition.capabilities by slug — one query, mapped; new pure `normalizeCapabilities()` scrubs junk from the JSONB blob); the admin board (timelineAdminService.listTimeline) merges the same DB capabilities onto each type so the editor preview gates too. Frontend: TimelineFeedCard/adaptToFeedCard carry `capabilities`; CardDetailBody gates optional sections by Part — `ai_chat` → the &quot;Interactive notes&quot; block, `quiz` → the quiz sub-list, `reflection` → the reflect sub-list. BACKWARD-COMPATIBLE: a card whose type has NO Parts configured shows everything (today&#39;s behavior); only once Parts are set does gating apply — so no live card loses a section (the prod Video type&#39;s Parts include ai_chat/quiz/reflection). StudentPreview passes the component&#39;s `parts`; the editor passes `typeDef.capabilities` — so both previews gate exactly like the live drawer. Phase 3 (per Ali: &quot;produced when admin or student presses it — it can expire after 30 days&quot;): NOT auto-generated on publish (no silent per-publish cost). Instead the class-wide interactive-notes cache (mentorService.videoAugment) now carries a 30-day TTL — a copy is reused until it&#39;s 30 days old, then the next press (admin OR student) refreshes it; legacy copies with no timestamp are grandfathered as fresh (no surprise re-bill/write). Files: backend/src/services/timeline/timelineService.ts + timelineAdminService.ts, services/runtime/mentorService.ts (AUGMENT_TTL_MS); frontend/src/components/timeline/CardDetailBody.tsx + TimelineCard.tsx, utils/cardAdapter.ts, pages/admin/orchestration/studio/StudentPreview.tsx + TimelineEditorTab.tsx; tests __tests__/services/cardContent.test.ts (normalizeCapabilities) + videoAugmentCache.test.ts (TTL fresh/expired).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); backend jest 20/20 (videoAugmentCache TTL fresh+expired+legacy+force, cardContent normalizeCapabilities happy+garbage, timelineAdminService unaffected). Post-deploy: confirm prod Video type capabilities include ai_chat/quiz/reflection (no live section lost); toggle a Part in the Studio → the section appears/disappears in BOTH the preview and the live drawer; re-open an augmented video after 30 days → next press refreshes.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Phase 2 additive (`capabilities` on the feed) — no schema change; backward-compatible gating cannot hide a section on a type with no Parts. Phase 3 = lazy cache TTL, cheaper than auto-on-publish (no cost until someone opens the card). Deploy backend + nginx. Closes the 28-point sync audit: render parity (Phase 1) + Parts honored (Phase 2) + on-demand/expiring content (Phase 3).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">31</span>
+          <h2>Timeline editor: one-click &quot;make a video from a title&quot; (find real video → fill everything)</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Creating a video should be as easy as adding a title, clicking Generate content, and Save — or fill it all in myself with my own video.&quot; New backend engine services/timeline/videoDraftService.ts `generateVideoDraft({type,title,subtitle?,description?,video?})`: (1) FIND a real video — if a URL is given use it, else the model proposes YouTube candidates for the title and each is VALIDATED through YouTube&#39;s free keyless oEmbed endpoint (the first that resolves gives the REAL title, channel→presenter, and thumbnail→poster); hallucinated/dead links are filtered out; graceful fallback (derive poster from the id, flag video_verified:false) if oEmbed is unreachable. (2) WRITE the subtitle, description, and lesson content (summary/body_html/questions/reflection) anchored to that real video, via the type&#39;s generation prompt. Returns a DRAFT — nothing persisted; the editor merges it and the author Saves. New endpoint POST /api/admin/orchestration/timeline/generate-video-draft (requireAdmin). To persist on Save: `content` is now a first-class saved field alongside `video` — buildContentMeta() + createCard/updateCard merge metadata.content (scrubbing empty blobs so Save never clobbers real notes), and `content` added to the create/update Zod schemas. Frontend TimelineEditorTab: &quot;Generate content&quot; is now the one-click — works from just a Title (no pre-save required), calls the new endpoint, and fills video+presenter+poster+subtitle+description+content into the live preview; &quot;Save changes&quot; persists it (create + update payloads now send `content`). youtubeId(url) helper extracts the id from every common share shape. Files: NEW backend/src/services/timeline/videoDraftService.ts + __tests__/services/videoDraft.test.ts; backend/src/controllers/timelineAdminController.ts, routes/admin/timelineAdminRoutes.ts, services/timeline/timelineAdminService.ts; frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); backend jest 14/14 (videoDraft: youtubeId across watch/youtu.be/embed/shorts/list + junk→null; buildContentMeta drops empty/garbage, coerces questions; timelineAdminService unaffected). Live check post-deploy: new Video card → type a title → Generate content → a real matching video + poster + presenter + notes appear in the preview → Save.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">External call is YouTube oEmbed only — keyless, free, public (not a paid service or npm dependency); 4s timeout + fallback. LLM video-suggestion reliability varies by topic; oEmbed validation filters dead links, and the author reviews the playable preview before Save (unverified guesses are flagged). Additive `content` metadata field, no schema change. Deploy backend + nginx. Next (Part A): make the Experience Studio Flow inputs the same card fields (Title/Subtitle/Desc/Video/Presenter/Poster) + wire its button to this same engine.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">32</span>
+          <h2>Experience Studio Flow: inputs now match the Timeline card editor + same one-click video engine (Part A)</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;The inputs in the Timeline have to match the Experience Studio. Week/cohort aren&#39;t applicable at this level; it should be Title / Subtitle / Description / Video &amp; Playback / Presenter / Poster.&quot; For a Video type, the Studio Flow&#39;s step-1 inputs are now those exact card fields (not the abstract {{topic}}/{{week}}/{{cohort}} variables), and the flow&#39;s button is the SAME one-click engine as the Timeline editor: add a Title → &quot;✦ Generate content&quot; → POST /api/admin/orchestration/timeline/generate-video-draft finds a real video (oEmbed-validated) and fills subtitle/description/presenter/poster + the lesson content; steps 3 (content) and 4 (student card) render from that run so they always match. Non-video types keep the {{variables}} flow unchanged. StudentPreview now also carries presenter + poster into the card so the Studio preview shows the real thumbnail/creator. Files: frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx (card-field state title/subtitle/description/presenter/poster, runVideoFlow, band-aware step-1 inputs + button + help copy), studio/StudentPreview.tsx (presenter/poster props → adaptToFeedCard video).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). Reuses the generate-video-draft endpoint shipped + LIVE in #208 (verified in prod: endpoint 401, videoDraftService.js in dist, YouTube oEmbed returns real title/author/thumbnail from the prod backend). Live check post-deploy: open Video in Experience Studio → step-1 shows Title/Subtitle/Description/Video URL/Presenter/Poster → type a title → Generate → a real video + content appear in steps 3-4, matching the Timeline editor.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change (backend engine already live from #208). Deploy nginx (frontend). Completes the two-surface parity: the Timeline editor and the Studio Flow now take the same inputs and run the same one-click.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">33</span>
+          <h2>Field-anchored auto-fill + signature ✦ icon: title→fills all, URL→fills all (incl. title)</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Put a regenerate logo next to Title and next to Video URL; clicking the button next to a field fills in all the OTHER fields except that one. Same in the Experience Studio. This icon will be used throughout the app to automate things, so make it a standout.&quot; (1) NEW signature control frontend/src/components/common/AutofillButton.tsx (+ .css) — a twin-spark glyph on a warm cherry→amber gradient with a springy hover and a spinning busy state; the app-wide &quot;auto-fill / regenerate&quot; mark (also exports AutofillIcon for inline use). (2) Backend generateVideoDraft is now field-ANCHORED: `anchor: &#39;title&#39; | &#39;video&#39;`. anchor=&#39;title&#39; keeps the title, finds a FRESH video (ignoring any pasted URL) + regenerates presenter/poster/subtitle/description/content; anchor=&#39;video&#39; keeps the URL, reads its real oEmbed metadata, and WRITES the card title + regenerates everything else (fixes &quot;pasting only a URL didn&#39;t work&quot; — title is no longer required when video-anchored). title is now optional (validated per anchor). (3) Timeline editor + Experience Studio Flow: a ✦ AutofillButton sits next to the Title input (anchor=title) and next to the Video URL input (anchor=video); each preserves its field and regenerates the rest into the live preview. The main &quot;Generate content&quot; button smart-anchors (title if present, else URL). The Studio also renders steps 3-4 (the real student card) from the result, and the now-redundant &quot;Variables · the inputs&quot; sidebar panel is hidden for video types. Files: NEW frontend/src/components/common/AutofillButton.tsx + .css; backend/src/services/timeline/videoDraftService.ts, controllers/timelineAdminController.ts; frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx + ExperienceStudioTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); backend jest 4/4 (videoDraft youtubeId + buildContentMeta). LIVE end-to-end test of BOTH anchors in the prod container (title→all fields filled incl. a real oEmbed-verified video; URL→all fields filled incl. a generated title) — see the deploy note.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Additive; the anchored field is always preserved. External call is YouTube oEmbed only (keyless). Deploy backend + nginx. The ✦ AutofillButton is intended as the standout automation mark across the app going forward.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">34</span>
+          <h2>Video card: AI Est. minutes + guessed XP; REMOVE interactive notes; content 30-day TTL (1st student regenerates)</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Three Ali requests. (1) EST. MINUTES + XP — generateVideoDraft now also returns estimated_time (AI estimate of the video length in minutes, clamped 1-180) and points {learning,builder,community} (AI-guessed XP, clamped); the Timeline editor merges them so a generated card arrives with a duration + XP filled. (Exact duration needs the YouTube Data API + a key — flagged; oEmbed has no duration and the prod server gets a consent page when scraping, so this is an estimate the admin can correct.) (2) REMOVE INTERACTIVE NOTES — per Ali, the admin populates the lesson content and there is no student-triggered &quot;Make it interactive&quot;/augment anymore. Removed the augment end to end: backend mentorService.videoAugment + AUGMENT_TTL_MS, the /video-augment route + handleVideoAugment controller, and videoAugmentCache.test.ts; frontend the Interactive Notes block in CardDetailBody, the &quot;Make it interactive&quot; block in RuntimeWorkspace, and runtimeApi.videoAugment. (3) CONTENT 30-DAY TTL — the admin-populated content (metadata.content) now carries content_at (stamped on admin save in createCard/updateCard AND on regeneration in generateCardContent). New cardContentService.ensureFreshContent(cardId): if content exists and is &lt;30 days old, return it (no LLM); if it exists but is past 30 days, the FIRST student to open regenerates it once (class-wide) and the fresh copy lasts 30 days; legacy content with no timestamp just starts its clock (no surprise re-bill); a card with NO admin content is never auto-generated. New student endpoint POST /api/portal/runtime/cards/:cardId/content → handleEnsureContent; CardDetailBody calls it on open (live only, content-bearing cards) and shows the fresh copy. Files: backend/src/services/timeline/videoDraftService.ts, cardContentService.ts (CONTENT_TTL_MS + ensureFreshContent), timelineAdminService.ts (content_at stamps); services/runtime/mentorService.ts, controllers/runtimeController.ts, routes/participantRoutes.ts; DELETED __tests__/services/videoAugmentCache.test.ts; frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx, components/timeline/CardDetailBody.tsx, pages/portal/runtime/RuntimeWorkspace.tsx + runtimeApi.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); backend jest 9/9 (cardContent contentFromMetadata + normalizeCapabilities; videoDraft youtubeId + buildContentMeta). LIVE-tested in prod after deploy: generate a card → Est. minutes + XP populate; interactive-notes UI gone from the drawer + runtime; the content endpoint returns fresh content (and regenerates a &gt;30-day copy).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The 30-day TTL moved OFF the removed augment ONTO the admin content, exactly per Ali&#39;s model. content_at re-stamps on every admin save (content is &quot;fresh as of last save&quot;). Deploy backend + nginx. Follow-up option: wire the YouTube Data API (needs a key) for exact video duration instead of an AI estimate. Also saved a memory: be selective with curriculum Parts (Ali trimmed the Video to 8 relevant Parts).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">35</span>
+          <h2>Anthropic Skills Course: class name/link inputs + student render + certificate upload with AI verification</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New end-to-end experience for the `anthropic_skills_jar` (render_band `skills_jar`) type, per Ali (inputs = Class name + Class link; output = upload a certificate; verify it&#39;s actually a certificate; logo overlay + social share are the deferred &quot;then we will&quot; steps). Phase 1 — INPUTS + RENDER: the class name + SkillsJar link live in `metadata.course {name,url}` (new buildCourseMeta + CreateCardInput.course + create/update merge + courseSchema; FeedCourse + courseFromMetadata + FeedCard.course in getFeed; TimelineFeedCard.course + adaptToFeedCard passthrough). The Timeline card editor gets a &quot;SkillsJar course&quot; box (Class name + Class link). CardDetailBody gained a `skills_jar` branch: the branded &quot;Anthropic · SkillsJar&quot; card, an &quot;Open in SkillsJar&quot; button (→ class link), and an &quot;Upload your certificate to complete / Choose certificate&quot; control (timeline.css .tld-skilljar/.tld-jarcard/.tld-upload/.tld-certmsg). Phase 2 — CERT UPLOAD + AI VERIFY: new certificateUpload multer config (PNG/JPG/WEBP + PDF, 15MB, /app/uploads/certificates); services/runtime/certificateService.ts verifyCertificate() (image → OpenAI vision gpt-4o-mini; PDF → pdf-parse text → LLM) checks it&#39;s a genuine completion certificate (strict on &quot;is it a certificate&quot;, lenient on exact course match) + uploadCertificate() records it as evidence on the progress row; new student endpoint POST /api/portal/runtime/cards/:cardId/certificate (requireParticipant, certificateUpload.single). On a valid verdict the drawer marks the card complete; invalid returns a clear reason to retry. Files: NEW backend/src/services/runtime/certificateService.ts; backend/src/config/upload.ts, controllers/runtimeController.ts, routes/participantRoutes.ts, controllers/timelineAdminController.ts, services/timeline/timelineAdminService.ts + timelineService.ts; frontend/src/components/timeline/CardDetailBody.tsx + timeline.css + TimelineCard.tsx, pages/admin/orchestration/TimelineEditorTab.tsx, utils/cardAdapter.ts; tests __tests__/services/cardContent.test.ts (courseFromMetadata) + videoDraft.test.ts (buildCourseMeta).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); backend jest 13/13 (courseFromMetadata + buildCourseMeta + existing). LIVE-test cert verification post-deploy (a real certificate accepts + completes; a non-certificate image rejects with a reason).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">External call is OpenAI (vision/text) — no new dependency (pdf-parse already present). Completion is client-gated on the valid verdict for v1 (evidence is recorded server-side). Deferred (Ali&#39;s &quot;then we will&quot;): Colaberry logo overlay on the verified cert (needs an image lib e.g. sharp — will confirm) + social-media share. Also shipped separately: Experience Studio library defaults to Approved-only. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">36</span>
+          <h2>Experience Studio library defaults to Approved-only (checkbox)</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;By default only show approved curriculum; a checkbox defaulted to selected, with views for all / not approved.&quot; The Experience Studio component library now defaults its approval filter to &#39;approved&#39; and adds a prominent &quot;Approved only&quot; checkbox (checked by default) next to the filters; unchecking shows all, and the existing approval dropdown still offers the explicit &quot;Not approved&quot; view (both read/write the same filter.approval state so they stay in sync). File: frontend/src/pages/admin/orchestration/ExperienceStudioTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). Live check post-deploy: open Experience Studio → only approved components show; uncheck &quot;Approved only&quot; → all show.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change. Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">37</span>
+          <h2>Anthropic Skills Course: link → ✦ Generate fills everything; branded feed render matches the demo; Studio == Timeline</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;The input for the Anthropic Skills course should be the LINK, then a Generate button fills everything; the Experience Studio and Timeline must be in sync; and it should look like my demo (the branded feed card).&quot; (1) ONE-INPUT GENERATE: new backend courseDraftService.generateCourseDraft(url) — reads the SkillsJar course page&#39;s Open-Graph metadata (title/description/image) then the model cleans + enriches to fill class name, subtitle, description, estimated_time, XP (points), and lesson content; new endpoint POST /api/admin/orchestration/timeline/generate-course-draft. The Timeline card editor&#39;s SkillsJar box is now just a Class link + a ✦ AutofillButton (auto-fills the class name + everything; name stays editable); the main &quot;Generate content&quot; button routes skills_jar → course generate. genContent gained a &#39;course&#39; anchor. (2) STUDIO == TIMELINE: the Experience Studio Flow gets the same single Class-link input + ✦ Generate (runCourseFlow), and its step-3/4 render the student card from the result — the two surfaces are in sync. StudentPreview + adaptToFeedCard now carry `course`. (3) LOOKS LIKE THE DEMO: new shared components/timeline/SkillsJarPanel.tsx renders the branded &quot;Anthropic · SkillsJar&quot; panel (badge, big graduation cap, brand line, class name + &quot;External course · cert required&quot;) + Open-in-SkillsJar + the AI-verified certificate upload — used identically by the student FEED card (TimelineCard, replacing the old generic thumbnail) AND the detail drawer (CardDetailBody), so they can&#39;t diverge. Completion threads through TimelineFeed → onComplete (ClassroomPage.completeCard). timeline.css updated for the demo look. Files: NEW backend/src/services/timeline/courseDraftService.ts, frontend/src/components/timeline/SkillsJarPanel.tsx; backend/src/controllers/timelineAdminController.ts + routes/admin/timelineAdminRoutes.ts; frontend/src/components/timeline/CardDetailBody.tsx + TimelineCard.tsx + TimelineFeed.tsx + timeline.css, pages/portal/ClassroomPage.tsx, pages/admin/orchestration/TimelineEditorTab.tsx + ExperienceStudioTab.tsx + studio/StudentPreview.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3). External call is the SkillsJar page fetch (OG scrape, 6s timeout + fallback) + OpenAI — no new dependency. Live-test post-deploy: paste a SkillsJar link → ✦ Generate fills class name/description/XP/minutes/content; the feed card shows the branded panel matching the demo; the Studio Flow does the same.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Every curriculum type has at least one generate button (video: title/URL-anchored; skills_jar: link; others: the main &quot;Generate content&quot;). Deploy backend + nginx. Still deferred (Ali&#39;s &quot;then we will&quot;): Colaberry logo overlay on the verified cert (needs sharp) + social share.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">38</span>
+          <h2>Admin timeline: every card renders the shared student view inline (uniform, matches edit + student)</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;SkillsJar (and every item) should look in the timeline the same way it looks in the edit and student view; every item should be the same size as video, by default.&quot; The admin Timeline editor&#39;s SortableCard used to inline-render ONLY video (a player); every other type (skills_jar, deep dive, knowledge check, …) collapsed to a small header. Now every card renders the SAME shared &lt;CardDetailBody preview/&gt; inline (via adaptToFeedCard from the card&#39;s fields + metadata.video/course/content), wrapped in the same .tl-de/.tld-inlinepanel as the edit &quot;Finished product&quot; — so the admin timeline == the edit preview == what the student sees, for every type. Threaded the type&#39;s participant label (labelOf) so the inline crumb/chip is right. Removed the now-unused VideoEmbed/parseVideoUrl imports + the video-only te-media/te-hero branch. File: frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). Live check post-deploy: open Orchestration → Timeline → every card (video, skills course, quiz, deep dive, …) shows its full branded student render inline, not a collapsed header.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change; &quot;one render everywhere&quot; now extends to the admin timeline feed. Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">39</span>
+          <h2>Skills Course certificate: Colaberry logo overlay + download + share to social</h2>
+          <span class="badge">2026-07-12</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The deferred &quot;then we will&quot; — after a certificate verifies valid, co-brand it with the Colaberry logo and let the student download + share it. Added `sharp` (native image lib; Docker builder already has python3/make/g++). The Colaberry logo is embedded as base64 (backend/src/assets/colaberryLogo.ts, from frontend/public/colaberry-logo-transparent.png) so the backend needs no runtime asset path. certificateService.brandCertificate(path, mime) composites the logo (bottom-right, on a white pill) onto the verified cert image via sharp → writes a co-branded PNG to CERT_DIR (images only; PDFs skip the overlay); uploadCertificate calls it on a valid verdict, stores the branded filename in the progress evidence, and returns `branded`. New getCertificateFile() + GET /api/portal/runtime/cards/:cardId/certificate (requireParticipant) serves THIS student&#39;s co-branded cert (basename-guarded path). SkillsJarPanel, on a valid upload (or when the card is already complete), fetches the co-branded cert as a blob and shows it with Download + &quot;Share on LinkedIn&quot; / &quot;Share on X&quot; (open the platform composer with a celebratory pre-filled text; the student attaches the downloaded image). Files: NEW backend/src/assets/colaberryLogo.ts; backend/package.json (+sharp), services/runtime/certificateService.ts (brandCertificate + getCertificateFile), controllers/runtimeController.ts (handleGetCertificate), routes/participantRoutes.ts (GET cert); frontend/src/components/timeline/SkillsJarPanel.tsx + timeline.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0 (CI TS 5.7.3); sharp compositing verified locally (valid 1200x850 branded PNG produced). Docker build validates the native sharp install; live-test post-deploy (upload a valid cert image → co-branded cert shows with Download + Share). New dependency `sharp` added per Ali&#39;s approval.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PDF certs are verified + complete the card but aren&#39;t logo-overlaid (image compositing only) — a student who wants the shareable branded image uploads an image cert. Social share is composer-intent + attach (no public cert hosting). Deploy backend + nginx. This completes the Anthropic Skills Course thread (inputs → generate → branded render → cert verify → co-brand → share).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">40</span>
+          <h2>Classroom: every card is one uniform 16:9 tile with a bottom-right ▶ that opens the assignment drawer</h2>
+          <span class="badge">2026-07-13</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;the class room items, just like the timeline items, should all be current Video Curriculum Type size … you should have a play button on the bottom right where when they click it - the pop out comes from the right and it will show the assignment + assignment details.&quot; The student Classroom feed rendered three different sizes/shapes: video played inline (16:9 player), reading/quiz were 250px poster thumbnails, and the SkillsJar course was a tall branded panel with an inline upload box. Now EVERY card is the same 16:9 poster tile with a bottom-right ▶ button; clicking it (or the tile, or the footer Open) opens the existing right-slide CardDetailDrawer, which renders the shared &lt;CardDetailBody&gt; — the video plays there, content/quiz/reflection render there, and the SkillsJar course link + certificate upload + co-branded share live there. CSS: .mthumb/.vframe height:250px → aspect-ratio:16/9 (video size on every width; dropped the mobile height override). TimelineCard: collapsed the 3 media branches (fc-video inline player, vframe, mthumb) into ONE mthumb poster (video uses its poster image behind a dark gradient for legibility); removed the inline SkillsJarPanel + VideoEmbed/parseVideoUrl imports (all now only in the drawer); skills footer now uses the normal Open CTA. Files: frontend/src/components/timeline/timeline.css, frontend/src/components/timeline/TimelineCard.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3 authoritative). Only ClassroomPage renders &lt;TimelineFeed&gt; (verified) and it wires onOpen→drawer, so no other consumer regresses. Live check post-deploy: open Classroom → every card (video, deep dive, knowledge check, Anthropic Skills Course) is the same 16:9 size; click any ▶ → drawer slides from the right with that assignment&#39;s full details + video/upload.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change. Deliberate UX shift — video no longer auto-embeds in the feed and the SkillsJar upload moved into the drawer (both still fully available there via CardDetailBody). Unused .vframe/.vplay/.fc-video CSS left in place (harmless). Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">41</span>
+          <h2>Backend boot self-heals missing enrollment/classroom columns (additive schema reconcile)</h2>
+          <span class="badge">2026-07-13</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;yes&quot; to auto-adding missing enrollment columns on deploy so the Classroom stops breaking. The prod enrollments table has drifted behind the Enrollment model twice (2026-07-05, 2026-07-13), each time 500ing the student Classroom (getFeed → Enrollment.findByPk SELECTs every model column → `column &quot;paysimple_payment_id&quot; does not exist`) because sync({alter}) is disabled on the 215-model graph. New backend/src/config/schemaReconcile.ts: reconcileMissingColumns(models[]) runs ONE describeTable per model, diffs live columns vs rawAttributes, and addColumn each missing one as NULLABLE (never drops/alters, skips VIRTUAL, tolerates a missing table, records rather than throws on a per-column failure — idempotent). Wired into server.ts boot (after the ensure*Schema block, gated by SCHEMA_RECONCILE!==&#39;false&#39;) for the 4 classroom-critical models: Enrollment, TimelineCard, TimelineCardProgress, CurriculumTypeDefinition. Scoped to a handful of models so it adds only a few info-schema queries — not the ~6-min 215-model sync scan. Files: NEW backend/src/config/schemaReconcile.ts, NEW backend/src/config/__tests__/schemaReconcile.test.ts; backend/src/server.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 6/6 (adds only missing; honors snake_case field; skips VIRTUAL; skips a missing table without aborting the rest; records an addColumn failure as skipped; idempotent no-op when in sync). backend tsc 0. Live check post-deploy: backend boot log shows `[schema-reconcile] N model(s) checked, schema in sync` (or the healed columns) and the Classroom loads.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">additive-only + nullable = safe on existing rows; can&#39;t clobber data. To protect another drift-prone model, add it to the CRITICAL list in server.ts. Real migrations remain the long-term fix. Deploy backend.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">42</span>
+          <h2>Path: everyone starts at Week 0 (green stub) + real position tracking + real points/level in the ring</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;In the path picture, let&#39;s put them at a Wk0 and allow it to keep track of where the student is. Everyone is defaulted to 0 but do it in a way that shows some green on the path but not quite to Wk1.&quot; PathPage was fully static/mock (hardcoded Week-5, &quot;Builder 2,140 pts&quot;). Now data-driven: a new Week-0 node sits left of the spine with a permanent green lead-in stub (M30-&gt;60) so every student shows &quot;on the path but not yet at W1&quot;; currentWeek is derived from the cohort start date (weeks elapsed, clamped 0-12; Explorers / not-yet-started sit at 0); node states, the green completed-spine overlay (pathLength=100 + dashoffset), the readiness ring %, the curriculum lane, and the four intensive cards all derive from currentWeek. The ring now shows the student&#39;s REAL points + level (fetchPoints + levelFor) and &quot;Week N / 12&quot; instead of fake pts. Project/Internship/Cert lanes read &quot;Not started&quot; until the program begins. Files: frontend/src/pages/portal/path/PathPage.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3 authoritative). Live check post-deploy: open Path as an Explorer -&gt; Week-0 node pulses, a small green stub shows before W1, all 12 nodes grey, ring shows real pts; an enrolled student shows green filled to their current week.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only, no schema/backend change. currentWeek is calendar-based (weeks since cohort start). Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">43</span>
+          <h2>Schedule: points history rendered on the calendar (month badge, week header, agenda breakdown)</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;as they get points I want you to show them on the schedule - The history of their points.&quot; SchedulePage now fetches the points ledger (fetchPoints) and buckets events by Central day. Month view shows a green &quot;+N pts&quot; chip per day; Week view shows a per-day &quot;+N pts&quot; in the day header; Agenda view shows a per-day total badge plus a per-event breakdown row (&quot;+5 Daily streak&quot;, etc.). A points-only day now appears in the agenda (previously skipped). Files: frontend/src/pages/portal/schedule/SchedulePage.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). Live check post-deploy: earn points (RSVP / claim streak) -&gt; the day shows &quot;+N pts&quot; in Month/Week/Agenda; the agenda lists each earning with its Central time.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">frontend-only; reuses the existing /api/portal/points ledger (already timestamped). Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">44</span>
+          <h2>Daily streak rebuilt: server-authoritative rolling 7-day window, reset-on-gap, escalating points folded into the score</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;the daily streak process is not working how you would think... show the past 7 days from today including today... The more consecutive days, the more the daily streak points get bigger and continuous effort should give you a higher score.&quot; The old streak was client-side localStorage (fixed Mon-Sun row, no gap-reset, no points). New backend streakService: getStreak/claimStreak keyed on daily_streak:&lt;centralDate&gt; in the points ledger — the window is the LAST 7 Central days (rolling, ending today), a missed day RESETS the run (derived from the ledger, not a counter), and each claim awards escalating points (base 5, +3/consecutive day, capped 30) that fold straight into the student&#39;s total score and show in the Schedule points history. Idempotent per Central day. New GET /api/portal/streak + POST /api/portal/streak/claim (requireParticipant). TodayShell now reads the server streak (fetchStreak/claimDailyStreak), shows the rolling 7-day labels, and the Claim button shows &quot;+N pts&quot;; the old shellUtils localStorage streak helpers were removed. Files: NEW backend/src/services/streakService.ts, NEW backend/src/services/__tests__/streakService.test.ts; backend/src/controllers/participantController.ts, routes/participantRoutes.ts; frontend/src/services/onboardingApi.ts, pages/portal/today/TodayShell.tsx, pages/portal/today/shellUtils.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 10/10 (escalation + cap; Central-day boundary; consecutive counting; gap resets the run; idempotent same-day claim; fresh claim awards; gap resets to day 1). backend + frontend tsc 0 (CI TS 5.7.3). Live check post-deploy: claim the streak -&gt; +N pts, total goes up, the day lights up in the 7-day row and on the Schedule.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">streak points are real ledger events (event_type daily_streak) so they also appear in the drill-down + schedule. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">45</span>
+          <h2>Points drill-down: one &quot;where you are / where you&#39;re headed&quot; view across the 3 progress systems (+ read-only promotion-gaps)</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;create a drill down on the points that can clearly communicate where they are and where they are headed... a really nice visual.&quot; Research found &quot;points&quot; is actually THREE independent systems (engagement points+level; learning/builder/community XP; competency-gated Builder level + Architect Readiness). New /portal/points page presents them as three linked lenses: (1) Engagement — score, level ladder + pts-to-next, streak; (2) Skill XP — learning/builder/community bars; (3) Architect Readiness — a readiness ring, current level, and the EXACT remaining gaps to the next level. Plus a &quot;where you are -&gt; where you&#39;re headed&quot; hero and a recent-points feed. New backend pointsDrilldownService aggregates the three (the two progression lenses degrade to null if progression isn&#39;t provisioned), and a new read-only getPromotionStatus() on promotionService returns the gaps WITHOUT the write side effect of evaluateForEnrollment. New GET /api/portal/points/drilldown. Linked from the Today &quot;Your day&quot; card. Files: NEW backend/src/services/pointsDrilldownService.ts, NEW frontend/src/pages/portal/points/PointsPage.tsx + PointsPage.css; backend/src/services/progression/promotionService.ts (getPromotionStatus), controllers/participantController.ts, routes/participantRoutes.ts; frontend/src/services/onboardingApi.ts, routes/portalRoutes.tsx, pages/portal/today/TodayShell.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend + frontend tsc 0 (CI TS 5.7.3). Live check post-deploy: open Today -&gt; &quot;Break down my points&quot; -&gt; the 3 lenses render; readiness lens lists what&#39;s left to the next level.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">getPromotionStatus is side-effect-free (safe for a GET); the drill-down is resilient to progression not being provisioned. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">46</span>
+          <h2>Settings redesign + self-serve subscription billing (2 plans, PaySimple checkout, Explorer-&gt;member conversion, cancel+reason)</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Settings page needs to be redesigned and also we need to add a simple billing process... bank details or CC... transparent about when the next payment is... enroll them into July batch and take the restrictions off... easy to cancel... obtain the reason.&quot; Decisions locked with Ali: one-time-now/auto-renew-later billing; plans Annual $1,788/yr (=$149/mo) + Monthly $199/mo month-to-month. New Subscription model + subscriptions table (explicit idempotent CREATE at boot; added to schema-reconcile). New subscriptionService: getSubscription (plans + status + &quot;next payment in N days&quot;), startCheckout (PaySimple hosted one-time checkout, card or bank, external_id SUB-&lt;enr&gt;-&lt;ts&gt;, pending row), activateByRef (called from the PaySimple webhook when the ref is a SUB- id — activates the plan, sets current_period_end, and converts Explorer -&gt; paying member: enrollment_type standard + tier member + payment_status paid + July cohort, which drops the Week-0 gate + Projects demo lock), cancelSubscription (captures a reason, keeps access to period end). Idempotent: activation is a no-op once active (no double-charge/double-convert). New GET /api/portal/subscription + POST /checkout + POST /cancel. Settings redesign: a prominent Subscription and billing section at the TOP — plan cards for Explorers, active-plan + &quot;next payment on &lt;date&gt; in N days&quot; + Cancel (reason chips + free text) for members, access-until + resubscribe after cancel. Files: NEW backend/src/models/Subscription.ts, backend/src/services/subscriptionService.ts, backend/src/services/__tests__/subscriptionService.test.ts, frontend/src/services/subscriptionApi.ts, frontend/src/pages/portal/settings/SubscriptionSection.tsx; backend/src/models/index.ts, server.ts (ensureSubscriptionSchema + reconcile), controllers/webhookController.ts (SUB- routing), controllers/participantController.ts, routes/participantRoutes.ts; frontend/src/pages/portal/settings/SettingsPage.tsx + SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 15/15 (plan prices; SUB- ref detect; explorer needs-subscription; active next-payment; canceled access-until; checkout unknown-plan / billing-unconfigured / no-enrollment / happy; activate unknown-ref / idempotent-already-active / first-activation-converts-explorer / keeps-existing-cohort; cancel no-active / records-reason). webhook regression 9/9 green. backend + frontend tsc 0 (CI TS 5.7.3). Live check post-deploy on DEV: Settings shows the plans; checkout redirects to PaySimple (test mode = $0.01); a simulated SUB- payment_created webhook flips the Explorer to member (Week-0 gate + demo drop) and sets the period; cancel captures the reason.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">V1 = existing one-time PaySimple checkout per the locked decision; the schema carries current_period_end so true auto-charge is an additive follow-on once PaySimple recurring is enabled. Target cohort = SUBSCRIPTION_TARGET_COHORT_ID env override else the soonest open non-demo cohort. GOVERNANCE: touches real payments — shipping to DEV first for Ali&#39;s review before any prod promotion (BC todo 10028907149). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">47</span>
+          <h2>Subscription target-cohort: pin prod July cohort + harden fallback to never pick Explorer/demo cohorts</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">After the batch went live on prod, found that with SUBSCRIPTION_TARGET_COHORT_ID unset, resolveTargetCohort() fell back to the soonest open non-demo cohort — which was &quot;Explorer — Prospects&quot; (the free-explorer holding cohort), so a paying subscriber would have been converted to a member but dropped into the wrong cohort. Two fixes: (1) PROD: set SUBSCRIPTION_TARGET_COHORT_ID=1f1d86f4-6da5-4767-a250-cd8310570bea (Cohort - July 2026, starts 2026-07-23 — Ali&#39;s choice) in /opt/colaberry-accelerator/.env and recreated the backend; verified it resolves to that cohort. (2) CODE: hardened the fallback — new isNonPayingCohortName() excludes the Explorer/prospect holding cohorts (name matches /explorer|prospect/i) in addition to demo/test/sandbox, so even with no env override a paying subscriber can never land in a non-paying cohort. Files: backend/src/services/subscriptionService.ts, backend/src/services/__tests__/subscriptionService.test.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 16/16 (added: Explorer/prospect/demo cohort names are non-paying; real July cohort names are paying). backend tsc 0. PROD: env var confirmed in container -&gt; resolves to &quot;Cohort - July 2026 | 2026-07-23 | open&quot;. Deploy backend.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The env override remains the source of truth on prod; the code hardening is the defensive backstop for any env where it is unset (dev/future). Real-money billing is LIVE on prod as of this session.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">48</span>
+          <h2>Settings redesign: split the crammed single page into sleek tabs</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;This settings page needs to be redesigned... Seems all splattered together... add multiple tabs to make it more clean. We are going for sleek... everything should not be on the same page.&quot; The Settings page stacked every section on one long page (subscription, photo, profile, resume, points, preferences, security). Refactored into a tabbed shell with an underline tab bar (matching the Orchestration tab pattern): Subscription / Profile (photo + profile form + resume+LinkedIn) / Points (level summary + link to the full /portal/points drill-down) / Preferences / Account (sign-in + sign out + account). Only the active tab renders, so nothing feels crammed. Content constrained to a max-width shell for a calmer, sleeker layout. All existing handlers/state unchanged — pure render reorganization. Files: frontend/src/pages/portal/settings/SettingsPage.tsx (tab state + grouped render), SettingsPage.css (.set-shell/.set-tabs/.set-tab/.set-panel).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3 authoritative). Deployed to DEV only per Ali; live check: /portal/settings shows 5 tabs, each with just its own section(s).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY change (Ali: &quot;Update the dev environment only&quot;) — committed to workstream/curriculum-type-rename + deployed to dev; NOT promoted to main/prod. Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">49</span>
+          <h2>Settings polish: roomier card padding + uploads-first Profile tab that prefills from the resume</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;the text seems all scrunched up in the corner... give it a thicker border to where the words don&#39;t seem crammed to the left. Put the uploads at the top so they can easily fill out the profile from the resume/linkedin - fewer steps.&quot; (1) Padding: settings cards now have generous internal padding (28px 32px) so content no longer hugs the left edge. (2) Profile tab reordered — Resume &amp; LinkedIn (relabeled &quot;Start here&quot;) is first, then Photo, then the details form (now &quot;Your details&quot;). (3) Wired the actual prefill: on load and after a text-resume upload, empty profile fields (name/title/company/company_size/phone/LinkedIn) auto-fill from the parsed resume/onboarding prefill — never overwriting anything already entered; binary (PDF/DOCX) resumes are parsed server-side and fill in on the next load. Files: frontend/src/pages/portal/settings/SettingsPage.tsx, SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0 (CI TS 5.7.3). DEV-only per Ali; live check: Profile tab shows uploads first, cards have breathing room, and an uploaded resume fills empty fields.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY — branch + dev nginx; not promoted to main/prod. Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">50</span>
+          <h2>Billing checkout bug (external_id &gt; 50 chars) + resume-&gt;profile prefill + Points-in-Settings + optional fields + more preferences</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Batch from Ali testing on dev. (1) CRITICAL billing fix: PaySimple rejected checkout with &quot;external_id must be 50 chars or fewer&quot; (SUB-&lt;uuid-36&gt;-&lt;ts&gt; = 54). Shortened to dashless-hex uuid (32) + base36 timestamp (~45). This bug blocks EVERY checkout, including on prod (billing is live). subscriptionService.startCheckout. (2) Resume-&gt;profile prefill now actually works: the Settings resume upload used to only STORE the file (no extraction). Now portalSettingsService.setResume decodes the base64, runs fileExtractionService.extractTextFromBuffer (new; officeparser handles pdf/docx/rtf/txt via a temp file) and resumeIngestService.ingestResumeFileText → an LLM (gpt-4o-mini via getInstrumentedOpenAI) extracts profile fields (full_name/title/company/company_size/phone/linkedin) + personalization (industry/role/seniority/years/skills/goals/location), stored on onboarding_profiles.prefill.{profile,personalization}. resumeIngestService extended (ResumeExtraction + prompt + mapExtractionToProfile + ingestResumeFileText + getOnboardingProfile returns profile/personalization); ingestBackground now returns them too. Frontend SettingsPage.onPickResume re-reads the parsed profile after upload and prefills EMPTY fields only (never overwrites). (3) Points tab now shows the FULL 3-lens drill-down (combined the /portal/points screen into Settings): extracted PointsDrilldown.tsx (shared by PointsPage + the Settings Points tab). (4) Expandable optional personalization fields (industry, function, seniority, years, location, skills, goals) behind an &quot;Add more details&quot; toggle in the Profile tab — prefilled from the resume, saved with the profile. (5) More Preferences: notification toggles (program updates / event reminders / weekly digest / community visibility, auto-save), plus experience-level, weekly-hours, timezone, preferred-contact, and #1 goal. Personalization + preferences persist in enrollments.intake_data_json (JSONB) via extended sanitizeProfilePatch/updateProfile/getSettings. (6) Dev PAYMENT_MODE flipped to test (env, not code) so every checkout is $0.01. Files: backend subscriptionService.ts, resumeIngestService.ts (+test), fileExtractionService.ts, portalSettingsService.ts; frontend onboardingApi.ts, portalSettingsApi.ts, pages/portal/points/PointsDrilldown.tsx (NEW) + PointsPage.tsx, pages/portal/settings/SettingsPage.tsx + SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest — resumeIngestService 19/19 (incl. new mapExtractionToProfile + profile/personalization on the result), subscriptionService 16/16; backend + frontend tsc 0 (CI TS 5.7.3). DEV-only per Ali: deploy backend + nginx to dev; live-test the $0.01 checkout + resume upload autofill.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY (Ali: &quot;Update the dev environment only&quot;) — committed to workstream/curriculum-type-rename + deployed to dev; NOT promoted to main/prod. FLAG: the external_id checkout bug is ALSO live-broken on prod (billing shipped but no one can actually check out) — recommend promoting at least that fix to prod. The resume LLM parse runs inline on upload (~3-5s); gated on OPENAI_API_KEY (set on dev). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">51</span>
+          <h2>Subscription: per-month×12 pricing model, exact test amounts, Free card (selected), post-payment manage screen</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Dev testing batch from Ali. (1) Pricing is now per-month-driven: planChargeAmount(cfg) = per_month×12 for annual, per_month for monthly — so real prices ($149/$199) drop in by editing only per_month. Test amounts set: annual $0.15/mo → $1.80/yr, monthly $0.19/mo. makePlan() derives price + amount_cents from per_month. (2) The subscription checkout now charges the EXACT plan amount (createPaymentLink gains `exactAmount` to bypass the blanket $0.01 test override) — so $1.80/$0.19 actually flow through PaySimple. (3) Free card: the plan-selection view shows a 3rd &quot;Free · Explorer&quot; card styled as the user&#39;s current/selected plan, alongside Annual + Monthly. (4) Post-payment = a different &quot;manage your subscription&quot; screen: active badge, which plan (prominent), $amount/cadence, next-payment &quot;in N days&quot;, access-through date, started date, and Cancel-with-reason; canceled shows access-until + reason + resubscribe. Files: backend subscriptionService.ts (planChargeAmount/makePlan/PLANS + checkout), paysimpleService.ts (exactAmount), subscriptionService.test.ts; frontend pages/portal/settings/SubscriptionSection.tsx + SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest subscription 16/16 (incl. planChargeAmount ×12 for both test + real numbers, and checkout charges exactAmount); backend + frontend tsc 0. DEV-only; deploy backend + nginx; live-check the $1.80/$0.19 checkout link + the Free card + manage screen.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. To go live, change per_month to 149/199 (nothing else). LIMITATION: PaySimple&#39;s activation webhook targets one URL (prod), so a dev test payment leaves the subscription &#39;pending&#39; — the post-payment screen is shown by manually activating the dev subscription on request (safe container-side activateByRef). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">52</span>
+          <h2>Post-payment flow: new-tab checkout + auto-activating confirm (webhook on prod, dev-gated return-activate) + manage screen</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali made a real $1.80 test payment (PaySimple Order #12928, Annual, Paid, Visa …1159, item correctly named &quot;AI Leadership Accelerator - Annual plan&quot;) but the plan didn&#39;t update. Root cause validated: the subscription stayed &#39;pending&#39; because PaySimple&#39;s activation webhook targets prod, so it never reached the dev instance (paysimple_payment_id null, enrollment still explorer). Probed PaySimple to build a query-based confirm, but this account returns stale 2016-2021 data and ignores customer/date filters and GET /ps/payment_link/{id} 404s — so a reliable payment-status query isn&#39;t available. Fixes: (1) Activated the paid $1.80 sub manually so the post-payment screen shows now. (2) New confirmCheckout(enrollmentId): on PROD reports current status so the UI updates once the signed webhook lands; on DEV only (env SUBSCRIPTION_ALLOW_RETURN_ACTIVATE=true, set on the dev host .env) it activates the most-recent pending sub created in the last 30 min so the flow can be tested end-to-end — flag OFF in prod, so no unpaid activation. New POST /api/portal/subscription/confirm. (3) Frontend: checkout now opens PaySimple in a NEW TAB (window.open); the Settings tab shows a &quot;Complete your payment…&quot; waiting panel and auto-polls confirm every 4s (and re-checks on window focus) for ~3 min, then flips to the manage screen with no manual refresh — plus an &quot;I&#39;ve paid — check now&quot; button. Files: backend subscriptionService.ts (confirmCheckout), controllers/participantController.ts, routes/participantRoutes.ts, subscriptionService.test.ts; frontend subscriptionApi.ts, pages/portal/settings/SubscriptionSection.tsx + SettingsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest subscription 20/20 (incl. confirm: already-active no-op, flag-off no activation, flag-on recent-pending activates, stale-pending ignored); backend + frontend tsc 0. DEV-only; deploy backend + nginx. Ali&#39;s paid sub activated (annual, active, renews 2027-07-15).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. On prod the webhook remains the source of truth (confirm never blindly activates without the flag). The dev flag lives only in the dev host .env, never committed. When promoting to prod, do NOT set SUBSCRIPTION_ALLOW_RETURN_ACTIVATE. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">53</span>
+          <h2>Settings: require industry + last title (checks + always-infer) and make the Points tab multi-column</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;put checks in place to make sure we collect things like industry. And Role/Title of their last job. Points section should be formatted better. Looks like a phone, fix that with at least 2 columns.&quot; (1) Industry + Title/role are now REQUIRED: the resume prompt is strengthened to ALWAYS provide title (their last job title) and industry (inferring industry from company/role when not stated, e.g. lending co -&gt; Financial Services); on load, if industry is still missing the &quot;Add more details&quot; section auto-expands so it&#39;s prompted; Save changes now blocks with a clear message until name + title + industry are filled; both labels show a red &quot;required&quot; badge. (2) Points drill-down was collapsing to a single column inside the narrower Settings &gt; Points tab — reduced the lens grid min from 280px to 205px (auto-fit) so 2-3 lenses sit side-by-side there while the standalone /portal/points still shows 3. Files: backend resumeIngestService.ts (prompt); frontend pages/portal/settings/SettingsPage.tsx (auto-expand + required validation + labels) + SettingsPage.css (.set-req), pages/portal/points/PointsPage.css (.pts-lenses grid).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest resumeIngest 15/15; backend + frontend tsc 0 (CI TS 5.7.3). DEV-only; deploy backend + nginx.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Required checks are client-side prompts (name is already server-enforced non-empty); industry/title are stored in intake_data_json / enrollments. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">54</span>
+          <h2>Subscription real prices ($149/$199) + Points forced 3-column layout</h2>
+          <span class="badge">2026-07-15</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;change the price from .15 to $149 and .19 to $199&quot; and &quot;We need 3 columns for points... make it fit, it looks awful.&quot; (1) Prices: PLANS per_month set to 149 (annual → $1,788/yr via ×12) and 199 (monthly). Dropped the subscription checkout&#39;s exactAmount flag so on DEV (PAYMENT_MODE=test) checkout still charges $0.01 for safe testing while the cards show the real $149/$199; on PROD (live mode) it charges the real $1,788/$199. (2) Points drill-down: the lens grid is now an explicit repeat(3, minmax(0,1fr)) (was auto-fit, which collapsed to 2 columns in the narrower Settings &gt; Points tab), collapsing to 1 column only under 680px; tightened the lens internals (padding, big-number 40→32, readiness ring 92→74) so three lenses sit cleanly side-by-side. Files: backend subscriptionService.ts (PLANS + checkout) + subscriptionService.test.ts; frontend pages/portal/points/PointsPage.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest subscription 20/20 (pricing now 1788/199, checkout requests real amount); backend + frontend tsc 0. DEV-only; deploy backend + nginx.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. On dev, subscription checkout charges $0.01 (test mode); real $1,788/$199 charges only happen in prod live mode. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">55</span>
+          <h2>Timeline launch gate: only LAUNCHED curriculum types can be added to the timeline</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;When I go to add a card to the timeline, I should only see Curriculum types that have been activated. I don&#39;t want staff to add curriculum types that have not been launched or approved.&quot; The Add-card Type dropdown listed every registry type regardless of approval. The Studio already has the lifecycle (draft → generated → validated → published, via the Status tab + PUT /api/admin/components/:slug/lifecycle) — the timeline just ignored it. Now: (1) listTimeline returns every authorable type WITH a computed `launched` flag (CurriculumTypeDefinition.status === &#39;published&#39; AND is_active !== false; no Studio row = not launched) — all types still returned so existing cards keep labels/bands. (2) Server-side enforcement: createCard → assertTypeLaunched() rejects hand-placing an unlaunched type with a 400 pointing at the Studio Status tab (staff can&#39;t bypass the dropdown via API). (3) Frontend: the Add-card Type select offers ONLY launched types (+ a hint &quot;Launch a type in the Experience Studio → Status tab&quot;), and openAdd defaults to a launched type. (4) One-time dev backfill: published the 24 types already in use on the timeline (de-facto launched); 18 unused types remain gated until approved in the Studio. Files: backend/src/services/timeline/timelineAdminService.ts, NEW backend/src/services/timeline/__tests__/typeLaunchGate.test.ts; frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 15/15 (new gate suite: rejects not-published / deactivated / no-row, allows published+active, listTimeline launched flags incl. no-row default; existing timelineAdminService tests still green). backend + frontend tsc 0. DEV: 24 published / 18 gated after backfill; live check — Add card shows only launched types.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY for now. On promotion to prod, run the same one-time backfill there (publish in-use types) or the Add dropdown starts empty: UPDATE curriculum_type_definitions SET status=&#39;published&#39; WHERE status&lt;&gt;&#39;published&#39; AND slug IN (SELECT DISTINCT type FROM timeline_cards WHERE type IS NOT NULL). Governance now lives in the Studio lifecycle: publish = launch. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">56</span>
+          <h2>Timeline launch gate v2: gate on the Studio&#39;s &quot;Approved for curriculum&quot; flag (not lifecycle status)</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;There are 19 approved but over 30 in the drop down. There should only be 19.&quot; The v1 gate keyed on lifecycle status=&#39;published&#39;, but the Studio&#39;s authoritative approval is the separate `approved` boolean (the &quot;✓ Approved for curriculum&quot; button, PUT /api/admin/components/:slug/approval) — the same flag the Curriculum Composer already honors, and the source of the Studio&#39;s &quot;19 approved&quot; count. The gate now keys on `approved === true &amp;&amp; is_active !== false` in both listTimeline&#39;s `launched` flag and createCard&#39;s assertTypeLaunched (error message now points at the Studio approval button). Frontend hint updated. The v1 published-status backfill is harmless (status is a separate authoring axis; no data reverted). Files: backend/src/services/timeline/timelineAdminService.ts, __tests__/typeLaunchGate.test.ts (re-keyed to approved); frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx (hint text).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest typeLaunchGate 5/5 (not-approved / deactivated / no-row rejected; approved+active allowed; launched flags); backend tsc 0. DEV live check: Add-card picker = approved ∩ hand-placeable types (19 approved on dev; system-emitted approved types like github_sync never appear in the picker by design).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Approval workflow: Experience Studio → open type → &quot;Approve for curriculum&quot; toggles it in/out of the picker; no separate backfill needed on prod promotion since `approved` is already curated there by the Studio. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">57</span>
+          <h2>Timeline cards show each item&#39;s OWN image (video/blog/testimonial) instead of the generic type visual</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Videos, blogs and testimonials should override these picture. They all have their own images. … The images should show in the timeline.&quot; Tiles only ever used a poster for video-kind cards WITH an explicitly saved poster; blogs had no image field at all. Now every card resolves its OWN image with a fallback chain — explicit card image (NEW metadata.image, for blogs etc.) → saved video poster → thumbnail derived from the video URL (new videoThumbnail(): YouTube img.youtube.com/vi/&lt;id&gt;/hqdefault.jpg) — and the timeline tile shows it (darkened for text legibility) for ANY card kind, falling back to the Design-E gradient only when none exists. The detail body (student drawer = Studio preview = editor preview) passes the derived thumbnail to VideoEmbed as the poster fallback and renders a 16:9 hero image for non-video items that carry metadata.image. Editor: new &quot;Image URL&quot; field for non-video/non-SkillsJar types, saved via new image key on create/update (zod imageSchema; buildImageMeta write + imageFromMetadata feed read; updateCard merges/clears metadata.image). Files: backend timelineService.ts (FeedCard.image + imageFromMetadata), timelineAdminService.ts (buildImageMeta, compose + updateCard), timelineAdminController.ts (imageSchema on create/update); frontend videoEmbed.ts (videoThumbnail), TimelineCard.tsx (ownImage tile), CardDetailBody.tsx (poster fallback + .tld-hero), timeline.css, cardAdapter.ts (image passthrough), TimelineEditorTab.tsx (field + previews + save).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 25/25 (new: metadata.image write via composeCardAttributes, buildImageMeta empties → null, imageFromMetadata read/absent/non-string; gate + video suites still green). backend tsc 0, frontend tsc 0. DEV live check after deploy: video card with YouTube URL and no saved poster now shows its real thumbnail on the tile.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Cards still show the gradient until media is attached — testimonials/podcasts get theirs the moment a clip is attached (✦ Generate already finds the video + writes the poster); blogs use the new Image URL field. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">58</span>
+          <h2>Merge: curriculum-type banners (CC-20260716-k3v7&#39;s branch) + item-own images unified into one image chain</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Merged `origin/workstream/curriculum-type-thumbnails` (type banner JPGs + type_thumbnail_url feed field + testimonial/podcast personalized sources + audio playback) into `workstream/curriculum-type-rename` — my earlier dev deploy had unknowingly replaced that session&#39;s Dev 1 deployment, hiding the banners Ali was already seeing. Combined tile precedence (TimelineCard): item&#39;s OWN image (metadata.image → video.poster → derived YouTube thumb) → type banner (type_thumbnail_url) → Design-E gradient; watermark icon only on gradient tiles. NEW in this merge (closes Ali&#39;s &quot;The images should show in the timeline&quot; on the ADMIN editor): listTimeline types now carry thumbnail_url; the Timeline editor passes it through thumbOf()/typeThumbUrl into every card preview + the edit drawer; CardDetailBody video cards with NO clip attached now show the card&#39;s image (own image, else type banner) instead of the empty dashed &quot;No video&quot; box (note below still says where to attach one). Also fixed two latent sibling-branch test breaks: FeedVideo.title extension vs videoFromMetadata expectation; type count 36→39 (testimonial/podcast/blog).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest timeline+podcast+cardContent 71/71; frontend curriculumFormatContract 5/5 (react-scripts); backend tsc 0; frontend tsc 0. DEV live check after deploy: admin Timeline shows banner/own images on cards (no more empty dashed boxes where a banner exists).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY (both branches). Merge commit unions zod schemas (image + testimonial + podcast) and updateCard metadata merge (video/content/course/image/testimonial/podcast). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">59</span>
+          <h2>Admin Timeline redesigned as the student classroom: 16:9 tile cards + details in the student&#39;s right-side popup</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Every curriculum object should have a 16:9 image in the preview and then allow the user to click something to see the details… I want it to look more like the student&#39;s experience where we can click on the button to pull it up (popup) on the right side. For [runtime-personalized items] in the timeline we can just use their stored image; only the student view shows the thumbnail specific to the student&#39;s experience.&quot; The admin Timeline previously rendered the FULL CardDetailBody inline on every card (very long). Now each card in the lanes renders the REAL student &lt;TimelineCard&gt; (header + short copy + 16:9 image tile via the stored-image chain: metadata.image → video poster/derived YouTube thumb → type banner → gradient); clicking ▶/Open pulls up the student&#39;s actual right-side popup — CardDetailDrawer gained an optional `preview` prop (complete/Enter-workspace disabled) so the admin popup IS the student drawer. Edit drawer&#39;s long inline &quot;Finished product&quot; is now the compact student tile + &quot;Open the student view — full details →&quot; button into the same popup (z-index raised above the edit drawer). Student-only Like/Comment hidden in admin lanes. Runtime-personalized cards (random testimonials/podcasts) show their STORED image in admin by construction (listTimeline never personalizes); students keep their per-student pick (getFeed injection). Files: frontend/src/components/timeline/CardDetailDrawer.tsx (preview prop, onComplete optional); frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx (student tiles, studentView popup state, EditDrawer onPreview, CSS overrides).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5 (react-scripts). DEV live check after deploy: every lane card is a 16:9 image tile; tile ▶/Open opens the right-side student popup; edit drawer shows compact tile + working student-view button.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Frontend-only change — deploy nginx. Backend untouched (admin uses stored metadata already).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">60</span>
+          <h2>One-click video playback + play/open affordance split on timeline tiles</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;I should be able to click on all videos and get them to play right away&quot; + &quot;We don&#39;t need a play button for everything - only things that can be played. Everything else will have an open button [that] opens on the right panel.&quot; (1) Autoplay: VideoEmbed gained an `autoplay` prop (starts in the playing state, no poster click); CardDetailBody threads it as `autoplayVideo`; CardDetailDrawer always passes it — opening a card&#39;s drawer IS the play intent, so any card with a video (student classroom, Today feed, admin Timeline popup) starts playback on the single click that opened it. VideoEmbed keyed by card.id so switching cards re-applies. Audio episodes (podcast .mp3) autoplay the same way. (2) Affordances: the tile&#39;s ▶ circle now appears ONLY when a playable source is attached (parseVideoUrl); everything else shows an &quot;Open →&quot; pill (new .mt-openpill style) that pulls up the right panel; the Skills Course tile&#39;s details circle swapped its ▶ for an open-panel chevron (▶ is reserved for playback). Completed cards keep the ✓. Files: frontend/src/components/timeline/VideoEmbed.tsx, CardDetailBody.tsx, CardDetailDrawer.tsx, TimelineCard.tsx, timeline.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. DEV live check after deploy: clicking a video card opens the popup with the video already playing; cards without a playable source show &quot;Open →&quot; and no ▶ anywhere on them.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Frontend-only — deploy nginx. Iframe autoplay works because the embed carries allow=&quot;autoplay&quot; and renders on a user click (Chrome delegation).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">61</span>
+          <h2>Classroom responsive: right rail disappears on shrink; feed keeps normal size (FB-style)</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;When in the classroom and the size of the screen shrinks, instead of making the content smaller, disappear the right side and keep the images their normal size making it more of a FB kind of view.&quot; Previously the two-column grid squeezed the feed (cards + 16:9 images shrank with the viewport) and below 1000px the rail stacked underneath. Now at ≤1180px the right rail (countdown / status / weekly progress) hides entirely and the feed column centers at max-width 720px — the cards and their images hold their normal size like a Facebook feed. Only ClassroomPage uses this grid (verified), so the change is scoped. File: frontend/src/components/timeline/timeline.css (.tl-grid/.tl-side/.tl-feedcol media rule).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">CSS-only; CRA Docker build green on deploy; DEV live check — shrink the classroom window: rail disappears, cards stay full-size and centered.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">62</span>
+          <h2>Inline video playback + working class comments (feed + workspace next to AI Mentor)</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Clicking on the video should start playing it in the current screen… I would need to click on the open button to open up the right side. That should be the only way.&quot; + &quot;The comment section doesn&#39;t work… when you go to workspace the video should play there — I should see comments from other users right next to the AI Mentor.&quot; (1) Inline play: clicking a playable tile (or its ▶) now swaps the 16:9 tile to the live player IN the feed (FB-style; VideoEmbed reused with autoplay + ribbon; onEnded still auto-completes direct files); the footer &quot;Open&quot; button (and the Open pill on non-playable tiles) is now the ONLY way to open the right-side panel. (2) Comments, full-stack: NEW timeline_card_comments table (idempotent ensureCardCommentsSchema — boot runs no global sync), CardComment model, cardCommentService (normalizeCommentBody ≤2000 chars, displayName &quot;First L.&quot;, listComments flags `mine`, addComment denormalizes author_name), GET/POST /api/portal/runtime/cards/:cardId/comments (requireParticipant + zod). NEW shared &lt;CardComments&gt; (self-fetching thread + post box, self-contained tlc-* CSS + dark theme) — the feed card&#39;s Comment button now toggles the real thread, and the Runtime workspace shows the same thread directly under the AI Mentor. (3) Workspace video: poster falls back to the derived YouTube thumbnail; podcast ribbon added. Files: backend server.ts, models/CardComment.ts (NEW), services/runtime/cardCommentService.ts (NEW) + test (NEW), controllers/runtimeController.ts, routes/participantRoutes.ts; frontend TimelineCard.tsx, CardComments.tsx (NEW), cardComments.css (NEW), RuntimeWorkspace.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest 52/52 incl. new cardCommentService 5/5 (body trim/empty/oversize; display-name shapes); backend + frontend tsc 0; curriculumFormatContract 5/5. DEV after deploy: timeline_card_comments table created on boot; comment posted on a card appears in the feed thread AND in the workspace thread (same data).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY. Comments are class-wide per card (no cohort scoping yet — one shared curriculum). Admin timeline hides the Comment button (participant-auth endpoints). Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">63</span>
+          <h2>Merge main (sibling sessions&#39; PRs #259/#260 + blog type) — one implementation per feature; video tiles show the VIDEO&#39;s image</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;these changes are not on dev environment&quot; + &quot;Videos, just like Testimonials should show the image for the video - instead of default image.&quot; Root cause: parallel Claude sessions ship to the ONE dev instance — a deploy from /opt/acc-testimonials (main + PRs #259/#260) replaced this branch&#39;s deploy 12 min after it went live, and main independently implemented card comments + inline click-to-play. Reconciled by merging origin/main in and keeping ONE implementation per feature: (1) DROPPED my duplicate comments backend (CardComment model, cardCommentService+test, runtime routes/handlers, my ensureCardCommentsSchema) in favor of main&#39;s TimelineCardComment + rate-limited /api/portal/classroom/cards/:cardId/comments + sync-based ensure — my feed &lt;CardComments&gt; toggle (unique: comments IN the feed card; main&#39;s are workspace-only) rewired to main&#39;s endpoint (newest-first, prepend on post). (2) TimelineCard: main&#39;s playingInline is the inline-play mechanism, generalized — my VideoEmbed-based inline branch replaces main&#39;s podcast-audio-only special case (any playable card plays in-tile incl. .mp3); poster chain unioned per Ali&#39;s newest ask: card image → video poster → DERIVED YouTube thumbnail (so a video card shows ITS video&#39;s image, never the type banner) → blog thumbnail → type banner (main&#39;s field name type_thumbnail) → gradient; kept my ▶-only-when-playable + Open-pill affordances, main&#39;s blog ribbon/title. (3) CardDetailBody: derived-thumb poster fallback + no-clip hero + autoplay preserved; main&#39;s non-video type_thumbnail hero gated to not fight the card&#39;s own image. (4) Editor: kept my student-tile lanes + student-view popup + Image URL field + launched gate; adopted main&#39;s blog source UI + field names (type_thumbnail, blog payloads). (5) RuntimeWorkspace: main&#39;s cohort-comments panel is the one implementation (mine removed); kept derived-thumb poster fallback. Fixed field-name drift (type_thumbnail_url → type_thumbnail) across adapter/editor/body.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0; backend jest timeline+podcast+blog+__tests__ 1022 passed (1 failing suite adminRoutes.test.ts is byte-identical to origin/main — pre-existing on main, not from this merge); curriculumFormatContract 5/5. DEV live check after deploy: &quot;Intro to Large Language Models&quot; (YouTube URL, no saved poster) shows the real video thumbnail on its tile; Comment button opens the thread in the feed; workspace comments + inline play intact.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY branch state (main itself untouched). Coordination: multiple sessions deploying different branches to the one dev instance keep overwriting each other — flagged to Ali in the session summary.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260708-q7m3</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

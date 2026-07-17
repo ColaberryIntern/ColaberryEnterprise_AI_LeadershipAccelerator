@@ -7,7 +7,14 @@ import {
 } from '../services/participantService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
+import { getStreak, claimStreak } from '../services/streakService';
+import { getPointsDrilldown } from '../services/pointsDrilldownService';
+import { getSubscription, startCheckout, cancelSubscription, confirmCheckout } from '../services/subscriptionService';
+import { getEnrollmentView, selectCohort, SelectCohortReason } from '../services/portalEnrollmentService';
+import { z } from 'zod';
+import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
+import Enrollment from '../models/Enrollment';
 import { getUpcomingPublicEvents } from '../services/publicEventsService';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
 
@@ -37,10 +44,105 @@ export async function handleGetPoints(req: Request, res: Response, next: NextFun
   } catch (err) { next(err); }
 }
 
+export async function handleGetPointsDrilldown(req: Request, res: Response, next: NextFunction) {
+  try {
+    const drilldown = await getPointsDrilldown(req.participant!.sub);
+    res.json(drilldown);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetSubscription(req: Request, res: Response, next: NextFunction) {
+  try {
+    const view = await getSubscription(req.participant!.sub);
+    res.json(view);
+  } catch (err) { next(err); }
+}
+
+export async function handleStartSubscriptionCheckout(req: Request, res: Response, next: NextFunction) {
+  try {
+    const plan = String(req.body?.plan || '') as SubscriptionPlan;
+    if (plan !== 'annual' && plan !== 'monthly') {
+      return res.status(400).json({ error: 'plan must be "annual" or "monthly"' });
+    }
+    const result = await startCheckout(req.participant!.sub, plan);
+    if (result.ok) return res.json({ payment_link: result.payment_link, plan: result.plan, amount: result.amount });
+    const status = result.reason === 'billing_unconfigured' ? 503
+      : result.reason === 'enrollment_not_found' ? 404
+      : result.reason === 'unknown_plan' ? 400 : 502;
+    return res.status(status).json({ error: result.reason, message: result.message });
+  } catch (err) { next(err); }
+}
+
+export async function handleConfirmCheckout(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await confirmCheckout(req.participant!.sub);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+export async function handleCancelSubscription(req: Request, res: Response, next: NextFunction) {
+  try {
+    const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+    if (!reason) return res.status(400).json({ error: 'A cancellation reason is required' });
+    const result = await cancelSubscription(req.participant!.sub, reason);
+    if (!result.ok) return res.status(409).json({ error: result.reason });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// ─── Enrollment (class-date selection) — enrolling reserves a spot; paying locks it ───
+
+const SelectCohortSchema = z.object({ cohort_id: z.string().uuid('cohort_id must be a UUID') });
+
+const SELECT_COHORT_STATUS: Record<SelectCohortReason, number> = {
+  enrollment_not_found: 404,
+  cohort_not_found: 404,
+  cohort_closed: 400,
+  cohort_not_selectable: 400,
+  cohort_started: 400,
+  locked_after_payment: 409,
+};
+
+export async function handleGetEnrollment(req: Request, res: Response, next: NextFunction) {
+  try {
+    const view = await getEnrollmentView(req.participant!.sub);
+    if (!view) return res.status(404).json({ error: 'Enrollment not found' });
+    res.json(view);
+  } catch (err) { next(err); }
+}
+
+export async function handleSelectEnrollmentCohort(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = SelectCohortSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'cohort_id is required' });
+    }
+    const result = await selectCohort(req.participant!.sub, parsed.data.cohort_id);
+    if (!result.ok) return res.status(SELECT_COHORT_STATUS[result.reason]).json({ error: result.reason });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetStreak(req: Request, res: Response, next: NextFunction) {
+  try {
+    const streak = await getStreak(req.participant!.sub);
+    res.json(streak);
+  } catch (err) { next(err); }
+}
+
+export async function handleClaimStreak(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await claimStreak(req.participant!.sub);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
 export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
   try {
     const schedule = await getOnboardingSchedule(req.participant!.sub);
-    res.json(schedule);
+    // Explorer status drives the free-tier conversion funnel on the portal (Today).
+    const enr = await Enrollment.findByPk(req.participant!.sub, { attributes: ['enrollment_type'] });
+    res.json({ ...schedule, is_explorer: (enr as any)?.enrollment_type === 'explorer' });
   } catch (err) { next(err); }
 }
 

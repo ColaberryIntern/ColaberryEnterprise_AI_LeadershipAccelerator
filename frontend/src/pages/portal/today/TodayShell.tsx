@@ -3,17 +3,18 @@ import { Link } from 'react-router-dom';
 import './TodayShell.css';
 import {
   fetchPoints, fetchSchedule, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
-  levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView,
+  fetchStreak, claimDailyStreak,
+  levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
 } from '../../../services/onboardingApi';
 import PortalShell from './PortalShell';
 import {
   readParticipant, countdown, firstClassTargetMs,
-  StreakState, loadStreak, saveStreak, todayKey, dowMonFirst,
-  fmtCentralDateTime, fmtCentralDate,
+  fmtCentralDateTime,
 } from './shellUtils';
-import FeedCard from '../feed/FeedCard';
-import { buildTodayFeed } from '../feed/todayFeed';
-import { useProjectsList, nextTask } from '../projects/projectsStore';
+import portalApi from '../../../utils/portalApi';
+import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
+import '../../../components/timeline/timeline.css';
 
 const TodayShell: React.FC = () => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
@@ -25,20 +26,34 @@ const TodayShell: React.FC = () => {
   const [uploadName, setUploadName] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
-  const [streak, setStreak] = useState<StreakState>(() => loadStreak());
-  const [feedFilter, setFeedFilter] = useState<string>('all');
-  const projects = useProjectsList();
+  const [streak, setStreak] = useState<StreakView | null>(null);
+  const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
+  const [visibleCount, setVisibleCount] = useState(5);
+  const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   const me = useMemo(readParticipant, []);
 
   const loadAll = useCallback(async () => {
-    const [p, s, pr] = await Promise.allSettled([fetchPoints(), fetchSchedule(), fetchOnboardingProfile()]);
+    const [p, s, pr, cl, st] = await Promise.allSettled([
+      fetchPoints(), fetchSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'), fetchStreak(),
+    ]);
     if (p.status === 'fulfilled') setPoints(p.value);
     if (s.status === 'fulfilled') setSchedule(s.value);
     if (pr.status === 'fulfilled') setProfile(pr.value);
+    if (cl.status === 'fulfilled') setCurriculum(((cl.value.data?.cards as TimelineFeedCard[]) || []).sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || a.order - b.order));
+    if (st.status === 'fulfilled') setStreak(st.value);
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+  // Infinite scroll — reveal more of the (looping) curriculum feed as you reach the end.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el || curriculum.length === 0) return;
+    const obs = new IntersectionObserver((e) => { if (e[0].isIntersecting) setVisibleCount((v) => v + 5); }, { rootMargin: '500px' });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [curriculum.length]);
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
@@ -54,6 +69,9 @@ const TodayShell: React.FC = () => {
   const hasBackground = !!(profile && (profile.has_resume || profile.linkedin_url));
   const rsvped = !!schedule?.my_rsvp;
 
+  // The real registration lives on Eventbrite; RSVP here records it + awards
+  // points, then sends the student to Eventbrite to secure their seat.
+  const EVENTBRITE_OPEN_HOUSE_URL = 'https://www.eventbrite.com/e/colaberry-ai-systems-architect-accelerator-open-house-tickets-1992498063344';
   const doRsvp = async () => {
     if (!oh || busy) return;
     setBusy(true);
@@ -62,6 +80,7 @@ const TodayShell: React.FC = () => {
       await loadAll();
       flash(r.awarded ? `RSVP confirmed — +${r.points} points` : 'You are already RSVP\'d');
     } catch { flash('Could not RSVP right now'); } finally { setBusy(false); }
+    window.open(EVENTBRITE_OPEN_HOUSE_URL, '_blank', 'noopener');
   };
 
   // Resume / LinkedIn are BOTH uploads. LinkedIn can't be scraped from a link,
@@ -83,13 +102,19 @@ const TodayShell: React.FC = () => {
     } catch { flash('Could not upload that right now'); } finally { setBusy(false); }
   };
 
-  const claimedToday = streak.lastClaim === todayKey();
-  const doClaimStreak = () => {
-    if (claimedToday) return;
-    const week = [...streak.week]; week[dowMonFirst()] = true;
-    const next: StreakState = { count: streak.count + 1, lastClaim: todayKey(), week };
-    setStreak(next); saveStreak(next);
-    flash(`Daily streak — ${next.count} day${next.count === 1 ? '' : 's'}`);
+  const claimedToday = !!streak?.claimed_today;
+  const doClaimStreak = async () => {
+    if (claimedToday || busy) return;
+    setBusy(true);
+    try {
+      const r = await claimDailyStreak();
+      setStreak(r.streak);
+      // Streak points fold into the score — refresh the points total too.
+      try { setPoints(await fetchPoints()); } catch { /* keep prior total */ }
+      flash(r.awarded
+        ? `Daily streak — ${r.streak.count} day${r.streak.count === 1 ? '' : 's'} · +${r.points} pts`
+        : 'Already claimed today');
+    } catch { flash('Could not claim your streak right now'); } finally { setBusy(false); }
   };
 
   const steps = [
@@ -101,36 +126,50 @@ const TodayShell: React.FC = () => {
   const setupRemaining = steps.filter((s) => !s.done).length;
   const setupDone = steps.filter((s) => s.done).length;
   const setupPct = Math.round((setupDone / steps.length) * 100);
-  const streakDow = dowMonFirst();
+  const streakCount = streak?.count ?? 0;
+  const streakWeek = streak?.week ?? [];
 
-  // Aggregated Today timeline — the "big feed" pulling from every page.
-  const firstClassLabel = schedule?.first_class?.start_date
-    ? new Date(`${schedule.first_class.start_date}T00:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-    : null;
-  const primaryBuild = projects[0] || null;
-  const projectHint = primaryBuild
-    ? { name: primaryBuild.name, status: primaryBuild.status, nextTaskTitle: nextTask(primaryBuild)?.task.title || null }
-    : null;
-  const feedItems = buildTodayFeed(
-    {
-      ohTitle: oh?.title || null,
-      ohWhen: oh ? fmtCentralDate(oh.starts_at) : null,
-      rsvped, hasBackground, firstClassLabel, project: projectHint,
-    },
-    { onRsvp: doRsvp, onUpload: () => setShowUpload(true), onSoon: (label) => flash(`${label} unlocks when you enroll`) },
-  );
-  const feedSources = Array.from(new Set(feedItems.map((i) => i.source)));
-  const filteredFeed = feedFilter === 'all' ? feedItems : feedItems.filter((i) => i.source === feedFilter);
+  // The Today timeline mirrors the Classroom curriculum — an endless FB-style
+  // feed of the real cards (Week 0 for a free Explorer). Cycles as you scroll so
+  // the total is never shown. Category chips are labels-only for now (0) — the
+  // other feed sources light up later.
+  const CATEGORY_LABELS = ['Your setup', 'Projects', 'Schedule', 'Your path', 'Classroom', 'Cert Prep', 'Community'];
+  const looped: TimelineFeedCard[] = curriculum.length
+    ? Array.from({ length: Math.min(visibleCount, curriculum.length * 12) }, (_, i) => curriculum[i % curriculum.length])
+    : [];
 
   return (
     <PortalShell todayBadge={setupRemaining}>
       {toast && <div className="te-toast">{toast}</div>}
 
       <div className="te-page-h">
-        <div className="crumb">Command Center</div>
+        <div className="crumb">{schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
         <h1>Welcome{me.email ? `, ${me.email.split('@')[0]}` : ''}</h1>
-        <div className="sub">Let's get you set up. A few quick steps unlock your first points and your seat.</div>
+        <div className="sub">{schedule?.is_explorer
+          ? "Explore AI for free — watch, listen, learn, and try. Enroll when you're ready to build for real."
+          : "Let's get you set up. A few quick steps unlock your first points and your seat."}</div>
       </div>
+
+      {schedule?.is_explorer && (
+        <div className="te-card" style={{ background: 'linear-gradient(135deg,#2E6A86,#367895)', color: '#fff', padding: '20px 22px', marginBottom: 18, border: 'none' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', opacity: 0.9 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 8h16v8H4zM4 8l2-3h12l2 3M9 12h6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+            Free AI Preview
+          </div>
+          <h2 style={{ margin: '8px 0 6px', fontSize: 22, color: '#fff' }}>You're learning AI for free</h2>
+          <p style={{ margin: '0 0 14px', opacity: 0.92, maxWidth: '54ch' }}>Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live build classes, the community, and your certification.</p>
+          {(fcCd || ohCd) && (
+            <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', margin: '2px 0 16px' }}>
+              {fcCd && <div><div style={{ fontSize: 11, opacity: 0.82 }}>Next class starts in</div><div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 700, fontSize: 15 }}>{fcCd.d}d {fcCd.h}h {fcCd.m}m {fcCd.s}s</div></div>}
+              {oh && ohCd && <div><div style={{ fontSize: 11, opacity: 0.82 }}>{oh.title} in</div><div style={{ fontFamily: 'ui-monospace,Menlo,monospace', fontWeight: 700, fontSize: 15 }}>{ohCd.d}d {ohCd.h}h {ohCd.m}m {ohCd.s}s</div></div>}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <Link className="te-btn cherry" to="/portal/curriculum">Enroll to unlock →</Link>
+            {oh && <button className="te-btn" style={{ color: '#fff', border: '1px solid rgba(255,255,255,.6)', background: 'rgba(255,255,255,.14)' }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd for the event" : 'RSVP for the event'}</button>}
+          </div>
+        </div>
+      )}
 
       <div className="te-grid">
         <div>
@@ -204,20 +243,16 @@ const TodayShell: React.FC = () => {
               </span>
             </div>
             <div className="te-feed-filter">
-              <button type="button" className={`fchip${feedFilter === 'all' ? ' active' : ''}`} onClick={() => setFeedFilter('all')}>All <span className="ct">{feedItems.length}</span></button>
-              {feedSources.map((s) => {
-                const label = feedItems.find((i) => i.source === s)?.sourceLabel || s;
-                const count = feedItems.filter((i) => i.source === s).length;
-                return (
-                  <button key={s} type="button" className={`fchip${feedFilter === s ? ' active' : ''}`} onClick={() => setFeedFilter(s)}>
-                    {label} <span className="ct">{count}</span>
-                  </button>
-                );
-              })}
+              {CATEGORY_LABELS.map((label) => (
+                <span key={label} className="fchip"><span>{label}</span> <span className="ct">0</span></span>
+              ))}
             </div>
-            {filteredFeed.length
-              ? filteredFeed.map((it) => <FeedCard key={it.id} item={it} />)
-              : <div className="fc-empty">Nothing in this filter yet.</div>}
+            <div className="tl-de" data-theme="light">
+              {looped.length
+                ? looped.map((c, i) => <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={setSelectedCard} likes={6 + ((i * 7) % 13)} />)
+                : <div className="fc-empty">Loading your feed…</div>}
+              <div ref={sentinelRef} style={{ height: 1 }} />
+            </div>
           </div>
         </div>
 
@@ -234,7 +269,8 @@ const TodayShell: React.FC = () => {
             <div className="te-stat"><span className="lab">Architect Readiness</span><span className="num">0/100</span></div>
             <div className="te-ribbon" style={{ marginBottom: 4 }}><i style={{ width: '2%', background: 'var(--cherry)' }} /></div>
             <div className="te-muted" style={{ fontSize: 12 }}>Grows as you build once the program starts.</div>
-            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/path">See your path</Link>
+            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/points">Break down my points</Link>
+            <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} to="/portal/path">See your path</Link>
             <div className="te-chip guest" style={{ marginTop: 12 }}>Free preview account</div>
           </div>
 
@@ -243,17 +279,19 @@ const TodayShell: React.FC = () => {
             <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2c1 3-1 4.5-2.5 6.5C8 10.5 7 12 7 14a5 5 0 0 0 10 0c0-2-1-3.4-2-5" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Daily streak</h3>
             <div className="te-streak-top">
               <span className="fl"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2c1 3-1 4.5-2.5 6.5C8 10.5 7 12 7 14a5 5 0 0 0 10 0c0-2-1-3.4-2-5 .5 1 .5 2 .2 2.8C16.8 9.4 15 8 14.5 5.5 14 3.5 13 2.6 12 2z" fill="#E8920C" /><path d="M12 21a3 3 0 0 0 3-3c0-1.6-1.3-2.6-2-4-.7 1.4-2 2-2 4a1 1 0 0 0 1 3z" fill="#FB2832" /></svg></span>
-              <div className="ct"><b>{streak.count}</b><span>day{streak.count === 1 ? '' : 's'} streak</span></div>
+              <div className="ct"><b>{streakCount}</b><span>day{streakCount === 1 ? '' : 's'} streak</span></div>
             </div>
             <div className="te-streak-week">
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d, i) => (
-                <div key={d} className={`sd${streak.week[i] ? ' hit' : ''}${i === streakDow ? ' today' : ''}`}>
+              {streakWeek.map((d) => (
+                <div key={d.date} className={`sd${d.hit ? ' hit' : ''}${d.is_today ? ' today' : ''}`}>
                   <span className="dot"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
-                  <span className="lbl">{d}</span>
+                  <span className="lbl">{d.label}</span>
                 </div>
               ))}
             </div>
-            <button className="te-btn leaf sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doClaimStreak} disabled={claimedToday}>{claimedToday ? 'Claimed today' : 'Claim today'}</button>
+            <button className="te-btn leaf sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doClaimStreak} disabled={claimedToday || busy}>
+              {claimedToday ? 'Claimed today' : streak ? `Claim today · +${streak.next_points} pts` : 'Claim today'}
+            </button>
           </div>
 
           {schedule?.first_class && (
@@ -283,6 +321,17 @@ const TodayShell: React.FC = () => {
           </div>
         </aside>
       </div>
+      <CardDetailDrawer
+        card={selectedCard}
+        onClose={() => setSelectedCard(null)}
+        onComplete={async (card) => {
+          // Persist the completion (the 75% watch gate is enforced server-side; a
+          // rejection propagates so the drawer surfaces "keep watching").
+          await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+          setSelectedCard(null);
+          await loadAll();
+        }}
+      />
     </PortalShell>
   );
 };

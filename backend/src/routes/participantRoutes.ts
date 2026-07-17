@@ -8,7 +8,9 @@ import { strategyPrepUpload, certificateUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
-  handleFreeSignup, handleGetPoints,
+  handleFreeSignup, handleGetPoints, handleGetPointsDrilldown, handleGetStreak, handleClaimStreak,
+  handleGetSubscription, handleStartSubscriptionCheckout, handleCancelSubscription, handleConfirmCheckout,
+  handleGetEnrollment, handleSelectEnrollmentCohort,
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
@@ -31,7 +33,9 @@ import {
   handleGetSessionChat, handlePostSessionChat,
 } from '../controllers/sessionChatController';
 import { handleExecutePromptLab } from '../controllers/promptLabController';
+import { listPodcastsPortal } from '../controllers/podcastController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
+import { handleListCardComments, handleCreateCardComment } from '../controllers/timelineCommentController';
 import {
   handleGetSettings, handleUpdateProfile, handleSetAvatar, handleClearAvatar,
   handleSetResume, handleGetResume, handleClearResume,
@@ -39,6 +43,7 @@ import {
 import {
   handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
+  handleWatchBeat,
 } from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
@@ -54,6 +59,7 @@ router.get('/api/portal/verify', handleVerifyMagicLink);
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
 router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
+router.get('/api/portal/podcasts', requireParticipant, listPodcastsPortal);
 // Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
 router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
@@ -71,6 +77,15 @@ router.post('/api/portal/runtime/cards/:cardId/certificate', requireParticipant,
 router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, handleGetCertificate);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
+// Watch-progress heartbeat (~1 per 15s of playback per player; limiter blunts floods).
+const watchBeatRateLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many watch beats — please slow down' },
+});
+router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
@@ -80,6 +95,16 @@ router.post('/api/portal/submissions', requireParticipant, handleCreateSubmissio
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
 router.get('/api/portal/progress', requireParticipant, handleGetProgress);
 router.get('/api/portal/points', requireParticipant, handleGetPoints);
+router.get('/api/portal/points/drilldown', requireParticipant, handleGetPointsDrilldown);
+router.get('/api/portal/streak', requireParticipant, handleGetStreak);
+router.post('/api/portal/streak/claim', requireParticipant, handleClaimStreak);
+// Enrollment (class-date selection) — enrolling reserves a spot; payment locks it.
+router.get('/api/portal/enrollment', requireParticipant, handleGetEnrollment);
+router.post('/api/portal/enrollment', requireParticipant, handleSelectEnrollmentCohort);
+router.get('/api/portal/subscription', requireParticipant, handleGetSubscription);
+router.post('/api/portal/subscription/checkout', requireParticipant, handleStartSubscriptionCheckout);
+router.post('/api/portal/subscription/confirm', requireParticipant, handleConfirmCheckout);
+router.post('/api/portal/subscription/cancel', requireParticipant, handleCancelSubscription);
 router.get('/api/portal/onboarding/schedule', requireParticipant, handleGetOnboardingSchedule);
 router.get('/api/portal/events', requireParticipant, handleGetPublicEvents); // public events (CCPP) for the calendar
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
@@ -659,6 +684,11 @@ router.post('/api/portal/community/comments/:commentId/like', requireParticipant
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
 });
+
+// Per-card student comments (Runtime workspace) — newest first. Registered here
+// (after the community limiters are defined) so the shared rate limiter is in scope.
+router.get('/api/portal/classroom/cards/:cardId/comments', requireParticipant, handleListCardComments);
+router.post('/api/portal/classroom/cards/:cardId/comments', communityCommentRateLimiter, requireParticipant, handleCreateCardComment);
 
 router.post('/api/portal/community/posts/:postId/report', requireParticipant, async (req, res) => {
   const paramsParsed = PostIdParamSchema.safeParse(req.params);

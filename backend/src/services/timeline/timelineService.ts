@@ -11,6 +11,9 @@ import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineC
 import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType } from './typeRegistry';
+import { selectTestimonialForEnrollment } from './networkVideoService';
+import { selectPodcastForEnrollment } from './podcastMediaService';
+import { selectBlogForEnrollment } from './blogMediaService';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -18,12 +21,14 @@ export interface FeedVideo {
   url: string;
   presenter: string | null;
   poster: string | null;
+  title?: string | null;   // the specific video's own title — overlaid on the poster (personalized picks)
 }
 
 /** AI-generated student content saved onto the card (by the Timeline editor's
  *  "Generate content"), rendered in the student drawer — what was previewed IS
  *  what the student sees. */
 export interface FeedContent {
+  title?: string;    // the generated lesson title (e.g. "Overview — {week topic}") — display beats the card's raw title
   summary?: string;
   body_html?: string;
   questions?: string[];
@@ -35,6 +40,15 @@ export interface FeedContent {
 export interface FeedCourse {
   name: string | null;
   url: string | null;
+}
+
+/** A blog post on the card (Blog type) — a fixed pasted post, or the per-student
+ *  auto-matched pick from the training-site library (see blogMediaService). */
+export interface FeedBlog {
+  url: string;
+  title: string | null;
+  excerpt?: string | null;
+  thumbnail?: string | null;
 }
 
 export interface FeedCard {
@@ -58,7 +72,10 @@ export interface FeedCard {
   video: FeedVideo | null;
   content: FeedContent | null;
   course: FeedCourse | null;          // Skills Course link (skills_jar)
+  image: string | null;               // the item's OWN image (blog cover, testimonial still) — tiles use it over the generic type visual
+  blog: FeedBlog | null;              // Blog post (blog type) — fixed or auto-matched per student
   capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
+  type_thumbnail: string | null;      // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
 }
 
 /** PURE — normalize a capabilities blob (JSONB, may be junk) into a string[]. */
@@ -72,6 +89,7 @@ export function contentFromMetadata(metadata: any): FeedContent | null {
   const c = metadata && typeof metadata === 'object' ? metadata.content : null;
   if (!c || typeof c !== 'object') return null;
   const out: FeedContent = {};
+  if (typeof c.title === 'string' && c.title.trim()) out.title = c.title;
   if (typeof c.summary === 'string' && c.summary.trim()) out.summary = c.summary;
   if (typeof c.body_html === 'string' && c.body_html.trim()) out.body_html = c.body_html;
   if (Array.isArray(c.questions) && c.questions.length) out.questions = c.questions.map(String);
@@ -88,6 +106,29 @@ export function videoFromMetadata(metadata: any): FeedVideo | null {
     url: v.url.trim(),
     presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
     poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
+    title: typeof v.title === 'string' && v.title.trim() ? v.title.trim() : null,
+  };
+}
+
+/** PURE — the card's own display image from its metadata blob, or null. Set by
+ *  the Timeline editor (Image URL) for non-video items like blogs; video-band
+ *  cards usually carry theirs on video.poster instead. */
+export function imageFromMetadata(metadata: any): string | null {
+  const img = metadata && typeof metadata === 'object' ? metadata.image : null;
+  return typeof img === 'string' && img.trim() ? img.trim() : null;
+}
+
+/** PURE — a typed blog post from a card's metadata blob (link mode), or null.
+ *  Only the URL is required; title/thumbnail/excerpt are display extras filled
+ *  from the library at save time when the URL is a training-site post. */
+export function blogFromMetadata(metadata: any): FeedBlog | null {
+  const b = metadata && typeof metadata === 'object' ? metadata.blog : null;
+  if (!b || typeof b !== 'object' || typeof b.url !== 'string' || !b.url.trim()) return null;
+  return {
+    url: b.url.trim(),
+    title: typeof b.title === 'string' && b.title.trim() ? b.title.trim() : null,
+    excerpt: typeof b.excerpt === 'string' && b.excerpt.trim() ? b.excerpt.trim() : null,
+    thumbnail: typeof b.thumbnail === 'string' && b.thumbnail.trim() ? b.thumbnail.trim() : null,
   };
 }
 
@@ -105,6 +146,7 @@ export interface TimelineFeed {
   cohort_id: string | null;
   buckets: string[];
   cards: FeedCard[];
+  is_explorer?: boolean;   // true = free Explorer tier (Week 0 only) — drives the enroll upsell
 }
 
 /**
@@ -154,7 +196,13 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return { cohort_id: null, buckets: [...BUCKET_ORDER], cards: [] };
   }
 
-  const cards = await getGlobalCards();
+  // Free lead-magnet gate: Explorers (unenrolled prospects) get ONLY the Week 0
+  // "AI Preview" tier for free; paid enrollments see the full curriculum. Gated
+  // here so the paid weeks stay behind enrollment.
+  const isExplorer = (enrollment as any).enrollment_type === 'explorer';
+  const allCards = await getGlobalCards();
+  const cards = isExplorer ? allCards.filter((c) => c.week === 0) : allCards;
+
   const progressRows = await TimelineCardProgress.findAll({
     where: { enrollment_id: enrollmentId, card_id: { [Op.in]: cards.map((c) => c.id) } },
   });
@@ -162,8 +210,10 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
 
   // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
   // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
-  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
+  const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
   const capsBySlug = new Map(typeDefs.map((t) => [t.slug, normalizeCapabilities(t.capabilities)]));
+  // The type's Studio thumbnail (AI banner) — every card's default image.
+  const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t.thumbnail_url || '').trim() || null]));
 
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
@@ -189,9 +239,59 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       video: videoFromMetadata(card.metadata),
       content: contentFromMetadata(card.metadata),
       course: courseFromMetadata(card.metadata),
+      image: imageFromMetadata(card.metadata),
+      blog: blogFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
+      type_thumbnail: thumbBySlug.get(card.type) || null,
     };
   });
 
-  return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards };
+  // Resolve per-student random testimonials (personalized, non-repeating). A
+  // testimonial card in "random" mode carries no fixed metadata.video — instead we
+  // pick a video this student hasn't seen and record it. Sequential (not parallel)
+  // so two random cards in the same feed can't both claim the same video.
+  for (let i = 0; i < feedCards.length; i++) {
+    const fc = feedCards[i];
+    const card = cards[i];
+    // Any testimonial card WITHOUT a fixed pasted video pulls a matched testimonial
+    // from our library (per student, non-repeating). A pasted link keeps its own video.
+    if (fc.type === 'testimonial' && !fc.video) {
+      const picked = await selectTestimonialForEnrollment(enrollmentId, card);
+      if (picked) {
+        // The picked testimonial IS the card now — its title + description take
+        // over the authored placeholder, and no stale AI lesson notes are shown.
+        fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+    // Any podcast card WITHOUT a fixed pasted link pulls a personalized episode from
+    // the Buzzsprout catalog (per student, non-repeating), recorded in podcast_views.
+    // A pasted link keeps its own video. Exact sibling of the testimonial block above.
+    if (fc.type === 'podcast' && !fc.video) {
+      const picked = await selectPodcastForEnrollment(enrollmentId, card);
+      if (picked) {
+        fc.video = picked.video;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+    // Any blog card WITHOUT a fixed pasted post pulls a week+student-matched post
+    // from the training-site blog library (per student, non-repeating), recorded in
+    // blog_post_views. A pasted link keeps its own post. Third sibling of the
+    // testimonial/podcast blocks above; see blogMediaService.
+    if (fc.type === 'blog' && !fc.blog) {
+      const picked = await selectBlogForEnrollment(enrollmentId, card);
+      if (picked) {
+        fc.blog = picked.blog;
+        if (picked.title) { fc.title = picked.title; fc.subtitle = null; }
+        if (picked.description) fc.description = picked.description;
+        fc.content = null;
+      }
+    }
+  }
+
+  return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
 }

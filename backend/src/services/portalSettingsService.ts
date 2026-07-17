@@ -31,6 +31,17 @@ export const RESUME_ALLOWED_MIME: Record<string, string> = {
 const NAME_MAX = 255;
 const SHORT_MAX = 120;
 const LINKEDIN_MAX = 500;
+const LONG_MAX = 600;
+
+// Optional personalization fields (mostly captured from the resume/LinkedIn) and
+// experience preferences. Stored in enrollments.intake_data_json (JSONB) — no
+// dedicated columns needed.
+const PERSONALIZATION_KEYS = ['industry', 'role', 'seniority', 'years_experience', 'location', 'goals', 'skills'] as const;
+const PREF_STRING_KEYS = ['timezone', 'weekly_hours', 'primary_goal', 'preferred_contact', 'experience_level'] as const;
+const PREF_BOOL_KEYS = ['email_updates', 'event_reminders', 'weekly_digest', 'community_visible'] as const;
+type PersonalizationKey = typeof PERSONALIZATION_KEYS[number];
+type PrefStringKey = typeof PREF_STRING_KEYS[number];
+type PrefBoolKey = typeof PREF_BOOL_KEYS[number];
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,6 +65,8 @@ export interface SettingsView {
   };
   avatar_data_url: string | null;
   resume: { file_name: string; mime: string | null; size_bytes: number; uploaded_at: Date | null } | null;
+  personalization: Record<PersonalizationKey, string | null>;
+  preferences: Record<PrefStringKey, string | null> & Record<PrefBoolKey, boolean>;
 }
 
 export interface ProfilePatchInput {
@@ -63,11 +76,14 @@ export interface ProfilePatchInput {
   company_size?: unknown;
   phone?: unknown;
   linkedin_url?: unknown;
+  personalization?: unknown;
+  preferences?: unknown;
 }
 
 export interface SanitizedProfilePatch {
   enrollment: { full_name?: string; title?: string; company?: string; company_size?: string; phone?: string };
   linkedin_url?: string | null;
+  intake?: { personalization?: Record<string, string>; preferences?: Record<string, string | boolean> };
 }
 
 export type Validation = { ok: true } | { ok: false; error: string };
@@ -127,11 +143,41 @@ export function sanitizeProfilePatch(input: ProfilePatchInput): { ok: true; patc
     patch.linkedin_url = url || null;
   }
 
+  // Optional personalization + preferences → intake_data_json (whitelisted keys only).
+  const intake: { personalization?: Record<string, string>; preferences?: Record<string, string | boolean> } = {};
+  if (input.personalization && typeof input.personalization === 'object') {
+    const src = input.personalization as Record<string, unknown>;
+    const p: Record<string, string> = {};
+    for (const k of PERSONALIZATION_KEYS) if (src[k] !== undefined) p[k] = str(src[k], LONG_MAX) ?? '';
+    if (Object.keys(p).length) intake.personalization = p;
+  }
+  if (input.preferences && typeof input.preferences === 'object') {
+    const src = input.preferences as Record<string, unknown>;
+    const pref: Record<string, string | boolean> = {};
+    for (const k of PREF_STRING_KEYS) if (src[k] !== undefined) pref[k] = str(src[k], SHORT_MAX) ?? '';
+    for (const k of PREF_BOOL_KEYS) if (src[k] !== undefined) pref[k] = !!src[k];
+    if (Object.keys(pref).length) intake.preferences = pref;
+  }
+  if (intake.personalization || intake.preferences) patch.intake = intake;
+
   const touchesEnrollment = Object.keys(patch.enrollment).length > 0;
-  if (!touchesEnrollment && patch.linkedin_url === undefined) {
+  if (!touchesEnrollment && patch.linkedin_url === undefined && !patch.intake) {
     return { ok: false, error: 'No changes provided' };
   }
   return { ok: true, patch };
+}
+
+/** Defaulted personalization + preferences view from an enrollment's intake JSON. */
+function readIntakeViews(intakeRaw: unknown): Pick<SettingsView, 'personalization' | 'preferences'> {
+  const intake = (intakeRaw && typeof intakeRaw === 'object') ? (intakeRaw as any) : {};
+  const per = (intake.personalization && typeof intake.personalization === 'object') ? intake.personalization : {};
+  const pref = (intake.preferences && typeof intake.preferences === 'object') ? intake.preferences : {};
+  const personalization = {} as Record<PersonalizationKey, string | null>;
+  for (const k of PERSONALIZATION_KEYS) personalization[k] = per[k] || null;
+  const preferences = {} as Record<PrefStringKey, string | null> & Record<PrefBoolKey, boolean>;
+  for (const k of PREF_STRING_KEYS) preferences[k] = pref[k] || null;
+  for (const k of PREF_BOOL_KEYS) preferences[k] = pref[k] === undefined ? true : !!pref[k]; // default opted-in
+  return { personalization, preferences };
 }
 
 // ── Reads ────────────────────────────────────────────────────────────────────
@@ -172,6 +218,7 @@ export async function getSettings(enrollmentId: string): Promise<SettingsView | 
           uploaded_at: op.resume_uploaded_at || null,
         }
       : null,
+    ...readIntakeViews(e.intake_data_json),
   };
 }
 
@@ -198,12 +245,22 @@ async function onboardingRow(enrollmentId: string): Promise<any> {
 }
 
 export async function updateProfile(enrollmentId: string, patch: SanitizedProfilePatch): Promise<SettingsView | null> {
-  const e = await Enrollment.findByPk(enrollmentId);
+  const e: any = await Enrollment.findByPk(enrollmentId);
   if (!e) return null;
-  if (Object.keys(patch.enrollment).length > 0) await (e as any).update(patch.enrollment);
+  if (Object.keys(patch.enrollment).length > 0) await e.update(patch.enrollment);
   if (patch.linkedin_url !== undefined) {
     const op = await onboardingRow(enrollmentId);
     await op.update({ linkedin_url: patch.linkedin_url });
+  }
+  if (patch.intake) {
+    // Deep-merge into the existing intake JSON so we never drop other keys.
+    const cur = (e.intake_data_json && typeof e.intake_data_json === 'object') ? e.intake_data_json : {};
+    const merged = {
+      ...cur,
+      personalization: { ...(cur.personalization || {}), ...(patch.intake.personalization || {}) },
+      preferences: { ...(cur.preferences || {}), ...(patch.intake.preferences || {}) },
+    };
+    await e.update({ intake_data_json: merged });
   }
   return getSettings(enrollmentId);
 }
@@ -229,12 +286,26 @@ export async function setResume(
   const e = await Enrollment.findByPk(enrollmentId);
   if (!e) return null;
   const op = await onboardingRow(enrollmentId);
+  const cleanB64 = input.data_base64.replace(/\s/g, '');
   await op.update({
     resume_file_name: input.file_name.slice(0, NAME_MAX),
     resume_mime: input.mime,
-    resume_data: input.data_base64.replace(/\s/g, ''),
+    resume_data: cleanB64,
     resume_uploaded_at: new Date(),
   });
+
+  // Parse the uploaded resume (pdf/docx/rtf/txt) and prefill the profile from it.
+  // Runs inline so the profile is ready when the client re-reads the prefill.
+  // Fully best-effort — a parse/LLM failure never fails the upload.
+  try {
+    const { extractTextFromBuffer } = await import('./fileExtractionService');
+    const { ingestResumeFileText } = await import('./resumeIngestService');
+    const text = await extractTextFromBuffer(Buffer.from(cleanB64, 'base64'), input.file_name);
+    if (text && text.trim().length > 40) await ingestResumeFileText(enrollmentId, text);
+  } catch (err: any) {
+    console.warn('[Settings] resume parse (non-fatal):', err?.message);
+  }
+
   return getSettings(enrollmentId);
 }
 

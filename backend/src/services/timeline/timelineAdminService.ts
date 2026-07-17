@@ -40,6 +40,16 @@ export interface CreateCardInput {
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
+  image?: string | null;   // the item's OWN display image (blog cover etc.) — tiles show it over the generic type visual
+  testimonial?: { mode?: string | null; category?: string | null } | null;   // Testimonials type: link vs random personalized
+  podcast?: { mode?: string | null; category?: string | null } | null;       // Podcast type: link vs random personalized episode
+  blog?: { mode?: string | null; url?: string | null } | null;               // Blog type: one specific post vs auto-matched per student+week
+}
+
+/** PURE — normalize an author's image URL into the stored metadata shape (a
+ *  trimmed url string), or null when empty. */
+export function buildImageMeta(image: CreateCardInput['image']): string | null {
+  return typeof image === 'string' && image.trim() ? image.trim() : null;
 }
 
 /** PURE — normalize an author's video input into the stored metadata shape, or
@@ -73,6 +83,41 @@ export function buildCourseMeta(course: CreateCardInput['course']): { name: stri
   const url = str(course.url);
   if (!name && !url) return null;
   return { name, url };
+}
+
+/** PURE — normalize the Testimonials source config into the stored metadata
+ *  shape (top-level `mode` + `testimonial_category`), or null when no valid mode.
+ *  `random` = pick a matched testimonial per student; `link` = play a set video. */
+export function buildTestimonialMeta(testimonial: CreateCardInput['testimonial']): { mode: 'link' | 'random'; testimonial_category: string } | null {
+  if (!testimonial || typeof testimonial !== 'object') return null;
+  const mode = testimonial.mode === 'random' ? 'random' : testimonial.mode === 'link' ? 'link' : null;
+  if (!mode) return null;
+  const cat = typeof testimonial.category === 'string' && testimonial.category.trim() ? testimonial.category.trim().toLowerCase() : 'testimonial';
+  return { mode, testimonial_category: cat };
+}
+
+/** PURE — normalize the Podcast source config into the stored metadata shape
+ *  (top-level `mode` + optional `podcast_category`), or null when no valid mode.
+ *  `random` = pick a matched episode per student from the `podcasts` catalog
+ *  (blank category = the whole catalog); `link` = play a pasted video/episode. */
+export function buildPodcastMeta(podcast: CreateCardInput['podcast']): { mode: 'link' | 'random'; podcast_category?: string } | null {
+  if (!podcast || typeof podcast !== 'object') return null;
+  const mode = podcast.mode === 'random' ? 'random' : podcast.mode === 'link' ? 'link' : null;
+  if (!mode) return null;
+  const cat = typeof podcast.category === 'string' && podcast.category.trim() ? podcast.category.trim().toLowerCase() : '';
+  return cat ? { mode, podcast_category: cat } : { mode };
+}
+
+/** PURE — normalize the Blog source config into the stored metadata shape
+ *  (top-level `mode` + `blog { url }` in link mode), or null when no valid mode.
+ *  `random` = auto-match a post per student+week from the blog_posts library;
+ *  `link` = one specific post (the URL is enriched from the library at save time). */
+export function buildBlogMeta(blog: CreateCardInput['blog']): { mode: 'link' | 'random'; blog?: { url: string } } | null {
+  if (!blog || typeof blog !== 'object') return null;
+  const mode = blog.mode === 'random' ? 'random' : blog.mode === 'link' ? 'link' : null;
+  if (!mode) return null;
+  const url = typeof blog.url === 'string' && blog.url.trim() ? blog.url.trim() : '';
+  return mode === 'link' && url ? { mode, blog: { url } } : { mode };
 }
 
 /**
@@ -115,6 +160,10 @@ export function composeCardAttributes(
       ...(buildVideoMeta(input.video) ? { video: buildVideoMeta(input.video) } : {}),
       ...(buildContentMeta(input.content) ? { content: buildContentMeta(input.content), content_at: new Date().toISOString() } : {}),
       ...(buildCourseMeta(input.course) ? { course: buildCourseMeta(input.course) } : {}),
+      ...(buildImageMeta(input.image) ? { image: buildImageMeta(input.image) } : {}),
+      ...(buildTestimonialMeta(input.testimonial) || {}),   // top-level mode + testimonial_category
+      ...(buildPodcastMeta(input.podcast) || {}),           // top-level mode + optional podcast_category
+      ...(buildBlogMeta(input.blog) || {}),                 // top-level mode + blog { url } in link mode
     },
   };
 }
@@ -128,38 +177,76 @@ async function nextOrderInLane(week: number | null, bucket: string): Promise<num
 }
 
 /** Admin view: the whole global curriculum (all visibilities) + the type registry. */
-export async function listTimeline() {
+export async function listTimeline(programId?: string | null) {
+  // The timeline is course-scoped (one curriculum per course, shared across that
+  // course's cohorts) — cohort_id stays null; program_id selects the course.
+  const where: Record<string, any> = { cohort_id: null };
+  if (programId) where.program_id = programId;
   const cards = await TimelineCard.findAll({
-    where: { cohort_id: null },
+    where,
     order: [['week', 'ASC'], ['bucket', 'ASC'], ['order', 'ASC']],
   });
-  // The type's Parts (capabilities) live on the DB CurriculumTypeDefinition
-  // (what the Studio "Parts" panel edits), keyed by slug — merged in so the
-  // editor's "finished product" preview gates sections like the live render.
-  const capRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities'] });
-  const capsBySlug = new Map(capRows.map((c) => [c.slug, normalizeCapabilities(c.capabilities)]));
-  // Authorable types only — system types are engine-emitted, not hand-placed.
+  // The type's Parts (capabilities) + curriculum APPROVAL live on the DB
+  // CurriculumTypeDefinition (what the Studio edits), keyed by slug — merged in
+  // so the editor's preview gates sections like the live render, and so the
+  // "Add card" picker can be limited to APPROVED types.
+  const defRows = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'approved', 'is_active', 'thumbnail_url'] });
+  const defBySlug = new Map(defRows.map((c: any) => [c.slug, c]));
+  // ALL authorable types are returned (existing cards of unapproved types still
+  // need labels/bands); `launched` marks the ones staff may ADD — the same
+  // "✓ Approved for curriculum" flag the Composer honors (Studio approval button).
   const types = allTypes()
     .filter((t) => !t.system)
-    .map((t) => ({
-      slug: t.slug, label: t.label, student_label: t.student_label,
-      bucket: t.bucket, render_band: t.render_band, difficulty: t.difficulty,
-      learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
-      competencies: t.competencies, event: !!t.event,
-      capabilities: capsBySlug.get(t.slug) || [],
-    }));
+    .map((t) => {
+      const row: any = defBySlug.get(t.slug);
+      return {
+        slug: t.slug, label: t.label, student_label: t.student_label,
+        bucket: t.bucket, render_band: t.render_band, difficulty: t.difficulty,
+        learning_xp: t.learning_xp, builder_xp: t.builder_xp, community_xp: t.community_xp,
+        competencies: t.competencies, event: !!t.event,
+        capabilities: row ? normalizeCapabilities(row.capabilities) : [],
+        launched: !!row && row.approved === true && row.is_active !== false,
+        // The type's banner — so the editor previews carry the same default image
+        // the student feed shows (feed cards get it as type_thumbnail).
+        thumbnail_url: (row && typeof row.thumbnail_url === 'string' && row.thumbnail_url.trim()) ? row.thumbnail_url : null,
+      };
+    });
   return { scope: 'global', buckets: BUCKETS, cards, types };
+}
+
+/** A type may be hand-placed on the timeline only if it carries the Studio's
+ *  "✓ Approved for curriculum" flag (and hasn't been deactivated) — the exact
+ *  same gate the Curriculum Composer uses. */
+async function assertTypeLaunched(slug: string): Promise<void> {
+  const row: any = await CurriculumTypeDefinition.findOne({ where: { slug }, attributes: ['slug', 'approved', 'is_active'] });
+  const launched = !!row && row.approved === true && row.is_active !== false;
+  if (!launched) {
+    throw Object.assign(
+      new Error(`Type "${slug}" is not approved for curriculum — approve it in the Experience Studio before adding it to the timeline`),
+      { status: 400 },
+    );
+  }
 }
 
 export async function createCard(input: CreateCardInput): Promise<TimelineCard> {
   const def = resolveType(input.type);
   if (!def) throw Object.assign(new Error(`Unknown card type "${input.type}"`), { status: 400 });
   if (def.system) throw Object.assign(new Error(`Type "${input.type}" is system-emitted and cannot be created manually`), { status: 400 });
+  await assertTypeLaunched(input.type); // only launched/approved types may be hand-placed
   if (input.bucket && !BUCKETS.includes(input.bucket)) throw Object.assign(new Error(`Invalid bucket "${input.bucket}"`), { status: 400 });
 
   const bucket = input.bucket || def.bucket;
   const order = await nextOrderInLane(input.week ?? null, bucket);
-  return TimelineCard.create(composeCardAttributes(def, input, order) as any);
+  const attrs = composeCardAttributes(def, input, order);
+  // Link-mode blog: enrich the pasted training-site URL from the blog_posts library
+  // so the card carries the real title/thumbnail/excerpt without manual typing.
+  const bmeta: any = (attrs.metadata as any)?.blog;
+  if (bmeta?.url) {
+    const { lookupBlogByUrl } = await import('./blogMediaService');
+    const enriched = await lookupBlogByUrl(bmeta.url);
+    if (enriched) (attrs.metadata as any).blog = enriched;
+  }
+  return TimelineCard.create(attrs as any);
 }
 
 const EDITABLE_FIELDS = [
@@ -180,11 +267,38 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
   // Video + content live in the metadata blob; merge them (setting/clearing each
   // key) without disturbing other metadata. Start from the latest metadata (or
   // whatever a prior branch already staged in clean.metadata).
-  if ('video' in patch || 'content' in patch || 'course' in patch) {
+  if ('video' in patch || 'content' in patch || 'course' in patch || 'image' in patch || 'testimonial' in patch || 'podcast' in patch || 'blog' in patch) {
     const meta = { ...(card.metadata && typeof card.metadata === 'object' ? card.metadata : {}) };
     if ('video' in patch) {
       const v = buildVideoMeta(patch.video);
       if (v) meta.video = v; else delete meta.video;
+    }
+    if ('testimonial' in patch) {
+      const t = buildTestimonialMeta(patch.testimonial);
+      if (t) { meta.mode = t.mode; meta.testimonial_category = t.testimonial_category; }
+      else { delete meta.mode; delete meta.testimonial_category; }
+    }
+    // NOTE: runs after the testimonial branch — a podcast save carries testimonial:null
+    // (which clears meta.mode) and then podcast re-sets it. The editor only ever sends
+    // the `podcast` key for podcast-type cards, so testimonial cards are never touched here.
+    if ('podcast' in patch) {
+      const p = buildPodcastMeta(patch.podcast);
+      if (p) {
+        meta.mode = p.mode;
+        if (p.podcast_category) meta.podcast_category = p.podcast_category; else delete meta.podcast_category;
+      } else { delete meta.mode; delete meta.podcast_category; }
+    }
+    // Sibling of the podcast branch — the editor only sends the `blog` key for
+    // blog-type cards, so other personalizable types are never touched here.
+    if ('blog' in patch) {
+      const b = buildBlogMeta(patch.blog);
+      if (b) {
+        meta.mode = b.mode;
+        if (b.blog?.url) {
+          const { lookupBlogByUrl } = await import('./blogMediaService');
+          meta.blog = (await lookupBlogByUrl(b.blog.url)) || b.blog;
+        } else delete meta.blog;
+      } else { delete meta.mode; delete meta.blog; }
     }
     if ('content' in patch) {
       const c = buildContentMeta(patch.content);
@@ -195,6 +309,10 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
     if ('course' in patch) {
       const co = buildCourseMeta(patch.course);
       if (co) meta.course = co; else delete meta.course;
+    }
+    if ('image' in patch) {
+      const img = buildImageMeta(patch.image);
+      if (img) meta.image = img; else delete meta.image;
     }
     clean.metadata = meta;
   }

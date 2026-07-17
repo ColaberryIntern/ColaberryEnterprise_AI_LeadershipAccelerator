@@ -5,6 +5,7 @@ import { fetchPoints, fetchSchedule, levelFor, PointsSummary, OnboardingSchedule
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import BuildToast from '../projects/BuildToast';
+import { useIsExplorer } from '../useIsExplorer';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
 // icon per item. Today / Path / Schedule / Projects / Classroom / Community are
@@ -72,6 +73,7 @@ type PortalShellProps = {
  */
 const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const location = useLocation();
+  const isExplorer = useIsExplorer();   // Explorer = demo tier — shows a Demo pill on Projects
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
@@ -183,6 +185,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
                   <span className="ic">{n.icon}</span>
                   <span className="lb">{n.label}</span>
                   {n.label === 'Today' && !!todayBadge && todayBadge > 0 && <span className="badge">{todayBadge}</span>}
+                  {n.label === 'Projects' && isExplorer && <span className="te-soon" style={{ background: '#E8920C', color: '#fff', fontWeight: 700 }}>Demo</span>}
                   {n.soon && <span className="te-soon">Soon</span>}
                 </>
               );

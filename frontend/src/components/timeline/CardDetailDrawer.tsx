@@ -14,10 +14,13 @@ import CardDetailBody from './CardDetailBody';
 interface Props {
   card: TimelineFeedCard | null;
   onClose: () => void;
-  onComplete: (card: TimelineFeedCard) => Promise<void> | void;
+  onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
+  /** Admin contexts (Timeline editor / Studio): the SAME popup students get,
+   *  with the live-only actions (complete, Enter-workspace nav) disabled. */
+  preview?: boolean;
 }
 
-const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
+const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview }) => {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -34,9 +37,11 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete }) => {
       <aside className="tld-panel" role="dialog" aria-modal="true" aria-label={card.title} onClick={(e) => e.stopPropagation()}>
         <CardDetailBody
           card={card}
+          preview={preview}
+          autoplayVideo
           onClose={onClose}
-          onComplete={() => onComplete(card)}
-          onEnterWorkspace={() => navigate(`/portal/runtime/${card.id}`)}
+          onComplete={preview || !onComplete ? undefined : () => onComplete(card)}
+          onEnterWorkspace={preview ? undefined : () => navigate(`/portal/runtime/${card.id}`)}
         />
       </aside>
     </div>

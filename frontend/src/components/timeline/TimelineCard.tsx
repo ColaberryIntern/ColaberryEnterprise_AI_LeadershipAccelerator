@@ -1,10 +1,17 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
+import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
+import VideoEmbed from './VideoEmbed';
+import CardComments from './CardComments';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
  * Design E. One presentational component renders every curriculum type; the
  * card's `render_band` picks the icon + colour, `student_label` names it, and
  * `points` drives the XP badge. Shared primitive owned by the Classroom tab.
+ *
+ * Interaction contract: ▶ on a playable card plays the video INLINE, right in
+ * the tile (FB-style, no panel). The "Open" button is the ONLY way to pull up
+ * the right-side detail panel.
  */
 
 export interface TimelineFeedCard {
@@ -25,10 +32,13 @@ export interface TimelineFeedCard {
   status: 'locked' | 'available' | 'in_progress' | 'completed';
   quiz_score: number | null;
   completed_at: string | null;
-  video?: { url: string; presenter: string | null; poster: string | null } | null;
+  video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
+  image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
   content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
+  blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
+  type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -117,12 +127,26 @@ interface Props {
   onOpen?: (card: TimelineFeedCard) => void;
   onLike?: (card: TimelineFeedCard) => void;
   onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
+  /** Comment button: jump straight into the card's workspace (where the cohort comments live). */
+  onComments?: (card: TimelineFeedCard) => void;
   likes?: number;
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
+  // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE —
+  // and while playing, clicking the artwork toggles pause/play (the bar has the
+  // native controls too).
+  const podcastAudio = card.type === 'podcast' && card.video?.url && isAudioUrl(card.video.url) ? card.video.url : null;
+  const [playingInline, setPlayingInline] = useState(false);
+  const inlineAudioRef = useRef<HTMLAudioElement | null>(null);
+  const toggleInline = () => {
+    if (locked) return;
+    if (!playingInline) { setPlayingInline(true); return; }
+    const a = inlineAudioRef.current;
+    if (a) { if (a.paused) { void a.play(); } else { a.pause(); } }
+  };
   const done = card.status === 'completed';
   const locked = card.status === 'locked';
   const isSkillsJar = v.kind === 'skilljar';
@@ -130,22 +154,38 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   const shortTitle = card.title.replace(/^[^·]*· /, '');
 
-  // Poster background: a video card uses its own poster image (darkened so the
-  // overlay text stays legible); every other kind uses its Design-E gradient.
-  const posterStyle: React.CSSProperties =
-    v.kind === 'video' && card.video?.poster
-      ? {
-          backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${card.video.poster})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-        }
-      : { background: KIND_GRADIENT[v.kind] };
+  // Poster background precedence: a card's OWN art wins — an explicit card
+  // image (blog cover), the video's saved poster (incl. podcast episode art /
+  // picked testimonial), a thumbnail DERIVED from the video URL (YouTube — so a
+  // plain video card shows ITS video's image, never the generic banner), or a
+  // blog card's post thumbnail; otherwise EVERY card defaults to its curriculum
+  // type's AI banner (the Experience Studio thumbnail); the Design-E gradient
+  // is the last-resort fallback. Darkened so the overlay text stays legible.
+  // Playable = a real video/audio source is attached. Only playable cards get
+  // the ▶ affordance — and ▶ plays INLINE in the tile (never opens the panel);
+  // everything else shows an "Open" pill (right-panel intent).
+  const source = parseVideoUrl(card.video?.url);
+  const playable = !!source;
+  const [showComments, setShowComments] = useState(false);
+  const ownPoster =
+    (card.image && card.image.trim()) ||
+    card.video?.poster ||
+    videoThumbnail(source) ||
+    (card.type === 'blog' && card.blog?.thumbnail) || null;
+  const posterUrl = ownPoster || card.type_thumbnail || null;
+  const posterStyle: React.CSSProperties = posterUrl
+    ? {
+        backgroundImage: `linear-gradient(135deg,rgba(46,106,134,.5),rgba(20,24,27,.66)), url(${posterUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }
+    : { background: KIND_GRADIENT[v.kind] };
 
-  // ONE uniform 16:9 tile for EVERY card. The bottom-right ▶ opens the detail
-  // drawer (pop-out from the right) where the full assignment lives — the video
-  // plays there, content/quiz/reflection render there, the SkillsJar course +
-  // certificate upload happen there. Same size, same open-from-the-right action
-  // on every card in the feed.
+  // ONE uniform 16:9 tile for EVERY card. Playable cards play INLINE on click
+  // (the tile swaps to the live player — FB-style, no panel). The footer "Open"
+  // button (and the Open pill on non-playable tiles) is the ONLY way to pull up
+  // the right-side detail panel, where content/quiz/reflection render and the
+  // SkillsJar course + certificate upload happen.
   const metaText = isSkillsJar
     ? 'External course · certificate required'
     : metaLine || (v.kind === 'video' ? 'video' : '');
@@ -165,28 +205,102 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
     else onOpen?.(card);
   };
 
+  // The big watermark icon only decorates gradient tiles — real artwork
+  // (own poster or type banner) doesn't need it and reads cleaner without.
+  const watermark = posterUrl ? null : (
+    <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+  );
+
   const media = isSkillsJar ? (
     <div className="mthumb skilljar" style={posterStyle}>
-      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+      {watermark}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
       <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
+        {/* Not a playable medium — the circle opens the right panel (details), so
+            it carries an open-panel chevron, not a ▶ (▶ is reserved for playback). */}
         <button type="button" className="mt-play" onClick={() => !locked && onOpen?.(card)} aria-label={`Course details: ${card.title}`}>
-          <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
         <button type="button" className="mt-openbtn" onClick={openCourseLink} aria-label={course?.url ? 'Open the course link' : 'Open course details'}>
           Open <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
       </div>
     </div>
-  ) : (
-    <button type="button" className={`mthumb${done ? ' done' : ''}`} style={posterStyle} onClick={() => !locked && onOpen?.(card)} aria-label={`Open ${card.title}`}>
-      <svg viewBox="0 0 24 24" fill="none" style={{ position: 'absolute', width: 132, height: 132, left: '50%', top: '50%', transform: 'translate(-50%,-50%)', color: '#fff', opacity: 0.16 }}><Icon kind={v.kind} /></svg>
+  ) : playable && !podcastAudio && playingInline ? (
+    // The tile IS the player now (in-feed playback, no panel) — video embeds
+    // (YouTube/Vimeo/…) and direct files. Ending playback auto-completes.
+    // Direct audio episodes use the dedicated podcast tile below instead.
+    <div className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}>
+      <VideoEmbed
+        source={source}
+        title={card.video?.title || shortTitle}
+        poster={ownPoster || posterUrl}
+        autoplay
+        badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+        onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
+      />
+    </div>
+  ) : podcastAudio ? (
+    // Podcast tile with a direct audio episode: clicking the artwork starts the
+    // episode playing INLINE (the footer "Open" still opens the drawer, which
+    // never autoplays). Two interactive elements ⇒ a <div> tile like skills_jar.
+    <div
+      className={`mthumb${done ? ' done' : ''}`} style={posterStyle} role="button" tabIndex={0}
+      onClick={toggleInline}
+      onKeyDown={(e) => {
+        // Only claim Enter/Space BEFORE playback starts — once the player is up,
+        // the native <audio> keyboard controls (space = pause) must win.
+        if (!playingInline && (e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); setPlayingInline(true); }
+      }}
+      aria-label={playingInline ? `Pause ${card.video?.title || card.title}` : `Play ${card.video?.title || card.title}`}
+    >
+      {watermark}
+      <span className="mt-ribbon">Podcast</span>
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
-      <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
-      <span className="mt-open">{done
-        ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
-        : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>
+      {!playingInline && <span className="mt-meta"><b>{card.video?.title || shortTitle}</b><span>{metaText}</span></span>}
+      {playingInline ? (
+        // The control bar must own ALL its pointer/keyboard events — nothing may
+        // bubble to the tile (which toggles playback) or steal the native controls.
+        <span
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          style={{ position: 'absolute', left: 10, right: 10, bottom: 10, zIndex: 5, display: 'block' }}
+        >
+          <audio
+            ref={inlineAudioRef}
+            style={{ width: '100%' }} src={podcastAudio} controls autoPlay
+            onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
+          />
+        </span>
+      ) : (
+        <span className="mt-open">{done
+          ? <svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
+          : <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg>}</span>
+      )}
+    </div>
+  ) : (
+    <button
+      type="button"
+      className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`}
+      style={posterStyle}
+      onClick={() => !locked && (playable ? setPlayingInline(true) : onOpen?.(card))}
+      aria-label={playable ? `Play ${card.video?.title || card.title}` : `Open ${card.title}`}
+    >
+      {watermark}
+      {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
+      {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
+      {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
+      <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
+      <span className="mt-meta"><b>{card.video?.title || card.blog?.title || shortTitle}</b><span>{metaText}</span></span>
+      {done
+        ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
+        : playable
+          ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
+          : <span className="mt-openpill">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>}
     </button>
   );
 
@@ -211,16 +325,22 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, likes = 0, liked 
         <button type="button" className={`like${liked ? ' liked' : ''}`} onClick={() => onLike?.(card)}>
           <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg> {likes}
         </button>
-        <button type="button" className="cmt"><svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment</button>
+        {/* Comment opens the class thread RIGHT HERE in the feed (the workspace
+            shows the same thread beside the AI Mentor). */}
+        <button type="button" className={`cmt${showComments ? ' liked' : ''}`} onClick={() => setShowComments((s) => !s)}>
+          <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment
+        </button>
         <span className="spacer" />
         {done
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }}>Unlocks later</span>
-            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => onOpen?.(card)}>
+            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
                 <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
               </button>}
       </div>
+      {/* The class thread — toggled by the Comment button, shared with the workspace. */}
+      {showComments && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
     </div>
   );
 };
