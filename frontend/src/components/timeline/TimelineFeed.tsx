@@ -13,12 +13,13 @@ interface Props {
   onOpen?: (card: TimelineFeedCard) => void;
   onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
   onComments?: (card: TimelineFeedCard) => void;
+  onWorkspace?: (card: TimelineFeedCard) => void;
 }
 
 // deterministic seed so like counts are stable across renders (no API field yet)
 const baseLikes = (id: string): number => 6 + (id.charCodeAt(id.length - 1) % 17);
 
-const TimelineFeed: React.FC<Props> = ({ cards, onOpen, onComplete, onComments }) => {
+const TimelineFeed: React.FC<Props> = ({ cards, onOpen, onComplete, onComments, onWorkspace }) => {
   const [liked, setLiked] = useState<Record<string, boolean>>({});
   const toggle = (c: TimelineFeedCard) => setLiked((m) => ({ ...m, [c.id]: !m[c.id] }));
 
@@ -31,6 +32,7 @@ const TimelineFeed: React.FC<Props> = ({ cards, onOpen, onComplete, onComments }
           onOpen={onOpen}
           onComplete={onComplete}
           onComments={onComments}
+          onWorkspace={onWorkspace}
           onLike={toggle}
           liked={!!liked[c.id]}
           likes={baseLikes(c.id) + (liked[c.id] ? 1 : 0)}

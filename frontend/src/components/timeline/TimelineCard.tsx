@@ -129,11 +129,13 @@ interface Props {
   onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
   /** Comment button: jump straight into the card's workspace (where the cohort comments live). */
   onComments?: (card: TimelineFeedCard) => void;
+  /** Workspace shortcut: open the card's full runtime workspace (video + AI Mentor + comments). */
+  onWorkspace?: (card: TimelineFeedCard) => void;
   likes?: number;
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWorkspace, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
   // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE —
   // and while playing, clicking the artwork toggles pause/play (the bar has the
@@ -296,11 +298,14 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
       {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       <span className="mt-meta"><b>{card.video?.title || card.blog?.title || shortTitle}</b><span>{metaText}</span></span>
+      {/* Corner affordance: ✓ when done, ▶ when the card can play inline. A
+          NON-playable tile shows nothing here — the single "Open" lives in the
+          footer, so a card never carries two Open buttons. */}
       {done
         ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
         : playable
           ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
-          : <span className="mt-openpill">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>}
+          : null}
     </button>
   );
 
@@ -330,6 +335,12 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
         <button type="button" className={`cmt${showComments ? ' liked' : ''}`} onClick={() => setShowComments((s) => !s)}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment
         </button>
+        {/* Quick shortcut into the full workspace (video + AI Mentor + comments). */}
+        {onWorkspace && !locked && (
+          <button type="button" className="cmt" onClick={() => onWorkspace(card)}>
+            <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 20h8M12 17v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Workspace
+          </button>
+        )}
         <span className="spacer" />
         {done
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
