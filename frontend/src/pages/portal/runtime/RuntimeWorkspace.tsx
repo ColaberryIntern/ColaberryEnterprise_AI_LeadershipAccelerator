@@ -51,9 +51,8 @@ const RuntimeWorkspace: React.FC = () => {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
         setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null);
         setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
-        if (VIDEO_BANDS.includes(open.card.render_band)) {
-          runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
-        }
+        // Every card type has a cohort comment thread in its workspace.
+        runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
       } catch { setError('Could not open this activity.'); }
     })();
   }, [cardId]);
@@ -215,9 +214,8 @@ const RuntimeWorkspace: React.FC = () => {
                 </button>}
           </div>
 
-          {/* COHORT COMMENTS — media cards (podcast / testimonial / video), newest first */}
-          {isVideo && (
-            <section className="rt-comments">
+          {/* COHORT COMMENTS — every card type has a thread, newest first */}
+          <section className="rt-comments">
               <div className="rt-lab">Comments</div>
               <div className="rt-cpost">
                 <input className="rt-in" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commentInput.trim() && postComment()} placeholder="Share a thought with your cohort…" />
@@ -231,8 +229,7 @@ const RuntimeWorkspace: React.FC = () => {
                       <p>{cm.body}</p>
                     </div>
                   ))}
-            </section>
-          )}
+          </section>
         </main>
 
         {/* RIGHT — AI Mentor */}
