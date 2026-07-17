@@ -58,10 +58,13 @@ const CardSurveyExperience: React.FC<Props> = ({ cardId, questions: initialQs, o
   const answered = useMemo(() => Object.keys(ratings).length, [ratings]);
   const total = questions.length;
   const pct = total ? Math.round((answered / total) * 100) : 0;
-  const canSubmit = !preview && !done && (answered > 0 || open.trim().length > 0);
+  const canSubmit = !done && (answered > 0 || open.trim().length > 0);
 
   const submit = async () => {
     if (!canSubmit || saving) return;
+    // Preview (admin Studio/editor): fully takeable, but LOCAL — no save, no
+    // completion. Lets an author click through exactly how it feels to a student.
+    if (preview) { setDone(true); return; }
     setSaving(true); setError('');
     try {
       const items = questions.map((_, i) => ({ index: i, rating: ratings[i] ?? null, comment: comments[i] || null }));
@@ -136,10 +139,10 @@ const CardSurveyExperience: React.FC<Props> = ({ cardId, questions: initialQs, o
         <div className="svx-thanks">
           <div className="svx-check"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" /></svg></div>
           <h3>Thank you for your feedback</h3>
-          <p>Your answers are saved and help us shape next week. You rated {answered} of {total} questions.</p>
-          {!preview && (
-            <button type="button" className="svx-edit" onClick={() => setDone(false)}>Update my answers</button>
-          )}
+          <p>{preview
+            ? `Preview — in the live survey, these ${total} answers would be saved and this activity marked complete.`
+            : `Your answers are saved and help us shape next week. You rated ${answered} of ${total} questions.`}</p>
+          <button type="button" className="svx-edit" onClick={() => setDone(false)}>{preview ? 'Take it again' : 'Update my answers'}</button>
         </div>
       </div>
     );
@@ -173,7 +176,6 @@ const CardSurveyExperience: React.FC<Props> = ({ cardId, questions: initialQs, o
                 aria-checked={ratings[i] === n}
                 aria-label={`${n} out of 5`}
                 className={`svx-opt${ratings[i] === n ? ' on' : ''}`}
-                disabled={preview}
                 onClick={() => setRatings((m) => ({ ...m, [i]: n }))}
               >{n}</button>
             ))}
@@ -184,11 +186,10 @@ const CardSurveyExperience: React.FC<Props> = ({ cardId, questions: initialQs, o
               className="svx-input"
               placeholder="Add a comment (optional)"
               value={comments[i] || ''}
-              disabled={preview}
               onChange={(e) => setComments((m) => ({ ...m, [i]: e.target.value }))}
             />
           ) : (
-            !preview && <button type="button" className="svx-ctoggle" onClick={() => setShowComment((m) => ({ ...m, [i]: true }))}>＋ Add a comment</button>
+            <button type="button" className="svx-ctoggle" onClick={() => setShowComment((m) => ({ ...m, [i]: true }))}>＋ Add a comment</button>
           )}
         </div>
       ))}
@@ -200,23 +201,20 @@ const CardSurveyExperience: React.FC<Props> = ({ cardId, questions: initialQs, o
           style={{ minHeight: 92, resize: 'vertical' }}
           placeholder="Your answer (optional)…"
           value={open}
-          disabled={preview}
           onChange={(e) => setOpen(e.target.value)}
         />
       </div>
 
-      {!preview && (
-        <div className="svx-actions">
-          <button type="button" className="svx-submit" disabled={!canSubmit || saving} onClick={submit}>
-            {saving ? 'Submitting…' : 'Submit feedback'}
-            {!saving && <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
-          </button>
-          {error ? <div className="svx-err">{error}</div>
-            : answered === 0 && !open.trim() ? <div className="svx-hint">Answer at least one question to submit.</div>
-            : <div className="svx-hint">Submitting marks this activity complete.</div>}
-        </div>
-      )}
-      {preview && <p className="svx-hint" style={{ marginTop: 14 }}>Preview — students take this live and their answers are saved.</p>}
+      <div className="svx-actions">
+        <button type="button" className="svx-submit" disabled={!canSubmit || saving} onClick={submit}>
+          {saving ? 'Submitting…' : preview ? 'Submit feedback (preview)' : 'Submit feedback'}
+          {!saving && <svg viewBox="0 0 24 24" fill="none" width="18" height="18"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+        </button>
+        {error ? <div className="svx-err">{error}</div>
+          : answered === 0 && !open.trim() ? <div className="svx-hint">Answer at least one question to submit.</div>
+          : preview ? <div className="svx-hint">Preview — take it to feel the flow; answers aren’t saved here.</div>
+          : <div className="svx-hint">Submitting marks this activity complete.</div>}
+      </div>
     </div>
   );
 };
