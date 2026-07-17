@@ -192,7 +192,8 @@ export interface PaySimplePayment {
   CustomerFirstName?: string;
   CustomerLastName?: string;
   PaymentDate?: string;
-  ActualSettledDate?: string | null;
+  ActualSettledDate?: string | null;    // set once the payment settles; null while in flight
+  EstimatedSettleDate?: string | null;  // when it is expected to settle
   CanVoidUntil?: string | null;   // void allowed only while now < CanVoidUntil
 }
 
@@ -210,23 +211,31 @@ export async function getCustomerById(customerId: string | number): Promise<PayS
   }
 }
 
-/** True while the payment can still be voided (full reversal, no fee). */
+/** True while the payment can still be voided (full reversal, no fee). PaySimple
+ *  only voids a payment in Authorized status, inside its CanVoidUntil window. */
 export function isVoidable(payment: Pick<PaySimplePayment, 'CanVoidUntil'>, nowMs: number = Date.now()): boolean {
   if (!payment.CanVoidUntil) return false;
   const until = Date.parse(payment.CanVoidUntil);
   return Number.isFinite(until) && until > nowMs;
 }
 
-/** Void an unsettled payment (full reversal). PaySimple: PUT /v4/payment/{id}/void. */
+/** True once the payment has settled — PaySimple only reverses/refunds a
+ *  SETTLED payment (verified against the live API: "Only Settled payments can
+ *  be Refunded"). */
+export function isSettled(payment: Pick<PaySimplePayment, 'ActualSettledDate' | 'Status'>): boolean {
+  return !!payment.ActualSettledDate || payment.Status === 'Settled';
+}
+
+/** Void an authorized payment (full reversal, no fee). PaySimple: PUT /v4/payment/{id}/void. */
 export async function voidPayment(paymentId: string | number): Promise<any> {
   return apiRequest('PUT', `/v4/payment/${paymentId}/void`);
 }
 
-/** Refund a posted/settled payment. Full when `amount` omitted, else partial.
- *  PaySimple: POST /v4/payment/{id}/refund. */
-export async function refundPayment(params: { paymentId: string | number; amount?: number }): Promise<any> {
-  const body = params.amount != null ? { Amount: Math.round(params.amount * 100) / 100 } : undefined;
-  return apiRequest('POST', `/v4/payment/${params.paymentId}/refund`, body);
+/** Refund (reverse) a SETTLED payment — full reversal. PaySimple's endpoint is
+ *  PUT /v4/payment/{id}/reverse (there is no /refund route; PaySimple reverses
+ *  the whole payment, so partial refunds are not supported here). */
+export async function refundPayment(paymentId: string | number): Promise<any> {
+  return apiRequest('PUT', `/v4/payment/${paymentId}/reverse`);
 }
 
 /* ------------------------------------------------------------------ */

@@ -152,8 +152,10 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     icon: 'bi-clipboard-check',
     badge_class: 'bg-warning',
     estimated_time: 5,
-    // The survey form is code-driven (SurveyForm.tsx); no capability Parts gate it.
-    capabilities: [],
+    // Parts the survey actually gives the student: a written reflection (the open
+    // feedback question) + a cohort comment thread. The rating scale itself is
+    // code-driven (CardSurveyExperience), not a toggizable Part.
+    capabilities: ['reflection', 'comments'],
     inputs: [],
     variable_keys: [], // zero author input — the runtime injects the week blueprint
     outputs: [

@@ -2,7 +2,7 @@ import { Op } from 'sequelize';
 import { Refund, Enrollment } from '../models';
 import { env } from '../config/env';
 import {
-  getPayment, getCustomerById, isVoidable, voidPayment, refundPayment,
+  getPayment, getCustomerById, isVoidable, isSettled, voidPayment, refundPayment,
 } from './paysimpleService';
 import { voidCreditBySourceEvent } from './accountCreditService';
 import type { RefundMethod } from '../models/Refund';
@@ -31,7 +31,7 @@ const round2 = (n: number): number => Math.round(n * 100) / 100;
 
 export type IssueRefundReason =
   | 'billing_unconfigured' | 'payment_not_found' | 'already_reversed'
-  | 'invalid_amount' | 'paysimple_error';
+  | 'invalid_amount' | 'partial_unsupported' | 'not_settled' | 'paysimple_error';
 
 export interface IssueRefundResult {
   ok: boolean;
@@ -57,7 +57,7 @@ async function resolvePayerEmail(customerId?: number): Promise<string | null> {
  * how much has already been refunded, and whether it would void or refund.
  */
 export async function lookupPayment(paymentId: string): Promise<
-  | { ok: true; payment: { id: string; status: string; amount_cents: number; refundable_cents: number; method: RefundMethod; email: string | null; name: string } }
+  | { ok: true; payment: { id: string; status: string; amount_cents: number; refundable_cents: number; method: RefundMethod; refundable_now: boolean; settles_on: string | null; email: string | null; name: string } }
   | { ok: false; reason: 'billing_unconfigured' | 'payment_not_found' }
 > {
   if (!env.paysimpleApiUser || !env.paysimpleApiKey) return { ok: false, reason: 'billing_unconfigured' };
@@ -70,6 +70,10 @@ export async function lookupPayment(paymentId: string): Promise<
   const amountCents = Math.round(Number(payment.Amount) * 100);
   const prior = await priorRefundedCents(paymentId);
   const email = await resolvePayerEmail(payment.CustomerId);
+  const voidable = isVoidable(payment);
+  const method: RefundMethod = voidable ? 'void' : 'refund';
+  // A refund needs the payment settled; a void needs the void window open.
+  const refundable_now = amountCents - prior > 0 && !UNREFUNDABLE.has(payment.Status) && (voidable || isSettled(payment));
   return {
     ok: true,
     payment: {
@@ -77,7 +81,9 @@ export async function lookupPayment(paymentId: string): Promise<
       status: payment.Status,
       amount_cents: amountCents,
       refundable_cents: Math.max(0, amountCents - prior),
-      method: isVoidable(payment) ? 'void' : 'refund',
+      method,
+      refundable_now,
+      settles_on: payment.EstimatedSettleDate ? String(payment.EstimatedSettleDate).slice(0, 10) : null,
       email,
       name: `${payment.CustomerFirstName || ''} ${payment.CustomerLastName || ''}`.trim(),
     },
@@ -114,8 +120,19 @@ export async function issueRefund(input: {
   if (!Number.isFinite(refundCents) || refundCents <= 0 || refundCents > remaining) {
     return { ok: false, reason: 'invalid_amount', message: `Refundable balance is $${round2(remaining / 100)}` };
   }
+  // PaySimple void/reverse are whole-payment operations — partials aren't supported.
+  if (refundCents !== paymentCents) {
+    return { ok: false, reason: 'partial_unsupported', message: 'PaySimple reverses the full payment; partial refunds are not supported.' };
+  }
 
-  const method: RefundMethod = isVoidable(payment) ? 'void' : 'refund';
+  // 3. State gate: void needs the void window open; a refund needs settlement.
+  const voidable = isVoidable(payment);
+  const method: RefundMethod = voidable ? 'void' : 'refund';
+  if (method === 'refund' && !isSettled(payment)) {
+    const est = payment.EstimatedSettleDate ? ` (settles ~${String(payment.EstimatedSettleDate).slice(0, 10)})` : '';
+    return { ok: false, reason: 'not_settled', message: `This payment is ${payment.Status} and has not settled yet${est}. PaySimple can only refund a settled payment — try again after it settles.` };
+  }
+
   const email = await resolvePayerEmail(payment.CustomerId);
   const enrollment = email ? await Enrollment.findOne({ where: { email: { [Op.iLike]: email } } }) : null;
 
@@ -134,12 +151,11 @@ export async function issueRefund(input: {
     updated_at: now,
   } as any);
 
-  // 4. Call PaySimple.
+  // 4. Call PaySimple (void an authorized payment, else reverse a settled one).
   try {
-    const isFull = refundCents === paymentCents;
     const res: any = method === 'void'
       ? await voidPayment(paymentId)
-      : await refundPayment({ paymentId, amount: isFull ? undefined : round2(refundCents / 100) });
+      : await refundPayment(paymentId);
 
     // 5. Void any account credit this payment granted (e.g. an Open House $50).
     const { voidedCents } = await voidCreditBySourceEvent(`ps-payment-${paymentId}`);
