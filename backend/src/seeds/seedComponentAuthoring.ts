@@ -163,6 +163,26 @@ const SELF_STUDY_GENERATION_PROMPT = [
 ].join('\n');
 
 /** slug -> authored fields layered on top of the registry defaults. */
+// ── knowledge_check (quiz) + evaluation ──────────────────────────────────────
+// The QUESTIONS are auto-generated per card by assessmentService (blueprint- +
+// competency-aware); these prompts only frame the card's title/summary. The
+// interactive assessment is code-driven (AssessmentPanel).
+const KNOWLEDGE_CHECK_GENERATION_PROMPT = [
+  'You write the framing for a quick Knowledge Check at the START of a week in the AI Systems Architect Accelerator. The WEEK CONTEXT above gives the week\'s topic and competencies.',
+  'title: the word "Knowledge Check", a space, an em dash, a space, then the week\'s topic from the WEEK CONTEXT.',
+  'summary: one sentence — a quick, low-stakes check of what the student knows coming into this week; no pressure, and they see the correct answers right away.',
+  'body_html: one short <p> saying this sets their starting point for the section, to be compared against the end-of-week Evaluation.',
+  'Return questions as [], reflection as "", discussion_prompt as "", github_task as null, evaluation_criteria as []. Encouraging, executive tone. No emojis.',
+].join('\n');
+
+const EVALUATION_GENERATION_PROMPT = [
+  'You write the framing for the end-of-section Evaluation in the AI Systems Architect Accelerator. The WEEK CONTEXT above gives the week\'s topic and competencies.',
+  'title: the word "Evaluation", a space, an em dash, a space, then the week\'s topic from the WEEK CONTEXT.',
+  'summary: one sentence — the graded check that measures how far the student has come this section; 75% or higher to pass and earn points.',
+  'body_html: one short <p> noting this is scored, needs 75% to pass, can be retried, and shows growth since the entry Knowledge Check.',
+  'Return questions as [], reflection as "", discussion_prompt as "", github_task as null, evaluation_criteria as []. Executive tone. No emojis.',
+].join('\n');
+
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
   warmup: {
@@ -232,6 +252,50 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     generation_prompt: OVERVIEW_GENERATION_PROMPT,
     thumbnail_url: OVERVIEW_THUMBNAIL_URL,
     renderers: { thumbnail: OVERVIEW_THUMBNAIL_RENDERER },
+    approved: true,
+    status: 'ready',
+  },
+  knowledge_check: {
+    student_label: 'Knowledge Check',
+    category: 'Assess',
+    icon: 'bi-question-circle',
+    badge_class: 'bg-info',
+    estimated_time: 5,
+    // Code-driven assessment (AssessmentPanel + assessmentService). Questions are
+    // auto-generated from the week blueprint — no author input, no Part gate.
+    capabilities: [],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'score', type: 'number', description: '0-1 entry-check score (the section baseline)' },
+      { key: 'competency_scores', type: 'object', description: 'per-competency correct/total' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: KNOWLEDGE_CHECK_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('knowledge_check'),
+    approved: true,
+    status: 'ready',
+  },
+  evaluation: {
+    student_label: 'Evaluation',
+    category: 'Assess',
+    icon: 'bi-clipboard-check',
+    badge_class: 'bg-danger',
+    estimated_time: 12,
+    capabilities: [],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'score', type: 'number', description: '0-1 evaluation score' },
+      { key: 'passed', type: 'boolean', description: 'true when score >= 0.75' },
+      { key: 'competency_scores', type: 'object', description: 'per-competency correct/total' },
+    ],
+    // 75% pass gate — enforced in assessmentService; documented here.
+    completion_rules: { on: 'evaluate', min_score: 0.75 },
+    evaluation_type: 'rubric',
+    generation_prompt: EVALUATION_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('evaluation'),
     approved: true,
     status: 'ready',
   },
