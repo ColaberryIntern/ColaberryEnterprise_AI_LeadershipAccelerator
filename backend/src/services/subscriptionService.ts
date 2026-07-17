@@ -2,6 +2,10 @@ import { Enrollment, Cohort, Subscription } from '../models';
 import { env } from '../config/env';
 import { findOrCreateCustomer, createPaymentLink } from './paysimpleService';
 import { isDemoCohortName } from './openHouseService';
+import {
+  availableCreditRows, getAvailableCreditCents, selectCreditsUpTo, creditApplyTarget,
+  consumeCreditsForSubscription,
+} from './accountCreditService';
 import type { SubscriptionPlan } from '../models/Subscription';
 
 /**
@@ -145,6 +149,9 @@ export interface SubscriptionView {
    *  month starts on your class start date" note. Null when no paid cohort is
    *  configured. is_future = class hasn't started yet (early-pay anchor applies). */
   class_start: null | { cohort_id: string; cohort_name: string; start_date: string; is_future: boolean };
+  /** Unspent account credit (e.g. the $50 Open House deposit) applied to the
+   *  next payment. 0 when none. */
+  available_credit_cents: number;
   subscription: null | {
     plan: SubscriptionPlan;
     status: string;
@@ -164,6 +171,9 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
   const sub = await currentSubscription(enrollmentId);
   const plans = [PLANS.annual, PLANS.monthly];
 
+  // Unspent account credit (Open House $50 deposit) applied to the next payment.
+  const available_credit_cents = await getAvailableCreditCents(enrollmentId);
+
   // The class this student's payment counts toward (their selection, else the
   // default target cohort) — lets the UI explain the early-pay billing anchor.
   const paidCohort = enrollment ? await resolvePaidCohortFor(enrollment as any) : null;
@@ -178,7 +188,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
     : null;
 
   if (!sub || sub.status === 'pending') {
-    return { plans, needs_subscription: isExplorer, class_start, subscription: null };
+    return { plans, needs_subscription: isExplorer, class_start, available_credit_cents, subscription: null };
   }
 
   const periodEnd = sub.current_period_end ? new Date(sub.current_period_end) : null;
@@ -192,6 +202,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
     plans,
     needs_subscription: isExplorer && !active,
     class_start,
+    available_credit_cents,
     subscription: {
       plan: sub.plan,
       status: sub.status,
@@ -207,7 +218,7 @@ export async function getSubscription(enrollmentId: string, nowMs: number = Date
 }
 
 export type CheckoutResult =
-  | { ok: true; payment_link: string; plan: SubscriptionPlan; amount: number }
+  | { ok: true; payment_link: string; plan: SubscriptionPlan; amount: number; full_amount: number; applied_credit: number }
   | { ok: false; reason: 'unknown_plan' | 'enrollment_not_found' | 'billing_unconfigured' | 'checkout_failed'; message?: string };
 
 /** Start a hosted checkout for a plan. Creates a pending subscription keyed on
@@ -219,6 +230,15 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
 
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) return { ok: false, reason: 'enrollment_not_found' };
+
+  // Apply any account credit (e.g. the $50 Open House deposit) to THIS charge:
+  // pick whole credit rows up to the payable target so the amount PaySimple is
+  // asked to charge is reduced. The credit is not consumed until the payment
+  // settles (activateByRef) — a checkout the student abandons keeps the credit.
+  const creditRows = await availableCreditRows(enrollmentId);
+  const { appliedCents } = selectCreditsUpTo(creditRows, creditApplyTarget(cfg.amount_cents));
+  const chargeCents = cfg.amount_cents - appliedCents;
+  const chargeAmount = round2(chargeCents / 100);
 
   // PaySimple caps external_id at 50 chars. UUID-with-dashes (36) + prefix +
   // timestamp overflowed (54); use the dashless hex (32) + base36 time → ~45.
@@ -237,11 +257,11 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
 
     const link = await createPaymentLink({
       externalId,
-      cohortName: `${cfg.label} plan`,
-      // Real plan amount on prod (live mode). On dev (PAYMENT_MODE=test) the
-      // service reduces this to $0.01 so checkout can be tested without a real
-      // $1,788/$199 charge.
-      amount: planChargeAmount(cfg),
+      cohortName: appliedCents > 0 ? `${cfg.label} plan (−$${round2(appliedCents / 100)} credit)` : `${cfg.label} plan`,
+      // Real plan amount less any account credit, on prod (live mode). On dev
+      // (PAYMENT_MODE=test) the service reduces this to $0.01 so checkout can be
+      // tested without a real charge.
+      amount: chargeAmount,
       customerFirstName: firstName,
       customerLastName: lastName,
       customerEmail: enrollment.email,
@@ -251,14 +271,15 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
       enrollment_id: enrollmentId,
       plan,
       status: 'pending',
-      amount_cents: cfg.amount_cents,
+      amount_cents: cfg.amount_cents,          // full recurring price (unchanged by the credit)
+      applied_credit_cents: appliedCents,      // discount taken off this first charge
       payment_ref: externalId,
       paysimple_customer_id: String(customer.Id),
       created_at: new Date(nowMs),
       updated_at: new Date(nowMs),
     });
 
-    return { ok: true, payment_link: link.payment_link, plan, amount: cfg.price };
+    return { ok: true, payment_link: link.payment_link, plan, amount: chargeAmount, full_amount: cfg.price, applied_credit: round2(appliedCents / 100) };
   } catch (err: any) {
     console.error('[Subscription] checkout failed:', err?.message);
     return { ok: false, reason: 'checkout_failed', message: err?.message };
@@ -318,6 +339,19 @@ export async function activateByRef(
       payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
       enrolled_at: enrollment.enrolled_at || now, // actual payment date, not the anchor
     });
+  }
+
+  // Spend the account credit that discounted this checkout — mark those ledger
+  // rows applied + link them to this subscription. Idempotent on the sub id, so
+  // a duplicate payment webhook never double-consumes the credit.
+  const appliedCreditCents = (sub as any).applied_credit_cents || 0;
+  if (appliedCreditCents > 0) {
+    try {
+      await consumeCreditsForSubscription(sub.enrollment_id, sub.id, appliedCreditCents, nowMs);
+    } catch (err: any) {
+      // Never fail an activation over credit bookkeeping — the payment cleared.
+      console.error('[Subscription] credit consume failed (non-fatal):', err?.message);
+    }
   }
   return sub;
 }
