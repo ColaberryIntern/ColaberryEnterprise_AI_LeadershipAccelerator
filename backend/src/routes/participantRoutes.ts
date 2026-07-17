@@ -324,7 +324,7 @@ router.get('/api/portal/github/oauth/callback', async (req, res) => {
   try {
     const { handleOAuthCallback } = await import('../services/githubIntegrationService');
     await handleOAuthCallback(code, enrollmentId);
-    res.redirect('/portal/home?github_connected=1');
+    res.redirect('/portal/project/builder?github_connected=1');
   } catch (err: any) {
     console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_oauth_callback_failed', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
     res.status(500).json({ error: 'GitHub connection failed' });
@@ -332,17 +332,41 @@ router.get('/api/portal/github/oauth/callback', async (req, res) => {
 });
 
 // GitHub integration endpoints
+const ConnectRepoSchema = z.object({
+  repo_url: z.string().trim().min(1, 'repo_url is required'),
+  access_token: z.string().trim().optional(),
+});
+
 router.post('/api/portal/github/connect', requireParticipant, async (req, res) => {
+  const parsed = ConnectRepoSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+    return;
+  }
   try {
+    const enrollmentId = req.participant!.sub;
     const githubService = await import('../services/githubService');
     const connection = await githubService.connectRepo(
-      req.participant!.sub,
-      req.body.repo_url,
-      req.body.access_token
+      enrollmentId,
+      parsed.data.repo_url,
+      parsed.data.access_token
     );
+
+    // Best-effort: same pattern as handleOAuthCallback — a webhook/sync
+    // failure never fails the connect response, since the repo link itself
+    // already succeeded and these can be retried by the daily sync cron.
+    const { registerWebhook, syncStudentActivity } = await import('../services/githubIntegrationService');
+    await registerWebhook(enrollmentId).catch((err: Error) => {
+      console.error(JSON.stringify({ level: 'warn', service: 'backend', event: 'github_webhook_register_failed', outcome: 'failure', error_class: err.constructor.name, context: { message: err.message, enrollment_id: enrollmentId } }));
+    });
+    await syncStudentActivity(enrollmentId).catch((err: Error) => {
+      console.error(JSON.stringify({ level: 'warn', service: 'backend', event: 'github_initial_sync_failed', outcome: 'failure', error_class: err.constructor.name, context: { message: err.message, enrollment_id: enrollmentId } }));
+    });
+
     res.json(connection);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    console.error(JSON.stringify({ level: 'error', service: 'backend', event: 'github_connect_repo_failed', outcome: 'failure', error_class: err.constructor?.name ?? 'Error', context: { message: err.message } }));
+    res.status(500).json({ error: 'GitHub repository connection failed' });
   }
 });
 
@@ -350,7 +374,7 @@ router.get('/api/portal/github/status', requireParticipant, async (req, res) => 
   try {
     const githubService = await import('../services/githubService');
     const status = await githubService.getRepoStatus(req.participant!.sub);
-    res.json(status || { connected: false });
+    res.json(status || { connected: false, hasToken: false });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
