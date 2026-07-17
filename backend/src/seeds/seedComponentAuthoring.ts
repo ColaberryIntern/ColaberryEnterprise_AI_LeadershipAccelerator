@@ -96,7 +96,7 @@ const OVERVIEW_THUMBNAIL_RENDERER = [
 const SURVEY_GENERATION_PROMPT = [
   'You write the Week Feedback Survey for the AI Systems Architect Accelerator: a short weekly check-in a participant fills out at the end of the week so we can understand their experience, how well they are learning, and what to improve. The WEEK CONTEXT block above gives this week\'s topic, focus, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground the questions in it; keep them specific to this week where natural.',
   '',
-  'title: "Week " then the week number from the WEEK CONTEXT, then " Feedback — ", then the week\'s topic exactly as named. Example: "Week 1 Feedback — Claude Code Foundations + Workspace".',
+  'title: "Week " then the week number from the WEEK CONTEXT, then " Feedback — ", then the week\'s topic in Title Case (capitalize each significant word; keep acronyms like AI, API, MCP as-is). Example: "Week 1 Feedback — Claude Code Foundations + Workspace".',
   '',
   'summary: one sentence telling the participant this is a quick, anonymous-feeling weekly check-in that helps us improve their experience.',
   '',

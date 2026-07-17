@@ -187,7 +187,7 @@ const BucketSection: React.FC<{
 // popup (CardDetailDrawer preview) — one renderer, nothing to drift.
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }; types: TypeDef[]; isNew: boolean; saving: boolean;
-  aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course'; onGenerate: (anchor: 'title' | 'video' | 'course') => void;
+  aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course' | 'content'; onGenerate: (anchor: 'title' | 'video' | 'course' | 'content') => void;
   bpContext: BlueprintContextDTO | null;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => void; onSave: () => void; onClose: () => void;
   onPreview: (c: TimelineFeedCard) => void;
@@ -196,6 +196,9 @@ const EditDrawer: React.FC<{
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
   const isSkillsJar = band === 'skills_jar';
+  // Zero-author-input types that write themselves from the week's blueprint —
+  // "Generate content" runs the type's own prompt (no title required).
+  const isBlueprintGen = ['survey', 'overview'].includes(draft.type || '');
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
   const setCourse = (patch: Partial<CardCourse>) => onChange({ course: { ...(draft.course || {}), ...patch } });
   // Testimonials + Podcast types: one set video ("link") or a personalized pick per student ("random").
@@ -269,16 +272,18 @@ const EditDrawer: React.FC<{
                   disabled={aiBusy || !draft.title} title={!draft.title ? 'Give it a title first' : 'Let AI write the subtitle, description, points, and suggest a video'}
                   onClick={onAiFill}>{aiBusy ? '✦ Filling…' : '✦ Fill in the fields'}</button>
                 <button type="button" className="te-act pri" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
-                  disabled={!!genBusy || (isSkillsJar ? !(draft.course?.url || '').trim() : (!draft.title && !(draft.video?.url || '').trim()))}
-                  title={isSkillsJar ? 'Fill everything from the SkillsJar link. Then Save.' : (!draft.title && !(draft.video?.url || '').trim()) ? 'Add a title (or paste a video URL) first' : isVideo ? 'Fill everything from your Title — or from your Video URL if you only pasted a link. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
-                  onClick={() => onGenerate(isSkillsJar ? 'course' : (draft.title ? 'title' : 'video'))}>{genBusy ? (isVideo || isSkillsJar ? '✦ Working…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
+                  disabled={!!genBusy || (isBlueprintGen ? false : isSkillsJar ? !(draft.course?.url || '').trim() : (!draft.title && !(draft.video?.url || '').trim()))}
+                  title={isBlueprintGen ? 'This type writes itself from the week’s blueprint — just click Generate content.' : isSkillsJar ? 'Fill everything from the SkillsJar link. Then Save.' : (!draft.title && !(draft.video?.url || '').trim()) ? 'Add a title (or paste a video URL) first' : isVideo ? 'Fill everything from your Title — or from your Video URL if you only pasted a link. Then Save.' : 'Write the subtitle, description, and lesson content for this title. Then Save.'}
+                  onClick={() => onGenerate(isBlueprintGen ? 'content' : isSkillsJar ? 'course' : (draft.title ? 'title' : 'video'))}>{genBusy ? (isVideo || isSkillsJar ? '✦ Working…' : '✦ Generating…') : previewCard.content ? '↻ Regenerate' : '✦ Generate content'}</button>
               </div>
               <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>
-                {isSkillsJar
-                  ? 'Paste the SkillsJar course link and press ✦ Generate content — it fills the class name, description, XP, minutes, and overview. Then Save changes.'
-                  : isVideo
-                    ? 'Add a Title and press the ✦ next to it to find a video and fill the rest — or paste a Video URL and press the ✦ next to it to fill everything from that video. Then Save changes.'
-                    : 'Add a title and click Generate content to write what students see. Then Save changes.'}
+                {isBlueprintGen
+                  ? 'This type writes itself from the selected week’s blueprint — just press ✦ Generate content, then Save changes. (Pick the Week below to target a specific week.)'
+                  : isSkillsJar
+                    ? 'Paste the SkillsJar course link and press ✦ Generate content — it fills the class name, description, XP, minutes, and overview. Then Save changes.'
+                    : isVideo
+                      ? 'Add a Title and press the ✦ next to it to find a video and fill the rest — or paste a Video URL and press the ✦ next to it to fill everything from that video. Then Save changes.'
+                      : 'Add a title and click Generate content to write what students see. Then Save changes.'}
               </div>
             </div>
           )}
@@ -458,7 +463,7 @@ const TimelineEditorTab: React.FC = () => {
   const [isNew, setIsNew] = useState(false);
   const [saving, setSaving] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
-  const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course'>('');
+  const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course' | 'content'>('');
   const [bpContext, setBpContext] = useState<BlueprintContextDTO | null>(null);
 
   // Load the courses once and default to the AI Systems Architect Accelerator —
@@ -651,8 +656,26 @@ const TimelineEditorTab: React.FC = () => {
   // live preview, then Save persists it).
   //   anchor='title' → keep the Title, find a fresh video + fill the rest.
   //   anchor='video' → keep the URL,  write the Title + fill the rest.
-  const genContent = async (anchor: 'title' | 'video' | 'course' = 'title') => {
+  const genContent = async (anchor: 'title' | 'video' | 'course' | 'content' = 'title') => {
     if (!draft?.type) return;
+    // Blueprint-driven types (survey, overview …): no title needed — run the
+    // type's own generation prompt against the selected week's blueprint (the
+    // same runtimePreview the Studio uses) and fill the card's content.
+    if (anchor === 'content') {
+      setGenBusy('content'); setError('');
+      try {
+        const r = await api.post(`/api/admin/components/${draft.type}/preview`, { program_id: courseId || null, week: draft.week ?? null });
+        const exp = r.data?.experience || {};
+        setDraft((d) => d && ({
+          ...d,
+          title: d.title || exp.title || d.title,
+          subtitle: exp.summary ?? d.subtitle,
+          metadata: { ...(d.metadata || {}), content: exp },
+        }));
+      } catch (e: any) { setError(e?.response?.data?.error || 'Generate failed'); }
+      finally { setGenBusy(''); }
+      return;
+    }
     // Skills Course: from just the SkillsJar link, fill class name + everything.
     if (anchor === 'course') {
       if (!(draft.course?.url || '').trim()) return;

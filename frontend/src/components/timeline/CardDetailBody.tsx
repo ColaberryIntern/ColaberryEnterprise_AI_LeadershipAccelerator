@@ -6,6 +6,7 @@ import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import CardSurveyExperience from './CardSurveyExperience';
+import { toTitleCase } from '../../utils/titleCase';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -68,6 +69,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isSkillsJar = card.render_band === 'skills_jar';
   const isSurvey = card.render_band === 'survey';   // bespoke live survey experience
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
+  // Media/external cards carry their own authored title casing; only curriculum
+  // content titles get Title-Cased for display.
+  const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
@@ -109,7 +113,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           {done && <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed</span>}
         </div>
 
-        <h2 className="tld-title">{card.video?.title || card.blog?.title || card.week_title || content?.title || card.title}</h2>
+        <h2 className="tld-title">{externalTitle
+          ? (card.video?.title || card.blog?.title || card.week_title || content?.title || card.title)
+          : toTitleCase(card.week_title || content?.title || card.title)}</h2>
 
         <div className="tld-meta">
           {presenter && <span><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" /><path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>{presenter}</span>}

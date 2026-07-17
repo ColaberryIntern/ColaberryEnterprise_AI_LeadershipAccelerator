@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
 import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
+import { toTitleCase } from '../../utils/titleCase';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
@@ -155,7 +156,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const isSkillsJar = v.kind === 'skilljar';
   const pts = totalPoints(card.points);
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
-  const shortTitle = (card.week_title || card.content?.title || card.title).replace(/^[^·]*· /, '');
+  // Media/external cards keep their authored title casing; curriculum content
+  // titles are Title-Cased for display.
+  const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
+  const tc = (s: string) => (externalTitle ? s : toTitleCase(s));
+  const shortTitle = tc((card.week_title || card.content?.title || card.title).replace(/^[^·]*· /, ''));
 
   // Poster background precedence: a card's OWN art wins — an explicit card
   // image (blog cover), the video's saved poster (incl. podcast episode art /
@@ -315,7 +320,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       <div className="fc-head">
         <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>
         <div style={{ minWidth: 0 }}>
-          <div className="ttl">{card.week_title || card.content?.title || card.title}</div>
+          <div className="ttl">{tc(card.week_title || card.content?.title || card.title)}</div>
           <div className="sub">
             <span className={`tl-chip ${v.kind === 'skilljar' || v.kind === 'survey' ? 'cert' : 'learning'}`} style={{ padding: '2px 9px' }}><span className="sw" />{card.student_label}</span>
             {pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}

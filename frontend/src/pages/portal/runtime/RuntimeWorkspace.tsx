@@ -6,6 +6,7 @@ import { lessonDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
+import { toTitleCase } from '../../../utils/titleCase';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -67,8 +68,11 @@ const RuntimeWorkspace: React.FC = () => {
   const isSurvey = band === 'survey';   // captured via the interactive SurveyForm
   const isReflect = ['reflection', 'question'].includes(band);
   // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
-  // beats the card's raw title everywhere the student sees it.
-  const displayTitle = card?.week_title || card?.content?.title || card?.title || '';
+  // beats the card's raw title everywhere the student sees it. Curriculum titles
+  // are Title-Cased for display; media/external keep their authored casing.
+  const externalTitle = isVideo || band === 'skills_jar' || ['testimonial', 'blog', 'podcast'].includes(card?.type || '');
+  const rawTitle = card?.week_title || card?.content?.title || card?.title || '';
+  const displayTitle = externalTitle ? rawTitle : toTitleCase(rawTitle);
   // Watch gate: report play heartbeats while not yet completed; the "Mark complete"
   // button stays disabled until the server confirms the 75% threshold is met.
   const onWatchBeat: ((beat: WatchBeatPayload) => void) | undefined = card && !completed
@@ -188,7 +192,7 @@ const RuntimeWorkspace: React.FC = () => {
               cardId={card.id}
               questions={card.content?.questions || []}
               openPrompt={card.content?.reflection || null}
-              title={card.content?.title || card.title}
+              title={displayTitle}
               completed={completed}
               onComplete={complete}
             />
