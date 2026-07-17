@@ -31,6 +31,10 @@ export const env = {
   paysimpleEnv: (process.env.PAYSIMPLE_ENV || 'sandbox') as 'sandbox' | 'live',
   paysimpleWebhookSecret: process.env.PAYSIMPLE_WEBHOOK_SECRET || '',
   paymentMode: (process.env.PAYMENT_MODE || 'test') as 'test' | 'live',
+  // Scheduled reconcile of our recorded PaySimple payments (settled -> revenue,
+  // failed/reversed -> subtracted). OFF by default so it ships dark; turn on once
+  // live READ credentials are set.
+  paysimpleSyncEnabled: process.env.PAYSIMPLE_SYNC_ENABLED === 'true',
 
   // JWT
   jwtSecret: resolveJwtSecret(),

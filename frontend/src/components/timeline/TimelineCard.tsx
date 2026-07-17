@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
 import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
+import { toTitleCase } from '../../utils/titleCase';
 
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
@@ -34,11 +35,12 @@ export interface TimelineFeedCard {
   completed_at: string | null;
   video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
-  content?: { summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
+  content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // title = the generated lesson title ("Overview — {week topic}"), display beats the raw card title
   course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
   type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
+  week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title (no week number)
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
@@ -64,7 +66,7 @@ export const BAND: Record<string, Visual> = {
   discussion: { kind: 'reading', color: '#367895' },
   community: { kind: 'reading', color: '#367895' },
   study: { kind: 'reading', color: '#367895' },
-  warmup: { kind: 'survey', color: '#E8920C' },
+  warmup: { kind: 'reading', color: '#2E6A86' },
   survey: { kind: 'survey', color: '#E8920C' },
   reflection: { kind: 'survey', color: '#E8920C' },
   quiz: { kind: 'test', color: '#5BA63C' },
@@ -129,11 +131,13 @@ interface Props {
   onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
   /** Comment button: jump straight into the card's workspace (where the cohort comments live). */
   onComments?: (card: TimelineFeedCard) => void;
+  /** Workspace shortcut: open the card's full runtime workspace (video + AI Mentor + comments). */
+  onWorkspace?: (card: TimelineFeedCard) => void;
   likes?: number;
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWorkspace, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
   // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE —
   // and while playing, clicking the artwork toggles pause/play (the bar has the
@@ -152,7 +156,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
   const isSkillsJar = v.kind === 'skilljar';
   const pts = totalPoints(card.points);
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
-  const shortTitle = card.title.replace(/^[^·]*· /, '');
+  // Media/external cards keep their authored title casing; curriculum content
+  // titles are Title-Cased for display.
+  const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
+  const tc = (s: string) => (externalTitle ? s : toTitleCase(s));
+  const shortTitle = tc((card.week_title || card.content?.title || card.title).replace(/^[^·]*· /, ''));
 
   // Poster background precedence: a card's OWN art wins — an explicit card
   // image (blog cover), the video's saved poster (incl. podcast episode art /
@@ -296,11 +304,14 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
       {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       <span className="mt-meta"><b>{card.video?.title || card.blog?.title || shortTitle}</b><span>{metaText}</span></span>
+      {/* Corner affordance: ✓ when done, ▶ when the card can play inline. A
+          NON-playable tile shows nothing here — the single "Open" lives in the
+          footer, so a card never carries two Open buttons. */}
       {done
         ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg></span>
         : playable
           ? <span className="mt-open"><svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg></span>
-          : <span className="mt-openpill">Open <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>}
+          : null}
     </button>
   );
 
@@ -309,7 +320,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
       <div className="fc-head">
         <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>
         <div style={{ minWidth: 0 }}>
-          <div className="ttl">{card.title}</div>
+          <div className="ttl">{tc(card.week_title || card.content?.title || card.title)}</div>
           <div className="sub">
             <span className={`tl-chip ${v.kind === 'skilljar' || v.kind === 'survey' ? 'cert' : 'learning'}`} style={{ padding: '2px 9px' }}><span className="sw" />{card.student_label}</span>
             {pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}
@@ -330,6 +341,12 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, likes
         <button type="button" className={`cmt${showComments ? ' liked' : ''}`} onClick={() => setShowComments((s) => !s)}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment
         </button>
+        {/* Quick shortcut into the full workspace (video + AI Mentor + comments). */}
+        {onWorkspace && !locked && (
+          <button type="button" className="cmt" onClick={() => onWorkspace(card)}>
+            <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 20h8M12 17v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Workspace
+          </button>
+        )}
         <span className="spacer" />
         {done
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>

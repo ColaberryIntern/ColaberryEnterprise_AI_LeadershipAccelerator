@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, July 16, 2026 at 12:08 PM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">63 changes</span></div>
+    <div class="meta">Generated Friday, July 17, 2026 at 10:18 AM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">70 changes</span></div>
   </header>
   <main>
     
@@ -1002,6 +1002,111 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; frontend tsc 0; backend jest timeline+podcast+blog+__tests__ 1022 passed (1 failing suite adminRoutes.test.ts is byte-identical to origin/main — pre-existing on main, not from this merge); curriculumFormatContract 5/5. DEV live check after deploy: &quot;Intro to Large Language Models&quot; (YouTube URL, no saved poster) shows the real video thumbnail on its tile; Comment button opens the thread in the feed; workspace comments + inline play intact.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY branch state (main itself untouched). Coordination: multiple sessions deploying different branches to the one dev instance keep overwriting each other — flagged to Ali in the session summary.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">64</span>
+          <h2>PROD promotion: merge latest main (watch gate #263, podcast toggle #264, lesson titles #262) + full timeline UX body → main → production</h2>
+          <span class="badge">2026-07-16</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;do what you have to do to deploy now.&quot; Merged main&#39;s 7 newest commits into the branch and promoted the union. Conflict resolutions (one implementation per feature): VideoEmbed = my `autoplay` + main&#39;s watch-tracking (onWatchBeat heartbeats, fallbackDurationS); CardDetailBody player = my source/hero/no-clip three-way + derived YouTube poster + autoplay UNIONED with main&#39;s watch-gate bar + completeSafely; TimelineCard = main&#39;s dedicated podcast pause/play tile (#264) for .mp3 + my generic inline player for video embeds (playable &amp;&amp; !podcastAudio &amp;&amp; playingInline), Comment button = my inline feed thread (Ali&#39;s explicit ask) over #261&#39;s navigate-to-workspace (prop kept in the interface for feed callers; workspace thread unchanged); RuntimeWorkspace = main&#39;s watch bar + lessonDoc + my derived-thumbnail poster fallback.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0, frontend tsc 0; curriculumFormatContract 5/5; backend timeline+podcast+runtime suites 91/91. PROD after deploy: site 200, bundle carries mt-openpill/&quot;Write a comment&quot;/hqdefault probes, backend dist has imageFromMetadata + assertTypeLaunched; boot ensured comment/blog/podcast tables.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Prod deploy authorized by Ali mid-day (&quot;deploy now&quot;) — overrides the after-hours default for this deploy. Dev 1 redeployed from the same commit so all environments match; future sessions deploying main now deploy the union (ends the overwrite churn).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">65</span>
+          <h2>Timeline card footer: single Open (off the image) + a Workspace shortcut next to Comment</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali (screenshot: a card showed an &quot;Open →&quot; pill on the image AND an Open button in the footer) — &quot;We should not have 2 open buttons. Keep the open that is not on the actual image. Then next to the comment button, add a workstation button so they can easily get to that.&quot; (1) Removed the on-image &quot;Open →&quot; pill (mt-openpill) from non-playable tiles — the footer Open (labs: &quot;Start&quot;) is now the single Open; playable tiles still show ▶ (plays inline, a distinct action) and completed tiles show ✓. (2) Added a &quot;Workspace&quot; button in the card footer beside Comment that opens the full runtime workspace (video + AI Mentor + comments) — new optional onWorkspace prop on TimelineCard + TimelineFeed, wired to navigate(/portal/runtime/:id) in ClassroomPage and TodayShell; hidden when locked and in the admin editor (no onWorkspace passed there). Files: frontend/src/components/timeline/TimelineCard.tsx, TimelineFeed.tsx; pages/portal/ClassroomPage.tsx, today/TodayShell.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; backend tsc 0; curriculumFormatContract 5/5. PROD after deploy: cards show one Open (footer), no on-image Open pill; Workspace button next to Comment jumps to the runtime.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Merged main first (open house runbook #271, Settings Enrollment tab #265, nginx /openhouse route #267) as a proper merge commit.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">66</span>
+          <h2>Workspace comments on EVERY curriculum type (not just media cards)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali (screenshot: an &quot;announcement&quot; workspace with the AI Mentor but no comments) — &quot;All curriculum types should have comments in their workspaces.&quot; The Runtime workspace only loaded + rendered the cohort comment thread for VIDEO_BANDS cards (media/live_class/video_feedback); announcements, quizzes, labs, readings, reflections etc. showed the AI Mentor but no comments. Removed both gates: comments now load on open for every card, and the Comments section renders under the activity for every type. Backend endpoint (/api/portal/classroom/cards/:id/comments) was never band-gated, so no server change. Files: frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0. DEV/PROD after deploy: open a non-video card&#39;s workspace (e.g. the Week-0 &quot;Welcome&quot; announcement) — the Comments section + post box appear beside the AI Mentor.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">67</span>
+          <h2>Weekly feedback Survey: blueprint-generated questions + captured &amp; stored answers, one per week</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Use the Curriculum type skill to update Survey [into] a feedback loop to understand their experience, how well they are learning, what we can do better. Answers captured and stored for later. Each week has a survey in the reflect section. ~10 questions, generated from the blueprint + week/section info.&quot; Three parts. (A, data — via build-curriculum-type skill) Survey CurriculumTypeDefinition now carries an authored generation_prompt (in seedComponentAuthoring.ts) that steers the fixed output schema to a Week Feedback survey: title &quot;Week {n} Feedback — {topic}&quot;, ~10 first-person Likert (1–5) statements grounded in the auto-injected WEEK CONTEXT (clarity/pace/confidence-on-objectives/relevance/hands-on/support/workload/engagement/progress/recommend), one open catch-all in `reflection`; render_band survey, bucket reflect, estimated 5 min, completion on submit, approved. (B, code — the PR the skill flags, since survey needed new render behavior + storage) NEW table timeline_survey_responses (idempotent boot ensure; one row per card+enrollment, upsert; program_id/week + full Q&amp;A snapshot in answers JSONB), CardSurveyResponse model (+ index.ts registration), surveyResponseService (questionsFromCard, normalizeAnswers with 1–5 bounds + question-text snapshot by index + empty-submission guard, getSurvey/saveSurvey upsert), participant routes GET/POST /api/portal/runtime/cards/:cardId/survey, runtimeController handlers. Frontend: NEW SurveyForm.tsx (1–5 agreement scale + optional per-question comment + open field; prefills prior answers; &quot;Save &amp; mark complete&quot; stores then completes) wired into RuntimeWorkspace for render_band &#39;survey&#39; (split out of the generic reflect textarea; generic completion bar hidden for surveys). runtimeApi.survey/saveSurvey. (C, placement) NEW scripts/ensureWeeklySurveys.ts — idempotent: one published survey card in every week&#39;s reflect bucket (weeks = distinct weeks that already have cards, else 1–12), then generateCardContent per card so questions come from THAT week&#39;s blueprint; skips weeks that already have a survey + cards whose questions are already populated.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0, frontend tsc 0; backend runtime+timeline suites 81/81 (new surveyResponseService 7/7: question extraction, rating bounds, snapshot-by-index, empty-submission guard); frontend curriculumFormatContract 5/5. DEV after deploy + placement run: survey card per week with generated questions; opening its workspace shows the 1–5 form; submitting stores a row in timeline_survey_responses and re-opening prefills.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">DEV-ONLY so far — survey CARDS placed on prod curriculum awaits Ali&#39;s OK (outward-facing data). Deploy backend + nginx; run node dist/scripts/ensureWeeklySurveys.js in the container. Answers stored for later analysis (admin/report view is a future task, per &quot;used at a later date&quot;). New render behavior (the survey form) is code, flagged by the skill.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">68</span>
+          <h2>Weekly Survey PROMOTED TO PROD: 12 survey cards placed + generated; answers captured/stored live</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali confirmed &quot;Weeks 1–12&quot; + &quot;Full send now.&quot; Merged latest main (account credits #276/#278, overview week_title #274 — clean auto-merge, kept both), promoted to main (afe71703), deployed prod backend+nginx (reset by SHA; boot created timeline_survey_responses), then ran ensureWeeklySurveys.js for weeks 1–12 on the canonical program (92b98a72…).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">prod HEAD afe71703 holds; timeline_survey_responses table present; survey routes (2) in backend dist; SurveyForm in nginx bundle; public /portal/classroom 200. Placement: 12/12 survey cards, all published, all with 10 generated week-specific questions (e.g. Week 3 = &quot;Week 3 Feedback — Claude API + Workflow Assistant&quot;). tsc 0 both; backend runtime+timeline 81/81; contract 5/5 (pre-merge). Dev end-to-end earlier confirmed save→store→prefill→idempotent-upsert.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Week 0 (free preview) intentionally excluded. Answers stored in timeline_survey_responses for later analysis (admin/report view = future task). Prod deploy authorized by Ali (&quot;Full send now&quot;) — overrides the after-hours default.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">69</span>
+          <h2>Survey: bespoke live &quot;take the survey&quot; experience in the right-side drawer (+ workspace)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;The real survey experience should create a specific html just for this curriculum type that will appear on the right side. The user should be able to take the actual survey live in the html to complete the assignment. Create a great experience.&quot; The right-side card drawer (CardDetailBody) previously showed survey questions READ-ONLY. NEW CardSurveyExperience.tsx — a bespoke, fully self-contained, theme-aware (light/dark) interactive survey: eyebrow + title + animated progress bar (answered/total), each question as a polished 5-point agreement scale (1–5, end labels, hover lift, filled-accent selection, ✓ on the number chip when answered) with an on-demand &quot;＋ Add a comment&quot; reveal, the open-ended question, a sticky &quot;Submit feedback →&quot; that saves answers (reusing GET/POST /survey) and marks the card complete, then a celebratory thank-you state (&quot;Update my answers&quot; re-opens; re-submit upserts). Prefills prior answers; `preview` renders it non-interactive from the card&#39;s generated questions for the admin Studio/editor. Wired into CardDetailBody for render_band &#39;survey&#39; (replaces the read-only block; drawer footer&#39;s Enter-workspace demoted to ghost since the survey completes in-body). REUSED the same component in RuntimeWorkspace (replacing the earlier rt-styled SurveyForm, now deleted) so the right-side drawer and the full workspace are identical. Files: NEW frontend/src/components/timeline/CardSurveyExperience.tsx; frontend CardDetailBody.tsx, pages/portal/runtime/RuntimeWorkspace.tsx; DELETED pages/portal/runtime/SurveyForm.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. Backend unchanged (same capture/store endpoints). After deploy: open a Week-N Feedback card → the right drawer shows the live survey; answering + Submit stores to timeline_survey_responses and completes the card; reopening shows the thank-you/prefill.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Self-styled component (svx-* + own &lt;style&gt;) so it renders identically in the drawer (.tl-de) and workspace (.rt) scopes. New render behavior = code (the &quot;specific html per curriculum type&quot; the build-curriculum-type skill flags).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">70</span>
+          <h2>Survey Studio: interactive &quot;take it&quot; preview in section 4 + Parts marked (reflection, comments)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Section 4 should show what the student sees and that should be the survey; I should be able to take the survey down there. Make sure it&#39;s passing in the auto-included. Mark some of the parts for the survey — currently none are selected.&quot; (1) Parts: survey CurriculumTypeDefinition capabilities set to [&#39;reflection&#39;,&#39;comments&#39;] in seedComponentAuthoring.ts (reflection = the open feedback question; comments = the cohort thread) — applied at boot (server.ts runs seedComponentAuthoring), so the Studio Parts panel now shows 2 selected. (2) Interactive preview: CardSurveyExperience&#39;s `preview` mode was read-only/disabled; now it is fully TAKEABLE but LOCAL — ratings/comments/open are editable, the progress bar moves, and Submit shows the thank-you WITHOUT calling the API or completing (author can click through exactly how it feels). Live student mode unchanged (fetch + save + complete). (3) Auto-included questions already flow: StudentPreview feeds preview.experience (content generated from the auto-included WEEK CONTEXT) into CardDetailBody → survey branch reads content.questions, so section 4 renders the real generated survey. Files: backend/src/seeds/seedComponentAuthoring.ts; frontend/src/components/timeline/CardSurveyExperience.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0, backend tsc 0; curriculumFormatContract 5/5. After deploy: Experience Studio → Survey → section 4 &quot;what the student sees&quot; is the interactive survey (generated questions from the Week blueprint), takeable end-to-end; Parts panel shows Reflection + Comments on.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deploy backend (applies capabilities at boot) + nginx. Preview submit is local-only (no card/enrollment in the Studio).</span></div>
           
         </div>
       </article>

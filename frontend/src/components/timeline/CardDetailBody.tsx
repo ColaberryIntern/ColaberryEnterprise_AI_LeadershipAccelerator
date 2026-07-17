@@ -5,6 +5,9 @@ import VideoEmbed, { WatchBeatPayload } from './VideoEmbed';
 import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
+import CardSurveyExperience from './CardSurveyExperience';
+import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
+import { toTitleCase } from '../../utils/titleCase';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -65,7 +68,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const source = parseVideoUrl(card.video?.url);
   const isVideo = ['media', 'live_class', 'video_feedback'].includes(card.render_band);
   const isSkillsJar = card.render_band === 'skills_jar';
+  const isSurvey = card.render_band === 'survey';   // bespoke live survey experience
+  const isAssessment = card.render_band === 'quiz' || card.render_band === 'evaluation';   // interactive Knowledge Check / Evaluation
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
+  // Media/external cards carry their own authored title casing; only curriculum
+  // content titles get Title-Cased for display.
+  const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
@@ -107,7 +115,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           {done && <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed</span>}
         </div>
 
-        <h2 className="tld-title">{card.video?.title || card.blog?.title || card.title}</h2>
+        <h2 className="tld-title">{externalTitle
+          ? (card.video?.title || card.blog?.title || card.week_title || content?.title || card.title)
+          : toTitleCase(card.week_title || content?.title || card.title)}</h2>
 
         <div className="tld-meta">
           {presenter && <span><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="2" /><path d="M4 20c0-4 4-6 8-6s8 2 8 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>{presenter}</span>}
@@ -182,6 +192,28 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         )}
 
+        {/* Survey: the bespoke live experience — the student takes it right here
+            and submitting completes the assignment. Replaces the read-only body. */}
+        {isSurvey && (
+          <CardSurveyExperience
+            cardId={card.id}
+            questions={(content?.questions as string[]) || []}
+            openPrompt={content?.reflection || null}
+            title={content?.title || card.title}
+            preview={preview}
+            completed={done}
+            onComplete={preview ? undefined : completeSafely}
+          />
+        )}
+
+        {/* Knowledge Check + Evaluation — the interactive assessment, taken right
+            here (real students score + persist; the Studio preview uses sample
+            questions). Replaces the read-only lesson/about, like the survey does. */}
+        {isAssessment && (
+          <AssessmentPanel cardId={card.id} preview={preview} kind={card.render_band === 'evaluation' ? 'evaluation' : 'quiz'} />
+        )}
+
+        {!isSurvey && !isAssessment && (
         <div className="tld-about">
           {(isVideo || blog) && <div className="tld-lab">About this {blog ? 'post' : source ? 'video' : 'activity'}</div>}
           {card.description
@@ -194,8 +226,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             {card.difficulty && <span><b>Level</b>{card.difficulty}</span>}
           </div>
         </div>
+        )}
 
-        {card.type !== 'testimonial' && card.type !== 'blog' && content && (content.summary || content.body_html || (content.questions && content.questions.length > 0) || content.reflection) && (
+        {!isSurvey && !isAssessment && card.type !== 'testimonial' && card.type !== 'blog' && content && (content.summary || content.body_html || (content.questions && content.questions.length > 0) || content.reflection) && (
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}
@@ -256,7 +289,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                     {gateActive && !watch?.met ? `Collect points · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%` : 'Collect points'}
                   </button>
                 )}
-                {onEnterWorkspace && <button type="button" className={`tl-btn ${isVideo && source ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {/* Survey completes in-body via its own Submit; the workspace link
+                    stays as a quiet secondary, not the primary CTA. */}
+                {onEnterWorkspace && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
               </>
             )}
       </div>

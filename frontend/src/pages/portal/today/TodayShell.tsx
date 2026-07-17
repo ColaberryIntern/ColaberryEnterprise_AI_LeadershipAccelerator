@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import './TodayShell.css';
 import {
   fetchPoints, fetchSchedule, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
@@ -17,6 +17,7 @@ import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import '../../../components/timeline/timeline.css';
 
 const TodayShell: React.FC = () => {
+  const navigate = useNavigate();
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [profile, setProfile] = useState<OnboardingProfileView | null>(null);
@@ -249,7 +250,7 @@ const TodayShell: React.FC = () => {
             </div>
             <div className="tl-de" data-theme="light">
               {looped.length
-                ? looped.map((c, i) => <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={setSelectedCard} likes={6 + ((i * 7) % 13)} />)
+                ? looped.map((c, i) => <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={setSelectedCard} onWorkspace={(x) => navigate(`/portal/runtime/${x.id}`)} likes={6 + ((i * 7) % 13)} />)
                 : <div className="fc-empty">Loading your feed…</div>}
               <div ref={sentinelRef} style={{ height: 1 }} />
             </div>

@@ -534,12 +534,78 @@ async function ensureSubscriptionSchema() {
     `CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_payment_ref_unique ON subscriptions (payment_ref)`,
     `CREATE INDEX IF NOT EXISTS idx_subscriptions_enrollment ON subscriptions (enrollment_id)`,
     `CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status)`,
+    // Account-credit applied to this checkout's first charge (added 2026-07 with account_credits).
+    `ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS applied_credit_cents INTEGER NOT NULL DEFAULT 0`,
   ];
   for (const sql of statements) {
     try {
       await sequelize.query(sql);
     } catch (err: any) {
       console.warn('[DB] subscription schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureAccountCreditSchema() {
+  // Account credits (Open House $50 "hold your spot" deposits → applied to the
+  // student's next subscription payment). Append-only ledger; unique
+  // source_event_id makes granting idempotent (a re-run cannot double-credit).
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS account_credits (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       amount_cents INTEGER NOT NULL,
+       reason VARCHAR(64) NOT NULL,
+       source_event_id VARCHAR(200) NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'available',
+       applied_subscription_id UUID,
+       applied_at TIMESTAMPTZ,
+       granted_by VARCHAR(120),
+       note TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS account_credits_source_event_unique ON account_credits (source_event_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_account_credits_enrollment_status ON account_credits (enrollment_id, status)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] account-credit schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureRefundSchema() {
+  // Admin-issued PaySimple refunds/voids. Ledger row per attempt; written
+  // pending before the API call so a mid-flight crash is visible (no silent
+  // double-refund). Idempotent create — safe to re-run.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS refunds (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID,
+       paysimple_payment_id VARCHAR(120) NOT NULL,
+       paysimple_refund_id VARCHAR(120),
+       amount_cents INTEGER NOT NULL,
+       method VARCHAR(20) NOT NULL DEFAULT 'refund',
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       reason TEXT,
+       customer_email VARCHAR(255),
+       voided_credit_cents INTEGER NOT NULL DEFAULT 0,
+       issued_by VARCHAR(120),
+       error TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_refunds_payment ON refunds (paysimple_payment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_refunds_status ON refunds (status)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] refund schema stmt skipped:', err?.message);
     }
   }
 }
@@ -851,6 +917,71 @@ async function ensureCardCommentsSchema() {
     console.log('[DB] Card comments schema ensured');
   } catch (err: any) {
     console.warn('[DB] Card comments schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
+// Weekly feedback Survey answers — one row per (card, enrollment); idempotent
+// create + unique index so a re-submit upserts. Boot runs no global sync.
+async function ensureSurveyResponsesSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS timeline_survey_responses (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       card_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       program_id UUID,
+       week INTEGER,
+       answers JSONB NOT NULL DEFAULT '{"items":[],"open":null}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS timeline_survey_responses_unique ON timeline_survey_responses (card_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_survey_responses_program_week ON timeline_survey_responses (program_id, week)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] survey responses schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+// Assessment attempts — per-student Knowledge Check (quiz) + Evaluation attempts:
+// score, per-question responses, per-competency breakdown, 75% pass gate, and the
+// program_id+week keys that pair a section's quiz (beginning) with its evaluation
+// (current) for pre/post growth. Sibling of ensureSurveyResponsesSchema.
+async function ensureAssessmentSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS runtime_assessment_attempts (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       card_id UUID NOT NULL,
+       program_id UUID,
+       week INTEGER,
+       kind VARCHAR(20) NOT NULL DEFAULT 'quiz',
+       score DOUBLE PRECISION NOT NULL DEFAULT 0,
+       correct_count INTEGER NOT NULL DEFAULT 0,
+       total_count INTEGER NOT NULL DEFAULT 0,
+       passed BOOLEAN,
+       pass_threshold DOUBLE PRECISION,
+       attempt_number INTEGER NOT NULL DEFAULT 1,
+       duration_ms INTEGER,
+       responses JSONB NOT NULL DEFAULT '[]'::jsonb,
+       competency_scores JSONB NOT NULL DEFAULT '{}'::jsonb,
+       started_at TIMESTAMPTZ,
+       submitted_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_assess_enrollment_card ON runtime_assessment_attempts (enrollment_id, card_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_assess_section ON runtime_assessment_attempts (enrollment_id, program_id, week, kind)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] assessment schema stmt skipped:', err?.message);
+    }
   }
 }
 
@@ -1501,6 +1632,10 @@ async function start(): Promise<void> {
   await ensurePointsSchema();
   // Student self-serve subscriptions (idempotent).
   await ensureSubscriptionSchema();
+  // Account credits — Open House $50 deposits applied to next payment (idempotent).
+  await ensureAccountCreditSchema();
+  // Admin-issued refunds/voids (idempotent).
+  await ensureRefundSchema();
   // Open house events (idempotent).
   await ensureOpenHouseSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).
@@ -1517,6 +1652,10 @@ async function start(): Promise<void> {
   await ensurePodcastSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
+  // Weekly feedback Survey answers (idempotent).
+  await ensureSurveyResponsesSchema();
+  // Knowledge Check (quiz) + Evaluation attempts — scores, responses, pre/post correlation.
+  await ensureAssessmentSchema();
   // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
@@ -1543,12 +1682,16 @@ async function start(): Promise<void> {
       const TimelineCardProgress = (await import('./models/TimelineCardProgress')).default;
       const CurriculumTypeDefinition = (await import('./models/CurriculumTypeDefinition')).default;
       const Subscription = (await import('./models/Subscription')).default;
+      const AccountCredit = (await import('./models/AccountCredit')).default;
+      const Refund = (await import('./models/Refund')).default;
       const r = await reconcileMissingColumns([
         Enrollment,
         TimelineCard,
         TimelineCardProgress,
         CurriculumTypeDefinition,
         Subscription,
+        AccountCredit,
+        Refund,
       ]);
       if (r.added.length) {
         console.log(

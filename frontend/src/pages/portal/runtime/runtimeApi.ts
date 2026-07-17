@@ -12,6 +12,7 @@ export interface RtCard {
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
   type_thumbnail?: string | null;   // the type's picture — hero banner with the title overlaid
+  week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 
@@ -27,6 +28,43 @@ export interface Readiness {
 export interface PromptEval { score: number; architect_score: number; strengths: string[]; gaps: string[]; suggestions: string[]; better_prompt: string }
 export interface MentorReply { reply: string; kind: string }
 export interface CardComment { id: string; body: string; author: string; mine: boolean; created_at: string }
+export interface SurveyAnswerItem { question: string; rating: number | null; comment: string | null }
+export interface SurveyAnswers { items: SurveyAnswerItem[]; open: string | null }
+export interface SurveyView { questions: string[]; open_prompt: string | null; answers: SurveyAnswers | null }
+
+// ── Assessments: Knowledge Check (quiz) + Evaluation ─────────────────────────
+export type AssessmentKind = 'quiz' | 'evaluation';
+export interface AssessmentQ { index: number; question: string; options: string[]; competency: string | null; correct_index?: number; explanation?: string | null }
+export interface AssessmentItem {
+  question: string; competency: string | null; options: string[];
+  selected_index: number | null; correct_index: number; is_correct: boolean;
+  explanation: string | null; time_ms: number | null;
+}
+export interface CompetencyScore { correct: number; total: number; pct: number }
+export interface SectionProgress {
+  week: number; beginning: number | null; current: number | null; growth: number | null;
+  quiz_taken: boolean; evaluation_taken: boolean; evaluation_passed: boolean | null;
+  per_competency: Array<{ domain: string; beginning: number | null; current: number | null; delta: number | null }>;
+}
+export interface AttemptReview {
+  kind: AssessmentKind; score: number; correct_count: number; total_count: number;
+  passed: boolean | null; pass_threshold: number | null; attempt_number: number;
+  items: AssessmentItem[]; competency_scores: Record<string, CompetencyScore>; submitted_at: string | null;
+}
+export interface AssessmentView {
+  kind: AssessmentKind; pass_threshold: number | null; question_count: number;
+  questions: AssessmentQ[]; last_attempt: AttemptReview | null; section: SectionProgress | null;
+}
+export interface AssessmentResult {
+  kind: AssessmentKind; score: number; correct_count: number; total_count: number;
+  passed: boolean | null; pass_threshold: number | null; attempt_number: number;
+  items: AssessmentItem[]; competency_scores: Record<string, CompetencyScore>;
+  section: SectionProgress | null; completion: { outcome: any; artifact: any; readiness: Readiness } | null;
+}
+export interface AssessmentSubmit {
+  responses: Array<{ index: number; selected_index: number | null; time_ms?: number | null }>;
+  duration_ms?: number | null; started_at?: string | null;
+}
 
 export const runtimeApi = {
   open: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}`).then((r) => r.data as RtOpen),
@@ -41,4 +79,10 @@ export const runtimeApi = {
   saveNote: (cardId: string, body: string, kind = 'note') => portalApi.post('/api/portal/runtime/notebook', { card_id: cardId, kind, body }).then((r) => r.data),
   comments: (cardId: string) => portalApi.get(`/api/portal/classroom/cards/${cardId}/comments`).then((r) => r.data as { comments: CardComment[] }),
   comment: (cardId: string, body: string) => portalApi.post(`/api/portal/classroom/cards/${cardId}/comments`, { body }).then((r) => r.data as { comment: CardComment }),
+  survey: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/survey`).then((r) => r.data as SurveyView),
+  saveSurvey: (cardId: string, payload: { items: Array<{ index: number; rating: number | null; comment?: string | null }>; open?: string | null }) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/survey`, payload).then((r) => r.data as { saved: true; answers: SurveyAnswers }),
+  assessment: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/assessment`).then((r) => r.data as AssessmentView),
+  submitAssessment: (cardId: string, payload: AssessmentSubmit) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/assessment`, payload).then((r) => r.data as AssessmentResult),
 };

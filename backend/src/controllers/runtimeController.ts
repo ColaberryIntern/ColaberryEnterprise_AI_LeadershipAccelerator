@@ -10,6 +10,8 @@ import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
+import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
+import { getAssessment, submitAssessment } from '../services/runtime/assessmentService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
 import fs from 'fs/promises';
@@ -96,6 +98,31 @@ export async function handleComplete(req: Request, res: Response, next: NextFunc
 
 export async function handleReadiness(req: Request, res: Response, next: NextFunction) {
   try { res.json(await readinessSummary(eid(req))); } catch (e) { fail(res, e, next); }
+}
+
+// weekly feedback survey — capture + store the student's answers
+export async function handleGetSurvey(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getSurvey(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSaveSurvey(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await saveSurvey(eid(req), String(req.params.cardId), req.body || {})); } catch (e) { fail(res, e, next); }
+}
+
+// Knowledge Check (quiz) + Evaluation — load questions (no answers leaked) / submit + score
+const submitAssessmentSchema = z.object({
+  responses: z.array(z.object({
+    index: z.number().int(),
+    selected_index: z.number().int().nullable(),
+    time_ms: z.number().nullable().optional(),
+  })).default([]),
+  duration_ms: z.number().nullable().optional(),
+  started_at: z.string().nullable().optional(),
+});
+export async function handleGetAssessment(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getAssessment(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSubmitAssessment(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await submitAssessment(eid(req), String(req.params.cardId), submitAssessmentSchema.parse(req.body || {}))); } catch (e) { fail(res, e, next); }
 }
 
 // notebook
