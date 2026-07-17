@@ -45,6 +45,8 @@ async function run() {
   console.log(`  registered/attended/paid: ${summary.by_status.registered} / ${summary.by_status.attended} / ${summary.by_status.paid}`);
   console.log(`  temperature raised: ${summary.raised}`);
   console.log(`  activities logged:  ${summary.activities}`);
+  console.log(`  failed:             ${summary.failed}`);
+  summary.failures.forEach((f) => console.log(`    FAIL ${f.email} — ${f.error}`));
   if (!apply) console.log(`\n  Dry run — nothing written. Re-run with --apply to commit.\n`);
   process.exit(0);
 }

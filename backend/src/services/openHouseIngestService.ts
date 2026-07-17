@@ -134,6 +134,8 @@ export interface IngestSummary {
   by_status: Record<OhStatus, number>;
   raised: number;
   activities: number;
+  failed: number;
+  failures: Array<{ email: string; error: string }>;
   apply: boolean;
   outcomes: IngestOutcome[];
 }
@@ -157,19 +159,31 @@ export async function ingestOpenHouseBatch(participants: OhParticipant[], opts: 
     });
   }
 
+  // Resilient: one bad row (e.g. a pre-existing duplicate lead whose legacy data
+  // fails model validation on .update()) must not abort the whole batch — it is
+  // recorded and the rest continue.
   const outcomes: IngestOutcome[] = [];
-  for (const p of byEmail.values()) outcomes.push(await ingestOpenHouseParticipant(p, opts));
+  const failures: Array<{ email: string; error: string }> = [];
+  for (const p of byEmail.values()) {
+    try {
+      outcomes.push(await ingestOpenHouseParticipant(p, opts));
+    } catch (err: any) {
+      failures.push({ email: p.email, error: String(err?.message || err).slice(0, 300) });
+    }
+  }
 
   const by_status: Record<OhStatus, number> = { registered: 0, attended: 0, paid: 0 };
   for (const o of outcomes) by_status[o.status]++;
   return {
-    total: outcomes.length,
+    total: byEmail.size,
     created: outcomes.filter((o) => o.lead === 'created' || o.lead === 'would_create').length,
     existing: outcomes.filter((o) => o.lead === 'existing').length,
     by_status,
     raised: outcomes.filter((o) => o.raised).length,
     activities: outcomes.filter((o) => o.activityLogged).length,
-    apply: opts.apply,
+    failed: failures.length,
+    failures,
     outcomes,
+    apply: opts.apply,
   };
 }
