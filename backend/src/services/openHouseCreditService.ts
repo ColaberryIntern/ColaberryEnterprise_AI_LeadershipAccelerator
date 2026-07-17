@@ -33,6 +33,7 @@ export interface OpenHousePayer {
 
 export interface GrantOutcome {
   email: string;
+  amountCents: number;          // the credit amount for THIS entry (a payment can be > $50)
   matched: 'existing' | 'created' | 'skipped';
   enrollmentId: string | null;
   cohortSet: boolean;
@@ -90,6 +91,7 @@ export async function reconcileOpenHousePayer(
   const amountCents = payer.amountCents ?? OPEN_HOUSE_DEPOSIT_CENTS;
   const out: GrantOutcome = {
     email: payer.email,
+    amountCents,
     matched: 'skipped',
     enrollmentId: null,
     cohortSet: false,
@@ -185,7 +187,8 @@ export async function grantOpenHouseCreditsBatch(
     cohorts_set: outcomes.filter((o) => o.cohortSet).length,
     credits_granted: outcomes.filter((o) => o.creditGranted).length,
     credits_already_present: outcomes.filter((o) => o.creditAlreadyPresent).length,
-    credited_cents: outcomes.filter((o) => o.creditGranted).length * OPEN_HOUSE_DEPOSIT_CENTS,
+    // Sum ACTUAL granted amounts (a payment can exceed $50 — e.g. a full-year payer).
+    credited_cents: outcomes.filter((o) => o.creditGranted).reduce((s, o) => s + o.amountCents, 0),
     apply: opts.apply,
     outcomes,
   };
