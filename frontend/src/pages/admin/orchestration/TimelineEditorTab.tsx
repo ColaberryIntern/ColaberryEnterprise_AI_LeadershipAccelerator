@@ -40,7 +40,7 @@ const BUCKET_COLOR: Record<Bucket, string> = {
 const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 const BAND_ICON: Record<string, string> = {
   media: '🎬', live_class: '🎥', video_feedback: '🎥', demo: '🖥️', interview: '🎙️', presentation: '📊',
-  promptlab: '⚡', quiz: '✅', warmup: '🔥', exam: '📝', evaluation: '⚖️', skills_jar: '🎓', study: '📚',
+  promptlab: '⚡', quiz: '✅', warmup: '📖', exam: '📝', evaluation: '⚖️', skills_jar: '🎓', study: '📚',
   reflection: '✍️', discussion: '💬', community: '👥', question: '❓', survey: '📋',
   overview: '🧭', announcement: '📣', deepdive: '📖',
   task: '🔨', build_story: '🏗️', github: '🐙', artifact: '🧩',
@@ -48,7 +48,7 @@ const BAND_ICON: Record<string, string> = {
 };
 const BAND_COLOR: Record<string, string> = {
   media: '#367895', live_class: '#367895', video_feedback: '#367895', demo: '#367895', interview: '#367895', presentation: '#367895', deepdive: '#367895',
-  promptlab: '#E8920C', quiz: '#E8920C', warmup: '#E8920C', exam: '#E8920C', evaluation: '#E8920C', skills_jar: '#E8920C', study: '#E8920C',
+  promptlab: '#E8920C', quiz: '#E8920C', warmup: '#2E6A86', exam: '#E8920C', evaluation: '#E8920C', skills_jar: '#E8920C', study: '#E8920C',
   reflection: '#8256B5', discussion: '#8256B5', community: '#8256B5', question: '#8256B5', survey: '#8256B5',
   overview: '#6B6B6B', announcement: '#6B6B6B',
   task: '#FB2832', build_story: '#FB2832', github: '#FB2832', artifact: '#FB2832',

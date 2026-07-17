@@ -944,6 +944,45 @@ async function ensureSurveyResponsesSchema() {
   }
 }
 
+// Assessment attempts — per-student Knowledge Check (quiz) + Evaluation attempts:
+// score, per-question responses, per-competency breakdown, 75% pass gate, and the
+// program_id+week keys that pair a section's quiz (beginning) with its evaluation
+// (current) for pre/post growth. Sibling of ensureSurveyResponsesSchema.
+async function ensureAssessmentSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS runtime_assessment_attempts (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       card_id UUID NOT NULL,
+       program_id UUID,
+       week INTEGER,
+       kind VARCHAR(20) NOT NULL DEFAULT 'quiz',
+       score DOUBLE PRECISION NOT NULL DEFAULT 0,
+       correct_count INTEGER NOT NULL DEFAULT 0,
+       total_count INTEGER NOT NULL DEFAULT 0,
+       passed BOOLEAN,
+       pass_threshold DOUBLE PRECISION,
+       attempt_number INTEGER NOT NULL DEFAULT 1,
+       duration_ms INTEGER,
+       responses JSONB NOT NULL DEFAULT '[]'::jsonb,
+       competency_scores JSONB NOT NULL DEFAULT '{}'::jsonb,
+       started_at TIMESTAMPTZ,
+       submitted_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_assess_enrollment_card ON runtime_assessment_attempts (enrollment_id, card_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_assess_section ON runtime_assessment_attempts (enrollment_id, program_id, week, kind)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] assessment schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 // Blog library (training.colaberry.com/blog) + per-student read ledger — powers the
 // Blog type's auto-match mode (see blogMediaService / blogIngestionService). Raw
 // idempotent DDL with DB-side defaults, sibling of ensureNetworkVideoSchema.
@@ -1613,6 +1652,8 @@ async function start(): Promise<void> {
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
   await ensureSurveyResponsesSchema();
+  // Knowledge Check (quiz) + Evaluation attempts — scores, responses, pre/post correlation.
+  await ensureAssessmentSchema();
   // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();

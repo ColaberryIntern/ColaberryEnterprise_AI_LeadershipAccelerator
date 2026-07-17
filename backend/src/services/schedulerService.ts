@@ -1799,6 +1799,21 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
+  // Reconcile enrollment payment state from PaySimple every 30 minutes: payments
+  // that went through become revenue; failed/reversed ones are subtracted. Ships
+  // dark — only scheduled when PAYSIMPLE_SYNC_ENABLED=true (needs live read creds).
+  if (env.paysimpleSyncEnabled) {
+    cron.schedule('*/30 * * * *', () => {
+      instrumentCronJob('PaySimplePaymentSync', async () => {
+        const { syncPaySimplePayments } = await import('./paymentSyncService');
+        await syncPaySimplePayments({ sinceDays: env.paysimpleSyncSinceDays });
+      }).catch((err) => {
+        console.error('[Scheduler] PaySimple payment sync error:', err);
+      });
+    });
+    console.log('[Scheduler] PaySimplePaymentSync scheduled (*/30 * * * *)');
+  }
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', async () => {
     try {

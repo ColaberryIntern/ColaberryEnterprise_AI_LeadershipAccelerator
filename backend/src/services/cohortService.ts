@@ -138,8 +138,20 @@ export async function getDashboardStats() {
     (c) => c.status === 'open' && new Date(c.start_date) > new Date()
   ).length;
 
+  // Revenue = real cash collected through PaySimple: SUM(amount_paid) over every
+  // enrollment whose payment currently stands as 'paid'. amount_paid is set from
+  // the PaySimple flow — markEnrollmentPaid (webhook), subscription activateByRef,
+  // and the paymentSyncService pull (which also flips a reversed/failed payment
+  // to 'failed', dropping it here). No explorer filter: a payment is revenue
+  // regardless of the enrollment's tag, and explorers who never paid have
+  // amount_paid null (contribute 0). Replaces the old count * $4,500 estimate.
+  const collectedRevenue =
+    (await Enrollment.sum('amount_paid', {
+      where: { payment_status: 'paid' } as any,
+    })) || 0;
+
   return {
-    totalRevenue: paidEnrollments * 4500,
+    totalRevenue: collectedRevenue,
     totalEnrollments,
     paidEnrollments,
     pendingInvoice,
