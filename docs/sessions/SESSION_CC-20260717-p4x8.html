@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 7:59 AM</div>
-    <div><span class="sid">CC-20260717-p4x8</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Friday, July 17, 2026 at 10:27 AM</div>
+    <div><span class="sid">CC-20260717-p4x8</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -72,6 +72,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Static self-review against prod code (`Enrollment.amount_paid` numeric column confirmed present and populated by `markEnrollmentPaid`/`activateByRef`; `Enrollment.sum` returns number, `|| 0` guards null; frontend renders only when `amount_paid &gt; 0`, matching the existing utm text style). Full `tsc --noEmit` + Dev 1 deploy verification via the Docker gate (no local toolchain on this host). Branch `workstream/paysimple-revenue` off origin/main.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**Course-corrected mid-session.** Initial exploration mapped a STALE local branch (`chapter-quality-and-worker`, HEAD 725 commits behind origin/main) where the webhook discarded the amount and no amount field existed, and I over-built a payments-ledger + PaySimple-API-sync for that false premise. Reading origin/main (prod) showed prod ALREADY captures `amount_paid` + has a `Subscription` model handling the $149/$199 plans — so the correct fix is this 2-file change. The API-sync-matched-by-email idea remains a future option ONLY if payments are ever set up directly in PaySimple outside our checkout (then amount_paid wouldn&#39;t be captured). Revenue will read real collected cash (near $0 until the open-house cohort&#39;s payments settle), replacing the fictitious $76,500.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**PaySimple pull-sync: reconcile payment state from the PaySimple API so payments flow into Revenue and failures/reversals flow out**</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Docker/Dev gate (backend tsc + endpoint). Ships dark (`PAYSIMPLE_SYNC_ENABLED=false`); sync no-ops without live read creds. Revenue math unchanged for already-recorded payments (Dev still shows the real collected total).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">`amount_paid` is one field per enrollment → tracks the latest payment (fits V1 one-payment-per-term). Recurring accumulation would want a per-payment ledger (documented future enhancement). Prod activation = set live read creds + `--since-days` backfill + `PAYSIMPLE_SYNC_ENABLED=true`.</span></div>
           
         </div>
       </article>

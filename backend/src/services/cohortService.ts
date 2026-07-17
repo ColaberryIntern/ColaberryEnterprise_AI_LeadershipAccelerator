@@ -138,15 +138,16 @@ export async function getDashboardStats() {
     (c) => c.status === 'open' && new Date(c.start_date) > new Date()
   ).length;
 
-  // Actual collected cash: sum of amount_paid across paid, non-Explorer
-  // enrollments. amount_paid is populated straight from the PaySimple payment
-  // flow — markEnrollmentPaid (webhook amount) and subscription activateByRef
-  // (plan charge) — so this is real money received, not the old count * $4,500
-  // estimate (that unit price was retired in the $149/mo offer pivot). Rows with
-  // no amount_paid (legacy/unset) contribute 0; SUM(null) coalesces to 0.
+  // Revenue = real cash collected through PaySimple: SUM(amount_paid) over every
+  // enrollment whose payment currently stands as 'paid'. amount_paid is set from
+  // the PaySimple flow — markEnrollmentPaid (webhook), subscription activateByRef,
+  // and the paymentSyncService pull (which also flips a reversed/failed payment
+  // to 'failed', dropping it here). No explorer filter: a payment is revenue
+  // regardless of the enrollment's tag, and explorers who never paid have
+  // amount_paid null (contribute 0). Replaces the old count * $4,500 estimate.
   const collectedRevenue =
     (await Enrollment.sum('amount_paid', {
-      where: { payment_status: 'paid', ...notExplorer } as any,
+      where: { payment_status: 'paid' } as any,
     })) || 0;
 
   return {

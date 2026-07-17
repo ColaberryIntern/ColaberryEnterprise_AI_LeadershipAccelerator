@@ -238,6 +238,110 @@ export async function createEnrollmentInvoice(params: {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Payments listing (API v4 — GET /v4/payment) — pull for reconcile   */
+/* ------------------------------------------------------------------ */
+
+// Loosely-typed PaySimple payment record; normalized in paymentSyncService with
+// field fallbacks (the exact envelope varies by API version and we can't exercise
+// the live API from local dev).
+export interface PaySimplePayment {
+  Id?: number | string;
+  CustomerId?: number | string;
+  CustomerFirstName?: string;
+  CustomerLastName?: string;
+  Email?: string;
+  Amount?: number;
+  Status?: string;
+  PaymentType?: string;
+  PaymentDate?: string;
+  [k: string]: unknown;
+}
+
+// Low-level GET preserving the FULL envelope (Response + Meta) with an explicit
+// timeout and capped, backoff'd retries on transient failures. apiRequest()
+// unwraps to data.Response and drops Meta, which we need for pagination.
+// Failure-first: bounded attempts; hard 4xx is NOT retried.
+async function apiGetRaw(
+  path: string,
+  opts?: { timeoutMs?: number; retries?: number }
+): Promise<any> {
+  const timeoutMs = opts?.timeoutMs ?? 20000;
+  const maxRetries = opts?.retries ?? 3;
+  const url = `${getBaseUrl()}${path}`;
+  let lastErr: unknown;
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let transient = false;
+    try {
+      const response = await fetch(url, { method: 'GET', headers: getAuthHeaders(), signal: controller.signal });
+      clearTimeout(timer);
+      if (response.ok) return await response.json();
+      const errorBody = await response.text().catch(() => '');
+      if (response.status === 429 || response.status >= 500) {
+        transient = true;
+        throw new Error(`PaySimple transient ${response.status}: ${errorBody}`);
+      }
+      throw new Error(`PaySimple API error ${response.status}: ${errorBody}`);
+    } catch (err: any) {
+      clearTimeout(timer);
+      lastErr = err;
+      const retryable =
+        transient || err?.name === 'AbortError' || err?.code === 'ECONNRESET' ||
+        /transient|fetch failed|network|timeout/i.test(String(err?.message));
+      if (retryable && attempt < maxRetries) {
+        const backoff = Math.min(2000 * 2 ** attempt, 15000);
+        console.warn(`[PaySimple] GET ${path} attempt ${attempt + 1} failed (${err?.message}); retry in ${backoff}ms`);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+      break;
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('PaySimple GET failed');
+}
+
+// Pull payments from PaySimple, paging until exhausted. maxPages is a hard
+// backstop so a bad Meta can never loop forever.
+export async function listPayments(
+  params: { since?: Date; until?: Date; maxPages?: number; pageSize?: number } = {}
+): Promise<PaySimplePayment[]> {
+  const pageSize = params.pageSize ?? 200;
+  const maxPages = params.maxPages ?? 100;
+  const out: PaySimplePayment[] = [];
+  const base: string[] = [`pagesize=${pageSize}`, 'sortby=PaymentDate', 'direction=DESC'];
+  if (params.since) base.push(`startdate=${encodeURIComponent(params.since.toISOString().slice(0, 10))}`);
+  if (params.until) base.push(`enddate=${encodeURIComponent(params.until.toISOString().slice(0, 10))}`);
+
+  for (let page = 1; page <= maxPages; page++) {
+    const body = await apiGetRaw(`/v4/payment?${base.join('&')}&page=${page}`);
+    const rows: PaySimplePayment[] = body?.Response ?? body?.data ?? (Array.isArray(body) ? body : []);
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    out.push(...rows);
+    const totalPages = body?.Meta?.Pagination?.TotalPages;
+    if (typeof totalPages === 'number' && page >= totalPages) break;
+    if (rows.length < pageSize) break;
+    if (page === maxPages) console.warn(`[PaySimple] listPayments hit maxPages=${maxPages}; may be truncated`);
+  }
+  console.log(`[PaySimple] listPayments pulled ${out.length} payment(s)`);
+  return out;
+}
+
+// Fetch a single customer (email resolution when a payment can't be matched by
+// external id or stored customer id). Best-effort — null on any failure.
+export async function getCustomerById(customerId: string | number): Promise<PaySimpleCustomer | null> {
+  try {
+    const body = await apiGetRaw(`/v4/customer/${customerId}`);
+    const c = body?.Response ?? body?.data ?? body;
+    return c && (c.Id || c.Email) ? (c as PaySimpleCustomer) : null;
+  } catch (err: any) {
+    console.warn(`[PaySimple] getCustomerById ${customerId} failed: ${err?.message}`);
+    return null;
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /*  Webhook Signature Verification                                     */
 /* ------------------------------------------------------------------ */
 
