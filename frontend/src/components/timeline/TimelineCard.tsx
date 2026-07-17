@@ -65,7 +65,7 @@ export const BAND: Record<string, Visual> = {
   discussion: { kind: 'reading', color: '#367895' },
   community: { kind: 'reading', color: '#367895' },
   study: { kind: 'reading', color: '#367895' },
-  warmup: { kind: 'survey', color: '#E8920C' },
+  warmup: { kind: 'reading', color: '#2E6A86' },
   survey: { kind: 'survey', color: '#E8920C' },
   reflection: { kind: 'survey', color: '#E8920C' },
   quiz: { kind: 'test', color: '#5BA63C' },

@@ -123,9 +123,71 @@ const SURVEY_GENERATION_PROMPT = [
   'Voice: warm, respectful, concise. No hype, no emojis. Em dash only in the title.',
 ].join('\n');
 
+// ── Self Study (read-before-class) ───────────────────────────────────────────
+// Zero author input: the runtime prepends the week Blueprint ("WEEK CONTEXT") and
+// enforces the fixed output schema. This prompt steers the title + a SELF-CONTAINED
+// STYLED body_html — the design CSS is baked in because the student drawer renders
+// body_html inside a sandboxed, no-external-CSS iframe (CardDetailBody.lessonDoc).
+// Certified in Experience Studio 2026-07-17.
+const SELF_STUDY_STYLE = '<style>.ss{font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;color:#1a1a1a;background:#f7f4ee;font-size:15px;line-height:1.62;padding:16px 18px;border-radius:12px}.ss .lead{font-weight:500}.ss h3{font-size:19px;margin:22px 0 6px;border-top:1px solid #ddd6c9;padding-top:16px}.ss h3:first-of-type{border-top:0;padding-top:0;margin-top:4px}.ss h4{font-size:15.5px;margin:14px 0 4px;color:#c20e1e}.ss p{margin:0 0 10px}.ss ul{margin:0 0 10px;padding-left:20px}.ss .note{background:#fdfcfa;border:1px dashed #ddd6c9;border-radius:10px;padding:12px 14px;margin:0 0 16px}.ss .term{background:#fdfcfa;border:1px solid #ddd6c9;border-left:3px solid #367895;border-radius:10px;padding:12px 14px;margin:12px 0}.ss .why{color:#4a4a4a}.ss .warn{background:#fdfcfa;border:1px solid #ddd6c9;border-left:3px solid #fb2832;border-radius:10px;padding:12px 14px;margin:14px 0}.ss .warn b{color:#c20e1e}.ss table{border-collapse:collapse;width:100%;margin:12px 0}.ss th,.ss td{border:1px solid #ddd6c9;padding:7px 10px;text-align:left}.ss th{background:#efebe4}@media(prefers-color-scheme:dark){.ss{background:#231f1b;color:#ece7e0}.ss .note,.ss .term,.ss .warn{background:#2c2723;border-color:#3a342e}.ss h3{border-color:#3a342e}.ss h4,.ss .warn b{color:#ff6b83}.ss .why{color:#a89f94}.ss th{background:#2c2723}.ss th,.ss td{border-color:#3a342e}}</style>';
+
+const SELF_STUDY_GENERATION_PROMPT = [
+  'You write the Self Study reading for the AI Systems Architect Accelerator: the "read before class" material a participant reads, at their own pace, before the week\'s live session. The WEEK CONTEXT block above gives this week\'s topic, purpose, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground every word in it and invent nothing it does not support. Generalize to whatever this week\'s topic is; never hard-code a specific week\'s subject matter.',
+  '',
+  'AUDIENCE & VOICE. Write for a learner with little or no prior background in this week\'s topic. Voice: warm, plain-English, encouraging. No hype. No emoji. Define every piece of jargon in plain words the first time it appears. This is self-study, not an assessment: nothing here is graded, tested, or timed, so never phrase anything as a test, deadline, or required task.',
+  '',
+  'GROUNDING & ACCURACY. Stay at the level of the concepts WEEK CONTEXT names. Do not invent technical claims it does not support, especially definitions, mechanisms, or what a named product or tool actually is. When unsure what a named tool or term is, describe its role in plain general terms rather than asserting a specific technical category (for example, never call a tool a "programming language" unless WEEK CONTEXT says so). Accuracy beats completeness.',
+  '',
+  'LEAD WITH THE CONCLUSION. Each Part\'s opening sentence must already state that Part\'s single most important idea; never bury it. Big idea first, then the plain-English explanation, then a concrete example.',
+  '',
+  'BODY_HTML — output a SELF-CONTAINED, STYLED fragment. It renders inside a sandboxed iframe with NO external CSS, so it must carry its own styles. Requirements, in order:',
+  '1. body_html MUST BEGIN with this exact style block, copied VERBATIM, character for character (do not alter, re-order, or re-indent it):',
+  SELF_STUDY_STYLE,
+  '2. Immediately after the style block, output a single <div class="ss"> that wraps ALL content, and close it at the very end.',
+  '3. Inside <div class="ss">, structure the content as:',
+  '   - FIRST child: <div class="note"><p>How to use this: read at your own pace, skip anything you already know, nothing here is tested.</p></div>',
+  '   - 4 to 6 Parts. Each Part = an <h3> heading ("Part 1 - ...") then a <p class="lead"> whose sentence states that Part\'s single key idea, then short <p> paragraphs.',
+  '   - For any term you define: <div class="term"><h4>Term</h4><p>plain-English definition</p><p class="why"><b>Why it matters:</b> ...</p></div>',
+  '   - For an important caution or common pitfall: <div class="warn"><p><b>Caution name.</b> explanation</p></div>',
+  '   - Use <ul>/<li> for lists and a <table> with a <thead> for any small comparison (e.g. an Industry / Where it shows up table).',
+  '4. Use ONLY the classes named above plus plain <h3>/<h4>/<p>/<ul>/<li>/<table>. Do NOT add any other <style>, any <script>, external CSS/JS, inline color/style attributes, or page chrome (no nav, logo, progress bar, or theme toggle). The style block already carries every color and size.',
+  '',
+  'FILL THE OTHER OUTPUT KEYS.',
+  '- title: "Self Study - <this week\'s topic>" from WEEK CONTEXT (e.g. "Self Study - Claude Code Foundations + Workspace").',
+  '- summary: one or two plain sentences: what this reading covers and that it is optional, self-paced, and not tested.',
+  '- questions: 3 to 5 light self-check questions ("In your own words, ..." / "Can you explain ..."), for self-checking only, never graded.',
+  '- reflection: one short, low-stakes reflection prompt connecting the reading to the learner\'s own work or goals.',
+  '- discussion_prompt: one open discussion seed for the cohort, tied to this week\'s topic.',
+  '- github_task: null. evaluation_criteria: an empty array (not scored).',
+  '- completion: describe that the card completes when the participant marks the reading as read; nothing is submitted or graded.',
+].join('\n');
+
 /** slug -> authored fields layered on top of the registry defaults. */
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
+  warmup: {
+    label: 'Self Study',
+    student_label: 'Self Study',
+    description: 'Read-before-class self-study material: the vocabulary and mental models a participant needs before the live session. Not tested, not timed. Warm, plain-English, structured so the key idea of each Part lands first.',
+    category: 'Self Study',
+    icon: 'bi-journal-text',
+    badge_class: 'bg-primary',
+    estimated_time: 20,
+    capabilities: ['reflection', 'discussion', 'bookmarks', 'comments', 'likes'],
+    inputs: [],
+    variable_keys: [], // zero author input — the runtime injects the week blueprint
+    outputs: [
+      { key: 'title', type: 'string', description: 'Self Study — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Self-contained styled reading (Parts, term cards, callouts)' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'view' },
+    evaluation_type: 'none',
+    generation_prompt: SELF_STUDY_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('warmup'),
+    approved: true,
+    status: 'published',
+  },
   survey: {
     student_label: 'Weekly Feedback',
     category: 'Reflect',
