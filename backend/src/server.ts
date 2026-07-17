@@ -532,12 +532,45 @@ async function ensureSubscriptionSchema() {
     `CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_payment_ref_unique ON subscriptions (payment_ref)`,
     `CREATE INDEX IF NOT EXISTS idx_subscriptions_enrollment ON subscriptions (enrollment_id)`,
     `CREATE INDEX IF NOT EXISTS idx_subscriptions_status ON subscriptions (status)`,
+    // Account-credit applied to this checkout's first charge (added 2026-07 with account_credits).
+    `ALTER TABLE subscriptions ADD COLUMN IF NOT EXISTS applied_credit_cents INTEGER NOT NULL DEFAULT 0`,
   ];
   for (const sql of statements) {
     try {
       await sequelize.query(sql);
     } catch (err: any) {
       console.warn('[DB] subscription schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureAccountCreditSchema() {
+  // Account credits (Open House $50 "hold your spot" deposits → applied to the
+  // student's next subscription payment). Append-only ledger; unique
+  // source_event_id makes granting idempotent (a re-run cannot double-credit).
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS account_credits (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       amount_cents INTEGER NOT NULL,
+       reason VARCHAR(64) NOT NULL,
+       source_event_id VARCHAR(200) NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'available',
+       applied_subscription_id UUID,
+       applied_at TIMESTAMPTZ,
+       granted_by VARCHAR(120),
+       note TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS account_credits_source_event_unique ON account_credits (source_event_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_account_credits_enrollment_status ON account_credits (enrollment_id, status)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] account-credit schema stmt skipped:', err?.message);
     }
   }
 }
@@ -1499,6 +1532,8 @@ async function start(): Promise<void> {
   await ensurePointsSchema();
   // Student self-serve subscriptions (idempotent).
   await ensureSubscriptionSchema();
+  // Account credits — Open House $50 deposits applied to next payment (idempotent).
+  await ensureAccountCreditSchema();
   // Open house events (idempotent).
   await ensureOpenHouseSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).
@@ -1541,12 +1576,14 @@ async function start(): Promise<void> {
       const TimelineCardProgress = (await import('./models/TimelineCardProgress')).default;
       const CurriculumTypeDefinition = (await import('./models/CurriculumTypeDefinition')).default;
       const Subscription = (await import('./models/Subscription')).default;
+      const AccountCredit = (await import('./models/AccountCredit')).default;
       const r = await reconcileMissingColumns([
         Enrollment,
         TimelineCard,
         TimelineCardProgress,
         CurriculumTypeDefinition,
         Subscription,
+        AccountCredit,
       ]);
       if (r.added.length) {
         console.log(

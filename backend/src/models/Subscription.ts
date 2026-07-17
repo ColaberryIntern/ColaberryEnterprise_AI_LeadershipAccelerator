@@ -18,7 +18,8 @@ export interface SubscriptionAttributes {
   enrollment_id: string;
   plan: SubscriptionPlan;
   status: SubscriptionStatus;
-  amount_cents: number;
+  amount_cents: number;                // full recurring plan price (unchanged by any credit)
+  applied_credit_cents?: number;       // account credit discounted off THIS checkout's first charge
   payment_ref: string;                 // PaySimple external_id (SUB-<enr>-<ts>) — idempotency anchor
   paysimple_customer_id?: string | null;
   paysimple_payment_id?: string | null;
@@ -36,6 +37,7 @@ class Subscription extends Model<SubscriptionAttributes> implements Subscription
   declare plan: SubscriptionPlan;
   declare status: SubscriptionStatus;
   declare amount_cents: number;
+  declare applied_credit_cents: number;
   declare payment_ref: string;
   declare paysimple_customer_id: string | null;
   declare paysimple_payment_id: string | null;
@@ -54,6 +56,7 @@ Subscription.init(
     plan: { type: DataTypes.STRING(20), allowNull: false },
     status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'pending' },
     amount_cents: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    applied_credit_cents: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     payment_ref: { type: DataTypes.STRING(120), allowNull: false, unique: true },
     paysimple_customer_id: { type: DataTypes.STRING(120), allowNull: true },
     paysimple_payment_id: { type: DataTypes.STRING(120), allowNull: true },

@@ -18,6 +18,17 @@ const fmtDate = (iso: string | null): string =>
   iso ? new Date(iso).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : '';
 const money = (n: number): string => n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 
+// PaySimple can't charge $0, so a credit never reduces a charge below $1 — mirror
+// of MIN_CHARGE_CENTS in the backend accountCreditService so the "you pay today"
+// shown here equals what is actually charged.
+const MIN_CHARGE_CENTS = 100;
+/** Credit applied to a plan's first charge, and the resulting amount due today. */
+const firstCharge = (priceDollars: number, creditCents: number): { appliedCents: number; chargeDollars: number } => {
+  const priceCents = Math.round(priceDollars * 100);
+  const appliedCents = Math.min(creditCents, Math.max(0, priceCents - MIN_CHARGE_CENTS));
+  return { appliedCents, chargeDollars: (priceCents - appliedCents) / 100 };
+};
+
 const CANCEL_REASONS = ['Too expensive', 'Not enough time', 'Not what I expected', 'Found another option', 'Just exploring'];
 
 const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onToast }) => {
@@ -93,9 +104,17 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
   const plans = view.plans;
   const planCfg = sub ? plans.find((p) => p.id === sub.plan) : null;
 
+  const creditCents = view.available_credit_cents || 0;
+
   // Plan-selection grid. `withFree` prepends the current (Free) plan, selected.
   const renderPlans = (withFree: boolean) => (
     <div className={`set-plans${withFree ? ' has-free' : ''}`}>
+      {creditCents > 0 && (
+        <div className="set-credit-banner" style={{ gridColumn: '1 / -1' }}>
+          <span className="set-credit-chip">${money(creditCents / 100)} credit</span>
+          <span>Your ${money(creditCents / 100)} Open House deposit is on your account — it comes off your first payment automatically, whichever plan you choose.</span>
+        </div>
+      )}
       {withFree && (
         <div className="set-plan current">
           <span className="set-plan-badge current"><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="#fff" strokeWidth="3" strokeLinecap="round" /></svg> Your plan</span>
@@ -106,18 +125,28 @@ const SubscriptionSection: React.FC<{ onToast?: (m: string) => void }> = ({ onTo
           <button className="te-btn ghost sm" disabled>Current plan</button>
         </div>
       )}
-      {plans.map((p) => (
+      {plans.map((p) => {
+        const { appliedCents, chargeDollars } = firstCharge(p.price, creditCents);
+        return (
         <div key={p.id} className={`set-plan${p.id === 'annual' ? ' featured' : ''}`}>
           {p.id === 'annual' && <span className="set-plan-badge">Best value</span>}
           <div className="set-plan-name">{p.label}</div>
           <div className="set-plan-price">${money(p.per_month)}<span>/mo</span></div>
           <div className="set-plan-terms">{p.cadence === 'year' ? `Billed $${money(p.price)} once a year` : 'Billed monthly · cancel anytime'}</div>
+          {appliedCents > 0 && (
+            <div className="set-plan-credit">
+              <span className="was">${money(p.price)}</span>
+              <span className="now">You pay ${money(chargeDollars)} today</span>
+              <span className="lbl">−${money(appliedCents / 100)} credit applied</span>
+            </div>
+          )}
           <p className="set-plan-blurb">{p.blurb}</p>
           <button className={`te-btn ${p.id === 'annual' ? 'cherry' : 'berry'} sm`} disabled={busy} onClick={() => onChoose(p.id)}>
             {busy ? 'Starting…' : `Choose ${p.label}`}
           </button>
         </div>
-      ))}
+        );
+      })}
       <p className="set-sub" style={{ gridColumn: '1 / -1', margin: '6px 0 0' }}>
         Secure checkout by PaySimple — pay by card or bank. You’ll be enrolled and everything unlocks the moment your payment clears.
       </p>
