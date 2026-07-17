@@ -1,4 +1,4 @@
-import { Cohort, Enrollment } from '../models';
+import { Cohort, Enrollment, AccountCredit } from '../models';
 import { UpdateCohortInput } from '../schemas/cohortSchema';
 import { AppError } from '../utils/AppError';
 import { Op } from 'sequelize';
@@ -138,17 +138,20 @@ export async function getDashboardStats() {
     (c) => c.status === 'open' && new Date(c.start_date) > new Date()
   ).length;
 
-  // Revenue = real cash collected through PaySimple: SUM(amount_paid) over every
-  // enrollment whose payment currently stands as 'paid'. amount_paid is set from
-  // the PaySimple flow — markEnrollmentPaid (webhook), subscription activateByRef,
-  // and the paymentSyncService pull (which also flips a reversed/failed payment
-  // to 'failed', dropping it here). No explorer filter: a payment is revenue
-  // regardless of the enrollment's tag, and explorers who never paid have
-  // amount_paid null (contribute 0). Replaces the old count * $4,500 estimate.
-  const collectedRevenue =
-    (await Enrollment.sum('amount_paid', {
-      where: { payment_status: 'paid' } as any,
-    })) || 0;
+  // Revenue = real cash collected through PaySimple, from TWO sources so a payer
+  // who made more than one payment is fully (and separately) counted:
+  //  1. Membership/direct payments — SUM(enrollments.amount_paid) over paid rows
+  //     (set by markEnrollmentPaid / subscription activateByRef).
+  //  2. Open House "$50 hold-your-spot" DEPOSITS — recorded as account_credits by
+  //     openHouseCreditService (the payer stays an Explorer; the deposit is NOT a
+  //     membership payment). Count deposits still 'available'; an 'applied' one is
+  //     already folded into the membership charge, so this can't double-count.
+  // Replaces the old count * $4,500 estimate.
+  const membershipRevenue =
+    (await Enrollment.sum('amount_paid', { where: { payment_status: 'paid' } as any })) || 0;
+  const depositCents =
+    (await AccountCredit.sum('amount_cents', { where: { status: 'available' } as any })) || 0;
+  const collectedRevenue = membershipRevenue + depositCents / 100;
 
   return {
     totalRevenue: collectedRevenue,

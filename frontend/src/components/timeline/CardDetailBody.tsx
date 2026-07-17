@@ -6,6 +6,7 @@ import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import CardSurveyExperience from './CardSurveyExperience';
+import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 
 /**
@@ -68,6 +69,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isVideo = ['media', 'live_class', 'video_feedback'].includes(card.render_band);
   const isSkillsJar = card.render_band === 'skills_jar';
   const isSurvey = card.render_band === 'survey';   // bespoke live survey experience
+  const isAssessment = card.render_band === 'quiz' || card.render_band === 'evaluation';   // interactive Knowledge Check / Evaluation
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
@@ -204,7 +206,14 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           />
         )}
 
-        {!isSurvey && (
+        {/* Knowledge Check + Evaluation — the interactive assessment, taken right
+            here (real students score + persist; the Studio preview uses sample
+            questions). Replaces the read-only lesson/about, like the survey does. */}
+        {isAssessment && (
+          <AssessmentPanel cardId={card.id} preview={preview} kind={card.render_band === 'evaluation' ? 'evaluation' : 'quiz'} />
+        )}
+
+        {!isSurvey && !isAssessment && (
         <div className="tld-about">
           {(isVideo || blog) && <div className="tld-lab">About this {blog ? 'post' : source ? 'video' : 'activity'}</div>}
           {card.description
@@ -219,7 +228,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         </div>
         )}
 
-        {!isSurvey && card.type !== 'testimonial' && card.type !== 'blog' && content && (content.summary || content.body_html || (content.questions && content.questions.length > 0) || content.reflection) && (
+        {!isSurvey && !isAssessment && card.type !== 'testimonial' && card.type !== 'blog' && content && (content.summary || content.body_html || (content.questions && content.questions.length > 0) || content.reflection) && (
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}

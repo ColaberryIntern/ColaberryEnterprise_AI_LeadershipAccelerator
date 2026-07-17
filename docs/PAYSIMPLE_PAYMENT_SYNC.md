@@ -1,8 +1,9 @@
 # PaySimple Payment Sync + Revenue
 
 **What it does:** keeps the admin Dashboard **Revenue** and per-participant paid
-amounts equal to **actual money collected through PaySimple** — payments count
-when they go through, and are **subtracted when they fail or reverse**.
+amounts equal to **actual money collected through our PaySimple checkout** —
+payments count when they go through, and are **subtracted when they fail or
+reverse**.
 
 ## Revenue definition
 
@@ -13,50 +14,60 @@ enrollment's explorer tag; explorers who never paid have `amount_paid = null`
 
 ## How payment state stays accurate
 
-Three writers set `enrollments.amount_paid` / `payment_status`:
-
 | Path | When | Effect |
 |---|---|---|
-| Webhook (`payment_created`) | real-time, if PaySimple calls us | `markEnrollmentPaid` / subscription `activateByRef` → `paid` + `amount_paid` |
-| Webhook (`payment_failed`) | real-time | `markEnrollmentFailed` → `failed` (but it will NOT override an already-`paid` row) |
-| **`paymentSyncService` (pull)** | every 30 min + CLI | reconciles from the PaySimple **API** — the authoritative source |
+| Webhook (`payment_created`) | real-time | `markEnrollmentPaid` / subscription `activateByRef` → `paid` + `amount_paid`, and records `paysimple_payment_id` |
+| Webhook (`payment_failed`) | real-time | `markEnrollmentFailed` → `failed` (won't override an already-`paid` row) |
+| **`paymentSyncService` (reconcile)** | every 30 min + CLI | re-reads each recorded payment from the PaySimple API and reconciles — the reversal safety-net |
 
-The **pull sync is the key addition**: it catches missed webhooks AND handles
-**reversals the webhook can't** (a settled-then-returned/charged-back payment).
-It pulls `GET /v4/payment`, matches each payment to an enrollment (our order
-external id → stored PaySimple customer id → payer email), takes each
-enrollment's **most recent** matched payment, and sets:
+### Why the reconcile is scoped to *our* payments (important)
 
-- latest is **settled/authorized/posted/…** → `payment_status='paid'`, `amount_paid=amount`
-- latest is **failed/returned/voided/chargeback/refunded/…** → `payment_status='failed'` (drops out of Revenue)
-- latest is **pending/unknown** → left untouched
+The sync reconciles **only the `paysimple_payment_id`s we recorded** through our
+own checkout — the ids stored on `subscriptions` (set by `activateByRef`) and on
+`enrollments` (set by `markEnrollmentPaid`). For each, it calls `getPayment(id)`
+and reads the **current** status:
 
-Idempotent (writes only on an actual change), safe to re-run, and bounded
-(timeout + capped retries on the API; hard `maxPages` cap).
+- settled / authorized / posted → `payment_status='paid'`, `amount_paid=amount`
+- failed / returned / voided / chargeback / refunded → `payment_status='failed'` (drops out of Revenue)
+- pending / unknown → left untouched
+
+It **never matches by email or customer id.** That was a deliberate change: a
+broad pull matched by email counted years of unrelated Colaberry charges (old
+bootcamp tuition, retired $4,500-accelerator payments) for anyone who now also
+has a platform enrollment — a dry-run showed it would falsely mark 46 paid vs the
+1 real membership. Reconciling only our recorded payment ids gives **zero
+false positives**.
+
+The enrollment's most-recent recorded payment governs (decline-then-settle → paid;
+settle-then-chargeback → failed). Idempotent (writes only on a real change),
+failure-first (a `getPayment` error skips that one payment), safe to re-run.
+
+**Scope note:** this catches **reversals** of known payments and keeps recorded
+amounts accurate. It does **not** discover a brand-new payment the webhook
+*missed* (there's no safe way to attribute an arbitrary PaySimple payment to an
+enrollment without our order id, which settled-payment records don't carry). The
+webhook is the record path; the reconcile is the safety-net.
 
 ## Files
 
 | Concern | File |
 |---|---|
-| PaySimple read API | `backend/src/services/paysimpleService.ts` — `listPayments()` (paged `GET /v4/payment`), `getCustomerById()` |
-| Reconcile sync | `backend/src/services/paymentSyncService.ts` — `syncPaySimplePayments()` + pure helpers |
+| Read API | `backend/src/services/paysimpleService.ts` — `getPayment(id)` (already present for refunds) |
+| Reconcile | `backend/src/services/paymentSyncService.ts` — `syncPaySimplePayments()` + pure helpers |
 | Revenue | `backend/src/services/cohortService.ts` → `getDashboardStats()` |
-| Per-participant | `backend/src/services/acceleratorService.ts` (returns `amount_paid`) + `frontend/src/pages/admin/AdminAcceleratorPage.tsx` |
+| Per-participant | `backend/src/services/acceleratorService.ts` + `frontend/src/pages/admin/AdminAcceleratorPage.tsx` |
 | Scheduled job | `backend/src/services/schedulerService.ts` — `PaySimplePaymentSync` (`*/30 * * * *`, gated by `PAYSIMPLE_SYNC_ENABLED`) |
-| CLI backfill | `backend/src/scripts/syncPaysimplePayments.ts` |
+| CLI | `backend/src/scripts/syncPaysimplePayments.ts` (`--dry-run`) |
 | Tests | `backend/src/__tests__/services/paymentSyncService.test.ts` |
 
 ## Activation (prod)
 
-1. Set live read creds on the prod host `.env`: `PAYSIMPLE_API_USER`, `PAYSIMPLE_API_KEY`, `PAYSIMPLE_ENV=live`.
-2. Backfill: `cd backend && npx ts-node src/scripts/syncPaysimplePayments.ts --since-days=365` (add `--dry-run` first to preview matched/paid/reversed counts).
-3. Set `PAYSIMPLE_SYNC_ENABLED=true` and restart the backend so the 30-min job runs.
-
-Until then it ships dark: the sync no-ops (`missing_credentials`) and Revenue
-simply reflects whatever `amount_paid` the webhook flow has already recorded.
+1. Live read creds already on the host `.env` (`PAYSIMPLE_API_USER`/`KEY`, `PAYSIMPLE_ENV=live`).
+2. Dry-run to preview: `cd backend && node dist/scripts/syncPaysimplePayments.js --dry-run` (should reconcile only our recorded payments).
+3. Set `PAYSIMPLE_SYNC_ENABLED=true` and restart the backend for the 30-min job.
 
 ## Known limitation
 
-`amount_paid` is a single field per enrollment, so it tracks the latest payment
-(fits the current V1 one-payment-per-term subscription model). True recurring
-accumulation would want a per-payment ledger table — a future enhancement.
+`amount_paid` is one field per enrollment → tracks the latest payment (fits the
+current V1 one-payment-per-term subscription model). True recurring accumulation
+would want a per-payment ledger — a future enhancement.
