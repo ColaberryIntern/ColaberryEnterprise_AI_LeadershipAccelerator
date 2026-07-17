@@ -10,6 +10,7 @@ import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineCardProgress';
 import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
+import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { resolve as resolveType } from './typeRegistry';
 import { selectTestimonialForEnrollment } from './networkVideoService';
 import { selectPodcastForEnrollment } from './podcastMediaService';
@@ -76,6 +77,7 @@ export interface FeedCard {
   blog: FeedBlog | null;              // Blog post (blog type) — fixed or auto-matched per student
   capabilities: string[];             // the type's Parts (from CurriculumTypeDefinition) — drive optional render sections
   type_thumbnail: string | null;      // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
+  week_title: string | null;          // the week's SECTION title from the Blueprint (e.g. "Claude Code Foundations + Workspace") — the Overview card's display title; null for non-overview or no blueprint
 }
 
 /** PURE — normalize a capabilities blob (JSONB, may be junk) into a string[]. */
@@ -146,7 +148,7 @@ export interface TimelineFeed {
   cohort_id: string | null;
   buckets: string[];
   cards: FeedCard[];
-  is_explorer?: boolean;   // true = free Explorer tier (Week 0 only) — drives the enroll upsell
+  is_explorer?: boolean;   // true = free Explorer tier — drives the enroll upsell (content gate is EXPLORER_WEEK0_ONLY, off by default)
 }
 
 /**
@@ -196,12 +198,15 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return { cohort_id: null, buckets: [...BUCKET_ORDER], cards: [] };
   }
 
-  // Free lead-magnet gate: Explorers (unenrolled prospects) get ONLY the Week 0
-  // "AI Preview" tier for free; paid enrollments see the full curriculum. Gated
-  // here so the paid weeks stay behind enrollment.
+  // Free lead-magnet gate: Explorers (unenrolled prospects) normally get ONLY the
+  // Week 0 "AI Preview" tier; paid enrollments see the full curriculum.
+  // LAUNCH POLICY (2026-07, temporary): anyone who signs up gets FULL free access,
+  // so Explorers see the same curriculum as paid. Re-enable the free-preview gate
+  // by setting EXPLORER_WEEK0_ONLY=true (then Explorers see Week 0 only again).
   const isExplorer = (enrollment as any).enrollment_type === 'explorer';
+  const gateExplorersToWeek0 = process.env.EXPLORER_WEEK0_ONLY === 'true';
   const allCards = await getGlobalCards();
-  const cards = isExplorer ? allCards.filter((c) => c.week === 0) : allCards;
+  const cards = (isExplorer && gateExplorersToWeek0) ? allCards.filter((c) => c.week === 0) : allCards;
 
   const progressRows = await TimelineCardProgress.findAll({
     where: { enrollment_id: enrollmentId, card_id: { [Op.in]: cards.map((c) => c.id) } },
@@ -214,6 +219,22 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   const capsBySlug = new Map(typeDefs.map((t) => [t.slug, normalizeCapabilities(t.capabilities)]));
   // The type's Studio thumbnail (AI banner) — every card's default image.
   const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t.thumbnail_url || '').trim() || null]));
+
+  // The week's SECTION title from the Blueprint — the Overview card's display
+  // title, sourced straight from the blueprint (no week number, no generation
+  // step). Looked up once per program present among overview cards.
+  const sectionTitleByKey = new Map<string, string>();
+  const overviewPrograms = Array.from(new Set(
+    cards.filter((c) => c.type === 'overview' && (c as any).program_id).map((c) => (c as any).program_id as string),
+  ));
+  if (overviewPrograms.length) {
+    const bps = await CurriculumBlueprint.findAll({
+      where: { program_id: { [Op.in]: overviewPrograms } },
+      attributes: ['program_id', 'week', 'title'],
+      order: [['updated_at', 'ASC']],   // latest update wins on overwrite
+    });
+    for (const b of bps) sectionTitleByKey.set(`${(b as any).program_id}|${b.week}`, b.title);
+  }
 
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
@@ -243,6 +264,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       blog: blogFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
       type_thumbnail: thumbBySlug.get(card.type) || null,
+      week_title: card.type === 'overview' ? (sectionTitleByKey.get(`${(card as any).program_id}|${card.week}`) || null) : null,
     };
   });
 

@@ -181,6 +181,64 @@ export async function deletePaymentLink(linkId: string): Promise<void> {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Payments — lookup, void, refund (API v4)                           */
+/* ------------------------------------------------------------------ */
+
+export interface PaySimplePayment {
+  Id: number;
+  Status: string;                 // Authorized | Posted | Settled | Failed | Voided | Refunded | ...
+  Amount: number;
+  CustomerId?: number;
+  CustomerFirstName?: string;
+  CustomerLastName?: string;
+  PaymentDate?: string;
+  ActualSettledDate?: string | null;    // set once the payment settles; null while in flight
+  EstimatedSettleDate?: string | null;  // when it is expected to settle
+  CanVoidUntil?: string | null;   // void allowed only while now < CanVoidUntil
+}
+
+/** Fetch a single payment. Used to read the amount/status/void-window before a refund. */
+export async function getPayment(paymentId: string | number): Promise<PaySimplePayment> {
+  return apiRequest<PaySimplePayment>('GET', `/v4/payment/${paymentId}`);
+}
+
+/** Fetch a customer by id (to resolve the payer email for a payment). Null on error. */
+export async function getCustomerById(customerId: string | number): Promise<PaySimpleCustomer | null> {
+  try {
+    return await apiRequest<PaySimpleCustomer>('GET', `/v4/customer/${customerId}`);
+  } catch {
+    return null;
+  }
+}
+
+/** True while the payment can still be voided (full reversal, no fee). PaySimple
+ *  only voids a payment in Authorized status, inside its CanVoidUntil window. */
+export function isVoidable(payment: Pick<PaySimplePayment, 'CanVoidUntil'>, nowMs: number = Date.now()): boolean {
+  if (!payment.CanVoidUntil) return false;
+  const until = Date.parse(payment.CanVoidUntil);
+  return Number.isFinite(until) && until > nowMs;
+}
+
+/** True once the payment has settled — PaySimple only reverses/refunds a
+ *  SETTLED payment (verified against the live API: "Only Settled payments can
+ *  be Refunded"). */
+export function isSettled(payment: Pick<PaySimplePayment, 'ActualSettledDate' | 'Status'>): boolean {
+  return !!payment.ActualSettledDate || payment.Status === 'Settled';
+}
+
+/** Void an authorized payment (full reversal, no fee). PaySimple: PUT /v4/payment/{id}/void. */
+export async function voidPayment(paymentId: string | number): Promise<any> {
+  return apiRequest('PUT', `/v4/payment/${paymentId}/void`);
+}
+
+/** Refund (reverse) a SETTLED payment — full reversal. PaySimple's endpoint is
+ *  PUT /v4/payment/{id}/reverse (there is no /refund route; PaySimple reverses
+ *  the whole payment, so partial refunds are not supported here). */
+export async function refundPayment(paymentId: string | number): Promise<any> {
+  return apiRequest('PUT', `/v4/payment/${paymentId}/reverse`);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Full Enrollment Flow                                               */
 /* ------------------------------------------------------------------ */
 
@@ -240,22 +298,6 @@ export async function createEnrollmentInvoice(params: {
 /* ------------------------------------------------------------------ */
 /*  Payments listing (API v4 — GET /v4/payment) — pull for reconcile   */
 /* ------------------------------------------------------------------ */
-
-// Loosely-typed PaySimple payment record; normalized in paymentSyncService with
-// field fallbacks (the exact envelope varies by API version and we can't exercise
-// the live API from local dev).
-export interface PaySimplePayment {
-  Id?: number | string;
-  CustomerId?: number | string;
-  CustomerFirstName?: string;
-  CustomerLastName?: string;
-  Email?: string;
-  Amount?: number;
-  Status?: string;
-  PaymentType?: string;
-  PaymentDate?: string;
-  [k: string]: unknown;
-}
 
 // Low-level GET preserving the FULL envelope (Response + Meta) with an explicit
 // timeout and capped, backoff'd retries on transient failures. apiRequest()
@@ -326,19 +368,6 @@ export async function listPayments(
   }
   console.log(`[PaySimple] listPayments pulled ${out.length} payment(s)`);
   return out;
-}
-
-// Fetch a single customer (email resolution when a payment can't be matched by
-// external id or stored customer id). Best-effort — null on any failure.
-export async function getCustomerById(customerId: string | number): Promise<PaySimpleCustomer | null> {
-  try {
-    const body = await apiGetRaw(`/v4/customer/${customerId}`);
-    const c = body?.Response ?? body?.data ?? body;
-    return c && (c.Id || c.Email) ? (c as PaySimpleCustomer) : null;
-  } catch (err: any) {
-    console.warn(`[PaySimple] getCustomerById ${customerId} failed: ${err?.message}`);
-    return null;
-  }
 }
 
 /* ------------------------------------------------------------------ */

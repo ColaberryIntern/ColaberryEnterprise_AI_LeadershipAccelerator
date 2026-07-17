@@ -5,6 +5,7 @@ import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/Video
 import { lessonDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
+import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -50,7 +51,7 @@ const RuntimeWorkspace: React.FC = () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
         setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null);
-        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
         // Every card type has a cohort comment thread in its workspace.
         runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
       } catch { setError('Could not open this activity.'); }
@@ -63,10 +64,11 @@ const RuntimeWorkspace: React.FC = () => {
   const band = card?.render_band || 'overview';
   const isVideo = VIDEO_BANDS.includes(band);
   const isLab = band === 'promptlab';
-  const isReflect = ['reflection', 'survey', 'question'].includes(band);
+  const isSurvey = band === 'survey';   // captured via the interactive SurveyForm
+  const isReflect = ['reflection', 'question'].includes(band);
   // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
   // beats the card's raw title everywhere the student sees it.
-  const displayTitle = card?.content?.title || card?.title || '';
+  const displayTitle = card?.week_title || card?.content?.title || card?.title || '';
   // Watch gate: report play heartbeats while not yet completed; the "Mark complete"
   // button stays disabled until the server confirms the 75% threshold is met.
   const onWatchBeat: ((beat: WatchBeatPayload) => void) | undefined = card && !completed
@@ -179,6 +181,19 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
 
+          {/* Weekly feedback survey — the bespoke live experience (same component
+              the right-side drawer uses), captured + stored on submit. */}
+          {isSurvey && (
+            <CardSurveyExperience
+              cardId={card.id}
+              questions={card.content?.questions || []}
+              openPrompt={card.content?.reflection || null}
+              title={card.content?.title || card.title}
+              completed={completed}
+              onComplete={complete}
+            />
+          )}
+
           {isReflect && (
             <div>
               {reflectionQs.length === 0 ? <button className="rt-btn pri" disabled={busy === 'reflect'} onClick={loadReflection}>{busy === 'reflect' ? 'Thinking…' : '✦ Get my reflection prompts'}</button>
@@ -189,7 +204,7 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* The workspace OPENS with the saved lesson (same content as the card drawer),
               so the student reads it here and asks the Mentor about it. */}
-          {!isVideo && !isLab && !isReflect && (
+          {!isVideo && !isLab && !isReflect && !isSurvey && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.content?.body_html
@@ -200,19 +215,23 @@ const RuntimeWorkspace: React.FC = () => {
 
           {artifact && <div className="rt-artifact"><div className="rt-lab">Portfolio artifact created</div><b>{artifact.title}</b><p className="rt-muted">{artifact.summary}</p></div>}
 
-          <div className="rt-complete">
-            {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
-              : <button
-                  className="rt-btn cta"
-                  disabled={busy === 'complete' || watchGated}
-                  title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
-                  onClick={complete}
-                >
-                  {busy === 'complete' ? 'Generating evidence…'
-                    : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
-                    : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
-                </button>}
-          </div>
+          {/* Surveys complete via their own "Save & mark complete" (answers must be
+              stored first), so the generic completion bar is hidden for them. */}
+          {!isSurvey && (
+            <div className="rt-complete">
+              {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
+                : <button
+                    className="rt-btn cta"
+                    disabled={busy === 'complete' || watchGated}
+                    title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
+                    onClick={complete}
+                  >
+                    {busy === 'complete' ? 'Generating evidence…'
+                      : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
+                      : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
+                  </button>}
+            </div>
+          )}
 
           {/* COHORT COMMENTS — every card type has a thread, newest first */}
           <section className="rt-comments">

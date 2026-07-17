@@ -88,9 +88,69 @@ const OVERVIEW_THUMBNAIL_RENDERER = [
   '{{content}}',
 ].join('\n');
 
+// ── survey (weekly feedback) ─────────────────────────────────────────────────
+// Zero author input: the runtime prepends the week's Blueprint ("WEEK CONTEXT")
+// and enforces the fixed output schema. This prompt steers the ~10 feedback
+// questions (rendered as a 1–5 agreement scale by the survey form) + one open
+// prompt, grounded in the week the card sits on.
+const SURVEY_GENERATION_PROMPT = [
+  'You write the Week Feedback Survey for the AI Systems Architect Accelerator: a short weekly check-in a participant fills out at the end of the week so we can understand their experience, how well they are learning, and what to improve. The WEEK CONTEXT block above gives this week\'s topic, focus, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. Ground the questions in it; keep them specific to this week where natural.',
+  '',
+  'title: "Week " then the week number from the WEEK CONTEXT, then " Feedback — ", then the week\'s topic exactly as named. Example: "Week 1 Feedback — Claude Code Foundations + Workspace".',
+  '',
+  'summary: one sentence telling the participant this is a quick, anonymous-feeling weekly check-in that helps us improve their experience.',
+  '',
+  'body_html: ONE short <p> (about 25–40 words) framing the survey — thank them, say it takes ~2 minutes, and that their answers shape next week. Valid, self-contained, fully balanced HTML. No headings, no lists, no inline styles.',
+  '',
+  'questions: an array of EXACTLY 10 concise first-person AGREEMENT STATEMENTS. Each is rated by the student on a 1–5 scale (1 = Strongly disagree, 5 = Strongly agree), so write STATEMENTS, not open questions, and never number them. Cover this spread, roughly in this order, adapted to the week\'s topic and objectives:',
+  '  1. Clarity — "This week\'s material was clear and well explained."',
+  '  2. Pace — "The pace of this week worked well for me."',
+  '  3. Confidence on objectives — a statement that I can now do the week\'s main objective/competency (name it from the WEEK CONTEXT).',
+  '  4. Relevance — "What I learned this week is relevant to becoming an AI Systems Architect."',
+  '  5. Hands-on — "The hands-on activities helped me actually learn, not just watch."',
+  '  6. Support — "When I got stuck, I could get the help or guidance I needed."',
+  '  7. Workload — "The amount of work this week was manageable."',
+  '  8. Engagement — "I felt engaged and motivated throughout the week."',
+  '  9. Progress — "I feel I made real progress toward my goals this week."',
+  '  10. Recommend — "I would recommend this week\'s experience to a peer."',
+  'Rephrase each to reference the week\'s actual topic/objective where it reads naturally; keep every statement under ~18 words.',
+  '',
+  'reflection: ONE open-ended prompt (a single sentence) asking what would make next week better for them, or anything they want us to know. Example: "In one or two sentences: what would make next week a better experience for you?"',
+  '',
+  'completion: "Marked complete when the participant submits their answers."',
+  'Return discussion_prompt as "", github_task as null, evaluation_criteria as [].',
+  '',
+  'Voice: warm, respectful, concise. No hype, no emojis. Em dash only in the title.',
+].join('\n');
+
 /** slug -> authored fields layered on top of the registry defaults. */
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
+  survey: {
+    student_label: 'Weekly Feedback',
+    category: 'Reflect',
+    icon: 'bi-clipboard-check',
+    badge_class: 'bg-warning',
+    estimated_time: 5,
+    // Parts the survey actually gives the student: a written reflection (the open
+    // feedback question) + a cohort comment thread. The rating scale itself is
+    // code-driven (CardSurveyExperience), not a toggizable Part.
+    capabilities: ['reflection', 'comments'],
+    inputs: [],
+    variable_keys: [], // zero author input — the runtime injects the week blueprint
+    outputs: [
+      { key: 'title', type: 'string', description: 'Week {n} Feedback — {week topic}' },
+      { key: 'questions', type: 'string[]', description: '~10 Likert (1–5) feedback statements' },
+      { key: 'reflection', type: 'string', description: 'One open feedback prompt' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: SURVEY_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('survey'),
+    approved: true,
+    status: 'ready',
+  },
   overview: {
     student_label: 'Overview',
     category: 'Learn',
