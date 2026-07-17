@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 9:49 AM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">69 changes</span></div>
+    <div class="meta">Generated Friday, July 17, 2026 at 10:18 AM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">70 changes</span></div>
   </header>
   <main>
     
@@ -1092,6 +1092,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. Backend unchanged (same capture/store endpoints). After deploy: open a Week-N Feedback card → the right drawer shows the live survey; answering + Submit stores to timeline_survey_responses and completes the card; reopening shows the thank-you/prefill.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Self-styled component (svx-* + own &lt;style&gt;) so it renders identically in the drawer (.tl-de) and workspace (.rt) scopes. New render behavior = code (the &quot;specific html per curriculum type&quot; the build-curriculum-type skill flags).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">70</span>
+          <h2>Survey Studio: interactive &quot;take it&quot; preview in section 4 + Parts marked (reflection, comments)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Section 4 should show what the student sees and that should be the survey; I should be able to take the survey down there. Make sure it&#39;s passing in the auto-included. Mark some of the parts for the survey — currently none are selected.&quot; (1) Parts: survey CurriculumTypeDefinition capabilities set to [&#39;reflection&#39;,&#39;comments&#39;] in seedComponentAuthoring.ts (reflection = the open feedback question; comments = the cohort thread) — applied at boot (server.ts runs seedComponentAuthoring), so the Studio Parts panel now shows 2 selected. (2) Interactive preview: CardSurveyExperience&#39;s `preview` mode was read-only/disabled; now it is fully TAKEABLE but LOCAL — ratings/comments/open are editable, the progress bar moves, and Submit shows the thank-you WITHOUT calling the API or completing (author can click through exactly how it feels). Live student mode unchanged (fetch + save + complete). (3) Auto-included questions already flow: StudentPreview feeds preview.experience (content generated from the auto-included WEEK CONTEXT) into CardDetailBody → survey branch reads content.questions, so section 4 renders the real generated survey. Files: backend/src/seeds/seedComponentAuthoring.ts; frontend/src/components/timeline/CardSurveyExperience.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0, backend tsc 0; curriculumFormatContract 5/5. After deploy: Experience Studio → Survey → section 4 &quot;what the student sees&quot; is the interactive survey (generated questions from the Week blueprint), takeable end-to-end; Parts panel shows Reflection + Comments on.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deploy backend (applies capabilities at boot) + nginx. Preview submit is local-only (no card/enrollment in the Studio).</span></div>
           
         </div>
       </article>
