@@ -286,6 +286,7 @@ import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
 import Subscription from './Subscription';
 import AccountCredit from './AccountCredit';
+import Refund from './Refund';
 
 // Knowledge Operations System — KB Unification
 import CoraKbCourse from './CoraKbCourse';
@@ -931,6 +932,9 @@ Subscription.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollmen
 // Account credits (Open House $50 deposits → applied to next payment).
 Enrollment.hasMany(AccountCredit, { foreignKey: 'enrollment_id', as: 'accountCredits', onDelete: 'CASCADE' });
 AccountCredit.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+// Refunds (admin-issued PaySimple refunds/voids).
+Enrollment.hasMany(Refund, { foreignKey: 'enrollment_id', as: 'refunds' });
+Refund.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 Enrollment.hasOne(OnboardingProfile, { foreignKey: 'enrollment_id', as: 'onboardingProfile', onDelete: 'CASCADE' });
 OnboardingProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
@@ -1209,6 +1213,7 @@ export {
   OnboardingProfile,
   Subscription,
   AccountCredit,
+  Refund,
   // Timeline Engine (Classroom rebuild)
   TimelineCard, TimelineCardProgress, TimelineEvent, PointsConfig,
   CompetencyDomain, StudentCompetency, EvidenceRecord, XpEvent, BuilderLevel, StudentLevel,
