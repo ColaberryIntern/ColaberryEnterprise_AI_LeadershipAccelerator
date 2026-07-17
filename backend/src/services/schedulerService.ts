@@ -2,10 +2,8 @@ import cron from 'node-cron';
 import { Op, QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import nodemailer from 'nodemailer';
-import { v4 as uuidv4 } from 'uuid';
-import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment, AiAgent, AiAgentActivityLog } from '../models';
+import { ScheduledEmail, Lead, Cohort, Campaign, CampaignLead, StrategyCall, Enrollment } from '../models';
 import { env } from '../config/env';
-import { runWithRequestContext } from '../utils/requestContext';
 import { logActivity } from './activityService';
 import { triggerVoiceCall } from './synthflowService';
 import { generateMessage, buildConversationHistory } from './aiMessageService';
@@ -40,87 +38,7 @@ import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
 import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom } from './sessionRecordingService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
-
-/**
- * Instrumentation wrapper for cron jobs.
- * Checks the agent registry for enabled/paused status, generates a trace_id,
- * measures duration, logs to ai_agent_activity_logs, and updates agent metrics.
- */
-async function instrumentCronJob(agentName: string, fn: () => Promise<void>): Promise<void> {
-  // Trace propagation (P1-4): seed a trace_id into AsyncLocalStorage so every downstream AI call this
-  // job makes (getInstrumentedOpenAI / emitAiEvent) correlates to THIS run instead of emitting null.
-  const traceId = uuidv4();
-  const traced = () => runWithRequestContext({ traceId }, fn);
-
-  let agent: InstanceType<typeof AiAgent> | null = null;
-  try {
-    agent = await AiAgent.findOne({ where: { agent_name: agentName } });
-  } catch {
-    // If registry lookup fails, run the job anyway (don't break existing behavior)
-    await traced();
-    return;
-  }
-
-  // If agent not in registry, run untracked
-  if (!agent) {
-    await traced();
-    return;
-  }
-
-  // Check enabled and paused status
-  if (!agent.enabled || agent.status === 'paused') return;
-
-  const start = Date.now();
-  let result: 'success' | 'failed' = 'success';
-  let errorMsg: string | null = null;
-  let stackTrace: string | null = null;
-
-  try {
-    await agent.update({ status: 'running' });
-    await traced();
-  } catch (err: any) {
-    result = 'failed';
-    errorMsg = err.message || String(err);
-    stackTrace = err.stack || null;
-  }
-
-  const duration = Date.now() - start;
-  const newRunCount = (agent.run_count || 0) + 1;
-  const newAvgDuration = agent.avg_duration_ms
-    ? Math.round((agent.avg_duration_ms * (newRunCount - 1) + duration) / newRunCount)
-    : duration;
-
-  const updateFields: Record<string, any> = {
-    status: 'idle',
-    run_count: newRunCount,
-    avg_duration_ms: newAvgDuration,
-    last_run_at: new Date(),
-  };
-  if (result === 'failed') {
-    updateFields.error_count = (agent.error_count || 0) + 1;
-    updateFields.last_error = errorMsg;
-    updateFields.last_error_at = new Date();
-  }
-
-  try {
-    await agent.update(updateFields);
-    await AiAgentActivityLog.create({
-      id: uuidv4(),
-      agent_id: agent.id,
-      action: agentName,
-      result,
-      confidence: null,
-      reason: result === 'failed' ? errorMsg : `Completed in ${duration}ms`,
-      details: null,
-      trace_id: traceId,
-      duration_ms: duration,
-      stack_trace: stackTrace,
-      created_at: new Date(),
-    } as any);
-  } catch (logErr: any) {
-    console.error(`[Scheduler] Failed to log instrumentation for ${agentName}:`, logErr.message);
-  }
-}
+import { instrumentCronJob } from './cronInstrumentation';
 
 let transporter: nodemailer.Transporter | null = null;
 
@@ -1931,21 +1849,21 @@ export function startScheduler(): void {
   }
 
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
-  cron.schedule('*/5 * * * *', async () => {
-    try {
+  cron.schedule('*/5 * * * *', () => {
+    instrumentCronJob('PreviewStackReaper', async () => {
       const { reapIdlePreviewStacks } = await import('./previewStackReaper');
       const result = await reapIdlePreviewStacks();
       if (result.stopped.length > 0) {
         console.log(`[PreviewReaper] Stopped ${result.stopped.length} idle stacks:`, result.stopped.join(', '));
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       console.error('[PreviewReaper] error:', err?.message);
-    }
+    });
   });
 
   // Recover stale processing actions every 15 minutes
   cron.schedule('*/15 * * * *', () => {
-    recoverStaleActions().catch((err) => {
+    instrumentCronJob('StaleActionRecovery', () => recoverStaleActions().then(() => {})).catch((err) => {
       console.error('[Scheduler] Stale recovery error:', err);
     });
   });
@@ -2903,6 +2821,45 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] System health monitor: every 15 min (weekdays 7AM-6PM CT, Cory voice + email alerts)');
 
+  // ── Cron Job Health Monitor (BC #10099862873 P0, every 15 min, 24/7) ───────
+  // Extends alerting beyond the single scheduler-heartbeat special case above
+  // to every cron-triggered AiAgent: error-rate spikes and missed-runs, using
+  // run/error data instrumentCronJob() already collects. Runs 24/7 (unlike the
+  // business-hours health monitor) since a silently-failing job doesn't wait
+  // for business hours to matter. Not itself business-critical enough to run
+  // through instrumentCronJob's AiAgent lookup — it's a monitor over the
+  // registry, not a registry entry.
+  cron.schedule('10,25,40,55 * * * *', () => {
+    const { checkAllCronJobHealth } = require('./cronHealthAlertService');
+    checkAllCronJobHealth().catch((err: any) => {
+      console.error('[CronHealthAlert] Cron job health check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Cron job health monitor: every 15 min (24/7, error-rate + missed-run alerts)');
+
+  // ── Dashboard Threshold Watcher (BC #10099862873 P1, every 15 min, 24/7) ───
+  // Converts the Trust Center + Ingest Logs dashboards from pull-only to
+  // push-alerts, reusing their existing computed data (no new dashboard logic).
+  cron.schedule('12,27,42,57 * * * *', () => {
+    const { checkDashboardThresholds } = require('./dashboardThresholdWatcherService');
+    checkDashboardThresholds().catch((err: any) => {
+      console.error('[DashboardThresholdWatcher] Dashboard threshold check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Dashboard threshold watcher: every 15 min (24/7, Trust Center + Ingest Logs)');
+
+  // ── Error-Class Spike Watcher (BC #10099862873 P1, every 15 min, 24/7) ─────
+  // Evaluates the classified ai_events rows now emitted by auth middleware +
+  // apollo/ghl/basecamp/synthflow wrappers for a failure-rate spike per event
+  // type, and alerts through the shared alert service.
+  cron.schedule('13,28,43,58 * * * *', () => {
+    const { checkErrorClassSpikes } = require('./errorSpikeAlertService');
+    checkErrorClassSpikes().catch((err: any) => {
+      console.error('[ErrorSpikeAlert] Error-class spike check error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Error-class spike watcher: every 15 min (24/7, auth + external API failure spikes)');
+
   // ── Build-log -> social drafter (BC #9985689786, weekly, Mon 6AM CT = 11:00 UTC) ──
   // Scans completed Tier-A build weeks and AI-drafts a #Colaberry post per
   // project/week. Draft-only — never auto-posts (see buildLogDraftService.ts).
@@ -2940,14 +2897,12 @@ export function startScheduler(): void {
   // Autonomous ingest insights — regenerate suggestion cards every 6 hours.
   // Never auto-applies; an admin must click Apply unless AUTONOMOUS_AUTOAPPLY=true.
   cron.schedule('0 */6 * * *', () => {
-    (async () => {
-      try {
-        const { runInsightsJob } = require('../jobs/autonomousIngestInsights');
-        await runInsightsJob();
-      } catch (err: any) {
-        console.error('[Scheduler] Autonomous ingest insights error:', err?.message);
-      }
-    })();
+    instrumentCronJob('AutonomousIngestInsights', async () => {
+      const { runInsightsJob } = require('../jobs/autonomousIngestInsights');
+      await runInsightsJob();
+    }).catch((err: any) => {
+      console.error('[Scheduler] Autonomous ingest insights error:', err?.message);
+    });
   });
 
   // Anthropic content watcher — nightly at 02:00 UTC.

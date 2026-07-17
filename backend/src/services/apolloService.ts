@@ -3,6 +3,16 @@ import { env } from '../config/env';
 import Lead from '../models/Lead';
 import { syncNewLeadToGhl } from './ghlService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { classifyError } from '../utils/errorClassifier';
+
+// Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
+// the full Sequelize/model graph into every apolloService import — some
+// callers (e.g. apolloKillSwitch.test.ts) deliberately import this module
+// without a DB connection available.
+async function emitFailureEvent(params: Parameters<typeof import('./aiEventService').emitAiEvent>[0]): Promise<void> {
+  const { emitAiEvent } = await import('./aiEventService');
+  await emitAiEvent(params).catch(() => {});
+}
 
 const APOLLO_BASE_URL = 'https://api.apollo.io';
 
@@ -52,6 +62,13 @@ async function fetchWithRetry(
         console.warn(`[${label}] Network error on attempt ${attempt + 1}/${retries + 1}: ${err.message}. Retrying in ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
       } else {
+        emitFailureEvent({
+          event_type: 'apollo_request_failed',
+          outcome: 'failure',
+          external_system: 'apollo',
+          error_class: classifyError(err),
+          metadata: { label, retries, message: String(err?.message || '').slice(0, 200) },
+        });
         throw new Error(`[${label}] Failed after ${retries + 1} attempts: ${err.message}`);
       }
     }

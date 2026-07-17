@@ -2,6 +2,14 @@ import { getSetting, getTestOverrides } from './settingsService';
 import { logActivity } from './activityService';
 import Lead from '../models/Lead';
 import { redactForLogs } from '../utils/piiRedaction';
+import { classifyError } from '../utils/errorClassifier';
+
+// Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
+// the full Sequelize/model graph into every ghlService import.
+async function emitFailureEvent(params: Parameters<typeof import('./aiEventService').emitAiEvent>[0]): Promise<void> {
+  const { emitAiEvent } = await import('./aiEventService');
+  await emitAiEvent(params).catch(() => {});
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -60,12 +68,26 @@ async function ghlFetch(
 
     if (!response.ok) {
       console.error(`[GHL] API error ${response.status}:`, data);
+      emitFailureEvent({
+        event_type: 'ghl_request_failed',
+        outcome: 'failure',
+        external_system: 'ghl',
+        error_class: classifyError({ status: response.status, message: data?.message }),
+        metadata: { path, method, message: String(data?.message || JSON.stringify(data)).slice(0, 200) },
+      });
       return { success: false, error: data?.message || JSON.stringify(data) };
     }
 
     return { success: true, data };
   } catch (error: any) {
     console.error('[GHL] Request failed:', error.message);
+    emitFailureEvent({
+      event_type: 'ghl_request_failed',
+      outcome: 'failure',
+      external_system: 'ghl',
+      error_class: classifyError(error),
+      metadata: { path, method, message: String(error?.message || '').slice(0, 200) },
+    });
     return { success: false, error: error.message };
   }
 }

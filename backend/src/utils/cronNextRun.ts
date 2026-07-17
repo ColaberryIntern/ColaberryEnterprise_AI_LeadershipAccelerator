@@ -14,6 +14,23 @@ export function calculateNextRun(schedule: string, _timezone?: string): Date | n
 }
 
 /**
+ * Calculate a cron expression's typical inter-run interval by diffing two
+ * consecutive future fire times. Returns null for invalid or non-periodic
+ * (single-fire) expressions.
+ */
+export function calculateExpectedIntervalMs(schedule: string): number | null {
+  try {
+    const expr = CronExpressionParser.parse(schedule);
+    const first = expr.next().toDate();
+    const second = expr.next().toDate();
+    const intervalMs = second.getTime() - first.getTime();
+    return intervalMs > 0 ? intervalMs : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Format next run as a human-readable relative string, e.g. "12m from now".
  */
 export function formatNextRun(schedule: string, timezone?: string): string | null {

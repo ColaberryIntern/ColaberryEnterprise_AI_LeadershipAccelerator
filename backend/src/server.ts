@@ -2682,6 +2682,15 @@ async function start(): Promise<void> {
     startScheduler();
   }
 
+  // Register the cognitive-incident email subscriber (BC #10099862873 P1 item 3,
+  // idempotent — re-registering on restart is safe, registerIncidentSubscriber
+  // just replaces the in-memory subscriber list)
+  import('./services/incidentSubscriberBootstrap').then(({ registerCognitiveIncidentSubscriber }) => {
+    registerCognitiveIncidentSubscriber().catch((err) => {
+      console.error('[Server] Failed to register cognitive incident subscriber:', err.message);
+    });
+  });
+
   app.listen(env.port, () => {
     console.log(`Server running on port ${env.port} [${env.nodeEnv}]`);
   });

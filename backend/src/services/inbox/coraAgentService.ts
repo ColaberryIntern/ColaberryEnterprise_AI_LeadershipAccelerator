@@ -13,8 +13,12 @@
  * for the loop guards that stop such a storm even when live.
  */
 import OpenAI from 'openai';
+import { Op } from 'sequelize';
 import { buildCoraSystemPromptFromDB, getCourseBySlug } from '../kbService';
 import { logAuditEvent } from './inboxAuditService';
+import { emitAlert } from '../alertService';
+import CoraReplyLog from '../../models/CoraReplyLog';
+import InboxAuditLog from '../../models/InboxAuditLog';
 
 const LOG_PREFIX = '[InboxCOS][Cora]';
 
@@ -33,6 +37,23 @@ if (!DRY_RUN) {
   console.warn(
     `${LOG_PREFIX} LIVE SEND ENABLED (CORA_DRY_RUN="false") — Cora will send real email as the support mailbox.`
   );
+}
+
+// Circuit breaker (2026-07-14 mail-loop incident, BC #10095332194): defense-in-depth
+// alongside coraAutoReplySkipReason() below — the skip-reason guards stop the KNOWN
+// loop shapes (self-address, bounces, auto-responders); this stops runaway volume
+// from any OTHER cause (a traffic spike, a guard gap not yet discovered) by capping
+// real sends per window and routing the rest to a human instead. Configurable so a
+// real traffic spike doesn't need a code change to raise the ceiling.
+const CIRCUIT_BREAKER_MAX_SENDS = parseInt(process.env.CORA_CIRCUIT_BREAKER_MAX_SENDS || '20', 10);
+const CIRCUIT_BREAKER_WINDOW_MS = parseInt(process.env.CORA_CIRCUIT_BREAKER_WINDOW_MINUTES || '10', 10) * 60_000;
+
+async function isCircuitBreakerTripped(): Promise<boolean> {
+  const since = new Date(Date.now() - CIRCUIT_BREAKER_WINDOW_MS);
+  const recentSends = await InboxAuditLog.count({
+    where: { action: 'cora_reply_sent', created_at: { [Op.gte]: since } },
+  });
+  return recentSends >= CIRCUIT_BREAKER_MAX_SENDS;
 }
 
 /**
@@ -260,6 +281,66 @@ export async function handleCoraInquiry(email: {
     });
     // Cora abstains: don't reply, and don't archive — leave it untouched for a human.
     return { archive: false, handoffReason: `cora_skipped_${skipReason}` };
+  }
+
+  const threadKey = email.provider_thread_id || email.provider_message_id;
+
+  // Circuit breaker (2026-07-14 mail-loop incident, BC #10095332194): defense-in-depth
+  // alongside the skip-reason guards above — this catches runaway volume from any
+  // cause, not just the known loop shapes. Skipped in dry-run (nothing real would be
+  // sent anyway). Checked BEFORE reserving the dedup slot below so a tripped breaker
+  // leaves this thread free for a real attempt once volume subsides, rather than
+  // permanently marking it "already handled" with no reply ever sent.
+  if (!DRY_RUN && (await isCircuitBreakerTripped())) {
+    const reason = `Circuit breaker tripped (>= ${CIRCUIT_BREAKER_MAX_SENDS} Cora sends in the last ${CIRCUIT_BREAKER_WINDOW_MS / 60_000}min)`;
+    console.error(`${LOG_PREFIX} ${reason} — routing ${email.id} to human instead of sending`);
+    await logAuditEvent({
+      email_id: email.id,
+      action: 'cora_circuit_breaker_tripped',
+      new_state: 'INBOX',
+      actor: 'cora',
+      reasoning: reason,
+      metadata: { thread_key: threadKey, max_sends: CIRCUIT_BREAKER_MAX_SENDS, window_ms: CIRCUIT_BREAKER_WINDOW_MS },
+    });
+    // Ops alerting (BC #10099862873 P0): the audit row above is discoverable
+    // only if someone opens the inbox dashboard — this is the exact gap that
+    // let the 2026-07-14 mail-loop incident run unnoticed. emitAlert()'s own
+    // 1h title+type dedup keeps repeat trips from re-paging Ali.
+    emitAlert({
+      type: 'critical',
+      severity: 5,
+      title: 'Circuit Breaker Tripped: cora_circuit_breaker',
+      description:
+        'Cora has stopped auto-replying to support inbox emails; inbound questions are piling up unanswered. ' +
+        `Send ceiling (${CIRCUIT_BREAKER_MAX_SENDS} replies / ${CIRCUIT_BREAKER_WINDOW_MS / 60_000}min) was hit. ` +
+        'Recommended action: check the inbox dashboard for a reply loop or traffic spike before raising the ceiling.',
+      sourceType: 'system',
+      impactArea: 'support_inbox',
+      urgency: 'immediate',
+      metadata: { thread_key: threadKey, max_sends: CIRCUIT_BREAKER_MAX_SENDS, window_ms: CIRCUIT_BREAKER_WINDOW_MS },
+    }).catch((err: any) => {
+      console.error(`${LOG_PREFIX} emitAlert failed for circuit breaker trip: ${err.message}`);
+    });
+    return { archive: false, handoffReason: 'cora_circuit_breaker_tripped' };
+  }
+
+  // Reserve-then-send dedup (loop guard, BC #10095332194): a second inquiry
+  // for a thread Cora has already replied to — however it got here, including
+  // her own reply being re-ingested — is skipped rather than answered again.
+  const [, reserved] = await CoraReplyLog.findOrCreate({
+    where: { thread_key: threadKey },
+    defaults: { thread_key: threadKey, email_id: email.id },
+  });
+  if (!reserved) {
+    console.warn(`${LOG_PREFIX} Duplicate thread ${threadKey} for email ${email.id} — already replied, skipping (loop guard)`);
+    await logAuditEvent({
+      email_id: email.id,
+      action: 'cora_reply_skipped_duplicate_thread',
+      new_state: 'AUTOMATION',
+      actor: 'cora',
+      metadata: { thread_key: threadKey },
+    });
+    return { archive: true };
   }
 
   let reply: CoraReply;

@@ -6,6 +6,14 @@
  */
 import { getBcToken, refreshBcToken, isAuthError } from './basecampToken';
 import { BC_RETRYABLE_STATUS, bcBackoffMs, bcPace, sleep } from './bcRetry';
+import { classifyError } from '../../utils/errorClassifier';
+
+// Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
+// the full Sequelize/model graph into every basecampClient import.
+async function emitFailureEvent(params: Parameters<typeof import('../aiEventService').emitAiEvent>[0]): Promise<void> {
+  const { emitAiEvent } = await import('../aiEventService');
+  await emitAiEvent(params).catch(() => {});
+}
 
 const BC_ACCOUNT_ID = process.env.BASECAMP_ACCOUNT_ID || '3945211';
 const BC_API = `https://3.basecampapi.com/${BC_ACCOUNT_ID}`;
@@ -48,6 +56,13 @@ export async function bcGet<T>(urlOrPath: string): Promise<T> {
   const r = await bcSend(() => fetch(u, { headers: bcHeaders(getBcToken()) }));
   if (!r.ok) {
     const body = await r.text().catch(() => '');
+    emitFailureEvent({
+      event_type: 'basecamp_request_failed',
+      outcome: 'failure',
+      external_system: 'basecamp',
+      error_class: classifyError({ status: r.status }),
+      metadata: { method: 'GET', url: u, message: body.slice(0, 200) },
+    });
     throw new Error(`BC GET ${u} -> ${r.status} ${body.slice(0, 200)}`);
   }
   return (await r.json()) as T;
@@ -64,6 +79,13 @@ export async function bcPost<T>(urlOrPath: string, body: unknown): Promise<T> {
   );
   if (!r.ok) {
     const errBody = await r.text().catch(() => '');
+    emitFailureEvent({
+      event_type: 'basecamp_request_failed',
+      outcome: 'failure',
+      external_system: 'basecamp',
+      error_class: classifyError({ status: r.status }),
+      metadata: { method: 'POST', url: u, message: errBody.slice(0, 200) },
+    });
     throw new Error(`BC POST ${u} -> ${r.status} ${errBody.slice(0, 200)}`);
   }
   return (await r.json()) as T;

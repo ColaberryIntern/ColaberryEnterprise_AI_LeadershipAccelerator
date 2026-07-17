@@ -2,6 +2,14 @@ import { env } from '../config/env';
 import { getTestOverrides } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import { redactForLogs } from '../utils/piiRedaction';
+import { classifyError } from '../utils/errorClassifier';
+
+// Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
+// the full Sequelize/model graph into every synthflowService import.
+async function emitFailureEvent(params: Parameters<typeof import('./aiEventService').emitAiEvent>[0]): Promise<void> {
+  const { emitAiEvent } = await import('./aiEventService');
+  await emitAiEvent(params).catch(() => {});
+}
 
 interface VoiceCallParams {
   name: string;
@@ -126,6 +134,13 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
 
     if (!response.ok) {
       console.error('[Synthflow] API error:', response.status, redactForLogs(JSON.stringify(data)));
+      emitFailureEvent({
+        event_type: 'synthflow_call_failed',
+        outcome: 'failure',
+        external_system: 'synthflow',
+        error_class: classifyError({ status: response.status, message: JSON.stringify(data) }),
+        metadata: { message: redactForLogs(JSON.stringify(data)).slice(0, 200) },
+      });
       return { success: false, error: JSON.stringify(data) };
     }
 
@@ -139,6 +154,13 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     return { success: true, data: { ...d, call_id: callId } };
   } catch (error: any) {
     console.error('[Synthflow] Request failed:', error.message);
+    emitFailureEvent({
+      event_type: 'synthflow_call_failed',
+      outcome: 'failure',
+      external_system: 'synthflow',
+      error_class: classifyError(error),
+      metadata: { message: String(error?.message || '').slice(0, 200) },
+    });
     return { success: false, error: error.message };
   }
 }
