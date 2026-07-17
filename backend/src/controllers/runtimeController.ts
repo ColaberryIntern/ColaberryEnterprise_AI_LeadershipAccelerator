@@ -10,6 +10,7 @@ import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
+import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
 import fs from 'fs/promises';
@@ -96,6 +97,14 @@ export async function handleComplete(req: Request, res: Response, next: NextFunc
 
 export async function handleReadiness(req: Request, res: Response, next: NextFunction) {
   try { res.json(await readinessSummary(eid(req))); } catch (e) { fail(res, e, next); }
+}
+
+// weekly feedback survey — capture + store the student's answers
+export async function handleGetSurvey(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getSurvey(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSaveSurvey(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await saveSurvey(eid(req), String(req.params.cardId), req.body || {})); } catch (e) { fail(res, e, next); }
 }
 
 // notebook

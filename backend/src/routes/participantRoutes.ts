@@ -43,7 +43,7 @@ import {
 import {
   handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleWatchBeat,
+  handleWatchBeat, handleGetSurvey, handleSaveSurvey,
 } from '../controllers/runtimeController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
@@ -77,6 +77,9 @@ router.post('/api/portal/runtime/cards/:cardId/certificate', requireParticipant,
 router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, handleGetCertificate);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
+// Weekly feedback Survey — read the questions + saved answers, and store answers.
+router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleGetSurvey);
+router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
 // Watch-progress heartbeat (~1 per 15s of playback per player; limiter blunts floods).
 const watchBeatRateLimiter = rateLimit({
   windowMs: 60 * 1000,

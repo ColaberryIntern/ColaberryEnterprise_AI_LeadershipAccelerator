@@ -852,6 +852,32 @@ async function ensureCardCommentsSchema() {
   }
 }
 
+// Weekly feedback Survey answers — one row per (card, enrollment); idempotent
+// create + unique index so a re-submit upserts. Boot runs no global sync.
+async function ensureSurveyResponsesSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS timeline_survey_responses (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       card_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       program_id UUID,
+       week INTEGER,
+       answers JSONB NOT NULL DEFAULT '{"items":[],"open":null}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS timeline_survey_responses_unique ON timeline_survey_responses (card_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_survey_responses_program_week ON timeline_survey_responses (program_id, week)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] survey responses schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 // Blog library (training.colaberry.com/blog) + per-student read ledger — powers the
 // Blog type's auto-match mode (see blogMediaService / blogIngestionService). Raw
 // idempotent DDL with DB-side defaults, sibling of ensureNetworkVideoSchema.
@@ -1515,6 +1541,8 @@ async function start(): Promise<void> {
   await ensurePodcastSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
+  // Weekly feedback Survey answers (idempotent).
+  await ensureSurveyResponsesSchema();
   // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();

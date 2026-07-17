@@ -5,6 +5,7 @@ import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/Video
 import { lessonDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
+import SurveyForm from './SurveyForm';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -63,7 +64,8 @@ const RuntimeWorkspace: React.FC = () => {
   const band = card?.render_band || 'overview';
   const isVideo = VIDEO_BANDS.includes(band);
   const isLab = band === 'promptlab';
-  const isReflect = ['reflection', 'survey', 'question'].includes(band);
+  const isSurvey = band === 'survey';   // captured via the interactive SurveyForm
+  const isReflect = ['reflection', 'question'].includes(band);
   // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
   // beats the card's raw title everywhere the student sees it.
   const displayTitle = card?.content?.title || card?.title || '';
@@ -179,6 +181,14 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
 
+          {/* Weekly feedback survey — the interactive, captured-and-stored form. */}
+          {isSurvey && (
+            <div>
+              {card.content?.summary && <p style={{ marginTop: 0 }}>{card.content.summary}</p>}
+              <SurveyForm cardId={card.id} completed={completed} busy={busy === 'complete'} onSubmit={complete} />
+            </div>
+          )}
+
           {isReflect && (
             <div>
               {reflectionQs.length === 0 ? <button className="rt-btn pri" disabled={busy === 'reflect'} onClick={loadReflection}>{busy === 'reflect' ? 'Thinking…' : '✦ Get my reflection prompts'}</button>
@@ -189,7 +199,7 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* The workspace OPENS with the saved lesson (same content as the card drawer),
               so the student reads it here and asks the Mentor about it. */}
-          {!isVideo && !isLab && !isReflect && (
+          {!isVideo && !isLab && !isReflect && !isSurvey && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.content?.body_html
@@ -200,19 +210,23 @@ const RuntimeWorkspace: React.FC = () => {
 
           {artifact && <div className="rt-artifact"><div className="rt-lab">Portfolio artifact created</div><b>{artifact.title}</b><p className="rt-muted">{artifact.summary}</p></div>}
 
-          <div className="rt-complete">
-            {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
-              : <button
-                  className="rt-btn cta"
-                  disabled={busy === 'complete' || watchGated}
-                  title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
-                  onClick={complete}
-                >
-                  {busy === 'complete' ? 'Generating evidence…'
-                    : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
-                    : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
-                </button>}
-          </div>
+          {/* Surveys complete via their own "Save & mark complete" (answers must be
+              stored first), so the generic completion bar is hidden for them. */}
+          {!isSurvey && (
+            <div className="rt-complete">
+              {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
+                : <button
+                    className="rt-btn cta"
+                    disabled={busy === 'complete' || watchGated}
+                    title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
+                    onClick={complete}
+                  >
+                    {busy === 'complete' ? 'Generating evidence…'
+                      : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
+                      : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
+                  </button>}
+            </div>
+          )}
 
           {/* COHORT COMMENTS — every card type has a thread, newest first */}
           <section className="rt-comments">
