@@ -1,421 +1,229 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, FunnelChart, Funnel, LabelList, Cell,
-} from 'recharts';
-import api from '../../utils/api';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
-import { TrustSignal } from '../../components/admin/shell/trust';
+import { getRevenuePayments, RevenueTransaction, RevenueSummary } from '../../services/revenueApi';
+import { issueRefund } from '../../services/refundApi';
 
-interface DashboardData {
-  pipelineCounts: Record<string, number>;
-  funnelConversions: { from: string; to: string; rate: number }[];
-  leadVelocity: { week: string; count: number }[];
-  conversionBySource: { source: string; total: number; enrolled: number; rate: number }[];
-  revenueForecast: {
-    actualRevenue: number;
-    projectedEnrollments: number;
-    projectedRevenue: number;
-    pipelineValue: number;
-    enrolled: number;
-    qualifiedLeads: number;
-  };
-  upcomingAppointments: any[];
-  recentActivities: any[];
-  campaignAttribution?: {
-    campaigns: Array<{
-      id: string;
-      name: string;
-      type: string;
-      status: string;
-      total_leads: number;
-      total_sent: number;
-      meetings_booked: number;
-      conversions: number;
-      conversion_rate: number;
-      budget_spent: number;
-    }>;
-    by_type: Array<{
-      type: string;
-      campaigns: number;
-      leads: number;
-      conversions: number;
-      meetings: number;
-    }>;
-  };
-}
+const money = (n: number): string =>
+  `$${Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 
-const STAGE_LABELS: Record<string, string> = {
-  new_lead: 'New Lead',
-  contacted: 'Contacted',
-  meeting_scheduled: 'Meeting',
-  proposal_sent: 'Proposal',
-  negotiation: 'Negotiation',
-  enrolled: 'Enrolled',
-  lost: 'Lost',
+const fmtAbs = (iso: string | null): string =>
+  iso ? new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+
+// "just now" / "17m ago" / "5h ago" / "yesterday" / "3d ago" / "Jul 4"
+const timeAgo = (iso: string | null): string => {
+  if (!iso) return '—';
+  const then = new Date(iso).getTime();
+  const s = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (s < 45) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d === 1) return 'yesterday';
+  if (d < 7) return `${d}d ago`;
+  if (d < 30) return `${Math.floor(d / 7)}w ago`;
+  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-// Funnel segment colors drawn from the shared chart palette (brand tokens).
-const FUNNEL_COLORS = [
-  'var(--chart-1)', 'var(--chart-5)', 'var(--chart-6)',
-  'var(--chart-4)', 'var(--chart-7)', 'var(--chart-3)',
-];
-
-type BadgeTone = 'success' | 'danger' | 'warning' | 'info' | 'neutral' | 'primary';
-
-// Campaign type -> semantic badge tone (replaces hardcoded Bootstrap bg-* on raw types).
-const TYPE_TONE: Record<string, BadgeTone> = {
-  warm_nurture: 'warning',
-  cold_outbound: 'info',
-  re_engagement: 'neutral',
+const typeMeta: Record<RevenueTransaction['type'], { label: string; tone: 'success' | 'info' | 'danger' }> = {
+  membership: { label: 'Membership', tone: 'success' },
+  deposit: { label: 'Deposit', tone: 'info' },
+  refund: { label: 'Refund', tone: 'danger' },
 };
 
-const STATUS_TONE: Record<string, BadgeTone> = {
-  active: 'success',
-  completed: 'info',
-  paused: 'warning',
+const statusTone = (s: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
+  const k = (s || '').toLowerCase();
+  if (['active', 'settled', 'succeeded'].includes(k)) return 'success';
+  if (k === 'available') return 'info';
+  if (['pending', 'applied'].includes(k)) return 'warning';
+  if (['failed', 'void'].includes(k)) return 'danger';
+  return 'neutral';
 };
+
+type TypeFilter = 'all' | 'membership' | 'deposit' | 'refund';
 
 function AdminRevenueDashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null);
+  const [summary, setSummary] = useState<RevenueSummary | null>(null);
+  const [txns, setTxns] = useState<RevenueTransaction[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [filter, setFilter] = useState<TypeFilter>('all');
+  const [query, setQuery] = useState('');
+  const [refunding, setRefunding] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchDashboard();
-  }, []);
-
-  const fetchDashboard = async () => {
+  const load = useCallback(async () => {
     try {
-      const res = await api.get('/api/admin/revenue/dashboard');
-      setData(res.data);
-    } catch (err) {
-      console.error('Failed to fetch revenue dashboard:', err);
+      const data = await getRevenuePayments();
+      setSummary(data.summary);
+      setTxns(data.transactions);
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Failed to load payments');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const onRefund = async (t: RevenueTransaction) => {
+    if (!t.paysimple_payment_id) return;
+    setError(null); setNotice(null);
+    if (!window.confirm(`Refund ${money(t.amount)} to ${t.payer_name}? This moves money via PaySimple and voids any account credit the payment granted.`)) return;
+    setRefunding(t.id);
+    try {
+      const { refund } = await issueRefund({ payment_id: t.paysimple_payment_id });
+      setNotice(`${refund.method === 'void' ? 'Voided' : 'Refunded'} ${money(refund.amount_cents / 100)} for ${t.payer_name}.`);
+      await load();
+    } catch (err: any) {
+      const code = err?.response?.data?.error;
+      const msg = err?.response?.data?.message;
+      setError(
+        code === 'already_reversed' ? 'That payment was already voided/refunded.'
+          : code === 'not_settled' ? (msg || 'That payment has not settled yet — refund it after it settles.')
+          : code === 'paysimple_error' ? `PaySimple refused the refund: ${msg || 'unknown error'}`
+          : msg || 'Refund failed.'
+      );
+    } finally {
+      setRefunding(null);
+    }
   };
 
-  /* ---------- per-page trust signal ---------- */
-
-  const trust: TrustSignal = useMemo(() => ({
-    level: 'live',
-    source: 'revenue / paysimple',
-    updatedAt: new Date().toISOString(),
-    summary: 'Live revenue, pipeline forecast, and campaign attribution.',
-    href: '/admin/trust',
-    pillars: [
-      {
-        name: 'Freshness',
-        status: 'live',
-        evidence: [{ label: 'Source', value: 'revenue / paysimple' }],
-      },
-    ],
-  }), []);
-
-  const formatCurrency = (val: number) => {
-    return '$' + val.toLocaleString();
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return txns.filter((t) => {
+      if (filter !== 'all' && t.type !== filter) return false;
+      if (q && !t.payer_name.toLowerCase().includes(q) && !t.payer_email.toLowerCase().includes(q)) return false;
+      return true;
     });
-  };
+  }, [txns, filter, query]);
 
-  const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
+  const countedShown = filtered.filter((t) => t.counted).length;
+
+  const pct = (n: number): number => {
+    if (!summary) return 0;
+    const denom = summary.memberships + summary.deposits || 1;
+    return Math.max(2, Math.round((n / denom) * 100));
+  };
 
   if (loading) {
-    return (
-      <div className="text-center py-5">
-        <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
-        </div>
-      </div>
-    );
+    return <div className="text-center py-5"><div className="spinner-border text-primary" role="status"><span className="visually-hidden">Loading…</span></div></div>;
   }
-
-  if (!data) {
-    return <div className="text-center text-muted py-5">Failed to load dashboard</div>;
-  }
-
-  // Prepare funnel data
-  const funnelData = Object.entries(data.pipelineCounts)
-    .filter(([stage]) => stage !== 'lost')
-    .map(([stage, count]) => ({
-      name: STAGE_LABELS[stage] || stage,
-      value: count,
-    }));
 
   return (
     <>
       <PageHeader
-        title="Revenue Dashboard"
+        title="Revenue"
         icon="money-dollar-circle-line"
-        subtitle="Actual revenue, weighted pipeline forecast, and campaign attribution."
+        subtitle="Every payment collected through PaySimple — memberships, Open House deposits, and refunds."
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Revenue' }]}
-        trust={trust}
-        actions={
-          <button className="btn btn-outline-primary btn-sm" onClick={fetchDashboard} disabled={loading}>
-            <i className="ri-refresh-line" aria-hidden="true" /> Refresh
-          </button>
-        }
+        actions={<Link to="/admin/refunds" className="btn btn-sm btn-danger">Issue refund</Link>}
       >
         <div className="row g-3">
-          <div className="col-sm-6 col-lg-3">
-            <StatCard
-              label="Actual Revenue"
-              value={formatCurrency(data.revenueForecast.actualRevenue)}
-              icon="money-dollar-circle-line"
-              tone="success"
-              hint={`${data.revenueForecast.enrolled} enrolled`}
-            />
-          </div>
-          <div className="col-sm-6 col-lg-3">
-            <StatCard
-              label="Pipeline Value"
-              value={formatCurrency(data.revenueForecast.pipelineValue)}
-              icon="funds-line"
-              tone="info"
-              hint={`${data.revenueForecast.qualifiedLeads} qualified`}
-            />
-          </div>
-          <div className="col-sm-6 col-lg-3">
-            <StatCard
-              label="Projected Revenue"
-              value={formatCurrency(data.revenueForecast.projectedRevenue)}
-              icon="line-chart-line"
-              tone="primary"
-              hint={`~${data.revenueForecast.projectedEnrollments} projected`}
-            />
-          </div>
-          <div className="col-sm-6 col-lg-3">
-            <StatCard
-              label="Price / Seat"
-              value="$4,500"
-              icon="price-tag-3-line"
-              tone="neutral"
-            />
-          </div>
+          <div className="col-6 col-lg-3"><StatCard label="Collected" value={money(summary?.collected || 0)} icon="money-dollar-circle-line" tone="success" hint="Real cash · matches the dashboard" /></div>
+          <div className="col-6 col-lg-3"><StatCard label="Memberships" value={money(summary?.memberships || 0)} icon="vip-crown-2-line" tone="primary" hint={`${summary?.membershipCount || 0} active`} /></div>
+          <div className="col-6 col-lg-3"><StatCard label="Open House deposits" value={money(summary?.deposits || 0)} icon="ticket-2-line" tone="info" hint={`${summary?.depositAvailableCount || 0} held · $50 each`} /></div>
+          <div className="col-6 col-lg-3"><StatCard label={summary && summary.refunds > 0 ? 'Refunds' : 'Net collected'} value={summary && summary.refunds > 0 ? `−${money(summary.refunds)}` : money(summary?.net || 0)} icon="refund-2-line" tone={summary && summary.refunds > 0 ? 'warning' : 'neutral'} hint={summary && summary.refunds > 0 ? `net ${money(summary.net)}` : `${summary?.refundCount || 0} refunds`} /></div>
         </div>
       </PageHeader>
 
-      <div className="row g-4">
-        {/* Left Column */}
-        <div className="col-lg-8">
-          {/* Pipeline Funnel */}
-          <SectionCard title="Pipeline Funnel" icon="filter-3-line" className="mb-4">
-            <div className="row g-2 mb-3">
-              {Object.entries(data.pipelineCounts).map(([stage, count]) => (
-                <div key={stage} className="col">
-                  <div className="text-center">
-                    <div className="small text-muted">{STAGE_LABELS[stage] || stage}</div>
-                    <div className="h5 fw-bold mb-0">{count}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {funnelData.length > 0 && (
-              <ResponsiveContainer width="100%" height={200}>
-                <FunnelChart>
-                  <Tooltip />
-                  <Funnel dataKey="value" data={funnelData} isAnimationActive>
-                    <LabelList position="center" fill="var(--text-on-accent)" fontSize={12} />
-                    {funnelData.map((_entry, index) => (
-                      <Cell key={`cell-${index}`} fill={FUNNEL_COLORS[index % FUNNEL_COLORS.length]} />
-                    ))}
-                  </Funnel>
-                </FunnelChart>
-              </ResponsiveContainer>
-            )}
-          </SectionCard>
+      {error && <div className="alert alert-danger py-2">{error}</div>}
+      {notice && <div className="alert alert-success py-2">{notice}</div>}
 
-          {/* Lead Velocity */}
-          <SectionCard title="Lead Velocity (Last 12 Weeks)" icon="line-chart-line" className="mb-4">
-            {data.leadVelocity.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={data.leadVelocity}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="week" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Line type="monotone" dataKey="count" stroke="var(--chart-1)" strokeWidth={2} dot={{ r: 4 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-muted small text-center mb-0">No data yet</p>
-            )}
-          </SectionCard>
-
-          {/* Conversion by Source */}
-          <SectionCard title="Conversion by Source" icon="bar-chart-2-line" className="mb-4">
-            {data.conversionBySource.length > 0 ? (
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={data.conversionBySource}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="source" tick={{ fontSize: 10 }} />
-                  <YAxis unit="%" />
-                  <Tooltip />
-                  <Bar dataKey="rate" fill="var(--chart-3)" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-muted small text-center mb-0">No data yet</p>
-            )}
-          </SectionCard>
-
-          {/* Campaign Attribution */}
-          {data.campaignAttribution && (
-            <>
-              {/* By Type Summary */}
-              {data.campaignAttribution.by_type.length > 0 && (
-                <SectionCard title="Campaign Performance by Type" icon="bar-chart-grouped-line" className="mb-4">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={data.campaignAttribution.by_type}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="type"
-                        tick={{ fontSize: 10 }}
-                        tickFormatter={(v: string) => v.replace(/_/g, ' ')}
-                      />
-                      <YAxis allowDecimals={false} />
-                      <Tooltip labelFormatter={(v: any) => String(v).replace(/_/g, ' ')} />
-                      <Bar dataKey="leads" fill="var(--chart-1)" name="Leads" />
-                      <Bar dataKey="meetings" fill="var(--chart-4)" name="Meetings" />
-                      <Bar dataKey="conversions" fill="var(--chart-3)" name="Conversions" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <div className="table-responsive mt-3">
-                    <table className="table table-sm mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Type</th>
-                          <th className="text-end">Campaigns</th>
-                          <th className="text-end">Leads</th>
-                          <th className="text-end">Meetings</th>
-                          <th className="text-end">Conversions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.campaignAttribution.by_type.map((t) => (
-                          <tr key={t.type}>
-                            <td>
-                              <StatusBadge label={t.type.replace(/_/g, ' ')} tone={TYPE_TONE[t.type] || 'neutral'} />
-                            </td>
-                            <td className="text-end">{t.campaigns}</td>
-                            <td className="text-end">{t.leads}</td>
-                            <td className="text-end">{t.meetings}</td>
-                            <td className="text-end">{t.conversions}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </SectionCard>
-              )}
-
-              {/* Per-Campaign Table */}
-              {data.campaignAttribution.campaigns.length > 0 && (
-                <SectionCard title="Campaign Attribution" icon="megaphone-line" padded={false} className="mb-4">
-                  <div className="table-responsive">
-                    <table className="table table-hover mb-0">
-                      <thead className="table-light">
-                        <tr>
-                          <th>Campaign</th>
-                          <th>Type</th>
-                          <th>Status</th>
-                          <th className="text-end">Leads</th>
-                          <th className="text-end">Sent</th>
-                          <th className="text-end">Meetings</th>
-                          <th className="text-end">Conv.</th>
-                          <th className="text-end">Conv. Rate</th>
-                          <th className="text-end">Spent</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.campaignAttribution.campaigns.map((c) => (
-                          <tr key={c.id}>
-                            <td>
-                              <Link to={`/admin/campaigns/${c.id}`} className="text-decoration-none fw-medium">
-                                {c.name}
-                              </Link>
-                            </td>
-                            <td>
-                              <StatusBadge label={c.type.replace(/_/g, ' ')} tone={TYPE_TONE[c.type] || 'neutral'} />
-                            </td>
-                            <td>
-                              <StatusBadge label={c.status} tone={STATUS_TONE[c.status] || 'neutral'} />
-                            </td>
-                            <td className="text-end">{c.total_leads}</td>
-                            <td className="text-end">{c.total_sent}</td>
-                            <td className="text-end">{c.meetings_booked}</td>
-                            <td className="text-end">{c.conversions}</td>
-                            <td className="text-end">{pct(c.conversion_rate)}</td>
-                            <td className="text-end">{formatCurrency(c.budget_spent)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </SectionCard>
-              )}
-            </>
-          )}
+      {summary && (
+        <div className="alert alert-success py-2 d-flex align-items-center gap-2">
+          <i className="ri-checkbox-circle-line" aria-hidden="true"></i>
+          <span className="small">
+            <strong>Reconciled</strong> — {money(summary.memberships)} memberships + {money(summary.deposits)} deposits − {money(summary.refunds)} refunds = <strong>{money(summary.collected - summary.refunds)}</strong>, matching the dashboard Revenue tile.
+          </span>
         </div>
+      )}
 
-        {/* Right Column */}
-        <div className="col-lg-4">
-          {/* Upcoming Appointments */}
-          <SectionCard title="Upcoming Appointments" icon="calendar-event-line" className="mb-4">
-            {data.upcomingAppointments.length === 0 ? (
-              <p className="text-muted small mb-0">No upcoming appointments</p>
-            ) : (
-              data.upcomingAppointments.map((apt: any) => (
-                <div key={apt.id} className="mb-3 pb-2 border-bottom">
-                  <div className="fw-medium small">{apt.title}</div>
-                  {apt.lead && (
-                    <Link to={`/admin/leads/${apt.lead.id}`} className="text-decoration-none small">
-                      {apt.lead.name}
-                      {apt.lead.company ? ` (${apt.lead.company})` : ''}
-                    </Link>
-                  )}
-                  <div className="text-muted" style={{ fontSize: '0.75rem' }}>
-                    {formatDate(apt.scheduled_at)}
-                  </div>
-                </div>
-              ))
-            )}
+      <div className="row g-3 mb-1">
+        <div className="col-lg-7">
+          <SectionCard title="Collected by type" icon="pie-chart-2-line">
+            {summary && ([
+              { label: 'Memberships', amount: summary.memberships, color: '#15803d' },
+              { label: 'Deposits', amount: summary.deposits, color: '#1f5fd0' },
+              { label: 'Refunds', amount: -summary.refunds, color: '#b4302a' },
+            ]).map((b) => (
+              <div key={b.label} className="d-flex align-items-center gap-3 my-2" style={{ fontSize: 13 }}>
+                <span style={{ width: 96, color: 'var(--bs-secondary-color)' }}>{b.label}</span>
+                <span className="flex-grow-1" style={{ height: 9, borderRadius: 6, background: 'var(--bs-tertiary-bg)', overflow: 'hidden' }}>
+                  <span style={{ display: 'block', height: '100%', width: `${pct(Math.abs(b.amount))}%`, background: b.color, borderRadius: 6 }}></span>
+                </span>
+                <span className="fw-semibold text-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>{b.amount < 0 ? '−' : ''}{money(b.amount)}</span>
+              </div>
+            ))}
           </SectionCard>
-
-          {/* Recent Activities */}
-          <SectionCard title="Recent Activity" icon="history-line">
-            {data.recentActivities.length === 0 ? (
-              <p className="text-muted small mb-0">No recent activity</p>
-            ) : (
-              data.recentActivities.map((act: any) => (
-                <div key={act.id} className="mb-2 pb-2 border-bottom">
-                  <div className="d-flex justify-content-between">
-                    <span className="small fw-medium">
-                      {act.subject || act.type}
-                    </span>
-                    <span className="text-muted" style={{ fontSize: '0.7rem' }}>
-                      {formatDate(act.created_at)}
-                    </span>
-                  </div>
-                  {act.lead && (
-                    <Link to={`/admin/leads/${act.lead.id}`} className="text-muted text-decoration-none" style={{ fontSize: '0.75rem' }}>
-                      {act.lead.name}
-                    </Link>
-                  )}
-                </div>
-              ))
-            )}
+        </div>
+        <div className="col-lg-5">
+          <SectionCard title="Deposits in flight" icon="flight-takeoff-line">
+            <div className="d-flex gap-3 align-items-start">
+              <div className="fw-bold" style={{ fontSize: 32, lineHeight: 1, color: '#1f5fd0', fontVariantNumeric: 'tabular-nums' }}>{summary?.depositAvailableCount || 0}</div>
+              <p className="small text-muted mb-0">
+                <strong className="text-body">{money(summary?.deposits || 0)} held</strong> as Open House seat deposits — each a $50 “hold your spot” credit applied to the member’s first subscription charge. Watch how many convert to paid memberships.
+              </p>
+            </div>
           </SectionCard>
         </div>
       </div>
+
+      <SectionCard title={`All payments (${filtered.length})`} icon="exchange-dollar-line" padded={false}>
+        <div className="d-flex justify-content-end align-items-center gap-2 flex-wrap px-3 pt-3 pb-2">
+          <div className="btn-group btn-group-sm" role="group" aria-label="Filter by type">
+            {(['all', 'membership', 'deposit', 'refund'] as TypeFilter[]).map((f) => (
+              <button key={f} type="button" className={`btn ${filter === f ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => setFilter(f)}>
+                {f === 'all' ? 'All' : f === 'membership' ? 'Memberships' : f === 'deposit' ? 'Deposits' : 'Refunds'}
+              </button>
+            ))}
+          </div>
+          <input className="form-control form-control-sm" style={{ width: 190 }} placeholder="Search payer…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        <div className="table-responsive">
+          <table className="table table-hover align-middle mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>When</th><th>Payer</th><th>Type</th><th>Plan</th>
+                <th className="text-end">Amount</th><th>Status</th><th>PaySimple ID</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={8} className="text-center text-muted py-4">No payments match those filters.</td></tr>
+              ) : filtered.map((t) => (
+                <tr key={t.id} style={t.counted ? undefined : { opacity: 0.62 }}>
+                  <td className="small text-muted text-nowrap" title={fmtAbs(t.date)}>{timeAgo(t.date)}</td>
+                  <td>
+                    <div className="fw-medium">{t.payer_name}</div>
+                    <div className="small text-muted"><code>{t.payer_email}</code></div>
+                  </td>
+                  <td><StatusBadge label={typeMeta[t.type].label} tone={typeMeta[t.type].tone} /></td>
+                  <td className="small text-muted">{t.plan || '—'}</td>
+                  <td className="text-end fw-semibold text-nowrap" style={{ fontVariantNumeric: 'tabular-nums', color: t.type === 'refund' ? 'var(--bs-danger)' : undefined }}>
+                    {t.type === 'refund' ? '−' : ''}{money(t.amount)}
+                  </td>
+                  <td><StatusBadge label={t.status} tone={statusTone(t.status)} /></td>
+                  <td className="small text-muted text-nowrap"><code>{t.paysimple_payment_id || '—'}</code></td>
+                  <td className="text-end">
+                    {t.refundable && (
+                      <button className="btn btn-sm btn-outline-danger" disabled={refunding === t.id} onClick={() => onRefund(t)}>
+                        {refunding === t.id ? '…' : 'Refund'}
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="d-flex justify-content-between align-items-center px-3 py-2 small text-muted border-top flex-wrap gap-2">
+          <span>Showing {filtered.length} payment{filtered.length === 1 ? '' : 's'} · {countedShown} counted toward revenue</span>
+          <span>Counted total: <strong className="text-success" style={{ fontVariantNumeric: 'tabular-nums' }}>{money(summary?.collected || 0)}</strong></span>
+        </div>
+      </SectionCard>
     </>
   );
 }
