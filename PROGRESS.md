@@ -9004,3 +9004,9 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali chose HAND-AUTHOR each week (quality over auto-generation). The generated content read "too dry" (lost the diagrams/visuals); the reader now renders hand-authored rich content and locks it so the 30-day refresh cannot overwrite it.
   - Verification: PR CI (backend + frontend typecheck + tests). Post-deploy: opening a Self Study card shows the full-bleed reader with hero + sticky tabs + progress; a `locked` authored card is never regenerated.
   - Notes: Branch `workstream/self-study-authored` off main. Follow-ups (data, not code): author + store + lock each week's reading (Week 1 first, using the standalone Week-1 page's content), extend to weeks 0-12, and position Self Study right after the opening knowledge-check quiz per week.
+- [x] Classroom feed: no-store so a newly-published card appears on next load (stale-feed fix)
+  - Date: 2026-07-18
+  - Session: CC-20260708-q7m3
+  - What changed: Ali published the Week 0 survey but still didn't see it in the classroom. Diagnosed: getFeed returns it (it's #1 in Week 0 — order 0, reflect), but /api/portal/classroom sent an ETag with NO Cache-Control, so the browser heuristically cached the feed and served a stale copy (the screenshot was missing 6 current cards incl. the survey, in the old order). Fix: handleGetClassroomFeed now sends Cache-Control: no-store, must-revalidate — the live per-student curriculum feed is never cached, so a newly-published card shows on the next load. File: backend/src/controllers/timelineController.ts.
+  - Verification: backend tsc 0. Confirmed via getFeed(enrollment) on prod: Week 0 has 11 cards, survey is #1 (reflect). After deploy: refresh the classroom and the survey is the first Week 0 card.
+  - Notes: Deploy backend + nginx. The survey was already correct/published; this removes the stale-cache trap.
