@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { handleGetRevenueDashboard, handleGetRevenuePayments } from '../../controllers/adminRevenueController';
+import { handleGetRevenueDashboard, handleGetRevenuePayments, handleSyncPaymentLedger } from '../../controllers/adminRevenueController';
 import {
   handleGetSettings,
   handleUpdateSettings,
@@ -13,6 +13,8 @@ const router = Router();
 router.get('/api/admin/revenue/dashboard', requireAdmin, handleGetRevenueDashboard);
 // Unified payments feed for the rebuilt /admin/revenue page
 router.get('/api/admin/revenue/payments', requireAdmin, handleGetRevenuePayments);
+// Manual "Sync now" — pull latest PaySimple payments into the ledger (idempotent)
+router.post('/api/admin/revenue/sync', requireAdmin, handleSyncPaymentLedger);
 
 // Settings
 router.get('/api/admin/settings', requireAdmin, handleGetSettings);

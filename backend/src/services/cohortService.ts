@@ -2,6 +2,7 @@ import { Cohort, Enrollment, AccountCredit } from '../models';
 import { UpdateCohortInput } from '../schemas/cohortSchema';
 import { AppError } from '../utils/AppError';
 import { Op } from 'sequelize';
+import { getLedgerRevenueCents } from './paymentLedgerService';
 
 export async function listOpenCohorts() {
   return Cohort.findAll({
@@ -138,20 +139,24 @@ export async function getDashboardStats() {
     (c) => c.status === 'open' && new Date(c.start_date) > new Date()
   ).length;
 
-  // Revenue = real cash collected through PaySimple, from TWO sources so a payer
-  // who made more than one payment is fully (and separately) counted:
-  //  1. Membership/direct payments — SUM(enrollments.amount_paid) over paid rows
-  //     (set by markEnrollmentPaid / subscription activateByRef).
-  //  2. Open House "$50 hold-your-spot" DEPOSITS — recorded as account_credits by
-  //     openHouseCreditService (the payer stays an Explorer; the deposit is NOT a
-  //     membership payment). Count deposits still 'available'; an 'applied' one is
-  //     already folded into the membership charge, so this can't double-count.
-  // Replaces the old count * $4,500 estimate.
-  const membershipRevenue =
-    (await Enrollment.sum('amount_paid', { where: { payment_status: 'paid' } as any })) || 0;
-  const depositCents =
-    (await AccountCredit.sum('amount_cents', { where: { status: 'available' } as any })) || 0;
-  const collectedRevenue = membershipRevenue + depositCents / 100;
+  // Revenue = live cash collected through PaySimple, read from the payment ledger
+  // (payments table): SUM(amount_cents WHERE is_live)/100. The ledger holds one row
+  // per Accelerator PaySimple payment (memberships + $50 deposits), so a recurring
+  // member who paid two months is fully counted and a bounced/reversed payment drops
+  // out automatically ("revenue until the payment fails, then subtracted").
+  // Fallback: if the ledger has not been populated yet (pre-backfill / dev), use the
+  // prior enrollment.amount_paid + available-deposits formula so the KPI never reads $0.
+  const ledger = await getLedgerRevenueCents();
+  let collectedRevenue: number;
+  if (ledger.rowCount > 0) {
+    collectedRevenue = ledger.totalCents / 100;
+  } else {
+    const membershipRevenue =
+      (await Enrollment.sum('amount_paid', { where: { payment_status: 'paid' } as any })) || 0;
+    const depositCents =
+      (await AccountCredit.sum('amount_cents', { where: { status: 'available' } as any })) || 0;
+    collectedRevenue = Number(membershipRevenue) + Number(depositCents) / 100;
+  }
 
   return {
     totalRevenue: collectedRevenue,

@@ -608,6 +608,44 @@ async function ensureRefundSchema() {
   }
 }
 
+async function ensurePaymentsSchema() {
+  // Accelerator payment ledger, mirrored from PaySimple. Source of truth for
+  // Revenue = SUM(amount_cents WHERE is_live). Unique paysimple_payment_id makes
+  // the sync idempotent (upsert; a re-run cannot duplicate a payment). Boot runs
+  // no global sequelize.sync, so the table + indexes are created here in raw SQL.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS payments (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       paysimple_payment_id VARCHAR(120) NOT NULL,
+       paysimple_customer_id VARCHAR(120),
+       payer_email VARCHAR(255),
+       payer_name VARCHAR(255),
+       amount_cents INTEGER NOT NULL,
+       status VARCHAR(40) NOT NULL,
+       is_live BOOLEAN NOT NULL DEFAULT FALSE,
+       payment_type VARCHAR(20) NOT NULL DEFAULT 'other',
+       payment_date TIMESTAMPTZ,
+       enrollment_id UUID,
+       raw JSONB,
+       synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS payments_paysimple_id_unique ON payments (paysimple_payment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_payer_email ON payments (payer_email)`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_is_live ON payments (is_live)`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_payment_date ON payments (payment_date)`,
+    `CREATE INDEX IF NOT EXISTS idx_payments_enrollment ON payments (enrollment_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] payments schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureFreeTierSchema() {
   // Free/guest tier support: a `tier` column on enrollments, and a nullable
   // cohort_id so self-serve free (non-member) accounts can exist without a
@@ -1634,6 +1672,8 @@ async function start(): Promise<void> {
   await ensureAccountCreditSchema();
   // Admin-issued refunds/voids (idempotent).
   await ensureRefundSchema();
+  // Accelerator payment ledger — source of truth for revenue (idempotent).
+  await ensurePaymentsSchema();
   // Open house events (idempotent).
   await ensureOpenHouseSchema();
   // Onboarding profile (resume/LinkedIn prefill) (idempotent).

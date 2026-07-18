@@ -35,6 +35,18 @@ export const env = {
   // failed/reversed -> subtracted). OFF by default so it ships dark; turn on once
   // live READ credentials are set.
   paysimpleSyncEnabled: process.env.PAYSIMPLE_SYNC_ENABLED === 'true',
+  // Payment ledger: ingest Accelerator PaySimple payments into a `payments` table
+  // so Revenue = SUM(live payments). The gateway is SHARED with the bootcamp, so we
+  // only ingest recognized Accelerator amounts (deposit + membership dollars below)
+  // to keep unrelated tuition ($250 installments, etc.) out of Accelerator revenue.
+  paysimpleLedgerEnabled: process.env.PAYSIMPLE_LEDGER_ENABLED === 'true',
+  // Only count payments on/after the membership program launch (pre-launch same-price
+  // charges are bootcamp, not Accelerator). ISO date.
+  paysimpleLedgerStart: process.env.PAYSIMPLE_LEDGER_START || '2026-06-01',
+  // Dollar amounts that identify an Accelerator payment in the shared gateway.
+  paysimpleDepositDollars: Number(process.env.PAYSIMPLE_DEPOSIT_DOLLARS || 50),
+  paysimpleMembershipDollars: (process.env.PAYSIMPLE_MEMBERSHIP_DOLLARS || '149,199,1788')
+    .split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0),
 
   // JWT
   jwtSecret: resolveJwtSecret(),

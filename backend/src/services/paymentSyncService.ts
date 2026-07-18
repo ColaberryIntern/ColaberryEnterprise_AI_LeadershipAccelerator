@@ -31,7 +31,8 @@ export const COLLECTED_STATUSES = new Set<string>([
   'settled', 'authorized', 'captured', 'posted', 'paid', 'success', 'completed',
 ]);
 export const FAILED_STATUSES = new Set<string>([
-  'failed', 'returned', 'voided', 'declined', 'reversed', 'chargeback', 'refunded', 'canceled', 'cancelled',
+  'failed', 'returned', 'returneditem', 'voided', 'declined', 'reversed', 'reversensf',
+  'chargeback', 'refunded', 'refundsettled', 'canceled', 'cancelled',
 ]);
 
 export interface NormalizedPayment {

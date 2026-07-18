@@ -4,17 +4,12 @@ import { sequelize } from '../config/database';
 /* ------------------------------------------------------------------ */
 /*  Revenue payments — the unified "all payments" view                 */
 /*                                                                     */
-/*  There is no single payments table; money lives across four         */
-/*  enrollment-linked tables. This service merges them into one        */
-/*  normalized transaction list + a summary that reconciles EXACTLY to */
-/*  the dashboard Revenue KPI (cohortService.getDashboardStats):       */
-/*    collected = SUM(enrollments.amount_paid where paid)              */
-/*              + SUM(account_credits.amount_cents where available)/100 */
-/*                                                                     */
-/*  Sources:                                                            */
-/*   - memberships → enrollments.amount_paid (+ subscription plan/id)  */
-/*   - deposits    → account_credits (Open House $50 holds)            */
-/*   - refunds     → refunds (money returned; shown negative)          */
+/*  Reads straight from the payment ledger (payments table), the single */
+/*  source of truth for Accelerator revenue, plus admin-issued refunds. */
+/*  Revenue reconciles EXACTLY to the dashboard KPI:                    */
+/*    collected = SUM(payments.amount_cents WHERE is_live)/100          */
+/*  A bounced/reversed payment stays in the list (counted=false) so the */
+/*  admin can see it, but it does not add to the collected total.       */
 /* ------------------------------------------------------------------ */
 
 export interface RevenueTransaction {
@@ -25,56 +20,50 @@ export interface RevenueTransaction {
   type: 'membership' | 'deposit' | 'refund';
   plan: string | null;
   amount: number; // dollars; refunds are negative
-  status: string; // active | settled | available | applied | void | pending | succeeded | failed
+  status: string; // PaySimple status (Settled | Posted | ReverseNSF | Returned | ...) or refund status
   paysimple_payment_id: string | null;
-  refundable: boolean; // has a payment id AND not already refunded/void
-  counted: boolean; // contributes to the collected total
+  refundable: boolean; // live, has a payment id, and not already refunded/void
+  counted: boolean; // contributes to the collected total (is_live)
   enrollment_id: string | null;
 }
 
 export interface RevenueSummary {
   collected: number;
   memberships: number;
-  deposits: number; // available deposits
+  deposits: number;
   refunds: number; // succeeded refunds (positive number)
   net: number; // collected - refunds
   membershipCount: number;
-  depositAvailableCount: number;
-  depositAppliedCount: number;
+  depositAvailableCount: number; // live deposits
+  depositAppliedCount: number; // bounced/returned deposits (not counted)
   refundCount: number;
 }
 
-const cap = (s: string | null | undefined): string | null =>
-  s ? s.charAt(0).toUpperCase() + s.slice(1) : null;
+function planLabel(type: string, amount: number): string | null {
+  if (type === 'deposit') return 'Deposit';
+  if (type === 'membership') return amount >= 1000 ? 'Annual' : 'Monthly';
+  return null;
+}
 
 export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; transactions: RevenueTransaction[] }> {
-  // 1) Memberships — paid enrollments carrying a real amount, with their latest subscription.
-  const memberships = (await sequelize.query(
-    `SELECT e.id AS enrollment_id, e.full_name, e.email, e.amount_paid::float8 AS amount,
-            COALESCE(e.enrolled_at, s.started_at) AS date,
-            COALESCE(e.paysimple_payment_id, s.paysimple_payment_id) AS pid,
-            s.plan, s.status AS sub_status
-       FROM enrollments e
-       LEFT JOIN LATERAL (
-         SELECT plan, status, paysimple_payment_id, started_at
-           FROM subscriptions WHERE enrollment_id = e.id ORDER BY created_at DESC LIMIT 1
-       ) s ON true
-      WHERE e.payment_status = 'paid' AND e.amount_paid > 0`,
+  // 1) Ledger rows (live + dead), newest first.
+  const ledger = (await sequelize.query(
+    `SELECT id, paysimple_payment_id, payer_email, payer_name, amount_cents, status,
+            is_live, payment_type, payment_date, enrollment_id
+       FROM payments
+      ORDER BY payment_date DESC NULLS LAST`,
     { type: QueryTypes.SELECT }
   )) as any[];
 
-  // 2) Open House $50 deposits.
-  const deposits = (await sequelize.query(
-    `SELECT ac.id, e.id AS enrollment_id, e.full_name, e.email,
-            (ac.amount_cents / 100.0)::float8 AS amount, ac.created_at AS date,
-            ac.status, ac.source_event_id
-       FROM account_credits ac
-       JOIN enrollments e ON e.id = ac.enrollment_id
-      WHERE ac.reason = 'open_house_deposit'`,
-    { type: QueryTypes.SELECT }
-  )) as any[];
+  // 2) Which payment ids already have a refund/void (so we don't offer it twice).
+  const refundedIds = new Set<string>(
+    ((await sequelize.query(
+      `SELECT DISTINCT paysimple_payment_id AS pid FROM refunds WHERE status IN ('succeeded','pending')`,
+      { type: QueryTypes.SELECT }
+    )) as Array<{ pid: string }>).map((r) => r.pid)
+  );
 
-  // 3) Refunds.
+  // 3) Refund ledger (shown as negative rows; succeeded ones reduce net).
   const refunds = (await sequelize.query(
     `SELECT r.id, r.enrollment_id, r.customer_email, (r.amount_cents / 100.0)::float8 AS amount,
             r.created_at AS date, r.status, r.method, r.paysimple_payment_id AS pid, e.full_name
@@ -85,41 +74,21 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
 
   const tx: RevenueTransaction[] = [];
 
-  for (const m of memberships) {
+  for (const p of ledger) {
+    const amount = Number(p.amount_cents) / 100;
     tx.push({
-      id: `mem-${m.enrollment_id}`,
-      date: m.date ? new Date(m.date).toISOString() : null,
-      payer_name: m.full_name || m.email || '—',
-      payer_email: m.email || '',
-      type: 'membership',
-      plan: cap(m.plan),
-      amount: Number(m.amount),
-      status: m.sub_status === 'active' ? 'active' : 'settled',
-      paysimple_payment_id: m.pid || null,
-      refundable: !!m.pid,
-      counted: true,
-      enrollment_id: m.enrollment_id,
-    });
-  }
-
-  for (const d of deposits) {
-    const pid =
-      typeof d.source_event_id === 'string' && d.source_event_id.startsWith('ps-payment-')
-        ? d.source_event_id.slice('ps-payment-'.length)
-        : null;
-    tx.push({
-      id: `dep-${d.id}`,
-      date: d.date ? new Date(d.date).toISOString() : null,
-      payer_name: d.full_name || d.email || '—',
-      payer_email: d.email || '',
-      type: 'deposit',
-      plan: null,
-      amount: Number(d.amount),
-      status: d.status, // available | applied | void
-      paysimple_payment_id: pid,
-      refundable: d.status === 'available' && !!pid,
-      counted: d.status === 'available',
-      enrollment_id: d.enrollment_id,
+      id: `pay-${p.id}`,
+      date: p.payment_date ? new Date(p.payment_date).toISOString() : null,
+      payer_name: p.payer_name || p.payer_email || '—',
+      payer_email: p.payer_email || '',
+      type: p.payment_type === 'deposit' ? 'deposit' : 'membership',
+      plan: planLabel(p.payment_type, amount),
+      amount,
+      status: p.status,
+      paysimple_payment_id: p.paysimple_payment_id || null,
+      refundable: !!p.is_live && !!p.paysimple_payment_id && !refundedIds.has(p.paysimple_payment_id),
+      counted: !!p.is_live,
+      enrollment_id: p.enrollment_id || null,
     });
   }
 
@@ -132,30 +101,34 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
       type: 'refund',
       plan: r.method === 'void' ? 'Void' : 'Reversal',
       amount: -Math.abs(Number(r.amount)),
-      status: r.status, // succeeded | pending | failed
+      status: r.status,
       paysimple_payment_id: r.pid || null,
       refundable: false,
-      counted: false, // refunds reduce net separately, shown as negative
-      enrollment_id: r.enrollment_id,
+      counted: false,
+      enrollment_id: r.enrollment_id || null,
     });
   }
 
   tx.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
 
-  const membershipRev = memberships.reduce((s, m) => s + Number(m.amount), 0);
-  const depositAvail = deposits.filter((d) => d.status === 'available').reduce((s, d) => s + Number(d.amount), 0);
+  // Summary — sourced from the ledger so it reconciles to the KPI exactly.
+  const liveRows = ledger.filter((p) => p.is_live);
+  const membershipRev =
+    liveRows.filter((p) => p.payment_type === 'membership').reduce((s, p) => s + Number(p.amount_cents), 0) / 100;
+  const depositRev =
+    liveRows.filter((p) => p.payment_type === 'deposit').reduce((s, p) => s + Number(p.amount_cents), 0) / 100;
+  const collected = membershipRev + depositRev;
   const refundSucceeded = refunds.filter((r) => r.status === 'succeeded').reduce((s, r) => s + Number(r.amount), 0);
-  const collected = membershipRev + depositAvail;
 
   const summary: RevenueSummary = {
     collected,
     memberships: membershipRev,
-    deposits: depositAvail,
+    deposits: depositRev,
     refunds: refundSucceeded,
     net: collected - refundSucceeded,
-    membershipCount: memberships.length,
-    depositAvailableCount: deposits.filter((d) => d.status === 'available').length,
-    depositAppliedCount: deposits.filter((d) => d.status === 'applied').length,
+    membershipCount: liveRows.filter((p) => p.payment_type === 'membership').length,
+    depositAvailableCount: liveRows.filter((p) => p.payment_type === 'deposit').length,
+    depositAppliedCount: ledger.filter((p) => !p.is_live && p.payment_type === 'deposit').length,
     refundCount: refunds.filter((r) => r.status === 'succeeded').length,
   };
 

@@ -202,6 +202,39 @@ export async function getPayment(paymentId: string | number): Promise<PaySimpleP
   return apiRequest<PaySimplePayment>('GET', `/v4/payment/${paymentId}`);
 }
 
+/**
+ * List payments most-recent-first, paging until we reach `since` (or run out).
+ * Used by the payment ledger sync to ingest every Accelerator payment (not just
+ * ones we recorded an id for). Bounded: stops once a page's earliest date is
+ * before `since`, and hard-caps at `maxPages` so a misconfigured `since` can't
+ * page the entire account. Each page is unwrapped by apiRequest (.Response).
+ */
+export async function listPayments(params: {
+  since: Date;
+  pageSize?: number;
+  maxPages?: number;
+}): Promise<PaySimplePayment[]> {
+  const pageSize = params.pageSize ?? 200;
+  const maxPages = params.maxPages ?? 20;
+  const sinceMs = params.since.getTime();
+  const out: PaySimplePayment[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const rows = await apiRequest<PaySimplePayment[]>(
+      'GET',
+      `/v4/payment?pagesize=${pageSize}&page=${page}&sortby=PaymentDate&direction=DESC`
+    );
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    out.push(...rows);
+    const earliest = rows[rows.length - 1]?.PaymentDate;
+    if (earliest && Date.parse(earliest) < sinceMs) break; // walked past the window
+    if (rows.length < pageSize) break; // last page
+  }
+  return out.filter((p) => {
+    const t = p.PaymentDate ? Date.parse(p.PaymentDate) : NaN;
+    return Number.isFinite(t) && t >= sinceMs;
+  });
+}
+
 /** Fetch a customer by id (to resolve the payer email for a payment). Null on error. */
 export async function getCustomerById(customerId: string | number): Promise<PaySimpleCustomer | null> {
   try {

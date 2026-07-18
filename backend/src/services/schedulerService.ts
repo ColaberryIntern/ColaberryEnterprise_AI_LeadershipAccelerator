@@ -1814,6 +1814,23 @@ export function startScheduler(): void {
     console.log('[Scheduler] PaySimplePaymentSync scheduled (*/30 * * * *)');
   }
 
+  // Payment ledger self-heal: ingest Accelerator PaySimple payments into the
+  // `payments` table (source of truth for revenue) every 15 minutes. New payments
+  // are recorded, status flips (bounce/reversal) drop out of revenue, and a live
+  // membership payer with no account gets a member enrollment. Ships dark — only
+  // scheduled when PAYSIMPLE_LEDGER_ENABLED=true.
+  if (env.paysimpleLedgerEnabled) {
+    cron.schedule('*/15 * * * *', () => {
+      instrumentCronJob('PaymentLedgerSync', async () => {
+        const { syncPaymentLedger } = await import('./paymentLedgerService');
+        await syncPaymentLedger({});
+      }).catch((err) => {
+        console.error('[Scheduler] Payment ledger sync error:', err);
+      });
+    });
+    console.log('[Scheduler] PaymentLedgerSync scheduled (*/15 * * * *)');
+  }
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', async () => {
     try {
