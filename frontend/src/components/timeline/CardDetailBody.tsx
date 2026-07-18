@@ -107,26 +107,52 @@ interface Props {
   autoplayVideo?: boolean;                 // drawer contexts: the open click was the play intent — start the video immediately
 }
 
+const GEN_STEPS = ['Reading this week\'s blueprint…', 'Drafting the sections…', 'Adding examples and key terms…', 'Formatting your reading…'];
+
+/** Animated "producing your reading" state shown full-bleed while an empty Self
+ *  Study card generates its content on first open (the server call is in flight). */
+const GeneratingReader: React.FC = () => {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => (n + 1) % GEN_STEPS.length), 1600);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="ssgen">
+      <div className="ssgen-orb"><span /><span /><span /></div>
+      <div className="ssgen-title">Producing your Self Study reading…</div>
+      <div className="ssgen-step">{GEN_STEPS[i]}</div>
+      <div className="ssgen-bar"><i /></div>
+      <div className="ssgen-note">This runs once for your whole cohort — the next person to open it sees it instantly.</div>
+    </div>
+  );
+};
+
 const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWorkspace, onClose, autoplayVideo }) => {
   // The admin-populated lesson content is the single source of notes. It expires
   // after 30 days; on open (live only) we ask the server to ensure it's fresh —
   // the first student past 30 days triggers a class-wide regenerate. Until that
   // returns, show whatever the feed already carried.
   const [content, setContent] = useState<TimelineFeedCard['content']>(card.content || null);
+  const [generating, setGenerating] = useState(false);
   useEffect(() => { setContent(card.content || null); }, [card.id, card.content]);
   useEffect(() => {
     if (preview) return;
     // Testimonials + podcasts + blogs present the picked item's own description — never AI lesson notes.
     if (card.type === 'testimonial' || card.type === 'podcast' || card.type === 'blog') return;
-    // Only content-bearing cards refresh (video, or anything that already has content).
-    const contentBearing = ['media', 'live_class', 'video_feedback'].includes(card.render_band) || !!card.content;
+    const reader = card.render_band === 'warmup';   // Self Study: generates on first open when empty
+    // Content-bearing: video bands, anything with content, OR a Self Study reader
+    // (an empty reader asks the server to produce the reading now).
+    const contentBearing = ['media', 'live_class', 'video_feedback'].includes(card.render_band) || !!card.content || reader;
     if (!contentBearing) return;
     let alive = true;
+    if (reader && !card.content) setGenerating(true);   // empty reader → show the producing animation
     portalApi.post(`/api/portal/runtime/cards/${card.id}/content`, {})
       .then((r) => { if (alive && r.data?.content) setContent(r.data.content); })
-      .catch(() => { /* keep showing the feed copy */ });
+      .catch(() => { /* keep showing whatever we already had */ })
+      .finally(() => { if (alive) setGenerating(false); });
     return () => { alive = false; };
-  }, [card.id, card.render_band, card.content, preview]);
+  }, [card.id, card.render_band, card.content, card.type, preview]);
 
   const source = parseVideoUrl(card.video?.url);
   const isVideo = ['media', 'live_class', 'video_feedback'].includes(card.render_band);
@@ -176,7 +202,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title)} />
-            : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>
