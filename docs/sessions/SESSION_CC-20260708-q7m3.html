@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Saturday, July 18, 2026 at 2:16 PM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">76 changes</span></div>
+    <div class="meta">Generated Saturday, July 18, 2026 at 2:57 PM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">78 changes</span></div>
   </header>
   <main>
     
@@ -1197,6 +1197,36 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. Also (data) applied the reflect gating chain on prod: 12 evaluations ← Learn, 12 surveys ← evaluation, 14 reflections ← survey; getFeed confirms locked status + reasons.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Evaluation/survey blueprint rebuild ran separately (rebuildWeeklyReflect).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">77</span>
+          <h2>Classroom order = Timeline section order + Week 0 survey now locked</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;curriculum should be in the order it appears in the timeline (my feedback is at the end of the timeline but shows up 1st in the curriculum)&quot; + &quot;it doesn&#39;t have the locks it should have.&quot; (1) Ordering: card `order` is per-(week,bucket) lane, so sorting the feed by order alone interleaved sections (a reflect card surfaced above learn). getFeed now sorts by week → BUCKET_ORDER index (pre_class→learn→practice→build→reflect→share→advance) → order, and ClassroomPage&#39;s weekCards sorts by section index then order (matches the Timeline tab; reflect/feedback reads at the END). (2) Week 0 lock: its lone reflect card is a survey with no evaluation, so setReflectGating left it ungated; the survey branch now falls back to [section_complete learn] when a week has no evaluation, so Week 0&#39;s feedback is locked until the Learn section is done. Files: backend/src/services/timeline/timelineService.ts (feed sort), frontend/src/pages/portal/ClassroomPage.tsx (weekCards sort), backend/src/scripts/setReflectGating.ts (survey fallback).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0, frontend tsc 0; timeline suites 61/61. After deploy + re-run setReflectGating: classroom shows sections in order (feedback last); Week 0 survey locked until Learn complete.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deploy backend + nginx; re-run node dist/scripts/setReflectGating.js. Composer↔Timeline canvas sync (separate ask) is the next change.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">78</span>
+          <h2>Married the Curriculum Composer canvas to the live Timeline</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;the curriculum composer is not in sync with Timeline — they should be married together.&quot; Root cause (mapped): the Composer&#39;s &quot;Timeline canvas&quot; rendered the blueprint&#39;s stale generated_plan JSON snapshot, while the Timeline tab + student feed read live timeline_cards; publish is a one-way copy and direct Timeline edits never flow back, so the canvas drifted (different cards + order). Fix (read-sync): the canvas now mirrors the LIVE published timeline_cards for the selected (program, week), in section order. New composerKit.timelineBoard(programId) (reuses GET /api/admin/orchestration/timeline — same source as the Timeline tab) + livePlanForWeek() maps published cards → the canvas Plan shape sorted pre_class→…→advance. CurriculumComposerTab: on open/load/publish, syncCanvasToLive() loads the live cards (falls back to the draft plan if none published); Generate still shows the AI draft (Draft·unpublished badge) until published; a &quot;● Live · synced with Timeline&quot; badge + &quot;⟳ Sync with Timeline&quot; button make the state explicit. Files: frontend/src/pages/admin/orchestration/composer/composerKit.tsx, CurriculumComposerTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. After deploy: open a published week in the Composer → the canvas shows exactly the live Timeline cards in the same order as the Timeline tab / classroom (e.g. reflect feedback last).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only (reuses the existing timeline list endpoint) — deploy nginx. Read-parity; full two-way edit-sync would need a per-card identity link (flagged, not built).</span></div>
           
         </div>
       </article>
