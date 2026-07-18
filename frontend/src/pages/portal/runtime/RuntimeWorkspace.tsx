@@ -25,6 +25,15 @@ const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 const RuntimeWorkspace: React.FC = () => {
   const { cardId = '' } = useParams();
   const navigate = useNavigate();
+  // Go back to wherever the student came from — normally the classroom, which
+  // restores their week / open card / scroll from a session snapshot. Pop real
+  // in-app history so the browser back button stays clean (no stacked entries);
+  // fall back to the classroom on a direct/deep link with no history to pop.
+  const goBack = useCallback(() => {
+    const idx = (window.history.state && (window.history.state as { idx?: number }).idx) || 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/portal/classroom');
+  }, [navigate]);
   const [data, setData] = useState<RtOpen | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [error, setError] = useState('');
@@ -127,7 +136,7 @@ const RuntimeWorkspace: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
 
-  if (error) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={() => navigate('/portal/classroom')}>← Classroom</button></div></div>;
+  if (error) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← Classroom</button></div></div>;
   if (!card) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
 
   const emp = readiness?.employment; const cert = readiness?.certification; const jr = readiness?.journey; const evd = readiness?.evidence;
@@ -164,7 +173,7 @@ const RuntimeWorkspace: React.FC = () => {
     <div className="rt">
       <style>{runtimeCss}</style>
       <header className="rt-top">
-        <button className="rt-back" onClick={() => navigate('/portal/classroom')} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+        <button className="rt-back" onClick={goBack} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
         <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
         <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>
       </header>

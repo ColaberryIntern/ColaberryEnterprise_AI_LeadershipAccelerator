@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
@@ -32,6 +32,24 @@ interface Feed {
 const wkLabel = (w: number | null): string => (w === 0 ? 'Free Preview' : w != null ? `Week ${w}` : 'Classroom');
 
 const titleCase = (s: string): string => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+// Persist the classroom view (selected week + window scroll) so that leaving for
+// the runtime workspace and coming back — via the workspace Back button OR the
+// browser's own back button — returns the student to the same spot in the list,
+// instead of remounting fresh and resetting to the top of the default week.
+// Session-scoped (per browser tab); cleared naturally when the tab closes.
+const VIEW_KEY = 'classroom-view';
+interface ViewSnapshot { week: number | null; scrollY: number }
+const readViewSnapshot = (): ViewSnapshot | null => {
+  try {
+    const raw = window.sessionStorage.getItem(VIEW_KEY);
+    return raw ? (JSON.parse(raw) as ViewSnapshot) : null;
+  } catch { return null; }
+};
+const writeViewSnapshot = (snap: ViewSnapshot): void => {
+  try { window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(snap)); } catch { /* private mode / quota — non-fatal */ }
+};
+
 const readTheme = (): 'light' | 'dark' =>
   (typeof window !== 'undefined' && window.localStorage.getItem('tl-theme') === 'dark') ? 'dark' : 'light';
 
@@ -85,12 +103,41 @@ const ClassroomPage: React.FC = () => {
     return Array.from(set).sort((a, b) => a - b);
   }, [feed]);
 
-  // default to the first week that still has an incomplete card
+  // Restore the last-viewed week (+ scroll position) when the student returns
+  // from the runtime workspace; otherwise default to the first week that still
+  // has an incomplete card. Runs once, after the feed loads.
+  const restoredRef = useRef(false);
   useEffect(() => {
-    if (!feed || week != null || weeks.length === 0) return;
-    const firstOpen = weeks.find((w) => feed.cards.some((c) => c.week === w && c.status !== 'completed'));
-    setWeek(firstOpen ?? weeks[0]);
+    if (!feed || weeks.length === 0) return;
+    if (!restoredRef.current) {
+      restoredRef.current = true;
+      const snap = readViewSnapshot();
+      if (snap && snap.week != null && weeks.includes(snap.week)) {
+        setWeek(snap.week);
+        // Restore scroll after the feed has painted at full height. App-level
+        // ScrollToTop zeroes the window on every route change, so this must run
+        // after it — two rAFs lands us past layout + that reset.
+        const y = snap.scrollY || 0;
+        if (y > 0) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+        return;
+      }
+    }
+    if (week == null) {
+      const firstOpen = weeks.find((w) => feed.cards.some((c) => c.week === w && c.status !== 'completed'));
+      setWeek(firstOpen ?? weeks[0]);
+    }
   }, [feed, weeks, week]);
+
+  // Snapshot the current view on unmount (i.e. when navigating to the workspace
+  // or anywhere else) so the restore above has something to return to. A ref
+  // holds the latest week so the cleanup captures the real position, not a stale
+  // closure. window.scrollY is read before App-level ScrollToTop resets it
+  // (unmount cleanups run before the new route's effects).
+  const viewRef = useRef<number | null>(week);
+  viewRef.current = week;
+  useEffect(() => () => {
+    writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY });
+  }, []);
 
   const weekCards = useMemo(() => {
     if (!feed) return [];
