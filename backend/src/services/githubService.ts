@@ -90,6 +90,8 @@ export async function getRepoStatus(enrollmentId: string): Promise<any> {
   if (!connection) return null;
 
   return {
+    connected: !!(connection.repo_owner && connection.repo_name),
+    hasToken: !!connection.access_token_encrypted,
     repoUrl: connection.repo_url,
     repoOwner: connection.repo_owner,
     repoName: connection.repo_name,
