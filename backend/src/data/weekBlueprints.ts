@@ -161,7 +161,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 2,
     title: 'Agent Skills (build 3 skills)',
-    anthropic_course_minutes: null, // Introduction to Agent Skills — account not enrolled; awaiting confirmed duration
+    anthropic_course_minutes: 45, // Introduction to Agent Skills — 6 lessons; Skilljar publishes no video-hours for this course (lesson-based), so this is a lesson-count estimate (enrolled + verified 2026-07-18)
     difficulty: 'core',
     estimated_hours: 7,
     purpose:
@@ -396,7 +396,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 7,
     title: 'Subagents + Multi-Agent Team',
-    anthropic_course_minutes: null, // Introduction to Subagents — account not enrolled; awaiting confirmed duration
+    anthropic_course_minutes: 35, // Introduction to Subagents — 4 lessons; Skilljar publishes no video-hours (lesson-based), so this is a lesson-count estimate (enrolled + verified 2026-07-18)
     difficulty: 'stretch',
     estimated_hours: 7,
     purpose:
