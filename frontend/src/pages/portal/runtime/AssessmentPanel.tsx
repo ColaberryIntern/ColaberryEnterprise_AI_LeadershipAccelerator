@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { runtimeApi, AssessmentView, AssessmentResult, AssessmentItem, AssessmentKind, AssessmentQ, CompetencyScore, SectionProgress, Readiness } from './runtimeApi';
+import { emitPointsEarned } from '../../../services/pointsFx';
 
 /**
  * AssessmentPanel — the Knowledge Check (quiz) and Evaluation experience in the
@@ -89,6 +90,9 @@ const AssessmentPanel: React.FC<Props> = ({ cardId, onCompleted, preview, kind: 
       const r = await runtimeApi.submitAssessment(cardId, { responses, duration_ms: now() - startRef.current, started_at: new Date(startRef.current).toISOString() });
       setResult(r);
       setPhase('result');
+      // Knowledge Check always completes; Evaluation only on a pass — the backend
+      // reports the exact points awarded (0 if none), which drives the HUD burst.
+      emitPointsEarned(r.completion?.outcome?.points_awarded ?? 0);
       onCompleted?.(r.completion?.readiness ?? null);
     } catch { setPhase('error'); } finally { setBusy(false); }
   };
