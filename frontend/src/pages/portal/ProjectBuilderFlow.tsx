@@ -158,6 +158,20 @@ export default function ProjectBuilderFlow() {
   const goNext = useCallback(async () => {
     setErr('');
 
+    if (step === 0) {
+      // Persist the project name immediately — without this, no project row
+      // exists yet, so a page reload before requirements are generated has
+      // nothing to resume from and always resets to step 0.
+      if (!projectName.trim()) { setErr('Name your project first.'); return; }
+      setLoading('Saving…');
+      try {
+        await portalApi.patch('/api/portal/project/name', { name: projectName.trim() });
+      } catch { /* non-critical — resume-on-reload just won't work yet if this fails */ }
+      finally { setLoading(''); }
+      setStep(1);
+      return;
+    }
+
     if (step === 1) {
       // Generate sharpening questions from idea
       if (!idea.trim()) { setErr('Describe your idea first.'); return; }
