@@ -89,8 +89,14 @@ const ClassroomPage: React.FC = () => {
 
   const weekCards = useMemo(() => {
     if (!feed) return [];
-    if (weeks.length === 0) return feed.cards;
-    return feed.cards.filter((c) => c.week === week).sort((a, b) => a.order - b.order);
+    // Sort by SECTION order (pre_class → learn → … → reflect → share → advance)
+    // then by the card's order in its lane — matches the Timeline tab, so e.g.
+    // the reflect feedback survey reads at the END, not interleaved at the top.
+    const bIdx = (b: string) => { const i = feed.buckets.indexOf(b); return i < 0 ? feed.buckets.length : i; };
+    const bySection = (a: typeof feed.cards[number], b: typeof feed.cards[number]) =>
+      bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order;
+    if (weeks.length === 0) return [...feed.cards].sort(bySection);
+    return feed.cards.filter((c) => c.week === week).sort(bySection);
   }, [feed, weeks, week]);
 
   const done = weekCards.filter((c) => c.status === 'completed').length;
