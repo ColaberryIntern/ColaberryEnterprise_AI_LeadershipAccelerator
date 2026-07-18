@@ -7,6 +7,7 @@ import SessionGate from '../models/SessionGate';
 import { Enrollment, Cohort, SectionConfig, ArtifactDefinition, PromptTemplate, AssignmentSubmission } from '../models';
 import MiniSection from '../models/MiniSection';
 import { getCourseLinkMap } from './courseLinkService';
+import { awardLessonCompletionPoints } from './progression/cardPointsService';
 import { generateLessonContent } from './contentGenerationService';
 import * as variableService from './variableService';
 import * as artifactService from './artifactService';
@@ -375,6 +376,9 @@ export async function completeLesson(
   // Mark complete
   await instance.update({ status: 'completed', completed_at: new Date() });
 
+  // Engagement points for the HUD (idempotent per lesson; non-fatal).
+  const points_awarded = await awardLessonCompletionPoints(enrollmentId, lessonId);
+
   // Unlock next lesson
   await unlockNextLesson(enrollmentId, lesson);
 
@@ -388,7 +392,7 @@ export async function completeLesson(
     title: (nextInstance as any).lesson?.title,
   } : null;
 
-  return { passed: true, score: payload.quiz_score, next_lesson: nextLesson };
+  return { passed: true, score: payload.quiz_score, next_lesson: nextLesson, points_awarded };
 }
 
 /* ------------------------------------------------------------------ */

@@ -59,6 +59,14 @@ export const runtimeCss = `
 .rt-artifact{background:var(--leaf-soft);border:1px solid rgba(91,166,60,.3);border-radius:13px;padding:16px 18px;margin-top:16px}
 .rt-artifact b{font-size:15px}
 .rt-complete{margin-top:22px;padding-top:18px;border-top:1px solid var(--line)}
+/* Self Study reader in the workstation: the iframe FILLS the center as the single scroll
+   (no nested/adjacent scrollbars); the complete gate sits in a slim fixed foot, and the
+   cohort comments move to the right rail (under the mentor). */
+.rt-mid--reader{overflow:hidden;display:flex;flex-direction:column;padding:0;max-width:none}
+.rt-readerwrap{flex:1;display:flex;flex-direction:column;min-height:0}
+.rt-readerframe{flex:1;width:100%;border:0;min-height:0;background:#F7F4EE;display:block}
+.rt-readerfoot{flex:none;display:flex;align-items:center;justify-content:flex-end;gap:12px;padding:12px 18px;border-top:1px solid var(--line);background:var(--paper)}
+.rt-comments--rail{flex:none;max-height:35vh;overflow-y:auto;margin:0;border-top:1px solid var(--line);padding:12px 14px}
 .rt-bar{display:flex;align-items:center;gap:24px;flex-wrap:wrap;padding:11px 20px;background:var(--ink);color:#D4DEE2;flex:none}
 .rt-stat{display:flex;flex-direction:column;gap:1px}
 .rt-stat .l{font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;color:#7d8b92}

@@ -105,6 +105,19 @@
 .tl-de .fc-head .st-ic{margin-left:auto;flex:none}
 .tl-de .fc-body{padding:0 20px 14px}
 .tl-de .fc-body p{margin:0 0 14px;color:var(--text-body);font-size:14.5px}
+/* ── Locked card: big lock over a dimmed tile; every interaction is blocked ── */
+.tl-de .fc-media-wrap{position:relative}
+.tl-de .fcard.locked .fc-media-wrap > .mthumb{filter:grayscale(.5) brightness(.62);pointer-events:none}
+.tl-de .fcard.locked .fc-media-wrap > .mthumb *{pointer-events:none}
+.tl-de .fc-lock{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--r-12);background:linear-gradient(180deg,rgba(20,24,27,.42),rgba(20,24,27,.66));color:#fff;text-align:center;padding:16px;cursor:not-allowed}
+.tl-de .fc-lock-ic{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.16);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center}
+.tl-de .fc-lock-ic svg{width:34px;height:34px;color:#fff}
+.tl-de .fc-lock-txt{font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.tl-de .fc-lock-sub{font-size:12.5px;font-weight:600;opacity:.95;max-width:280px;line-height:1.4;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.tl-de .fcard.locked{opacity:.96}
+.tl-de .fcard.locked .fc-foot .like,.tl-de .fcard.locked .fc-foot .cmt{opacity:.4;cursor:not-allowed}
+.tl-de .fcard.locked .fc-foot .like:hover,.tl-de .fcard.locked .fc-foot .cmt:hover{color:inherit}
 .tl-de .fc-foot{display:flex;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid var(--border-subtle);background:var(--surface-subtle);flex-wrap:wrap}
 .tl-de .fc-foot .like,.tl-de .fc-foot .cmt{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-default);
   background:var(--surface-page);border-radius:var(--r-pill);padding:7px 14px;font-size:13px;font-weight:700;color:var(--text-muted);font-family:inherit;transition:.16s var(--ease)}
@@ -330,3 +343,8 @@
 }
 /* Watch-gate rejection message in the drawer footer */
 .tld-gatemsg{font-size:12.5px;font-weight:600;color:var(--cherry-deep,#a4161a);margin-right:auto;align-self:center}
+/* Shared Self Study "Mark complete" CTA — UNSCOPED so the drawer footer (.tl-de) and
+   the workstation (.rt) render it identically in color + size (Ali: they must match). */
+.ss-complete-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #c20e1e;background:#c20e1e;color:#fff;font:600 14px/1 Roboto,system-ui,-apple-system,sans-serif;padding:11px 22px;border-radius:999px;cursor:pointer;transition:background .15s,border-color .15s}
+.ss-complete-btn:hover{background:#a50c1a;border-color:#a50c1a}
+.ss-complete-btn:disabled{opacity:.6;cursor:not-allowed}

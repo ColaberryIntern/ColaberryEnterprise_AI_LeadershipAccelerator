@@ -14,6 +14,7 @@ import StudentLevel from '../../models/StudentLevel';
 import { EvidenceSource } from '../../models/EvidenceRecord';
 import { resolve as resolveType } from '../timeline/typeRegistry';
 import { getTypeXp } from './pointsConfigService';
+import { awardCardCompletionPoints } from './cardPointsService';
 import { awardLearningXp } from './learningEngine';
 import { recordCardEvidence } from './evidenceEngine';
 import { recomputeForEnrollment, getStudentCompetency } from './competencyEngine';
@@ -52,6 +53,7 @@ export interface CardCompletionOutcome {
   learning_xp: number;
   builder_xp: number;
   community_xp: number;
+  points_awarded: number;   // engagement points credited to the HUD total (0 if already earned)
   promotion: PromotionOutcome;
 }
 
@@ -101,10 +103,14 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
 
   const community_xp = await awardCommunityXp(enrollmentId, { id: card.id, type: card.type }, (await getTypeXp(card.type)).community);
 
+  // Engagement points for the HUD (StudentPointsEvent) — a separate ledger from XP.
+  // Non-fatal + idempotent per (enrollment, card): re-completing awards 0.
+  const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type });
+
   await recomputeForEnrollment(enrollmentId);
   const promotion = await evaluateForEnrollment(enrollmentId);
 
-  return { card_id: cardId, learning_xp, builder_xp, community_xp, promotion };
+  return { card_id: cardId, learning_xp, builder_xp, community_xp, points_awarded, promotion };
 }
 
 export interface ProgressionSummary {

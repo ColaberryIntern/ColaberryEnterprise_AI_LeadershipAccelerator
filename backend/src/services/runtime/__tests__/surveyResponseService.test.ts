@@ -1,10 +1,14 @@
 /** Pure core of the weekly-survey capture service: question extraction + answer
  *  validation/normalization (rating bounds, snapshotting question text by index,
  *  the "answer something before submitting" guard). */
-import { questionsFromCard, normalizeAnswers } from '../surveyResponseService';
+import { questionsFromCard, normalizeAnswers, saveSurvey } from '../surveyResponseService';
+import CardSurveyResponse from '../../../models/CardSurveyResponse';
+import TimelineCard from '../../../models/TimelineCard';
+import { awardCardCompletionPoints } from '../../progression/cardPointsService';
 
-jest.mock('../../../models/CardSurveyResponse', () => ({ __esModule: true, default: {} }));
-jest.mock('../../../models/TimelineCard', () => ({ __esModule: true, default: {} }));
+jest.mock('../../../models/CardSurveyResponse', () => ({ __esModule: true, default: { findOne: jest.fn(), create: jest.fn(), update: jest.fn() } }));
+jest.mock('../../../models/TimelineCard', () => ({ __esModule: true, default: { findByPk: jest.fn() } }));
+jest.mock('../../progression/cardPointsService', () => ({ awardCardCompletionPoints: jest.fn() }));
 jest.mock('../../../config/database', () => ({ sequelize: {} }));
 
 const QS = ['This week was clear.', 'The pace worked for me.', 'I made real progress.'];
@@ -43,5 +47,42 @@ describe('normalizeAnswers', () => {
   it('rejects an empty submission (no ratings, no open text)', () => {
     expect(() => normalizeAnswers({ items: [{ index: 0, rating: null }] }, QS)).toThrow(/at least one/i);
     expect(() => normalizeAnswers({ items: [] }, QS)).toThrow(/at least one/i);
+  });
+});
+
+describe('saveSurvey (points wiring)', () => {
+  const mockCard = (TimelineCard as any).findByPk as jest.Mock;
+  const mockFindResp = (CardSurveyResponse as any).findOne as jest.Mock;
+  const mockCreateResp = (CardSurveyResponse as any).create as jest.Mock;
+  const mockAwardCard = awardCardCompletionPoints as jest.Mock;
+  const CARD = { id: 'card-1', type: 'warmup', program_id: 'prog-1', week: 0, metadata: { content: { questions: QS, reflection: 'What would help?' } } };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockCard.mockResolvedValue(CARD);
+    mockFindResp.mockResolvedValue(null);
+    mockCreateResp.mockResolvedValue({});
+    mockAwardCard.mockResolvedValue(10);
+  });
+
+  it('saves answers and awards engagement points, returning the delta', async () => {
+    const res = await saveSurvey('enr-1', 'card-1', { items: [{ index: 0, rating: 4 }], open: null });
+    expect(res.saved).toBe(true);
+    expect(res.points_awarded).toBe(10);
+    expect(mockCreateResp).toHaveBeenCalledTimes(1);
+    // Award is keyed on the survey card; idempotency is enforced inside cardPointsService.
+    expect(mockAwardCard).toHaveBeenCalledWith('enr-1', { id: 'card-1', type: 'warmup' });
+  });
+
+  it('returns points_awarded=0 when the ledger already credited this card (idempotent)', async () => {
+    mockFindResp.mockResolvedValue({ update: jest.fn().mockResolvedValue({}) }); // existing response → update path
+    mockAwardCard.mockResolvedValue(0);                                          // already awarded on first submit
+    const res = await saveSurvey('enr-1', 'card-1', { items: [{ index: 0, rating: 5 }], open: null });
+    expect(res.points_awarded).toBe(0);
+  });
+
+  it('404s when the card does not exist', async () => {
+    mockCard.mockResolvedValue(null);
+    await expect(saveSurvey('enr-1', 'missing', { items: [{ index: 0, rating: 3 }] })).rejects.toMatchObject({ status: 404 });
   });
 });
