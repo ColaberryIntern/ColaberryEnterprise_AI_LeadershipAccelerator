@@ -14,10 +14,12 @@ import { Op } from 'sequelize';
 import { sequelize } from '../../config/database';
 import TimelineCard, { TimelineBucket, TimelineCardAttributes } from '../../models/TimelineCard';
 import TimelineCardProgress from '../../models/TimelineCardProgress';
+import TimelineSectionRule from '../../models/TimelineSectionRule';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType, allTypes, CardTypeDef } from './typeRegistry';
 import { normalizeCapabilities } from './timelineService';
 import { recomputeForCard, recomputeMany, recomputeBlueprintHours } from '../composer/blueprintRollup';
+import { normalizeRules, UnlockPredicate } from './timelineGatingService';
 
 export const BUCKETS: TimelineBucket[] = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
 const VISIBILITIES = ['draft', 'scheduled', 'published', 'archived'] as const;
@@ -38,6 +40,7 @@ export interface CreateCardInput {
   visibility?: Visibility;
   release_date?: string | Date | null;
   program_id?: string | null;
+  unlock_rules?: any;   // per-card gating predicates (UnlockPredicate[]) — normalized on write
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
   course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
@@ -155,6 +158,7 @@ export function composeCardAttributes(
     status: 'active',
     cohort_id: null,                 // global — one curriculum for every batch
     program_id: input.program_id ?? null,
+    unlock_rules: normalizeRules(input.unlock_rules),   // gating predicates (usually empty at create)
     order,
     metadata: {
       authored: true,
@@ -212,7 +216,38 @@ export async function listTimeline(programId?: string | null) {
         thumbnail_url: (row && typeof row.thumbnail_url === 'string' && row.thumbnail_url.trim()) ? row.thumbnail_url : null,
       };
     });
-  return { scope: 'global', buckets: BUCKETS, cards, types };
+  const sectionRules = await getSectionRules(programId ?? null);
+  return { scope: 'global', buckets: BUCKETS, cards, types, sectionRules };
+}
+
+// ── section gating rules (per program × bucket) ──────────────────────────────
+
+/** All section (bucket) gating rules for a program, normalized. */
+export async function getSectionRules(
+  programId: string | null,
+): Promise<Array<{ bucket: TimelineBucket; rules: UnlockPredicate[]; active: boolean }>> {
+  const where: Record<string, any> = {};
+  if (programId) where.program_id = programId;
+  const rows = await TimelineSectionRule.findAll({ where, order: [['bucket', 'ASC']] });
+  return rows.map((r) => ({ bucket: r.bucket, rules: normalizeRules(r.rules), active: r.active }));
+}
+
+/** Upsert one section's gating rules (idempotent on (program_id, bucket)). An
+ *  empty rules array clears gating for that section. */
+export async function setSectionRule(
+  programId: string,
+  bucket: TimelineBucket,
+  rules: any,
+): Promise<{ bucket: TimelineBucket; rules: UnlockPredicate[] }> {
+  if (!programId) throw Object.assign(new Error('program_id is required'), { status: 400 });
+  if (!BUCKETS.includes(bucket)) throw Object.assign(new Error(`Invalid bucket "${bucket}"`), { status: 400 });
+  const clean = normalizeRules(rules);
+  const [row] = await TimelineSectionRule.findOrCreate({
+    where: { program_id: programId, bucket },
+    defaults: { program_id: programId, bucket, rules: clean, active: true },
+  });
+  await row.update({ rules: clean, active: true });
+  return { bucket, rules: clean };
 }
 
 /** A type may be hand-placed on the timeline only if it carries the Studio's
@@ -255,6 +290,7 @@ export async function createCard(input: CreateCardInput): Promise<TimelineCard> 
 const EDITABLE_FIELDS = [
   'title', 'subtitle', 'description', 'week', 'bucket', 'difficulty',
   'estimated_time', 'points', 'competencies', 'visibility', 'release_date', 'priority', 'order',
+  'unlock_rules',
 ] as const;
 
 export async function updateCard(id: string, patch: Record<string, any>): Promise<TimelineCard> {
@@ -266,7 +302,10 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
 
   const clean: Record<string, any> = {};
   for (const f of EDITABLE_FIELDS) {
-    if (f in patch) clean[f] = f === 'release_date' && patch[f] ? new Date(patch[f]) : patch[f];
+    if (!(f in patch)) continue;
+    if (f === 'release_date') clean[f] = patch[f] ? new Date(patch[f]) : patch[f];
+    else if (f === 'unlock_rules') clean[f] = normalizeRules(patch[f]);   // drop junk predicates
+    else clean[f] = patch[f];
   }
   // Video + content live in the metadata blob; merge them (setting/clearing each
   // key) without disturbing other metadata. Start from the latest metadata (or

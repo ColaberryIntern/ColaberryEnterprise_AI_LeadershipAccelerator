@@ -14,6 +14,7 @@
  */
 import CardSurveyResponse, { SurveyAnswers, SurveyAnswerItem } from '../../models/CardSurveyResponse';
 import TimelineCard from '../../models/TimelineCard';
+import { awardCardCompletionPoints } from '../progression/cardPointsService';
 
 const MAX_COMMENT = 2000;
 const MAX_OPEN = 4000;
@@ -69,9 +70,11 @@ export async function getSurvey(enrollmentId: string, cardId: string): Promise<S
   return { questions, open_prompt, answers: row ? row.answers : null };
 }
 
-/** Save (upsert) this student's answers; snapshots week/program + question text. */
-export async function saveSurvey(enrollmentId: string, cardId: string, payload: any): Promise<{ saved: true; answers: SurveyAnswers }> {
-  const card = await TimelineCard.findByPk(cardId, { attributes: ['id', 'program_id', 'week', 'metadata'] });
+/** Save (upsert) this student's answers; snapshots week/program + question text.
+ *  Submitting the survey is what completes the card, so it also awards engagement
+ *  points (idempotent per card — re-submitting never re-awards). */
+export async function saveSurvey(enrollmentId: string, cardId: string, payload: any): Promise<{ saved: true; answers: SurveyAnswers; points_awarded: number }> {
+  const card = await TimelineCard.findByPk(cardId, { attributes: ['id', 'type', 'program_id', 'week', 'metadata'] });
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
   const { questions } = questionsFromCard(card.metadata);
   const answers = normalizeAnswers(payload, questions);
@@ -85,5 +88,6 @@ export async function saveSurvey(enrollmentId: string, cardId: string, payload: 
       answers,
     });
   }
-  return { saved: true, answers };
+  const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type });
+  return { saved: true, answers, points_awarded };
 }

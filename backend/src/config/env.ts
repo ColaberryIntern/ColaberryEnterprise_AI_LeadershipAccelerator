@@ -35,6 +35,14 @@ export const env = {
   // failed/reversed -> subtracted). OFF by default so it ships dark; turn on once
   // live READ credentials are set.
   paysimpleSyncEnabled: process.env.PAYSIMPLE_SYNC_ENABLED === 'true',
+  // Safety-net reconcile for missed-webhook membership payments: for OUR OWN
+  // checkout customers (enrollments carrying a paysimple_customer_id we stored) that
+  // are still unpaid, find and link their live membership payment. Scoped strictly to
+  // our stored customer ids, so shared-gateway/direct charges can never leak in. OFF
+  // by default (ships dark).
+  paysimpleAppReconcileEnabled: process.env.PAYSIMPLE_APP_RECONCILE_ENABLED === 'true',
+  // Only look at payments on/after this date (membership program launch).
+  paysimpleReconcileStart: process.env.PAYSIMPLE_RECONCILE_START || '2026-06-01',
 
   // JWT
   jwtSecret: resolveJwtSecret(),
@@ -109,6 +117,11 @@ export const env = {
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',
+  // Portal engagement points: award StudentPointsEvent points when a student
+  // completes a curriculum item (survey / knowledge check / card / lesson). These
+  // feed the top-right HUD total. ON by default; set PORTAL_POINTS_AWARD_ENABLED=false
+  // to dark-disable coursework awards (streak + RSVP awards are unaffected).
+  portalPointsAwardEnabled: process.env.PORTAL_POINTS_AWARD_ENABLED !== 'false',
   chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
   chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 

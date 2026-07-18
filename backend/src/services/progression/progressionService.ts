@@ -14,6 +14,7 @@ import StudentLevel from '../../models/StudentLevel';
 import { EvidenceSource } from '../../models/EvidenceRecord';
 import { resolve as resolveType } from '../timeline/typeRegistry';
 import { getTypeXp } from './pointsConfigService';
+import { awardCardCompletionPoints } from './cardPointsService';
 import { awardLearningXp } from './learningEngine';
 import { recordCardEvidence } from './evidenceEngine';
 import { recomputeForEnrollment, getStudentCompetency } from './competencyEngine';
@@ -52,6 +53,7 @@ export interface CardCompletionOutcome {
   learning_xp: number;
   builder_xp: number;
   community_xp: number;
+  points_awarded: number;   // engagement points credited to the HUD total (0 if already earned)
   promotion: PromotionOutcome;
 }
 
@@ -63,6 +65,13 @@ export interface CardCompletionOutcome {
 export async function onCardCompleted(enrollmentId: string, cardId: string): Promise<CardCompletionOutcome> {
   const card = await TimelineCard.findByPk(cardId);
   if (!card) throw new Error(`card ${cardId} not found`);
+
+  // Gating: a card whose prerequisites are unmet can't be force-completed by a
+  // direct API call. Single choke point — covers the classroom + runtime complete
+  // paths. Already-engaged cards never re-gate; fail-open on error.
+  // Throws { status: 423, code: 'card_locked' } when locked.
+  const { assertCardUnlocked } = await import('../timeline/timelineGatingService');
+  await assertCardUnlocked(enrollmentId, card);
 
   // Watch gate: video-bearing cards (video/testimonial/podcast) require the
   // configured share actually watched (default 75%) BEFORE completion + XP.
@@ -94,10 +103,14 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
 
   const community_xp = await awardCommunityXp(enrollmentId, { id: card.id, type: card.type }, (await getTypeXp(card.type)).community);
 
+  // Engagement points for the HUD (StudentPointsEvent) — a separate ledger from XP.
+  // Non-fatal + idempotent per (enrollment, card): re-completing awards 0.
+  const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type });
+
   await recomputeForEnrollment(enrollmentId);
   const promotion = await evaluateForEnrollment(enrollmentId);
 
-  return { card_id: cardId, learning_xp, builder_xp, community_xp, promotion };
+  return { card_id: cardId, learning_xp, builder_xp, community_xp, points_awarded, promotion };
 }
 
 export interface ProgressionSummary {

@@ -31,6 +31,7 @@ export interface TimelineFeedCard {
   points: { learning?: number; builder?: number; community?: number };
   competencies: unknown;
   status: 'locked' | 'available' | 'in_progress' | 'completed';
+  lock_reason?: string | null;   // when status='locked', why (e.g. "Finish the Learn tasks first")
   quiz_score: number | null;
   completed_at: string | null;
   video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
@@ -316,7 +317,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   );
 
   return (
-    <div className="tl-card fcard">
+    <div className={`tl-card fcard${locked ? ' locked' : ''}`}>
       <div className="fc-head">
         <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>
         <div style={{ minWidth: 0 }}>
@@ -330,15 +331,26 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       </div>
       <div className="fc-body">
         {card.description && <p>{card.description}</p>}
-        {media}
+        {/* Locked: a big lock over the tile, dimmed, and an overlay that swallows
+            every pointer/keyboard interaction so nothing opens or plays. */}
+        <div className="fc-media-wrap">
+          {media}
+          {locked && (
+            <div className="fc-lock" role="note" aria-label={`Locked${card.lock_reason ? ` — complete ${card.lock_reason} first` : ''}`}>
+              <span className="fc-lock-ic"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10" width="16" height="11" rx="2.5" stroke="currentColor" strokeWidth="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="15.5" r="1.5" fill="currentColor" /></svg></span>
+              <span className="fc-lock-txt">Locked</span>
+              {card.lock_reason && <span className="fc-lock-sub">Complete {card.lock_reason} to unlock</span>}
+            </div>
+          )}
+        </div>
       </div>
       <div className="fc-foot">
-        <button type="button" className={`like${liked ? ' liked' : ''}`} onClick={() => onLike?.(card)}>
+        <button type="button" className={`like${liked ? ' liked' : ''}`} disabled={locked} onClick={() => !locked && onLike?.(card)}>
           <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg> {likes}
         </button>
         {/* Comment opens the class thread RIGHT HERE in the feed (the workspace
-            shows the same thread beside the AI Mentor). */}
-        <button type="button" className={`cmt${showComments ? ' liked' : ''}`} onClick={() => setShowComments((s) => !s)}>
+            shows the same thread beside the AI Mentor). Disabled while locked. */}
+        <button type="button" className={`cmt${showComments ? ' liked' : ''}`} disabled={locked} onClick={() => !locked && setShowComments((s) => !s)}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment
         </button>
         {/* Quick shortcut into the full workspace (video + AI Mentor + comments). */}
@@ -351,13 +363,13 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         {done
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
-            ? <span className="pip lock" style={{ fontSize: 13 }}>Unlocks later</span>
+            ? <span className="pip lock" style={{ fontSize: 13 }} title={card.lock_reason || undefined}>{card.lock_reason || 'Unlocks later'}</span>
             : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
                 <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
               </button>}
       </div>
-      {/* The class thread — toggled by the Comment button, shared with the workspace. */}
-      {showComments && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
+      {/* The class thread — toggled by the Comment button, shared with the workspace. Never for locked cards. */}
+      {showComments && !locked && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
     </div>
   );
 };

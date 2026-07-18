@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 11:04 AM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">71 changes</span></div>
+    <div class="meta">Generated Saturday, July 18, 2026 at 3:37 PM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">79 changes</span></div>
   </header>
   <main>
     
@@ -1122,6 +1122,126 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0, backend tsc 0; titleCase 6/6, curriculumFormatContract 5/5. After deploy: card/drawer/workspace titles render in Title Case (acronyms intact); adding a Survey card → ✦ Generate content is enabled with no title and fills the questions from the week blueprint.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Deploy backend (survey prompt) + nginx. Prod already had the survey experience; the old look was a client cache (hard-refresh).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">72</span>
+          <h2>Add-card: Publish-now toggle (default ON) + DRAFT/LIVE badge — new cards no longer silently save as draft</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali added a survey but it didn&#39;t show for students because new cards defaulted to draft (student feed shows published only). Diagnosed: the card was correct (published-after-manual-publish, Week 0 reflect, cohort-null, active) and getFeed returns it — the miss was the draft default + a stale classroom. Root-cause fix (Ali chose &quot;Publish toggle in Add-card&quot;): the Add-card/Edit drawer now shows a Publish-now switch + a ● LIVE / ○ DRAFT badge at the top of the body, and openAdd defaults new cards to visibility &#39;published&#39; (toggle ON) so add == live unless the author deliberately flips to draft. Save button reads &quot;Add &amp; publish&quot; / &quot;Add as draft&quot; accordingly. Files: frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0. Also published the stuck Week 0 survey on prod (UPDATE visibility=&#39;published&#39;); confirmed getFeed(enrollment) returns it under Week 0 → reflect (status available). After deploy: adding a card shows LIVE by default and appears for students on save (after their feed refresh).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Draft is still one click away for build-before-ship.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">73</span>
+          <h2>Classroom feed: no-store so a newly-published card appears on next load (stale-feed fix)</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali published the Week 0 survey but still didn&#39;t see it in the classroom. Diagnosed: getFeed returns it (it&#39;s #1 in Week 0 — order 0, reflect), but /api/portal/classroom sent an ETag with NO Cache-Control, so the browser heuristically cached the feed and served a stale copy (the screenshot was missing 6 current cards incl. the survey, in the old order). Fix: handleGetClassroomFeed now sends Cache-Control: no-store, must-revalidate — the live per-student curriculum feed is never cached, so a newly-published card shows on the next load. File: backend/src/controllers/timelineController.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0. Confirmed via getFeed(enrollment) on prod: Week 0 has 11 cards, survey is #1 (reflect). After deploy: refresh the classroom and the survey is the first Week 0 card.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deploy backend + nginx. The survey was already correct/published; this removes the stale-cache trap.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">74</span>
+          <h2>Classroom feed cache-buster — the survey (and any newly-published card) shows without a manual cache clear</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Even after the no-store header, Ali&#39;s browser still held the pre-survey feed copy (showed &quot;the test&quot; but not the survey). Added a per-load cache-buster to the classroom fetch (portalApi.get(&#39;/api/portal/classroom&#39;, { params: { _t: Date.now() } })) so each request is a unique URL that can&#39;t be served from a stale browser copy — pairs with the server Cache-Control: no-store. Confirmed nginx does not proxy_cache /api, so this + no-store fully covers it. File: frontend/src/pages/portal/ClassroomPage.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0. Fresh getFeed on prod: survey is the #1 Week 0 card (reflect), status available (like every card — locking isn&#39;t enforced in Phase 1, so it shows in the same &quot;Not started&quot; state as the knowledge_check &quot;test&quot;). After deploy: reload the classroom → the survey appears in Week 0 reflect.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deploy nginx. If reflect items (survey/test) should be LOCKED until the week&#39;s content is complete, that&#39;s the not-yet-built unlock_rules gating pass — separate feature.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">75</span>
+          <h2>Reflect-section gating chain + extensive evaluations (10 Q) + surveys/evals rebuilt from the new blueprint</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali updated the blueprints and asked for (1) the reflect section to gate: test until Learn done, survey until the test is taken, reflection until feedback done; (2) the evaluations rebuilt from the new blueprint with DOUBLE the knowledge-check questions (more extensive); (3) the surveys rebuilt from the new blueprint. Built on the freshly-merged gating engine (per-card unlock_rules → getFeed sets status &#39;locked&#39; + lock_reason → Lock badge + disabled CTA). (A) NEW scripts/setReflectGating.ts — per-card unlock_rules on the canonical course weeks 1–12: evaluation → [section_complete learn/week], survey → [type_complete evaluation/week], reflection → [type_complete survey/week]; idempotent, only gates when the prerequisite exists that week (Week 0&#39;s lone survey stays ungated). (B) assessmentService question count for evaluation 8 → 10 (double the entry Knowledge Check&#39;s 5); NEW scripts/rebuildWeeklyReflect.ts force-regenerates each week&#39;s evaluation (generateCardContent framing + clear metadata.assessment + ensureQuestions → 10 blueprint-driven MCQ) and (C) each week&#39;s survey (generateCardContent → framing + 10 feedback questions). Both generators pull getBlueprintContext(program, week) so they use the updated blueprint. Fixed a merge-broken test (typeLaunchGate: mock TimelineSectionRule.findAll, added by main&#39;s gating feature). Files: backend/src/services/runtime/assessmentService.ts; NEW scripts/setReflectGating.ts, scripts/rebuildWeeklyReflect.ts; test mock.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0; timeline+runtime suites 96/96 (incl. gating). PENDING: run both scripts on dev then prod + verify (locked cards show the lock badge; evaluations regenerate 10 MCQ; surveys reflect new blueprint).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Scripts run in the container: node dist/scripts/setReflectGating.js and node dist/scripts/rebuildWeeklyReflect.js. Deploy backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">76</span>
+          <h2>Locked card visual: big lock over a dimmed tile + all interactions blocked (no open/play/comment/like)</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;make it to where they see the big lock on the visual and they can&#39;t click anywhere or open anything or leave comments or even like it.&quot; Locked cards (status &#39;locked&#39; from the reflect gating chain) now render a prominent lock: the 16:9 tile is dimmed/grayscaled with pointer-events off, and a full-tile overlay shows a big lock icon + &quot;Locked&quot; + &quot;Complete {lock_reason} to unlock&quot;, swallowing all pointer/keyboard interaction (no open, no inline play). The footer Like and Comment buttons are `disabled` + dimmed + no-op while locked, and the comment thread can&#39;t be opened (guarded). Workspace shortcut already hidden when locked; the footer keeps the lock-reason pip. Files: frontend/src/components/timeline/TimelineCard.tsx, timeline.css.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. Also (data) applied the reflect gating chain on prod: 12 evaluations ← Learn, 12 surveys ← evaluation, 14 reflections ← survey; getFeed confirms locked status + reasons.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Evaluation/survey blueprint rebuild ran separately (rebuildWeeklyReflect).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">77</span>
+          <h2>Classroom order = Timeline section order + Week 0 survey now locked</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;curriculum should be in the order it appears in the timeline (my feedback is at the end of the timeline but shows up 1st in the curriculum)&quot; + &quot;it doesn&#39;t have the locks it should have.&quot; (1) Ordering: card `order` is per-(week,bucket) lane, so sorting the feed by order alone interleaved sections (a reflect card surfaced above learn). getFeed now sorts by week → BUCKET_ORDER index (pre_class→learn→practice→build→reflect→share→advance) → order, and ClassroomPage&#39;s weekCards sorts by section index then order (matches the Timeline tab; reflect/feedback reads at the END). (2) Week 0 lock: its lone reflect card is a survey with no evaluation, so setReflectGating left it ungated; the survey branch now falls back to [section_complete learn] when a week has no evaluation, so Week 0&#39;s feedback is locked until the Learn section is done. Files: backend/src/services/timeline/timelineService.ts (feed sort), frontend/src/pages/portal/ClassroomPage.tsx (weekCards sort), backend/src/scripts/setReflectGating.ts (survey fallback).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend tsc 0, frontend tsc 0; timeline suites 61/61. After deploy + re-run setReflectGating: classroom shows sections in order (feedback last); Week 0 survey locked until Learn complete.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deploy backend + nginx; re-run node dist/scripts/setReflectGating.js. Composer↔Timeline canvas sync (separate ask) is the next change.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">78</span>
+          <h2>Married the Curriculum Composer canvas to the live Timeline</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;the curriculum composer is not in sync with Timeline — they should be married together.&quot; Root cause (mapped): the Composer&#39;s &quot;Timeline canvas&quot; rendered the blueprint&#39;s stale generated_plan JSON snapshot, while the Timeline tab + student feed read live timeline_cards; publish is a one-way copy and direct Timeline edits never flow back, so the canvas drifted (different cards + order). Fix (read-sync): the canvas now mirrors the LIVE published timeline_cards for the selected (program, week), in section order. New composerKit.timelineBoard(programId) (reuses GET /api/admin/orchestration/timeline — same source as the Timeline tab) + livePlanForWeek() maps published cards → the canvas Plan shape sorted pre_class→…→advance. CurriculumComposerTab: on open/load/publish, syncCanvasToLive() loads the live cards (falls back to the draft plan if none published); Generate still shows the AI draft (Draft·unpublished badge) until published; a &quot;● Live · synced with Timeline&quot; badge + &quot;⟳ Sync with Timeline&quot; button make the state explicit. Files: frontend/src/pages/admin/orchestration/composer/composerKit.tsx, CurriculumComposerTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. After deploy: open a published week in the Composer → the canvas shows exactly the live Timeline cards in the same order as the Timeline tab / classroom (e.g. reflect feedback last).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only (reuses the existing timeline list endpoint) — deploy nginx. Read-parity; full two-way edit-sync would need a per-card identity link (flagged, not built).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">79</span>
+          <h2>Composer two-way edit: rename + reorder live cards, gated behind &quot;Apply to live Timeline&quot;</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;let&#39;s do it&quot; (the flagged two-way edit-sync). The Composer canvas, when synced to the live Timeline, is now an editing surface: each live card&#39;s title is inline-editable and reorders within its section lane via ▲▼. Edits are STAGED locally (badge flips to &quot;✎ Live · unsaved edits&quot;); nothing reaches students until the operator hits &quot;✓ Apply to live Timeline&quot; (confirm dialog: &quot;Students see this immediately&quot;), with a Revert to discard. Apply diffs the canvas against the pristine live snapshot and writes only what changed — renamed titles via PUT /cards/:id, reordered lanes via PUT /cards/reorder (both already existed, admin-only) — then re-reads the live board so the canvas reflects what persisted. Idempotent: unchanged cards are skipped and a retry after a partial failure re-sends the same bodies (no-op for what landed). Safety: editing is gated on `live &amp;&amp; card.id` (only published rows carry an id — draft/generated plans stay read-only), Sync warns before discarding unsaved edits, and no delete path is exposed on the canvas. Files: frontend/src/pages/admin/orchestration/composer/composerKit.tsx (id+order on PlanCard, updateLiveCard/reorderLiveCards, edit CSS), CurriculumComposerTab.tsx (liveOrig snapshot, dirty state, editLiveTitle/moveLiveCard/applyToLive/revertLive, editable tiles + Apply/Revert bar).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0. Backend unchanged (existing PUT /cards/:id + /cards/reorder). After deploy: sync a published week → rename a card + move it up → Apply → the Timeline tab and student classroom show the new title/order; Revert restores; draft (unpublished) weeks show read-only tiles (no ▲▼).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Backend write endpoints reused as-is.</span></div>
           
         </div>
       </article>

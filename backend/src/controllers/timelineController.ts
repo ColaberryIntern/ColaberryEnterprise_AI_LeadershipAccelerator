@@ -23,6 +23,9 @@ export async function handleGetClassroomFeed(req: Request, res: Response): Promi
     await initProgress(enrollmentId);
     const feed = await getFeed(enrollmentId);
     const progression = await getProgressionSummary(enrollmentId);
+    // The feed is per-student, live curriculum data — never let the browser or a
+    // CDN serve a stale copy (a newly-published card must appear on next load).
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
     res.json({ ...feed, progression });
   } catch (err: any) {
     console.error('[timelineController] classroom feed failed', err?.message);
