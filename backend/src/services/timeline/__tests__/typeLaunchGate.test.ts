@@ -13,6 +13,7 @@ jest.mock('../../../models/TimelineCard', () => ({
   default: { findAll: jest.fn(), findByPk: jest.fn(), create: jest.fn(), max: jest.fn() },
 }));
 jest.mock('../../../models/TimelineCardProgress', () => ({ __esModule: true, default: {} }));
+jest.mock('../../../models/TimelineSectionRule', () => ({ __esModule: true, default: { findAll: jest.fn().mockResolvedValue([]) } }));
 jest.mock('../../../models/CurriculumTypeDefinition', () => ({
   __esModule: true,
   default: { findAll: jest.fn(), findOne: jest.fn() },

@@ -59,7 +59,9 @@ async function generateQuestions(card: any): Promise<AssessmentQuestion[]> {
   const kind = kindForCard(card);
   const bp = await getBlueprintContext(card.program_id, card.week);
   const competencies = sectionCompetencies(card, bp ? bp.competencies : []);
-  const n = kind === 'evaluation' ? 8 : 5;
+  // Evaluation is the extensive end-of-week test — double the entry Knowledge
+  // Check's question count so it probes the week far more thoroughly.
+  const n = kind === 'evaluation' ? 10 : 5;
   const style = kind === 'evaluation'
     ? 'an end-of-section Evaluation — applied, scenario-based questions that test whether the student can USE the concepts'
     : 'a quick entry Knowledge Check — short, foundational recall questions that gauge what the student knows coming in';
