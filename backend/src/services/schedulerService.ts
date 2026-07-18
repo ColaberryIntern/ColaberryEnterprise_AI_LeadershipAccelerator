@@ -1814,6 +1814,22 @@ export function startScheduler(): void {
     console.log('[Scheduler] PaySimplePaymentSync scheduled (*/30 * * * *)');
   }
 
+  // Heal missed-webhook membership payments every 20 minutes: for OUR checkout
+  // customers whose enrollment is still unpaid, link their live PaySimple membership
+  // payment (scoped to our stored customer ids only — no amount/email matching, so
+  // shared-gateway charges can't leak). Ships dark — PAYSIMPLE_APP_RECONCILE_ENABLED=true.
+  if (env.paysimpleAppReconcileEnabled) {
+    cron.schedule('*/20 * * * *', () => {
+      instrumentCronJob('AppPaymentReconcile', async () => {
+        const { reconcileAppPayments } = await import('./appPaymentReconcileService');
+        await reconcileAppPayments({});
+      }).catch((err) => {
+        console.error('[Scheduler] App payment reconcile error:', err);
+      });
+    });
+    console.log('[Scheduler] AppPaymentReconcile scheduled (*/20 * * * *)');
+  }
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', async () => {
     try {
