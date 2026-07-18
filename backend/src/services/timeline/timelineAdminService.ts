@@ -18,6 +18,7 @@ import TimelineSectionRule from '../../models/TimelineSectionRule';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType, allTypes, CardTypeDef } from './typeRegistry';
 import { normalizeCapabilities } from './timelineService';
+import { recomputeForCard, recomputeMany, recomputeBlueprintHours } from '../composer/blueprintRollup';
 import { normalizeRules, UnlockPredicate } from './timelineGatingService';
 
 export const BUCKETS: TimelineBucket[] = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
@@ -150,7 +151,7 @@ export function composeCardAttributes(
     visibility: input.visibility ?? 'draft',
     release_date: input.release_date ? new Date(input.release_date) : null,
     difficulty: input.difficulty ?? def.difficulty,
-    estimated_time: input.estimated_time ?? (def.evidence_required ? 45 : 15),
+    estimated_time: input.estimated_time ?? def.est_minutes ?? 15,
     points,
     competencies,
     ref_kind: 'none',
@@ -281,7 +282,9 @@ export async function createCard(input: CreateCardInput): Promise<TimelineCard> 
     const enriched = await lookupBlogByUrl(bmeta.url);
     if (enriched) (attrs.metadata as any).blog = enriched;
   }
-  return TimelineCard.create(attrs as any);
+  const card = await TimelineCard.create(attrs as any);
+  await recomputeForCard(card); // keep the week's blueprint est_hours in sync
+  return card;
 }
 
 const EDITABLE_FIELDS = [
@@ -293,6 +296,7 @@ const EDITABLE_FIELDS = [
 export async function updateCard(id: string, patch: Record<string, any>): Promise<TimelineCard> {
   const card = await TimelineCard.findByPk(id);
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
+  const before = { program_id: card.program_id, week: card.week }; // week/estimated_time may change
   if (patch.bucket && !BUCKETS.includes(patch.bucket)) throw Object.assign(new Error(`Invalid bucket "${patch.bucket}"`), { status: 400 });
   if (patch.visibility && !VISIBILITIES.includes(patch.visibility)) throw Object.assign(new Error(`Invalid visibility "${patch.visibility}"`), { status: 400 });
 
@@ -356,18 +360,22 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
     clean.metadata = meta;
   }
   await card.update(clean);
+  // Recompute both the old and (possibly changed) new week's blueprint total.
+  await recomputeMany([before, { program_id: card.program_id, week: card.week }]);
   return card;
 }
 
 export async function deleteCard(id: string): Promise<void> {
   const card = await TimelineCard.findByPk(id);
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
+  const owner = { program_id: card.program_id, week: card.week };
   // Schema has no DB-level FK cascade (tables are raw-created), so clear the
   // student progress rows explicitly to avoid orphans.
   await sequelize.transaction(async (t) => {
     await TimelineCardProgress.destroy({ where: { card_id: id }, transaction: t });
     await card.destroy({ transaction: t });
   });
+  await recomputeBlueprintHours(owner.program_id, owner.week);
 }
 
 /**
@@ -376,7 +384,16 @@ export async function deleteCard(id: string): Promise<void> {
  * a partial drag never leaves the board half-ordered.
  */
 export async function reorderCards(items: Array<{ id: string; order: number; week?: number | null; bucket?: string }>): Promise<{ updated: number }> {
-  return sequelize.transaction(async (t) => {
+  // Capture each card's current (program_id, week) so a cross-week drag recomputes
+  // both the source and destination week totals.
+  const before = (await TimelineCard.findAll({
+    where: { id: items.map((i) => i.id) },
+    attributes: ['id', 'program_id', 'week'],
+    raw: true,
+  })) as unknown as Array<{ id: string; program_id: string | null; week: number | null }>;
+  const beforeById = new Map(before.map((b) => [b.id, b]));
+
+  const result = await sequelize.transaction(async (t) => {
     let updated = 0;
     for (const it of items) {
       if (it.bucket && !BUCKETS.includes(it.bucket as TimelineBucket)) {
@@ -390,6 +407,19 @@ export async function reorderCards(items: Array<{ id: string; order: number; wee
     }
     return { updated };
   });
+
+  // Recompute the union of source weeks + any new destination weeks (only cards
+  // that actually moved week matter, but recomputeMany de-dups the rest).
+  const keys: Array<{ program_id?: string | null; week?: number | null }> = [];
+  for (const b of before) keys.push({ program_id: b.program_id, week: b.week });
+  for (const it of items) {
+    if ('week' in it) {
+      const b = beforeById.get(it.id);
+      keys.push({ program_id: b?.program_id ?? null, week: it.week ?? null });
+    }
+  }
+  await recomputeMany(keys);
+  return result;
 }
 
 /** Clone a card to the tail of its lane, as a draft. */
@@ -399,10 +429,12 @@ export async function cloneCard(id: string): Promise<TimelineCard> {
   const order = await nextOrderInLane(src.week, src.bucket);
   const attrs = src.toJSON() as any;
   delete attrs.id; delete attrs.created_at; delete attrs.updated_at;
-  return TimelineCard.create({
+  const card = await TimelineCard.create({
     ...attrs,
     title: `${src.title} (copy)`,
     visibility: 'draft',
     order,
   });
+  await recomputeForCard(card);
+  return card;
 }

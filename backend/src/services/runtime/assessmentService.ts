@@ -4,9 +4,9 @@
  * Quiz  = a quick, low-stakes entry check ("what you know coming in"); no pass
  *         gate, reveals the correct answer + explanation after submit, awards
  *         learning XP on completion.
- * Eval  = the end-of-section graded test; must hit 75% to PASS, complete, earn
+ * Eval  = the end-of-section graded test; must hit 70% to PASS, complete, earn
  *         points, and write competency evidence (which moves readiness). Below
- *         75% = no points, retry allowed.
+ *         70% = no points, retry allowed.
  *
  * Both persist a full AssessmentAttempt (per-question responses + per-competency
  * scores) so a section's quiz (beginning) and evaluation (current) can be paired
@@ -22,7 +22,7 @@ import { getBlueprintContext } from '../timeline/blueprintContext';
 import { resolve as resolveType } from '../timeline/typeRegistry';
 import { completeActivity } from './runtimeService';
 
-export const EVAL_PASS_THRESHOLD = 0.75;
+export const EVAL_PASS_THRESHOLD = 0.70;
 
 export interface AssessmentQuestion {
   question: string;
@@ -257,7 +257,7 @@ export async function sectionResultsSummary(enrollmentId: string, programId?: st
 
   const section = await getSectionProgress(enrollmentId, programId, week);
   if (section && section.current != null) {
-    lines.push(`Evaluation: scored ${Math.round(section.current * 100)}% (${section.evaluation_passed ? 'passed' : 'not yet passed — needs 75%'}).`);
+    lines.push(`Evaluation: scored ${Math.round(section.current * 100)}% (${section.evaluation_passed ? 'passed' : 'not yet passed — needs 70%'}).`);
     if (section.growth != null) lines.push(`Growth since the entry Knowledge Check: ${section.growth >= 0 ? '+' : ''}${Math.round(section.growth * 100)} points.`);
     const comps = (section.per_competency || []).filter((c) => c.current != null);
     if (comps.length) {

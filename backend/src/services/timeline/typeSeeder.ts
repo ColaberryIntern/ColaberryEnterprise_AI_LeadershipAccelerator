@@ -30,6 +30,7 @@ export async function seedCurriculumTypeDefinitions(): Promise<TypeSeedResult> {
         applicable_prompt_pairs: t.prompt_pairs,
         bucket_default: t.bucket,
         render_band: t.render_band,
+        estimated_time: t.est_minutes,
         learning_xp: t.learning_xp,
         builder_xp: t.builder_xp,
         community_xp: t.community_xp,
@@ -52,6 +53,7 @@ export async function seedCurriculumTypeDefinitions(): Promise<TypeSeedResult> {
         {
           bucket_default: t.bucket,
           render_band: t.render_band,
+          estimated_time: t.est_minutes,
           learning_xp: t.learning_xp,
           builder_xp: t.builder_xp,
           community_xp: t.community_xp,

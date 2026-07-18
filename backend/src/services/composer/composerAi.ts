@@ -50,12 +50,10 @@ const SEQ: Record<ComposerScope, string[]> = {
   program: ['announcement', 'overview', 'video', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'mock_interview', 'evaluation'],
 };
 
-const clampMin = (n: number) => Math.max(3, Math.min(120, Math.round(n)));
+const clampMin = (n: number) => Math.max(3, Math.min(600, Math.round(n)));
+// Single source of truth for a type's default duration: the registry (est_minutes).
 function defaultMinutes(def: CardTypeDef): number {
-  if (def.evidence_required && def.github_required) return 60;
-  if (def.evidence_required) return 40;
-  if (def.render_band === 'media' || def.render_band === 'live_class') return 18;
-  return 15;
+  return def.est_minutes ?? 15;
 }
 function cardFromDef(def: CardTypeDef, topic: string, week: number | null): PlanCard {
   return {

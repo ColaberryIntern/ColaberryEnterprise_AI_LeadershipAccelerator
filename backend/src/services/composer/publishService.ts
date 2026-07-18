@@ -9,8 +9,10 @@ import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { createCard, CreateCardInput } from '../timeline/timelineAdminService';
 import { assessPlan } from './blueprintService';
 import { approvedSlugs } from './composerAi';
+import { recomputeBlueprintHours } from './blueprintRollup';
 import { PlanCard, CurriculumPlan } from './types';
 import { TimelineBucket } from '../../models/TimelineCard';
+import { weekBlueprint, CANONICAL_PROGRAM_ID } from '../../data/weekBlueprints';
 
 function toCardInput(c: PlanCard): CreateCardInput {
   return {
@@ -63,11 +65,24 @@ export async function publishBlueprint(id: string, force = false): Promise<Publi
     return { published: true, created: 0, card_ids: existing, already: true, quality: validation.quality };
   }
 
+  // The Anthropic Skilljar course is "outside work" — its card carries the real
+  // course duration (from data/weekBlueprints), not the generic type default.
+  const courseMinutes =
+    bp.program_id === CANONICAL_PROGRAM_ID && bp.week != null
+      ? weekBlueprint(bp.week)?.anthropic_course_minutes ?? null
+      : null;
+
   const cardIds: string[] = [];
   for (const c of plan.cards) {
-    const card = await createCard(toCardInput(c));
+    const input = toCardInput(c);
+    if (c.type === 'anthropic_skills_jar' && courseMinutes != null) {
+      input.estimated_time = courseMinutes;
+    }
+    const card = await createCard(input);
     cardIds.push(card.id);
   }
   await bp.update({ published_card_ids: [...existing, ...cardIds], status: 'published' });
+  // estimated_hours becomes the live sum of the week's cards.
+  await recomputeBlueprintHours(bp.program_id, bp.week);
   return { published: true, created: cardIds.length, card_ids: cardIds, quality: validation.quality };
 }
