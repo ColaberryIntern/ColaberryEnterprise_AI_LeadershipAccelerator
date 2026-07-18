@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 10:18 AM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">70 changes</span></div>
+    <div class="meta">Generated Friday, July 17, 2026 at 11:04 AM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">71 changes</span></div>
   </header>
   <main>
     
@@ -1107,6 +1107,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0, backend tsc 0; curriculumFormatContract 5/5. After deploy: Experience Studio → Survey → section 4 &quot;what the student sees&quot; is the interactive survey (generated questions from the Week blueprint), takeable end-to-end; Parts panel shows Reflection + Comments on.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Deploy backend (applies capabilities at boot) + nginx. Preview submit is local-only (no card/enrollment in the Studio).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">71</span>
+          <h2>Survey polish: title-case titles + Generate-content works for zero-input types (survey)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;Format these titles better with title case. When adding the survey, I don&#39;t have the ability to generate the content.&quot; (Also flagged prod looked old — it was a stale browser bundle; prod already had the survey experience.) (1) Title case: NEW frontend/src/utils/titleCase.ts — safe Title Case that preserves acronyms/brands (AI, API, MCP, GitHub) via an internal-capital/all-caps check + an ACRONYMS set, lowercases small connecting words. Applied to displayed curriculum titles in TimelineCard (tile + header), CardDetailBody (drawer h2), RuntimeWorkspace (header) — gated so media/external titles (video, testimonial, blog, podcast, skills_jar) keep their authored casing. Survey generation_prompt also asks for a Title-Case topic. (2) Generate content for zero-input types: the editor&#39;s ✦ Generate content was disabled without a title, but survey/overview write themselves from the week blueprint. Added an isBlueprintGen path (survey, overview): the button is enabled without a title and calls POST /api/admin/components/:slug/preview (runtimePreview — the same blueprint-driven generation the Studio uses) with {program_id, week}, filling metadata.content. Files: NEW frontend/src/utils/titleCase.ts (+test); frontend TimelineCard.tsx, CardDetailBody.tsx, pages/portal/runtime/RuntimeWorkspace.tsx, pages/admin/orchestration/TimelineEditorTab.tsx; backend/src/seeds/seedComponentAuthoring.ts.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0, backend tsc 0; titleCase 6/6, curriculumFormatContract 5/5. After deploy: card/drawer/workspace titles render in Title Case (acronyms intact); adding a Survey card → ✦ Generate content is enabled with no title and fills the questions from the week blueprint.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Deploy backend (survey prompt) + nginx. Prod already had the survey experience; the old look was a client cache (hard-refresh).</span></div>
           
         </div>
       </article>
