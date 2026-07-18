@@ -36,19 +36,17 @@ describe('scoreResponses', () => {
     expect(r.competency_scores.architecture).toEqual({ correct: 2, total: 2, pct: 1 });
   });
 
-  it('the 75% evaluation gate: 3/4 passes, 2/4 fails', () => {
-    const three = scoreResponses(questions, [
-      { index: 0, selected_index: 0 }, { index: 1, selected_index: 1 },
-      { index: 2, selected_index: 2 }, { index: 3, selected_index: 0 },
-    ]);
-    expect(three.score).toBe(0.75);
-    expect(three.score >= EVAL_PASS_THRESHOLD).toBe(true);
-    const two = scoreResponses(questions, [
-      { index: 0, selected_index: 0 }, { index: 1, selected_index: 1 },
-      { index: 2, selected_index: 0 }, { index: 3, selected_index: 0 },
-    ]);
-    expect(two.score).toBe(0.5);
-    expect(two.score >= EVAL_PASS_THRESHOLD).toBe(false);
+  it('the 70% evaluation gate: 7/10 passes, 6/10 fails (threshold 0.70)', () => {
+    expect(EVAL_PASS_THRESHOLD).toBe(0.7);
+    // A 10-question evaluation; the correct answer for each is index 0.
+    const ten: AssessmentQuestion[] = Array.from({ length: 10 }, () => Q(0, 'architecture'));
+    const answer = (rightCount: number) => ten.map((_, i) => ({ index: i, selected_index: i < rightCount ? 0 : 1 }));
+    const seven = scoreResponses(ten, answer(7));   // 7/10 = 0.70 — now passes (would have failed at 0.75)
+    expect(seven.score).toBeCloseTo(0.7);
+    expect(seven.score >= EVAL_PASS_THRESHOLD).toBe(true);
+    const six = scoreResponses(ten, answer(6));      // 6/10 = 0.60 — still fails
+    expect(six.score).toBeCloseTo(0.6);
+    expect(six.score >= EVAL_PASS_THRESHOLD).toBe(false);
   });
 
   it('empty question set scores 0 without dividing by zero', () => {
