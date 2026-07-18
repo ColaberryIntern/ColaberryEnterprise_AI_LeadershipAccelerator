@@ -16,7 +16,8 @@ export interface RevenueTransaction {
   paysimple_payment_id: string | null;
   refundable: boolean;
   counted: boolean;
-  enrollment_id: string | null;
+  enrollment_id: string | null; // -> student profile (/admin/accelerator?enrollment=)
+  lead_id: number | null; // -> lead profile (/admin/leads/:id)
 }
 
 export interface RevenueSummary {
