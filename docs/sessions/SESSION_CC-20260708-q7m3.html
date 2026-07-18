@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Saturday, July 18, 2026 at 2:57 PM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">78 changes</span></div>
+    <div class="meta">Generated Saturday, July 18, 2026 at 3:37 PM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">79 changes</span></div>
   </header>
   <main>
     
@@ -1227,6 +1227,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0; curriculumFormatContract 5/5. After deploy: open a published week in the Composer → the canvas shows exactly the live Timeline cards in the same order as the Timeline tab / classroom (e.g. reflect feedback last).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Frontend-only (reuses the existing timeline list endpoint) — deploy nginx. Read-parity; full two-way edit-sync would need a per-card identity link (flagged, not built).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">79</span>
+          <h2>Composer two-way edit: rename + reorder live cards, gated behind &quot;Apply to live Timeline&quot;</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;let&#39;s do it&quot; (the flagged two-way edit-sync). The Composer canvas, when synced to the live Timeline, is now an editing surface: each live card&#39;s title is inline-editable and reorders within its section lane via ▲▼. Edits are STAGED locally (badge flips to &quot;✎ Live · unsaved edits&quot;); nothing reaches students until the operator hits &quot;✓ Apply to live Timeline&quot; (confirm dialog: &quot;Students see this immediately&quot;), with a Revert to discard. Apply diffs the canvas against the pristine live snapshot and writes only what changed — renamed titles via PUT /cards/:id, reordered lanes via PUT /cards/reorder (both already existed, admin-only) — then re-reads the live board so the canvas reflects what persisted. Idempotent: unchanged cards are skipped and a retry after a partial failure re-sends the same bodies (no-op for what landed). Safety: editing is gated on `live &amp;&amp; card.id` (only published rows carry an id — draft/generated plans stay read-only), Sync warns before discarding unsaved edits, and no delete path is exposed on the canvas. Files: frontend/src/pages/admin/orchestration/composer/composerKit.tsx (id+order on PlanCard, updateLiveCard/reorderLiveCards, edit CSS), CurriculumComposerTab.tsx (liveOrig snapshot, dirty state, editLiveTitle/moveLiveCard/applyToLive/revertLive, editable tiles + Apply/Revert bar).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0. Backend unchanged (existing PUT /cards/:id + /cards/reorder). After deploy: sync a published week → rename a card + move it up → Apply → the Timeline tab and student classroom show the new title/order; Revert restores; draft (unpublished) weeks show read-only tiles (no ▲▼).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Backend write endpoints reused as-is.</span></div>
           
         </div>
       </article>
