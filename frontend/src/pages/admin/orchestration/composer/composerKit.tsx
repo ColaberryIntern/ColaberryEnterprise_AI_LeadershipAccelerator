@@ -71,7 +71,37 @@ export const composerApi = {
   generate: (id: string, instruction: string, scope?: string) => api.post(`/api/admin/composer/blueprints/${id}/generate`, { instruction, scope }).then((r) => r.data as { plan: Plan; source: string; cost_usd: number; assessment: Assessment }),
   validate: (id: string) => api.get(`/api/admin/composer/blueprints/${id}/validate`).then((r) => r.data as { plan: Plan; assessment: Assessment }),
   publish: (id: string) => api.post(`/api/admin/composer/blueprints/${id}/publish`).then((r) => r.data),
+  // The LIVE Timeline board (same source the Timeline tab + student feed read) —
+  // lets the Composer canvas mirror what's actually published, not a stale plan.
+  timelineBoard: (programId: string) => api.get('/api/admin/orchestration/timeline', { params: { program_id: programId } }).then((r) => r.data as { cards: TimelineBoardCard[] }),
 };
+
+// A published timeline_cards row as the board returns it (only the fields the
+// Composer canvas needs to render + order).
+export interface TimelineBoardCard {
+  id: string; type: string; title: string; subtitle: string | null; description: string | null;
+  week: number | null; bucket: string; order: number; difficulty: string; estimated_time: number | null;
+  points?: { learning?: number; builder?: number; community?: number };
+  visibility: string; metadata?: any;
+}
+
+const CANVAS_BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
+
+/** Map the LIVE published timeline_cards for one week into the canvas Plan shape,
+ *  in the section order the week actually reads (pre_class → … → advance). */
+export function livePlanForWeek(cards: TimelineBoardCard[], week: number | null): Plan {
+  const bIdx = (b: string) => { const i = CANVAS_BUCKET_ORDER.indexOf(b); return i < 0 ? CANVAS_BUCKET_ORDER.length : i; };
+  const wkCards = cards
+    .filter((c) => c.week === week && c.visibility === 'published')
+    .sort((a, b) => bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order)
+    .map((c): PlanCard => ({
+      type: c.type, title: c.title, subtitle: c.subtitle, description: c.description, bucket: c.bucket,
+      week: c.week, difficulty: c.difficulty, estimated_time: c.estimated_time ?? 0,
+      points: { learning: c.points?.learning ?? 0, builder: c.points?.builder ?? 0, community: c.points?.community ?? 0 },
+      competencies: [], video_url: c.metadata?.video?.url ?? null,
+    }));
+  return { scope: 'week', week, cards: wkCards };
+}
 
 export const money = (n?: number) => (n == null ? '—' : n < 0.001 ? `$${n.toExponential(1)}` : `$${n.toFixed(4)}`);
 

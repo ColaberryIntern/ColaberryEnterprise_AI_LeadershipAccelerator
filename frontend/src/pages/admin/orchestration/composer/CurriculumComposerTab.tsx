@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   composerApi, composerCss, Blueprint, Course, Plan, Assessment, PlanCard,
-  Chip, Lab, Btn, Meter, Ring, money, bandTone, initials,
+  Chip, Lab, Btn, Meter, Ring, money, bandTone, initials, livePlanForWeek,
 } from './composerKit';
 
 /**
@@ -31,6 +31,22 @@ const CurriculumComposerTab: React.FC = () => {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  // When true, the canvas is showing the LIVE published Timeline for this week
+  // (married to the Timeline tab + student feed), not the draft generated plan.
+  const [live, setLive] = useState(false);
+
+  // Pull the LIVE published Timeline cards for a blueprint's week into the canvas
+  // so the Composer mirrors exactly what students see (and in section order).
+  // Returns true if it found live cards. Falls back to the draft plan otherwise.
+  const syncCanvasToLive = async (bp: Blueprint | null, draft: Plan | null): Promise<void> => {
+    if (!bp || !courseId || bp.week == null) { setPlan(draft); setLive(false); return; }
+    try {
+      const board = await composerApi.timelineBoard(courseId);
+      const livePlan = livePlanForWeek(board.cards || [], bp.week);
+      if (livePlan.cards.length) { setPlan(livePlan); setLive(true); return; }
+    } catch { /* fall through to the draft */ }
+    setPlan(draft); setLive(false);
+  };
 
   // Load the courses once, then default to the AI Systems Architect Accelerator.
   useEffect(() => {
@@ -53,7 +69,8 @@ const CurriculumComposerTab: React.FC = () => {
         setList(bps);
         if (bps.length) {
           const bp = await composerApi.get(bps[0].id);
-          setSel(bp); setPlan(bp.generated_plan || null); setAssess(bp.assessment || null);
+          setSel(bp); setAssess(bp.assessment || null);
+          await syncCanvasToLive(bp, bp.generated_plan || null);
           if (bp.title) setInstruction(`Generate a week for ${bp.title}`);
         } else { setSel(null); setPlan(null); setAssess(null); }
       } catch { setError('Failed to load the Composer.'); }
@@ -76,7 +93,8 @@ const CurriculumComposerTab: React.FC = () => {
     setError(''); setNote('');
     try {
       const bp = await composerApi.get(id);
-      setSel(bp); setPlan(bp.generated_plan || null); setAssess(bp.assessment || null);
+      setSel(bp); setAssess(bp.assessment || null);
+      await syncCanvasToLive(bp, bp.generated_plan || null);
       if (bp.title) setInstruction(`Generate a week for ${bp.title}`);
     } catch { setError('Failed to open blueprint.'); }
   };
@@ -110,7 +128,7 @@ const CurriculumComposerTab: React.FC = () => {
       await composerApi.remove(sel.id);
       const bps = await composerApi.list(courseId);
       setList(bps);
-      if (bps.length) { const bp = await composerApi.get(bps[0].id); setSel(bp); setPlan(bp.generated_plan || null); setAssess(bp.assessment || null); }
+      if (bps.length) { const bp = await composerApi.get(bps[0].id); setSel(bp); setAssess(bp.assessment || null); await syncCanvasToLive(bp, bp.generated_plan || null); }
       else { setSel(null); setPlan(null); setAssess(null); }
       setNote('Week deleted.');
     } catch { setError('Delete failed.'); } finally { setBusy(''); }
@@ -120,7 +138,7 @@ const CurriculumComposerTab: React.FC = () => {
     if (!sel) return; setBusy('generate'); setError(''); setNote('');
     try {
       const r = await composerApi.generate(sel.id, extra ? `${instruction}. Also: ${extra}` : instruction);
-      setPlan(r.plan); setAssess(r.assessment);
+      setPlan(r.plan); setLive(false); setAssess(r.assessment);   // draft preview until published
       setSel({ ...sel, status: 'generated', quality_score: r.assessment.validation.quality });
       setNote(`${r.source === 'ai' ? 'AI' : 'Scaffold'} generated ${r.plan.cards.length} cards · ${money(r.cost_usd)}`);
     } catch (e: any) { setError(e?.response?.data?.error || 'Generation failed.'); } finally { setBusy(''); }
@@ -131,7 +149,9 @@ const CurriculumComposerTab: React.FC = () => {
     try {
       const r = await composerApi.publish(sel.id);
       setNote(r.already ? `Already published (${r.card_ids.length} cards).` : `Published ${r.created} cards to the Timeline ✓`);
-      setSel({ ...sel, status: 'published' });
+      const pub = { ...sel, status: 'published' };
+      setSel(pub);
+      await syncCanvasToLive(pub, plan);   // canvas now mirrors the live Timeline
     } catch (e: any) { setError(e?.response?.data?.error || 'Publish failed.'); } finally { setBusy(''); }
   };
 
@@ -195,7 +215,9 @@ const CurriculumComposerTab: React.FC = () => {
         {/* CENTER — Canvas */}
         <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           <div className="cc-canvastop"><Chip tone="cherry">{sel.week != null ? `Week ${sel.week}` : sel.scope || 'week'}</Chip><b style={{ fontSize: 14 }}>Timeline canvas</b>
-            {plan && <Btn tone="ghost" style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 10px' }} disabled={busy === 'generate'} onClick={() => generate()}>↻ Regenerate</Btn>}</div>
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 999, background: live ? '#E7F5E9' : '#F3ECDD', color: live ? '#3C7A26' : '#8A6D1F' }} title={live ? 'This canvas mirrors the live published Timeline for this week — the same cards, in the same order, students see.' : 'Draft plan — publish to push it to the Timeline, then the canvas mirrors the live cards.'}>{live ? '● Live · synced with Timeline' : 'Draft · unpublished'}</span>
+            <Btn tone="ghost" style={{ marginLeft: 'auto', fontSize: 12, padding: '6px 10px' }} disabled={busy === 'sync'} onClick={async () => { setBusy('sync'); await syncCanvasToLive(sel, plan); setBusy(''); }}>⟳ Sync with Timeline</Btn>
+            {plan && <Btn tone="ghost" style={{ fontSize: 12, padding: '6px 10px' }} disabled={busy === 'generate'} onClick={() => generate()}>↻ Regenerate</Btn>}</div>
           <div style={{ padding: 15, overflowY: 'auto', maxHeight: 610 }}>
             {!plan ? (
               <div className="cc-genbox">
