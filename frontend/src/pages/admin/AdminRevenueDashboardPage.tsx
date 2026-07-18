@@ -199,6 +199,22 @@ function AdminRevenueDashboardPage() {
                   <td>
                     <div className="fw-medium">{t.payer_name}</div>
                     <div className="small text-muted"><code>{t.payer_email}</code></div>
+                    <div className="d-flex gap-3 mt-1">
+                      {t.lead_id != null ? (
+                        <Link to={`/admin/leads/${t.lead_id}`} className="small text-decoration-none d-inline-flex align-items-center gap-1" title={`Open lead profile for ${t.payer_name}`}>
+                          <i className="ri-contacts-line" aria-hidden="true"></i>Lead
+                        </Link>
+                      ) : (
+                        <span className="small text-muted d-inline-flex align-items-center gap-1" title="No lead record for this email"><i className="ri-contacts-line" aria-hidden="true"></i>Lead</span>
+                      )}
+                      {t.enrollment_id ? (
+                        <Link to={`/admin/accelerator?enrollment=${t.enrollment_id}&name=${encodeURIComponent(t.payer_name)}`} className="small text-decoration-none d-inline-flex align-items-center gap-1" title={`Open student profile for ${t.payer_name}`}>
+                          <i className="ri-graduation-cap-line" aria-hidden="true"></i>Student
+                        </Link>
+                      ) : (
+                        <span className="small text-muted d-inline-flex align-items-center gap-1" title="No student record for this payment"><i className="ri-graduation-cap-line" aria-hidden="true"></i>Student</span>
+                      )}
+                    </div>
                   </td>
                   <td><StatusBadge label={typeMeta[t.type].label} tone={typeMeta[t.type].tone} /></td>
                   <td className="small text-muted">{t.plan || '—'}</td>
