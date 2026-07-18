@@ -9030,3 +9030,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali (verifying prod) — generated readings were "too dry, no visuals." Rather than have the LLM emit unreliable SVG, the reader draws diagrams/icons from a type+labels the content supplies. Applies to generated AND authored content.
   - Verification: PR CI (frontend typecheck). Local render of a generated-style reading (data-diagram nested/flow/layers + data-icon term cards) drew correctly. Then Week-0 content set to the data-driven visual version for Ali to verify in prod before rolling to the other weeks.
   - Notes: Branch `workstream/self-study-reader-diagrams` off main. Next (after Ali verifies Week 0): update the generation prompt to emit data-diagram/data-icon so on-demand generated weeks get visuals too; then hand-author premium weeks.
+
+- [x] Self Study reader carries into the RuntimeWorkspace ("Enter workspace" full page)
+  - Date: 2026-07-18
+  - Session: CC-20260717-s3v9
+  - What changed: `RuntimeWorkspace.tsx` (the full-page runtime opened via "Enter workspace →") rendered the reading with `lessonDoc` in a `sandbox=""` iframe, so the reader engine never ran — diagrams/icons/nav/styling were all lost (plain text). Now, for a Self Study card (`render_band==='warmup'` with body_html), it renders the SAME `readerDoc` (imported from CardDetailBody) in a `sandbox="allow-scripts"` full-height iframe, so the workspace shows the identical immersive reader (hero, sticky tab-nav, diagrams, icon cards) as the card drawer. All other card types keep the existing `lessonDoc` render. File: frontend RuntimeWorkspace.tsx only (nginx-only deploy).
+  - Why: Ali — "the format does not carry over to the workspace. It should." The drawer used readerDoc; the workspace used lessonDoc — now both use readerDoc for Self Study.
+  - Verification: PR CI (frontend typecheck). Post-deploy: /portal/runtime/<self-study-card-id> shows the full reader with visuals, matching the drawer.
+  - Notes: Branch `workstream/self-study-workspace-reader` off main.
