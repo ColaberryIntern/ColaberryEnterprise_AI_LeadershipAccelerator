@@ -6,6 +6,7 @@ import PortalLayout from '../components/Layout/PortalLayout';
 import PortalLoginPage from '../pages/portal/PortalLoginPage';
 import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
+import PortalHandoffPage from '../pages/portal/PortalHandoffPage';
 import PortalDashboardPage from '../pages/portal/PortalDashboardPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
@@ -43,6 +44,8 @@ const portalRoutes = (
     <Route path="/portal/login" element={<PortalLoginPage />} />
     <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
+    {/* Phone handoff — public: exchanges a one-time QR code for a session, then lands on Today. */}
+    <Route path="/portal/handoff" element={<PortalHandoffPage />} />
     <Route element={<PortalProtectedRoute />}>
       {/* Today shell (Design E onboarding experience) renders its own chrome,
           so it sits outside PortalLayout. */}
