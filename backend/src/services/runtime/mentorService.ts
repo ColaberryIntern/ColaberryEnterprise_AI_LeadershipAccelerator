@@ -36,10 +36,15 @@ export async function coach(enrollmentId: string, card: CardCtx, mode: MentorMod
 }
 
 /** AI-guided reflection prompts — deeper than "what did you learn?". */
-export async function reflectionPrompts(card: CardCtx) {
+export async function reflectionPrompts(card: CardCtx, resultsContext?: string | null) {
   const system = 'You design reflection questions that build metacognition for an AI Systems Architect student. Return STRICT json.';
-  const user = `For the activity "${card.title}" (${card.type}), return json { "questions": string[] } — 4 sharp reflection questions ` +
+  const base = `For the activity "${card.title}" (${card.type}), return json { "questions": string[] } — 4 sharp reflection questions ` +
     `like "What surprised you?", "What would you build with this?", "How would you explain it to a teammate?", "How would you improve it?", "How does this connect to your current project?". Make them specific to the activity.`;
+  // The section's reflection sits AFTER the evaluation + survey, so when their
+  // results are available, make the questions help the student make sense of them.
+  const user = resultsContext
+    ? `${base}\n\nThe student has JUST finished this section's Evaluation and weekly Survey:\n${resultsContext}\nMake at least TWO of the four questions help them make sense of THESE specific results — their score and pass/fail, where they were strong vs weak, their growth since the entry Knowledge Check, and what their own survey feedback reveals — not generic prompts.`
+    : base;
   const r = await chatJson('runtime_reflection', system, user, undefined, 500);
   const qs = Array.isArray(r.parsed?.questions) && r.parsed.questions.length ? r.parsed.questions.map(String) : DEFAULT_REFLECTION;
   return { questions: qs, cost_usd: r.cost_usd };
