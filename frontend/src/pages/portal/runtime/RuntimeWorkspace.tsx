@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment } from './runtimeApi';
 import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
 import AssessmentPanel from './AssessmentPanel';
-import { lessonDoc } from '../../../components/timeline/CardDetailBody';
+import { lessonDoc, readerDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
@@ -216,7 +216,14 @@ const RuntimeWorkspace: React.FC = () => {
             <AssessmentPanel cardId={card.id} onCompleted={(r) => { if (r) { setReadiness(r); setCompleted(true); } }} />
           )}
 
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && (
+          {/* Self Study reading: same immersive reader as the card drawer (diagrams,
+              icon cards, sticky nav) so the format carries over into the workspace. */}
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && band === 'warmup' && card.content?.body_html && (
+            <div className="rt-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <iframe title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(card.content.body_html, card.content.title || card.title)} style={{ width: '100%', border: 0, height: 'min(80vh, 900px)', background: '#F7F4EE', borderRadius: 8, display: 'block' }} />
+            </div>
+          )}
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !(band === 'warmup' && card.content?.body_html) && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.content?.body_html
