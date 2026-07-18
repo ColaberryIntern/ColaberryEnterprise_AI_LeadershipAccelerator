@@ -41,13 +41,20 @@
 .te-cdchip .lbl{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);display:block}
 .te-cdchip .val{font-weight:700;color:var(--strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .te-cdchip .val .mono{font-family:var(--mono);color:var(--berry)}
-.te-hud{display:flex;flex-direction:column;gap:3px;min-width:150px}
+.te-hud{position:relative;display:flex;flex-direction:column;gap:3px;min-width:150px;text-decoration:none;color:inherit;cursor:pointer;padding:3px 7px;margin:0 -7px;border-radius:10px;transition:background .15s ease}
+.te-hud:hover,.te-hud.active{background:var(--sunken)}
 .te-hud .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .te-hud .lvl{font-size:13px;font-weight:700;color:var(--leaf-text)}
 .te-hud .pts{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--muted)}
 .te-hud .bar{height:7px;border-radius:var(--r-pill);background:var(--sunken);border:1px solid var(--border-sub);overflow:hidden}
-.te-hud .bar > i{display:block;height:100%;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--leaf),var(--berry))}
+.te-hud .bar > i{display:block;height:100%;border-radius:var(--r-pill);background:linear-gradient(90deg,var(--leaf),var(--berry));transition:width .6s cubic-bezier(.22,1,.36,1)}
 .te-hud .next{font-size:10px;color:var(--muted)}
+/* points-earned FX: a brief scale-pulse on the HUD + a rising "+N" burst */
+.te-hud.bump{animation:te-hud-pop .5s cubic-bezier(.2,1.4,.4,1)}
+@keyframes te-hud-pop{0%{transform:scale(1)}35%{transform:scale(1.08)}100%{transform:scale(1)}}
+.te-hud-burst{position:absolute;top:-3px;right:8px;font-family:var(--mono);font-size:13px;font-weight:800;color:var(--leaf);pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.18);animation:te-hud-rise 1.1s ease-out forwards}
+@keyframes te-hud-rise{0%{opacity:0;transform:translateY(6px) scale(.9)}20%{opacity:1;transform:translateY(0) scale(1.06)}70%{opacity:1;transform:translateY(-9px) scale(1)}100%{opacity:0;transform:translateY(-22px) scale(.95)}}
+@media (prefers-reduced-motion:reduce){.te-hud.bump{animation:none}.te-hud-burst{animation:none;opacity:0}.te-hud .bar > i{transition:none}}
 .te-avatar{width:40px;height:40px;border-radius:50%;background:var(--berry);color:#fff;font-weight:700;
   display:flex;align-items:center;justify-content:center;flex:none;border:2px solid var(--surface);box-shadow:var(--shadow-md)}
 

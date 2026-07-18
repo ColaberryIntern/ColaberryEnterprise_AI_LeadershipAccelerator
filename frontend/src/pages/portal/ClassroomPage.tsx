@@ -6,6 +6,7 @@ import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import '../../components/timeline/timeline.css';
 import PortalShell from './today/PortalShell';
+import { emitPointsEarned } from '../../services/pointsFx';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -106,8 +107,9 @@ const ClassroomPage: React.FC = () => {
   const openCard = useCallback((card: TimelineFeedCard) => { setSelectedId(card.id); }, []);
   const completeCard = useCallback(async (card: TimelineFeedCard) => {
     try {
-      await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+      const res = await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
       await load();
+      emitPointsEarned(res.data?.points_awarded ?? 0);   // HUD burst + chime (0 = already earned → silent)
     } catch { /* surfaced on next load; keep the UI responsive */ }
   }, [load]);
   const selectedCard = useMemo(() => feed?.cards.find((c) => c.id === selectedId) ?? null, [feed, selectedId]);

@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './TodayShell.css';
 import { fetchPoints, fetchSchedule, levelFor, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
+import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import BuildToast from '../projects/BuildToast';
 import { useIsExplorer } from '../useIsExplorer';
@@ -77,6 +78,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
+  // Points-earned FX: displayTotal counts UP to the real total; `fx` drives the
+  // "+N" burst + a brief scale-pulse on the HUD when points land.
+  const [displayTotal, setDisplayTotal] = useState(0);
+  const displayRef = useRef(0);
+  const [fx, setFx] = useState<{ delta: number; key: number } | null>(null);
+  const fxKeyRef = useRef(0);
   const me = useMemo(readParticipant, []);
   const [avatar, setAvatar] = useState<string | null>(() => readCachedAvatar());
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -107,6 +114,43 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
+
+  // Count the HUD total UP to its current value (on load, and after each earn).
+  useEffect(() => {
+    const end = points?.total ?? 0;
+    const start = displayRef.current;
+    if (start === end) return;
+    const reduce = !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { displayRef.current = end; setDisplayTotal(end); return; }
+    let raf = 0;
+    const t0 = performance.now();
+    const dur = 700;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - t0) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const v = Math.round(start + (end - start) * eased);
+      displayRef.current = v;
+      setDisplayTotal(v);
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [points]);
+
+  // When points are earned anywhere in the portal, refetch the authoritative
+  // total (so the bar + level are exact) and fire the "+N" burst + pulse.
+  useEffect(() => {
+    return onPointsEarned((d) => {
+      void load();
+      fxKeyRef.current += 1;
+      setFx({ delta: d.delta, key: fxKeyRef.current });
+    });
+  }, [load]);
+  useEffect(() => {
+    if (!fx) return;
+    const id = window.setTimeout(() => setFx(null), 1100);
+    return () => window.clearTimeout(id);
+  }, [fx]);
 
   // Profile photo for the topbar avatar. Read the per-session cache first for an
   // instant paint; fetch once if it hasn't been populated yet this session.
@@ -159,11 +203,17 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
               ? <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="2" /><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
               : <svg viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>}
           </button>
-          <div className="te-hud">
-            <div className="row"><span className="lvl"><svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>{lvl.name}</span><span className="pts">{total.toLocaleString()} pts</span></div>
+          <Link
+            to="/portal/settings?tab=points"
+            className={`te-hud${fx ? ' bump' : ''}${active.startsWith('/portal/settings') ? ' active' : ''}`}
+            title="View your points breakdown"
+            aria-label={`${total} points, level ${lvl.name} — view your points breakdown`}
+          >
+            {fx && <span key={fx.key} className="te-hud-burst" aria-hidden="true">+{fx.delta}</span>}
+            <div className="row"><span className="lvl"><svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>{lvl.name}</span><span className="pts">{displayTotal.toLocaleString()} pts</span></div>
             <div className="bar"><i style={{ width: `${lvl.pct}%` }} /></div>
             <div className="next">{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level'}</div>
-          </div>
+          </Link>
           <Link to="/portal/settings" className={`te-iconbtn${active.startsWith('/portal/settings') ? ' active' : ''}`} title="Settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" /><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.5 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 13a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 6.5a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 2.6h.09A1.65 1.65 0 0 0 11 1.09V1a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16.5 4.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21.4 11H21a2 2 0 0 1 0 4z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
           </Link>
