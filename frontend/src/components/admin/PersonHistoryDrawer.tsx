@@ -119,10 +119,21 @@ const PersonHistoryDrawer: React.FC<Props> = ({ enrollmentId, name, onClose, onV
             {p?.payment_status && <span className={`badge ${p.payment_status === 'paid' ? 'text-bg-success' : 'text-bg-warning'}`}>{p.payment_status}</span>}
             {p?.portal_enabled && <span className="badge text-bg-info">Portal</span>}
             {p?.cohort && <span className="badge text-bg-light text-dark border">{p.cohort}</span>}
+            {p?.total_paid > 0 && (
+              <span className="badge text-bg-dark" title="Membership + deposits across every enrollment row for this email">
+                ${Number(p.total_paid).toLocaleString('en-US', { maximumFractionDigits: 2 })} collected
+              </span>
+            )}
             <button className="btn btn-outline-primary btn-sm ms-auto" onClick={() => onViewAsStudent(enrollmentId)}>
               <i className="ri-eye-line me-1" aria-hidden="true"></i>View as student
             </button>
           </div>
+          {p?.enrollment_records > 1 && (
+            <div className="small text-muted mt-1">
+              <i className="ri-information-line me-1" aria-hidden="true"></i>
+              {p.enrollment_records} enrollment records share this email — payments below are combined across all of them.
+            </div>
+          )}
         </div>
 
         {/* Body */}
