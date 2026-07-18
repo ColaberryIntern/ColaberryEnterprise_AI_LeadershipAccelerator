@@ -15,6 +15,7 @@ import { resolve as resolveType } from './typeRegistry';
 import { selectTestimonialForEnrollment } from './networkVideoService';
 import { selectPodcastForEnrollment } from './podcastMediaService';
 import { selectBlogForEnrollment } from './blogMediaService';
+import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingService';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -68,6 +69,7 @@ export interface FeedCard {
   points: any;
   competencies: any;
   status: TimelineCardStatus;
+  lock_reason: string | null;         // when status='locked', the student-facing "why" (e.g. "Finish the Learn tasks first")
   quiz_score: number | null;
   completed_at: Date | null;
   video: FeedVideo | null;
@@ -213,6 +215,17 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   });
   const progressByCard = new Map(progressRows.map((p) => [p.card_id, p]));
 
+  // Gating overlay: compute each card's locked/available status from the student's
+  // completion snapshot + section/card unlock rules (timelineGatingService). Lock
+  // is a read-time overlay — nothing is persisted; a card already engaged
+  // (completed / in_progress) is never re-locked. Evaluated over the full
+  // curriculum (allCards) so section/type predicates see every card.
+  const completedCardIds = new Set(
+    progressRows.filter((p) => p.status === 'completed').map((p) => p.card_id),
+  );
+  const gateCtx = await buildGateContext(allCards, completedCardIds);
+  const gateCardById = new Map<string, GateCard>(gateCtx.allCards.map((c) => [c.id, c]));
+
   // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
   // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
   const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
@@ -239,6 +252,24 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
     const progress = progressByCard.get(card.id);
+    // Already-engaged cards keep their stored status; everything else gets the
+    // computed lock overlay. Fail-open (available) if evaluation ever throws.
+    const stored = progress?.status;
+    let status: TimelineCardStatus;
+    let lock_reason: string | null = null;
+    if (stored === 'completed' || stored === 'in_progress') {
+      status = stored;
+    } else {
+      try {
+        const gc = gateCardById.get(card.id)
+          || { id: card.id, type: card.type, bucket: card.bucket, week: card.week, program_id: (card as any).program_id ?? null, unlock_rules: card.unlock_rules };
+        const verdict = evaluateCardLock(gc, gateCtx);
+        status = verdict.locked ? 'locked' : 'available';
+        lock_reason = verdict.locked ? (verdict.unmet[0]?.label ?? null) : null;
+      } catch {
+        status = 'available';
+      }
+    }
     return {
       id: card.id,
       type: card.type,
@@ -254,7 +285,8 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       estimated_time: card.estimated_time,
       points: card.points,
       competencies: card.competencies,
-      status: progress?.status || 'available',
+      status,
+      lock_reason,
       quiz_score: progress?.quiz_score ?? null,
       completed_at: progress?.completed_at ?? null,
       video: videoFromMetadata(card.metadata),
