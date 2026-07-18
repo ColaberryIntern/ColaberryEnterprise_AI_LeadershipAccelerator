@@ -54,7 +54,11 @@ export function lessonDoc(bodyHtml: string): string {
 export function readerDoc(bodyHtml: string, title?: string): string {
   const body = stripUnsafe(bodyHtml);
   const heroTitle = String(title || 'Self Study').replace(/[<>]/g, '');
-  const js = "(function(){var secs=[].slice.call(document.querySelectorAll('section[id]'));var nav=document.getElementById('nav');if(!nav)return;if(!secs.length){nav.style.display='none';return;}var map={};secs.forEach(function(s){var label=s.getAttribute('data-nav');if(!label){var h=s.querySelector('h2,h3');label=h?h.textContent:s.id;}var a=document.createElement('a');a.textContent=label;a.href='#'+s.id;a.addEventListener('click',function(e){e.preventDefault();var el=document.getElementById(s.id);if(!el)return;var y=(window.pageYOffset||document.documentElement.scrollTop)+el.getBoundingClientRect().top-52;window.scrollTo({top:y,behavior:'smooth'});});nav.appendChild(a);map[s.id]=a;});var bar=document.querySelector('#pbar>i');var t=false;function sc(){var d=document.documentElement;var m=d.scrollHeight-d.clientHeight;if(bar)bar.style.width=(m>0?((window.pageYOffset||d.scrollTop)/m*100):0)+'%';t=false;}window.addEventListener('scroll',function(){if(!t){requestAnimationFrame(sc);t=true;}},{passive:true});sc();if('IntersectionObserver' in window){var spy=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){Object.keys(map).forEach(function(k){map[k].classList.remove('active');});var a=map[e.target.id];if(a){a.classList.add('active');a.scrollIntoView({inline:'nearest',block:'nearest'});}}});},{rootMargin:'-12% 0px -72% 0px',threshold:0});secs.forEach(function(s){spy.observe(s);});}})();";
+  // Reader engine (runs inside the iframe): builds the tab-nav + scrollspy + progress,
+  // injects term-card icons from data-icon, and renders diagrams from a data-diagram
+  // TYPE + data-items labels — so authored/generated content only supplies a type +
+  // labels, never fragile SVG geometry. Template literal so the SVG quotes need no escaping.
+  const js = `(function(){var ICONS={brain:'<path d="M4 17l6-6 4 4 6-6"/>',chip:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>',scissors:'<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.5 7.5l11.5 9M8.5 16.5L20 7"/>',window:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',book:'<path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2z"/><path d="M5 18h13"/>',chat:'<path d="M4 5h16v11H8l-4 4z"/>',gauge:'<path d="M4 15a8 8 0 0 1 16 0"/><path d="M12 15l4-4"/>',flag:'<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',check:'<path d="M4 12l5 5L20 6"/>',bulb:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 4 10c-1 1-1 2-1 3H9c0-1 0-2-1-3a6 6 0 0 1 4-10z"/>'};function esc(s){return String(s).replace(/[<>&]/g,function(m){return m==='<'?'&lt;':m==='>'?'&gt;':'&amp;';});}[].forEach.call(document.querySelectorAll('[data-icon]'),function(el){var ic=ICONS[el.getAttribute('data-icon')]||ICONS.bulb;var h=el.querySelector('h3,h4');if(!h)return;var t=document.createElement('span');t.className='tile';t.innerHTML='<svg viewBox="0 0 24 24">'+ic+'</svg>';h.insertBefore(t,h.firstChild);});var CB=['#FB2832','#5BA63C','#2E6A86','#E8920C'];function dN(it){var n=it.length,cx=220,cy=140,mx=125,mn=48,s='<svg viewBox="0 0 440 300" role="img" aria-label="'+esc(it.join(' inside '))+'">';for(var i=0;i<n;i++){var r=n>1?mx-i*(mx-mn)/(n-1):mx,cyy=cy+i*20;s+='<circle cx="'+cx+'" cy="'+cyy+'" r="'+r+'" fill="none" stroke="'+CB[i%4]+'" stroke-width="2.5"/><text x="'+cx+'" y="'+(cyy-r+22)+'" text-anchor="middle" class="dg-txt" font-size="'+(13-i)+'" font-weight="700">'+esc(it[i])+'</text>';}return s+'</svg>';}function dL(it){var n=it.length,s='<svg viewBox="0 0 440 '+(n*66+6)+'" role="img" aria-label="'+esc(it.join(', '))+'">';for(var i=0;i<n;i++){var y=6+i*66;s+='<rect x="18" y="'+y+'" width="404" height="54" rx="12" fill="#fff" stroke="'+CB[i%4]+'" stroke-width="2.5"/><text x="36" y="'+(y+32)+'" class="dg-txt" font-size="13" font-weight="700">'+esc(it[i])+'</text>';}return s+'</svg>';}function dF(it){var n=it.length,g=26,w=Math.floor((440-20-(n-1)*g)/n),s='<svg viewBox="0 0 440 92" role="img" aria-label="'+esc(it.join(' then '))+'">',x=10;for(var i=0;i<n;i++){s+='<rect x="'+x+'" y="24" width="'+w+'" height="44" rx="10" fill="#fff" stroke="#2E6A86" stroke-width="2"/><text x="'+(x+w/2)+'" y="50" text-anchor="middle" class="dg-txt" font-size="11">'+esc(it[i])+'</text>';if(i<n-1){var ax=x+w;s+='<path d="M'+ax+' 46h'+(g-6)+'" stroke="#8a8178" stroke-width="2"/><path d="M'+(ax+g-10)+' 41l7 5-7 5" fill="#8a8178"/>';}x+=w+g;}return s+'</svg>';}var R={nested:dN,layers:dL,flow:dF};[].forEach.call(document.querySelectorAll('figure[data-diagram]'),function(f){var it=(f.getAttribute('data-items')||'').split('|').filter(Boolean),fn=R[f.getAttribute('data-diagram')];if(fn&&it.length){var cap=f.querySelector('figcaption');f.insertAdjacentHTML('afterbegin',fn(it));if(cap)f.appendChild(cap);}});var secs=[].slice.call(document.querySelectorAll('section[id]')),nav=document.getElementById('nav');if(!nav)return;if(!secs.length){nav.style.display='none';}var map={};secs.forEach(function(s){var label=s.getAttribute('data-nav');if(!label){var h=s.querySelector('h2,h3');label=h?h.textContent:s.id;}var a=document.createElement('a');a.textContent=label;a.href='#'+s.id;a.addEventListener('click',function(e){e.preventDefault();var el=document.getElementById(s.id);if(!el)return;var y=(window.pageYOffset||document.documentElement.scrollTop)+el.getBoundingClientRect().top-52;window.scrollTo({top:y,behavior:'smooth'});});nav.appendChild(a);map[s.id]=a;});var bar=document.querySelector('#pbar>i'),t=false;function sc(){var d=document.documentElement,m=d.scrollHeight-d.clientHeight;if(bar)bar.style.width=(m>0?((window.pageYOffset||d.scrollTop)/m*100):0)+'%';t=false;}window.addEventListener('scroll',function(){if(!t){requestAnimationFrame(sc);t=true;}},{passive:true});sc();if('IntersectionObserver' in window){var spy=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){Object.keys(map).forEach(function(k){map[k].classList.remove('active');});var a=map[e.target.id];if(a){a.classList.add('active');a.scrollIntoView({inline:'nearest',block:'nearest'});}}});},{rootMargin:'-12% 0px -72% 0px',threshold:0});secs.forEach(function(s){spy.observe(s);});}})();`;
   return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
     html{scroll-behavior:smooth}
     body{font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#F7F4EE;color:#1a1a1a;font-size:15px;line-height:1.64}
@@ -75,7 +79,7 @@ export function readerDoc(bodyHtml: string, title?: string): string {
     .term{flex:1 1 240px;background:#FDFCFA;border:1px solid #DDD6C9;border-left:4px solid #2E6A86;border-radius:12px;padding:14px 16px}
     .term.leaf{border-left-color:#5BA63C}.term.berry{border-left-color:#2E6A86}
     .term h3,.term h4{display:flex;align-items:center;gap:9px;font-size:1.02rem;color:#1a1a1a;margin:0 0 6px;font-weight:700}
-    .tile{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;background:#2E6A86}
+    .tile{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;background:#2E6A86}.term.leaf .tile{background:#5BA63C}
     .tile svg{width:17px;height:17px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
     .why{color:#4a4a4a;font-size:14px}.why b{color:#1a1a1a}
     .warn{background:#fff6f6;border:1px solid #f6d5d8;border-left:4px solid #FB2832;border-radius:12px;padding:14px 16px;margin:16px 0}.warn b{color:#c20e1e}
@@ -107,26 +111,52 @@ interface Props {
   autoplayVideo?: boolean;                 // drawer contexts: the open click was the play intent — start the video immediately
 }
 
+const GEN_STEPS = ['Reading this week\'s blueprint…', 'Drafting the sections…', 'Adding examples and key terms…', 'Formatting your reading…'];
+
+/** Animated "producing your reading" state shown full-bleed while an empty Self
+ *  Study card generates its content on first open (the server call is in flight). */
+const GeneratingReader: React.FC = () => {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => (n + 1) % GEN_STEPS.length), 1600);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div className="ssgen">
+      <div className="ssgen-orb"><span /><span /><span /></div>
+      <div className="ssgen-title">Producing your Self Study reading…</div>
+      <div className="ssgen-step">{GEN_STEPS[i]}</div>
+      <div className="ssgen-bar"><i /></div>
+      <div className="ssgen-note">This runs once for your whole cohort — the next person to open it sees it instantly.</div>
+    </div>
+  );
+};
+
 const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWorkspace, onClose, autoplayVideo }) => {
   // The admin-populated lesson content is the single source of notes. It expires
   // after 30 days; on open (live only) we ask the server to ensure it's fresh —
   // the first student past 30 days triggers a class-wide regenerate. Until that
   // returns, show whatever the feed already carried.
   const [content, setContent] = useState<TimelineFeedCard['content']>(card.content || null);
+  const [generating, setGenerating] = useState(false);
   useEffect(() => { setContent(card.content || null); }, [card.id, card.content]);
   useEffect(() => {
     if (preview) return;
     // Testimonials + podcasts + blogs present the picked item's own description — never AI lesson notes.
     if (card.type === 'testimonial' || card.type === 'podcast' || card.type === 'blog') return;
-    // Only content-bearing cards refresh (video, or anything that already has content).
-    const contentBearing = ['media', 'live_class', 'video_feedback'].includes(card.render_band) || !!card.content;
+    const reader = card.render_band === 'warmup';   // Self Study: generates on first open when empty
+    // Content-bearing: video bands, anything with content, OR a Self Study reader
+    // (an empty reader asks the server to produce the reading now).
+    const contentBearing = ['media', 'live_class', 'video_feedback'].includes(card.render_band) || !!card.content || reader;
     if (!contentBearing) return;
     let alive = true;
+    if (reader && !card.content) setGenerating(true);   // empty reader → show the producing animation
     portalApi.post(`/api/portal/runtime/cards/${card.id}/content`, {})
       .then((r) => { if (alive && r.data?.content) setContent(r.data.content); })
-      .catch(() => { /* keep showing the feed copy */ });
+      .catch(() => { /* keep showing whatever we already had */ })
+      .finally(() => { if (alive) setGenerating(false); });
     return () => { alive = false; };
-  }, [card.id, card.render_band, card.content, preview]);
+  }, [card.id, card.render_band, card.content, card.type, preview]);
 
   const source = parseVideoUrl(card.video?.url);
   const isVideo = ['media', 'live_class', 'video_feedback'].includes(card.render_band);
@@ -176,7 +206,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title)} />
-            : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>

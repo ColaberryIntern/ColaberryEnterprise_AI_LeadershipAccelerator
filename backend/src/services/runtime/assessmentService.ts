@@ -14,6 +14,7 @@
  * (blueprint- + competency-aware) and cached on card.metadata.assessment.
  */
 import TimelineCard from '../../models/TimelineCard';
+import CardSurveyResponse from '../../models/CardSurveyResponse';
 import AssessmentAttempt, { AssessmentKind, AssessmentResponseItem, CompetencyScore } from '../../models/AssessmentAttempt';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
@@ -239,4 +240,44 @@ export async function getSectionProgress(enrollmentId: string, programId?: strin
     quiz_taken: !!quiz, evaluation_taken: !!evaluation,
     evaluation_passed: evaluation?.passed ?? null, per_competency,
   };
+}
+
+const prettyDom = (d: string) => (d || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+
+/**
+ * A short natural-language summary of a section's Evaluation score + weekly Survey
+ * answers, for the (after-survey) Reflection to reference. Null when neither the
+ * evaluation nor the survey has been done yet.
+ */
+export async function sectionResultsSummary(enrollmentId: string, programId?: string | null, week?: number | null): Promise<string | null> {
+  if (!programId || week == null) return null;
+  const lines: string[] = [];
+
+  const section = await getSectionProgress(enrollmentId, programId, week);
+  if (section && section.current != null) {
+    lines.push(`Evaluation: scored ${Math.round(section.current * 100)}% (${section.evaluation_passed ? 'passed' : 'not yet passed — needs 75%'}).`);
+    if (section.growth != null) lines.push(`Growth since the entry Knowledge Check: ${section.growth >= 0 ? '+' : ''}${Math.round(section.growth * 100)} points.`);
+    const comps = (section.per_competency || []).filter((c) => c.current != null);
+    if (comps.length) {
+      const sorted = [...comps].sort((a, b) => (b.current || 0) - (a.current || 0));
+      const strong = sorted[0], weak = sorted[sorted.length - 1];
+      if (strong && weak && strong.domain !== weak.domain) {
+        lines.push(`Strongest: ${prettyDom(strong.domain)} (${Math.round((strong.current || 0) * 100)}%); needs work: ${prettyDom(weak.domain)} (${Math.round((weak.current || 0) * 100)}%).`);
+      }
+    }
+  }
+
+  const survey = await CardSurveyResponse.findOne({ where: { enrollment_id: enrollmentId, program_id: programId, week } });
+  const answers: any = survey ? (survey as any).answers : null;
+  if (answers) {
+    const items = Array.isArray(answers.items) ? answers.items : [];
+    const rated = items.filter((i: any) => typeof i.rating === 'number');
+    if (rated.length) {
+      const avg = rated.reduce((sum: number, i: any) => sum + i.rating, 0) / rated.length;
+      lines.push(`Weekly survey: average self-rating ${avg.toFixed(1)}/5 across ${rated.length} questions.`);
+    }
+    if (answers.open && String(answers.open).trim()) lines.push(`Their survey comment: "${String(answers.open).trim().slice(0, 200)}".`);
+  }
+
+  return lines.length ? lines.join(' ') : null;
 }
