@@ -28,21 +28,21 @@ const DRY = process.argv.includes('--dry-run');
 async function backfillCards() {
   const completed = await TimelineCardProgress.findAll({ where: { status: 'completed' }, attributes: ['card_id', 'enrollment_id'] });
   const cardIds = Array.from(new Set(completed.map((p) => p.card_id)));
-  const cards = cardIds.length ? await TimelineCard.findAll({ where: { id: cardIds }, attributes: ['id', 'type'] }) : [];
-  const typeById = new Map(cards.map((c) => [c.id, c.type]));
+  const cards = cardIds.length ? await TimelineCard.findAll({ where: { id: cardIds }, attributes: ['id', 'type', 'points'] }) : [];
+  const cardById = new Map(cards.map((c) => [c.id, { id: c.id, type: c.type, points: (c as any).points }]));
 
   let awarded = 0, points = 0, skipped = 0, errors = 0;
   for (const p of completed) {
-    const type = typeById.get(p.card_id);
-    if (!type) { skipped++; continue; } // orphaned progress (card deleted)
+    const card = cardById.get(p.card_id);
+    if (!card) { skipped++; continue; } // orphaned progress (card deleted)
     try {
       if (DRY) {
         const already = await hasAwarded(p.enrollment_id, `card:${p.card_id}`);
         if (already) { skipped++; continue; }
-        points += await resolveCardEngagementPoints({ id: p.card_id, type });
+        points += await resolveCardEngagementPoints(card);
         awarded++;
       } else {
-        const got = await awardCardCompletionPoints(p.enrollment_id, { id: p.card_id, type });
+        const got = await awardCardCompletionPoints(p.enrollment_id, card);
         if (got > 0) { awarded++; points += got; } else { skipped++; }
       }
     } catch (err: any) {
