@@ -9174,6 +9174,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: frontend tsc 0; curriculumFormatContract 5/5. After deploy: open a published week in the Composer → the canvas shows exactly the live Timeline cards in the same order as the Timeline tab / classroom (e.g. reflect feedback last).
   - Notes: Frontend-only (reuses the existing timeline list endpoint) — deploy nginx. Read-parity; full two-way edit-sync would need a per-card identity link (flagged, not built).
 
+- [x] Portal points: Classroom/Today feed live-refresh on earn (Quick Check no longer needs a navigation) [CC-20260718-p9x4]
+  - Date: 2026-07-18
+  - Session: CC-20260718-p9x4
+  - What changed: ClassroomPage + TodayShell now subscribe to the te-points-changed event and refetch their feed, so "Your status" XP + "This week" progress update live after any completion. Fixes the Quick Check (AssessmentPanel) path, which awarded points to the HUD but never refetched the feed — so the sidebar stayed stale until a navigation.
+  - Verification: frontend `tsc --noEmit` clean; deployed to prod 2026-07-18 (Ali reported the staleness live and re-verified after).
+  - Notes: Root cause = AssessmentPanel is the one completion path not wired to the feed's completeCard refetch. Listening on the points event covers ALL earn paths without re-posting complete (which would wrongly complete a failed evaluation).
 - [ ] Person-360 drawer: show ALL of a person's payments (membership + $50 deposit), aggregated by email
   - Date: 2026-07-18
   - Session: CC-20260718-r7k4

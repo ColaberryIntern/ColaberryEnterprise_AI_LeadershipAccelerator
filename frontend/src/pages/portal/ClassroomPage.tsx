@@ -6,7 +6,7 @@ import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import '../../components/timeline/timeline.css';
 import PortalShell from './today/PortalShell';
-import { emitPointsEarned } from '../../services/pointsFx';
+import { emitPointsEarned, onPointsEarned } from '../../services/pointsFx';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -69,6 +69,11 @@ const ClassroomPage: React.FC = () => {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  // Points earned anywhere on this page (card / quick-check / survey completion)
+  // means the feed changed — refetch so "Your status" XP + "This week" progress
+  // update live, without waiting for a navigation. The quick-check panel updates
+  // the HUD via this same event but does not itself refetch the feed.
+  useEffect(() => onPointsEarned(() => { void load(); }), [load]);
   useEffect(() => {
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
