@@ -256,7 +256,10 @@ export async function syncPaymentLedger(opts?: { dryRun?: boolean; sinceISO?: st
     // Live membership payer with no account → create one (authorized decision).
     if (r.type === 'membership' && r.isLive && r.email && !enrollmentId) {
       if (dryRun) {
+        // Count one account per unique payer (a recurring member has >1 payment);
+        // seed the cache so their later payments don't re-count.
         s.accountsCreated++;
+        enrByEmail.set(r.email, { id: 'dry-run', payment_status: 'paid', amount_paid: r.amountCents / 100 });
       } else {
         const newId = await createMemberEnrollment({
           name: r.name, email: r.email, amountDollars: r.amountCents / 100,
