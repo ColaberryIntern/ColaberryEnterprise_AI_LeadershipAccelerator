@@ -16,7 +16,6 @@ import AIXceleratorLandingPage from './pages/AIXceleratorLandingPage';
 import AIPilotLandingPage from './pages/AIPilotLandingPage';
 import AIPilotVerticalPage from './pages/AIPilotVerticalPage';
 import PublicPortfolioPage from './pages/PublicPortfolioPage';
-import GlobalCoryWidget from './components/GlobalCoryWidget';
 
 function App() {
   return (
