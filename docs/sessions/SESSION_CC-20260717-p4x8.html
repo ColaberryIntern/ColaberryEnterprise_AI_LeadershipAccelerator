@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 2:48 PM</div>
-    <div><span class="sid">CC-20260717-p4x8</span><span class="count">3 changes</span></div>
+    <div class="meta">Generated Saturday, July 18, 2026 at 9:38 AM</div>
+    <div><span class="sid">CC-20260717-p4x8</span><span class="count">4 changes</span></div>
   </header>
   <main>
     
@@ -100,6 +100,20 @@
         <div class="card-body">
           <div class="row"><span class="k">What changed</span><span class="v">`cohortService.getDashboardStats()` adds available `account_credits` (the $50 Open House deposits recorded by main&#39;s `openHouseCreditService`) to membership `amount_paid`. Counting two sources means a dual-payer (membership + $50 deposit) is fully + separately counted; deposits are &#39;available&#39; cash (an &#39;applied&#39; one is folded into the membership charge, so no double-count).</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">prod account_credits = 25 × $50 = $1,250 available; membership = $1,788 → Revenue = $3,038. Docker/Dev gate + live-endpoint check.</span></div>
+          
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>**Replaced the stale ×$4,500 lead-forecast revenue page with a unified payments view (memberships + Open House deposits + refunds) + per-row refunds + relative time**</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Docker/Dev gate + live endpoint; reconciles to $3,038 ($1,788 membership + $1,250 deposits, 0 refunds).</span></div>
           
           
         </div>

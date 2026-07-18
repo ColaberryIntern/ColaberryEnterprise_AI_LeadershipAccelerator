@@ -110,9 +110,17 @@ export async function ensureFreshContent(cardId: string): Promise<{ content: Car
   const existing = meta.content && typeof meta.content === 'object' ? (meta.content as CardContent) : null;
   const at = typeof meta.content_at === 'string' ? Date.parse(meta.content_at) : null;
 
-  // Only content the ADMIN populated is refreshed here — never auto-generate for
-  // a card that was intentionally left without content.
-  if (!existing) return { content: null, regenerated: false };
+  // Empty card: Self Study readings GENERATE on first open (the reader shows a
+  // loading animation meanwhile) instead of staying blank — the first student to
+  // open it produces the class-wide copy. Other card types stay blank (never
+  // auto-generate for a card intentionally left without content).
+  if (!existing) {
+    if (card.type === 'warmup') {
+      try { const r = await generateCardContent(cardId); return { content: r.content, regenerated: true }; }
+      catch { return { content: null, regenerated: false }; }
+    }
+    return { content: null, regenerated: false };
+  }
 
   // Hand-authored readings are LOCKED — never auto-regenerate over them.
   if ((meta as Record<string, unknown>).locked) return { content: existing, regenerated: false };
