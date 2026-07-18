@@ -73,6 +73,19 @@ describe('typeRegistry', () => {
     }
   });
 
+  it('every type declares a non-negative default duration (est_minutes)', () => {
+    for (const t of CARD_TYPES) {
+      expect(typeof t.est_minutes).toBe('number');
+      expect(Number.isFinite(t.est_minutes)).toBe(true);
+      expect(t.est_minutes).toBeGreaterThanOrEqual(0);
+    }
+    // System types have no duration; content/live types have a positive default.
+    for (const t of CARD_TYPES.filter((x) => x.system)) expect(t.est_minutes).toBe(0);
+    expect(resolve('live_class')!.est_minutes).toBe(120);
+    expect(resolve('anthropic_skills_jar')!.est_minutes).toBeGreaterThan(0);
+    expect(resolve('blog')!.est_minutes).toBeGreaterThan(0);
+  });
+
   it('every render_band is one the Classroom can render (so the Studio demo == the timeline event)', () => {
     const unsupported = CARD_TYPES
       .filter((t) => !SUPPORTED_RENDER_BANDS.has(t.render_band))
