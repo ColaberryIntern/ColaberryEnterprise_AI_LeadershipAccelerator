@@ -9140,3 +9140,9 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali — "There is a scroll at the top. Remove that - I would rather have the navigation on different lines."
   - Verification: PR CI (frontend typecheck). Post-deploy: open a Self Study card (Week 0 / Week 1) → the top tabs wrap onto multiple lines with no scrollbar; clicking any tab lands its Part title fully visible under the nav; same in the "Enter workspace" full page.
   - Notes: Branch `workstream/self-study-nav-wrap` off main.
+- [x] Locked card visual: big lock over a dimmed tile + all interactions blocked (no open/play/comment/like)
+  - Date: 2026-07-18
+  - Session: CC-20260708-q7m3
+  - What changed: Ali — "make it to where they see the big lock on the visual and they can't click anywhere or open anything or leave comments or even like it." Locked cards (status 'locked' from the reflect gating chain) now render a prominent lock: the 16:9 tile is dimmed/grayscaled with pointer-events off, and a full-tile overlay shows a big lock icon + "Locked" + "Complete {lock_reason} to unlock", swallowing all pointer/keyboard interaction (no open, no inline play). The footer Like and Comment buttons are `disabled` + dimmed + no-op while locked, and the comment thread can't be opened (guarded). Workspace shortcut already hidden when locked; the footer keeps the lock-reason pip. Files: frontend/src/components/timeline/TimelineCard.tsx, timeline.css.
+  - Verification: frontend tsc 0; curriculumFormatContract 5/5. Also (data) applied the reflect gating chain on prod: 12 evaluations ← Learn, 12 surveys ← evaluation, 14 reflections ← survey; getFeed confirms locked status + reasons.
+  - Notes: Frontend-only — deploy nginx. Evaluation/survey blueprint rebuild ran separately (rebuildWeeklyReflect).
