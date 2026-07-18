@@ -15,6 +15,7 @@ import { buildBucketMermaid, nodeIdFromMermaidGroupId, MAX_NODES } from '../../.
 import AutofillButton from '../../../components/common/AutofillButton';
 import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
 import BlueprintDefaults from './BlueprintDefaults';
+import GatingRuleEditor, { SectionGatingModal, UnlockPredicate } from './builder/GatingRuleEditor';
 import '../../../components/timeline/timeline.css';
 
 /**
@@ -82,8 +83,10 @@ interface Card {
   week: number | null; bucket: Bucket; order: number; difficulty: string;
   estimated_time: number | null; points: { learning?: number; builder?: number; community?: number };
   competencies: Array<{ domain_id: string; weight: number }>; visibility: string;
+  unlock_rules?: UnlockPredicate[];   // per-card gating prerequisites
   metadata?: { video?: CardVideo | null; [k: string]: any } | null;
 }
+interface SectionRule { bucket: string; rules: UnlockPredicate[]; active: boolean }
 interface TypeDef {
   slug: string; label: string; bucket: Bucket; render_band: string; difficulty: string;
   learning_xp: number; builder_xp: number; community_xp: number; competencies: string[]; event: boolean;
@@ -91,7 +94,7 @@ interface TypeDef {
   launched?: boolean;        // Studio "✓ Approved for curriculum" + active — only these can be ADDED
   thumbnail_url?: string | null;   // the type's banner — the card's DEFAULT image in previews
 }
-interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[] }
+interface Board { scope: string; buckets: Bucket[]; cards: Card[]; types: TypeDef[]; sectionRules?: SectionRule[] }
 
 const pts = (p: Card['points']) => (p?.learning || 0) + (p?.builder || 0) + (p?.community || 0);
 
@@ -151,8 +154,9 @@ const SortableCard: React.FC<{
 // editable cards.
 const BucketSection: React.FC<{
   bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; thumbOf: (type: string) => string | null; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
+  hasGating: boolean; onEditGating: (bucket: Bucket) => void;
   cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel' | 'typeThumbUrl'>;
-}> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, cardActions }) => {
+}> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, hasGating, onEditGating, cardActions }) => {
   const [collapsed, setCollapsed] = useState(true);   // collapse by default
   const [focusCardId, setFocusCardId] = useState<string | null>(null);
   const sensors = useSensors(
@@ -213,8 +217,14 @@ const BucketSection: React.FC<{
             {BUCKET_LABEL[bucket]}
           </span>
           <span style={{ fontSize: 12, color: '#B0B0B0', fontWeight: 600 }}>{cards.length}</span>
+          {hasGating && <span title="This section has gating rules" style={{ fontSize: 11 }}>🔒</span>}
         </button>
         <span style={{ flex: 1, height: 1, background: '#EEE' }} />
+        <button className="tl-mini" onClick={() => onEditGating(bucket)}
+          title="Gate this whole section — lock its cards until prerequisites are met"
+          style={hasGating ? { borderColor: '#367895', color: '#1F5266', background: '#EAF3F6' } : undefined}>
+          {hasGating ? '🔒 Gating on' : '🔒 Gating'}
+        </button>
         <button className="tl-mini" onClick={() => onAdd(bucket)}>+ Add card</button>
       </div>
 
@@ -255,12 +265,12 @@ const BucketSection: React.FC<{
 // tile) via adaptToFeedCard; the full details open in the student's right-side
 // popup (CardDetailDrawer preview) — one renderer, nothing to drift.
 const EditDrawer: React.FC<{
-  draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }; types: TypeDef[]; isNew: boolean; saving: boolean;
+  draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }; types: TypeDef[]; allCards: Card[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course' | 'content'; onGenerate: (anchor: 'title' | 'video' | 'course' | 'content') => void;
   bpContext: BlueprintContextDTO | null;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => void; onSave: () => void; onClose: () => void;
   onPreview: (c: TimelineFeedCard) => void;
-}> = ({ draft, types, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose, onPreview }) => {
+}> = ({ draft, types, allCards, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose, onPreview }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
@@ -508,11 +518,24 @@ const EditDrawer: React.FC<{
               </label>
             ))}
           </div>
-          <label style={{ ...lbl, marginBottom: 0 }}>Visibility
+          <label style={{ ...lbl }}>Visibility
             <select style={inp} value={draft.visibility || 'draft'} onChange={(e) => onChange({ visibility: e.target.value })}>
               {['draft', 'scheduled', 'published', 'archived'].map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           </label>
+
+          {/* Per-card gating — this card stays LOCKED for the student until every
+              prerequisite is completed. Section-wide rules live on the lane's 🔒 button. */}
+          <div className="te-sechead" style={{ marginTop: 6 }}>🔒 Prerequisites — lock this card until…</div>
+          <GatingRuleEditor
+            rules={draft.unlock_rules || []}
+            onChange={(rules) => onChange({ unlock_rules: rules })}
+            cards={allCards.map((c) => ({ id: c.id, title: c.title, bucket: c.bucket, week: c.week, type: c.type }))}
+            excludeCardId={draft.id}
+          />
+          <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>
+            The student sees this card as “locked” (with the reason) until every prerequisite is completed. To lock the whole section at once, use the section’s 🔒 Gating button.
+          </div>
         </div>
 
         <div className="te-dfoot">
@@ -545,6 +568,8 @@ const TimelineEditorTab: React.FC = () => {
   const [aiBusy, setAiBusy] = useState(false);
   const [genBusy, setGenBusy] = useState<'' | 'title' | 'video' | 'course' | 'content'>('');
   const [bpContext, setBpContext] = useState<BlueprintContextDTO | null>(null);
+  const [sectionGating, setSectionGating] = useState<Bucket | null>(null);   // which section's gating modal is open
+  const [savingSection, setSavingSection] = useState(false);
 
   // Load the courses once and default to the AI Systems Architect Accelerator —
   // the Timeline is scoped to one course.
@@ -610,6 +635,22 @@ const TimelineEditorTab: React.FC = () => {
     const t = board?.types.find((x) => x.slug === type);
     return t?.thumbnail_url || null;
   }, [board]);
+
+  // Section gating rules (per bucket) from the board; the lane's 🔒 badge + modal use these.
+  const sectionRuleFor = useCallback(
+    (bucket: string) => (board?.sectionRules || []).find((s) => s.bucket === bucket && s.active !== false),
+    [board],
+  );
+  const saveSectionRule = async (bucket: Bucket, rules: UnlockPredicate[]) => {
+    if (!courseId) return;
+    setSavingSection(true); setError('');
+    try {
+      await api.put('/api/admin/orchestration/timeline/section-rules', { program_id: courseId, bucket, rules });
+      setSectionGating(null);
+      await loadBoard();
+    } catch (e: any) { setError(e?.response?.data?.error || 'Saving section rules failed'); }
+    finally { setSavingSection(false); }
+  };
 
   const weekCards = useMemo(
     () => (board?.cards || []).filter((c) => (typeof c.week === 'number' ? c.week : null) === week),
@@ -686,7 +727,7 @@ const TimelineEditorTab: React.FC = () => {
           points: draft.points, visibility: draft.visibility, video: videoPayload, content: contentPayload, course: coursePayload, testimonial: testimonialPayload,
           ...(draft.type === 'podcast' ? { podcast: podcastPayload } : {}),
           ...(draft.type === 'blog' ? { blog: blogPayload } : {}),
-          image: imagePayload, program_id: courseId || null,
+          image: imagePayload, unlock_rules: draft.unlock_rules || [], program_id: courseId || null,
         });
       } else if (draft.id) {
         await api.put(`/api/admin/orchestration/timeline/cards/${draft.id}`, {
@@ -696,7 +737,7 @@ const TimelineEditorTab: React.FC = () => {
           video: videoPayload, content: contentPayload, course: coursePayload, testimonial: testimonialPayload,
           ...(draft.type === 'podcast' ? { podcast: podcastPayload } : {}),
           ...(draft.type === 'blog' ? { blog: blogPayload } : {}),
-          image: imagePayload,
+          image: imagePayload, unlock_rules: draft.unlock_rules || [],
         });
       }
       setDraft(null);
@@ -928,15 +969,28 @@ const TimelineEditorTab: React.FC = () => {
 
           {BUCKETS.map((b) => (
             <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} thumbOf={thumbOf} onReorder={onReorder} onAdd={openAdd}
+              hasGating={(sectionRuleFor(b)?.rules.length || 0) > 0} onEditGating={(bk) => setSectionGating(bk)}
               cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish, onPreview: setStudentView }} />
           ))}
         </>
       )}
 
       {draft && (
-        <EditDrawer draft={draft} types={board?.types || []} isNew={isNew} saving={saving}
+        <EditDrawer draft={draft} types={board?.types || []} allCards={board?.cards || []} isNew={isNew} saving={saving}
           aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext}
           onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} onPreview={setStudentView} />
+      )}
+
+      {/* Section gating modal — lock a whole lane until its prerequisites are met. */}
+      {sectionGating && (
+        <SectionGatingModal
+          bucket={sectionGating}
+          initialRules={sectionRuleFor(sectionGating)?.rules || []}
+          cards={(board?.cards || []).map((c) => ({ id: c.id, title: c.title, bucket: c.bucket, week: c.week, type: c.type }))}
+          saving={savingSection}
+          onSave={(rules) => saveSectionRule(sectionGating, rules)}
+          onClose={() => setSectionGating(null)}
+        />
       )}
 
       {/* The student's right-side popup — the EXACT drawer students get, opened

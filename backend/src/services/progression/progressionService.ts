@@ -64,6 +64,13 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
   const card = await TimelineCard.findByPk(cardId);
   if (!card) throw new Error(`card ${cardId} not found`);
 
+  // Gating: a card whose prerequisites are unmet can't be force-completed by a
+  // direct API call. Single choke point — covers the classroom + runtime complete
+  // paths. Already-engaged cards never re-gate; fail-open on error.
+  // Throws { status: 423, code: 'card_locked' } when locked.
+  const { assertCardUnlocked } = await import('../timeline/timelineGatingService');
+  await assertCardUnlocked(enrollmentId, card);
+
   // Watch gate: video-bearing cards (video/testimonial/podcast) require the
   // configured share actually watched (default 75%) BEFORE completion + XP.
   // Single choke point — covers the classroom drawer, Today, and the runtime.

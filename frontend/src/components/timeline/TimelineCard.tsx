@@ -31,6 +31,7 @@ export interface TimelineFeedCard {
   points: { learning?: number; builder?: number; community?: number };
   competencies: unknown;
   status: 'locked' | 'available' | 'in_progress' | 'completed';
+  lock_reason?: string | null;   // when status='locked', why (e.g. "Finish the Learn tasks first")
   quiz_score: number | null;
   completed_at: string | null;
   video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
@@ -351,7 +352,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         {done
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
-            ? <span className="pip lock" style={{ fontSize: 13 }}>Unlocks later</span>
+            ? <span className="pip lock" style={{ fontSize: 13 }} title={card.lock_reason || undefined}>{card.lock_reason || 'Unlocks later'}</span>
             : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
                 <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
               </button>}
