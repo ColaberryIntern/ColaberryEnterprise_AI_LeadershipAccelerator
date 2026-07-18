@@ -347,5 +347,13 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     }
   }
 
+  // Order the feed the way the week reads top-to-bottom: by week, then by the
+  // section order (pre_class → learn → practice → build → reflect → share →
+  // advance), then by the card's order within its lane. Card `order` is
+  // per-(week,bucket) so sorting by it alone interleaves sections (a reflect
+  // card could surface above a learn card) — bucket-first keeps reflect last.
+  const bIdx = (b: string) => { const i = BUCKET_ORDER.indexOf(b as any); return i < 0 ? BUCKET_ORDER.length : i; };
+  feedCards.sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order);
+
   return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
 }
