@@ -29,7 +29,8 @@ export interface RevenueTransaction {
   paysimple_payment_id: string | null;
   refundable: boolean; // has a payment id AND not already refunded/void
   counted: boolean; // contributes to the collected total
-  enrollment_id: string | null;
+  enrollment_id: string | null; // -> student profile drawer (/admin/accelerator?enrollment=)
+  lead_id: number | null; // -> lead profile (/admin/leads/:id), resolved by payer email
 }
 
 export interface RevenueSummary {
@@ -99,6 +100,7 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
       refundable: !!m.pid,
       counted: true,
       enrollment_id: m.enrollment_id,
+      lead_id: null,
     });
   }
 
@@ -120,6 +122,7 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
       refundable: d.status === 'available' && !!pid,
       counted: d.status === 'available',
       enrollment_id: d.enrollment_id,
+      lead_id: null,
     });
   }
 
@@ -137,7 +140,23 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
       refundable: false,
       counted: false, // refunds reduce net separately, shown as negative
       enrollment_id: r.enrollment_id,
+      lead_id: null,
     });
+  }
+
+  // Resolve a lead id per payer email so each row can deep-link to the lead profile
+  // (/admin/leads/:id needs a numeric id — there is no email route).
+  const emails = [...new Set(tx.map((t) => t.payer_email).filter(Boolean).map((e) => e.toLowerCase()))];
+  if (emails.length > 0) {
+    const leadRows = (await sequelize.query(
+      `SELECT DISTINCT ON (lower(email)) lower(email) AS email, id
+         FROM leads WHERE lower(email) IN (:emails) ORDER BY lower(email), id ASC`,
+      { replacements: { emails }, type: QueryTypes.SELECT }
+    )) as Array<{ email: string; id: number }>;
+    const leadByEmail = new Map(leadRows.map((r) => [r.email, Number(r.id)]));
+    for (const t of tx) {
+      t.lead_id = t.payer_email ? leadByEmail.get(t.payer_email.toLowerCase()) ?? null : null;
+    }
   }
 
   tx.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
