@@ -56,7 +56,10 @@ const ClassroomPage: React.FC = () => {
 
   const load = useCallback(async () => {
     try {
-      const res = await portalApi.get('/api/portal/classroom');
+      // Cache-buster: the live feed must never be served from a stale browser
+      // copy (a newly-published card has to appear on load), so each fetch is a
+      // unique URL. Pairs with the server's Cache-Control: no-store.
+      const res = await portalApi.get('/api/portal/classroom', { params: { _t: Date.now() } });
       setFeed(res.data as Feed);
       setUiState('ready');
     } catch (err: any) {
