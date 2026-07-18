@@ -12,7 +12,7 @@ import {
   fmtCentralDateTime,
 } from './shellUtils';
 import portalApi from '../../../utils/portalApi';
-import { emitPointsEarned } from '../../../services/pointsFx';
+import { emitPointsEarned, onPointsEarned } from '../../../services/pointsFx';
 import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import '../../../components/timeline/timeline.css';
@@ -48,6 +48,9 @@ const TodayShell: React.FC = () => {
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
+  // Refetch the Today feed + status whenever points are earned (e.g. a quick-check
+  // completed in the drawer) so the sidebar stays live without a navigation.
+  useEffect(() => onPointsEarned(() => { void loadAll(); }), [loadAll]);
   // Infinite scroll — reveal more of the (looping) curriculum feed as you reach the end.
   useEffect(() => {
     const el = sentinelRef.current;
