@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 11:04 AM</div>
-    <div><span class="sid">CC-20260708-q7m3</span><span class="count">71 changes</span></div>
+    <div class="meta">Generated Saturday, July 18, 2026 at 9:44 AM</div>
+    <div><span class="sid">CC-20260708-q7m3</span><span class="count">72 changes</span></div>
   </header>
   <main>
     
@@ -1122,6 +1122,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0, backend tsc 0; titleCase 6/6, curriculumFormatContract 5/5. After deploy: card/drawer/workspace titles render in Title Case (acronyms intact); adding a Survey card → ✦ Generate content is enabled with no title and fills the questions from the week blueprint.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Deploy backend (survey prompt) + nginx. Prod already had the survey experience; the old look was a client cache (hard-refresh).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">72</span>
+          <h2>Add-card: Publish-now toggle (default ON) + DRAFT/LIVE badge — new cards no longer silently save as draft</h2>
+          <span class="badge">2026-07-18</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali added a survey but it didn&#39;t show for students because new cards defaulted to draft (student feed shows published only). Diagnosed: the card was correct (published-after-manual-publish, Week 0 reflect, cohort-null, active) and getFeed returns it — the miss was the draft default + a stale classroom. Root-cause fix (Ali chose &quot;Publish toggle in Add-card&quot;): the Add-card/Edit drawer now shows a Publish-now switch + a ● LIVE / ○ DRAFT badge at the top of the body, and openAdd defaults new cards to visibility &#39;published&#39; (toggle ON) so add == live unless the author deliberately flips to draft. Save button reads &quot;Add &amp; publish&quot; / &quot;Add as draft&quot; accordingly. Files: frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend tsc 0. Also published the stuck Week 0 survey on prod (UPDATE visibility=&#39;published&#39;); confirmed getFeed(enrollment) returns it under Week 0 → reflect (status available). After deploy: adding a card shows LIVE by default and appears for students on save (after their feed refresh).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Frontend-only — deploy nginx. Draft is still one click away for build-before-ship.</span></div>
           
         </div>
       </article>
