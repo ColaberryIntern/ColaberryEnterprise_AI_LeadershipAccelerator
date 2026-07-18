@@ -199,6 +199,7 @@ const EditDrawer: React.FC<{
   // Zero-author-input types that write themselves from the week's blueprint —
   // "Generate content" runs the type's own prompt (no title required).
   const isBlueprintGen = ['survey', 'overview'].includes(draft.type || '');
+  const published = draft.visibility === 'published';
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
   const setCourse = (patch: Partial<CardCourse>) => onChange({ course: { ...(draft.course || {}), ...patch } });
   // Testimonials + Podcast types: one set video ("link") or a personalized pick per student ("random").
@@ -241,6 +242,16 @@ const EditDrawer: React.FC<{
         </div>
 
         <div className="te-dbody">
+          {/* Publish state — a visible switch (default ON for new cards) + badge,
+              so a card never silently saves as a draft the student can't see. */}
+          <div className="te-pubrow">
+            <span className={`te-vbadge ${published ? 'live' : 'draft'}`}>{published ? '● LIVE' : '○ DRAFT'}</span>
+            <label className="te-switch">
+              <input type="checkbox" checked={published} onChange={(e) => onChange({ visibility: e.target.checked ? 'published' : 'draft' })} />
+              <span className="te-track"><span className="te-knob" /></span>
+              <span className="te-swlab">{published ? 'Published — students see it on save' : 'Draft — hidden from students until published'}</span>
+            </label>
+          </div>
           {isNew && (
             <label style={lbl}>Type
               <select style={inp} value={draft.type || ''} onChange={(e) => onChange({ type: e.target.value })}>
@@ -438,7 +449,7 @@ const EditDrawer: React.FC<{
         <div className="te-dfoot">
           <button className="tl-btn-ghost" onClick={onClose}>Cancel</button>
           <button className="tl-btn-primary" disabled={saving || (isNew && !draft.type) || !draft.title} onClick={onSave}>
-            {saving ? 'Saving…' : isNew ? 'Add card' : 'Save changes'}
+            {saving ? 'Saving…' : isNew ? (published ? 'Add & publish' : 'Add as draft') : 'Save changes'}
           </button>
         </div>
       </div>
@@ -552,7 +563,7 @@ const TimelineEditorTab: React.FC = () => {
     const def = launched.find((t) => t.bucket === bucket) || launched[0];
     setIsNew(true);
     setDraft({ type: def?.slug, title: '', bucket, week: wk !== undefined ? wk : week, difficulty: def?.difficulty || 'core',
-      points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'draft' });
+      points: { learning: def?.learning_xp, builder: def?.builder_xp, community: def?.community_xp }, visibility: 'published' });
   };
   const openEdit = (c: Card) => { setIsNew(false); setDraft({ ...c, video: c.metadata?.video || undefined, course: c.metadata?.course || undefined, image: (c.metadata as any)?.image || undefined }); };
 
@@ -770,6 +781,16 @@ const TimelineEditorTab: React.FC = () => {
         @keyframes te-slide{from{transform:translateX(40px);opacity:.5}to{transform:none;opacity:1}}
         .te-dhead{display:flex;align-items:center;gap:10px;padding:15px 20px;border-bottom:1px solid #EEE;flex:none}
         .te-dbody{flex:1;overflow:auto;padding:18px 20px}
+        .te-pubrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;margin-bottom:16px;border:1px solid #E4E4E4;border-radius:10px;background:#FAFBFC}
+        .te-vbadge{font-size:11px;font-weight:800;letter-spacing:.04em;padding:4px 10px;border-radius:999px;flex:none}
+        .te-vbadge.live{background:#E7F5E9;color:#3C7A26} .te-vbadge.draft{background:#F0F0F0;color:#8A8A8A}
+        .te-switch{display:flex;align-items:center;gap:9px;cursor:pointer;min-width:0}
+        .te-switch input{position:absolute;opacity:0;width:0;height:0}
+        .te-track{position:relative;width:38px;height:22px;border-radius:999px;background:#CBD2D8;flex:none;transition:.16s ease}
+        .te-knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:.16s ease}
+        .te-switch input:checked + .te-track{background:#5BA63C} .te-switch input:checked + .te-track .te-knob{transform:translateX(16px)}
+        .te-switch input:focus-visible + .te-track{outline:2px solid #367895;outline-offset:2px}
+        .te-swlab{font-size:12.5px;color:#4A4A4A}
         .te-dfoot{display:flex;justify-content:flex-end;gap:8px;padding:14px 20px;border-top:1px solid #EEE;flex:none;background:#fff}
         .te-close{margin-left:auto;background:none;border:none;cursor:pointer;color:#8A8A8A;font-size:24px;line-height:1;padding:0 4px}
         .te-plabel{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#8A8A8A;margin-bottom:8px}
