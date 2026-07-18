@@ -9174,6 +9174,13 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: frontend tsc 0; curriculumFormatContract 5/5. After deploy: open a published week in the Composer → the canvas shows exactly the live Timeline cards in the same order as the Timeline tab / classroom (e.g. reflect feedback last).
   - Notes: Frontend-only (reuses the existing timeline list endpoint) — deploy nginx. Read-parity; full two-way edit-sync would need a per-card identity link (flagged, not built).
 
+- [ ] Person-360 drawer: show ALL of a person's payments (membership + $50 deposit), aggregated by email
+  - Date: 2026-07-18
+  - Session: CC-20260718-r7k4
+  - What changed: personHistoryService.getEnrollmentHistory now aggregates payments across EVERY enrollment row sharing the person's email (a person can have their $50 Open House deposit on one row and their paid membership on another, plus stray abandoned signups). The timeline previously showed a single "Payment confirmed" from this one enrollment's amount_paid and never queried account_credits — so a member who paid a deposit AND a membership (e.g. Ikenna: $1,788 annual + $50 deposit, both real) only showed the $1,788. Now it emits a "Membership payment $X · plan" event per paid sibling enrollment + an "Open House deposit $50" event per account_credit, and returns profile.total_paid (membership+deposits across all rows) + profile.enrollment_records. PersonHistoryDrawer header shows a "$X collected" badge and, when >1 enrollment row shares the email, a note that payments are combined. Opening EITHER of a person's enrollment rows now shows the same complete picture.
+  - Why: Ali — clicking Ikenna's student profile showed only $1,788, not his $50 deposit; "it's been looked at as two people even though the emails are the same."
+  - Verification: PENDING — Docker tsc + CRA gate; live: Ikenna's drawer shows both the $1,788 membership and the $50 deposit + "$1,838 collected".
+  - Notes: 13 emails have >1 enrollment row (mostly @colaberry.com test + abandoned open-house signups with 0 payments; Ikenna is the only real paid one). Not auto-deduping rows here (risky; which row wins, data merge) — the display aggregation is the safe fix. Duplicate-row cleanup can be a separate pass if wanted.
 ### Self Study: picture-rich reader + per-section read-gate + Mark Complete parity — 2026-07-18
 - [x] Self Study reading is now genuinely visual (illustrations/diagrams/stats) AND a Mark Complete button gated on reading every section for >=10s, in both the drawer and the workstation
   - Date: 2026-07-18
