@@ -1140,6 +1140,18 @@ async function ensureTimelineEngineSchema() {
     `CREATE INDEX IF NOT EXISTS idx_timeline_events_cohort_week ON timeline_events (cohort_id, week)`,
     `CREATE INDEX IF NOT EXISTS idx_timeline_events_slug ON timeline_events (slug)`,
 
+    // Per-(program, section/bucket) gating rules — see timelineGatingService.
+    `CREATE TABLE IF NOT EXISTS timeline_section_rules (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       program_id UUID NOT NULL,
+       bucket VARCHAR(20) NOT NULL,
+       rules JSONB NOT NULL DEFAULT '[]'::jsonb,
+       active BOOLEAN NOT NULL DEFAULT TRUE,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS idx_timeline_section_rules_program_bucket ON timeline_section_rules (program_id, bucket)`,
+
     `CREATE TABLE IF NOT EXISTS points_config (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        scope VARCHAR(30) NOT NULL,
@@ -1680,6 +1692,7 @@ async function start(): Promise<void> {
       const Enrollment = (await import('./models/Enrollment')).default;
       const TimelineCard = (await import('./models/TimelineCard')).default;
       const TimelineCardProgress = (await import('./models/TimelineCardProgress')).default;
+      const TimelineSectionRule = (await import('./models/TimelineSectionRule')).default;
       const CurriculumTypeDefinition = (await import('./models/CurriculumTypeDefinition')).default;
       const Subscription = (await import('./models/Subscription')).default;
       const AccountCredit = (await import('./models/AccountCredit')).default;
@@ -1688,6 +1701,7 @@ async function start(): Promise<void> {
         Enrollment,
         TimelineCard,
         TimelineCardProgress,
+        TimelineSectionRule,
         CurriculumTypeDefinition,
         Subscription,
         AccountCredit,

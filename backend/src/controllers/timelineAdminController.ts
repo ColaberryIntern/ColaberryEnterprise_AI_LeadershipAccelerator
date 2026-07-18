@@ -7,6 +7,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import {
   listTimeline, createCard, updateCard, deleteCard, reorderCards, cloneCard,
+  getSectionRules, setSectionRule,
 } from '../services/timeline/timelineAdminService';
 import { generateCardContent } from '../services/timeline/cardContentService';
 import { generateVideoDraft } from '../services/timeline/videoDraftService';
@@ -60,6 +61,17 @@ const blogSourceSchema = z.object({
   mode: z.enum(['link', 'random']).nullable().optional(),
   url: z.string().max(2000).nullable().optional(),
 }).nullable().optional();
+// Gating: per-card unlock predicates. Loose here (all fields optional); the
+// service's normalizeRules() enforces the per-kind required fields and drops junk.
+const unlockPredicateSchema = z.object({
+  kind: z.enum(['card_complete', 'section_complete', 'type_complete']),
+  card_id: z.string().optional(),
+  bucket: bucketEnum.optional(),
+  type: z.string().optional(),
+  scope: z.enum(['week', 'all']).optional(),
+  label: z.string().max(200).optional(),
+});
+const unlockRulesSchema = z.array(unlockPredicateSchema).max(30).optional();
 
 const createSchema = z.object({
   type: z.string().min(1),
@@ -75,6 +87,7 @@ const createSchema = z.object({
   visibility: visibilityEnum.optional(),
   release_date: z.string().datetime().nullable().optional(),
   program_id: z.string().uuid().nullable().optional(),
+  unlock_rules: unlockRulesSchema,
   video: videoSchema,
   content: contentSchema,
   course: courseSchema,
@@ -98,6 +111,7 @@ const updateSchema = z.object({
   release_date: z.string().datetime().nullable().optional(),
   priority: z.number().int().optional(),
   order: z.number().int().optional(),
+  unlock_rules: unlockRulesSchema,
   video: videoSchema,
   content: contentSchema,
   course: courseSchema,
@@ -106,6 +120,13 @@ const updateSchema = z.object({
   podcast: podcastSourceSchema,
   blog: blogSourceSchema,
 }).strict();
+
+// Section gating: set/replace one section's (bucket's) unlock predicates.
+const sectionRuleSchema = z.object({
+  program_id: z.string().uuid(),
+  bucket: bucketEnum,
+  rules: z.array(unlockPredicateSchema).max(30).default([]),
+});
 
 // One-click: build a full video-card draft from a title (find a real video +
 // write the copy/content). Returned to the editor as a draft to review + save.
@@ -216,5 +237,18 @@ export async function handleGetBlueprintContext(req: Request, res: Response, nex
     const programId = (req.query.program_id as string) || undefined;
     const week = req.query.week != null && req.query.week !== '' ? Number(req.query.week) : undefined;
     res.json(await getBlueprintContext(programId, week));
+  } catch (err) { fail(res, err, next); }
+}
+
+// Gating: list a program's per-section rules; upsert one section's rules.
+export async function handleGetSectionRules(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ sectionRules: await getSectionRules((req.query.program_id as string) || null) });
+  } catch (err) { fail(res, err, next); }
+}
+export async function handleSetSectionRule(req: Request, res: Response, next: NextFunction) {
+  try {
+    const b = sectionRuleSchema.parse(req.body);
+    res.json(await setSectionRule(b.program_id, b.bucket, b.rules));
   } catch (err) { fail(res, err, next); }
 }
