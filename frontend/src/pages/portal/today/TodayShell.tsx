@@ -12,6 +12,7 @@ import {
   fmtCentralDateTime,
 } from './shellUtils';
 import portalApi from '../../../utils/portalApi';
+import { emitPointsEarned } from '../../../services/pointsFx';
 import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import '../../../components/timeline/timeline.css';
@@ -79,6 +80,7 @@ const TodayShell: React.FC = () => {
     try {
       const r = await rsvpOpenHouse(oh.id);
       await loadAll();
+      emitPointsEarned(r.awarded ? (r.points ?? 0) : 0);
       flash(r.awarded ? `RSVP confirmed — +${r.points} points` : 'You are already RSVP\'d');
     } catch { flash('Could not RSVP right now'); } finally { setBusy(false); }
     window.open(EVENTBRITE_OPEN_HOUSE_URL, '_blank', 'noopener');
@@ -110,6 +112,7 @@ const TodayShell: React.FC = () => {
     try {
       const r = await claimDailyStreak();
       setStreak(r.streak);
+      emitPointsEarned(r.awarded ? r.points : 0);
       // Streak points fold into the score — refresh the points total too.
       try { setPoints(await fetchPoints()); } catch { /* keep prior total */ }
       flash(r.awarded
@@ -328,9 +331,10 @@ const TodayShell: React.FC = () => {
         onComplete={async (card) => {
           // Persist the completion (the 75% watch gate is enforced server-side; a
           // rejection propagates so the drawer surfaces "keep watching").
-          await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+          const res = await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
           setSelectedCard(null);
           await loadAll();
+          emitPointsEarned(res.data?.points_awarded ?? 0);   // HUD burst + chime
         }}
       />
     </PortalShell>

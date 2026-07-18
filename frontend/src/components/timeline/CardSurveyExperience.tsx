@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
+import { emitPointsEarned } from '../../services/pointsFx';
 
 /**
  * CardSurveyExperience — the bespoke, self-contained "take the survey live"
@@ -68,7 +69,8 @@ const CardSurveyExperience: React.FC<Props> = ({ cardId, questions: initialQs, o
     setSaving(true); setError('');
     try {
       const items = questions.map((_, i) => ({ index: i, rating: ratings[i] ?? null, comment: comments[i] || null }));
-      await runtimeApi.saveSurvey(cardId, { items, open: open.trim() || null });
+      const res = await runtimeApi.saveSurvey(cardId, { items, open: open.trim() || null });
+      emitPointsEarned(res.points_awarded);   // HUD burst + chime for the points just earned
       if (onComplete) await onComplete();
       setDone(true);
     } catch (e: any) {

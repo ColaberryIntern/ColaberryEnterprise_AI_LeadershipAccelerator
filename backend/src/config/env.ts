@@ -117,6 +117,11 @@ export const env = {
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',
+  // Portal engagement points: award StudentPointsEvent points when a student
+  // completes a curriculum item (survey / knowledge check / card / lesson). These
+  // feed the top-right HUD total. ON by default; set PORTAL_POINTS_AWARD_ENABLED=false
+  // to dark-disable coursework awards (streak + RSVP awards are unaffected).
+  portalPointsAwardEnabled: process.env.PORTAL_POINTS_AWARD_ENABLED !== 'false',
   chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
   chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 

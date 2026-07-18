@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import { useParticipantAuth } from '../../../contexts/ParticipantAuthContext';
 import portalApi from '../../../utils/portalApi';
 import { fetchOnboardingProfile, ResumeProfileFields, ResumePersonalization } from '../../../services/onboardingApi';
+import { soundEnabled, setSoundEnabled, playEarnSound } from '../../../services/pointsFx';
 import {
   fetchSettings, updateProfile, uploadAvatar, removeAvatar,
   uploadResume, removeResume, downloadResume,
@@ -60,9 +61,15 @@ const SettingsPage: React.FC = () => {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try { return (localStorage.getItem('te-theme') as 'light' | 'dark') || 'light'; } catch { return 'light'; }
   });
+  const [soundOn, setSoundOn] = useState<boolean>(() => soundEnabled());
   // Enrollment first: Open House visitors land here to pick their class date
-  // (enroll), then lock the seat on the Subscription tab (pay).
-  const [tab, setTab] = useState<SetTab>('enrollment');
+  // (enroll), then lock the seat on the Subscription tab (pay). A ?tab= query
+  // (e.g. the HUD's "?tab=points" deep-link) opens straight to that tab.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState<SetTab>(() => {
+    const t = searchParams.get('tab');
+    return SET_TABS.some((x) => x.id === t) ? (t as SetTab) : 'enrollment';
+  });
   const avatarRef = useRef<HTMLInputElement>(null);
   const resumeRef = useRef<HTMLInputElement>(null);
 
@@ -474,6 +481,27 @@ const SettingsPage: React.FC = () => {
               <div className="desc">Switch between light and dark. Remembered on this device.</div>
             </div>
             <button className="te-btn ghost sm" onClick={toggleTheme}>{theme === 'dark' ? 'Switch to light' : 'Switch to dark'}</button>
+          </div>
+          <div className="set-row">
+            <div>
+              <div className="lab">Sound effects</div>
+              <div className="desc">Play a soft chime when you earn points. Remembered on this device.</div>
+            </div>
+            <button
+              type="button"
+              className={`set-toggle${soundOn ? ' on' : ''}`}
+              role="switch"
+              aria-checked={soundOn}
+              aria-label="Sound effects"
+              onClick={() => {
+                const next = !soundOn;
+                setSoundOn(next);
+                setSoundEnabled(next);
+                if (next) playEarnSound();   // instant preview when turning it on
+              }}
+            >
+              <span className="knob" />
+            </button>
           </div>
         </section>
         </>)}

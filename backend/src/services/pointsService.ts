@@ -12,6 +12,14 @@ export const POINT_EVENTS: Record<string, number> = {
   open_house_attended: 50,
   project_dna_completed: 40,
   first_task_complete: 20,
+  // Curriculum completion (the engagement points the HUD total sums). Amounts here
+  // are fallbacks; per-type / per-card overrides live in points_config and are
+  // resolved by cardPointsService before award() is called.
+  card_complete: 5,
+  survey_complete: 10,
+  knowledge_check: 15,
+  evaluation_passed: 20,
+  lesson_complete: 10,
 };
 
 export interface AwardInput {
