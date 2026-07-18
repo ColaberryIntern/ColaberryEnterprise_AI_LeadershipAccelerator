@@ -1806,7 +1806,7 @@ export function startScheduler(): void {
     cron.schedule('*/30 * * * *', () => {
       instrumentCronJob('PaySimplePaymentSync', async () => {
         const { syncPaySimplePayments } = await import('./paymentSyncService');
-        await syncPaySimplePayments({ sinceDays: env.paysimpleSyncSinceDays });
+        await syncPaySimplePayments({});
       }).catch((err) => {
         console.error('[Scheduler] PaySimple payment sync error:', err);
       });

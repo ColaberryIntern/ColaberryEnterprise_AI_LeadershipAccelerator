@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Friday, July 17, 2026 at 10:27 AM</div>
-    <div><span class="sid">CC-20260717-p4x8</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Friday, July 17, 2026 at 2:48 PM</div>
+    <div><span class="sid">CC-20260717-p4x8</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -87,6 +87,20 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Docker/Dev gate (backend tsc + endpoint). Ships dark (`PAYSIMPLE_SYNC_ENABLED=false`); sync no-ops without live read creds. Revenue math unchanged for already-recorded payments (Dev still shows the real collected total).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">`amount_paid` is one field per enrollment → tracks the latest payment (fits V1 one-payment-per-term). Recurring accumulation would want a per-payment ledger (documented future enhancement). Prod activation = set live read creds + `--since-days` backfill + `PAYSIMPLE_SYNC_ENABLED=true`.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>**Dashboard Revenue = SUM(enrollments.amount_paid paid) + SUM(account_credits available); Open House $50 &quot;hold-your-spot&quot; deposits now count**</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`cohortService.getDashboardStats()` adds available `account_credits` (the $50 Open House deposits recorded by main&#39;s `openHouseCreditService`) to membership `amount_paid`. Counting two sources means a dual-payer (membership + $50 deposit) is fully + separately counted; deposits are &#39;available&#39; cash (an &#39;applied&#39; one is folded into the membership charge, so no double-count).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">prod account_credits = 25 × $50 = $1,250 available; membership = $1,788 → Revenue = $3,038. Docker/Dev gate + live-endpoint check.</span></div>
+          
           
         </div>
       </article>

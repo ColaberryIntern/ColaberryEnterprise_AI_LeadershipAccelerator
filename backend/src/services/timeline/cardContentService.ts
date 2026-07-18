@@ -66,7 +66,7 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
 
   const client = getInstrumentedOpenAI({ workflow_id: 'timeline_card_generate' });
   const res = await client.chat.completions.create({
-    model, temperature: 0.6, max_tokens: 1600, response_format: { type: 'json_object' },
+    model, temperature: 0.6, max_tokens: 3200, response_format: { type: 'json_object' },
     messages: [
       { role: 'system', content: `${bp ? bp.prompt_text + '\n\n' : ''}${roster ? roster.prompt_text + '\n\n' : ''}You render the "${def?.student_label || card.type}" activity into the exact content a student sees on this card. Return STRICT json.` },
       { role: 'user', content: `Produce the student content as json with keys: title, summary, body_html (clean self-contained HTML, no scripts), questions (string[]), reflection (string).\n\nInstruction:\n${resolved}` },
@@ -113,6 +113,9 @@ export async function ensureFreshContent(cardId: string): Promise<{ content: Car
   // Only content the ADMIN populated is refreshed here — never auto-generate for
   // a card that was intentionally left without content.
   if (!existing) return { content: null, regenerated: false };
+
+  // Hand-authored readings are LOCKED — never auto-regenerate over them.
+  if ((meta as Record<string, unknown>).locked) return { content: existing, regenerated: false };
 
   const fresh = at !== null && !Number.isNaN(at) && Date.now() - at <= CONTENT_TTL_MS;
   if (fresh) return { content: existing, regenerated: false };

@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260717-x8k4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Friday, July 17, 2026 at 3:45 PM</div>
+    <div><span class="sid">CC-20260717-x8k4</span><span class="count">3 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Orchestration Timeline: collapsible bucket sections with a click-to-expand Mermaid overview</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali (from admin Orchestration → Timeline): make each bucket section (Pre-Class, Learn, …) collapsible; collapsed BY DEFAULT, a section shows a Mermaid &quot;what curriculum is loaded&quot; map you click to open the full editable card list — a wider, glanceable view. (1) NEW `frontend/src/utils/bucketMermaid.ts` — pure builder `buildBucketMermaid(cards, bandIconOf)` emits a left-to-right `flowchart LR` (one node per card in order; green = published/live, grey = draft; folds overflow past 8 cards into a single &quot;+N more&quot; node) plus `mermaidLabel()` which sanitizes titles (strips mermaid-breaking chars, folds quotes, truncates) so no card title can break the diagram. (2) `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx` BucketSection: added `collapsed` state (default true); header now has a rotating caret toggle (aria-expanded); collapsed renders the existing reusable `&lt;MermaidDiagram&gt;` inside a role=&quot;button&quot;, keyboard-accessible `.te-minimap` wrapper (click or Enter/Space expands); empty buckets show a muted hint; expanding restores the full drag-to-reorder card list unchanged. No new dependency — reused the MermaidDiagram component already used on public pages.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` clean — 0 new errors (only the 3 pre-existing `@dnd-kit` exports-map resolution errors, proven identical on the pristine HEAD tree — a raw-tsc artifact; the CRA build resolves them). jest 8/8 for bucketMermaid (label sanitize/truncate/fallback; LR nodes + visibility class; +N more overflow; single-node no-edge; title fallback).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/timeline-collapsible-mermaid` off origin/main (prod 6d0c2f2b), built in an isolated worktree — the local checkout was on an unrelated, far-behind branch that lacks the Timeline UI. Not deployed; awaiting review/merge. TimelineEditorTab is a grandfathered oversize file (851 lines) — kept the new logic in a separate util rather than grow it; a full component split would be a &gt;25% rewrite (out of scope).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Orchestration Timeline: Mermaid map nodes jump to the exact card (not the top of the list)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: clicking a specific card in the collapsed Mermaid map should open THAT card, not default to the top of the expanded list. `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx`: each card&#39;s root now carries a stable DOM id (`te-card-&lt;id&gt;`); the collapsed map wrapper&#39;s click reads the clicked mermaid node group id (`flowchart-&lt;nodeId&gt;-&lt;n&gt;`) → maps `n&lt;i&gt;` → cards[i] and `more` → the first hidden card → expands the lane and `scrollIntoView({block:&#39;center&#39;})` on that exact card with a 1.6s highlight flash; clicking empty map space / the caption still just expands. Exported `MAX_NODES` from `bucketMermaid.ts` for the &quot;+N more&quot; → first-hidden mapping; added node cursor/hover + `.te-card-flash` CSS. No shared-component change — the SVG lives inside the `.te-minimap` wrapper, so the node-hit-test handler is local.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` 0 new errors (only the 3 baseline `@dnd-kit` resolution errors); jest 8/8; the Docker CRA prod build (nginx) compiled clean and the dev `:9999` bundle serves the new code.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/timeline-collapsible-mermaid`. Ali (DRI) directed a same-day PROD deploy of this Timeline work (frontend-only → nginx), overriding the after-hours norm.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Orchestration Timeline: Mermaid overview wraps into rows of 3 (+ fix node-click card jump)</h2>
+          <span class="badge">2026-07-17</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali: with 5-6 cards the collapsed Mermaid map crammed everything onto one row — cap it at 3 per row and wrap down. `frontend/src/utils/bucketMermaid.ts`: the lane now emits each row of ≤ROW_SIZE (3) nodes as its OWN left-to-right chain with no cross-row edge; disconnected same-rank chains make mermaid stack them into an aligned grid. ALSO fixed a latent bug the headless render exposed: rendered mermaid node group DOM ids are `&lt;renderId&gt;-flowchart-&lt;nodeId&gt;-&lt;counter&gt;` (the renderId prefix varies), but the click handler&#39;s regex was start-anchored (`^flowchart-…`) so it never matched once the prefix was present — clicking a specific node silently just expanded to the top instead of jumping to that card. Extracted `nodeIdFromMermaidGroupId()` (prefix-agnostic, tail-matched) and used it in TimelineEditorTab&#39;s `onMapClick`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` 0 new errors; jest 12/12 (added a row-wrap test + 3 node-id-parser tests); **Playwright headless render** of the exact mermaid output confirmed the wrap — 5→[3,2], 6→[3,3], 8→[3,3,2], 3→[3]; Docker CRA prod build compiled clean.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/timeline-collapsible-mermaid`. Same-day PROD deploy per Ali&#39;s direction. The node-click-jump was shipped broken in the prior deploy (unnoticed) and is fixed here.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260717-x8k4</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

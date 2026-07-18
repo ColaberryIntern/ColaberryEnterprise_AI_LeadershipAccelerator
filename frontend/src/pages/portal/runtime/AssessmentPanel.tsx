@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { runtimeApi, AssessmentView, AssessmentResult, AssessmentItem, SectionProgress, Readiness } from './runtimeApi';
+import { runtimeApi, AssessmentView, AssessmentResult, AssessmentItem, AssessmentKind, AssessmentQ, CompetencyScore, SectionProgress, Readiness } from './runtimeApi';
 
 /**
  * AssessmentPanel — the Knowledge Check (quiz) and Evaluation experience in the
@@ -11,13 +11,29 @@ import { runtimeApi, AssessmentView, AssessmentResult, AssessmentItem, SectionPr
  * Portal-styled (rt-* tokens); its own scoped .as-* classes.
  */
 
-interface Props { cardId: string; onCompleted?: (readiness: Readiness | null) => void }
+interface Props {
+  cardId: string;
+  onCompleted?: (readiness: Readiness | null) => void;
+  preview?: boolean;          // admin Experience Studio: sample questions, no fetch, no persist
+  kind?: AssessmentKind;      // preview only — which mode to demo
+}
 type Phase = 'loading' | 'intro' | 'taking' | 'result' | 'error';
 
 const pct = (x: number | null | undefined) => (x == null ? null : Math.round(x * 100));
 const now = () => Date.now();
 
-const AssessmentPanel: React.FC<Props> = ({ cardId, onCompleted }) => {
+// Representative sample questions for the admin Studio preview (real students get
+// blueprint-generated questions from the backend). Answers included so the preview
+// scores client-side without any API call.
+type SampleQ = { question: string; options: string[]; competency: string; correct_index: number; explanation: string };
+const SAMPLE_QS: SampleQ[] = [
+  { question: 'What best describes an AI system architecture?', options: ['A single clever prompt', 'The end-to-end design of the components, data, and models that deliver an AI capability', 'A chatbot window', 'A database table'], competency: 'architecture', correct_index: 1, explanation: 'Architecture is the whole end-to-end design, not any one piece.' },
+  { question: 'Which most improves a prompt?', options: ['Adding more words', 'Being specific and giving the model clear context and examples', 'Guessing and hoping', 'Avoiding any examples'], competency: 'prompt_engineering', correct_index: 1, explanation: 'Clear, specific context (and examples) reliably improves outputs.' },
+  { question: 'Why do we test AI systems?', options: ['We do not need to', 'To catch failures before users do and keep behavior reliable', 'Only to slow shipping down', 'Only for compliance paperwork'], competency: 'testing', correct_index: 1, explanation: 'Testing surfaces failures early and keeps behavior reliable.' },
+  { question: 'A good first step when scoping an AI feature is to…', options: ['Pick the biggest model available', 'Define the outcome and how you will measure success', 'Write the UI first', 'Skip planning to move fast'], competency: 'architecture', correct_index: 1, explanation: 'Start from the outcome and a success measure, then design to it.' },
+];
+
+const AssessmentPanel: React.FC<Props> = ({ cardId, onCompleted, preview, kind: kindProp }) => {
   const [view, setView] = useState<AssessmentView | null>(null);
   const [phase, setPhase] = useState<Phase>('loading');
   const [idx, setIdx] = useState(0);
@@ -31,11 +47,21 @@ const AssessmentPanel: React.FC<Props> = ({ cardId, onCompleted }) => {
 
   useEffect(() => {
     let alive = true;
+    if (preview) {
+      const k: AssessmentKind = kindProp || 'quiz';
+      const questions: AssessmentQ[] = SAMPLE_QS.map((s, i) => ({
+        index: i, question: s.question, options: s.options, competency: s.competency,
+        ...(k === 'quiz' ? { correct_index: s.correct_index, explanation: s.explanation } : {}),  // quiz reveals; eval hides
+      }));
+      setView({ kind: k, pass_threshold: k === 'evaluation' ? 0.75 : null, question_count: questions.length, questions, last_attempt: null, section: null });
+      setPhase('intro');
+      return () => { alive = false; };
+    }
     runtimeApi.assessment(cardId)
       .then((v) => { if (!alive) return; setView(v); setPhase(v.last_attempt ? 'result' : 'intro'); })
       .catch(() => { if (alive) setPhase('error'); });
     return () => { alive = false; };
-  }, [cardId]);
+  }, [cardId, preview, kindProp]);
 
   const isEval = view?.kind === 'evaluation';
   const qs = view?.questions || [];
@@ -56,6 +82,7 @@ const AssessmentPanel: React.FC<Props> = ({ cardId, onCompleted }) => {
 
   const submit = async () => {
     noteTime(idx);
+    if (preview) { setResult(scorePreview(kindProp || 'quiz', answers)); setPhase('result'); return; }
     setBusy(true);
     try {
       const responses = qs.map((_, i) => ({ index: i, selected_index: answers[i] ?? null, time_ms: timesRef.current[i] ?? null }));
@@ -247,6 +274,30 @@ const Result: React.FC<{ view: AssessmentView; result: AssessmentResult | null; 
 
 function prettyDomain(d: string): string {
   return (d || '').replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+// Client-side scoring for the admin Studio preview — no API, no persistence.
+function scorePreview(kind: AssessmentKind, answers: Record<number, number>): AssessmentResult {
+  const items: AssessmentItem[] = SAMPLE_QS.map((s, i) => ({
+    question: s.question, competency: s.competency, options: s.options,
+    selected_index: answers[i] ?? null, correct_index: s.correct_index,
+    is_correct: (answers[i] ?? null) === s.correct_index, explanation: s.explanation, time_ms: null,
+  }));
+  const correct = items.filter((x) => x.is_correct).length;
+  const total = SAMPLE_QS.length;
+  const score = total ? correct / total : 0;
+  const passed = kind === 'evaluation' ? score >= 0.75 : null;
+  const agg: Record<string, { correct: number; total: number }> = {};
+  for (const it of items) { const c = it.competency || 'general'; (agg[c] = agg[c] || { correct: 0, total: 0 }).total += 1; if (it.is_correct) agg[c].correct += 1; }
+  const competency_scores: Record<string, CompetencyScore> = {};
+  for (const [c, v] of Object.entries(agg)) competency_scores[c] = { correct: v.correct, total: v.total, pct: v.total ? v.correct / v.total : 0 };
+  const BEGIN = 0.4;   // a sample "coming in" baseline so the eval growth meter renders
+  const section: SectionProgress | null = kind === 'evaluation' ? {
+    week: 1, beginning: BEGIN, current: score, growth: score - BEGIN,
+    quiz_taken: true, evaluation_taken: true, evaluation_passed: passed,
+    per_competency: Object.entries(competency_scores).map(([domain, cs]) => ({ domain, beginning: BEGIN, current: cs.pct, delta: cs.pct - BEGIN })),
+  } : null;
+  return { kind, score, correct_count: correct, total_count: total, passed, pass_threshold: kind === 'evaluation' ? 0.75 : null, attempt_number: 1, items, competency_scores, section, completion: null };
 }
 
 const asCss = `
