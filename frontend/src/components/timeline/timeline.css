@@ -343,3 +343,8 @@
 }
 /* Watch-gate rejection message in the drawer footer */
 .tld-gatemsg{font-size:12.5px;font-weight:600;color:var(--cherry-deep,#a4161a);margin-right:auto;align-self:center}
+/* Shared Self Study "Mark complete" CTA — UNSCOPED so the drawer footer (.tl-de) and
+   the workstation (.rt) render it identically in color + size (Ali: they must match). */
+.ss-complete-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #c20e1e;background:#c20e1e;color:#fff;font:600 14px/1 Roboto,system-ui,-apple-system,sans-serif;padding:11px 22px;border-radius:999px;cursor:pointer;transition:background .15s,border-color .15s}
+.ss-complete-btn:hover{background:#a50c1a;border-color:#a50c1a}
+.ss-complete-btn:disabled{opacity:.6;cursor:not-allowed}
