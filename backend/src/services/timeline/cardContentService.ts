@@ -114,6 +114,9 @@ export async function ensureFreshContent(cardId: string): Promise<{ content: Car
   // a card that was intentionally left without content.
   if (!existing) return { content: null, regenerated: false };
 
+  // Hand-authored readings are LOCKED — never auto-regenerate over them.
+  if ((meta as Record<string, unknown>).locked) return { content: existing, regenerated: false };
+
   const fresh = at !== null && !Number.isNaN(at) && Date.now() - at <= CONTENT_TTL_MS;
   if (fresh) return { content: existing, regenerated: false };
 

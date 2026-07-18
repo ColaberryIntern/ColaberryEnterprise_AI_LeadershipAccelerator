@@ -45,39 +45,56 @@ export function lessonDoc(bodyHtml: string): string {
   </style>${bodyHtml}`;
 }
 
-/** Immersive Self Study reader: a warm full-height reading with a STICKY top nav
- *  (built from <section id data-nav>), scrollspy active-highlight, a progress line, and
- *  smooth click-to-scroll. Rendered in a sandbox="allow-scripts" iframe whose origin is
- *  opaque (no allow-same-origin), so its scripts cannot touch the parent page, cookies,
- *  or storage. Content is script/style-stripped (stripUnsafe) as defense-in-depth. */
-export function readerDoc(bodyHtml: string): string {
+/** Immersive Self Study reader: a warm full-height reading with a hero, a STICKY top
+ *  tab-nav (built from <section id data-nav>), scrollspy active-highlight, a progress
+ *  line, and smooth click-to-scroll. Renders hand-authored rich content (diagrams,
+ *  icon term-cards, prereq tiles, callouts, tables). In a sandbox="allow-scripts" iframe
+ *  whose origin is opaque (no allow-same-origin): its scripts cannot touch the parent
+ *  page/cookies/storage, and the HTML is script/style-stripped as defense-in-depth. */
+export function readerDoc(bodyHtml: string, title?: string): string {
   const body = stripUnsafe(bodyHtml);
-  const js = "(function(){var secs=[].slice.call(document.querySelectorAll('section[id]'));var nav=document.getElementById('nav');if(!nav)return;if(!secs.length){nav.style.display='none';return;}var map={};secs.forEach(function(s){var label=s.getAttribute('data-nav');if(!label){var h=s.querySelector('h2,h3');label=h?h.textContent:s.id;}var a=document.createElement('a');a.textContent=label;a.href='#'+s.id;a.addEventListener('click',function(e){e.preventDefault();var el=document.getElementById(s.id);if(!el)return;var y=(window.pageYOffset||document.documentElement.scrollTop)+el.getBoundingClientRect().top-50;window.scrollTo({top:y,behavior:'smooth'});});nav.appendChild(a);map[s.id]=a;});var bar=document.querySelector('#pbar>i');var t=false;function sc(){var d=document.documentElement;var m=d.scrollHeight-d.clientHeight;if(bar)bar.style.width=(m>0?((window.pageYOffset||d.scrollTop)/m*100):0)+'%';t=false;}window.addEventListener('scroll',function(){if(!t){requestAnimationFrame(sc);t=true;}},{passive:true});sc();if('IntersectionObserver' in window){var spy=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){Object.keys(map).forEach(function(k){map[k].classList.remove('active');});var a=map[e.target.id];if(a){a.classList.add('active');a.scrollIntoView({inline:'nearest',block:'nearest'});}}});},{rootMargin:'-10% 0px -72% 0px',threshold:0});secs.forEach(function(s){spy.observe(s);});}})();";
+  const heroTitle = String(title || 'Self Study').replace(/[<>]/g, '');
+  const js = "(function(){var secs=[].slice.call(document.querySelectorAll('section[id]'));var nav=document.getElementById('nav');if(!nav)return;if(!secs.length){nav.style.display='none';return;}var map={};secs.forEach(function(s){var label=s.getAttribute('data-nav');if(!label){var h=s.querySelector('h2,h3');label=h?h.textContent:s.id;}var a=document.createElement('a');a.textContent=label;a.href='#'+s.id;a.addEventListener('click',function(e){e.preventDefault();var el=document.getElementById(s.id);if(!el)return;var y=(window.pageYOffset||document.documentElement.scrollTop)+el.getBoundingClientRect().top-52;window.scrollTo({top:y,behavior:'smooth'});});nav.appendChild(a);map[s.id]=a;});var bar=document.querySelector('#pbar>i');var t=false;function sc(){var d=document.documentElement;var m=d.scrollHeight-d.clientHeight;if(bar)bar.style.width=(m>0?((window.pageYOffset||d.scrollTop)/m*100):0)+'%';t=false;}window.addEventListener('scroll',function(){if(!t){requestAnimationFrame(sc);t=true;}},{passive:true});sc();if('IntersectionObserver' in window){var spy=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){Object.keys(map).forEach(function(k){map[k].classList.remove('active');});var a=map[e.target.id];if(a){a.classList.add('active');a.scrollIntoView({inline:'nearest',block:'nearest'});}}});},{rootMargin:'-12% 0px -72% 0px',threshold:0});secs.forEach(function(s){spy.observe(s);});}})();";
   return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
     html{scroll-behavior:smooth}
-    body{font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#F7F4EE;color:#1a1a1a;font-size:15px;line-height:1.62}
-    #pbar{position:sticky;top:0;height:3px;z-index:6;background:transparent}
-    #pbar>i{display:block;height:100%;width:0;background:#FB2832;transition:width .08s linear}
-    #nav{position:sticky;top:3px;z-index:5;display:flex;gap:7px;overflow-x:auto;padding:11px 16px;background:rgba(247,244,238,.94);border-bottom:1px solid #DDD6C9;scrollbar-width:none}
+    body{font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#F7F4EE;color:#1a1a1a;font-size:15px;line-height:1.64}
+    #pbar{position:sticky;top:0;height:3px;z-index:6}#pbar>i{display:block;height:100%;width:0;background:#FB2832;transition:width .08s linear}
+    #nav{position:sticky;top:3px;z-index:5;display:flex;gap:7px;overflow-x:auto;padding:11px 20px;background:rgba(247,244,238,.95);backdrop-filter:blur(8px);border-bottom:1px solid #DDD6C9;scrollbar-width:none}
     #nav::-webkit-scrollbar{display:none}
-    #nav a{flex:none;font:600 12.5px/1 Roboto,sans-serif;color:#4a4a4a;background:#FDFCFA;border:1px solid #DDD6C9;border-radius:999px;padding:8px 13px;text-decoration:none;white-space:nowrap;cursor:pointer}
-    #nav a:hover{border-color:#2E6A86;color:#1a1a1a}
-    #nav a.active{background:#c20e1e;border-color:#c20e1e;color:#fff}
-    .ss{padding:16px 18px 44px}
-    .ss section{scroll-margin-top:56px;padding-top:16px;margin-top:16px;border-top:1px solid #DDD6C9}
-    .ss section:first-child{border-top:0;margin-top:0;padding-top:4px}
-    .ss h2{font-size:19px;margin:0 0 6px;font-weight:700} .ss .lead{font-weight:500;font-size:15.5px;margin:0 0 10px}
-    .ss p{margin:0 0 11px} .ss ul,.ss ol{padding-left:20px;margin:0 0 11px} .ss li{margin:5px 0}
-    .ss .term{background:#FDFCFA;border:1px solid #DDD6C9;border-left:4px solid #367895;border-radius:12px;padding:12px 15px;margin:13px 0}
-    .ss .term h3,.ss .term h4{font-size:15.5px;color:#c20e1e;margin:0 0 5px;font-weight:700}
-    .ss .why{color:#4a4a4a} .ss .why b{color:#1a1a1a}
-    .ss .warn{background:#FDFCFA;border:1px solid #DDD6C9;border-left:4px solid #FB2832;border-radius:12px;padding:12px 15px;margin:14px 0} .ss .warn b{color:#c20e1e}
-    .ss table{border-collapse:collapse;width:100%;margin:12px 0;font-size:14.5px}
-    .ss th,.ss td{border:1px solid #DDD6C9;padding:8px 11px;text-align:left;vertical-align:top} .ss th{background:#EFEBE4;font-weight:700}
-    @media(prefers-color-scheme:dark){body{background:#231f1b;color:#ece7e0}#nav{background:rgba(35,31,27,.94);border-color:#3a342e}#nav a{background:#2c2723;border-color:#3a342e;color:#c9beb2}#nav a.active{color:#231f1b;background:#ff6b83;border-color:#ff6b83}.ss section{border-color:#3a342e}.ss .term,.ss .warn{background:#2c2723;border-color:#3a342e}.ss .term h3,.ss .term h4,.ss .warn b{color:#ff6b83}.ss .why{color:#a89f94}.ss th{background:#2c2723}.ss th,.ss td{border-color:#3a342e}}
+    #nav a{flex:none;font:600 12.5px/1 Roboto,sans-serif;color:#4a4a4a;background:#FDFCFA;border:1px solid #DDD6C9;border-radius:999px;padding:8px 14px;text-decoration:none;white-space:nowrap;cursor:pointer;transition:.15s}
+    #nav a:hover{border-color:#2E6A86;color:#1a1a1a}#nav a.active{background:#c20e1e;border-color:#c20e1e;color:#fff}
+    .wrap{max-width:700px;margin:0 auto;padding:0 22px}
+    .hero{padding:22px 0 4px}.hero .eyebrow{font:700 11px/1 Roboto;letter-spacing:.13em;text-transform:uppercase;color:#c20e1e;margin:0 0 10px}
+    .hero h1{font-size:1.5rem;line-height:1.24;margin:0 0 12px;font-weight:700}
+    .note{background:#FDFCFA;border:1px dashed #DDD6C9;border-radius:12px;padding:14px 16px}.note p{margin:0;color:#4a4a4a}
+    .ss{padding:4px 0 64px}
+    .ss section{scroll-margin-top:62px;padding-top:22px;margin-top:22px;border-top:1px solid #DDD6C9}.ss section:first-child{border-top:0;margin-top:8px;padding-top:6px}
+    .ss h2{font-size:1.3rem;margin:0 0 8px;font-weight:700}.ss .lead{font-weight:600;font-size:1.05rem;margin:0 0 12px;color:#c20e1e}
+    .ss p{margin:0 0 12px}.ss ul{padding-left:0;margin:0 0 12px;list-style:none}.ss ol{padding-left:22px;margin:0 0 12px}
+    .cardgrid{display:flex;flex-wrap:wrap;gap:12px;margin:14px 0}
+    .term{flex:1 1 240px;background:#FDFCFA;border:1px solid #DDD6C9;border-left:4px solid #2E6A86;border-radius:12px;padding:14px 16px}
+    .term.leaf{border-left-color:#5BA63C}.term.berry{border-left-color:#2E6A86}
+    .term h3,.term h4{display:flex;align-items:center;gap:9px;font-size:1.02rem;color:#1a1a1a;margin:0 0 6px;font-weight:700}
+    .tile{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none;background:#2E6A86}
+    .tile svg{width:17px;height:17px;stroke:#fff;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+    .why{color:#4a4a4a;font-size:14px}.why b{color:#1a1a1a}
+    .warn{background:#fff6f6;border:1px solid #f6d5d8;border-left:4px solid #FB2832;border-radius:12px;padding:14px 16px;margin:16px 0}.warn b{color:#c20e1e}
+    .figure{background:#FDFCFA;border:1px solid #DDD6C9;border-radius:14px;padding:18px;margin:16px 0;text-align:center}
+    .figure svg{max-width:min(100%,440px);height:auto;display:block;margin:0 auto}
+    .figure figcaption{font-size:13px;color:#4a4a4a;margin-top:12px;line-height:1.5}
+    .prereq{display:flex;gap:11px;align-items:flex-start;background:#FDFCFA;border:1px solid #DDD6C9;border-radius:12px;padding:12px 14px;margin:8px 0}
+    .prereq b{display:block;margin-bottom:2px}
+    table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14.5px}
+    th,td{border:1px solid #DDD6C9;padding:9px 12px;text-align:left;vertical-align:top}th{background:#EFEBE4;font-weight:700}td:first-child{font-weight:600}
+    .dg-txt{fill:#1a1a1a;font-family:Roboto,sans-serif}
+    @media(prefers-color-scheme:dark){body{background:#231f1b;color:#ece7e0}#nav{background:rgba(35,31,27,.95);border-color:#3a342e}#nav a{background:#2c2723;border-color:#3a342e;color:#c9beb2}#nav a.active{color:#231f1b;background:#ff6b83;border-color:#ff6b83}.hero .eyebrow{color:#ff6b83}.note,.term,.figure,.prereq{background:#2c2723;border-color:#3a342e}.ss section{border-color:#3a342e}.ss .lead,.term h3,.term h4,.warn b{color:#ff6b83}.term h3,.term h4{color:#ece7e0}.why{color:#a89f94}.warn{background:#2c2723;border-color:#3a342e}th{background:#2c2723}th,td{border-color:#3a342e}.dg-txt{fill:#ece7e0}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}#pbar>i{transition:none}}
   </style>
-  <div id="pbar"><i></i></div><nav id="nav"></nav><main class="ss">${body}</main>
+  <div id="pbar"><i></i></div><nav id="nav"></nav>
+  <div class="wrap">
+    <div class="hero"><p class="eyebrow">Read before class</p><h1>${heroTitle}</h1><div class="note"><p>How to use this: read at your own pace, skip anything you already know, nothing here is tested.</p></div></div>
+    <main class="ss">${body}</main>
+  </div>
   <script>${js}</script>`;
 }
 
@@ -155,7 +172,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         )}
       </div>
 
-      <div className="tld-body">
+      <div className={isReader ? 'tld-body tld-body--reader' : 'tld-body'}>
+        {isReader ? (
+          content?.body_html
+            ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title)} />
+            : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
+        ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>
           {pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}
@@ -311,6 +333,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {card.type === 'blog' && !blog && (
           <div className="tld-note">No blog post is attached to this card yet. It will auto-match once the blog library is loaded.</div>
         )}
+        </>)}
       </div>
 
       <div className="tld-foot">
