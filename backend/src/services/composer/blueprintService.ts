@@ -13,6 +13,7 @@ import { deriveDna } from './curriculumDna';
 import { journeyContribution } from './architectJourney';
 import { recommend } from './optimizationEngine';
 import { checkDependencies } from './dependencyEngine';
+import { planMinutes, minutesToHours } from './blueprintRollup';
 
 function blueprintLike(bp: CurriculumBlueprint): BlueprintLike & BlueprintInput {
   return {
@@ -96,6 +97,9 @@ export async function generateForBlueprint(id: string, instruction: string, scop
   await bp.update({
     generated_plan: result.plan, dna: assessment.dna, status: 'generated',
     quality_score: assessment.validation.quality, coverage_score: assessment.validation.coverage, readiness_score: assessment.validation.readiness,
+    // estimated_hours is a live rollup — seed it from the freshly generated plan
+    // (publish later recomputes it from the real published cards).
+    estimated_hours: minutesToHours(planMinutes(result.plan)),
   });
   return { plan: result.plan, source: result.source, cost_usd: result.cost_usd ?? 0, runtime_ms: result.runtime_ms ?? 0, assessment };
 }
