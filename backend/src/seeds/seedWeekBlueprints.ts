@@ -38,9 +38,11 @@ import '../models';
 import CurriculumBlueprint from '../models/CurriculumBlueprint';
 import { WEEK_BLUEPRINTS, CANONICAL_PROGRAM_ID, WeekBlueprintContent } from '../data/weekBlueprints';
 
-/** The content fields we write — a subset of blueprintService.CREATE_FIELDS. */
+// The content fields we write — a subset of blueprintService.CREATE_FIELDS.
+// NOTE: estimated_hours is intentionally NOT written here — it is now a live
+// rollup of the week's card minutes (services/composer/blueprintRollup.ts).
 const WRITE_FIELDS = [
-  'purpose', 'difficulty', 'estimated_hours',
+  'purpose', 'difficulty',
   'learning_objectives', 'competencies', 'architect_domains',
   'student_outcomes', 'success_criteria',
   'evidence_produced', 'github_deliverables', 'portfolio_deliverables',
@@ -52,7 +54,6 @@ function toPatch(c: WeekBlueprintContent): Record<string, unknown> {
   return {
     purpose: c.purpose,
     difficulty: c.difficulty,
-    estimated_hours: c.estimated_hours,
     learning_objectives: c.learning_objectives,
     competencies: c.competencies,
     architect_domains: c.architect_domains,

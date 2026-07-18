@@ -34,7 +34,18 @@ export interface WeekBlueprintContent {
   /** Kept for provenance/tests; the writer does NOT overwrite the existing row title. */
   title: string;
   difficulty: Difficulty;
+  /**
+   * A hint only — estimated_hours is now a LIVE ROLLUP computed from the week's
+   * card minutes (see services/composer/blueprintRollup.ts). The seed no longer
+   * writes it.
+   */
   estimated_hours: number;
+  /**
+   * Real Anthropic Skilljar course duration in minutes (posted "hours of video"),
+   * applied to the week's `anthropic_skills_jar` card at publish. Null/omitted =
+   * no mapped course or not yet confirmed (falls back to the type default).
+   */
+  anthropic_course_minutes?: number | null;
   purpose: string;
   learning_objectives: string[];
   competencies: string[];
@@ -102,6 +113,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 1,
     title: 'Claude Code Foundations + Workspace',
+    anthropic_course_minutes: 90, // Claude Code 101 — 1.5 hrs of video (Skilljar, verified 2026-07-18)
     difficulty: 'core',
     estimated_hours: 7,
     purpose:
@@ -149,6 +161,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 2,
     title: 'Agent Skills (build 3 skills)',
+    anthropic_course_minutes: null, // Introduction to Agent Skills — account not enrolled; awaiting confirmed duration
     difficulty: 'core',
     estimated_hours: 7,
     purpose:
@@ -195,6 +208,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 3,
     title: 'Claude API + Workflow Assistant',
+    anthropic_course_minutes: 486, // Building with the Claude API — 8.1 hrs of video (Skilljar, verified 2026-07-18)
     difficulty: 'core',
     estimated_hours: 8,
     purpose:
@@ -287,6 +301,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 5,
     title: 'MCP Foundations + First MCP Server',
+    anthropic_course_minutes: 60, // Introduction to MCP — 1 hr of video (Skilljar, verified 2026-07-18)
     difficulty: 'core',
     estimated_hours: 8,
     purpose:
@@ -333,6 +348,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 6,
     title: 'Advanced MCP + System Integration',
+    anthropic_course_minutes: 66, // MCP: Advanced Topics — 1.1 hrs of video (Skilljar, verified 2026-07-18)
     difficulty: 'stretch',
     estimated_hours: 8,
     purpose:
@@ -380,6 +396,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 7,
     title: 'Subagents + Multi-Agent Team',
+    anthropic_course_minutes: null, // Introduction to Subagents — account not enrolled; awaiting confirmed duration
     difficulty: 'stretch',
     estimated_hours: 7,
     purpose:
@@ -426,6 +443,7 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 8,
     title: 'Claude Code Workflows + Automation',
+    anthropic_course_minutes: 60, // Claude Code in Action — 1 hr of video (Skilljar, verified 2026-07-18)
     difficulty: 'stretch',
     estimated_hours: 7,
     purpose:
