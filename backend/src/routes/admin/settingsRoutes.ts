@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { handleGetRevenueDashboard } from '../../controllers/adminRevenueController';
+import { handleGetRevenueDashboard, handleGetRevenuePayments } from '../../controllers/adminRevenueController';
 import {
   handleGetSettings,
   handleUpdateSettings,
@@ -9,8 +9,10 @@ import {
 
 const router = Router();
 
-// Revenue Dashboard
+// Revenue Dashboard (legacy pipeline forecast — now served at /admin/pipeline)
 router.get('/api/admin/revenue/dashboard', requireAdmin, handleGetRevenueDashboard);
+// Unified payments feed for the rebuilt /admin/revenue page
+router.get('/api/admin/revenue/payments', requireAdmin, handleGetRevenuePayments);
 
 // Settings
 router.get('/api/admin/settings', requireAdmin, handleGetSettings);
