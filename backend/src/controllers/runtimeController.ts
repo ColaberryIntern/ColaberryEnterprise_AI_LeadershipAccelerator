@@ -11,7 +11,7 @@ import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentor
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
-import { getAssessment, submitAssessment } from '../services/runtime/assessmentService';
+import { getAssessment, submitAssessment, sectionResultsSummary } from '../services/runtime/assessmentService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
 import fs from 'fs/promises';
@@ -37,7 +37,13 @@ export async function handleMentor(req: Request, res: Response, next: NextFuncti
 }
 
 export async function handleReflection(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await reflectionPrompts(await cardContext(String(req.params.cardId)))); } catch (e) { fail(res, e, next); }
+  try {
+    const ctx = await cardContext(String(req.params.cardId));
+    // The reflection sits after the section's Evaluation + Survey — feed their
+    // results in so the questions help the student make sense of them.
+    const results = await sectionResultsSummary(eid(req), (ctx as any).program_id, (ctx as any).week);
+    res.json(await reflectionPrompts(ctx, results));
+  } catch (e) { fail(res, e, next); }
 }
 // The first student to open a card whose content is missing or >30 days old
 // regenerates it once (class-wide); the fresh copy then lasts 30 days.
