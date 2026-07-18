@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
-import { getRevenuePayments, RevenueTransaction, RevenueSummary } from '../../services/revenueApi';
+import { getRevenuePayments, syncPayments, RevenueTransaction, RevenueSummary } from '../../services/revenueApi';
 import { issueRefund } from '../../services/refundApi';
 
 const money = (n: number): string =>
@@ -53,6 +53,7 @@ function AdminRevenueDashboardPage() {
   const [filter, setFilter] = useState<TypeFilter>('all');
   const [query, setQuery] = useState('');
   const [refunding, setRefunding] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -68,10 +69,27 @@ function AdminRevenueDashboardPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const onSync = async () => {
+    setError(null); setNotice(null); setSyncing(true);
+    try {
+      const { summary: s } = await syncPayments();
+      setNotice(
+        `Synced from PaySimple — ${s.inserted} new, ${s.updated} updated${s.accountsCreated ? `, ${s.accountsCreated} member account${s.accountsCreated === 1 ? '' : 's'} created` : ''}. ` +
+        `${s.liveCount} live payments = ${money(s.liveTotalCents / 100)}.`
+      );
+      await load();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const onRefund = async (t: RevenueTransaction) => {
     if (!t.paysimple_payment_id) return;
     setError(null); setNotice(null);
-    if (!window.confirm(`Refund ${money(t.amount)} to ${t.payer_name}? This moves money via PaySimple and voids any account credit the payment granted.`)) return;
+    const verb = t.refund_method === 'void' ? 'Void' : 'Refund';
+    if (!window.confirm(`${verb} ${money(t.amount)} to ${t.payer_name}? This reverses the payment via PaySimple and voids any account credit it granted.`)) return;
     setRefunding(t.id);
     try {
       const { refund } = await issueRefund({ payment_id: t.paysimple_payment_id });
@@ -119,7 +137,14 @@ function AdminRevenueDashboardPage() {
         icon="money-dollar-circle-line"
         subtitle="Every payment collected through PaySimple — memberships, Open House deposits, and refunds."
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Revenue' }]}
-        actions={<Link to="/admin/refunds" className="btn btn-sm btn-danger">Issue refund</Link>}
+        actions={
+          <div className="d-flex gap-2">
+            <button className="btn btn-sm btn-outline-secondary" disabled={syncing} onClick={onSync} title="Pull the latest payments from PaySimple">
+              <i className={`ri-refresh-line ${syncing ? 'ri-spin' : ''}`} aria-hidden="true"></i> {syncing ? 'Syncing…' : 'Sync now'}
+            </button>
+            <Link to="/admin/refunds" className="btn btn-sm btn-danger">Issue refund</Link>
+          </div>
+        }
       >
         <div className="row g-3">
           <div className="col-6 col-lg-3"><StatCard label="Collected" value={money(summary?.collected || 0)} icon="money-dollar-circle-line" tone="success" hint="Real cash · matches the dashboard" /></div>
@@ -209,8 +234,21 @@ function AdminRevenueDashboardPage() {
                   <td className="small text-muted text-nowrap"><code>{t.paysimple_payment_id || '—'}</code></td>
                   <td className="text-end">
                     {t.refundable && (
-                      <button className="btn btn-sm btn-outline-danger" disabled={refunding === t.id} onClick={() => onRefund(t)}>
-                        {refunding === t.id ? '…' : 'Refund'}
+                      <button
+                        className={`btn btn-sm ${t.refund_method === 'void' ? 'btn-outline-warning' : 'btn-outline-danger'}`}
+                        disabled={refunding === t.id || !t.refundable_now}
+                        title={
+                          t.refundable_now
+                            ? t.refund_method === 'void'
+                              ? 'Void this payment — free full reversal while the window is open'
+                              : 'Refund this settled payment'
+                            : t.settles_on
+                              ? `Available after it settles ~${new Date(t.settles_on).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+                              : 'Not yet refundable — waiting on PaySimple to settle'
+                        }
+                        onClick={() => onRefund(t)}
+                      >
+                        {refunding === t.id ? '…' : t.refund_method === 'void' ? 'Void' : 'Refund'}
                       </button>
                     )}
                   </td>

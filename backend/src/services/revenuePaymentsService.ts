@@ -22,7 +22,10 @@ export interface RevenueTransaction {
   amount: number; // dollars; refunds are negative
   status: string; // PaySimple status (Settled | Posted | ReverseNSF | Returned | ...) or refund status
   paysimple_payment_id: string | null;
-  refundable: boolean; // live, has a payment id, and not already refunded/void
+  refundable: boolean; // live, has a payment id, and not already refunded/void (show the button)
+  refundable_now: boolean; // can be actioned right now (void window open OR already settled)
+  refund_method: 'void' | 'refund' | null; // how it would reverse right now
+  settles_on: string | null; // ISO estimated settle date — when a not-yet-settled payment becomes refundable
   counted: boolean; // contributes to the collected total (is_live)
   enrollment_id: string | null;
 }
@@ -46,10 +49,12 @@ function planLabel(type: string, amount: number): string | null {
 }
 
 export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; transactions: RevenueTransaction[] }> {
-  // 1) Ledger rows (live + dead), newest first.
+  // 1) Ledger rows (live + dead), newest first. `raw` carries the PaySimple payment
+  //    (CanVoidUntil / ActualSettledDate / EstimatedSettleDate) so the refund button's
+  //    void-vs-settle state is derived here with no extra PaySimple API calls.
   const ledger = (await sequelize.query(
     `SELECT id, paysimple_payment_id, payer_email, payer_name, amount_cents, status,
-            is_live, payment_type, payment_date, enrollment_id
+            is_live, payment_type, payment_date, enrollment_id, raw
        FROM payments
       ORDER BY payment_date DESC NULLS LAST`,
     { type: QueryTypes.SELECT }
@@ -73,9 +78,18 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
   )) as any[];
 
   const tx: RevenueTransaction[] = [];
+  const now = Date.now();
 
   for (const p of ledger) {
     const amount = Number(p.amount_cents) / 100;
+    const raw = (p.raw || {}) as Record<string, any>;
+    const canVoidUntil = raw.CanVoidUntil ? Date.parse(raw.CanVoidUntil) : NaN;
+    const canVoid = Number.isFinite(canVoidUntil) && canVoidUntil > now;
+    const settled = !!raw.ActualSettledDate || p.status === 'Settled';
+    const alreadyReversed = !!p.paysimple_payment_id && refundedIds.has(p.paysimple_payment_id);
+    const refundable = !!p.is_live && !!p.paysimple_payment_id && !alreadyReversed;
+    // Right now: void while the window is open (free full reversal), else refund once settled.
+    const refundMethod: 'void' | 'refund' | null = !refundable ? null : canVoid ? 'void' : settled ? 'refund' : null;
     tx.push({
       id: `pay-${p.id}`,
       date: p.payment_date ? new Date(p.payment_date).toISOString() : null,
@@ -86,7 +100,10 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
       amount,
       status: p.status,
       paysimple_payment_id: p.paysimple_payment_id || null,
-      refundable: !!p.is_live && !!p.paysimple_payment_id && !refundedIds.has(p.paysimple_payment_id),
+      refundable,
+      refundable_now: refundable && refundMethod !== null,
+      refund_method: refundMethod,
+      settles_on: raw.EstimatedSettleDate || raw.ActualSettledDate || null,
       counted: !!p.is_live,
       enrollment_id: p.enrollment_id || null,
     });
@@ -104,6 +121,9 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
       status: r.status,
       paysimple_payment_id: r.pid || null,
       refundable: false,
+      refundable_now: false,
+      refund_method: null,
+      settles_on: null,
       counted: false,
       enrollment_id: r.enrollment_id || null,
     });

@@ -14,7 +14,10 @@ export interface RevenueTransaction {
   amount: number; // dollars; refunds negative
   status: string;
   paysimple_payment_id: string | null;
-  refundable: boolean;
+  refundable: boolean; // eligible to reverse (show the button)
+  refundable_now: boolean; // can be actioned right now (void window open OR settled)
+  refund_method: 'void' | 'refund' | null; // how it would reverse right now
+  settles_on: string | null; // ISO — when a not-yet-settled payment becomes refundable
   counted: boolean;
   enrollment_id: string | null;
 }
@@ -33,5 +36,23 @@ export interface RevenueSummary {
 
 export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; transactions: RevenueTransaction[] }> {
   const { data } = await api.get('/api/admin/revenue/payments');
+  return data;
+}
+
+export interface LedgerSyncSummary {
+  scanned: number;
+  accelerator: number;
+  inserted: number;
+  updated: number;
+  unchanged: number;
+  accountsCreated: number;
+  liveCount: number;
+  deadCount: number;
+  liveTotalCents: number;
+}
+
+// Pull the latest Accelerator payments from PaySimple into the ledger (idempotent).
+export async function syncPayments(): Promise<{ ok: boolean; summary: LedgerSyncSummary }> {
+  const { data } = await api.post('/api/admin/revenue/sync');
   return data;
 }
