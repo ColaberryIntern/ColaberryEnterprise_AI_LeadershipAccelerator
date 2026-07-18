@@ -132,6 +132,34 @@ const RuntimeWorkspace: React.FC = () => {
 
   const emp = readiness?.employment; const cert = readiness?.certification; const jr = readiness?.journey; const evd = readiness?.evidence;
 
+  // Complete gate + comments are shared so Self Study can host them in the reader foot /
+  // right rail (single-scroll layout) while every other card keeps them in the center.
+  const completeLabel = busy === 'complete' ? 'Generating evidence…'
+    : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
+    : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete';
+  const completeGate = completed
+    ? <span className="rt-pill done">✓ Completed — evidence generated</span>
+    : isReader && !readerProg.complete
+      ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
+      : <button className={isReader ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
+  const commentsBlock = (
+    <section className={`rt-comments${isReader ? ' rt-comments--rail' : ''}`}>
+      <div className="rt-lab">Comments</div>
+      <div className="rt-cpost">
+        <input className="rt-in" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commentInput.trim() && postComment()} placeholder="Share a thought with your cohort…" />
+        <button className="rt-btn pri" disabled={busy === 'comment' || !commentInput.trim()} onClick={postComment}>Post</button>
+      </div>
+      {comments.length === 0
+        ? <p className="rt-muted" style={{ margin: '8px 2px' }}>No comments yet — be the first.</p>
+        : comments.map((cm) => (
+            <div key={cm.id} className="rt-comment">
+              <div className="rt-cwho"><b>{cm.mine ? 'You' : cm.author}</b><span>{new Date(cm.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
+              <p>{cm.body}</p>
+            </div>
+          ))}
+    </section>
+  );
+
   return (
     <div className="rt">
       <style>{runtimeCss}</style>
@@ -143,9 +171,10 @@ const RuntimeWorkspace: React.FC = () => {
 
       <div className="rt-body">
         {/* CENTER — activity */}
-        <main className="rt-mid">
-          {/* Hero — the type's picture with the lesson title ON the image (video bands keep their player). */}
-          {!isVideo && card.type_thumbnail && (
+        <main className={`rt-mid${isReader ? ' rt-mid--reader' : ''}`}>
+          {/* Hero — the type's picture with the lesson title ON the image (video bands keep
+              their player; Self Study has its own hero inside the reader, so skip it here). */}
+          {!isVideo && !isReader && card.type_thumbnail && (
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
@@ -223,9 +252,10 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* Self Study reading: same immersive reader as the card drawer (diagrams,
               icon cards, sticky nav) so the format carries over into the workspace. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && band === 'warmup' && card.content?.body_html && (
-            <div className="rt-card" style={{ padding: 0, overflow: 'hidden' }}>
-              <iframe title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(card.content.body_html, card.content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} style={{ width: '100%', border: 0, height: 'min(80vh, 900px)', background: '#F7F4EE', borderRadius: 8, display: 'block' }} />
+          {isReader && (
+            <div className="rt-readerwrap">
+              <iframe className="rt-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(card.content?.body_html || '', card.content?.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
+              <div className="rt-readerfoot">{completeGate}</div>
             </div>
           )}
           {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !(band === 'warmup' && card.content?.body_html) && (
@@ -241,40 +271,13 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* Surveys + assessments complete via their own flow (answers/score must be
               stored first), so the generic completion bar is hidden for them. */}
-          {!isSurvey && !isAssessment && (
-            <div className="rt-complete">
-              {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
-                : isReader && !readerProg.complete
-                  ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
-                  : <button
-                      className={isReader ? 'ss-complete-btn' : 'rt-btn cta'}
-                      disabled={busy === 'complete' || watchGated}
-                      title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
-                      onClick={complete}
-                    >
-                      {busy === 'complete' ? 'Generating evidence…'
-                        : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
-                        : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
-                    </button>}
-            </div>
+          {!isSurvey && !isAssessment && !isReader && (
+            <div className="rt-complete">{completeGate}</div>
           )}
 
-          {/* COHORT COMMENTS — every card type has a thread, newest first */}
-          <section className="rt-comments">
-              <div className="rt-lab">Comments</div>
-              <div className="rt-cpost">
-                <input className="rt-in" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commentInput.trim() && postComment()} placeholder="Share a thought with your cohort…" />
-                <button className="rt-btn pri" disabled={busy === 'comment' || !commentInput.trim()} onClick={postComment}>Post</button>
-              </div>
-              {comments.length === 0
-                ? <p className="rt-muted" style={{ margin: '8px 2px' }}>No comments yet — be the first.</p>
-                : comments.map((cm) => (
-                    <div key={cm.id} className="rt-comment">
-                      <div className="rt-cwho"><b>{cm.mine ? 'You' : cm.author}</b><span>{new Date(cm.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
-                      <p>{cm.body}</p>
-                    </div>
-                  ))}
-          </section>
+          {/* COHORT COMMENTS — for Self Study the thread moves to the right rail so the
+              reading is a single scroll; every other card keeps it here in the center. */}
+          {!isReader && commentsBlock}
         </main>
 
         {/* RIGHT — AI Mentor */}
@@ -291,6 +294,8 @@ const RuntimeWorkspace: React.FC = () => {
             <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && mentorInput.trim() && ask('ask', mentorInput)} placeholder="Ask your mentor…" />
             <button className="rt-btn pri" disabled={busy === 'mentor' || !mentorInput.trim()} onClick={() => ask('ask', mentorInput)}>Send</button>
           </div>
+          {/* Self Study: cohort comments live in the rail (the reading owns the center scroll). */}
+          {isReader && commentsBlock}
         </aside>
       </div>
 
