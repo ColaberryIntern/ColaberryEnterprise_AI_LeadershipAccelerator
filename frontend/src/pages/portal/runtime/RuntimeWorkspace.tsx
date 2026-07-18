@@ -8,6 +8,7 @@ import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
 import { toTitleCase } from '../../../utils/titleCase';
+import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -81,6 +82,10 @@ const RuntimeWorkspace: React.FC = () => {
     ? (beat) => { runtimeApi.watch(card.id, beat).then(setWatch).catch(() => { /* best-effort */ }); }
     : undefined;
   const watchGated = isVideo && watch?.required_pct != null && !watch?.met;
+  // Self Study reading: same per-section read-gate as the drawer — Mark complete only
+  // unlocks once every section has been read (>=10s each), via the reader's postMessages.
+  const isReader = band === 'warmup' && !!card?.content?.body_html;
+  const readerProg = useReaderProgress(cardId, isReader && !completed);
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -220,7 +225,7 @@ const RuntimeWorkspace: React.FC = () => {
               icon cards, sticky nav) so the format carries over into the workspace. */}
           {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && band === 'warmup' && card.content?.body_html && (
             <div className="rt-card" style={{ padding: 0, overflow: 'hidden' }}>
-              <iframe title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(card.content.body_html, card.content.title || card.title)} style={{ width: '100%', border: 0, height: 'min(80vh, 900px)', background: '#F7F4EE', borderRadius: 8, display: 'block' }} />
+              <iframe title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(card.content.body_html, card.content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} style={{ width: '100%', border: 0, height: 'min(80vh, 900px)', background: '#F7F4EE', borderRadius: 8, display: 'block' }} />
             </div>
           )}
           {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !(band === 'warmup' && card.content?.body_html) && (
@@ -239,16 +244,18 @@ const RuntimeWorkspace: React.FC = () => {
           {!isSurvey && !isAssessment && (
             <div className="rt-complete">
               {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
-                : <button
-                    className="rt-btn cta"
-                    disabled={busy === 'complete' || watchGated}
-                    title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
-                    onClick={complete}
-                  >
-                    {busy === 'complete' ? 'Generating evidence…'
-                      : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
-                      : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
-                  </button>}
+                : isReader && !readerProg.complete
+                  ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
+                  : <button
+                      className={isReader ? 'ss-complete-btn' : 'rt-btn cta'}
+                      disabled={busy === 'complete' || watchGated}
+                      title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
+                      onClick={complete}
+                    >
+                      {busy === 'complete' ? 'Generating evidence…'
+                        : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
+                        : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
+                    </button>}
             </div>
           )}
 
