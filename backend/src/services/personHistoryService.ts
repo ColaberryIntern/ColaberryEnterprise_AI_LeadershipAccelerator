@@ -3,6 +3,7 @@ import {
   Enrollment, Lead, Cohort, CommunicationLog, CampaignLead, Campaign,
   AssignmentSubmission, AttendanceRecord, LiveSession, StudentNavigationEvent,
   UserCurriculumProfile, Project, LessonInstance, ScheduledEmail, LeadTemperatureHistory,
+  AccountCredit, Subscription,
 } from '../models';
 
 /**
@@ -81,6 +82,24 @@ export async function getEnrollmentHistory(enrollmentId: string): Promise<Person
   const campaigns = campIds.length ? toJSON(await safe(Campaign.findAll({ where: { id: { [Op.in]: campIds } }, attributes: ['id', 'name'] }), [])) : [];
   const campName = new Map(campaigns.map((c) => [c.id, c.name]));
 
+  // This person may span more than one enrollment row (an Open House Explorer row
+  // that holds the $50 deposit, a separate paid membership row, plus stray abandoned
+  // signups). Aggregate payments + deposits across EVERY enrollment sharing this email
+  // so the profile shows everything they actually paid — not just this one row.
+  const siblings: any[] = email
+    ? toJSON(await safe(Enrollment.findAll({ where: { email: { [Op.iLike]: email } }, order: [['created_at', 'ASC']] }), [e]))
+    : [e];
+  const siblingIds = siblings.map((s) => s.id);
+  const [creditsR, sibSubsR] = await Promise.all([
+    safe(AccountCredit.findAll({ where: { enrollment_id: { [Op.in]: siblingIds } } }), []),
+    safe(Subscription.findAll({ where: { enrollment_id: { [Op.in]: siblingIds } } }), []),
+  ]);
+  const credits = toJSON(creditsR);
+  const planByEnr = new Map<string, string>();
+  for (const su of toJSON(sibSubsR)) if (su.plan) planByEnr.set(su.enrollment_id, su.plan);
+  const totalPaid = siblings.reduce((sum, s) => sum + (s.payment_status === 'paid' ? Number(s.amount_paid || 0) : 0), 0)
+    + credits.filter((c) => c.status !== 'void').reduce((sum, c) => sum + Number(c.amount_cents || 0) / 100, 0);
+
   const t: TimelineEvent[] = [];
   t.push({ at: e.created_at ?? null, kind: 'registered', icon: 'user-add-line', tone: 'info',
     title: e.enrollment_type === 'explorer' ? 'Registered as Explorer (free)' : 'Enrolled',
@@ -88,9 +107,17 @@ export async function getEnrollmentHistory(enrollmentId: string): Promise<Person
   if (l?.created_at && new Date(l.created_at).getTime() < new Date(e.created_at ?? 0).getTime() - 60000) {
     t.push({ at: l.created_at, kind: 'lead', icon: 'user-search-line', tone: 'neutral', title: 'First seen as a lead', detail: l.source || undefined });
   }
-  if (e.payment_status === 'paid') {
-    t.push({ at: e.enrolled_at || e.created_at || null, kind: 'payment', icon: 'bank-card-line', tone: 'success',
-      title: 'Payment confirmed', detail: e.amount_paid != null ? `$${e.amount_paid}` : undefined });
+  // Membership payments — one per paid enrollment row across this email (a person
+  // can have their deposit on one row and their membership on another).
+  for (const s of siblings.filter((x) => x.payment_status === 'paid' && x.amount_paid != null)) {
+    t.push({ at: s.enrolled_at || s.created_at || null, kind: 'payment', icon: 'bank-card-line', tone: 'success',
+      title: 'Membership payment', detail: `$${s.amount_paid}${planByEnr.get(s.id) ? ' · ' + planByEnr.get(s.id) : ''}` });
+  }
+  // Open House deposits ($50 "hold your spot" — separate cash from the membership).
+  for (const c of credits) {
+    t.push({ at: c.created_at || null, kind: 'deposit', icon: 'ticket-2-line',
+      tone: c.status === 'void' ? 'danger' : 'success',
+      title: 'Open House deposit', detail: `$${c.amount_cents / 100}${c.status !== 'available' ? ' · ' + c.status : ''}` });
   }
   for (const c of comms) t.push({ at: c.created_at ?? null, kind: 'email',
     icon: c.direction === 'inbound' ? 'inbox-line' : 'mail-send-line',
@@ -124,6 +151,8 @@ export async function getEnrollmentHistory(enrollmentId: string): Promise<Person
       id: e.id, full_name: e.full_name, email: e.email, company: e.company, title: e.title, phone: e.phone,
       cohort: e.cohort?.name || null, enrollment_type: e.enrollment_type, payment_status: e.payment_status,
       portal_enabled: e.portal_enabled, status: e.status, created_at: e.created_at, notes: e.notes,
+      total_paid: totalPaid, // membership + deposits across all of this email's enrollment rows
+      enrollment_records: siblings.length, // >1 means the same person spans multiple enrollment rows
     },
     acquisition: l ? {
       source: l.source, form_type: l.form_type, utm_source: l.utm_source, utm_campaign: l.utm_campaign,
