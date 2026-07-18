@@ -35,6 +35,14 @@ export const env = {
   // failed/reversed -> subtracted). OFF by default so it ships dark; turn on once
   // live READ credentials are set.
   paysimpleSyncEnabled: process.env.PAYSIMPLE_SYNC_ENABLED === 'true',
+  // Safety-net reconcile for missed-webhook membership payments: for OUR OWN
+  // checkout customers (enrollments carrying a paysimple_customer_id we stored) that
+  // are still unpaid, find and link their live membership payment. Scoped strictly to
+  // our stored customer ids, so shared-gateway/direct charges can never leak in. OFF
+  // by default (ships dark).
+  paysimpleAppReconcileEnabled: process.env.PAYSIMPLE_APP_RECONCILE_ENABLED === 'true',
+  // Only look at payments on/after this date (membership program launch).
+  paysimpleReconcileStart: process.env.PAYSIMPLE_RECONCILE_START || '2026-06-01',
 
   // JWT
   jwtSecret: resolveJwtSecret(),
