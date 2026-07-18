@@ -7,7 +7,7 @@ import { emitPointsEarned } from '../../../services/pointsFx';
  * Learning Runtime. One component, two modes:
  *   QUIZ  — low-stakes entry check; instant per-question feedback + the correct
  *           answer; no pass gate; framed as "what you know coming in".
- *   EVAL  — graded end-of-section test; hidden answers, batch submit, 75% to pass
+ *   EVAL  — graded end-of-section test; hidden answers, batch submit, 70% to pass
  *           and earn points, a pre→post growth meter vs the section's quiz, retry.
  * Portal-styled (rt-* tokens); its own scoped .as-* classes.
  */
@@ -54,7 +54,7 @@ const AssessmentPanel: React.FC<Props> = ({ cardId, onCompleted, preview, kind: 
         index: i, question: s.question, options: s.options, competency: s.competency,
         ...(k === 'quiz' ? { correct_index: s.correct_index, explanation: s.explanation } : {}),  // quiz reveals; eval hides
       }));
-      setView({ kind: k, pass_threshold: k === 'evaluation' ? 0.75 : null, question_count: questions.length, questions, last_attempt: null, section: null });
+      setView({ kind: k, pass_threshold: k === 'evaluation' ? 0.70 : null, question_count: questions.length, questions, last_attempt: null, section: null });
       setPhase('intro');
       return () => { alive = false; };
     }
@@ -178,7 +178,7 @@ const Journey: React.FC<{ kind: string; section: SectionProgress | null; phase: 
   const steps = [
     { key: 'quiz', label: 'Knowledge Check', done: !!section?.quiz_taken, sub: beginPct != null ? `${beginPct}% coming in` : 'entry check', active: !isEval },
     { key: 'learn', label: 'Learn the section', done: !!section?.quiz_taken, sub: 'lessons & labs', active: false },
-    { key: 'eval', label: 'Evaluation', done: section?.evaluation_passed === true, sub: isEval ? (curPct != null ? `${curPct}% now` : '75% to pass') : 'ahead', active: isEval },
+    { key: 'eval', label: 'Evaluation', done: section?.evaluation_passed === true, sub: isEval ? (curPct != null ? `${curPct}% now` : '70% to pass') : 'ahead', active: isEval },
   ];
   return (
     <div className="as-journey">
@@ -290,7 +290,7 @@ function scorePreview(kind: AssessmentKind, answers: Record<number, number>): As
   const correct = items.filter((x) => x.is_correct).length;
   const total = SAMPLE_QS.length;
   const score = total ? correct / total : 0;
-  const passed = kind === 'evaluation' ? score >= 0.75 : null;
+  const passed = kind === 'evaluation' ? score >= 0.70 : null;
   const agg: Record<string, { correct: number; total: number }> = {};
   for (const it of items) { const c = it.competency || 'general'; (agg[c] = agg[c] || { correct: 0, total: 0 }).total += 1; if (it.is_correct) agg[c].correct += 1; }
   const competency_scores: Record<string, CompetencyScore> = {};
@@ -301,7 +301,7 @@ function scorePreview(kind: AssessmentKind, answers: Record<number, number>): As
     quiz_taken: true, evaluation_taken: true, evaluation_passed: passed,
     per_competency: Object.entries(competency_scores).map(([domain, cs]) => ({ domain, beginning: BEGIN, current: cs.pct, delta: cs.pct - BEGIN })),
   } : null;
-  return { kind, score, correct_count: correct, total_count: total, passed, pass_threshold: kind === 'evaluation' ? 0.75 : null, attempt_number: 1, items, competency_scores, section, completion: null };
+  return { kind, score, correct_count: correct, total_count: total, passed, pass_threshold: kind === 'evaluation' ? 0.70 : null, attempt_number: 1, items, competency_scores, section, completion: null };
 }
 
 const asCss = `
