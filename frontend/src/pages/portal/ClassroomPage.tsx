@@ -50,9 +50,6 @@ const writeViewSnapshot = (snap: ViewSnapshot): void => {
   try { window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(snap)); } catch { /* private mode / quota — non-fatal */ }
 };
 
-const readTheme = (): 'light' | 'dark' =>
-  (typeof window !== 'undefined' && window.localStorage.getItem('tl-theme') === 'dark') ? 'dark' : 'light';
-
 /** ms until the next Thursday 10:00 (client-side schedule anchor until live sessions are wired). */
 function nextThursday(now: number): number {
   const d = new Date(now);
@@ -68,7 +65,6 @@ const ClassroomPage: React.FC = () => {
   const navigate = useNavigate();
   const [feed, setFeed] = useState<Feed | null>(null);
   const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'error'>('loading');
-  const [theme, setTheme] = useState<'light' | 'dark'>(readTheme);
   const [week, setWeek] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState<number>(() => (typeof performance !== 'undefined' ? Date.now() : 0));
@@ -166,20 +162,6 @@ const ClassroomPage: React.FC = () => {
   }, [load]);
   const selectedCard = useMemo(() => feed?.cards.find((c) => c.id === selectedId) ?? null, [feed, selectedId]);
 
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    try { window.localStorage.setItem('tl-theme', next); } catch { /* ignore */ }
-  };
-
-  const themeBtn = (
-    <button type="button" className="tl-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
-      {theme === 'dark'
-        ? <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="2" /><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-        : <svg viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>}
-    </button>
-  );
-
   if (uiState === 'loading') return <PortalShell><div className="tl-de"><div className="tl-empty">Loading your classroom…</div></div></PortalShell>;
   if (uiState === 'disabled') return (
     <PortalShell><div className="tl-de"><div className="tl-empty">
@@ -198,7 +180,7 @@ const ClassroomPage: React.FC = () => {
 
   return (
     <PortalShell>
-    <div className="tl-de" data-theme={theme}>
+    <div className="tl-de">
       <div className="tl-top">
         <div>
           <div className="tl-crumb">{wkLabel(week)}</div>
@@ -207,7 +189,6 @@ const ClassroomPage: React.FC = () => {
             ? 'Your free AI Preview — watch testimonials, listen to podcasts, read, and try short lessons and quizzes. Enroll to unlock the full Accelerator.'
             : 'Your week as a feed. Watch, build, test, reflect — every item scores on-site and feeds your points. Complete each card to advance.'}</div>
         </div>
-        {themeBtn}
       </div>
 
       {feed.is_explorer && (
@@ -243,7 +224,7 @@ const ClassroomPage: React.FC = () => {
 
           {weekCards.length === 0
             ? <div className="tl-empty">No cards here yet.</div>
-            : <TimelineFeed cards={weekCards} onOpen={openCard} onComplete={completeCard} onComments={(c) => navigate(`/portal/runtime/${c.id}`)} onWorkspace={(c) => navigate(`/portal/runtime/${c.id}`)} />}
+            : <TimelineFeed cards={weekCards} groupCompleted onOpen={openCard} onComplete={completeCard} onComments={(c) => navigate(`/portal/runtime/${c.id}`)} onWorkspace={(c) => navigate(`/portal/runtime/${c.id}`)} />}
         </div>
 
         <aside className="tl-side">
