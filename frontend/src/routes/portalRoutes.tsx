@@ -67,12 +67,18 @@ const portalRoutes = (
       {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
       <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />
       <Route element={<PortalLayout />}>
-        <Route path="/portal/home" element={<CoryHome />} />
+        {/* The old AI Project Builder ("Build Your Requirements") is retired as the
+            student landing. `/portal/home` now forwards to the Design E student
+            home (Today) so nothing lands a student on the builder. CoryHome is
+            preserved at `/portal/home-legacy` for direct-URL access + rollback;
+            nothing links to it. */}
+        <Route path="/portal/home" element={<Navigate to="/portal/today" replace />} />
+        <Route path="/portal/home-legacy" element={<CoryHome />} />
         <Route path="/portal/architect-dashboard" element={<ArchitectDashboard />} />
         <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />
         <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
-        {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
-        <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
+        {/* Legacy redirect — old `/portal/dashboard` now lands on the student home (Today). */}
+        <Route path="/portal/dashboard" element={<Navigate to="/portal/today" replace />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
         <Route path="/portal/classroom/week/:weekNum" element={<ClassroomWeekPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
