@@ -46,7 +46,7 @@ export async function setReflectGating(programId = CANONICAL_PROGRAM, onlyWeeks?
     for (const c of cards) {
       let rules: any[] | null = null;
       if (c.type === 'evaluation') rules = LEARN_GATE;                                   // ← Learn complete
-      else if (c.type === 'survey') rules = hasEval ? EVAL_GATE : null;                  // ← Evaluation complete
+      else if (c.type === 'survey') rules = hasEval ? EVAL_GATE : LEARN_GATE;            // ← Evaluation (or Learn if no eval, e.g. Week 0)
       else if (c.type === 'reflection') rules = hasSurvey ? SURVEY_GATE : (hasEval ? EVAL_GATE : LEARN_GATE); // ← Survey complete
       if (!rules) { report.push({ week, type: c.type, card_id: c.id, gate: null }); continue; }
       await updateCard(c.id, { unlock_rules: rules });
