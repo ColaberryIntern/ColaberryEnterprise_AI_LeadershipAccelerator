@@ -68,6 +68,10 @@ export async function cardContext(cardId: string) {
 export async function openCard(enrollmentId: string, cardId: string) {
   const card = await TimelineCard.findByPk(cardId);
   if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
+  // Gating: a locked card (unmet prerequisites) can't be opened by direct URL.
+  // Throws { status: 423, code: 'card_locked' }; fail-open on error.
+  const { assertCardUnlocked } = await import('../timeline/timelineGatingService');
+  await assertCardUnlocked(enrollmentId, card);
   const def = resolveType(card.type);
   // The type's Studio thumbnail lives on the DB definition (not the code registry).
   const dbDef = await CurriculumTypeDefinition.findOne({ where: { slug: card.type }, attributes: ['thumbnail_url'] });
