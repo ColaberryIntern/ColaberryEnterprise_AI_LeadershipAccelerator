@@ -9714,3 +9714,15 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali — "take the wk1 format and create wk 2-12. It should be in the Learn section of the curriculum." Arc from the Week 0 roadmap, role-framed to match "Business Analyst".
   - Verification: <FILL: prod backend+nginx build (tsc gate over the 11 new base64 imports) + reseed creates 11 Learn cards + DB spot-check>. All 11 assembled 57.8-63.4 KB (< 64 KB srcDoc limit), JS parses, 15 sections, zero double-escape/emoji, machinery byte-identical to wk1 (validated by buildWeeks). Content spot-checked (real discipline-specific sections + build prompts, not placeholders).
   - Notes: 11 content specs authored by parallel subagents against a shared brief; oversized ones (wk9/11/12 near 64 KB) trimmed to < 58.5 KB. The generator makes future weeks / edits a one-file change. [[reference_deep_dive_field_guide_platform]]
+
+### Project Backend — P0 schema converge + P1 read API (flag-gated) — 2026-07-19
+- [x] Persisted student-projects read API over the unified StudentTask hierarchy + the blocked_by gating column; default OFF
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - **P0:** added `blocked_by` JSONB to `StudentTask` (model + `ensureStudentTaskMergeSchema` ALTER in server.ts) for walking-skeleton release gating (the localStorage `blockedBy`). Additive/idempotent.
+    - **P1a read API** (flag `PROJECT_API_ENABLED`, default off → 404): `backend/src/services/projects/projectTreeDto.ts` (NEW, PURE mappers — project→lists→tasks DTO + task_counts + ordering), `projectReadService.ts` (NEW, I/O — ownership-scoped `getActiveProjectTree`/`getOwnedProjectTree`/`listEnrollmentProjectsSummary`), `routes/projectsPortalRoutes.ts` (NEW — `GET /api/portal/projects`, `/active`, `/:projectId`; requireParticipant; no-store) mounted in participantRoutes. `env.projectApiEnabled` flag.
+    - Test `projectTreeDto.test.ts` (NEW, pure): field mapping/defaults, task ordering, list ordering + status counts, active-flag.
+  - Why: P0+P1a of `docs/PROJECT_BACKEND_PLAN.md` — give student projects a real backend around the existing unified `StudentTask` model (replacing localStorage). Additive + flag-gated → zero behavior change; unblocks P1b (localStorage migration) and Project→Today.
+  - Verification: pure jest `projectTreeDto.test.ts`; backend tsc + jest = CI gate. Pre-checked exports (getProjectByEnrollment/listProjectsForEnrollment, Project/StudentTask/StudentTaskList models + `taskLists`/`tasks` associations, req.participant, env).
+  - Notes: Branch `workstream/project-backend-p0` off main. Seed-vs-ensure drift on `requirement_key` NOT NULL self-heals at boot (ensure hook relaxes it) — a full seed reconcile is a noted P0 tidy-up. Not deployed; foundation only.
