@@ -10,6 +10,18 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Announcement — Week 0 REVERTED to the hand-authored format, no time (2026-07-19)
+- [x] **Reverted Week 0 to the previous hand-authored "Welcome to Your Free AI Preview" format (no time budget, no live map); weeks 1-12 stay live-generated**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - Restored `backend/src/data/announcementWeek0.ts` (the approved hand-authored Week 0 body — friendly explore cards, Workspace + Mentor, ecosystem pitch; deliberately NO time).
+    - Restored `backend/src/scripts/setupAnnouncementCards.ts` `lockWeek0()` — Week 0 is LOCKED with the hand-authored content again (drops any prior live-gen fingerprint); weeks 1-12 keep the `refreshWeek` dedup/clear.
+    - `backend/src/seeds/seedComponentAuthoring.ts` — removed the Week-0 free-preview branch from `ANNOUNCEMENT_GENERATION_PROMPT` (title exception + ecosystem band); the prompt is back to the standard weekly map for weeks 1-12 only.
+  - Why: Ali reviewed the live-generated Week 0 and preferred the previous hand-authored format, and said Week 0 should not involve time.
+  - Verification: prod Week 0 card re-locked with the hand-authored body immediately (body_len 6612, contains-any-time-text = false, `locked: true`). `tsc` + jest via CI. Post-deploy: `setupAnnouncementCards.js` re-locks Week 0 durably.
+  - Notes: reverts the Week-0 parts of PR #415; weeks 1-12 unchanged (still the wide/mapped/time-budget live-gen).
+
 ### Announcement — Week 0 live-generates in the new format (free-preview branch); ready to build out all weeks (2026-07-19)
 - [x] **Week 0 now live-generates in the same wide/mapped/time-budget format as every other week, via a free-preview branch in the prompt — no more hand-authored lock; reads from the curriculum like the rest**
   - Date: 2026-07-19
