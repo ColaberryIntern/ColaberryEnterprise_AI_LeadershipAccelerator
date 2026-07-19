@@ -51,6 +51,7 @@ import {
 import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
+import projectsPortalRoutes from './projectsPortalRoutes';
 import workspaceRoutes from './workspaceRoutes';
 
 const router = Router();
@@ -297,6 +298,9 @@ router.use(workspaceRoutes);
 
 // Student CB-System operating model (priority queue, Run My Day, decisions)
 router.use(studentOpsRoutes);
+
+// Persisted student projects read API (Project Backend P1, flag-gated)
+router.use(projectsPortalRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);

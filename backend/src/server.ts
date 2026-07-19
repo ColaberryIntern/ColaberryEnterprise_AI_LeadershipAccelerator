@@ -399,6 +399,7 @@ async function ensureStudentTaskMergeSchema() {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(30)`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS fulfills JSONB`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS release_key VARCHAR(60)`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS blocked_by JSONB`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_story ON student_tasks (story_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_story ON student_tasks (project_id, story_id) WHERE story_id IS NOT NULL`,
   ];
