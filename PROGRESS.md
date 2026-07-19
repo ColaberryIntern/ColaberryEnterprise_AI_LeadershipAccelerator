@@ -10,6 +10,18 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Announcement — full-week curriculum MAP: wide/responsive, covers every activity grouped by phase (2026-07-19)
+- [x] **Rebuilt the announcement generation so it maps the WHOLE week (all activities grouped by phase), widens in the workspace, and has more emoji/spacing**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/services/timeline/sectionCurriculumContext.ts` — `buildSectionCurriculumText` now leads with the TOTAL activity count and tags each item with its journey PHASE (`[Prep]`/`[Learn]`/…), so a week-summary generator covers the whole week grouped by phase (was: a flat list, model cherry-picked 4). Added `PHASE_LABEL`. (Also feeds Overview.)
+    - `backend/src/seeds/seedComponentAuthoring.ts` — rewrote `ANNOUNCEMENT_GENERATION_PROMPT`: emits a fixed, WIDE, responsive `<style>` (copied verbatim: `body max-width:1080px`, a `repeat(auto-fill,minmax(280px,1fr))` grid so activity cards flow into multiple columns in the workspace and single-column in the ~400px drawer), a per-activity emoji on every card, phase-grouped sections covering EVERY activity, more spacing. Title locked to the exact WEEK CONTEXT topic (verbatim, no paraphrase). No hours/minutes.
+    - `backend/src/services/timeline/__tests__/sectionCurriculumContext.test.ts` — updated for the new count+phase format; asserts `announcement` in `SECTION_ROSTER_TYPES`.
+  - Why: Ali reviewed the live Week 1 card — it only showed 4 of ~14 activities and didn't map to the curriculum; he wants the full week mapped, wider in the workspace, more emoji + spacing for readability.
+  - Verification: iterated on prod against the real Week 1 roster (14 activities) — final v3 covered ALL 14 grouped by phase, copied the wide/responsive CSS verbatim (multi-column in workspace, single-column in drawer), per-activity emoji. Ali approved the look. `tsc` + jest via CI (authoritative Docker gate).
+  - Notes: builds on the announcement type (prior entry / PR #389). Post-merge: deploy, then regenerate the prod Week 1 card via the deployed path (title-locked); weeks 2-12 inherit on first open.
+
 ### Announcement curriculum type — friendly weekly kickoff that scans the section (2026-07-19)
 - [x] **Announcement authored as the section-opener: live-generated "mini report" that scans the week's roster, resets when the curriculum changes; Week 0 locked hand-authored free-preview welcome**
   - Date: 2026-07-19
