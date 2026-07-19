@@ -9482,6 +9482,13 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: jest `mentorNudgeFormat.test.ts` 10/10; `tsc --noEmit` clean for our source. Backend-only. Landed together with Phase 5 (nudges) in the same PR/deploy.
   - Notes: Branch `workstream/mentor-proactive-nudge` (folds nudges + personalization). Deployed to prod + dev.
 
+### Portal login embed posted to Basecamp Reference Kits + regeneration script committed (2026-07-19)
+- [x] **Version-controlled the portal-login embed as a Reference Kit (BC vault ticket + idempotent post script)**
+  - Date: 2026-07-19
+  - Session: CC-20260719-h7q4
+  - What changed: NEW `backend/src/scripts/postPortalLoginKitToBasecamp.js` + kit files `backend/src/scripts/reference-kits/portal-login/{portal-login.js, portal-login-embed.md, embed-snippet.html}`. Mirrors the `postSynthflowKitToBasecamp.js` kit-vault convention: idempotent create-or-reuse of one COMPLETE-marked to-do in the "Reference Kits" list (9982030818, bucket 7463955), byline, far-future due, the copy/paste embed snippet inline in the description, and all 3 kit files uploaded + embedded in a single `bc-attachment` comment. Uses native `fetch` (no axios) and self-heals the BC token on a 401 by pulling the live token from CCPP `Basecamp_AuthInfo` (same source as `basecampToken.ts`) when MSSQL_* env is present.
+  - Verification: RAN on prod (docker cp into accelerator-backend `/app`, `docker exec -w /app node`) - token self-healed from CCPP after 401, created + completed to-do 10109402635, uploaded all 3 files, posted files comment 10109402655. LIVE: https://app.basecamp.com/3945211/buckets/7463955/todos/10109402635 . Local `node ... --dry-run` loads all 3 kit files clean. Plain-JS scripts (no tsc/build gate); temp files cleaned from container `/app` + host `/tmp` after the run.
+  - Notes: BC ticket creation itself is excluded from PROGRESS by policy; this entry covers the committed regeneration script + kit files. `reference-kits/portal-login/portal-login.js` is a SNAPSHOT of the live `frontend/public/embeds/portal-login.js` (source of truth) - re-run the script to refresh the ticket if the loader changes. Built on an isolated worktree off `origin/main` (working branch 900+ behind). No deploy needed (one-off script).
 ### Deep Dive Field Guides — 5-second dwell-per-section read gate — 2026-07-19
 - [x] A section only counts as read after 5 continuous seconds on it (no more scroll-past-to-complete) — Wk0 + Wk1
   - Date: 2026-07-19
