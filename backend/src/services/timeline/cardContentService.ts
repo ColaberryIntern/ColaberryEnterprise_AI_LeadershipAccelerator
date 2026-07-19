@@ -13,6 +13,7 @@ import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolvePrompt } from '../components/promptTesterService';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL, MODEL_PRICING } from '../components/costEstimationService';
+import { createHash } from 'crypto';
 
 export interface CardContent {
   title?: string;
@@ -39,6 +40,20 @@ function cost(model: string, res: any): number {
   const p = MODEL_PRICING[model] || MODEL_PRICING[DEFAULT_MODEL];
   const i = res.usage?.prompt_tokens ?? 0, o = res.usage?.completion_tokens ?? 0;
   return Number(((i * p.input_per_1m + o * p.output_per_1m) / 1_000_000).toFixed(6));
+}
+
+/**
+ * A stable fingerprint of the week's activity roster (each item's type + title,
+ * in order). Roster-summary cards (announcement/overview) save this alongside
+ * their generated content; when the week's placed curriculum changes, the
+ * fingerprint changes and the card regenerates on the next view — so a
+ * "what you'll cover this week" summary is never stale. Returns null when there
+ * is no roster (nothing to fingerprint / non-roster type).
+ */
+function sectionFingerprint(roster: { items: Array<{ type: string; title: string }> } | null): string | null {
+  if (!roster || !roster.items.length) return null;
+  const basis = roster.items.map((i) => `${i.type}|${(i.title || '').trim().toLowerCase()}`).join('~');
+  return createHash('sha1').update(basis).digest('hex').slice(0, 16);
 }
 
 /**
@@ -83,9 +98,10 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
   };
 
   // Persist onto the shared card so every student sees EXACTLY this. Stamp
-  // content_at so the copy expires after 30 days (see ensureFreshContent).
+  // content_at so the copy expires after 30 days (see ensureFreshContent), and
+  // section_fingerprint so a roster-summary card resets when the week changes.
   const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
-  await card.update({ metadata: { ...meta, content, content_at: new Date().toISOString() } });
+  await card.update({ metadata: { ...meta, content, content_at: new Date().toISOString(), section_fingerprint: sectionFingerprint(roster) } });
 
   return { content, resolved_prompt: resolved, cost_usd: cost(model, res) };
 }
@@ -110,12 +126,12 @@ export async function ensureFreshContent(cardId: string): Promise<{ content: Car
   const existing = meta.content && typeof meta.content === 'object' ? (meta.content as CardContent) : null;
   const at = typeof meta.content_at === 'string' ? Date.parse(meta.content_at) : null;
 
-  // Empty card: Self Study readings GENERATE on first open (the reader shows a
-  // loading animation meanwhile) instead of staying blank — the first student to
-  // open it produces the class-wide copy. Other card types stay blank (never
+  // Empty card: Self Study readings AND roster-summary cards (announcement /
+  // overview) GENERATE on first open instead of staying blank — the first student
+  // to open one produces the class-wide copy. Other card types stay blank (never
   // auto-generate for a card intentionally left without content).
   if (!existing) {
-    if (card.type === 'warmup') {
+    if (card.type === 'warmup' || SECTION_ROSTER_TYPES.has(card.type)) {
       try { const r = await generateCardContent(cardId); return { content: r.content, regenerated: true }; }
       catch { return { content: null, regenerated: false }; }
     }
@@ -124,6 +140,23 @@ export async function ensureFreshContent(cardId: string): Promise<{ content: Car
 
   // Hand-authored readings are LOCKED — never auto-regenerate over them.
   if ((meta as Record<string, unknown>).locked) return { content: existing, regenerated: false };
+
+  // Roster-summary cards (announcement/overview) reset when the week's curriculum
+  // changes: if the placed roster no longer matches the fingerprint saved when we
+  // generated, regenerate now so "what you'll cover this week" is never stale.
+  // (Runs before the 30-day TTL check so a change resets it immediately.)
+  if (SECTION_ROSTER_TYPES.has(card.type)) {
+    try {
+      const roster = await getSectionCurriculumContext((card as any).program_id, card.week, card.id);
+      const currentFp = sectionFingerprint(roster);
+      const storedFp = typeof (meta as Record<string, unknown>).section_fingerprint === 'string'
+        ? (meta as Record<string, string>).section_fingerprint : null;
+      if (currentFp && currentFp !== storedFp) {
+        const r = await generateCardContent(cardId);
+        return { content: r.content, regenerated: true };
+      }
+    } catch { /* fall through to the TTL check — never block a student view */ }
+  }
 
   const fresh = at !== null && !Number.isNaN(at) && Date.now() - at <= CONTENT_TTL_MS;
   if (fresh) return { content: existing, regenerated: false };
