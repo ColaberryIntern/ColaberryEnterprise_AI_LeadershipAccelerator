@@ -10,6 +10,17 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Roster-card titles are deterministic from the blueprint theme (SDLC re-theme) (2026-07-19)
+- [x] **Announcement/Overview titles are now always "This Week — {blueprint theme}" / "Overview — {theme}", taken from the blueprint (synced from the Deep Dive), not the model — so the week theme name never drifts**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/services/timeline/cardContentService.ts` — `generateCardContent` now overrides the generated `content.title` for `announcement` → `This Week — {bp.title}` and `overview` → `Overview — {bp.title}` (from `getBlueprintContext().title`). The model's title is ignored for these roster-summary types.
+    - Prod data (this session, via script): synced every week's `curriculum_blueprints.title` from its Deep Dive theme (W1 = Business Analyst, W2 = Solution Architect, … W12 = AI Solution Architect — the real role/SDLC curriculum), and set the current announcement/overview titles to match.
+  - Why: Ali — the deep dive titles are the correct week themes (roles), but the announcements showed the wrong Anthropic-mapped names, and when regenerated the model paraphrased against the Claude-Code focus (e.g. "Build Your AI Foundation"). Making the title deterministic fixes the name for good.
+  - Verification: `tsc` + jest via CI. Post-deploy: regenerate a week's announcement and confirm the title stays `This Week — {theme}`. Prod titles already corrected via script.
+  - Notes: this is the "name only" fix Ali asked for — the announcement BODY still maps the real activities (Claude-Code-named); a fuller content re-theme is a separate, deferred decision. Deep dive title is the source of truth; re-run the blueprint-title sync if a deep dive is retitled.
+
 ### Skills Course workspace — style the panel like the drawer + drop the hero image (2026-07-19)
 - [x] **The Skills Course workspace panel now renders styled like the right-side drawer (was a giant unstyled icon) and no longer shows a redundant hero image**
   - Date: 2026-07-19
@@ -9746,3 +9757,26 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali — "it keeps showing colaberry with different logos and different color sets… every time someone shares one of these documents… professionalism… means not using different logos and different colors." Brand source = design-system repo linked off BC todo 10031928327.
   - Verification: <FILL: prod backend build (tsc over base64) + reseed pushes branded prompts + live-card check>. The injected brand block is BYTE-IDENTICAL across all 12 guides (single md5 ×12). All 11 assemble 58.8-63.2 KB (< 64 KB), JS parses, brand spec present + old vague line removed. Logo URL is public (200). wk1 57,970 bytes, JS OK.
   - Notes: The pinned logo loads from the public URL (embedded as a data URI at build time by the student's Claude Code); colors + fonts are literal so nothing is left to invent. [[reference_deep_dive_field_guide_platform]]
+### Project Backend — P1b write API (task status + import), flag-gated — 2026-07-19
+- [x] First write path onto StudentTask: set-task-status + one-time localStorage import; default OFF
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - `projectWriteDto.ts` (NEW, PURE): TASK_STATUSES + `isTaskStatus` guard + `importTaskToAttributes` (client import task → StudentTaskAttributes, bounded/defaulted; model import is type-only so it stays DB-free).
+    - `projectWriteService.ts` (NEW, I/O): `setTaskStatus` — ownership-scoped update of `student_tasks.status` (the FIRST StudentTask write path; `/decide` mutates RequirementsMap, a separate layer — reconcile in P2); `importProject` — get-or-create the project (`createProjectForEnrollment`) + idempotent findOrCreate of lists (by cluster) and tasks (by story_id/requirement_key), preserving existing progress.
+    - `routes/projectsPortalRoutes.ts`: + `PATCH /api/portal/projects/tasks/:taskId` and `POST /api/portal/projects/import` (Zod-validated at the boundary), flag-gated.
+    - Test `projectWriteDto.test.ts` (NEW, pure): status guard, import mapping/defaults/title-bound.
+  - Why: P1b (write half) of `docs/PROJECT_BACKEND_PLAN.md` — the backend can now persist a student's projects + task progress. Additive + flag-gated (`PROJECT_API_ENABLED`, default OFF) → zero behaviour change. Next: P1b-2 (point the frontend `projectsStore` at the API) + flag-on.
+  - Verification: pure jest `projectWriteDto.test.ts`; backend tsc + jest = CI gate. Zod v4 (`err.issues`) at the route boundary.
+  - Notes: Branch `workstream/project-backend-p1b` off main. Reconciling StudentTask (task layer) vs RequirementsMap (requirement catalog) as the single source of truth is a P2 item. Not deployed.
+
+### Project Backend — P1b-2: frontend mirrors localStorage projects to the backend — 2026-07-19
+- [x] The projects page mirrors the student's build to the persisted backend on load (flag-gated, best-effort); import upserts so it stays current
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - Frontend `projectSync.ts` (NEW): maps the localStorage `StudentProject` → the import payload (state→status, lists→cluster, tasks→story_id/prompt/acceptance/blocked_by) and fire-and-forgets `POST /api/portal/projects/import` once per session. Best-effort + flag-gated (404 = off → silent no-op); the demo/sample build is NOT persisted. Wired into `ProjectsPage` via a `useEffect` on the projects list — no page/async/store changes (localStorage stays the render source).
+    - Backend `projectWriteService.importProject` now UPSERTS: on an existing task it updates content/status (never the dedup keys or requirement link), so a re-import each load keeps the backend a faithful mirror of the working localStorage source.
+  - Why: P1b-2 of `docs/PROJECT_BACKEND_PLAN.md` — student projects now durably persist server-side (survive localStorage clears; available to Project→Today) while the UI is unchanged. Still flag-gated (`PROJECT_API_ENABLED`).
+  - Verification: frontend `tsc --noEmit` clean for the 2 changed files (only known @types/d3 local-env noise); backend tsc/jest = CI gate.
+  - Notes: Branch `workstream/project-backend-p1b2` off main. Mirror direction is localStorage→backend for now (backend = synced copy); flipping the READ path to backend-source (true cross-device) + per-task write-through are the next refinement. Syncs one project (first non-sample) per session.
