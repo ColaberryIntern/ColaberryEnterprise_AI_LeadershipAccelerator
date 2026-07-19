@@ -14,8 +14,9 @@ import TimelineCard from '../../models/TimelineCard';
 import { resolve } from './typeRegistry';
 
 /** Types whose generation receives the week's activity roster. Extend as other
- *  week-summary types (wrap-ups, weekly reflections) need it. */
-export const SECTION_ROSTER_TYPES = new Set(['overview']);
+ *  week-summary types (wrap-ups, weekly reflections) need it. `announcement` is
+ *  the friendly week-opener that scans the section and reports what's ahead. */
+export const SECTION_ROSTER_TYPES = new Set(['overview', 'announcement']);
 
 /** Meta/system cards excluded from the roster — they are not "things you'll do". */
 const EXCLUDED_TYPES = new Set([
@@ -42,12 +43,22 @@ export interface SectionCurriculumContext {
   prompt_text: string;
 }
 
-/** Pure formatter — deterministic and unit-testable (mirrors buildBlueprintPromptText). */
+/** Student-journey phase label per bucket, surfaced in the roster context so a
+ *  week-summary generator can group the week by phase. */
+const PHASE_LABEL: Record<string, string> = {
+  pre_class: 'Prep', learn: 'Learn', practice: 'Practice', build: 'Build',
+  reflect: 'Reflect', share: 'Share', advance: 'Advance',
+};
+
+/** Pure formatter — deterministic and unit-testable (mirrors buildBlueprintPromptText).
+ *  Leads with the TOTAL count and tags each item with its phase, so a week-summary
+ *  card (announcement/overview) can cover the WHOLE week grouped by phase instead of
+ *  cherry-picking a few. */
 export function buildSectionCurriculumText(week: number, items: SectionCurriculumItem[]): string {
   const lines: string[] = [
-    `THIS WEEK'S ACTIVITIES — the concrete curriculum the student will work through in Week ${week}:`,
-    ...items.map((it, i) => `${i + 1}. ${it.label}: ${it.title}`),
-    'When describing what this week covers, describe what the student will actually DO in these activities — name the videos, labs, courses, and builds above rather than inventing others.',
+    `THIS WEEK'S ACTIVITIES — the ${items.length} concrete curriculum items the student will work through in Week ${week}, in journey order (phase in brackets):`,
+    ...items.map((it, i) => `${i + 1}. [${PHASE_LABEL[it.bucket] || it.bucket}] ${it.label}: ${it.title}`),
+    'When describing what this week covers, cover ALL of these — name the real videos, labs, courses, and builds above and group them by phase; do not invent others or omit any.',
   ];
   return lines.join('\n');
 }

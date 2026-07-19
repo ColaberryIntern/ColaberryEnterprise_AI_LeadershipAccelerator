@@ -42,11 +42,12 @@ import {
   handleSetResume, handleGetResume, handleClearResume,
 } from '../controllers/portalSettingsController';
 import {
-  handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
+  handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
   handleWatchBeat, handleGetSurvey, handleSaveSurvey,
   handleGetAssessment, handleSubmitAssessment,
 } from '../controllers/runtimeController';
+import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import workspaceRoutes from './workspaceRoutes';
@@ -71,11 +72,15 @@ router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 // Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
 router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);
+// Today Timeline v2 — never-ending engagement feed (flag-gated in the controller).
+router.get('/api/portal/runtime/today', requireParticipant, handleGetToday);
+router.post('/api/portal/runtime/today/:cardRef/interact', requireParticipant, handleTodayInteract);
 router.get('/api/portal/runtime/notebook', requireParticipant, handleListNotes);
 router.post('/api/portal/runtime/notebook', requireParticipant, handleCreateNote);
 router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDeleteNote);
 router.get('/api/portal/runtime/cards/:cardId', requireParticipant, handleOpenCard);
 router.post('/api/portal/runtime/cards/:cardId/mentor', requireParticipant, handleMentor);
+router.get('/api/portal/runtime/cards/:cardId/nudge', requireParticipant, handleNudge);
 router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, handleReflection);
 router.post('/api/portal/runtime/cards/:cardId/content', requireParticipant, handleEnsureContent);
 // Anthropic Skills Course — upload + AI-verify the completion certificate.

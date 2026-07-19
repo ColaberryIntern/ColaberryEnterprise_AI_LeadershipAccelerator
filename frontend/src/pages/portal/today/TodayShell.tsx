@@ -15,7 +15,8 @@ import {
 } from './shellUtils';
 import portalApi from '../../../utils/portalApi';
 import { emitPointsEarned, onPointsEarned } from '../../../services/pointsFx';
-import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
+import TodayFeedV2 from './TodayFeedV2';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import '../../../components/timeline/timeline.css';
 
@@ -32,9 +33,7 @@ const TodayShell: React.FC = () => {
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [streak, setStreak] = useState<StreakView | null>(null);
   const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
-  const [visibleCount, setVisibleCount] = useState(5);
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
-  const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   const me = useMemo(readParticipant, []);
   const { flags } = usePortalFlags();
@@ -54,14 +53,6 @@ const TodayShell: React.FC = () => {
   // Refetch the Today feed + status whenever points are earned (e.g. a quick-check
   // completed in the drawer) so the sidebar stays live without a navigation.
   useEffect(() => onPointsEarned(() => { void loadAll(); }), [loadAll]);
-  // Infinite scroll — reveal more of the (looping) curriculum feed as you reach the end.
-  useEffect(() => {
-    const el = sentinelRef.current;
-    if (!el || curriculum.length === 0) return;
-    const obs = new IntersectionObserver((e) => { if (e[0].isIntersecting) setVisibleCount((v) => v + 5); }, { rootMargin: '500px' });
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [curriculum.length]);
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
@@ -149,9 +140,6 @@ const TodayShell: React.FC = () => {
   // the total is never shown. Category chips are labels-only for now (0) — the
   // other feed sources light up later.
   const CATEGORY_LABELS = ['Your setup', 'Projects', 'Schedule', 'Your path', 'Classroom', 'Cert Prep', 'Community'];
-  const looped: TimelineFeedCard[] = curriculum.length
-    ? Array.from({ length: Math.min(visibleCount, curriculum.length * 12) }, (_, i) => curriculum[i % curriculum.length])
-    : [];
 
   return (
     <PortalShell todayBadge={setupRemaining}>
@@ -311,12 +299,11 @@ const TodayShell: React.FC = () => {
                 <span key={label} className="fchip"><span>{label}</span> <span className="ct">0</span></span>
               ))}
             </div>
-            <div className="tl-de" data-theme="light">
-              {looped.length
-                ? looped.map((c, i) => <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={setSelectedCard} onWorkspace={(x) => navigate(`/portal/runtime/${x.id}`)} likes={6 + ((i * 7) % 13)} />)
-                : <div className="fc-empty">Loading your feed…</div>}
-              <div ref={sentinelRef} style={{ height: 1 }} />
-            </div>
+            <TodayFeedV2
+              fallbackCards={curriculum}
+              onOpen={setSelectedCard}
+              onWorkspace={(x) => navigate(`/portal/runtime/${x.id}`)}
+            />
           </div>
         </div>
 
