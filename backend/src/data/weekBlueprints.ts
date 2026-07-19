@@ -46,6 +46,24 @@ export interface WeekBlueprintContent {
    * no mapped course or not yet confirmed (falls back to the type default).
    */
   anthropic_course_minutes?: number | null;
+  /**
+   * Explicit override for the week's Anthropic Skills Course CARD, used when one
+   * course is split across two weeks (e.g. the 8.1h "Building with the Claude API"
+   * split into wk3 Part 1 + wk4 Part 2). When present, seedSkilljarCards uses this
+   * instead of deriving from `anthropic` — so a week can carry a course card even
+   * if its primary `anthropic.kind` is not `skilljar` (e.g. wk4 stays
+   * Colaberry-original for its Prompt Library). `completion` picks the student
+   * flow: 'certificate' (upload the whole-course cert — only valid once the course
+   * is finished) vs 'progress' (upload a Skilljar progress screenshot for an
+   * interim/split part).
+   */
+  anthropic_course_card?: {
+    title: string;
+    url: string;
+    minutes: number;
+    completion: 'certificate' | 'progress';
+    sections?: string; // human note of which sections this part covers
+  };
   purpose: string;
   learning_objectives: string[];
   competencies: string[];
@@ -209,6 +227,16 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     week: 3,
     title: 'Claude API + Workflow Assistant',
     anthropic_course_minutes: 486, // Building with the Claude API — 8.1 hrs of video (Skilljar, verified 2026-07-18)
+    // Course SPLIT across wk3+wk4: Part 1 = 6 of 7 sections (~65 of 75 lessons ≈ 421 min).
+    // Certificate is whole-course-only, so Part 1 completes via a PROGRESS screenshot; the
+    // certificate is the wk4 Part 2 task. Sum of the two parts = 486 (the full course).
+    anthropic_course_card: {
+      title: 'Building with the Claude API · Part 1',
+      url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
+      minutes: 421,
+      completion: 'progress',
+      sections: 'Getting Started, Tool Use, RAG, Features, Claude Code & Computer Use, Agents & Workflows',
+    },
     difficulty: 'core',
     estimated_hours: 8,
     purpose:
@@ -255,6 +283,17 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 4,
     title: 'Prompt Engineering + Prompt Library',
+    // Part 2 of the split "Building with the Claude API" course: the on-topic
+    // "Prompt engineering & evaluation" section (~10 of 75 lessons ≈ 65 min). By now
+    // the whole course is finished, so completion = upload the Certificate. Week 4
+    // stays Colaberry-original for its own Prompt Library (this is an added card).
+    anthropic_course_card: {
+      title: 'Building with the Claude API · Part 2 — Prompt Engineering & Evaluation',
+      url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
+      minutes: 65,
+      completion: 'certificate',
+      sections: 'Prompt engineering & evaluation',
+    },
     difficulty: 'core',
     estimated_hours: 7,
     purpose:

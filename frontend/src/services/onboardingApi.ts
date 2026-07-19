@@ -126,6 +126,26 @@ export async function fetchOnboardingProfile(): Promise<OnboardingProfileView> {
   return data;
 }
 
+// ── Portal feature flags (server-authoritative; picks the Today experience) ──
+export interface PortalFlags { today_redesign: boolean; }
+export async function fetchPortalFlags(): Promise<PortalFlags> {
+  const { data } = await portalApi.get<PortalFlags>('/api/portal/flags');
+  return data;
+}
+
+// ── "Open on your phone" QR handoff ──────────────────────────────────────────
+export interface HandoffCreate { url: string; qrSvg: string; expiresAt: string; ttlMs: number; }
+/** Authed: mint a single-use QR to open Today on the phone. */
+export async function createPhoneHandoff(): Promise<HandoffCreate> {
+  const { data } = await portalApi.post<HandoffCreate>('/api/portal/handoff');
+  return data;
+}
+/** Public: the phone trades a one-time code for a participant session JWT. */
+export async function exchangePhoneHandoff(token: string): Promise<string> {
+  const { data } = await portalApi.get<{ jwt: string }>(`/api/portal/handoff/exchange?token=${encodeURIComponent(token)}`);
+  return data.jwt;
+}
+
 export async function rsvpOpenHouse(id: string): Promise<{ ok: boolean; awarded?: boolean; points?: number }> {
   const { data } = await portalApi.post(`/api/portal/open-house/${id}/rsvp`);
   return data;

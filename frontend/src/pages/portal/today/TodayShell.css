@@ -30,7 +30,9 @@
   border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20}
 .te-brand{display:flex;align-items:center;gap:11px;min-width:0}
 .te-mark{width:38px;height:38px;border-radius:9px;object-fit:contain;flex:none;background:transparent;display:block}
-.te-brand b{font-family:var(--logo);font-size:17px;color:var(--strong);line-height:1;display:block}
+/* Title-Case wordmark: heavier weight + normal spacing so the Quicksand "C…"
+   reads as "Colaberry", not a lowercase logotype. */
+.te-brand b{font-family:var(--logo);font-size:18px;font-weight:700;letter-spacing:.005em;color:var(--strong);line-height:1;display:block}
 .te-brand span{font-size:11px;color:var(--muted)}
 .te-brand .cc{color:var(--cherry)}
 .te-top-right{margin-left:auto;display:flex;align-items:center;gap:12px}
@@ -255,8 +257,75 @@
 .te-toast{position:fixed;top:74px;right:24px;z-index:60;background:var(--surface);border:1px solid var(--border);
   border-left:4px solid var(--leaf);border-radius:var(--r-12);box-shadow:var(--shadow-lg);padding:13px 18px;font-size:14px;color:var(--strong)}
 
+/* ════════════════════════════════════════════════════════════════════════
+   REDESIGN — command band (desktop), bottom tab bar (mobile), QR modal.
+   ════════════════════════════════════════════════════════════════════════ */
+.te-band{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:26px;align-items:center;
+  background:var(--surface);border:1px solid var(--border);border-top:4px solid var(--cherry);
+  border-radius:var(--r-24);box-shadow:var(--shadow-md);padding:22px 26px;margin-bottom:18px}
+.te-band .crumb{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--cherry-text);display:flex;align-items:center;gap:8px}
+.te-band h2{font-family:var(--logo);font-size:26px;line-height:1.12;color:var(--strong);margin:8px 0 4px;font-weight:700;letter-spacing:-.01em}
+.te-band .statline{color:var(--muted);font-size:14px;margin:0 0 14px}
+.te-band .statline b{color:var(--leaf-text)}
+.te-band .ctas{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.te-cluster{display:flex;gap:20px;align-items:center;padding-left:26px;border-left:1px solid var(--border-sub)}
+.te-ring{--p:0;--c:var(--berry);width:74px;height:74px;border-radius:50%;flex:none;display:grid;place-items:center;
+  background:conic-gradient(var(--c) calc(var(--p)*1%),var(--sunken) 0);position:relative}
+.te-ring::before{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--surface)}
+.te-ring .v{position:relative;text-align:center;line-height:1}
+.te-ring .v b{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--strong);display:block}
+.te-ring .v span{font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.te-ringwrap{text-align:center}
+.te-ringwrap .cap{font-size:11px;font-weight:700;color:var(--muted);margin-top:7px}
+.te-ringwrap.lf .cap{color:var(--leaf-text)}
+.te-metacol{display:flex;flex-direction:column;gap:6px;min-width:124px;align-items:flex-start}
+.te-metacol .lab{font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.te-metacol .big{font-family:var(--logo);font-size:16px;font-weight:700;color:var(--strong)}
+.te-metacol .to{font-size:12px;color:var(--muted)}
+.te-bandflame{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--amber-deep);
+  background:rgba(232,146,12,.14);border:1px solid rgba(232,146,12,.3);border-radius:var(--r-pill);padding:4px 10px;cursor:pointer;font-family:inherit}
+.te-bandflame:disabled{cursor:default;opacity:.7}
+.phonebtn{display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-pill);padding:8px 14px;font-size:13px;font-weight:700;color:var(--berry);cursor:pointer;font-family:inherit}
+.phonebtn:hover{background:var(--sunken)}
+.phonebtn svg{width:16px;height:16px}
+
+/* bottom tab bar — mobile only (revealed in the ≤820 query) */
+.te-tabbar{display:none;position:fixed;bottom:0;left:0;right:0;z-index:40;background:var(--surface);border-top:1px solid var(--border);
+  padding:6px 2px calc(6px + env(safe-area-inset-bottom));justify-content:space-around}
+.te-tab{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--muted);font-size:10px;font-weight:600;
+  text-decoration:none;padding:4px 0;position:relative}
+.te-tab .ic{width:22px;height:22px;display:flex;align-items:center;justify-content:center}
+.te-tab .ic svg{width:22px;height:22px;opacity:.85}
+.te-tab .lb{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.te-tab.active{color:var(--cherry-deep)}
+.te-tab.active .ic svg{opacity:1}
+.te-tab .tdot{position:absolute;top:2px;right:calc(50% - 15px);width:7px;height:7px;border-radius:50%;background:var(--cherry)}
+
+/* "Open on your phone" QR modal */
+.te-qr-backdrop{position:fixed;inset:0;z-index:70;background:rgba(20,17,16,.55);display:flex;align-items:center;justify-content:center;padding:20px}
+.te-qr{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-24);box-shadow:var(--shadow-lg);width:320px;max-width:100%;padding:20px}
+.te-qr .hd{display:flex;align-items:center;gap:11px;margin-bottom:15px}
+.te-qr .hd .ic{width:40px;height:40px;border-radius:11px;background:var(--sunken);border:1px solid var(--border-sub);display:flex;align-items:center;justify-content:center;font-size:20px;flex:none}
+.te-qr .hd .t{font-weight:700;color:var(--strong);font-size:15px}
+.te-qr .hd .s{font-size:12px;color:var(--muted);margin-top:1px}
+.te-qr .hd .x{margin-left:auto;border:none;background:none;color:var(--muted);font-size:16px;cursor:pointer;line-height:1}
+.te-qr .tile{background:#fff;border-radius:var(--r-16);padding:14px;box-shadow:inset 0 0 0 1px var(--border-sub);min-height:230px;display:flex;align-items:center;justify-content:center}
+.te-qr .tile svg{width:100%;height:auto;display:block}
+.te-qr .cap{text-align:center;font-size:12.5px;color:var(--muted);margin-top:13px}
+.te-qr .cap b{font-family:var(--mono);color:var(--berry)}
+.te-qr .err{text-align:center;color:var(--cherry-text);font-size:13px;padding:26px 6px}
+
 @media(max-width:820px){
   .te-shell{grid-template-columns:1fr;grid-template-areas:"top" "main"}
   .te-nav{display:none}
-  .te-main{padding:20px 16px 60px}
+  .te-main{padding:18px 14px 84px}
+  /* app bar: keep brand + theme + settings + avatar; drop the desktop rail + HUD */
+  .te-rail,.te-hud{display:none}
+  .te-top{padding:10px 14px;gap:10px}
+  /* command band stacks; the ring cluster wraps under the greeting */
+  .te-band{grid-template-columns:1fr;padding:18px;border-radius:var(--r-16)}
+  .te-band h2{font-size:22px}
+  .te-cluster{padding-left:0;border-left:none;border-top:1px solid var(--border-sub);padding-top:16px;flex-wrap:wrap;gap:16px}
+  .te-tabbar{display:flex}
 }
