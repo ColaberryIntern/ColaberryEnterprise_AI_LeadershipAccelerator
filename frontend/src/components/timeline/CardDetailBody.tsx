@@ -9,7 +9,7 @@ import CardSurveyExperience from './CardSurveyExperience';
 import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
-import { useFieldGuideUpload } from './useFieldGuideUpload';
+import { useDeepDiveHost } from './useDeepDiveHost';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -220,26 +220,11 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // live reader cards (not admin preview).
   const readerProg = useReaderProgress(card.id, isReader && !preview);
 
-  // Deep Dive gating: the Field Guide iframe (opaque-origin) posts read-progress via
-  // postMessage; Mark Complete appears only once every section has been read.
-  const [ddProg, setDdProg] = useState<{ done: number; total: number; complete: boolean }>({ done: 0, total: 0, complete: false });
-  useEffect(() => {
-    setDdProg({ done: 0, total: 0, complete: false });
-    if (!isDeepDive || preview) return;
-    const onMsg = (e: MessageEvent) => {
-      const d = e.data as { source?: string; done?: number; total?: number; complete?: boolean } | null;
-      if (!d || d.source !== 'deepdive') return;
-      setDdProg({ done: Number(d.done) || 0, total: Number(d.total) || 0, complete: !!d.complete });
-    };
-    window.addEventListener('message', onMsg);
-    return () => window.removeEventListener('message', onMsg);
-  }, [card.id, isDeepDive, preview]);
-
-  // Week-1+ Deep Dive: the guide's "Choose HTML file" button delegates the real
-  // upload to this host page (the iframe can't reach the API). fg wires the picker,
-  // the +100-point upload, and restoring prior uploads across reopens.
+  // Deep Dive host bridge: the Field Guide iframe (opaque-origin) can't persist or
+  // reach the API, so the host owns read/copy persistence (restored across reopens),
+  // the +100-point upload, and the Mark-complete gate (dd.complete folds read+copy+upload).
   const ddIframeRef = useRef<HTMLIFrameElement>(null);
-  const fg = useFieldGuideUpload(card.id, isDeepDive && !preview && !done, ddIframeRef);
+  const dd = useDeepDiveHost(card.id, isDeepDive && !preview && !done, ddIframeRef);
 
   return (
     <>
@@ -433,13 +418,13 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isReader && !readerProg.complete && readerProg.total > 0 && (
                   <span className="tld-gatemsg">{readerProg.done} of {readerProg.total} sections read</span>
                 )}
-                {isDeepDive && !ddProg.complete && ddProg.total > 0 && (
-                  <span className="tld-gatemsg">{ddProg.done} of {ddProg.total} sections read</span>
+                {isDeepDive && !dd.complete && dd.total > 0 && (
+                  <span className="tld-gatemsg">{dd.done} of {dd.total} sections read</span>
                 )}
-                {isDeepDive && fg.message && <span className="tld-gatemsg">{fg.message}</span>}
+                {isDeepDive && dd.message && <span className="tld-gatemsg">{dd.message}</span>}
                 {/* The guide's "Choose HTML file" button posts to the host; this hidden
                     input is the real picker the host opens for the +100-point upload. */}
-                {isDeepDive && <input ref={fg.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={fg.onFileChange} />}
+                {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
                 {onClose && <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>}
                 {/* Media cards collect points here, gated by the server's watch check.
                     When the gate is active but unmet, the button is disabled with the
@@ -463,7 +448,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isReader && readerProg.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
                 )}
-                {isDeepDive && ddProg.complete && completeSafely && (
+                {isDeepDive && dd.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
                 )}
               </>

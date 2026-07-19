@@ -9,7 +9,7 @@ import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
 import { toTitleCase } from '../../../utils/titleCase';
 import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
-import { useFieldGuideUpload } from '../../../components/timeline/useFieldGuideUpload';
+import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -106,21 +106,13 @@ const RuntimeWorkspace: React.FC = () => {
   const isReader = band === 'warmup' && !!card?.content?.body_html;
   const readerProg = useReaderProgress(cardId, isReader && !completed);
   // Deep Dive Field Guide: renders its own self-contained HTML in an allow-scripts iframe
-  // (same as the drawer's deepdive arm). It postMessages `{source:'deepdive', complete}`;
-  // Mark complete stays gated until the guide reports it (read all sections + copy the prompt).
+  // (same as the drawer's deepdive arm). The host bridge owns read/copy persistence
+  // (restored across drawer↔workspace), the +100-point upload, and the gate — dd.complete
+  // folds read all sections + copy the prompt + (Week 1+) upload.
   const isDeepDive = band === 'deepdive' && card?.type === 'deep_dive' && !!card?.content?.body_html;
-  const [ddComplete, setDdComplete] = useState(false);
-  useEffect(() => {
-    setDdComplete(false);
-    if (!isDeepDive || completed) return;
-    const onMsg = (e: MessageEvent) => { const d = e.data as { source?: string; complete?: boolean } | null; if (d && d.source === 'deepdive' && d.complete) setDdComplete(true); };
-    window.addEventListener('message', onMsg);
-    return () => window.removeEventListener('message', onMsg);
-  }, [cardId, isDeepDive, completed]);
-  // Week-1+ Deep Dive: the guide delegates its real upload to this host (the iframe
-  // can't reach the API). fg wires the picker + the +100-point upload + restore.
   const ddIframeRef = useRef<HTMLIFrameElement>(null);
-  const fg = useFieldGuideUpload(cardId, isDeepDive && !completed, ddIframeRef);
+  const dd = useDeepDiveHost(cardId, isDeepDive && !completed, ddIframeRef);
+  const ddComplete = dd.complete;
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
@@ -183,7 +175,7 @@ const RuntimeWorkspace: React.FC = () => {
     : isReader && !readerProg.complete
       ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
       : isDeepDive && !ddComplete
-        ? <span className="rt-muted">Read the sections and copy the build prompt (run it in Claude Code) to finish</span>
+        ? <span className="rt-muted">Finish the steps in the guide to complete{dd.total > 0 ? ` — ${dd.done} of ${dd.total} sections read` : ''}</span>
         : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
   // Comments always render in the right rail now (every card type), so the center is a
   // single, clean scroll.
@@ -313,8 +305,8 @@ const RuntimeWorkspace: React.FC = () => {
                     : lessonDoc(card.content?.body_html || '')}
               />
               <div className="rt-readerfoot">
-                {isDeepDive && fg.message && <span className="rt-muted" style={{ marginRight: 'auto' }}>{fg.message}</span>}
-                {isDeepDive && <input ref={fg.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={fg.onFileChange} />}
+                {isDeepDive && dd.message && <span className="rt-muted" style={{ marginRight: 'auto' }}>{dd.message}</span>}
+                {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
                 {completeGate}
               </div>
             </div>

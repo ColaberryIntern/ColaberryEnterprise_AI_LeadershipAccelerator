@@ -26,29 +26,35 @@
 }
 </script>
 <style>
+  /* Roboto = Colaberry brand typeface; Roboto Mono for code/data figures. */
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap');
   :root{
-    --navy:#1a365d; --navy-2:#2b6cb0; --red:#e53e3e; --green:#38a169; --teal:#2c7a7b; --amber:#c05621;
-    --bg:#ffffff; --bg-alt:#f7fafc; --bg-soft:#eef2f7; --panel:#ffffff;
-    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --shadow:0 1px 2px rgba(16,24,40,.06);
-    --brand:var(--navy); --brand-soft:#e8eef6; --brand-ink:#1a365d;
+    /* Colaberry brand — Cherry Red / Leaf Green / Berry Blue (design-system tokens).
+       Structure = berry blue (trust); the cherry accent is fixed; green = progress. */
+    --blue:#367895; --blue-2:#2E6A86; --red:#FB2832; --green:#468A2E; --teal:#2BA39A; --amber:#E8920C;
+    --bg:#ffffff; --bg-alt:#F8F8F7; --bg-soft:#F1F1F0; --panel:#ffffff;
+    --text:#2B2B2B; --muted:#6B6B6B; --border:#E4E4E3; --shadow:0 1px 2px rgba(16,24,40,.06);
+    --brand:var(--blue); --brand-soft:#EAF2F6; --brand-ink:#265A72;
     --radius:11px; --rail:52px; --head:46px; --bar:60px; --panelw:560px;
-    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    --font:'Roboto',-apple-system,'Segoe UI',system-ui,Helvetica,Arial,sans-serif;
+    --mono:'Roboto Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   :root[data-theme="dark"]{
-    --bg:#0f1622; --bg-alt:#0b111b; --bg-soft:#1b2637; --panel:#141d2b;
-    --text:#e2e8f0; --muted:#94a3b8; --border:#26344a; --shadow:0 1px 2px rgba(0,0,0,.4);
-    --brand:#63b3ed; --brand-soft:#17263b; --brand-ink:#90cdf4; --navy-2:#63b3ed;
+    --bg:#0F0F0F; --bg-alt:#000000; --bg-soft:#1A1A1A; --panel:#161616;
+    --text:#F1F1F0; --muted:#B4B4B4; --border:rgba(255,255,255,.14); --shadow:0 1px 2px rgba(0,0,0,.4);
+    --brand:#5AA8C4; --brand-soft:rgba(54,120,149,.18); --brand-ink:#8FBBCF; --blue-2:#5AA8C4;
+    --red:#FF6B72; --green:#8AC759; --amber:#F0A93A;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--text);line-height:1.55;font-size:14px;
-    background:radial-gradient(1200px 500px at 20% -10%, rgba(43,108,176,.10), transparent 60%),var(--bg-alt);
+    background:radial-gradient(1200px 500px at 20% -10%, rgba(54,120,149,.10), transparent 60%),var(--bg-alt);
     min-height:100vh}
   /* The panel fills its container: ~560px in the drawer, full width in the workspace runtime. */
   h1,h2,h3,h4{color:var(--brand-ink);line-height:1.25;font-weight:700;margin:0 0 .4rem}
   h2{font-size:1.18rem;letter-spacing:-.01em} h3{font-size:.98rem;margin-top:.9rem} h4{font-size:.86rem}
   p{margin:.4rem 0}
-  a{color:var(--navy-2);text-decoration:none} a:hover{text-decoration:underline}
-  code{background:var(--bg-soft);padding:.05rem .3rem;border-radius:5px;font-size:.85em}
+  a{color:var(--blue-2);text-decoration:none} a:hover{text-decoration:underline}
+  code{background:var(--bg-soft);padding:.05rem .3rem;border-radius:5px;font-size:.85em;font-family:var(--mono)}
   .muted{color:var(--muted)} .small{font-size:.8rem}
   .logo{height:22px;width:auto;flex:0 0 auto}
   :root[data-theme="dark"] .phead .logo{background:#fff;padding:2px 6px;border-radius:6px}
@@ -64,18 +70,18 @@
   .phead .search svg{position:absolute;left:.5rem;top:50%;transform:translateY(-50%);color:var(--muted)}
   .hbtn{flex:0 0 auto;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:7px;height:30px;
     padding:0 .6rem;display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.76rem;font-weight:600}
-  .hbtn:hover{border-color:var(--navy-2);color:var(--navy-2)} .hbtn svg{width:14px;height:14px}
+  .hbtn:hover{border-color:var(--blue-2);color:var(--blue-2)} .hbtn svg{width:14px;height:14px}
 
   .pbody{display:flex;align-items:flex-start}
   .rail{position:sticky;top:var(--head);flex:0 0 var(--rail);height:calc(100vh - var(--head) - var(--bar));overflow-y:auto;
     background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:.15rem;padding:.5rem 0}
   .rail::-webkit-scrollbar{width:0}
   .ri{position:relative;width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer}
-  .ri svg{width:19px;height:19px} .ri:hover{background:var(--bg-soft);color:var(--navy-2);text-decoration:none}
+  .ri svg{width:19px;height:19px} .ri:hover{background:var(--bg-soft);color:var(--blue-2);text-decoration:none}
   .ri.active{background:var(--brand);color:#fff} :root[data-theme="dark"] .ri.active{color:#0f1622}
   .ri .num{position:absolute;top:-1px;right:-1px;background:var(--panel);color:var(--muted);border:1px solid var(--border);
     border-radius:999px;font-size:.52rem;font-weight:700;min-width:13px;height:13px;line-height:11px;text-align:center;padding:0 2px}
-  .ri.active .num{background:var(--navy-2);color:#fff;border-color:var(--navy-2)}
+  .ri.active .num{background:var(--blue-2);color:#fff;border-color:var(--blue-2)}
   .ri.done .num{background:var(--green);color:#fff;border-color:var(--green)}
   .rail .sep{width:22px;height:1px;background:var(--border);margin:.25rem 0}
 
@@ -97,14 +103,14 @@
   section[data-sec]{scroll-margin-top:calc(var(--head) + 8px);padding:.9rem 0 .3rem;border-top:1px solid var(--border)}
   section[data-sec]:first-of-type{border-top:none;padding-top:.5rem}
   .eyebrow{display:inline-flex;align-items:center;gap:.35rem;font-size:.64rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;
-    color:var(--navy-2);background:var(--brand-soft);padding:.18rem .5rem;border-radius:999px;margin-bottom:.4rem}
+    color:var(--blue-2);background:var(--brand-soft);padding:.18rem .5rem;border-radius:999px;margin-bottom:.4rem}
   .lead{font-size:.94rem}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem .85rem;box-shadow:var(--shadow);margin:.6rem 0}
   .sub{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:.2rem 0 .35rem}
 
   .kpis{display:flex;flex-wrap:wrap;gap:.5rem}
   .kpi{flex:1 1 88px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:.6rem .3rem;text-align:center;box-shadow:var(--shadow)}
-  .kpi .v{font-size:1.4rem;font-weight:800;line-height:1;color:var(--navy-2)}
+  .kpi .v{font-size:1.4rem;font-weight:800;line-height:1;color:var(--blue-2)}
   .kpi.c1 .v{color:var(--amber)} .kpi.c2 .v{color:var(--teal)} .kpi.c3 .v{color:var(--red)} .kpi.c4 .v{color:var(--green)}
   .kpi .l{font-size:.64rem;color:var(--muted);margin-top:.3rem;text-transform:uppercase;letter-spacing:.02em}
 
@@ -131,8 +137,8 @@
 
   .gb{display:flex;flex-direction:column;gap:.5rem}
   .gb .col{border-radius:9px;padding:.6rem .75rem;border:1px solid var(--border)}
-  .gb .good{background:rgba(56,161,105,.09);border-color:rgba(56,161,105,.35)}
-  .gb .bad{background:rgba(229,62,62,.08);border-color:rgba(229,62,62,.3)}
+  .gb .good{background:rgba(119,187,74,.09);border-color:rgba(119,187,74,.35)}
+  .gb .bad{background:rgba(251,40,50,.08);border-color:rgba(251,40,50,.3)}
   .gb h4{margin-top:0} .gb .good h4{color:var(--green)} .gb .bad h4{color:var(--red)}
   .gb ul{margin:.25rem 0 0;padding-left:1rem} .gb li{margin:.2rem 0;font-size:.83rem}
 
@@ -140,10 +146,10 @@
   .term{border:1px solid var(--border);border-radius:9px;padding:.5rem .7rem;background:var(--panel)}
   .term b{color:var(--brand-ink)} .term p{margin:.12rem 0 0;font-size:.82rem;color:var(--muted)}
 
-  .callout{border-left:3px solid var(--navy-2);background:var(--brand-soft);padding:.55rem .75rem;border-radius:0 9px 9px 0;margin:.6rem 0;font-size:.86rem}
-  .callout.warn{border-left-color:var(--amber);background:rgba(192,86,33,.09)}
+  .callout{border-left:3px solid var(--blue-2);background:var(--brand-soft);padding:.55rem .75rem;border-radius:0 9px 9px 0;margin:.6rem 0;font-size:.86rem}
+  .callout.warn{border-left-color:var(--amber);background:rgba(232,146,12,.09)}
   ul.clean{list-style:none;padding-left:0;margin:.3rem 0} ul.clean li{padding-left:1.15rem;position:relative;margin:.24rem 0;font-size:.85rem}
-  ul.clean li::before{content:"▸";position:absolute;left:.15rem;color:var(--navy-2)}
+  ul.clean li::before{content:"▸";position:absolute;left:.15rem;color:var(--blue-2)}
   .grid{display:grid;gap:.5rem} .g2{grid-template-columns:1fr 1fr}
   @media (max-width:430px){.g2{grid-template-columns:1fr}}
 
@@ -152,15 +158,16 @@
   .q .ans{margin-top:.4rem;padding-top:.4rem;border-top:1px dashed var(--border);color:var(--green);font-size:.83rem}
   .q.js .ans{display:none} .q.js.open .ans{display:block}
   .revealbtn{margin-top:.4rem;font-size:.74rem;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:6px;padding:.24rem .6rem;cursor:pointer;display:none}
-  .q.js .revealbtn{display:inline-block} .revealbtn:hover{border-color:var(--navy-2);color:var(--navy-2)}
+  .q.js .revealbtn{display:inline-block} .revealbtn:hover{border-color:var(--blue-2);color:var(--blue-2)}
 
   mark{background:#fde68a;color:#1a202c;border-radius:3px}
 
-  .donebar{display:none;align-items:center;gap:.5rem;background:rgba(56,161,105,.1);border:1px solid rgba(56,161,105,.4);
+  .donebar{display:none;align-items:center;gap:.5rem;background:rgba(119,187,74,.12);border:1px solid rgba(70,138,46,.4);
     border-radius:10px;padding:.6rem .8rem;margin:.6rem 0;font-size:.86rem} .donebar.show{display:flex} .donebar b{color:var(--green)}
+  .donebar .dcheck{color:var(--green);flex:0 0 auto;display:inline-flex} .donebar .dcheck svg{width:20px;height:20px}
   .uploadbox{border:1.5px dashed var(--border);border-radius:10px;padding:.8rem;text-align:center;margin:.5rem 0;background:var(--bg-soft)}
   .uploadbox .big{font-weight:700;color:var(--brand-ink)}
-  .uploadbox.done{border-color:var(--green);border-style:solid;background:rgba(56,161,105,.08)}
+  .uploadbox.done{border-color:var(--green);border-style:solid;background:rgba(119,187,74,.08)}
   .uploadok{margin-top:.5rem;font-weight:700;color:var(--green);font-size:.9rem}
   .checklist .ck{display:flex;align-items:center;gap:.55rem;padding:.28rem 0;font-size:.88rem}
   .checklist .box{width:18px;height:18px;border:2px solid var(--border);border-radius:5px;flex:0 0 auto;position:relative}
@@ -176,7 +183,7 @@
     padding:.6rem 1rem;font-size:.9rem;font-weight:700;cursor:pointer;margin:.3rem 0}
   :root[data-theme="dark"] .buildcta{color:#0f1622} .buildcta:hover{filter:brightness(1.06)} .buildcta.ok{background:var(--green)}
   .buildcta svg{width:16px;height:16px}
-  .startbanner{background:var(--brand-soft);border:1px solid var(--navy-2);border-left:4px solid var(--navy-2);border-radius:10px;padding:.8rem 1rem;margin:.5rem 0 .7rem;display:flex;flex-direction:column;gap:.5rem;align-items:flex-start}
+  .startbanner{background:var(--brand-soft);border:1px solid var(--blue-2);border-left:4px solid var(--blue-2);border-radius:10px;padding:.8rem 1rem;margin:.5rem 0 .7rem;display:flex;flex-direction:column;gap:.5rem;align-items:flex-start}
   .startbanner .sbt{font-size:.9rem;color:var(--text)} .startbanner .sbt em{color:var(--red);font-style:normal;font-weight:600}
 
   .actionbar{position:sticky;bottom:0;z-index:6;height:var(--bar);display:flex;align-items:center;gap:.6rem;padding:0 .8rem;
@@ -185,11 +192,11 @@
   .prog .ptext{font-size:.68rem;color:var(--muted);font-weight:600;margin-bottom:.22rem;display:flex;justify-content:space-between}
   .prog .ptext b{color:var(--brand-ink)}
   .bar{height:6px;background:var(--bg-soft);border-radius:999px;overflow:hidden}
-  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--navy-2),var(--green));transition:width .35s}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue-2),var(--green));transition:width .35s}
   .btn{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;height:36px;padding:0 .8rem;
     display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.8rem;font-weight:700;white-space:nowrap}
   .btn svg{width:15px;height:15px}
-  .btn.work{border-color:var(--navy-2);color:var(--navy-2)} .btn.work:hover{background:var(--brand-soft)} .btn.work.ok{border-color:var(--green);color:var(--green)}
+  .btn.work{border-color:var(--blue-2);color:var(--blue-2)} .btn.work:hover{background:var(--brand-soft)} .btn.work.ok{border-color:var(--green);color:var(--green)}
   .btn.done{background:var(--green);border-color:var(--green);color:#fff}
   .btn.done:disabled{background:var(--bg-soft);border-color:var(--border);color:var(--muted);cursor:not-allowed}
   :root[data-theme="dark"] .btn.done:not(:disabled){color:#0f1622}
@@ -200,8 +207,8 @@
     body{display:block;background:#fff;color:#111} body::before{display:none}
     .panel{width:auto;height:auto;overflow:visible;box-shadow:none;border:none}
     .phead,.rail,.actionbar,.revealbtn,.search{display:none!important} .pcontent{padding:0}
-    .printcover{display:block;text-align:center;border-bottom:2px solid var(--navy);padding-bottom:12px;margin-bottom:14px}
-    .printcover .logo{height:40px;margin-bottom:6px} .printcover h1{color:var(--navy);font-size:20px;margin:.2rem 0} .printcover .meta{color:#555;font-size:11px}
+    .printcover{display:block;text-align:center;border-bottom:2px solid var(--blue);padding-bottom:12px;margin-bottom:14px}
+    .printcover .logo{height:40px;margin-bottom:6px} .printcover h1{color:var(--blue);font-size:20px;margin:.2rem 0} .printcover .meta{color:#555;font-size:11px}
     .q.js .ans{display:block!important} section[data-sec]{page-break-inside:avoid;border-top:1px solid #ccc}
     .card,.table-wrap{box-shadow:none} a{color:#111;text-decoration:none}
   }
@@ -253,7 +260,7 @@
         <span class="eyebrow">Business Analysis · Week 1</span>
         <h2>Turn a business need into clear requirements</h2>
         <div class="startbanner">
-          <div class="sbt"><b>▶ Start here.</b> Copy this prompt and run it in your own <b>Claude Code</b> — it builds your Business Analysis Field Guide (~5–10 min). Read the sections below while it builds. <em>You can't complete this Deep Dive until you've run it.</em></div>
+          <div class="sbt"><b>Start here.</b> Copy this prompt and run it in your own <b>Claude Code</b> — it builds your Business Analysis Field Guide (~5–10 min). Read the sections below while it builds. <em>You can't complete this Deep Dive until you've run it.</em></div>
           <button class="buildcta" id="copyPromptBtn3" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Copy the build prompt</button>
         </div>
         <p class="lead">Business Analysis is the discipline that decides <strong>what to build and why</strong> — before anyone designs or writes code. Most projects fail here, not in the code. Your job as an architect isn't to write every requirement; it's to <strong>direct, evaluate, and approve</strong> the requirements an AI drafts, so the team builds the right thing.</p>
@@ -494,7 +501,7 @@
           <div class="ck" data-ck="copy"><span class="box"></span><span>Click "Copy the build prompt" &amp; run it in Claude Code</span></div>
           <div class="ck" data-ck="upload"><span class="box"></span><span>Upload your Field Guide</span></div>
         </div>
-        <div class="donebar" id="donebar"><span>✅</span><div><b>All 3 steps done.</b> Mark this Deep Dive complete to lock in your <b>100 points</b>.</div></div>
+        <div class="donebar" id="donebar"><span class="dcheck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg></span><div><b>All 3 steps done.</b> Mark this Deep Dive complete to lock in your <b>100 points</b>.</div></div>
         <div class="uploadbox">
           <div class="big">Upload your Field Guide</div>
           <p class="muted" style="margin:.3rem 0 .5rem">Built it? Drop the HTML file here. Points are awarded on the first valid upload; you can replace it any time.</p>
@@ -560,56 +567,65 @@ When finished, open the file in the browser.</pre>
   document.querySelectorAll('.rail a.ri').forEach(function(a){ var t=a.getAttribute('title'); if(t){ var s=document.createElement('span'); s.className='rlabel'; s.textContent=t; a.appendChild(s); } });
   Object.keys(railLinks).forEach(function(id){ railLinks[id].addEventListener('click',function(e){ e.preventDefault(); var el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }); });
   document.querySelectorAll('.rail .num').forEach(function(n){n.setAttribute('data-n',n.textContent);});
-  var KEY='dd-wk1-seen', seen={}; try{seen=JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch(e){seen={};}
-  function count(){var n=0;for(var k in seen){if(seen[k])n++;}return n;}
+  // The HOST persists progress (read sections + copied + upload) and restores it —
+  // our localStorage is blocked in the sandboxed iframe (which is why it "reset" before).
+  var seen={};
+  function keys(){var a=[];for(var k in seen){if(seen[k])a.push(k);}return a;}
+  function count(){return keys().length;}
   // 3-step completion gate: read all sections + copy the prompt + upload the guide.
-  var CKKEY='dd-wk1-copied'; var copiedBefore=false; try{copiedBefore=localStorage.getItem(CKKEY)==='1';}catch(e){}
-  var ck={read:false,copy:copiedBefore,upload:false};
+  var ck={read:false,copy:false,upload:false};
   function gate(){ var ok=ck.read&&ck.copy&&ck.upload, btn=document.getElementById('completeBtn');
     btn.disabled=!ok; btn.title=ok?'Mark this Deep Dive complete':'Finish all 3 steps (read · copy prompt · upload) to complete';
     if(ok)document.getElementById('donebar').classList.add('show');
-    try{ if(window.parent&&window.parent!==window) window.parent.postMessage({source:'deepdive',done:count(),total:total,complete:ok},'*'); }catch(e){} }
-  function setCk(k,v){ if(ck[k]===v)return; ck[k]=v; var el=document.querySelector('.ck[data-ck="'+k+'"]'); if(el)el.classList.toggle('done',v);
-    if(k==='copy'&&v){try{localStorage.setItem(CKKEY,'1');}catch(e){}} gate(); }
+    try{ if(window.parent&&window.parent!==window) window.parent.postMessage({source:'deepdive',done:count(),total:total,ids:keys(),copied:ck.copy,complete:ok},'*'); }catch(e){} }
+  function setCk(k,v){ if(ck[k]===v)return; ck[k]=v; var el=document.querySelector('.ck[data-ck="'+k+'"]'); if(el)el.classList.toggle('done',v); gate(); }
   function render(){
     var n=count(); document.getElementById('pcount').textContent=n; document.getElementById('pfill').style.width=Math.round(n/total*100)+'%';
     secs.forEach(function(s){var a=railLinks[s.id];if(a){if(seen[s.id])a.classList.add('done');else a.classList.remove('done');
       var num=a.querySelector('.num');if(num)num.textContent=seen[s.id]?'✓':(num.getAttribute('data-n')||num.textContent);}});
-    setCk('read', n>=total);
+    setCk('read', n>=total); gate();
   }
-  function markSeen(id){ if(!seen[id]){ seen[id]=true; try{localStorage.setItem(KEY,JSON.stringify(seen));}catch(e){} render(); } }
-  if('IntersectionObserver' in window){
-    // A section counts as read only after it has been the active (centered) section for
-    // 5 continuous seconds — scrolling past it fast does not mark it. Leaving cancels the timer.
-    var dwell={}, DWELL=5000;
-    var spy=new IntersectionObserver(function(es){ es.forEach(function(en){ var id=en.target.id, a=railLinks[id];
-      if(en.isIntersecting){
-        for(var k in railLinks)railLinks[k].classList.remove('active'); if(a)a.classList.add('active');
-        if(!seen[id] && !dwell[id]){ dwell[id]=setTimeout(function(){ dwell[id]=null; markSeen(id); }, DWELL); }
-      } else if(dwell[id]){ clearTimeout(dwell[id]); dwell[id]=null; }
-    }); },{root:panel,rootMargin:'-40% 0px -55% 0px',threshold:0});
-    secs.forEach(function(s){spy.observe(s);});
-  } else { secs.forEach(function(s){seen[s.id]=true;}); }
-  render();
-  // Restore the copy-step checkmark for a returning student (copy is remembered).
-  if(ck.copy){var ce=document.querySelector('.ck[data-ck="copy"]');if(ce)ce.classList.add('done');gate();}
+  function markSeen(id){ if(id && !seen[id]){ seen[id]=true; render(); } }
+  // A section is marked read after you spend 5s ON it. "Active" = the section at the
+  // reading line (scroll-position based), so even the last/short section can be reached.
+  var secT={}, DWELL_S=5;
+  function activeId(){
+    if(!secs.length) return null;
+    if(panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 4) return secs[secs.length-1].id;
+    var pr=panel.getBoundingClientRect(), line=pr.top + pr.height*0.35, cur=secs[0];
+    for(var i=0;i<secs.length;i++){ if(secs[i].getBoundingClientRect().top <= line) cur=secs[i]; }
+    return cur.id;
+  }
+  setInterval(function(){
+    var id=activeId(); if(!id) return;
+    for(var k in railLinks) railLinks[k].classList.remove('active');
+    if(railLinks[id]) railLinks[id].classList.add('active');
+    if(!seen[id]){ secT[id]=(secT[id]||0)+1; if(secT[id]>=DWELL_S) markSeen(id); }
+  }, 1000);
   document.getElementById('completeBtn').addEventListener('click',function(){
-    if(this.disabled)return; this.textContent='Completed ✓'; this.disabled=true; document.getElementById('donebar').classList.add('show');
+    if(this.disabled)return; this.textContent='Completed'; this.disabled=true; document.getElementById('donebar').classList.add('show');
   });
-  // Upload is done by the platform (this guide runs sandboxed and can't reach the
-  // API). The button asks the host to open the real file picker; the host tells us
-  // back when the upload succeeds so the checklist ticks + points show.
+  // Upload runs on the platform (the sandboxed guide can't reach the API): the button
+  // asks the host to open the real picker; the host tells us back so the checklist ticks.
   function hostMsg(action){ try{ if(window.parent&&window.parent!==window) window.parent.postMessage({source:'deepdive',action:action},'*'); }catch(e){} }
   document.getElementById('uploadBtn').addEventListener('click',function(){ hostMsg('upload'); });
-  window.addEventListener('message',function(e){ var d=e.data; if(!d||d.source!=='deepdive-host')return;
-    if(d.type==='uploaded'){ setCk('upload',true);
-      var ub=document.querySelector('.uploadbox'); if(ub){ ub.classList.add('done');
-        var st=ub.querySelector('.uploadok'); if(!st){ st=document.createElement('div'); st.className='uploadok'; ub.appendChild(st); }
-        st.textContent = d.restore ? '✓ Field Guide uploaded — 100 points banked.' : '✓ Field Guide uploaded — 100 points earned!';
-      }
+  function markUploaded(banked){
+    setCk('upload',true);
+    var ub=document.querySelector('.uploadbox'); if(ub){ ub.classList.add('done');
+      var st=ub.querySelector('.uploadok'); if(!st){ st=document.createElement('div'); st.className='uploadok'; ub.appendChild(st); }
+      st.textContent = banked ? 'Field Guide uploaded — 100 points banked.' : 'Field Guide uploaded — 100 points earned.';
     }
+  }
+  window.addEventListener('message',function(e){ var d=e.data; if(!d||d.source!=='deepdive-host')return;
+    if(d.type==='restore'){
+      if(Array.isArray(d.seenIds)) d.seenIds.forEach(function(id){ if(id) seen[id]=true; });
+      if(d.copied) setCk('copy',true);
+      render();
+      if(d.uploaded) markUploaded(true);
+    } else if(d.type==='uploaded'){ markUploaded(!d.points_awarded); }
   });
-  // Tell the host we're ready so it can restore a prior upload (returning student).
+  render();
+  // Tell the host we're ready so it can restore prior read/copy/upload state.
   hostMsg('ready');
 
   function copyPrompt(btn){
