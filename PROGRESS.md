@@ -9232,6 +9232,18 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: PR CI (Frontend typecheck). Post-deploy: open a few types in the workstation (Overview, a video, Knowledge Check, Self Study) — each is one scrollbar with comments in the right rail; content-body types fill the panel.
   - Notes: Branch `workstream/workstation-single-scroll-all` off main. Frontend-only -> nginx. The contrast fix was reader-specific (only Self Study has read-tabs) so nothing else needed there.
 
+### AI Mentor Intelligence — Phase 0: assignment-aware runtime mentor — 2026-07-18
+- [x] The runtime AI Mentor now sees the student's actual work on the card (answers, score, saved work, section growth) instead of "I don't see your answers yet"
+  - Date: 2026-07-18
+  - Session: CC-20260718-a9k2
+  - What changed:
+    - New `backend/src/services/runtime/mentorContext.ts` — read-only assembler of the assignment-aware context for (enrollment, card): the card's activity content, the student's latest `AssessmentAttempt` (per-question right/wrong by competency + score), saved non-quiz work (`TimelineCardProgress.student_progress` — prompt-lab/reflection/structured), and `sectionResultsSummary` (growth since the entry Knowledge Check + weekly survey). Token-budgeted to 1800 chars.
+    - New `backend/src/services/runtime/mentorContextFormat.ts` — the PURE renderers (`renderAttempt`, `renderSavedWork`); type-only model import so it is DB-free and unit-testable. Carries the ANSWER-LEAK GUARD: a graded Evaluation the student has NOT passed withholds the correct option (it is retryable) and returns `graded_lock=true`; a Knowledge Check (already revealed on submit) or a passed Evaluation may reveal the answer + explanation to close the gap.
+    - `mentorService.ts › coach()` now calls `buildMentorContext` and injects the work block + a graded-lock instruction into the system prompt. Fails safe: a context-assembly error is logged (structured warn) and the mentor degrades to card-only coaching rather than 500-ing the chat. `CardCtx` extended with `program_id`/`week` (already returned by `cardContext`, so no controller change).
+    - New test `backend/src/services/runtime/__tests__/mentorContextFormat.test.ts` (6 cases) including the leak guard: an unpassed eval must not surface the correct answer.
+  - Why: Screenshot — a student scored 3/5 on "Quick Check: AI Foundations" and clicked "Review my work"; the mentor replied "I don't see your answers yet" because `coach()` only received the card title/description. This is Phase 0 of the AI Mentor Intelligence plan (make the mentor assignment-aware now; Phases 1-4 add the full learner-360 context service + conversation memory + a longitudinal learner-memory writer). [[reference_timeline_engine_student_runtime]]
+  - Verification: jest `mentorContextFormat.test.ts` 6/6 pass (incl. LEAK GUARD); `tsc --noEmit` clean for our source (the only errors are the pre-existing zod v4 `.d.cts` local-environment parse mismatch, unrelated to this change; Docker CI tsc is authoritative).
+  - Notes: Branch `workstream/mentor-intelligence` off `origin/main` (the runtime mentor lives on `main`, not the checked-out `workstream/chapter-quality-and-worker`). Backend-only; no deploy yet (prod deploys after hours). The pure renderers were split from the I/O module specifically so the unit test stays hermetic — `models/index` is 1000+ lines and blows the V8 heap under ts-jest type-checking.
 ### Classroom: remove duplicate theme toggle + collapse completed work — 2026-07-18
 - [x] Deleted the redundant in-page Classroom theme toggle (header toggle is now the single day/night control) and folded completed cards into one collapsible "Completed (N)" section
   - Date: 2026-07-18
@@ -9270,6 +9282,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: New raw-Playwright E2E (no framework dep — reuses the existing `playwright` package like scripts/capture*.js) that drives the whole points loop against a live target: fresh throwaway guest → complete a card → asserts award == the card's "+N pts" badge value → points total rises → the top-bar HUD renders the new total in a real browser → clicking the HUD deep-links to Settings ▸ Points. Fresh @colaberry-test.local guest per run, so it is safe to re-run.
   - Verification: RAN green against prod — 9/9 checks pass, including "award (10) == card badge (10) [warmup]", which independently re-confirms the badge-parity fix is live. Exit 0; screenshot saved to tests/systemV2/logs/.
   - Notes: On-demand / scheduled, NOT per-PR CI (each run writes a guest + one completion to the target). Point it anywhere with BASE_URL. Establishes the tests/systemV2 E2E dir the CLAUDE.md structure references. Not picked up by backend/frontend jest or tsc (outside their roots), so it can't break CI.
+
+### AI Mentor Phase 0 — merge main + pass-threshold drift fix — 2026-07-18
+- [x] Merged latest main into the Phase 0 branch and made the mentor's pass-threshold copy read from the attempt instead of a hardcoded 75%
+  - Date: 2026-07-18
+  - Session: CC-20260718-a9k2
+  - What changed: PR #350's branch was ~30 commits behind main; merged `origin/main` (clean auto-merge — only PROGRESS.md overlapped, no code conflicts). Main's PR #348 lowered `EVAL_PASS_THRESHOLD` 75% -> 70%, which made `mentorContextFormat.renderAttempt`'s hardcoded "needs 75%" stale. Fixed `renderAttempt` to read `pass_threshold` off the attempt (`AttemptLike` gains an optional `pass_threshold`) so the copy tracks the real bar and can't drift again; updated the leak-guard test to assert "needs 70%".
+  - Verification: jest `mentorContextFormat.test.ts` 6/6 pass; `tsc --noEmit` clean for our source (only the known zod v4 `.d.cts` local errors remain).
+  - Notes: Same PR #350 / branch `workstream/mentor-intelligence`. Surfaced by checking merge-readiness when asked "is it ready?" — good thing, or the mentor would have told students the wrong pass bar.
 - [x] Today screen: command-band top redesign + Title-Case wordmark + mobile bottom tab nav + QR "Open on your phone" auth handoff (flag-gated)
   - Date: 2026-07-18
   - Session: CC-20260718-9m4x
