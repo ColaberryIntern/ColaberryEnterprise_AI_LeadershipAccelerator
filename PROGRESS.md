@@ -10,6 +10,19 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Announcement — curriculum-derived time budget: total at top + per-phase + per-activity (2026-07-19)
+- [x] **The week map now shows a real time budget pulled from the curriculum: a "how much work" overview at the top, each phase's time on its heading, each activity's minutes on its card — and it refreshes when the curriculum's timing changes**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/services/timeline/sectionCurriculumContext.ts` — `SectionCurriculumItem` gains `est_minutes` (the card's `estimated_time`, or the type's registry default); `getSectionCurriculumContext` populates it. `buildSectionCurriculumText` now leads with the TOTAL time (humanized + minutes), a per-phase subtotal line, and each item's minutes — so the generator renders a real time budget instead of guessing. Added `fmtDuration`.
+    - `backend/src/services/timeline/cardContentService.ts` — `sectionFingerprint` now includes each item's `bucket` (phase) + `est_minutes`, so a re-timed or re-phased week also resets the summary (not just added/removed/retitled activities). "Pulled from the curriculum even as it changes."
+    - `backend/src/seeds/seedComponentAuthoring.ts` — `ANNOUNCEMENT_GENERATION_PROMPT`: added a top 3-tile overview (⏱️ total time · 📚 activities · 🎓 level), a per-phase time subtotal on each phase heading, and a per-activity ⏱️ minutes label on each card — all using the exact numbers from the roster context (no re-estimating). Replaced the old chips row with the overview. Removed the "never show minutes" rule.
+    - `backend/src/services/timeline/__tests__/sectionCurriculumContext.test.ts` — updated for the time format (total, per-phase, per-item minutes).
+  - Why: Ali wants a summary of time spent on each section plus an overview of total work/time at the top, all pulled from the curriculum so it stays accurate as the curriculum changes.
+  - Verification: pure-logic checked (total 102 min → "1.7 hours", phase subtotals, per-item minutes); `tsc` + jest via CI (authoritative Docker gate). Post-deploy: regenerate Week 1 via the deployed path and confirm the times render.
+  - Notes: builds on PRs #389 + #399. `est_minutes` falls back to the type registry default when a card has no `estimated_time`, so every activity has a time.
+
 ### Announcement — full-week curriculum MAP: wide/responsive, covers every activity grouped by phase (2026-07-19)
 - [x] **Rebuilt the announcement generation so it maps the WHOLE week (all activities grouped by phase), widens in the workspace, and has more emoji/spacing**
   - Date: 2026-07-19
