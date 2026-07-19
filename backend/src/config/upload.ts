@@ -82,3 +82,23 @@ export const certificateUpload = multer({
 });
 
 export { CERT_DIR };
+
+// ── Deep Dive "Field Guide" uploads — a single self-contained .html artifact ──
+// The student builds it in their own Claude Code and uploads it. It is stored in
+// the DB (PortfolioArtifact), NOT on disk, so it survives container restarts and
+// can be rendered back — so we use MEMORY storage and read the buffer in the
+// service. Accept text/html by mime OR extension (some browsers send
+// application/octet-stream for a local .html).
+const MAX_FIELD_GUIDE_SIZE = 5 * 1024 * 1024; // 5MB
+function fieldGuideFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const name = (file.originalname || '').toLowerCase();
+  const ok = file.mimetype === 'text/html' || /\.html?$/.test(name);
+  if (ok) cb(null, true);
+  else cb(new Error('Upload the .html Field Guide that Claude Code built for you.'));
+}
+export const fieldGuideUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: fieldGuideFilter,
+  limits: { fileSize: MAX_FIELD_GUIDE_SIZE },
+});
+export { MAX_FIELD_GUIDE_SIZE };

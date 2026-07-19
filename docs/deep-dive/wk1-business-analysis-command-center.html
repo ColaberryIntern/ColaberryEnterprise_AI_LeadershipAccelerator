@@ -160,6 +160,8 @@
     border-radius:10px;padding:.6rem .8rem;margin:.6rem 0;font-size:.86rem} .donebar.show{display:flex} .donebar b{color:var(--green)}
   .uploadbox{border:1.5px dashed var(--border);border-radius:10px;padding:.8rem;text-align:center;margin:.5rem 0;background:var(--bg-soft)}
   .uploadbox .big{font-weight:700;color:var(--brand-ink)}
+  .uploadbox.done{border-color:var(--green);border-style:solid;background:rgba(56,161,105,.08)}
+  .uploadok{margin-top:.5rem;font-weight:700;color:var(--green);font-size:.9rem}
   .checklist .ck{display:flex;align-items:center;gap:.55rem;padding:.28rem 0;font-size:.88rem}
   .checklist .box{width:18px;height:18px;border:2px solid var(--border);border-radius:5px;flex:0 0 auto;position:relative}
   .checklist .ck.done .box{background:var(--green);border-color:var(--green)}
@@ -561,12 +563,14 @@ When finished, open the file in the browser.</pre>
   var KEY='dd-wk1-seen', seen={}; try{seen=JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch(e){seen={};}
   function count(){var n=0;for(var k in seen){if(seen[k])n++;}return n;}
   // 3-step completion gate: read all sections + copy the prompt + upload the guide.
-  var ck={read:false,copy:false,upload:false};
+  var CKKEY='dd-wk1-copied'; var copiedBefore=false; try{copiedBefore=localStorage.getItem(CKKEY)==='1';}catch(e){}
+  var ck={read:false,copy:copiedBefore,upload:false};
   function gate(){ var ok=ck.read&&ck.copy&&ck.upload, btn=document.getElementById('completeBtn');
     btn.disabled=!ok; btn.title=ok?'Mark this Deep Dive complete':'Finish all 3 steps (read · copy prompt · upload) to complete';
     if(ok)document.getElementById('donebar').classList.add('show');
     try{ if(window.parent&&window.parent!==window) window.parent.postMessage({source:'deepdive',done:count(),total:total,complete:ok},'*'); }catch(e){} }
-  function setCk(k,v){ if(ck[k]===v)return; ck[k]=v; var el=document.querySelector('.ck[data-ck="'+k+'"]'); if(el)el.classList.toggle('done',v); gate(); }
+  function setCk(k,v){ if(ck[k]===v)return; ck[k]=v; var el=document.querySelector('.ck[data-ck="'+k+'"]'); if(el)el.classList.toggle('done',v);
+    if(k==='copy'&&v){try{localStorage.setItem(CKKEY,'1');}catch(e){}} gate(); }
   function render(){
     var n=count(); document.getElementById('pcount').textContent=n; document.getElementById('pfill').style.width=Math.round(n/total*100)+'%';
     secs.forEach(function(s){var a=railLinks[s.id];if(a){if(seen[s.id])a.classList.add('done');else a.classList.remove('done');
@@ -587,10 +591,26 @@ When finished, open the file in the browser.</pre>
     secs.forEach(function(s){spy.observe(s);});
   } else { secs.forEach(function(s){seen[s.id]=true;}); }
   render();
+  // Restore the copy-step checkmark for a returning student (copy is remembered).
+  if(ck.copy){var ce=document.querySelector('.ck[data-ck="copy"]');if(ce)ce.classList.add('done');gate();}
   document.getElementById('completeBtn').addEventListener('click',function(){
     if(this.disabled)return; this.textContent='Completed ✓'; this.disabled=true; document.getElementById('donebar').classList.add('show');
   });
-  document.getElementById('uploadBtn').addEventListener('click',function(){ alert('In the platform this opens a file picker to upload your Field Guide. Points are awarded once, on the first valid upload.'); setCk('upload',true); });
+  // Upload is done by the platform (this guide runs sandboxed and can't reach the
+  // API). The button asks the host to open the real file picker; the host tells us
+  // back when the upload succeeds so the checklist ticks + points show.
+  function hostMsg(action){ try{ if(window.parent&&window.parent!==window) window.parent.postMessage({source:'deepdive',action:action},'*'); }catch(e){} }
+  document.getElementById('uploadBtn').addEventListener('click',function(){ hostMsg('upload'); });
+  window.addEventListener('message',function(e){ var d=e.data; if(!d||d.source!=='deepdive-host')return;
+    if(d.type==='uploaded'){ setCk('upload',true);
+      var ub=document.querySelector('.uploadbox'); if(ub){ ub.classList.add('done');
+        var st=ub.querySelector('.uploadok'); if(!st){ st=document.createElement('div'); st.className='uploadok'; ub.appendChild(st); }
+        st.textContent = d.restore ? '✓ Field Guide uploaded — 100 points banked.' : '✓ Field Guide uploaded — 100 points earned!';
+      }
+    }
+  });
+  // Tell the host we're ready so it can restore a prior upload (returning student).
+  hostMsg('ready');
 
   function copyPrompt(btn){
     var txt=document.getElementById('promptText').textContent, orig=btn.innerHTML;

@@ -9,6 +9,7 @@ import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
 import { toTitleCase } from '../../../utils/titleCase';
 import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
+import { useFieldGuideUpload } from '../../../components/timeline/useFieldGuideUpload';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -116,6 +117,10 @@ const RuntimeWorkspace: React.FC = () => {
     window.addEventListener('message', onMsg);
     return () => window.removeEventListener('message', onMsg);
   }, [cardId, isDeepDive, completed]);
+  // Week-1+ Deep Dive: the guide delegates its real upload to this host (the iframe
+  // can't reach the API). fg wires the picker + the +100-point upload + restore.
+  const ddIframeRef = useRef<HTMLIFrameElement>(null);
+  const fg = useFieldGuideUpload(cardId, isDeepDive && !completed, ddIframeRef);
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
@@ -297,6 +302,7 @@ const RuntimeWorkspace: React.FC = () => {
           {fill && (
             <div className="rt-readerwrap">
               <iframe
+                ref={isDeepDive ? ddIframeRef : undefined}
                 className="rt-readerframe"
                 title={isReader ? 'Self Study reading' : isDeepDive ? 'Field Guide' : 'Lesson'}
                 sandbox={isReader ? 'allow-scripts' : isDeepDive ? 'allow-scripts allow-modals' : ''}
@@ -306,7 +312,11 @@ const RuntimeWorkspace: React.FC = () => {
                     ? (card.content?.body_html || '')
                     : lessonDoc(card.content?.body_html || '')}
               />
-              <div className="rt-readerfoot">{completeGate}</div>
+              <div className="rt-readerfoot">
+                {isDeepDive && fg.message && <span className="rt-muted" style={{ marginRight: 'auto' }}>{fg.message}</span>}
+                {isDeepDive && <input ref={fg.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={fg.onFileChange} />}
+                {completeGate}
+              </div>
             </div>
           )}
           {/* Fallback for a non-media card with no body yet — just its description. */}

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
 import VideoEmbed, { WatchBeatPayload } from './VideoEmbed';
@@ -9,6 +9,7 @@ import CardSurveyExperience from './CardSurveyExperience';
 import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
+import { useFieldGuideUpload } from './useFieldGuideUpload';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -234,6 +235,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
     return () => window.removeEventListener('message', onMsg);
   }, [card.id, isDeepDive, preview]);
 
+  // Week-1+ Deep Dive: the guide's "Choose HTML file" button delegates the real
+  // upload to this host page (the iframe can't reach the API). fg wires the picker,
+  // the +100-point upload, and restoring prior uploads across reopens.
+  const ddIframeRef = useRef<HTMLIFrameElement>(null);
+  const fg = useFieldGuideUpload(card.id, isDeepDive && !preview && !done, ddIframeRef);
+
   return (
     <>
       <div className="tld-head">
@@ -254,7 +261,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
               : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
         ) : isDeepDive ? (
           content?.body_html
-            ? <iframe className="tld-lessonframe tld-readerframe" title="Field Guide" sandbox="allow-scripts allow-modals" srcDoc={content.body_html} />
+            ? <iframe ref={ddIframeRef} className="tld-lessonframe tld-readerframe" title="Field Guide" sandbox="allow-scripts allow-modals" srcDoc={content.body_html} />
             : <div className="tld-note" style={{ margin: 20 }}>This Field Guide has not been added yet.</div>
         ) : (<>
         <div className="tld-chiprow">
@@ -429,6 +436,10 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isDeepDive && !ddProg.complete && ddProg.total > 0 && (
                   <span className="tld-gatemsg">{ddProg.done} of {ddProg.total} sections read</span>
                 )}
+                {isDeepDive && fg.message && <span className="tld-gatemsg">{fg.message}</span>}
+                {/* The guide's "Choose HTML file" button posts to the host; this hidden
+                    input is the real picker the host opens for the +100-point upload. */}
+                {isDeepDive && <input ref={fg.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={fg.onFileChange} />}
                 {onClose && <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>}
                 {/* Media cards collect points here, gated by the server's watch check.
                     When the gate is active but unmet, the button is disabled with the

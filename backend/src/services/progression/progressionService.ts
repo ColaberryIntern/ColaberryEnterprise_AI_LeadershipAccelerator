@@ -80,6 +80,13 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
   const { assertWatchRequirement } = await import('../runtime/watchProgressService');
   await assertWatchRequirement(enrollmentId, card);
 
+  // Field Guide gate: a Week-1+ Deep Dive requires the student to upload the HTML
+  // Field Guide they built in their own Claude Code before it can be completed.
+  // Single choke point — covers the classroom drawer + runtime workspace.
+  // Throws { status: 422, code: 'field_guide_required' } when not yet uploaded.
+  const { assertFieldGuideRequirement } = await import('../runtime/fieldGuideService');
+  await assertFieldGuideRequirement(enrollmentId, card);
+
   // Mark progress complete (idempotent).
   const [progress] = await TimelineCardProgress.findOrCreate({
     where: { card_id: cardId, enrollment_id: enrollmentId },
