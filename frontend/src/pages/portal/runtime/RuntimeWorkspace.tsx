@@ -9,6 +9,7 @@ import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
 import { toTitleCase } from '../../../utils/titleCase';
 import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
+import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -58,6 +59,7 @@ const RuntimeWorkspace: React.FC = () => {
   // mentor
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [mentorInput, setMentorInput] = useState('');
+  const [nudge, setNudge] = useState<string | null>(null);   // proactive struggle nudge — the mentor offers help first
   const mentorEnd = useRef<HTMLDivElement>(null);
 
   // cohort comments (media cards) — newest first
@@ -68,10 +70,12 @@ const RuntimeWorkspace: React.FC = () => {
     (async () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
-        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null);
+        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null); setNudge(null);
         setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
         // Every card type has a cohort comment thread in its workspace.
         runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
+        // Proactive nudge — if the student looks stuck on this card, the mentor offers help first.
+        runtimeApi.nudge(cardId).then((n) => setNudge(n.message)).catch(() => { /* nudge is optional */ });
       } catch { setError('Could not open this activity.'); }
     })();
   }, [cardId]);
@@ -101,12 +105,20 @@ const RuntimeWorkspace: React.FC = () => {
   // unlocks once every section has been read (>=10s each), via the reader's postMessages.
   const isReader = band === 'warmup' && !!card?.content?.body_html;
   const readerProg = useReaderProgress(cardId, isReader && !completed);
+  // Deep Dive Field Guide: renders its own self-contained HTML in an allow-scripts iframe
+  // (same as the drawer's deepdive arm). The host bridge owns read/copy persistence
+  // (restored across drawer↔workspace), the +100-point upload, and the gate — dd.complete
+  // folds read all sections + copy the prompt + (Week 1+) upload.
+  const isDeepDive = band === 'deepdive' && card?.type === 'deep_dive' && !!card?.content?.body_html;
+  const ddIframeRef = useRef<HTMLIFrameElement>(null);
+  const dd = useDeepDiveHost(cardId, isDeepDive && !completed, ddIframeRef);
+  const ddComplete = dd.complete;
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
   // the right rail. This is the single-scroll workstation layout applied to every type.
-  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !!card?.content?.body_html;
-  const fill = isReader || isLesson;
+  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !!card?.content?.body_html;
+  const fill = isReader || isLesson || isDeepDive;
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -162,7 +174,9 @@ const RuntimeWorkspace: React.FC = () => {
     ? <span className="rt-pill done">✓ Completed — evidence generated</span>
     : isReader && !readerProg.complete
       ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
-      : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
+      : isDeepDive && !ddComplete
+        ? <span className="rt-muted">Finish the steps in the guide to complete{dd.total > 0 ? ` — ${dd.done} of ${dd.total} sections read` : ''}</span>
+        : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
   // Comments always render in the right rail now (every card type), so the center is a
   // single, clean scroll.
   const commentsBlock = (
@@ -280,14 +294,21 @@ const RuntimeWorkspace: React.FC = () => {
           {fill && (
             <div className="rt-readerwrap">
               <iframe
+                ref={isDeepDive ? ddIframeRef : undefined}
                 className="rt-readerframe"
-                title={isReader ? 'Self Study reading' : 'Lesson'}
-                sandbox={isReader ? 'allow-scripts' : ''}
+                title={isReader ? 'Self Study reading' : isDeepDive ? 'Field Guide' : 'Lesson'}
+                sandbox={isReader ? 'allow-scripts' : isDeepDive ? 'allow-scripts allow-modals' : ''}
                 srcDoc={isReader
                   ? readerDoc(card.content?.body_html || '', card.content?.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })
-                  : lessonDoc(card.content?.body_html || '')}
+                  : isDeepDive
+                    ? (card.content?.body_html || '')
+                    : lessonDoc(card.content?.body_html || '')}
               />
-              <div className="rt-readerfoot">{completeGate}</div>
+              <div className="rt-readerfoot">
+                {isDeepDive && dd.message && <span className="rt-muted" style={{ marginRight: 'auto' }}>{dd.message}</span>}
+                {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
+                {completeGate}
+              </div>
             </div>
           )}
           {/* Fallback for a non-media card with no body yet — just its description. */}
@@ -314,6 +335,15 @@ const RuntimeWorkspace: React.FC = () => {
             {msgs.map((m, i) => <div key={i} className={`rt-msg ${m.role}`}>{m.content}</div>)}
             <div ref={mentorEnd} />
           </div>
+          {nudge && (
+            <div className="rt-nudge">
+              <div className="rt-nudge-msg">{nudge}</div>
+              <div className="rt-nudge-actions">
+                <button className="rt-btn pri" disabled={busy === 'mentor'} onClick={() => { setNudge(null); ask('ask', 'Yes — walk me through the next step, one at a time.'); }}>Yes, walk me through it</button>
+                <button className="rt-btn" onClick={() => setNudge(null)}>Not now</button>
+              </div>
+            </div>
+          )}
           <div className="rt-modes">
             {(['hint', 'explain', 'review'] as const).map((mo) => <button key={mo} className="rt-chip" disabled={busy === 'mentor'} onClick={() => ask(mo, mo === 'review' ? (isLab ? prompt : reflectionText) || 'Review my work.' : `Give me a ${mo}.`)}>{mo}</button>)}
           </div>

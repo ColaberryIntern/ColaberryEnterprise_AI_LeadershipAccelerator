@@ -1,14 +1,15 @@
 /**
- * setupAnnouncementCards — one-time, idempotent card data for the Announcement
- * type rollout (Session CC-20260719-k4m8):
+ * setupAnnouncementCards — idempotent card data for the Announcement rollout
+ * (Session CC-20260719-k4m8):
  *   • Week 0: LOCK the announcement card with the approved hand-authored
  *     "Welcome to Your Free AI Preview" content (ANNOUNCEMENT_WEEK0) so it never
- *     auto-regenerates or drifts. Also fixes its title casing.
+ *     auto-regenerates or drifts. Also fixes its title casing. Week 0 is the free
+ *     lead-magnet tier and deliberately keeps the previous hand-authored format
+ *     (no time budget, no live map) — Ali's call.
  *   • Weeks 1-12: collapse duplicate announcement cards to ONE per week (keep the
- *     lowest-order published card, archive the rest) so a week never shows two
- *     kickoffs, and clear any STALE pre-rollout content (content with no
- *     section_fingerprint) so the kept card regenerates live with the new prompt
- *     and roster scan on first open.
+ *     lowest-order published card, archive the rest), and clear any STALE
+ *     pre-rollout content (content with no section_fingerprint) so the kept card
+ *     regenerates live with the current prompt + roster scan on first open.
  *
  * Idempotent + safe to re-run (archived stays archived; already-regenerated
  * content carries a section_fingerprint and is left untouched). Sends no comms.
@@ -37,7 +38,9 @@ async function lockWeek0(programId: string): Promise<void> {
   });
   if (!cards.length) { console.log('[setupAnnouncement] week 0: no announcement card found — skipped'); return; }
   const [keep, ...extra] = cards;
-  const meta = keep.metadata && typeof keep.metadata === 'object' ? (keep.metadata as Record<string, unknown>) : {};
+  const meta = keep.metadata && typeof keep.metadata === 'object' ? { ...(keep.metadata as Record<string, unknown>) } : {};
+  // Drop any prior live-generated fingerprint so the locked hand-authored copy wins.
+  delete meta.section_fingerprint;
   await keep.update({
     title: ANNOUNCEMENT_WEEK0.title,
     metadata: {

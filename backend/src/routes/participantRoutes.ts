@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
-import { strategyPrepUpload, certificateUpload } from '../config/upload';
+import { strategyPrepUpload, certificateUpload, fieldGuideUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
@@ -42,11 +42,13 @@ import {
   handleSetResume, handleGetResume, handleClearResume,
 } from '../controllers/portalSettingsController';
 import {
-  handleOpenCard, handleMentor, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
+  handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
   handleWatchBeat, handleGetSurvey, handleSaveSurvey,
   handleGetAssessment, handleSubmitAssessment,
+  handleUploadFieldGuide, handleGetFieldGuide,
 } from '../controllers/runtimeController';
+import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import workspaceRoutes from './workspaceRoutes';
@@ -71,16 +73,23 @@ router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 // Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
 router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);
+// Today Timeline v2 — never-ending engagement feed (flag-gated in the controller).
+router.get('/api/portal/runtime/today', requireParticipant, handleGetToday);
+router.post('/api/portal/runtime/today/:cardRef/interact', requireParticipant, handleTodayInteract);
 router.get('/api/portal/runtime/notebook', requireParticipant, handleListNotes);
 router.post('/api/portal/runtime/notebook', requireParticipant, handleCreateNote);
 router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDeleteNote);
 router.get('/api/portal/runtime/cards/:cardId', requireParticipant, handleOpenCard);
 router.post('/api/portal/runtime/cards/:cardId/mentor', requireParticipant, handleMentor);
+router.get('/api/portal/runtime/cards/:cardId/nudge', requireParticipant, handleNudge);
 router.get('/api/portal/runtime/cards/:cardId/reflection', requireParticipant, handleReflection);
 router.post('/api/portal/runtime/cards/:cardId/content', requireParticipant, handleEnsureContent);
 // Anthropic Skills Course — upload + AI-verify the completion certificate.
 router.post('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, certificateUpload.single('file'), handleUploadCertificate);
 router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, handleGetCertificate);
+// Deep Dive Field Guide — upload the .html built in Claude Code (+100 pts, once); GET = status.
+router.post('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, fieldGuideUpload.single('file'), handleUploadFieldGuide);
+router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, handleGetFieldGuide);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 // Weekly feedback Survey — read the questions + saved answers, and store answers.

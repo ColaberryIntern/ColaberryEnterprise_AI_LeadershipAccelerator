@@ -1,10 +1,10 @@
 /**
  * announcementWeek0 — the hand-authored, LOCKED Week 0 announcement content
  * ("Welcome to Your Free AI Preview"). Week 0 is the free lead-magnet tier; its
- * copy is fixed marketing (approved by Ali 2026-07-19), so it is stored here and
- * LOCKED on the card (metadata.locked) so it never auto-regenerates or drifts.
- * Weeks 1+ instead generate live from ANNOUNCEMENT_GENERATION_PROMPT and scan the
- * week's real roster. Applied by scripts/setupAnnouncementCards.ts.
+ * copy is fixed marketing (approved by Ali 2026-07-19) and deliberately has NO
+ * time budget, so it is stored here and LOCKED on the card (metadata.locked) so
+ * it never auto-regenerates or drifts. Weeks 1+ instead generate live from
+ * ANNOUNCEMENT_GENERATION_PROMPT. Applied by scripts/setupAnnouncementCards.ts.
  */
 export const ANNOUNCEMENT_WEEK0 = {
   title: 'Welcome to Your Free AI Preview',

@@ -34,6 +34,7 @@ export interface SectionCurriculumItem {
   label: string;   // student-facing type label, e.g. "Prompt Lab"
   title: string;   // the card's own title
   bucket: string;
+  est_minutes: number;   // per-activity time: the card's estimated_time, or the type default
 }
 
 export interface SectionCurriculumContext {
@@ -43,12 +44,38 @@ export interface SectionCurriculumContext {
   prompt_text: string;
 }
 
-/** Pure formatter — deterministic and unit-testable (mirrors buildBlueprintPromptText). */
+/** Student-journey phase label per bucket, surfaced in the roster context so a
+ *  week-summary generator can group the week by phase. */
+const PHASE_LABEL: Record<string, string> = {
+  pre_class: 'Prep', learn: 'Learn', practice: 'Practice', build: 'Build',
+  reflect: 'Reflect', share: 'Share', advance: 'Advance',
+};
+
+/** Human duration: minutes under an hour, else hours to one decimal. */
+function fmtDuration(mins: number): string {
+  if (mins < 60) return `${mins} min`;
+  const h = Math.round((mins / 60) * 10) / 10;
+  return `${h} hour${h === 1 ? '' : 's'}`;
+}
+
+/** Pure formatter — deterministic and unit-testable (mirrors buildBlueprintPromptText).
+ *  Leads with the TOTAL count + total time, tags each item with its phase AND minutes,
+ *  and lists per-phase time subtotals — so a week-summary card (announcement/overview)
+ *  can show a real, curriculum-derived time budget (total at the top, per phase, per
+ *  activity) and cover the WHOLE week grouped by phase instead of cherry-picking. */
 export function buildSectionCurriculumText(week: number, items: SectionCurriculumItem[]): string {
+  const total = items.reduce((s, it) => s + (it.est_minutes || 0), 0);
+  const byPhase = new Map<string, number>();
+  for (const it of items) {
+    const p = PHASE_LABEL[it.bucket] || it.bucket;
+    byPhase.set(p, (byPhase.get(p) || 0) + (it.est_minutes || 0));
+  }
+  const phaseTotals = Array.from(byPhase.entries()).map(([p, m]) => `${p} ${m} min`).join(' · ');
   const lines: string[] = [
-    `THIS WEEK'S ACTIVITIES — the concrete curriculum the student will work through in Week ${week}:`,
-    ...items.map((it, i) => `${i + 1}. ${it.label}: ${it.title}`),
-    'When describing what this week covers, describe what the student will actually DO in these activities — name the videos, labs, courses, and builds above rather than inventing others.',
+    `THIS WEEK'S ACTIVITIES (Week ${week}) — ${items.length} items, about ${fmtDuration(total)} of work total (${total} min), in journey order (phase in brackets, minutes in parentheses):`,
+    `Phase totals: ${phaseTotals}`,
+    ...items.map((it, i) => `${i + 1}. [${PHASE_LABEL[it.bucket] || it.bucket}] ${it.label} (${it.est_minutes} min): ${it.title}`),
+    'When you describe the week: put the TOTAL time in the overview at the top, each PHASE\'s total on its phase heading, and each ACTIVITY\'s minutes on its card — use these exact numbers, do not re-estimate. Cover ALL activities; do not invent or omit any.',
   ];
   return lines.join('\n');
 }
@@ -88,6 +115,7 @@ export async function getSectionCurriculumContext(
       label: def?.student_label || c.type.replace(/_/g, ' '),
       title: c.title,
       bucket: c.bucket,
+      est_minutes: (c as any).estimated_time ?? def?.est_minutes ?? 0,
     });
   }
   if (!items.length) return null;
