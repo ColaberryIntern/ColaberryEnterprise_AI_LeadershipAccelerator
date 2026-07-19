@@ -3,15 +3,13 @@ import {
   DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, DragEndEvent,
 } from '@dnd-kit/core';
 import {
-  SortableContext, verticalListSortingStrategy, useSortable, arrayMove, sortableKeyboardCoordinates,
+  SortableContext, verticalListSortingStrategy, rectSortingStrategy, useSortable, arrayMove, sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import api from '../../../utils/api';
 import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
-import MermaidDiagram from '../../../components/visuals/MermaidDiagram';
-import { buildBucketMermaid, nodeIdFromMermaidGroupId, MAX_NODES } from '../../../utils/bucketMermaid';
 import AutofillButton from '../../../components/common/AutofillButton';
 import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
 import BlueprintDefaults from './BlueprintDefaults';
@@ -166,19 +164,64 @@ const SortableCard: React.FC<{
   );
 };
 
+// Split a list into fixed-size rows (the overview lays cards out 3-across, matching
+// the old Mermaid map) so arrows only sit BETWEEN cards within a row.
+function chunk<T>(arr: T[], n: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
+  return out;
+}
+
+// ── one card in the compact OVERVIEW board (draggable flow box) ──────────────
+// This is the interactive replacement for the old static Mermaid map: same green
+// (live) / grey (draft) flow boxes, but each is draggable to reorder (auto-saves),
+// reveals Activate/Deactivate + Delete on hover, and opens the editor on click.
+const MiniCard: React.FC<{
+  card: Card; band?: string; onEdit: (c: Card) => void; onDelete: (c: Card) => void; onPublish: (c: Card) => void;
+}> = ({ card, band, onEdit, onDelete, onPublish }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
+  const published = card.visibility === 'published';
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform), transition,
+    opacity: isDragging ? 0.55 : 1, zIndex: isDragging ? 5 : undefined,
+  };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`te-mini ${published ? 'live' : 'draft'}${isDragging ? ' dragging' : ''}`}
+      role="button"
+      tabIndex={0}
+      onClick={() => onEdit(card)}
+      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); onEdit(card); } }}
+      title={`${card.title} — click to edit`}
+    >
+      <span {...attributes} {...listeners} className="te-mini-grip" role="button"
+        aria-label={`Drag to reorder "${card.title}"`} title="Drag to reorder — saves automatically"
+        onClick={(e) => e.stopPropagation()}>⠿</span>
+      <span className="te-mini-ico" aria-hidden>{bandIcon(band)}</span>
+      <span className="te-mini-ttl">{card.title}</span>
+      <span className="te-mini-acts" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="te-mini-btn" onClick={() => onPublish(card)}
+          title={published ? 'Active — click to deactivate (hide from students)' : 'Inactive — click to activate'}>
+          {published ? '◐' : '●'}
+        </button>
+        <button type="button" className="te-mini-btn del" onClick={() => onDelete(card)} title="Delete this card">🗑</button>
+      </span>
+    </div>
+  );
+};
+
 // ── one bucket section (collapsible) ─────────────────────────────────────────
-// Collapsed BY DEFAULT: instead of the full card list, a collapsed bucket shows a
-// click-to-expand Mermaid map of the cards loaded in it — a wide, glanceable
-// overview of what curriculum sits in this lane (green = live, grey = draft).
-// Clicking the map (or the header caret) expands to the full, drag-to-reorder
-// editable cards.
+// Collapsed BY DEFAULT: shows the interactive OVERVIEW board (drag-to-reorder flow
+// boxes with inline Activate/Deactivate + Delete; green = live, grey = draft). The
+// header caret expands to the full card list with large student-facing previews.
 const BucketSection: React.FC<{
   bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; thumbOf: (type: string) => string | null; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
   hasGating: boolean; onEditGating: (bucket: Bucket) => void;
   cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel' | 'typeThumbUrl'>;
 }> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, hasGating, onEditGating, cardActions }) => {
   const [collapsed, setCollapsed] = useState(true);   // collapse by default
-  const [focusCardId, setFocusCardId] = useState<string | null>(null);
   // While a card is being dragged we neutralize the inline video iframes in this
   // lane (see .te-lane.dragging CSS). Iframes are separate browsing contexts that
   // swallow pointer events, so without this the pointer is "lost" the moment the
@@ -199,35 +242,6 @@ const BucketSection: React.FC<{
     if (oldI < 0 || newI < 0) return;
     onReorder(bucket, arrayMove(ids, oldI, newI));
   };
-  // After a specific card is picked from the collapsed map, the lane expands and
-  // this jumps to (and briefly flashes) that exact card instead of the top.
-  useEffect(() => {
-    if (collapsed || !focusCardId) return;
-    const el = document.getElementById(`te-card-${focusCardId}`);
-    if (!el) { setFocusCardId(null); return; }
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    el.classList.add('te-card-flash');
-    const t = setTimeout(() => { el.classList.remove('te-card-flash'); setFocusCardId(null); }, 1600);
-    return () => clearTimeout(t);
-  }, [collapsed, focusCardId]);
-  // Click on the collapsed map: on a card NODE → expand and jump to that exact
-  // card; on empty space / the caption → just expand. The clicked mermaid node
-  // group's DOM id carries our node id (n0…, or `more` for the overflow).
-  const onMapClick = (e: React.MouseEvent) => {
-    const g = (e.target as Element).closest('g.node');
-    const nodeId = nodeIdFromMermaidGroupId(g?.id);
-    let idx = -1;
-    if (nodeId === 'more') idx = MAX_NODES;                        // first hidden card
-    else if (nodeId) { const m = nodeId.match(/^n(\d+)$/); if (m) idx = Number(m[1]); }
-    setCollapsed(false);
-    const target = idx >= 0 ? cards[idx] : undefined;
-    if (target) setFocusCardId(target.id);
-  };
-  // Built only while collapsed; deterministic so <MermaidDiagram> won't re-render
-  // for unchanged data. The overview reuses the card band icons.
-  const chart = collapsed && cards.length > 0
-    ? buildBucketMermaid(cards, (type) => bandIcon(bandOf(type)))
-    : '';
   return (
     <div style={{ marginBottom: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -259,20 +273,35 @@ const BucketSection: React.FC<{
         cards.length === 0 ? (
           <div style={{ fontSize: 12, color: '#C4C4C4', padding: '2px 0 8px 20px' }}>No cards yet — “+ Add card” to start this lane.</div>
         ) : (
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={onMapClick}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setCollapsed(false); } }}
-            title="Click a card to jump straight to it, or anywhere else to open the section"
-            className="te-minimap"
+          // Interactive overview board — the draggable flow boxes with inline
+          // Activate/Deactivate + Delete (replaces the old static Mermaid map).
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={() => setDragging(true)}
+            onDragCancel={() => setDragging(false)}
+            onDragEnd={onDragEnd}
           >
-            <MermaidDiagram
-              chart={chart}
-              caption={`${BUCKET_LABEL[bucket]} · ${cards.length} card${cards.length === 1 ? '' : 's'} loaded — click to edit`}
-              id={`te-minimap-${bucket}`}
-            />
-          </div>
+            <div className={`te-lane te-ovwrap${dragging ? ' dragging' : ''}`}>
+              <SortableContext items={ids} strategy={rectSortingStrategy}>
+                {chunk(cards, 3).map((row, ri) => (
+                  <div className="te-ovrow" key={ri}>
+                    {row.map((c, ci) => (
+                      <React.Fragment key={c.id}>
+                        <MiniCard card={c} band={bandOf(c.type)}
+                          onEdit={cardActions.onEdit} onDelete={cardActions.onDelete} onPublish={cardActions.onPublish} />
+                        {ci < row.length - 1 && <span className="te-ovarrow" aria-hidden>→</span>}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                ))}
+              </SortableContext>
+              <div className="te-ovcap">
+                Drag ⠿ to reorder · ◐ / ● activate-deactivate · 🗑 delete · click a card to edit ·{' '}
+                <button type="button" className="te-ovlink" onClick={() => setCollapsed(false)}>open full view →</button>
+              </div>
+            </div>
+          </DndContext>
         )
       ) : (
         <DndContext
@@ -940,6 +969,29 @@ const TimelineEditorTab: React.FC = () => {
         /* Transient "order saved" confirmation next to the card counts. */
         .te-saved{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#3C7A26;background:#E7F5E9;border-radius:999px;padding:2px 10px;animation:te-fadein .15s ease}
         @keyframes te-fadein{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}
+        /* Interactive OVERVIEW board — draggable flow boxes (replaces the Mermaid map) */
+        .te-ovwrap{border:1px solid #ECECEC;border-radius:12px;padding:14px 14px 8px;background:#FCFCFC}
+        .te-ovwrap.dragging{cursor:grabbing}
+        .te-ovrow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-bottom:8px}
+        .te-mini{position:relative;display:flex;align-items:center;gap:7px;width:206px;min-height:48px;padding:8px 10px;border-radius:9px;cursor:pointer;background:#E7F4E7;border:1px solid #BEE0BE;box-shadow:0 1px 1px rgba(0,0,0,.03);transition:box-shadow .12s ease}
+        .te-mini.draft{background:#F1F1F1;border-color:#DCDCDC}
+        .te-mini:hover{box-shadow:0 3px 10px rgba(0,0,0,.12)}
+        .te-mini.dragging{box-shadow:0 8px 18px rgba(0,0,0,.2)}
+        .te-mini-grip{flex:none;cursor:grab;color:#8DB88D;font-size:15px;line-height:1;user-select:none;touch-action:none;padding:2px 1px;border-radius:5px}
+        .te-mini.draft .te-mini-grip{color:#B4B4B4}
+        .te-mini-grip:hover{background:rgba(0,0,0,.06);color:#5E8C5E}
+        .te-mini-grip:active{cursor:grabbing}
+        .te-mini-ico{flex:none;font-size:15px;line-height:1}
+        .te-mini-ttl{flex:1;min-width:0;font-size:12px;font-weight:600;color:#284A2C;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+        .te-mini.draft .te-mini-ttl{color:#555}
+        .te-mini-acts{position:absolute;top:5px;right:6px;display:none;gap:3px}
+        .te-mini:hover .te-mini-acts,.te-mini:focus-within .te-mini-acts{display:flex}
+        .te-mini-btn{border:1px solid #D6D6D6;background:#fff;border-radius:6px;width:23px;height:23px;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#3C7A26;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+        .te-mini-btn:hover{background:#F2F2F2}
+        .te-mini-btn.del{color:#C20E1E}
+        .te-ovarrow{flex:none;align-self:center;color:#9AC79A;font-size:16px;font-weight:700}
+        .te-ovcap{font-size:11px;color:#9AA0A6;margin-top:6px}
+        .te-ovlink{border:none;background:none;padding:0;font:inherit;color:#367895;font-weight:600;cursor:pointer;text-decoration:underline}
         .te-act{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:6px 13px;border:1px solid #DADADA;background:#fff;border-radius:7px;cursor:pointer;color:#4A4A4A}
         .te-act:hover{background:#F5F5F5}
         .te-act:disabled{opacity:.55;cursor:not-allowed}
