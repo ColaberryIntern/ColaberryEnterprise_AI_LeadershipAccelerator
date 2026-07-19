@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, July 19, 2026 at 4:58 PM</div>
-    <div><span class="sid">CC-20260718-k9x2</span><span class="count">8 changes</span></div>
+    <div class="meta">Generated Sunday, July 19, 2026 at 6:40 PM</div>
+    <div><span class="sid">CC-20260718-k9x2</span><span class="count">10 changes</span></div>
   </header>
   <main>
     
@@ -177,6 +177,36 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #426 → prod at HEAD 18053a51; backend tsc (over the 11 new base64 imports) + nginx builds passed. Reseed created 9 new Learn cards + filled the 2 stray empty deep_dive cards (wk4 fa0f8624, wk11 838e6f88) — no duplicates. DB confirms all 13 weeks: bucket `learn`, published, role titles, 55.9-63.2 KB body_html (&lt; 64 KB), requires_field_guide_upload true (2-12) / false (wk0). Live-card spot-check (wk2/6/12): MACHINERY-OK (deepdive-host + scroll-position read-tracker + #FB2832 brand + uploadBtn all present). All 11 validated by buildWeeks (15 sections, machinery byte-identical to wk1, JS parses, no emoji, no double-escape). Renders via the already-verified deep_dive drawer+workspace arm; upload/points/gate covered by the prior 9/9 backend smoke.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">11 content specs authored by parallel subagents against a shared brief; oversized ones (wk9/11/12 near 64 KB) trimmed to &lt; 58.5 KB. The generator makes future weeks / edits a one-file change. [[reference_deep_dive_field_guide_platform]]</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>Added the program&#39;s architecture philosophy to the enterprise KB (enterprise.colaberry.ai/knowledge) as content + a downloadable document, using the real Colaberry logo</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #433 → prod at HEAD 9275a67b (nginx rebuild). LIVE: `enterprise.colaberry.ai/knowledge/downloads/colaberry-architecture-philosophy.html` returns 200 text/html (64,570 bytes) with the real logo inlined twice (masthead + footer) + the thesis; `enterprise.colaberry.ai/knowledge/data/curriculum-kb.js` serves the &quot;What is Colaberry&#39;s architecture philosophy?&quot; entry; `enterprise.colaberry.ai/knowledge/kb.json` = 217 entries with the philosophy `reference` present. `curriculum-kb.js` passes `node --check`. The `/knowledge` hub reads the source JS module directly, so the download link renders from the committed module.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">[[project_customer_kb_sync_training_site]] The public KB is static JS data modules under `frontend/public/knowledge/` (not a DB/API); add an entry = edit a `*-kb.js` module + `node build-kb.js` + deploy nginx. Downloadable assets live under `frontend/public/knowledge/` (served at the /knowledge root). A PDF variant can be generated on request for a forced-download button (engine auto-adds `download` only for `.pdf`).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>Every Deep Dive build prompt now bakes in the exact Colaberry logo + colors + fonts, so every document a student builds is identically, professionally branded</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The build prompts said &quot;put the Colaberry logo in the header&quot; + &quot;on-brand&quot; but never pinned the logo, palette, or type — so each student&#39;s Claude Code invented its own logo + colors (Ali ran them; the 9 built docs were inconsistent). Added a single `BRAND_SPEC` to the generator (`scripts/deep-dive/buildFieldGuide.js`) that `applyBrand()` injects into every guide&#39;s build prompt, replacing the loose branding line: the ONE official logo (fetch https://enterprise.colaberry.ai/colaberry-logo-transparent.png, embed as data URI, never draw/substitute), the exact design-system hex palette (Cherry #FB2832 fixed accent, Berry #367895 structure, Leaf #5BA63C success, pinned neutrals + dark-mode values, Amber #E8920C warnings only), Roboto + Roboto Mono, no emoji. Applied the same block to the hand-authored Week 1 prompt. wk6 (QA) tipped over the 64KB srcDoc ceiling once the spec was added, so its content was trimmed ~3.7KB (still 15 sections + 7 artifacts). Regenerated all 11 guides + wk1; base64 modules `deepDiveWeek{1..12}Html.ts` refreshed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #440 → prod at HEAD aed14904 (backend rebuild, tsc over the 12 base64 modules) + reseed (all 13 cards updated in place). Live-card spot-check (wk1/4/6/12): all BRANDED (`BRANDING (MANDATORY` + `colaberry-logo-transparent.png` present), 57.8-63 KB body_html (&lt; 64 KB). The injected brand block is BYTE-IDENTICAL across all 12 guides (single md5 ×12). All 11 assemble 58.8-63.2 KB, JS parses, old vague branding line removed. Logo URL is public (200).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The pinned logo loads from the public URL (embedded as a data URI at build time by the student&#39;s Claude Code); colors + fonts are literal so nothing is left to invent. [[reference_deep_dive_field_guide_platform]]</span></div>
           
         </div>
       </article>
