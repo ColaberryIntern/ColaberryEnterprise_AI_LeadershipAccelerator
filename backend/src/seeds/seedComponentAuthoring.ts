@@ -196,7 +196,7 @@ const ANNOUNCEMENT_GENERATION_PROMPT = [
   'You write the weekly Announcement for the AI Systems Architect Accelerator: the warm, friendly kickoff AND the MAP of everything the student will do this week. The WEEK CONTEXT above gives the week topic, objectives, outcomes, and level. THIS WEEK\'S ACTIVITIES above lists the ACTUAL curriculum items placed in this week, in journey order with each item\'s phase in brackets. Ground everything in both; invent nothing.',
   '',
   'VOICE: warm, encouraging, human, playful. Lots of friendly emoji. Plain English, no jargon, no hype.',
-  'TITLE: for a normal week, exactly the words "This Week", then a space, an em dash, a space, then the week\'s topic EXACTLY as written in the WEEK CONTEXT above (copy it verbatim; do NOT paraphrase, shorten, or invent a topic) — e.g. "This Week — Claude Code Foundations + Workspace". EXCEPTION — the FREE PREVIEW week (when the WEEK CONTEXT names it Week 0, the "Free AI Preview", or the free lead-magnet tier): title it exactly "Welcome to Your Free AI Preview".',
+  'TITLE: exactly the words "This Week", then a space, an em dash, a space, then the week\'s topic EXACTLY as written in the WEEK CONTEXT above — copy it verbatim; do NOT paraphrase, shorten, or invent a different topic. Example: "This Week — Claude Code Foundations + Workspace".',
   'SUMMARY: one friendly, inviting sentence previewing the week.',
   '',
   'BODY_HTML: output the following, in order, and NOTHING else.',
@@ -240,7 +240,6 @@ const ANNOUNCEMENT_GENERATION_PROMPT = [
   '  <div class="awy"><h2>🎯 Why it matters</h2><p>one or two friendly sentences tying this week to becoming an AI Systems Architect, from the student outcomes / success criteria.</p></div>',
   '',
   'COVER EVERY activity from THIS WEEK\'S ACTIVITIES — do not skip, merge, or invent any; only omit pure system cards (badges/streaks/milestones). This is the full curriculum map for the week, not a teaser. Phase emojis: 🔥 Prep, 📚 Learn, 🧪 Practice, 🏗️ Build, 🪞 Reflect, 🤝 Share. Activity emoji by type: 📖 self study/reading, ✅ knowledge check/quiz/evaluation, 🎬 video, 👥 live class, 🔎 deep dive, 🎓 skills course, 🧪 prompt lab, 🏗️ implementation/build, 🔁 github sync, 📦 artifact, 🪞 reflection, 📝 survey, 🤝 community/discussion.',
-  'FREE PREVIEW WEEK ONLY (Week 0 / the "Free AI Preview" / the free lead-magnet tier): make the hero a warm welcome to their FREE week of AI ("this week is on us"); the overview\'s first stat tile reads "🆓 Free" instead of a time; still map ALL the week\'s activities with their times as above; and AFTER the "🎯 Why it matters" band, add ONE more band — <div class="awb"><h2>🚀 Where this can take you</h2><p>a warm invitation to keep going and unlock the full Colaberry AI ecosystem (training, projects, certifications, internships, and more) with an affordable monthly membership — do NOT mention any price.</p></div>. For EVERY OTHER week, do NOT add this ecosystem band and keep the time in the first stat tile.',
   'Every opening tag has a matching closing tag; the CSS must be valid. Set questions to [] and reflection to "".',
   'completion: "Marked complete when the participant opens and reads the weekly announcement."',
 ].join('\n');
