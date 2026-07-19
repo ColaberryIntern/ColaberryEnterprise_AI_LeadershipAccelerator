@@ -24,29 +24,35 @@
 }
 </script>
 <style>
+  /* Roboto = Colaberry brand typeface; Roboto Mono for code/data figures. */
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap');
   :root{
-    --navy:#1a365d; --navy-2:#2b6cb0; --red:#e53e3e; --green:#38a169; --teal:#2c7a7b; --amber:#c05621;
-    --bg:#ffffff; --bg-alt:#f7fafc; --bg-soft:#eef2f7; --panel:#ffffff;
-    --text:#2d3748; --muted:#718096; --border:#e2e8f0; --shadow:0 1px 2px rgba(16,24,40,.06);
-    --brand:var(--navy); --brand-soft:#e8eef6; --brand-ink:#1a365d;
+    /* Colaberry brand — Cherry Red / Leaf Green / Berry Blue (design-system tokens).
+       Structure = berry blue (trust); the cherry accent is fixed; green = progress. */
+    --blue:#367895; --blue-2:#2E6A86; --red:#FB2832; --green:#468A2E; --teal:#2BA39A; --amber:#E8920C;
+    --bg:#ffffff; --bg-alt:#F8F8F7; --bg-soft:#F1F1F0; --panel:#ffffff;
+    --text:#2B2B2B; --muted:#6B6B6B; --border:#E4E4E3; --shadow:0 1px 2px rgba(16,24,40,.06);
+    --brand:var(--blue); --brand-soft:#EAF2F6; --brand-ink:#265A72;
     --radius:11px; --rail:52px; --head:46px; --bar:60px; --panelw:560px;
-    --font:'Segoe UI',system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    --font:'Roboto',-apple-system,'Segoe UI',system-ui,Helvetica,Arial,sans-serif;
+    --mono:'Roboto Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
   }
   :root[data-theme="dark"]{
-    --bg:#0f1622; --bg-alt:#0b111b; --bg-soft:#1b2637; --panel:#141d2b;
-    --text:#e2e8f0; --muted:#94a3b8; --border:#26344a; --shadow:0 1px 2px rgba(0,0,0,.4);
-    --brand:#63b3ed; --brand-soft:#17263b; --brand-ink:#90cdf4; --navy-2:#63b3ed;
+    --bg:#0F0F0F; --bg-alt:#000000; --bg-soft:#1A1A1A; --panel:#161616;
+    --text:#F1F1F0; --muted:#B4B4B4; --border:rgba(255,255,255,.14); --shadow:0 1px 2px rgba(0,0,0,.4);
+    --brand:#5AA8C4; --brand-soft:rgba(54,120,149,.18); --brand-ink:#8FBBCF; --blue-2:#5AA8C4;
+    --red:#FF6B72; --green:#8AC759; --amber:#F0A93A;
   }
   *{box-sizing:border-box}
   body{margin:0;font-family:var(--font);color:var(--text);line-height:1.55;font-size:14px;
-    background:radial-gradient(1200px 500px at 20% -10%, rgba(43,108,176,.10), transparent 60%),var(--bg-alt);
+    background:radial-gradient(1200px 500px at 20% -10%, rgba(54,120,149,.10), transparent 60%),var(--bg-alt);
     min-height:100vh}
   /* The panel FILLS its container: ~560px in the drawer, full width in the workspace runtime. */
   h1,h2,h3,h4{color:var(--brand-ink);line-height:1.25;font-weight:700;margin:0 0 .4rem}
   h2{font-size:1.18rem;letter-spacing:-.01em} h3{font-size:.98rem;margin-top:.9rem} h4{font-size:.86rem}
   p{margin:.4rem 0}
-  a{color:var(--navy-2);text-decoration:none} a:hover{text-decoration:underline}
-  code{background:var(--bg-soft);padding:.05rem .3rem;border-radius:5px;font-size:.85em}
+  a{color:var(--blue-2);text-decoration:none} a:hover{text-decoration:underline}
+  code{background:var(--bg-soft);padding:.05rem .3rem;border-radius:5px;font-size:.85em;font-family:var(--mono)}
   .muted{color:var(--muted)}
   .logo{height:22px;width:auto;flex:0 0 auto}
   :root[data-theme="dark"] .phead .logo{background:#fff;padding:2px 6px;border-radius:6px}
@@ -62,18 +68,18 @@
   .phead .search svg{position:absolute;left:.5rem;top:50%;transform:translateY(-50%);color:var(--muted)}
   .hbtn{flex:0 0 auto;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:7px;height:30px;
     padding:0 .6rem;display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.76rem;font-weight:600}
-  .hbtn:hover{border-color:var(--navy-2);color:var(--navy-2)} .hbtn svg{width:14px;height:14px}
+  .hbtn:hover{border-color:var(--blue-2);color:var(--blue-2)} .hbtn svg{width:14px;height:14px}
 
   .pbody{display:flex;align-items:flex-start}
   .rail{position:sticky;top:var(--head);flex:0 0 var(--rail);height:calc(100vh - var(--head) - var(--bar));overflow-y:auto;
     background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:.15rem;padding:.5rem 0}
   .rail::-webkit-scrollbar{width:0}
   .ri{position:relative;width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer}
-  .ri svg{width:19px;height:19px} .ri:hover{background:var(--bg-soft);color:var(--navy-2);text-decoration:none}
+  .ri svg{width:19px;height:19px} .ri:hover{background:var(--bg-soft);color:var(--blue-2);text-decoration:none}
   .ri.active{background:var(--brand);color:#fff} :root[data-theme="dark"] .ri.active{color:#0f1622}
   .ri .num{position:absolute;top:-1px;right:-1px;background:var(--panel);color:var(--muted);border:1px solid var(--border);
     border-radius:999px;font-size:.52rem;font-weight:700;min-width:13px;height:13px;line-height:11px;text-align:center;padding:0 2px}
-  .ri.active .num{background:var(--navy-2);color:#fff;border-color:var(--navy-2)}
+  .ri.active .num{background:var(--blue-2);color:#fff;border-color:var(--blue-2)}
   .ri.done .num{background:var(--green);color:#fff;border-color:var(--green)}
   .rail .sep{width:22px;height:1px;background:var(--border);margin:.25rem 0}
 
@@ -98,14 +104,14 @@
   section[data-sec]{scroll-margin-top:calc(var(--head) + 8px);padding:.9rem 0 .3rem;border-top:1px solid var(--border)}
   section[data-sec]:first-of-type{border-top:none;padding-top:.5rem}
   .eyebrow{display:inline-flex;align-items:center;gap:.35rem;font-size:.64rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;
-    color:var(--navy-2);background:var(--brand-soft);padding:.18rem .5rem;border-radius:999px;margin-bottom:.4rem}
+    color:var(--blue-2);background:var(--brand-soft);padding:.18rem .5rem;border-radius:999px;margin-bottom:.4rem}
   .lead{font-size:.94rem}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem .85rem;box-shadow:var(--shadow);margin:.6rem 0}
   .sub{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:.2rem 0 .35rem}
 
   .kpis{display:flex;flex-wrap:wrap;gap:.5rem}
   .kpi{flex:1 1 88px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:.6rem .3rem;text-align:center;box-shadow:var(--shadow)}
-  .kpi .v{font-size:1.4rem;font-weight:800;line-height:1;color:var(--navy-2)}
+  .kpi .v{font-size:1.4rem;font-weight:800;line-height:1;color:var(--blue-2)}
   .kpi.c1 .v{color:var(--amber)} .kpi.c2 .v{color:var(--teal)} .kpi.c3 .v{color:var(--red)} .kpi.c4 .v{color:var(--green)}
   .kpi .l{font-size:.64rem;color:var(--muted);margin-top:.3rem;text-transform:uppercase;letter-spacing:.02em}
 
@@ -135,8 +141,8 @@
 
   .gb{display:flex;flex-direction:column;gap:.5rem}
   .gb .col{border-radius:9px;padding:.6rem .75rem;border:1px solid var(--border)}
-  .gb .good{background:rgba(56,161,105,.09);border-color:rgba(56,161,105,.35)}
-  .gb .bad{background:rgba(229,62,62,.08);border-color:rgba(229,62,62,.3)}
+  .gb .good{background:rgba(119,187,74,.09);border-color:rgba(119,187,74,.35)}
+  .gb .bad{background:rgba(251,40,50,.08);border-color:rgba(251,40,50,.3)}
   .gb h4{margin-top:0} .gb .good h4{color:var(--green)} .gb .bad h4{color:var(--red)}
   .gb ul{margin:.25rem 0 0;padding-left:1rem} .gb li{margin:.2rem 0;font-size:.83rem}
 
@@ -144,18 +150,18 @@
   .term{border:1px solid var(--border);border-radius:9px;padding:.5rem .7rem;background:var(--panel)}
   .term b{color:var(--brand-ink)} .term p{margin:.12rem 0 0;font-size:.82rem;color:var(--muted)}
 
-  .callout{border-left:3px solid var(--navy-2);background:var(--brand-soft);padding:.55rem .75rem;border-radius:0 9px 9px 0;margin:.6rem 0;font-size:.86rem}
-  .callout.warn{border-left-color:var(--amber);background:rgba(192,86,33,.09)}
+  .callout{border-left:3px solid var(--blue-2);background:var(--brand-soft);padding:.55rem .75rem;border-radius:0 9px 9px 0;margin:.6rem 0;font-size:.86rem}
+  .callout.warn{border-left-color:var(--amber);background:rgba(232,146,12,.09)}
   ul.clean{list-style:none;padding-left:0;margin:.3rem 0} ul.clean li{padding-left:1.15rem;position:relative;margin:.24rem 0;font-size:.85rem}
-  ul.clean li::before{content:"▸";position:absolute;left:.15rem;color:var(--navy-2)}
+  ul.clean li::before{content:"▸";position:absolute;left:.15rem;color:var(--blue-2)}
   .grid{display:grid;gap:.5rem} .g2{grid-template-columns:1fr 1fr}
   @media (max-width:430px){.g2{grid-template-columns:1fr}}
 
   .road{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.45rem}
   .wk{border:1px solid var(--border);border-radius:9px;padding:.45rem .55rem;background:var(--panel);box-shadow:var(--shadow)}
-  .wk .w{font-size:.6rem;font-weight:800;color:var(--navy-2);letter-spacing:.04em}
+  .wk .w{font-size:.6rem;font-weight:800;color:var(--blue-2);letter-spacing:.04em}
   .wk .d{font-weight:700;font-size:.82rem;margin:.1rem 0} .wk .cc{font-size:.68rem;color:var(--muted)}
-  .wk.now{border-color:var(--navy-2);box-shadow:0 0 0 2px var(--brand-soft)}
+  .wk.now{border-color:var(--blue-2);box-shadow:0 0 0 2px var(--brand-soft)}
   .linked{display:inline-flex;align-items:center;gap:.2rem;color:var(--green);font-size:.66rem;font-weight:700;margin-top:.2rem}
 
   .q{border:1px solid var(--border);border-radius:9px;padding:.55rem .7rem;margin:.45rem 0;background:var(--panel)}
@@ -163,13 +169,14 @@
   .q .ans{margin-top:.4rem;padding-top:.4rem;border-top:1px dashed var(--border);color:var(--green);font-size:.83rem}
   .q.js .ans{display:none} .q.js.open .ans{display:block}
   .revealbtn{margin-top:.4rem;font-size:.74rem;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:6px;padding:.24rem .6rem;cursor:pointer;display:none}
-  .q.js .revealbtn{display:inline-block} .revealbtn:hover{border-color:var(--navy-2);color:var(--navy-2)}
+  .q.js .revealbtn{display:inline-block} .revealbtn:hover{border-color:var(--blue-2);color:var(--blue-2)}
 
   svg .lbl{font:600 10px var(--font);fill:var(--text)} svg .lbl-m{font:600 9px var(--font);fill:var(--muted)}
   mark{background:#fde68a;color:#1a202c;border-radius:3px}
 
-  .donebar{display:none;align-items:center;gap:.5rem;background:rgba(56,161,105,.1);border:1px solid rgba(56,161,105,.4);
+  .donebar{display:none;align-items:center;gap:.5rem;background:rgba(119,187,74,.12);border:1px solid rgba(70,138,46,.4);
     border-radius:10px;padding:.6rem .8rem;margin:.6rem 0;font-size:.86rem} .donebar.show{display:flex} .donebar b{color:var(--green)}
+  .donebar .dcheck{color:var(--green);flex:0 0 auto;display:inline-flex} .donebar .dcheck svg{width:20px;height:20px}
 
   .actionbar{position:sticky;bottom:0;z-index:6;height:var(--bar);display:flex;align-items:center;gap:.6rem;padding:0 .8rem;
     background:var(--panel);border-top:1px solid var(--border)}
@@ -177,7 +184,7 @@
   .prog .ptext{font-size:.68rem;color:var(--muted);font-weight:600;margin-bottom:.22rem;display:flex;justify-content:space-between}
   .prog .ptext b{color:var(--brand-ink)}
   .bar{height:6px;background:var(--bg-soft);border-radius:999px;overflow:hidden}
-  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--navy-2),var(--green));transition:width .35s}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue-2),var(--green));transition:width .35s}
   .btn{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;height:36px;padding:0 .9rem;
     display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.8rem;font-weight:700;white-space:nowrap}
   .btn svg{width:15px;height:15px}
@@ -191,8 +198,8 @@
     body{display:block;background:#fff;color:#111} body::before{display:none}
     .panel{width:auto;height:auto;overflow:visible;box-shadow:none;border:none}
     .phead,.rail,.actionbar,.revealbtn,.search{display:none!important} .pcontent{padding:0}
-    .printcover{display:block;text-align:center;border-bottom:2px solid var(--navy);padding-bottom:12px;margin-bottom:14px}
-    .printcover .logo{height:40px;margin-bottom:6px} .printcover h1{color:var(--navy);font-size:20px;margin:.2rem 0} .printcover .meta{color:#555;font-size:11px}
+    .printcover{display:block;text-align:center;border-bottom:2px solid var(--blue);padding-bottom:12px;margin-bottom:14px}
+    .printcover .logo{height:40px;margin-bottom:6px} .printcover h1{color:var(--blue);font-size:20px;margin:.2rem 0} .printcover .meta{color:#555;font-size:11px}
     .q.js .ans{display:block!important} section[data-sec]{page-break-inside:avoid;border-top:1px solid #ccc}
     .card,.table-wrap{box-shadow:none} a{color:#111;text-decoration:none}
   }
@@ -286,20 +293,20 @@
         <p>The SDLC is the path a system travels from idea to running product and back. Each phase has an owner discipline, hands off artifacts, and passes an approval gate. You sit above the phases: set intent, read outputs, sign the gates.</p>
         <div class="viz"><div class="vt">The software development lifecycle</div>
           <svg viewBox="0 0 300 230" width="100%" style="max-width:340px;display:block;margin:0 auto" role="img" aria-label="SDLC lifecycle cycle">
-            <defs><marker id="sdlcarr" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2b6cb0"/></marker></defs>
+            <defs><marker id="sdlcarr" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2E6A86"/></marker></defs>
             <circle cx="150" cy="110" r="80" fill="none" stroke="#dbe4f0" stroke-width="2"/>
-            <path d="M150,30 A80,80 0 1 1 93,53" fill="none" stroke="#2b6cb0" stroke-width="2" marker-end="url(#sdlcarr)"/>
+            <path d="M150,30 A80,80 0 1 1 93,53" fill="none" stroke="#2E6A86" stroke-width="2" marker-end="url(#sdlcarr)"/>
             <g font-family="Segoe UI,Arial" font-size="9.5" font-weight="600" fill="#2d3748">
-              <circle cx="150" cy="30" r="5" fill="#2b6cb0"/><text x="150" y="20" text-anchor="middle">Discover</text>
-              <circle cx="207" cy="53" r="5" fill="#2b6cb0"/><text x="215" y="49" text-anchor="start">Design</text>
-              <circle cx="230" cy="110" r="5" fill="#2b6cb0"/><text x="238" y="113" text-anchor="start">Plan</text>
-              <circle cx="207" cy="167" r="5" fill="#2b6cb0"/><text x="215" y="174" text-anchor="start">Build</text>
-              <circle cx="150" cy="190" r="5" fill="#2b6cb0"/><text x="150" y="206" text-anchor="middle">Verify</text>
-              <circle cx="93" cy="167" r="5" fill="#2b6cb0"/><text x="85" y="174" text-anchor="end">Deliver</text>
-              <circle cx="70" cy="110" r="5" fill="#2b6cb0"/><text x="62" y="113" text-anchor="end">Operate</text>
-              <circle cx="93" cy="53" r="5" fill="#2b6cb0"/><text x="85" y="49" text-anchor="end">Improve</text>
+              <circle cx="150" cy="30" r="5" fill="#2E6A86"/><text x="150" y="20" text-anchor="middle">Discover</text>
+              <circle cx="207" cy="53" r="5" fill="#2E6A86"/><text x="215" y="49" text-anchor="start">Design</text>
+              <circle cx="230" cy="110" r="5" fill="#2E6A86"/><text x="238" y="113" text-anchor="start">Plan</text>
+              <circle cx="207" cy="167" r="5" fill="#2E6A86"/><text x="215" y="174" text-anchor="start">Build</text>
+              <circle cx="150" cy="190" r="5" fill="#2E6A86"/><text x="150" y="206" text-anchor="middle">Verify</text>
+              <circle cx="93" cy="167" r="5" fill="#2E6A86"/><text x="85" y="174" text-anchor="end">Deliver</text>
+              <circle cx="70" cy="110" r="5" fill="#2E6A86"/><text x="62" y="113" text-anchor="end">Operate</text>
+              <circle cx="93" cy="53" r="5" fill="#2E6A86"/><text x="85" y="49" text-anchor="end">Improve</text>
             </g>
-            <text x="150" y="106" text-anchor="middle" font-family="Segoe UI,Arial" font-size="18" font-weight="800" fill="#1a365d">SDLC</text>
+            <text x="150" y="106" text-anchor="middle" font-family="Segoe UI,Arial" font-size="18" font-weight="800" fill="#367895">SDLC</text>
             <text x="150" y="121" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" fill="#718096">lifecycle</text>
           </svg>
         </div>
@@ -325,10 +332,10 @@
             <line x1="260" y1="40" x2="260" y2="66" stroke="#94a3b8" stroke-width="1.5"/>
             <line x1="260" y1="102" x2="260" y2="124" stroke="#94a3b8" stroke-width="1.5"/>
             <line x1="260" y1="158" x2="260" y2="172" stroke="#94a3b8" stroke-width="1.5"/>
-            <rect x="150" y="8" width="220" height="32" rx="8" fill="#fff" stroke="#2b6cb0" stroke-width="1.5"/><text x="260" y="28" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11" font-weight="600" fill="#1a365d">Business · Sponsor + Product Owner (the why)</text>
-            <rect x="138" y="66" width="244" height="36" rx="8" fill="#1a365d"/><text x="260" y="89" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11.5" font-weight="700" fill="#fff">AI Solution Architect — you (the how)</text>
-            <rect x="30" y="124" width="460" height="34" rx="8" fill="#fff" stroke="#2b6cb0" stroke-width="1.5"/><text x="260" y="145" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#1a365d">Discipline leads · BA · PM · Eng · UX · QA · Data · DevOps · Security</text>
-            <rect x="110" y="172" width="300" height="32" rx="8" fill="#f0f5fb" stroke="#94a3b8" stroke-width="1.4"/><text x="260" y="192" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#1a365d">AI agents · Claude Code · Practitioners (do the work)</text>
+            <rect x="150" y="8" width="220" height="32" rx="8" fill="#fff" stroke="#2E6A86" stroke-width="1.5"/><text x="260" y="28" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11" font-weight="600" fill="#367895">Business · Sponsor + Product Owner (the why)</text>
+            <rect x="138" y="66" width="244" height="36" rx="8" fill="#367895"/><text x="260" y="89" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11.5" font-weight="700" fill="#fff">AI Solution Architect — you (the how)</text>
+            <rect x="30" y="124" width="460" height="34" rx="8" fill="#fff" stroke="#2E6A86" stroke-width="1.5"/><text x="260" y="145" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#367895">Discipline leads · BA · PM · Eng · UX · QA · Data · DevOps · Security</text>
+            <rect x="110" y="172" width="300" height="32" rx="8" fill="#f0f5fb" stroke="#94a3b8" stroke-width="1.4"/><text x="260" y="192" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#367895">AI agents · Claude Code · Practitioners (do the work)</text>
           </svg>
         </div>
         <div class="callout"><strong>Three flows keep delivery moving:</strong> intent flows <em>down</em> from goals, artifacts flow <em>across</em> (each phase's output feeds the next), signals flow <em>back up</em> so you can steer. Break any one and delivery stalls.</div>
@@ -351,15 +358,15 @@
         </table></div>
         <div class="card"><div class="sub" style="text-align:center">The Agile sprint loop</div>
           <svg viewBox="0 0 300 190" width="100%" height="180" role="img" aria-label="Agile sprint cycle">
-            <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--navy-2)"/></marker></defs>
+            <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--blue-2)"/></marker></defs>
             <circle cx="150" cy="95" r="66" fill="none" stroke="var(--border)" stroke-width="2"/>
-            <path d="M150,29 A66,66 0 0 1 209,125" fill="none" stroke="var(--navy-2)" stroke-width="2" marker-end="url(#ar)"/>
+            <path d="M150,29 A66,66 0 0 1 209,125" fill="none" stroke="var(--blue-2)" stroke-width="2" marker-end="url(#ar)"/>
             <g text-anchor="middle">
-              <circle cx="150" cy="29" r="5" fill="var(--navy-2)"/><text class="lbl" x="150" y="18">Plan</text>
-              <circle cx="213" cy="72" r="5" fill="var(--navy-2)"/><text class="lbl" x="248" y="72">Build</text>
-              <circle cx="189" cy="150" r="5" fill="var(--navy-2)"/><text class="lbl" x="196" y="170">Test</text>
-              <circle cx="111" cy="150" r="5" fill="var(--navy-2)"/><text class="lbl" x="104" y="170">Review</text>
-              <circle cx="87" cy="72" r="5" fill="var(--navy-2)"/><text class="lbl" x="54" y="72">Retro</text>
+              <circle cx="150" cy="29" r="5" fill="var(--blue-2)"/><text class="lbl" x="150" y="18">Plan</text>
+              <circle cx="213" cy="72" r="5" fill="var(--blue-2)"/><text class="lbl" x="248" y="72">Build</text>
+              <circle cx="189" cy="150" r="5" fill="var(--blue-2)"/><text class="lbl" x="196" y="170">Test</text>
+              <circle cx="111" cy="150" r="5" fill="var(--blue-2)"/><text class="lbl" x="104" y="170">Review</text>
+              <circle cx="87" cy="72" r="5" fill="var(--blue-2)"/><text class="lbl" x="54" y="72">Retro</text>
               <text class="lbl-m" x="150" y="92">1–2 week</text><text class="lbl-m" x="150" y="104">sprint</text>
             </g>
           </svg>
@@ -551,7 +558,7 @@
         <div class="q"><div class="qt">4. What makes a generation a deliverable, not a liability?</div><button class="revealbtn">Reveal</button><div class="ans">Human evaluation and approval against intent.</div></div>
         <div class="q"><div class="qt">5. Two red flags that stop an approval.</div><button class="revealbtn">Reveal</button><div class="ans">Any two of: no traceability, no ADRs, no failure-path tests, no rollback, no risk owner.</div></div>
 
-        <div class="donebar" id="donebar"><span>✅</span><div><b>All sections read.</b> You've built the mental model for the next twelve weeks — mark this Deep Dive complete.</div></div>
+        <div class="donebar" id="donebar"><span class="dcheck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg></span><div><b>All sections read.</b> You've built the mental model for the next twelve weeks — mark this Deep Dive complete.</div></div>
       </section>
 
     </div>
@@ -584,8 +591,10 @@
   // Explicit click-to-scroll — bare #anchors don't reliably scroll the panel inside a sandboxed iframe.
   Object.keys(railLinks).forEach(function(id){ railLinks[id].addEventListener('click',function(e){ e.preventDefault(); var el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }); });
   document.querySelectorAll('.rail .num').forEach(function(n){n.setAttribute('data-n',n.textContent);});
-  var KEY='dd-wk0-seen', seen={}; try{seen=JSON.parse(localStorage.getItem(KEY)||'{}')||{};}catch(e){seen={};}
-  function count(){var n=0;for(var k in seen){if(seen[k])n++;}return n;}
+  // The HOST persists progress + restores it (our localStorage is blocked in the sandbox).
+  var seen={};
+  function keys(){var a=[];for(var k in seen){if(seen[k])a.push(k);}return a;}
+  function count(){return keys().length;}
   function render(){
     var n=count(); document.getElementById('pcount').textContent=n; document.getElementById('pfill').style.width=Math.round(n/total*100)+'%';
     secs.forEach(function(s){var a=railLinks[s.id];if(a){if(seen[s.id])a.classList.add('done');else a.classList.remove('done');
@@ -593,22 +602,31 @@
     var done=n>=total, btn=document.getElementById('completeBtn');
     btn.disabled=!done; btn.title=done?'Mark this Deep Dive complete':'Read all sections to complete';
     if(done)document.getElementById('donebar').classList.add('show');
-    try{ if(window.parent && window.parent!==window) window.parent.postMessage({source:'deepdive',done:n,total:total,complete:done},'*'); }catch(e){}
+    try{ if(window.parent && window.parent!==window) window.parent.postMessage({source:'deepdive',done:n,total:total,ids:keys(),complete:done},'*'); }catch(e){}
   }
-  function markSeen(id){ if(!seen[id]){ seen[id]=true; try{localStorage.setItem(KEY,JSON.stringify(seen));}catch(e){} render(); } }
-  if('IntersectionObserver' in window){
-    // A section counts as read only after it has been the active (centered) section for
-    // 5 continuous seconds — scrolling past it fast does not mark it. Leaving cancels the timer.
-    var dwell={}, DWELL=5000;
-    var spy=new IntersectionObserver(function(es){ es.forEach(function(en){ var id=en.target.id, a=railLinks[id];
-      if(en.isIntersecting){
-        for(var k in railLinks)railLinks[k].classList.remove('active'); if(a)a.classList.add('active');
-        if(!seen[id] && !dwell[id]){ dwell[id]=setTimeout(function(){ dwell[id]=null; markSeen(id); }, DWELL); }
-      } else if(dwell[id]){ clearTimeout(dwell[id]); dwell[id]=null; }
-    }); },{root:panel,rootMargin:'-40% 0px -55% 0px',threshold:0});
-    secs.forEach(function(s){spy.observe(s);});
-  } else { secs.forEach(function(s){seen[s.id]=true;}); }
+  function markSeen(id){ if(id && !seen[id]){ seen[id]=true; render(); } }
+  // A section is marked read after you spend 5s ON it. "Active" = the section at the
+  // reading line (scroll-position based), so even the last/short section can be reached
+  // — a thin center-band observer could never mark a short final section.
+  var secT={}, DWELL_S=5;
+  function activeId(){
+    if(!secs.length) return null;
+    if(panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 4) return secs[secs.length-1].id;
+    var pr=panel.getBoundingClientRect(), line=pr.top + pr.height*0.35, cur=secs[0];
+    for(var i=0;i<secs.length;i++){ if(secs[i].getBoundingClientRect().top <= line) cur=secs[i]; }
+    return cur.id;
+  }
+  setInterval(function(){
+    var id=activeId(); if(!id) return;
+    for(var k in railLinks) railLinks[k].classList.remove('active');
+    if(railLinks[id]) railLinks[id].classList.add('active');
+    if(!seen[id]){ secT[id]=(secT[id]||0)+1; if(secT[id]>=DWELL_S) markSeen(id); }
+  }, 1000);
+  window.addEventListener('message',function(e){ var d=e.data; if(!d||d.source!=='deepdive-host')return;
+    if(d.type==='restore' && Array.isArray(d.seenIds)){ d.seenIds.forEach(function(id){ if(id) seen[id]=true; }); render(); }
+  });
   render();
+  try{ if(window.parent&&window.parent!==window) window.parent.postMessage({source:'deepdive',action:'ready'},'*'); }catch(e){}
   document.getElementById('completeBtn').addEventListener('click',function(){
     if(this.disabled)return; this.textContent='Completed ✓'; this.disabled=true; document.getElementById('donebar').classList.add('show');
   });
