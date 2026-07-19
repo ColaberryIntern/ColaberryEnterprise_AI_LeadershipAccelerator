@@ -16,6 +16,7 @@ import AIXceleratorLandingPage from './pages/AIXceleratorLandingPage';
 import AIPilotLandingPage from './pages/AIPilotLandingPage';
 import AIPilotVerticalPage from './pages/AIPilotVerticalPage';
 import PublicPortfolioPage from './pages/PublicPortfolioPage';
+import ManagementPreviewPage from './pages/ManagementPreviewPage';
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
         <Route path="/ai-pilot/construction" element={<AIPilotVerticalPage variantKey="construction" />} />
         <Route path="/ai-pilot/care" element={<AIPilotVerticalPage variantKey="care" />} />
         <Route path="/portfolio/share/:token" element={<PublicPortfolioPage />} />
+        <Route path="/try" element={<ManagementPreviewPage />} />
         {adminRoutes}
         {portalRoutes}
         {referralRoutes}

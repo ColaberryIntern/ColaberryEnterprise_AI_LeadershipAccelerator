@@ -9,7 +9,7 @@ import IndustryDemoGrid from '../components/IndustryDemoGrid';
 // AdvisoryPage — /advisory
 // REFRAME: dropped the standalone enterprise-retainer pitch. Advisory is now a
 // slim note FOR SPONSORS — a light-touch wrap around the one class — that points
-// employers to "Sponsor Your Team". DS-only, semantic tokens only.
+// employers to start free first, then bring their team. DS-only, semantic tokens only.
 
 // CtaButton: the DS Button only forwards href + on* handlers to its host element
 // (it drops React Router's `to`), so we route via href + onClick — a real anchor
@@ -95,7 +95,7 @@ const CSS = `
 `;
 
 const FRAME = [
-  { ic: '🚪', title: 'One class, two doors', desc: 'Individuals self-serve a membership. Employers sponsor seat blocks. Everyone learns in the same program.' },
+  { ic: '🚪', title: 'One platform, one way in', desc: 'Start free and explore the whole platform yourself. Add your seat or bring your team on reassignable seats when you are ready.' },
   { ic: '🛠️', title: 'They build on the job', desc: 'Your people learn on their own time and ship a real AI build scoped to their actual work — no one leaves their seat.' },
   { ic: '🔭', title: 'You discover talent', desc: 'A company leaderboard and Demo Day surface who your real AI builders are — without taking anyone off the job.' },
 ];
@@ -124,7 +124,7 @@ function AdvisoryPage() {
       <style>{CSS}</style>
       <SEOHead
         title="Advisory for Sponsors"
-        description="Light-touch advisory wrapped around the Colaberry AI Challenge. Sponsor a seat block, watch your real AI builders surface on a company leaderboard, and meet them at Demo Day — without taking anyone off the job."
+        description="Light-touch advisory wrapped around the Colaberry AI Challenge. Start free and explore it yourself, then sponsor a seat block, watch your real AI builders surface on a company leaderboard, and meet them at Demo Day, without taking anyone off the job."
       />
 
       {/* HERO */}
@@ -138,8 +138,8 @@ function AdvisoryPage() {
             inside your organization.
           </p>
           <div className="cbadv-hero-cta">
-            <CtaButton to="/sponsorship" size="lg" trailingIcon={<span aria-hidden>→</span>}>
-              Sponsor Your Team
+            <CtaButton to="/try" size="lg" data-track="advisory_hero_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
             <CtaButton to="/challenge" size="lg" variant="outline">
               See How It Works
@@ -186,15 +186,15 @@ function AdvisoryPage() {
             </Card>
             <div className="cbadv-aside">
               <Badge tone="red" solid>For Employers</Badge>
-              <h3 className="cbadv-mt4">Sponsor a seat block and let the leaderboard do the talking.</h3>
+              <h3 className="cbadv-mt4">See it yourself, then sponsor a seat block and let the leaderboard do the talking.</h3>
               <p>
-                You buy annual seats, your employees redeem codes and climb a company leaderboard, and the
-                strongest builders present at Demo Day. We stay close enough to keep momentum, light enough that
-                no one has to leave their day job.
+                Start free and explore the platform yourself first. When you are ready, buy annual seats; your
+                employees redeem codes and climb a company leaderboard, and the strongest builders present at Demo
+                Day. We stay close enough to keep momentum, light enough that no one has to leave their day job.
               </p>
               <div className="cbadv-cta">
-                <CtaButton to="/sponsorship" tone="red" trailingIcon={<span aria-hidden>→</span>}>
-                  Sponsor Your Team
+                <CtaButton to="/try" tone="red" data-track="advisory_aside_start_free" trailingIcon={<span aria-hidden>→</span>}>
+                  Start free
                 </CtaButton>
                 <CtaButton to="/leaderboard" variant="ghost" tone="blue">
                   View a Leaderboard
@@ -238,18 +238,18 @@ function AdvisoryPage() {
       {/* CLOSING */}
       <section className="cbadv-sec">
         <div className="cbadv-wrap cbadv-closing">
-          <div className="cbadv-eyebrow">Pick Your Door</div>
-          <h2 className="cb-balance cbadv-mt4">Sponsor your team, or join the Challenge yourself.</h2>
+          <div className="cbadv-eyebrow">Start Free</div>
+          <h2 className="cb-balance cbadv-mt4">Try it yourself, then bring your team.</h2>
           <p className="cbadv-lead">
-            Employers sponsor seat blocks to discover their AI builders. Individuals join the same class on a
-            membership. One program, two doors.
+            Start free and explore the whole platform yourself, as both the learner and the admin. When you are
+            ready, sponsor a seat block and discover the AI builders already inside your company.
           </p>
           <div className="cbadv-closing-cta">
-            <CtaButton to="/sponsorship" size="lg" trailingIcon={<span aria-hidden>→</span>}>
-              Sponsor Your Team
+            <CtaButton to="/try" size="lg" data-track="advisory_final_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
-            <CtaButton to="/enroll" size="lg" variant="outline">
-              Join the Challenge
+            <CtaButton to="/contact" size="lg" variant="outline" data-track="advisory_final_book_walkthrough">
+              Book a walkthrough
             </CtaButton>
           </div>
         </div>

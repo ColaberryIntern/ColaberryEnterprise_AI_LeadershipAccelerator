@@ -308,6 +308,9 @@ import CommunityEvent from './CommunityEvent';
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
 import SponsorSeat from './SponsorSeat';
+// Free-trial Organization / Manager layer (dual account + team roster).
+import Organization from './Organization';
+import OrgMember from './OrgMember';
 import Challenge from './Challenge';
 import ChallengeParticipant from './ChallengeParticipant';
 import LeaderboardScore from './LeaderboardScore';
@@ -984,6 +987,18 @@ ChallengeParticipant.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'e
 ChallengeParticipant.hasOne(LeaderboardScore, { foreignKey: 'challenge_participant_id', as: 'score', onDelete: 'CASCADE' });
 LeaderboardScore.belongsTo(ChallengeParticipant, { foreignKey: 'challenge_participant_id', as: 'participant' });
 
+// --- Free-trial Organization / Manager associations ---
+// An Organization owns a roster of OrgMembers; each member links (nullable) to
+// the teammate's free student enrollment so metrics roll up over the real ledgers.
+Organization.hasMany(OrgMember, { foreignKey: 'org_id', as: 'members', onDelete: 'CASCADE' });
+OrgMember.belongsTo(Organization, { foreignKey: 'org_id', as: 'organization' });
+
+Organization.belongsTo(Enrollment, { foreignKey: 'owner_enrollment_id', as: 'owner', onDelete: 'CASCADE' });
+Enrollment.hasMany(Organization, { foreignKey: 'owner_enrollment_id', as: 'ownedOrganizations' });
+
+OrgMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment', onDelete: 'SET NULL' });
+Enrollment.hasMany(OrgMember, { foreignKey: 'enrollment_id', as: 'orgMemberships' });
+
 export {
   Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
@@ -1190,6 +1205,9 @@ export {
   Challenge,
   ChallengeParticipant,
   LeaderboardScore,
+  // Free-trial Organization / Manager layer
+  Organization,
+  OrgMember,
   // Curriculum + enrollment + Skilljar sync (from main)
   CurriculumCourseLink,
   EnrollmentLead,

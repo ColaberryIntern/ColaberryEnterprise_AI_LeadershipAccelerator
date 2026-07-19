@@ -395,15 +395,15 @@ function LeaderboardPage() {
           <Badge solid>Not on the board yet?</Badge>
           <h2 style={{ marginTop: 'var(--space-4)' }}>Ship one build this week and claim your rank.</h2>
           <p>
-            Every builder here started at zero. Join the Challenge as an individual, or have your employer sponsor
-            a seat, and your first shipped project puts your name on this list.
+            Every builder here started at zero. Start free, ship your first project, and your name lands on this
+            list. Bring your team when you are ready.
           </p>
           <div className="cblb-cta-row">
-            <CtaButton to="/enroll" size="lg" trailingIcon={<span aria-hidden>→</span>}>
-              Join the Challenge
+            <CtaButton to="/try" size="lg" data-track="leaderboard_cta_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
-            <CtaButton to="/sponsorship" size="lg" variant="outline">
-              Sponsor Your Team
+            <CtaButton to="/contact" size="lg" variant="outline" data-track="leaderboard_cta_book_walkthrough">
+              Book a walkthrough
             </CtaButton>
             <CtaButton to="/challenge" size="lg" variant="ghost">
               How scoring works
