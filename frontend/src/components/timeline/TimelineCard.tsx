@@ -164,7 +164,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   // Media/external cards keep their authored title casing; curriculum content
   // titles are Title-Cased for display.
-  const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
+  const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
   const tc = (s: string) => (externalTitle ? s : toTitleCase(s));
   const shortTitle = tc((card.week_title || card.content?.title || card.title).replace(/^[^·]*· /, ''));
 
