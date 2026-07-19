@@ -14,8 +14,9 @@ import TimelineCard from '../../models/TimelineCard';
 import { resolve } from './typeRegistry';
 
 /** Types whose generation receives the week's activity roster. Extend as other
- *  week-summary types (wrap-ups, weekly reflections) need it. */
-export const SECTION_ROSTER_TYPES = new Set(['overview']);
+ *  week-summary types (wrap-ups, weekly reflections) need it. `announcement` is
+ *  the friendly week-opener that scans the section and reports what's ahead. */
+export const SECTION_ROSTER_TYPES = new Set(['overview', 'announcement']);
 
 /** Meta/system cards excluded from the roster — they are not "things you'll do". */
 const EXCLUDED_TYPES = new Set([

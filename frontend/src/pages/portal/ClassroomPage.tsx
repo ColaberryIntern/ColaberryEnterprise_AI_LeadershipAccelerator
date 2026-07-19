@@ -50,6 +50,40 @@ const writeViewSnapshot = (snap: ViewSnapshot): void => {
   try { window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(snap)); } catch { /* private mode / quota — non-fatal */ }
 };
 
+// Restore window scroll to targetY, but only once the feed is tall enough to
+// actually reach it. The feed's card thumbnails (video/podcast posters) load
+// AFTER the cards render, so right after a remount the document is short and a
+// naive window.scrollTo(0, targetY) clamps near the top — which is the "back
+// sends me to the top" bug. So we poll per animation frame until the document
+// can reach targetY (images have grown it back to the height it had when we
+// saved), then scroll once. We bail the moment the student scrolls themselves,
+// so we never fight them, and give up after a cap so a genuinely-shorter feed
+// (e.g. a card was completed/removed) doesn't spin.
+function restoreScroll(targetY: number): void {
+  if (!targetY || targetY <= 0) return;
+  let done = false;
+  const cleanup = () => {
+    window.removeEventListener('wheel', onUser);
+    window.removeEventListener('touchstart', onUser);
+  };
+  function onUser() { done = true; cleanup(); }
+  window.addEventListener('wheel', onUser, { passive: true });
+  window.addEventListener('touchstart', onUser, { passive: true });
+  const start = performance.now();
+  const tick = () => {
+    if (done) return;
+    const maxY = document.documentElement.scrollHeight - window.innerHeight;
+    if (maxY >= targetY - 4 || performance.now() - start > 3000) {
+      window.scrollTo(0, targetY);
+      done = true;
+      cleanup();
+    } else {
+      requestAnimationFrame(tick);
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
 /** ms until the next Thursday 10:00 (client-side schedule anchor until live sessions are wired). */
 function nextThursday(now: number): number {
   const d = new Date(now);
@@ -110,11 +144,10 @@ const ClassroomPage: React.FC = () => {
       const snap = readViewSnapshot();
       if (snap && snap.week != null && weeks.includes(snap.week)) {
         setWeek(snap.week);
-        // Restore scroll after the feed has painted at full height. App-level
-        // ScrollToTop zeroes the window on every route change, so this must run
-        // after it — two rAFs lands us past layout + that reset.
-        const y = snap.scrollY || 0;
-        if (y > 0) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+        // Restore scroll once the feed is tall enough (its thumbnails have
+        // loaded). restoreScroll waits for that, so it runs after App-level
+        // ScrollToTop's reset AND after the images that give the page its height.
+        restoreScroll(snap.scrollY || 0);
         return;
       }
     }
@@ -124,16 +157,23 @@ const ClassroomPage: React.FC = () => {
     }
   }, [feed, weeks, week]);
 
-  // Snapshot the current view on unmount (i.e. when navigating to the workspace
-  // or anywhere else) so the restore above has something to return to. A ref
-  // holds the latest week so the cleanup captures the real position, not a stale
-  // closure. window.scrollY is read before App-level ScrollToTop resets it
-  // (unmount cleanups run before the new route's effects).
+  // Continuously remember the current scroll position (and week) so returning
+  // from the workspace can restore it. This MUST be done live, on scroll — NOT in
+  // an unmount cleanup: a useEffect cleanup is passive and runs AFTER React has
+  // already swapped the classroom DOM out for the workspace and ScrollToTop has
+  // zeroed the window, so window.scrollY reads ~0 there. (That was the "back
+  // always lands at the top" bug — every save recorded scrollY: 0.) A ref holds
+  // the latest week so each save tags the right one. Throttled to one write/frame.
   const viewRef = useRef<number | null>(week);
   viewRef.current = week;
-  useEffect(() => () => {
-    writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY });
-  }, []);
+  useEffect(() => {
+    if (uiState !== 'ready') return;
+    let raf = 0;
+    const persist = () => { raf = 0; writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY }); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(persist); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [uiState]);
 
   const weekCards = useMemo(() => {
     if (!feed) return [];

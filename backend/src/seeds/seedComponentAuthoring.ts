@@ -183,6 +183,38 @@ const EVALUATION_GENERATION_PROMPT = [
   'Return questions as [], reflection as "", discussion_prompt as "", github_task as null, evaluation_criteria as []. Executive tone. No emojis.',
 ].join('\n');
 
+// ── announcement (the friendly weekly kickoff) ───────────────────────────────
+// The FIRST card in every section (pre_class). A roster-summary type
+// (SECTION_ROSTER_TYPES) whose runtime prepends the week Blueprint ("WEEK
+// CONTEXT") AND the week's real activity roster ("THIS WEEK'S ACTIVITIES"), so it
+// scans the section and reports what's ahead in a warm, emoji-rich "mini report".
+// Generic render band → it ships its own self-contained CSS inside body_html
+// (lessonDoc preserves <style>). Week 0 is hand-authored + locked (the free-
+// preview welcome); weeks 1+ generate live from this prompt and reset when the
+// week's curriculum changes.
+const ANNOUNCEMENT_GENERATION_PROMPT = [
+  'You write the weekly Announcement for the AI Systems Architect Accelerator: the warm, friendly kickoff card that is the FIRST thing a participant sees when they open the week. The WEEK CONTEXT block above gives this week\'s topic, focus, learning objectives, competencies, architect domains, student outcomes, success criteria, and level. The THIS WEEK\'S ACTIVITIES block above lists the ACTUAL cards placed in this week. Ground everything in both and invent nothing they do not support.',
+  '',
+  'VOICE: warm, encouraging, human, a little playful. Use emoji generously as friendly section icons and inline accents. Plain English, no jargon, no hype. This is the friendly front door to the week, not a formal briefing.',
+  '',
+  'TITLE: the words "This Week", a space, an em dash, a space, then the week\'s topic exactly as named in the WEEK CONTEXT. Example: "This Week — Claude Code Foundations + Workspace".',
+  '',
+  'SUMMARY: one friendly sentence previewing what the week is about and inviting them in.',
+  '',
+  'BODY_HTML: clean, self-contained, VALID, fully-balanced HTML with ONE <style> block at the top (no external URLs, no @import, NO <script>, no event handlers, no <img>). It renders in a single narrow ~400px column, so design airy with short lines and generous spacing.',
+  'STYLE (match this friendly brand look): warm off-white page background (#fbfaf7); dark ink text (#1a2024). A HERO band with a teal-to-indigo gradient background (linear-gradient(135deg,#2a7d8c,#4c5bd4)), white text, rounded 16px corners, generous padding. Small uppercase section eyebrows in teal (#227d8e, letter-spacing, bold). Activity items as white rounded cards (border 1px solid #e7e3da, radius 12px, padding ~12px) with the emoji on the left. Pill chips with a soft teal tint (background #e8f3f5, teal text, rounded 999px). Soft tinted callout bands (radius 14px) for the Workspace and conversation sections. Keep corners rounded (12 to 16px) and leave real whitespace between every section. Emit these sections in order:',
+  '  1. HERO band: a big friendly welcome (wave or sparkle emoji) and one sentence naming this week\'s big idea from the WEEK CONTEXT.',
+  '  2. A small row of 3 to 4 friendly "at a glance" pill chips grounded in the WEEK CONTEXT (e.g. the level, and how many things they will do this week). NEVER include any estimate of hours or minutes anywhere.',
+  '  3. "✨ What you\'ll cover this week": 4 to 7 short cards, EACH drawn from a real item in THIS WEEK\'S ACTIVITIES above. Use the actual activity titles (name the videos, labs, courses, live classes, builds, readings) with a friendly one-line description of what the student will DO. Give each a matching emoji (🎬 video, 🎧 podcast, 📰 blog, 🧪 lab, 🏗️ build, 🎓 course, 👥 live class, 📖 reading, ✅ quiz, 🔎 deep dive, 🔁 sync). Pick the most important activities; skip meta/system cards.',
+  '  4. "🎯 Why it matters": one or two friendly sentences tying this week to becoming an AI Systems Architect, from the student outcomes / success criteria.',
+  '  5. "🖥️ Your Workspace + AI Mentor": tell them that opening any lesson takes them into their Workspace, where they meet their personal AI Mentor Agent (who coaches, never just hands answers), alongside the community and their progress.',
+  '  6. "💬 Join the conversation": warmly encourage a comment, and remind them it is visible to the whole community and a great way to connect with fellow learners.',
+  '',
+  'Keep the visible prose drawer-sized and skimmable (roughly 220 to 320 words plus the activity cards). Every opening tag must have a matching closing tag and the CSS must be valid.',
+  'Set questions to [] and reflection to "".',
+  'completion: "Marked complete when the participant opens and reads the weekly announcement."',
+].join('\n');
+
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
   warmup: {
@@ -232,6 +264,29 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     thumbnail_url: thumbnailUrlFor('survey'),
     approved: true,
     status: 'ready',
+  },
+  announcement: {
+    student_label: 'Announcement',
+    category: 'Announce',
+    icon: 'bi-megaphone',
+    badge_class: 'bg-info',
+    estimated_time: 2,
+    // Friendly week-opener: scans the week roster (SECTION_ROSTER_TYPES) and
+    // reports what's ahead. AI Mentor chat + community comments/likes on the card.
+    capabilities: ['ai_chat', 'comments', 'likes', 'bookmarks'],
+    inputs: [],
+    variable_keys: [], // zero author input — the runtime injects blueprint + week roster
+    outputs: [
+      { key: 'title', type: 'string', description: 'This Week — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Friendly emoji "mini report" scanning the week' },
+      { key: 'summary', type: 'string', description: 'One-sentence friendly framing' },
+    ],
+    completion_rules: { on: 'view' },
+    evaluation_type: 'none',
+    generation_prompt: ANNOUNCEMENT_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('announcement'),
+    approved: true,
+    status: 'published',
   },
   overview: {
     student_label: 'Overview',

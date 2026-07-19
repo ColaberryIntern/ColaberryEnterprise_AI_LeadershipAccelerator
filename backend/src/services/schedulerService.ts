@@ -1799,6 +1799,22 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
+  // Distill each active student's recent sessions into their evolving LearnerMemory
+  // once nightly (02:15 America/Chicago) — the AI Mentor's "gets to know you over
+  // weeks" engine. Idempotent per (enrollment, day); safe to re-run.
+  cron.schedule(
+    '15 2 * * *',
+    () => {
+      instrumentCronJob('LearnerMemoryDistill', async () => {
+        const { runLearnerMemoryBatch } = await import('./runtime/learnerMemoryWriter');
+        await runLearnerMemoryBatch();
+      }).catch((err) => {
+        console.error('[Scheduler] Learner memory distill error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
   // Reconcile enrollment payment state from PaySimple every 30 minutes: payments
   // that went through become revenue; failed/reversed ones are subtracted. Ships
   // dark — only scheduled when PAYSIMPLE_SYNC_ENABLED=true (needs live read creds).
