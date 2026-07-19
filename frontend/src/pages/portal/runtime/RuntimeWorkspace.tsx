@@ -101,12 +101,24 @@ const RuntimeWorkspace: React.FC = () => {
   // unlocks once every section has been read (>=10s each), via the reader's postMessages.
   const isReader = band === 'warmup' && !!card?.content?.body_html;
   const readerProg = useReaderProgress(cardId, isReader && !completed);
+  // Deep Dive Field Guide: renders its own self-contained HTML in an allow-scripts iframe
+  // (same as the drawer's deepdive arm). It postMessages `{source:'deepdive', complete}`;
+  // Mark complete stays gated until the guide reports it (read all sections + copy the prompt).
+  const isDeepDive = band === 'deepdive' && card?.type === 'deep_dive' && !!card?.content?.body_html;
+  const [ddComplete, setDdComplete] = useState(false);
+  useEffect(() => {
+    setDdComplete(false);
+    if (!isDeepDive || completed) return;
+    const onMsg = (e: MessageEvent) => { const d = e.data as { source?: string; complete?: boolean } | null; if (d && d.source === 'deepdive' && d.complete) setDdComplete(true); };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [cardId, isDeepDive, completed]);
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
   // the right rail. This is the single-scroll workstation layout applied to every type.
-  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !!card?.content?.body_html;
-  const fill = isReader || isLesson;
+  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !!card?.content?.body_html;
+  const fill = isReader || isLesson || isDeepDive;
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -162,7 +174,9 @@ const RuntimeWorkspace: React.FC = () => {
     ? <span className="rt-pill done">✓ Completed — evidence generated</span>
     : isReader && !readerProg.complete
       ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
-      : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
+      : isDeepDive && !ddComplete
+        ? <span className="rt-muted">Read the sections and copy the build prompt (run it in Claude Code) to finish</span>
+        : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
   // Comments always render in the right rail now (every card type), so the center is a
   // single, clean scroll.
   const commentsBlock = (
@@ -281,11 +295,13 @@ const RuntimeWorkspace: React.FC = () => {
             <div className="rt-readerwrap">
               <iframe
                 className="rt-readerframe"
-                title={isReader ? 'Self Study reading' : 'Lesson'}
-                sandbox={isReader ? 'allow-scripts' : ''}
+                title={isReader ? 'Self Study reading' : isDeepDive ? 'Field Guide' : 'Lesson'}
+                sandbox={isReader ? 'allow-scripts' : isDeepDive ? 'allow-scripts allow-modals' : ''}
                 srcDoc={isReader
                   ? readerDoc(card.content?.body_html || '', card.content?.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })
-                  : lessonDoc(card.content?.body_html || '')}
+                  : isDeepDive
+                    ? (card.content?.body_html || '')
+                    : lessonDoc(card.content?.body_html || '')}
               />
               <div className="rt-readerfoot">{completeGate}</div>
             </div>

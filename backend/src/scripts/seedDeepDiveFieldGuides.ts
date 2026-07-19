@@ -1,0 +1,62 @@
+/**
+ * seedDeepDiveFieldGuides — place the Deep Dive "Field Guide" cards on the canonical
+ * program with their self-contained HTML content. Week 0 = read-only SDLC Field Guide;
+ * Week 1 = Business Analysis Field Guide (build-prompt + upload flow).
+ *
+ * Idempotent, keyed on (cohort_id null, program, week, type='deep_dive'). Sets
+ * metadata.locked=true so `ensureFreshContent` never regenerates. The HTML ships as
+ * base64 (the backend image excludes docs/); regen the *Html.ts modules from
+ * docs/deep-dive/*.html when a guide changes. IMPORTANT: keep each guide's body_html
+ * under ~64KB — a larger srcDoc truncates the trailing <script> in the sandboxed iframe
+ * and NO JS runs (de-inline the logo, reference it by URL). See the deep-dive field-guide
+ * platform memory.
+ *
+ * Run: node dist/scripts/seedDeepDiveFieldGuides.js
+ */
+import { sequelize } from '../config/database';
+import TimelineCard from '../models/TimelineCard';
+import { resolveOrThrow } from '../services/timeline/typeRegistry';
+import { composeCardAttributes } from '../services/timeline/timelineAdminService';
+import { DEEP_DIVE_WK0_HTML_B64 } from '../data/deepDiveWeek0Html';
+import { DEEP_DIVE_WK1_HTML_B64 } from '../data/deepDiveWeek1Html';
+
+const CANONICAL_PROGRAM = '92b98a72-8681-4f04-8ba1-16a18334cd0b';
+
+interface Guide { week: number; title: string; description: string; b64: string; }
+const GUIDES: Guide[] = [
+  { week: 0, title: 'Deep Dive - Understanding Modern Software Development', description: 'The SDLC Field Guide - the map for the next twelve weeks (read-only).', b64: DEEP_DIVE_WK0_HTML_B64 },
+  { week: 1, title: 'Deep Dive - Business Analysis', description: 'The Business Analysis Field Guide - build it in your own Claude Code.', b64: DEEP_DIVE_WK1_HTML_B64 },
+];
+
+async function seedOne(g: Guide, programId: string): Promise<{ week: number; created: boolean; card_id: string }> {
+  const html = Buffer.from(g.b64, 'base64').toString('utf8');
+  const content = { title: g.title, body_html: html };
+  const existing: any = await TimelineCard.findOne({ where: { cohort_id: null, program_id: programId, week: g.week, type: 'deep_dive' } });
+  if (existing) {
+    const meta = { ...(existing.metadata || {}), content, content_at: new Date().toISOString(), locked: true, authored: true };
+    await existing.update({ metadata: meta, visibility: 'published', status: 'active' });
+    return { week: g.week, created: false, card_id: existing.id };
+  }
+  const def = resolveOrThrow('deep_dive');
+  const max = await (TimelineCard as any).max('order', { where: { cohort_id: null, program_id: programId, week: g.week, bucket: 'learn' } });
+  const order = (typeof max === 'number' ? max : -1) + 1;
+  const attrs = composeCardAttributes(def, { type: 'deep_dive', program_id: programId, week: g.week, bucket: 'learn', title: g.title, visibility: 'published', description: g.description, content } as any, order);
+  const card: any = await TimelineCard.create(attrs as any);
+  await card.update({ metadata: { ...(card.metadata || {}), locked: true } });
+  return { week: g.week, created: true, card_id: card.id };
+}
+
+export async function seedDeepDiveFieldGuides(programId = CANONICAL_PROGRAM) {
+  const out = [];
+  for (const g of GUIDES) out.push(await seedOne(g, programId));
+  return out;
+}
+
+if (require.main === module) {
+  seedDeepDiveFieldGuides()
+    .then((r) => { console.log('[seedDeepDiveFieldGuides] ' + JSON.stringify(r)); return sequelize.close(); })
+    .then(() => process.exit(0))
+    .catch((e) => { console.error('[seedDeepDiveFieldGuides] ERROR ' + (e && e.message ? e.message : e)); process.exit(1); });
+}
+
+export default seedDeepDiveFieldGuides;
