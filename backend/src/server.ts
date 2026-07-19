@@ -1510,6 +1510,19 @@ async function ensureRuntimeSchema() {
        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE INDEX IF NOT EXISTS idx_runtime_notes_enrollment ON runtime_notes (enrollment_id, kind)`,
+    `CREATE TABLE IF NOT EXISTS learner_memory (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL UNIQUE,
+       summary TEXT,
+       misconceptions JSONB NOT NULL DEFAULT '[]'::jsonb,
+       goals TEXT,
+       strengths JSONB NOT NULL DEFAULT '[]'::jsonb,
+       last_distilled_on DATE,
+       last_turn_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_learner_memory_enrollment ON learner_memory (enrollment_id)`,
   ];
   for (const sql of statements) {
     try { await sequelize.query(sql); }

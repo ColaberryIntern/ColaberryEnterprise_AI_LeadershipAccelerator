@@ -19,6 +19,7 @@ import { Enrollment } from '../models';
 import Cohort from '../models/Cohort';
 import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import AssessmentAttempt from '../models/AssessmentAttempt';
+import LearnerMemory from '../models/LearnerMemory';
 import { getSkillGenome } from './skillGenomeService';
 import { getProjectByEnrollment } from './projectService';
 import {
@@ -45,7 +46,7 @@ function extractGaps(g: { layers?: Array<{ domains?: Array<{ skills?: Array<{ na
 export async function getLearnerContext(enrollmentId: string): Promise<LearnerContext> {
   const ctx = emptyLearnerContext();
 
-  const [enr, profile, genome, project, attempts] = await Promise.allSettled([
+  const [enr, profile, genome, project, attempts, memory] = await Promise.allSettled([
     Enrollment.findByPk(enrollmentId),
     UserCurriculumProfile.findOne({ where: { enrollment_id: enrollmentId } }),
     getSkillGenome(enrollmentId),
@@ -56,6 +57,7 @@ export async function getLearnerContext(enrollmentId: string): Promise<LearnerCo
       order: [['submitted_at', 'DESC']],
       limit: 200,
     }),
+    LearnerMemory.findOne({ where: { enrollment_id: enrollmentId }, attributes: ['summary', 'misconceptions', 'strengths'] }),
   ]);
 
   if (enr.status === 'fulfilled' && enr.value) {
@@ -104,6 +106,11 @@ export async function getLearnerContext(enrollmentId: string): Promise<LearnerCo
     ctx.assessments = rollupAssessments(attempts.value.map((a: any) => ({
       kind: a.kind, score: a.score, passed: a.passed, competency_scores: a.competency_scores,
     })));
+  }
+
+  if (memory.status === 'fulfilled' && memory.value) {
+    const m: any = memory.value;
+    ctx.memory = { summary: m.summary || '', misconceptions: m.misconceptions || [], strengths: m.strengths || [] };
   }
 
   return ctx;
