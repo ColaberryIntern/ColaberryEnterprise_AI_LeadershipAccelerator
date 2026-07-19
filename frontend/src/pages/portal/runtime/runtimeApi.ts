@@ -11,6 +11,8 @@ export interface RtCard {
   evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
+  course?: { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null;   // Skills Course link (skills_jar)
+  points?: { learning?: number; builder?: number; community?: number } | null;
   type_thumbnail?: string | null;   // the type's picture — hero banner with the title overlaid
   week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title
 }

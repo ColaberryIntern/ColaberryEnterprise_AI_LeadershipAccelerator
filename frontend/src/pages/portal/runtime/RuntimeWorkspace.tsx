@@ -7,6 +7,7 @@ import { lessonDoc, readerDoc } from '../../../components/timeline/CardDetailBod
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
+import SkillsJarPanel from '../../../components/timeline/SkillsJarPanel';
 import { toTitleCase } from '../../../utils/titleCase';
 import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
 import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
@@ -89,6 +90,7 @@ const RuntimeWorkspace: React.FC = () => {
   const isSurvey = band === 'survey';   // captured via the interactive SurveyForm
   const isAssessment = band === 'quiz' || band === 'evaluation';   // Knowledge Check + Evaluation, self-contained
   const isReflect = ['reflection', 'question'].includes(band);
+  const isSkillsJar = band === 'skills_jar';   // Anthropic Skills Course — external course + certificate upload
   // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
   // beats the card's raw title everywhere the student sees it. Curriculum titles
   // are Title-Cased for display; media/external keep their authored casing.
@@ -314,8 +316,16 @@ const RuntimeWorkspace: React.FC = () => {
               </div>
             </div>
           )}
+          {/* Anthropic Skills Course — the external-course panel + certificate upload
+              (same component as the drawer), so the workspace actually carries the course. */}
+          {isSkillsJar && (
+            <SkillsJarPanel
+              card={{ ...(card as any), status: completed ? 'completed' : (data?.progress.status || 'available') } as any}
+              onComplete={complete}
+            />
+          )}
           {/* Fallback for a non-media card with no body yet — just its description. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !fill && (
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
@@ -326,7 +336,7 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* Surveys + assessments complete via their own flow; fill cards host the gate in
               their foot. Everything else gets the completion bar here in the center. */}
-          {!isSurvey && !isAssessment && !fill && (
+          {!isSurvey && !isAssessment && !isSkillsJar && !fill && (
             <div className="rt-complete">{completeGate}</div>
           )}
         </main>
