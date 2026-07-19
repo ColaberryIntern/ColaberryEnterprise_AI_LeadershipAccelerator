@@ -7,6 +7,8 @@ import {
   levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
 } from '../../../services/onboardingApi';
 import PortalShell from './PortalShell';
+import OpenOnPhone from './OpenOnPhone';
+import { usePortalFlags } from '../../../hooks/usePortalFlags';
 import {
   readParticipant, countdown, firstClassTargetMs,
   fmtCentralDateTime,
@@ -35,6 +37,7 @@ const TodayShell: React.FC = () => {
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
 
   const me = useMemo(readParticipant, []);
+  const { flags } = usePortalFlags();
 
   const loadAll = useCallback(async () => {
     const [p, s, pr, cl, st] = await Promise.allSettled([
@@ -73,6 +76,10 @@ const TodayShell: React.FC = () => {
   const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
   const hasBackground = !!(profile && (profile.has_resume || profile.linkedin_url));
   const rsvped = !!schedule?.my_rsvp;
+  // Redesign flag (default ON while loading). firstName from the real profile —
+  // never the raw email prefix.
+  const redesign = flags?.today_redesign ?? true;
+  const firstName = profile?.profile?.full_name?.trim().split(/\s+/)[0] || '';
 
   // The real registration lives on Eventbrite; RSVP here records it + awards
   // points, then sends the student to Eventbrite to secure their seat.
@@ -149,13 +156,58 @@ const TodayShell: React.FC = () => {
     <PortalShell todayBadge={setupRemaining}>
       {toast && <div className="te-toast">{toast}</div>}
 
-      <div className="te-page-h">
-        <div className="crumb">{schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
-        <h1>Welcome{me.email ? `, ${me.email.split('@')[0]}` : ''}</h1>
-        <div className="sub">{schedule?.is_explorer
-          ? "Explore AI for free — watch, listen, learn, and try. Enroll when you're ready to build for real."
-          : "Let's get you set up. A few quick steps unlock your first points and your seat."}</div>
-      </div>
+      {redesign ? (
+        /* command band — greeting + primary next step + the three meters in one row */
+        <div className="te-band">
+          <div>
+            <div className="crumb">◆ {schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
+            <h2>{firstName ? `Welcome back, ${firstName} 👋` : 'Welcome back 👋'}</h2>
+            <p className="statline">
+              {hasBackground
+                ? <>You're all set — <b>we're personalizing your experience in the background.</b></>
+                : <>One step from your first points — <b>upload your résumé and you're set.</b> About 2 minutes.</>}
+            </p>
+            <div className="ctas">
+              {!hasBackground && (
+                <button className="te-btn cherry" type="button" onClick={() => setShowUpload(true)}>Upload résumé / LinkedIn</button>
+              )}
+              <Link className="te-btn ghost" to="/portal/path">See your path</Link>
+              <Link className="te-btn ghost" to="/portal/points">Break down my points</Link>
+            </div>
+          </div>
+          <div className="te-cluster">
+            <div className="te-ringwrap lf">
+              <div className="te-ring" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b><span>pts</span></div></div>
+              <div className="cap">{lvl.name}</div>
+            </div>
+            <div className="te-ringwrap">
+              <div className="te-ring" style={{ '--p': setupPct, '--c': 'var(--berry)' } as React.CSSProperties}><div className="v"><b>{setupDone}/{steps.length}</b><span>setup</span></div></div>
+              <div className="cap">Setup</div>
+            </div>
+            <div className="te-ringwrap">
+              <div className="te-ring" style={{ '--p': 2, '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>0</b><span>/100</span></div></div>
+              <div className="cap">Readiness</div>
+            </div>
+            <div className="te-metacol">
+              <span className="lab">Next tier</span>
+              <span className="big">{lvl.next ? lvl.next.name : 'Max level'}</span>
+              <span className="to">{lvl.next ? `${lvl.next.min - total} pts to go` : 'Top tier reached'}</span>
+              <button className="te-bandflame" type="button" onClick={doClaimStreak} disabled={claimedToday || busy}>
+                🔥 {streakCount}-day streak · {claimedToday ? 'claimed' : `claim${streak ? ` +${streak.next_points}` : ''}`}
+              </button>
+              <OpenOnPhone />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="te-page-h">
+          <div className="crumb">{schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
+          <h1>Welcome{me.email ? `, ${me.email.split('@')[0]}` : ''}</h1>
+          <div className="sub">{schedule?.is_explorer
+            ? "Explore AI for free — watch, listen, learn, and try. Enroll when you're ready to build for real."
+            : "Let's get you set up. A few quick steps unlock your first points and your seat."}</div>
+        </div>
+      )}
 
       {schedule?.is_explorer && (
         <div className="te-card" style={{ background: 'linear-gradient(135deg,#2E6A86,#367895)', color: '#fff', padding: '20px 22px', marginBottom: 18, border: 'none' }}>
@@ -180,7 +232,8 @@ const TodayShell: React.FC = () => {
 
       <div className="te-grid">
         <div>
-          {/* hero */}
+          {/* hero — the command band carries the primary CTA when the redesign flag is on */}
+          {!redesign && (
           <div className="te-hero">
             <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next step</div>
             <h2>{hasBackground ? "You're set up — we're personalizing as you go" : 'Upload your resume or LinkedIn to personalize everything'}</h2>
@@ -189,6 +242,7 @@ const TodayShell: React.FC = () => {
               : "LinkedIn can't be imported by link, so export your LinkedIn profile to PDF (profile → More → Save to PDF) or grab your resume, and upload it. We tailor your experience from it in the background."}</p>
             {!hasBackground && <button className="te-btn cherry" onClick={() => setShowUpload(true)}>Upload resume / LinkedIn</button>}
           </div>
+          )}
 
           {/* open house strip */}
           {oh && (
@@ -265,7 +319,8 @@ const TodayShell: React.FC = () => {
 
         {/* ── right sidebar ── */}
         <aside className="te-side">
-          {/* Your day */}
+          {/* Your day — meters fold into the command band when the redesign flag is on */}
+          {!redesign && (
           <div className="te-card te-scard accent-leaf">
             <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Your day</h3>
             <div className="te-stat"><span className="lab">{lvl.name}</span><span className="num">{total.toLocaleString()} pts</span></div>
@@ -280,6 +335,7 @@ const TodayShell: React.FC = () => {
             <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} to="/portal/path">See your path</Link>
             <div className="te-chip guest" style={{ marginTop: 12 }}>Free preview account</div>
           </div>
+          )}
 
           {/* Daily streak */}
           <div className="te-card te-scard te-streak accent-amber">

@@ -1744,6 +1744,13 @@ async function start(): Promise<void> {
   } catch (err: any) {
     console.warn('[DB] consent_records schema ensure failed:', err?.message);
   }
+  // Portal "Open on your phone" handoff tokens (idempotent, single-use QR bridge).
+  try {
+    const { ensureHandoffSchema } = await import('./services/portalHandoffService');
+    await ensureHandoffSchema();
+  } catch (err: any) {
+    console.warn('[DB] portal_handoff_tokens schema ensure failed:', err?.message);
+  }
   // Seed v0 automation rules (idempotent).
   try {
     const { seedDefaultAutomationRules } = await import('./services/ops/automationRulesService');
