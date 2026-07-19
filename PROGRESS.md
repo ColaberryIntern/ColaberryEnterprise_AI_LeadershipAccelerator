@@ -10,6 +10,19 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Anthropic Skills Course — tile interactions + the workspace now carries the course (2026-07-19)
+- [x] **Skills Course tile: click the picture → drawer, chevron → the course, removed the extra "Open" overlay; and the WORKSPACE now renders the course panel instead of a generic fallback**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/services/runtime/runtimeService.ts` — the runtime open endpoint now returns `course` (`courseFromMetadata`) and `points` on the card, so the workspace has the Skills Course data (this was the "it doesn't bring the info over" bug — the field was never sent).
+    - `frontend/src/pages/portal/runtime/runtimeApi.ts` — `RtCard` gains `course` + `points`.
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx` — renders `SkillsJarPanel` for `render_band === 'skills_jar'` (same component the drawer uses: branded panel, Open-in-course, certificate upload) and excludes it from the generic fallback + duplicate complete bar.
+    - `frontend/src/components/timeline/TimelineCard.tsx` — Skills Course tile: clicking the picture opens the right drawer (`role="button"`, keyboard-accessible, mirrors the podcast tile), the `>` chevron now jumps to the external course, and the redundant "Open ↗" overlay button was removed (the footer "Open" already opens the drawer).
+  - Why: Ali — on the Skills Course card, clicking the picture should open the side panel, `>` should go to the course, remove the extra Open button, and fix the workspace which showed a generic "Work through this activity" instead of the course.
+  - Verification: `tsc` + jest via CI. Post-deploy (backend + nginx): open a Skills Course card — picture→drawer, `>`→course, footer Open→drawer, and Enter workspace shows the course panel + certificate upload.
+  - Notes: backend + frontend → rebuild backend AND nginx. `.mt-openbtn` CSS is now unused (harmless).
+
 ### Card drawer (pop-up) — single scroll + remove the redundant top hero (2026-07-19)
 - [x] **The right-side card pop-up now has ONE scroll (not the drawer + the page + an inner iframe), and no redundant type-thumbnail hero at the top; applies to content cards and videos**
   - Date: 2026-07-19

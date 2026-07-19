@@ -16,7 +16,7 @@ import { computeEmploymentReadiness } from './employmentReadiness';
 import { computeCertificationReadiness } from './certificationReadiness';
 import { StudentSignals } from './readinessTypes';
 import { generateArtifact, listArtifacts } from './portfolioService';
-import { videoFromMetadata, contentFromMetadata, blogFromMetadata } from '../timeline/timelineService';
+import { videoFromMetadata, contentFromMetadata, blogFromMetadata, courseFromMetadata } from '../timeline/timelineService';
 import { selectTestimonialForEnrollment } from '../timeline/networkVideoService';
 import { selectPodcastForEnrollment } from '../timeline/podcastMediaService';
 import { selectBlogForEnrollment } from '../timeline/blogMediaService';
@@ -116,6 +116,8 @@ export async function openCard(enrollmentId: string, cardId: string) {
       estimated_time: card.estimated_time, competencies: card.competencies,
       evidence_required: !!def?.evidence_required, video,
       blog,
+      course: courseFromMetadata(card.metadata),   // Skills Course link — the workspace needs it to render SkillsJarPanel
+      points: card.points,
       content: contentFromMetadata(card.metadata),
       type_thumbnail: ((dbDef?.thumbnail_url || '') as string).trim() || null,
       week_title: bp?.title || null,
