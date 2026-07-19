@@ -9737,3 +9737,16 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: P0+P1a of `docs/PROJECT_BACKEND_PLAN.md` — give student projects a real backend around the existing unified `StudentTask` model (replacing localStorage). Additive + flag-gated → zero behavior change; unblocks P1b (localStorage migration) and Project→Today.
   - Verification: pure jest `projectTreeDto.test.ts`; backend tsc + jest = CI gate. Pre-checked exports (getProjectByEnrollment/listProjectsForEnrollment, Project/StudentTask/StudentTaskList models + `taskLists`/`tasks` associations, req.participant, env).
   - Notes: Branch `workstream/project-backend-p0` off main. Seed-vs-ensure drift on `requirement_key` NOT NULL self-heals at boot (ensure hook relaxes it) — a full seed reconcile is a noted P0 tidy-up. Not deployed; foundation only.
+
+### Project Backend — P1b write API (task status + import), flag-gated — 2026-07-19
+- [x] First write path onto StudentTask: set-task-status + one-time localStorage import; default OFF
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - `projectWriteDto.ts` (NEW, PURE): TASK_STATUSES + `isTaskStatus` guard + `importTaskToAttributes` (client import task → StudentTaskAttributes, bounded/defaulted; model import is type-only so it stays DB-free).
+    - `projectWriteService.ts` (NEW, I/O): `setTaskStatus` — ownership-scoped update of `student_tasks.status` (the FIRST StudentTask write path; `/decide` mutates RequirementsMap, a separate layer — reconcile in P2); `importProject` — get-or-create the project (`createProjectForEnrollment`) + idempotent findOrCreate of lists (by cluster) and tasks (by story_id/requirement_key), preserving existing progress.
+    - `routes/projectsPortalRoutes.ts`: + `PATCH /api/portal/projects/tasks/:taskId` and `POST /api/portal/projects/import` (Zod-validated at the boundary), flag-gated.
+    - Test `projectWriteDto.test.ts` (NEW, pure): status guard, import mapping/defaults/title-bound.
+  - Why: P1b (write half) of `docs/PROJECT_BACKEND_PLAN.md` — the backend can now persist a student's projects + task progress. Additive + flag-gated (`PROJECT_API_ENABLED`, default OFF) → zero behaviour change. Next: P1b-2 (point the frontend `projectsStore` at the API) + flag-on.
+  - Verification: pure jest `projectWriteDto.test.ts`; backend tsc + jest = CI gate. Zod v4 (`err.issues`) at the route boundary.
+  - Notes: Branch `workstream/project-backend-p1b` off main. Reconciling StudentTask (task layer) vs RequirementsMap (requirement catalog) as the single source of truth is a P2 item. Not deployed.
