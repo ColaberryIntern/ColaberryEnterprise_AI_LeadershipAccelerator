@@ -9330,6 +9330,18 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: frontend tsc --noEmit 0 errors in TodayShell.tsx (junctioned typecheck). nginx-only deploy; CI + prod smoke on deploy.
   - Notes: Deploy nginx only.
 
+### AI Mentor Intelligence — Phase 1: shared Learner Context Service (student 360) — 2026-07-19
+- [x] Both mentors now share ONE typed student-360 (persona, competency, assessment history, project) so the mentor knows the whole learner, assembled once
+  - Date: 2026-07-19
+  - Session: CC-20260718-a9k2
+  - What changed:
+    - New `backend/src/services/learnerContextService.ts` — `getLearnerContext(enrollmentId)` aggregates a typed `LearnerContext` from READ-ONLY sources via `Promise.allSettled` (resilient: one failed source → partial context, never a thrown turn): Enrollment identity + cohort + readiness, `UserCurriculumProfile` persona (company/industry/role/goal/ai_maturity/use_case), `skillGenomeService.getSkillGenome` (overall proficiency + mastered/total + top-3 gaps), cross-card `AssessmentAttempt` rollup (evals taken/passed, avg score, weakest competencies), and `getProjectByEnrollment` (name/stage/requirements%). `getLearnerContextBlock()` is the fail-safe accessor both mentors call (returns '' + structured warn on error). Deliberately does NOT call `projectProgressService.calculateProgress`/`getReadinessScore` because those WRITE cached fields back to the Project row — a side effect we must not trigger on every mentor turn; reads the cached `requirements_completion_pct` instead.
+    - New `backend/src/services/learnerContextFormat.ts` — the PURE serializer (no I/O): `renderLearnerContext` (compact, only-present-sections, token-budgeted to 900 chars) with **PII redaction** (emails + phone numbers stripped from persona free-text before it reaches the LLM) and `rollupAssessments`. Split from the I/O module so the test is hermetic.
+    - Wired BOTH mentors to the shared block: runtime `runtime/mentorService.coach()` fetches the 360 in parallel with the card-scoped context and injects it after the system persona (fail-safe); legacy `mentorService.buildMentorSystemPrompt()` REPLACED its ad-hoc `UserCurriculumProfile`+`Enrollment` persona assembly with `getLearnerContextBlock` (removed the now-unused imports) — the two mentors can no longer drift.
+    - New test `backend/src/services/__tests__/learnerContextFormat.test.ts` (8 cases): full render, empty→'' (new enrollment), partial-data, PII redaction, budget cap, `redactPII`, `rollupAssessments`.
+  - Why: Phase 1 of the AI Mentor Intelligence plan — one 360 the mentor uses to personalize and get to know the learner over time. Phase 0 (assignment-aware, PR #350) is live on prod+dev; Phases 2-4 add conversation memory + a longitudinal learner-memory writer + adaptive/model. [[project_ai_mentor_intelligence_build]]
+  - Verification: jest `learnerContextFormat.test.ts` 8/8 pass; Phase 0 `mentorContextFormat.test.ts` still 6/6 (no regression); `tsc --noEmit` clean for our source (only the known zod v4 / @types/d3 `.d.cts` local-env errors remain; Docker CI tsc authoritative).
+  - Notes: Branch `workstream/mentor-learner-context` off `main` (a030de8d, includes Phase 0). Backend-only. Read-only aggregation by design; the two per-turn heavy calls (`getSkillGenome` decay recompute) are acceptable now — a short-TTL cache is a noted Phase-2+ optimization if mentor turns get hot.
 ### Classroom: completed cards inline + compact (regular smaller feed post) — 2026-07-19
 - [x] Reverted the collapsible "Completed (N)" section — completed cards now stay INLINE in timeline order but render compact (a smaller FB-style post: text + social footer, no big media tile)
   - Date: 2026-07-19
