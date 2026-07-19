@@ -10,6 +10,17 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Card drawer (pop-up) — single scroll + remove the redundant top hero (2026-07-19)
+- [x] **The right-side card pop-up now has ONE scroll (not the drawer + the page + an inner iframe), and no redundant type-thumbnail hero at the top; applies to content cards and videos**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `frontend/src/components/timeline/CardDetailDrawer.tsx` — lock `document.body` overflow while the drawer is open (restored on close), so the classroom page behind no longer scrolls alongside the drawer (this was the "two scrolls" on Self Study + Video).
+    - `frontend/src/components/timeline/CardDetailBody.tsx` — (a) removed the redundant hero: the type's Studio thumbnail was rendered again at the top of the drawer (it's already on the classroom tile). (b) The generic (non-reader) lesson iframe now renders `sandbox="allow-same-origin"` and auto-sizes to its content on load, so it no longer scrolls internally — the drawer body is the single scroll (falls back to the CSS height if measuring fails). The Self Study reader keeps its own scripted single-scroll.
+  - Why: Ali — the pop-up showed two scrollbars (should be one, like the reader), and the picture at the top is redundant; fix videos too.
+  - Verification: Frontend `tsc` via CI (authoritative). Post-deploy (nginx): open a card drawer and confirm a single scrollbar + no top thumbnail; check Self Study, an announcement/overview, and a video.
+  - Notes: frontend-only → nginx rebuild. `allow-same-origin` here has NO `allow-scripts`, so no script runs; it only lets the parent measure the content height.
+
 ### Orchestration Timeline — interactive OVERVIEW board (drag/activate/delete on the collapsed map) (2026-07-19)
 - [x] **Replaced the static Mermaid overview map with an interactive board so cards can be reordered/activated/deleted without expanding**
   - Date: 2026-07-19
