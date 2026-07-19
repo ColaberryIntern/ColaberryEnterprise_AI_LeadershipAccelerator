@@ -216,7 +216,7 @@ const RuntimeWorkspace: React.FC = () => {
         <main className={`rt-mid${fill ? ' rt-mid--reader' : ''}`}>
           {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
               their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
-          {!isVideo && !fill && card.type_thumbnail && (
+          {!isVideo && !isSkillsJar && !fill && card.type_thumbnail && (
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
@@ -319,10 +319,16 @@ const RuntimeWorkspace: React.FC = () => {
           {/* Anthropic Skills Course — the external-course panel + certificate upload
               (same component as the drawer), so the workspace actually carries the course. */}
           {isSkillsJar && (
-            <SkillsJarPanel
-              card={{ ...(card as any), status: completed ? 'completed' : (data?.progress.status || 'available') } as any}
-              onComplete={complete}
-            />
+            // Wrap in .tl-de so the SkillsJarPanel picks up the Design-E palette +
+            // its tld-jar* styling (defined in timeline.css, scoped under .tl-de) —
+            // otherwise it renders unstyled (a giant raw icon). The workspace column
+            // is wider than the drawer, so it reads as the same panel, widened.
+            <div className="tl-de">
+              <SkillsJarPanel
+                card={{ ...(card as any), status: completed ? 'completed' : (data?.progress.status || 'available') } as any}
+                onComplete={complete}
+              />
+            </div>
           )}
           {/* Fallback for a non-media card with no body yet — just its description. */}
           {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && (

@@ -10,6 +10,16 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Skills Course workspace — style the panel like the drawer + drop the hero image (2026-07-19)
+- [x] **The Skills Course workspace panel now renders styled like the right-side drawer (was a giant unstyled icon) and no longer shows a redundant hero image**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx` — (a) wrapped the workspace `SkillsJarPanel` in a `.tl-de` container so it picks up the Design-E palette + the `tld-jar*` styling (defined in `timeline.css`, scoped under `.tl-de`); without it the panel rendered unstyled (a huge raw graduation-cap icon). (b) Skip the workspace hero image for `skills_jar` (the marbles picture at the top was redundant).
+  - Why: Ali — the Skills Course workspace should look like the right-side panel (just widened) and not show the picture at the top.
+  - Verification: Frontend `tsc` via CI. Post-deploy (nginx): Enter workspace on a Skills Course card — the branded SkillsJar panel + Open-in-course + upload should look like the drawer, wider, with no top image.
+  - Notes: frontend-only → nginx rebuild. The workspace column (~820px) is wider than the ~520px drawer, so it reads as the same panel, widened.
+
 ### Anthropic Skills Course — tile interactions + the workspace now carries the course (2026-07-19)
 - [x] **Skills Course tile: click the picture → drawer, chevron → the course, removed the extra "Open" overlay; and the WORKSPACE now renders the course panel instead of a generic fallback**
   - Date: 2026-07-19
@@ -9716,3 +9726,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali — "Add this to our knowledgebase as information about our philosophy and as a document that can be downloaded. Use Colaberry real logo instead of the fake one."
   - Verification: <FILL: prod nginx build + live KB page shows the entries + the /knowledge/downloads/ doc loads>. `curriculum-kb.js` passes `node --check`; `kb.json` regenerated + the entry's `reference` resolves to the placed file; doc is self-contained (logo data URI, no external deps except optional fonts). The `/knowledge` hub reads the source JS module directly, so the download link renders from the committed module.
   - Notes: [[project_customer_kb_sync_training_site]] The public KB is static JS data modules under `frontend/public/knowledge/` (not a DB/API); add an entry = edit a `*-kb.js` module + `node build-kb.js` + deploy nginx. Downloadable assets live under `frontend/public/knowledge/` (served at the /knowledge root). A PDF variant can be generated on request for a forced-download button (engine auto-adds `download` only for `.pdf`).
+### Project Backend — P0 schema converge + P1 read API (flag-gated) — 2026-07-19
+- [x] Persisted student-projects read API over the unified StudentTask hierarchy + the blocked_by gating column; default OFF
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - **P0:** added `blocked_by` JSONB to `StudentTask` (model + `ensureStudentTaskMergeSchema` ALTER in server.ts) for walking-skeleton release gating (the localStorage `blockedBy`). Additive/idempotent.
+    - **P1a read API** (flag `PROJECT_API_ENABLED`, default off → 404): `backend/src/services/projects/projectTreeDto.ts` (NEW, PURE mappers — project→lists→tasks DTO + task_counts + ordering), `projectReadService.ts` (NEW, I/O — ownership-scoped `getActiveProjectTree`/`getOwnedProjectTree`/`listEnrollmentProjectsSummary`), `routes/projectsPortalRoutes.ts` (NEW — `GET /api/portal/projects`, `/active`, `/:projectId`; requireParticipant; no-store) mounted in participantRoutes. `env.projectApiEnabled` flag.
+    - Test `projectTreeDto.test.ts` (NEW, pure): field mapping/defaults, task ordering, list ordering + status counts, active-flag.
+  - Why: P0+P1a of `docs/PROJECT_BACKEND_PLAN.md` — give student projects a real backend around the existing unified `StudentTask` model (replacing localStorage). Additive + flag-gated → zero behavior change; unblocks P1b (localStorage migration) and Project→Today.
+  - Verification: pure jest `projectTreeDto.test.ts`; backend tsc + jest = CI gate. Pre-checked exports (getProjectByEnrollment/listProjectsForEnrollment, Project/StudentTask/StudentTaskList models + `taskLists`/`tasks` associations, req.participant, env).
+  - Notes: Branch `workstream/project-backend-p0` off main. Seed-vs-ensure drift on `requirement_key` NOT NULL self-heals at boot (ensure hook relaxes it) — a full seed reconcile is a noted P0 tidy-up. Not deployed; foundation only.
