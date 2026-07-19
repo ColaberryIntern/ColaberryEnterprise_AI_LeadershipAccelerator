@@ -48,3 +48,10 @@ export function buildNudge(s: StruggleInputs): Nudge {
   const { struggling, reasons } = detectStruggle(s);
   return { struggling, reasons, message: nudgeMessage(reasons) };
 }
+
+/** PURE — greet the student by their first name, if known. */
+export function personalize(message: string | null, firstName: string): string | null {
+  if (!message) return null;
+  const fn = (firstName || '').trim();
+  return fn ? `${fn} — ${message}` : message;
+}

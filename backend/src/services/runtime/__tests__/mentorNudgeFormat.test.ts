@@ -2,7 +2,7 @@
  * mentorNudgeFormat — unit tests for the pure struggle detector + nudge message.
  * Hermetic (no DB).
  */
-import { detectStruggle, nudgeMessage, buildNudge, StruggleInputs } from '../mentorNudgeFormat';
+import { detectStruggle, nudgeMessage, buildNudge, personalize, StruggleInputs } from '../mentorNudgeFormat';
 
 const base: StruggleInputs = { turnsOnCard: 0, attempts: 0, gradedLock: false, failedEval: false, lowScorePct: null };
 
@@ -52,5 +52,13 @@ describe('buildNudge', () => {
     const n = buildNudge({ ...base, attempts: 3 });
     expect(n.struggling).toBe(true);
     expect(n.message).toBeTruthy();
+  });
+});
+
+describe('personalize', () => {
+  it('greets by first name when known, passes through otherwise', () => {
+    expect(personalize('I noticed this one is tricky.', 'Sofia')).toBe('Sofia — I noticed this one is tricky.');
+    expect(personalize('hi', '')).toBe('hi');
+    expect(personalize(null, 'Sofia')).toBeNull();
   });
 });
