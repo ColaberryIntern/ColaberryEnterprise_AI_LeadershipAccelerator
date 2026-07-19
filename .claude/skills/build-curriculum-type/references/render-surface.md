@@ -7,6 +7,13 @@ The mistake that cost the most rework across the Overview / Self Study builds wa
 Student renderer: `frontend/src/components/timeline/CardDetailBody.tsx` (+ siblings
 `studio/StudentPreview.tsx`, `portal/runtime/RuntimeWorkspace.tsx`).
 
+**A type renders on THREE surfaces — always review all three** (see the skill's "Preview
+across ALL perspectives" step): the classroom **tile** (`TimelineCard.tsx`), the **pop-up
+drawer** (this doc), and the **workspace** (`RuntimeWorkspace.tsx`). The drawer lives inside
+`.tl-de` (Design-E palette + `tld-*` styling); the workspace does NOT — so a bespoke panel
+reused there must be wrapped in `.tl-de` or it renders unstyled, and the runtime open
+endpoint (`runtimeService.ts`) must return the fields the panel reads (e.g. `course`, `points`).
+
 ---
 
 ## Physical constraints

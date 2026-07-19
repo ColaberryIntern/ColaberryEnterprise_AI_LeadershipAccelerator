@@ -152,6 +152,34 @@ and returns only a 5-key subset — so **preview is a lower-fidelity approximati
 
 **H. Verify.** `GET /api/admin/components/:slug`; if any code changed, `tsc --noEmit`.
 
+### Preview across ALL perspectives — tile + pop-up + workspace (REQUIRED)
+The API `/preview` (step E) is ONE low-fidelity approximation. Every type renders on
+**three real surfaces**, and it can look right on one and broken on another — the Skills
+Course looked perfect in the drawer but rendered as a **giant unstyled icon in the
+workspace**, because the workspace is not a `.tl-de` container so the `timeline.css`
+styling never applied. So always review the REAL generated content on all three:
+
+1. **The tile** (classroom feed) — `TimelineCard.tsx`: the `type_thumbnail`/poster, the
+   `student_label` chip, the meta line, and the click/open behavior (which button opens the
+   drawer vs. an external link).
+2. **The pop-up drawer** (~400–560px, inside `.tl-de`) — `CardDetailBody.tsx`: the real
+   `lessonDoc(body_html)` for a generic band, or the bespoke renderer (reader/survey/quiz/
+   skills). Generic `body_html` **keeps its own `<style>`** (lessonDoc does NOT strip it);
+   the reader/deepdive path DOES strip `<style>/<script>` via `stripUnsafe`.
+3. **The workspace** — `RuntimeWorkspace.tsx`: the center render for the band (a `fill`
+   iframe for `body_html`; a bespoke panel otherwise) plus the AI Mentor + comments +
+   readiness bar. **Bespoke panels must be wrapped in `.tl-de`** so their scoped CSS applies,
+   and the runtime open endpoint (`runtimeService.ts`) must actually RETURN the fields the
+   panel needs (e.g. `course`, `points`) — a field the feed sends but the runtime omits is
+   why "the workspace doesn't bring the info over."
+
+**Render it faithfully with no live server:** generate the REAL persisted content on dev
+(`generateCardContent(cardId)` via the exec pattern — the 3200-token student path, NOT the
+1800-token `/preview`), then build ONE self-contained HTML that shows the card as a tile, a
+~430px drawer frame that reconstructs `lessonDoc`/`readerDoc` **verbatim** (base stylesheet +
+the card's `body_html` in a sandboxed iframe), and a wide workspace frame — and open it for
+Ali. Do this for every type so Ali reviews the whole journey at once, not one screen at a time.
+
 ### Running against dev without a server/auth (the proven pattern)
 `accelerator-dev-backend` on the VPS runs current main with DB `accelerator_dev1`
 (**the env var `DB_NAME=accelerator_prod` LIES — always confirm with `select current_database()`**).
@@ -212,7 +240,7 @@ CI ≠ validated. Validate locally or via the dev-exec pattern. Prod deploys aft
 ## Definition of Done
 - [ ] Component created/updated by slug; all JSONB contracts explicit (`[]`/`{}`).
 - [ ] `generation_prompt` grounded in WEEK CONTEXT, uses the section title (never the number), unused keys set explicitly.
-- [ ] Previewed against a real week **in the drawer's shape**; render verdict good.
+- [ ] Previewed against a real week across **ALL perspectives** (tile + pop-up drawer + workspace), each render verdict good — a type can look right in the drawer but broken in the workspace (unstyled panel / missing runtime field). See "Preview across ALL perspectives".
 - [ ] Thumbnail set (asset path preferred) and showing on all surfaces it should.
 - [ ] Approved (if Ali signed off) — remember it gates the Composer.
 - [ ] **Promoted:** `seedComponentAuthoring.ts` entry committed **and** `typeRegistry.ts` updated if the chip/metadata changed.
