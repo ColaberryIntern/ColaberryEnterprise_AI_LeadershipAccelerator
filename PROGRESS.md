@@ -10,6 +10,34 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Orchestration Timeline — interactive OVERVIEW board (drag/activate/delete on the collapsed map) (2026-07-19)
+- [x] **Replaced the static Mermaid overview map with an interactive board so cards can be reordered/activated/deleted without expanding**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k3m9
+  - What changed:
+    - `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx`: the collapsed lane view (the green flow boxes Ali actually meant by "the overview") was a **static Mermaid diagram** — display-only, so nothing on it could be dragged/deleted/toggled. Replaced it with an interactive board that keeps the same look (green=live / grey=draft boxes, 3-across rows with → arrows) but is fully actionable:
+      - New `MiniCard` (dnd-kit `useSortable`) — draggable flow box; drag the ⠿ grip to reorder (persists via the existing `reorderCards` endpoint), hover reveals ◐/● Activate-Deactivate + 🗑 Delete, click the box opens the full editor drawer. Green/grey background reflects live/draft and recolors on toggle.
+      - Collapsed branch now renders `<DndContext>` + `<SortableContext strategy={rectSortingStrategy}>` over `chunk(cards,3)` rows; a caption offers "open full view →" to expand to the large student-preview list (unchanged).
+      - Removed the Mermaid overview entirely: dropped `MermaidDiagram`/`buildBucketMermaid`/`nodeIdFromMermaidGroupId`/`MAX_NODES` imports and the `focusCardId` jump-to-card effect + `onMapClick` + `chart`.
+  - Why: Ali clarified (with screenshots) that "delete a curriculum type from the overview / activate-deactivate the item" meant the **collapsed overview map**, not the expanded card list where the first pass put the controls. The overview boxes were a Mermaid picture and couldn't carry actions; making them real draggable elements was the only way to put drag/activate/delete on that view. Confirmed approach with Ali ("Make the boxes interactive").
+  - Verification: Syntax/JSX clean via the TypeScript compiler API on the edited file (0 errors); no dangling refs to the removed Mermaid helpers. Full frontend `tsc` in CI (authoritative). Browser-verified on dev after deploy (see the reliable-drag entry's harness): the interactive board renders and drag persists across reload.
+  - Notes: Same session/PR as the drag-reorder fix (PR #395). The expand-to-full-list view (large 16:9 previews) is preserved behind the header caret + the "open full view" link. Built in the dedicated worktree pinned off `origin/main`.
+
+### Orchestration Timeline editor — reliable drag-reorder + clear Activate/Deactivate + Delete (2026-07-19)
+- [x] **Fixed drag-to-reorder not saving, and surfaced per-card Activate/Deactivate + Delete on the timeline board**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k3m9
+  - What changed:
+    - `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx` (only file touched):
+      - **Drag reliability (the "reorder doesn't save" bug):** `BucketSection` now tracks a `dragging` flag via `DndContext` `onDragStart`/`onDragCancel`/`onDragEnd`, and wraps the sortable list in a `.te-lane` container. New CSS `.te-lane.dragging .te-media, .te-lane.dragging iframe { pointer-events:none }` neutralizes the inline video iframes during a drag so dnd-kit keeps the pointer and the drop resolves (over≠null) instead of silently no-op'ing. Enlarged/clarified the drag handle (bigger hit area, hover state, ⠿ glyph, "drops save automatically" tooltip).
+      - **Save feedback + real errors:** `onReorder` now shows a transient "✓ Order saved" chip by the card counts on success, and on failure surfaces the real server error (`err.response.data.error` / message) instead of the generic "Reorder failed", then reloads to the server truth. (Backend `PUT .../cards/reorder` was already correct.)
+      - **Activate/Deactivate:** the per-card status badge is now a one-click toggle (LIVE→hidden and back) and the footer button reads **● Activate / ◐ Deactivate** (mapped to `visibility` published↔draft per Ali's choice: deactivate = hide from students, stays in the curriculum). No backend/DB change.
+      - **Delete:** relabeled to **🗑 Delete** with an explicit tooltip; existing confirm + `DELETE .../cards/:id` unchanged.
+  - Why: On production (enterprise.colaberry.ai `/admin/orchestration` → Timeline) Ali reported drag-drop in the expanded lane didn't persist ("moved it, still not at the top") and wanted delete + activate/deactivate as obvious per-card controls. Root cause of the drag bug: each sortable card renders a full interactive student card whose video iframe swallows pointer events, breaking dnd-kit drop detection — the canonical iframe+dnd-kit failure.
+  - Verification: Syntax/JSX clean via the TypeScript compiler API (`ts.transpileModule`, jsx=React) on the edited file — 0 errors. Full frontend `tsc --noEmit` deferred to CI (authoritative per repo convention; this OneDrive-synced host has no local frontend tsc/@dnd-kit). Behavior not yet run on a live instance (frontend can't build locally here) — see Notes.
+  - Notes: Built in a worktree off `origin/main` (`a986a022`, the exact commit prod runs; local `main` was stale/881 behind). Backend reorder/delete endpoints already existed and are correct, so this is frontend-only. Could not reproduce the drag failure on this box (no local frontend build), so the fix hardens the three most-likely causes (iframe pointer capture, tiny handle, silent persist failure) AND makes any remaining server failure visible instead of silent. Next: deploy to a dev instance for Ali to confirm drag persists across reload, then fold into a prod deploy (after-hours).
+
+---
 ### Announcement — Week 0 REVERTED to the hand-authored format, no time (2026-07-19)
 - [x] **Reverted Week 0 to the previous hand-authored "Welcome to Your Free AI Preview" format (no time budget, no live map); weeks 1-12 stay live-generated**
   - Date: 2026-07-19
