@@ -157,6 +157,9 @@ const RuntimeWorkspace: React.FC = () => {
       const r = await runtimeApi.complete(card.id, work, reflectionText);
       setArtifact(r.artifact); setReadiness(r.readiness); setCompleted(true);
       setMsgs((m) => [...m, { role: 'assistant', content: r.artifact ? `Nice — I turned your work into a portfolio artifact: "${r.artifact.title}". Your readiness just updated below.` : 'Completed — your progress and readiness updated below.', kind: 'complete' }]);
+      // Deep Dive: on completion, return the student to the Classroom right where they
+      // left off (it restores their week + scroll) — now with this card marked complete.
+      if (isDeepDive) setTimeout(goBack, 900);
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
 

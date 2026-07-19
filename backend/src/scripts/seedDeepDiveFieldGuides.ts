@@ -28,7 +28,7 @@ const GUIDES: Guide[] = [
   { week: 0, title: 'Deep Dive - Understanding Modern Software Development', description: 'The SDLC Field Guide - the map for the next twelve weeks (read-only).', b64: DEEP_DIVE_WK0_HTML_B64, requiresUpload: false },
   // Week 1+ the student builds a Field Guide in their own Claude Code and uploads it
   // (requires_field_guide_upload gates completion server-side + awards 100 points).
-  { week: 1, title: 'Deep Dive - Business Analysis', description: 'The Business Analysis Field Guide - build it in your own Claude Code.', b64: DEEP_DIVE_WK1_HTML_B64, requiresUpload: true },
+  { week: 1, title: 'Deep Dive - Business Analyst', description: 'The Business Analyst Field Guide - build it in your own Claude Code.', b64: DEEP_DIVE_WK1_HTML_B64, requiresUpload: true },
 ];
 
 async function seedOne(g: Guide, programId: string): Promise<{ week: number; created: boolean; card_id: string }> {

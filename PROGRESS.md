@@ -9603,3 +9603,15 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali — "when i go through 3 green checks and then switch to workspace, I should see the same sections checked - it should not start over." (The earlier fix moved persistence to the host but the empty-first-render race still wiped it.)
   - Verification: DEPLOYED via PR #413 → prod at HEAD d21a7faf; nginx CRA build passed (tsc gate), new bundle main.65df4491.js served with the `dd:progress` persistence key; site 200. Logic verified by trace (empty-first-render no longer clobbers stored ids; restore re-checks). Frontend-only (useDeepDiveHost.ts) — no backend/base64/reseed; guides unchanged. Browser retest of drawer→workspace carry-over is Ali's to confirm.
   - Notes: [[reference_deep_dive_field_guide_platform]] Key lesson: a host that mirrors an iframe's self-reported progress must treat progress as accumulate-only, or the iframe's fresh-load empty state clobbers the restore it is about to receive.
+
+### Deep Dive Field Guide — Wk1 polish: "Business Analyst", single complete button, auto-return to classroom — 2026-07-19
+- [x] Three Week-1 fixes from Ali's screenshots
+  - Date: 2026-07-19
+  - Session: CC-20260718-k9x2
+  - What changed:
+    - **"Business Analysis" → "Business Analyst"** across the Week 1 guide (title, H1, eyebrow, meta, roadmap chip, build prompt) + the card title in `seedDeepDiveFieldGuides.ts`; reworded the few prose sentences so the ROLE reads naturally ("The Business Analyst decides…", activity stays lowercase "business analysis").
+    - **Two complete buttons → one:** removed the guide's own internal "Complete" button (a decoy that only changed its own label) from the guide's action bar; completion is now solely the platform's "Mark complete" (driven by the guide's `complete` postMessage). Guarded the JS that referenced it.
+    - **Auto-return to classroom:** in `RuntimeWorkspace.complete()`, a Deep Dive now navigates back to `/portal/classroom` (~900ms after success) so the student lands where they were, with the card marked complete — Ali: "like hitting the back button… only it marked complete now."
+  - Why: Ali's screenshot feedback on the Week 1 workspace.
+  - Verification: <FILL: prod backend+nginx build + reseed>. wk1 JS parses clean (vm.Script), base64 round-trip OK, 56991 bytes (< 64 KB), zero `completeBtn`/"Business Analysis" left.
+  - Notes: Auto-return scoped to `isDeepDive` only (other card types keep the stay-on-workspace + readiness behavior). Weeks 2-12 (same format) are the next build — arc from the Wk0 roadmap: Solution Architecture, Project Management, Software Engineering, UX, QA, Integration, AI Systems, Data Architecture, DevOps, Ops & Governance, AI Solution Architecture.
