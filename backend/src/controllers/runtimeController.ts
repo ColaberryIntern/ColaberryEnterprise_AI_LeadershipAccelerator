@@ -8,12 +8,14 @@ import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
 import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
+import { getNudge } from '../services/runtime/mentorNudgeService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
 import { getAssessment, submitAssessment, sectionResultsSummary } from '../services/runtime/assessmentService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
+import { uploadFieldGuide, getFieldGuideStatus } from '../services/runtime/fieldGuideService';
 import fs from 'fs/promises';
 
 function fail(res: Response, err: any, next: NextFunction) {
@@ -34,6 +36,12 @@ export async function handleMentor(req: Request, res: Response, next: NextFuncti
     const ctx = await cardContext(String(req.params.cardId));
     res.json(await coach(eid(req), ctx, b.mode as MentorMode, b.message, b.history || []));
   } catch (e) { fail(res, e, next); }
+}
+
+// Proactive nudge: on card open, if the student looks stuck, the mentor offers
+// help unprompted. Read-only + fail-safe; returns { struggling, reasons, message }.
+export async function handleNudge(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getNudge(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
 }
 
 export async function handleReflection(req: Request, res: Response, next: NextFunction) {
@@ -71,6 +79,19 @@ export async function handleGetCertificate(req: Request, res: Response, next: Ne
     res.setHeader('Content-Disposition', `inline; filename="${cert.download}"`);
     res.send(buf);
   } catch (e) { fail(res, e, next); }
+}
+
+// Deep Dive Field Guide: the student uploads the .html they built in Claude Code.
+// Stores it as a portfolio artifact + awards a one-time 100-point bonus. GET = status.
+export async function handleUploadFieldGuide(req: Request, res: Response, next: NextFunction) {
+  try {
+    const file = (req as any).file;
+    if (!file) { res.status(400).json({ error: 'No Field Guide file uploaded.' }); return; }
+    res.json(await uploadFieldGuide(eid(req), String(req.params.cardId), file));
+  } catch (e) { fail(res, e, next); }
+}
+export async function handleGetFieldGuide(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getFieldGuideStatus(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
 }
 
 const labSchema = z.object({ prompt: z.string().min(1), output: z.string().optional() });

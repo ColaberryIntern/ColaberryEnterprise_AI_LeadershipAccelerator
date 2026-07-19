@@ -11,6 +11,8 @@ export interface RtCard {
   evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
+  course?: { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null;   // Skills Course link (skills_jar)
+  points?: { learning?: number; builder?: number; community?: number } | null;
   type_thumbnail?: string | null;   // the type's picture — hero banner with the title overlaid
   week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title
 }
@@ -25,8 +27,15 @@ export interface Readiness {
   evidence: { github: { repos: number; commits: number; prs: number }; portfolio: { entries: number; artifacts: number } };
   portfolio: Array<{ id: string; kind: string; title: string; summary: string | null }>;
 }
+export interface FieldGuideStatus { uploaded: boolean; uploaded_at: string | null; filename: string | null; size_bytes: number | null }
+export interface FieldGuideUploadResult {
+  uploaded: boolean; filename: string; size_bytes: number; uploaded_at: string;
+  points_awarded: number; already_awarded: boolean;
+  artifact: { id: string; kind: string; title: string; summary: string };
+}
 export interface PromptEval { score: number; architect_score: number; strengths: string[]; gaps: string[]; suggestions: string[]; better_prompt: string }
 export interface MentorReply { reply: string; kind: string }
+export interface Nudge { struggling: boolean; reasons: string[]; message: string | null }
 export interface CardComment { id: string; body: string; author: string; mine: boolean; created_at: string }
 export interface SurveyAnswerItem { question: string; rating: number | null; comment: string | null }
 export interface SurveyAnswers { items: SurveyAnswerItem[]; open: string | null }
@@ -68,6 +77,7 @@ export interface AssessmentSubmit {
 
 export const runtimeApi = {
   open: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}`).then((r) => r.data as RtOpen),
+  nudge: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/nudge`).then((r) => r.data as Nudge),
   mentor: (cardId: string, mode: string, message: string, history: Array<{ role: string; content: string }>) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/mentor`, { mode, message, history }).then((r) => r.data as MentorReply),
   reflection: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/reflection`).then((r) => r.data as { questions: string[] }),
@@ -85,4 +95,10 @@ export const runtimeApi = {
   assessment: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/assessment`).then((r) => r.data as AssessmentView),
   submitAssessment: (cardId: string, payload: AssessmentSubmit) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/assessment`, payload).then((r) => r.data as AssessmentResult),
+  // Deep Dive Field Guide: read upload status / upload the .html built in Claude Code (+100 pts, once).
+  fieldGuideStatus: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/field-guide`).then((r) => r.data as FieldGuideStatus),
+  uploadFieldGuide: (cardId: string, file: File) => {
+    const fd = new FormData(); fd.append('file', file);
+    return portalApi.post(`/api/portal/runtime/cards/${cardId}/field-guide`, fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then((r) => r.data as FieldGuideUploadResult);
+  },
 };

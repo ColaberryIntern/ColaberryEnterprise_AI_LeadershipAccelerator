@@ -27,7 +27,14 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview 
     if (!card) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    // Lock the page behind the drawer so the pop-up is a SINGLE scroll — not the
+    // drawer AND the classroom page both scrolling.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [card, onClose]);
 
   if (!card) return null;

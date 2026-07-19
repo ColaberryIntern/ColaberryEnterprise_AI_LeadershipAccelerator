@@ -164,7 +164,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const metaLine = [card.estimated_time ? `${card.estimated_time} min` : null, card.difficulty].filter(Boolean).join(' · ');
   // Media/external cards keep their authored title casing; curriculum content
   // titles are Title-Cased for display.
-  const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
+  const externalTitle = v.kind === 'video' || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
   const tc = (s: string) => (externalTitle ? s : toTitleCase(s));
   const shortTitle = tc((card.week_title || card.content?.title || card.title).replace(/^[^·]*· /, ''));
 
@@ -226,18 +226,22 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   );
 
   const media = isSkillsJar ? (
-    <div className="mthumb skilljar" style={posterStyle}>
+    // Clicking the tile opens the right panel (course details + certificate upload);
+    // the chevron jumps straight to the external course. No separate "Open" overlay —
+    // the footer "Open" button already opens the panel.
+    <div
+      className="mthumb skilljar" style={posterStyle}
+      role="button" tabIndex={0}
+      onClick={() => !locked && onOpen?.(card)}
+      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); onOpen?.(card); } }}
+      aria-label={`Open ${card.title}`}
+    >
       {watermark}
       <span className="mt-chip"><span className="sw" style={{ background: v.color }} />{card.student_label}</span>
       <span className="mt-meta"><b>{shortTitle}</b><span>{metaText}</span></span>
       <div className="mt-actions" onClick={(e) => e.stopPropagation()}>
-        {/* Not a playable medium — the circle opens the right panel (details), so
-            it carries an open-panel chevron, not a ▶ (▶ is reserved for playback). */}
-        <button type="button" className="mt-play" onClick={() => !locked && onOpen?.(card)} aria-label={`Course details: ${card.title}`}>
+        <button type="button" className="mt-play" onClick={openCourseLink} aria-label={course?.url ? 'Go to the course' : 'Open course details'}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-        </button>
-        <button type="button" className="mt-openbtn" onClick={openCourseLink} aria-label={course?.url ? 'Open the course link' : 'Open course details'}>
-          Open <svg viewBox="0 0 24 24" fill="none"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
       </div>
     </div>

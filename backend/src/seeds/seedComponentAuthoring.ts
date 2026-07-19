@@ -183,6 +183,67 @@ const EVALUATION_GENERATION_PROMPT = [
   'Return questions as [], reflection as "", discussion_prompt as "", github_task as null, evaluation_criteria as []. Executive tone. No emojis.',
 ].join('\n');
 
+// ── announcement (the friendly weekly kickoff) ───────────────────────────────
+// The FIRST card in every section (pre_class). A roster-summary type
+// (SECTION_ROSTER_TYPES) whose runtime prepends the week Blueprint ("WEEK
+// CONTEXT") AND the week's real activity roster ("THIS WEEK'S ACTIVITIES"), so it
+// scans the section and reports what's ahead in a warm, emoji-rich "mini report".
+// Generic render band → it ships its own self-contained CSS inside body_html
+// (lessonDoc preserves <style>). Week 0 is hand-authored + locked (the free-
+// preview welcome); weeks 1+ generate live from this prompt and reset when the
+// week's curriculum changes.
+const ANNOUNCEMENT_GENERATION_PROMPT = [
+  'You write the weekly Announcement for the AI Systems Architect Accelerator: the warm, friendly kickoff AND the MAP of everything the student will do this week. The WEEK CONTEXT above gives the week topic, objectives, outcomes, and level. THIS WEEK\'S ACTIVITIES above lists the ACTUAL curriculum items placed in this week, in journey order with each item\'s phase in brackets. Ground everything in both; invent nothing.',
+  '',
+  'VOICE: warm, encouraging, human, playful. Lots of friendly emoji. Plain English, no jargon, no hype.',
+  'TITLE: exactly the words "This Week", then a space, an em dash, a space, then the week\'s topic EXACTLY as written in the WEEK CONTEXT above — copy it verbatim; do NOT paraphrase, shorten, or invent a different topic. Example: "This Week — Claude Code Foundations + Workspace".',
+  'SUMMARY: one friendly, inviting sentence previewing the week.',
+  '',
+  'BODY_HTML: output the following, in order, and NOTHING else.',
+  'FIRST, copy this <style> block VERBATIM, character for character — do not change any value, class name, or rule:',
+  '<style>',
+  '  body{max-width:1080px;margin:0 auto;background:#fbfaf7;color:#1a2024;padding:24px;line-height:1.6}',
+  '  h1,h2,p{margin:0}',
+  '  .awh{background:linear-gradient(135deg,#2a7d8c,#4c5bd4);color:#fff;border-radius:20px;padding:32px 26px;text-align:center;margin-bottom:24px}',
+  '  .awh .w{font-size:40px;display:block;margin-bottom:10px}',
+  '  .awh h1{color:#fff;font-size:24px;margin-bottom:10px;line-height:1.25}',
+  '  .awh p{color:#eaf6f8;font-size:16px;line-height:1.6;max-width:54ch;margin:0 auto}',
+  '  .awo{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-bottom:32px}',
+  '  .awo .s{flex:1;min-width:140px;background:#fff;border:1px solid #e7e3da;border-radius:16px;padding:18px 16px;text-align:center}',
+  '  .awo .s b{display:block;font-size:22px;color:#227d8e;line-height:1.15}',
+  '  .awo .s span{display:block;font-size:11.5px;color:#5b6772;text-transform:uppercase;letter-spacing:.05em;font-weight:700;margin-top:7px}',
+  '  .awe{font-size:13px;letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:#227d8e;margin-bottom:20px;text-align:center}',
+  '  .awp{margin-bottom:32px}',
+  '  .awp h2{font-size:18px;margin-bottom:16px;display:flex;align-items:center;gap:10px;justify-content:space-between}',
+  '  .awp h2 .st{font-size:13px;font-weight:700;color:#8a94a0}',
+  '  .awg{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}',
+  '  .awk{display:flex;gap:14px;align-items:flex-start;background:#fff;border:1px solid #e7e3da;border-radius:16px;padding:18px 20px}',
+  '  .awk .i{font-size:28px;line-height:1;flex:none}',
+  '  .awk b{font-size:15.5px;display:block;margin-bottom:5px}',
+  '  .awk .d{font-size:14px;color:#5b6772;line-height:1.55}',
+  '  .awk .tm{display:inline-block;margin-top:8px;font-size:12.5px;font-weight:700;color:#8a94a0}',
+  '  .awb{background:#e8f3f5;border:1px solid #cfe6ea;border-radius:18px;padding:24px 26px;margin-bottom:20px}',
+  '  .awb h2{font-size:18px;margin-bottom:10px;color:#155e6b;display:flex;align-items:center;gap:10px}',
+  '  .awb p{font-size:15px;color:#2c5560;line-height:1.7}',
+  '  .awy{padding:8px 6px}',
+  '  .awy h2{font-size:18px;margin-bottom:10px;color:#227d8e;display:flex;align-items:center;gap:10px}',
+  '  .awy p{font-size:15px;line-height:1.7}',
+  '</style>',
+  '',
+  'THEN the content, using ONLY these classes and this structure — no other classes, no inline style attributes, no <script>, no <img>. ALL time numbers come straight from THIS WEEK\'S ACTIVITIES (the total, the per-phase totals, and each activity\'s minutes) — use those exact numbers, never invent or re-estimate a time:',
+  '  <div class="awh"><span class="w">👋</span><h1>a warm welcome that names the week</h1><p>one sentence on this week\'s big idea</p></div>',
+  '  A top overview of how much work this week is — 3 stat tiles: <div class="awo"><div class="s"><b>⏱️ {total time from the header, e.g. ~4.5 hrs}</b><span>This week</span></div><div class="s"><b>📚 {N activities from the header}</b><span>Activities</span></div><div class="s"><b>🎓 {level from WEEK CONTEXT}</b><span>Level</span></div></div>',
+  '  <p class="awe">🗺️ Your week, mapped</p>',
+  '  Then, for EACH phase that has activities, in the journey order Prep, Learn, Practice, Build, Reflect, Share: <div class="awp"><h2><span>{phase emoji} {Phase name}</span><span class="st">{that phase\'s total minutes from the Phase totals line}</span></h2><div class="awg"> one card per activity in that phase: <div class="awk"><span class="i">{activity emoji}</span><span><b>{the activity\'s REAL title}</b><span class="d">{a short friendly phrase, max ~12 words, on what the student does}</span><span class="tm">⏱️ {that activity\'s minutes} min</span></span></div> </div></div>',
+  '  <div class="awb"><h2>🖥️ Your Workspace + AI Mentor</h2><p>opening any lesson takes them into their Workspace, where they meet their personal AI Mentor Agent (who coaches, never just hands answers), alongside the community and their progress.</p></div>',
+  '  <div class="awb"><h2>💬 Join the conversation</h2><p>warmly encourage a comment; remind them it is visible to the whole community and a great way to connect with fellow learners.</p></div>',
+  '  <div class="awy"><h2>🎯 Why it matters</h2><p>one or two friendly sentences tying this week to becoming an AI Systems Architect, from the student outcomes / success criteria.</p></div>',
+  '',
+  'COVER EVERY activity from THIS WEEK\'S ACTIVITIES — do not skip, merge, or invent any; only omit pure system cards (badges/streaks/milestones). This is the full curriculum map for the week, not a teaser. Phase emojis: 🔥 Prep, 📚 Learn, 🧪 Practice, 🏗️ Build, 🪞 Reflect, 🤝 Share. Activity emoji by type: 📖 self study/reading, ✅ knowledge check/quiz/evaluation, 🎬 video, 👥 live class, 🔎 deep dive, 🎓 skills course, 🧪 prompt lab, 🏗️ implementation/build, 🔁 github sync, 📦 artifact, 🪞 reflection, 📝 survey, 🤝 community/discussion.',
+  'Every opening tag has a matching closing tag; the CSS must be valid. Set questions to [] and reflection to "".',
+  'completion: "Marked complete when the participant opens and reads the weekly announcement."',
+].join('\n');
+
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
   warmup: {
@@ -232,6 +293,29 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     thumbnail_url: thumbnailUrlFor('survey'),
     approved: true,
     status: 'ready',
+  },
+  announcement: {
+    student_label: 'Announcement',
+    category: 'Announce',
+    icon: 'bi-megaphone',
+    badge_class: 'bg-info',
+    estimated_time: 2,
+    // Friendly week-opener: scans the week roster (SECTION_ROSTER_TYPES) and
+    // reports what's ahead. AI Mentor chat + community comments/likes on the card.
+    capabilities: ['ai_chat', 'comments', 'likes', 'bookmarks'],
+    inputs: [],
+    variable_keys: [], // zero author input — the runtime injects blueprint + week roster
+    outputs: [
+      { key: 'title', type: 'string', description: 'This Week — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Friendly emoji "mini report" scanning the week' },
+      { key: 'summary', type: 'string', description: 'One-sentence friendly framing' },
+    ],
+    completion_rules: { on: 'view' },
+    evaluation_type: 'none',
+    generation_prompt: ANNOUNCEMENT_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('announcement'),
+    approved: true,
+    status: 'published',
   },
   overview: {
     student_label: 'Overview',

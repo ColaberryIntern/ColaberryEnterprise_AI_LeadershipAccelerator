@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
 import VideoEmbed, { WatchBeatPayload } from './VideoEmbed';
@@ -9,6 +9,7 @@ import CardSurveyExperience from './CardSurveyExperience';
 import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
+import { useDeepDiveHost } from './useDeepDiveHost';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -190,7 +191,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
-  const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
+  const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
@@ -219,20 +220,11 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // live reader cards (not admin preview).
   const readerProg = useReaderProgress(card.id, isReader && !preview);
 
-  // Deep Dive gating: the Field Guide iframe (opaque-origin) posts read-progress via
-  // postMessage; Mark Complete appears only once every section has been read.
-  const [ddProg, setDdProg] = useState<{ done: number; total: number; complete: boolean }>({ done: 0, total: 0, complete: false });
-  useEffect(() => {
-    setDdProg({ done: 0, total: 0, complete: false });
-    if (!isDeepDive || preview) return;
-    const onMsg = (e: MessageEvent) => {
-      const d = e.data as { source?: string; done?: number; total?: number; complete?: boolean } | null;
-      if (!d || d.source !== 'deepdive') return;
-      setDdProg({ done: Number(d.done) || 0, total: Number(d.total) || 0, complete: !!d.complete });
-    };
-    window.addEventListener('message', onMsg);
-    return () => window.removeEventListener('message', onMsg);
-  }, [card.id, isDeepDive, preview]);
+  // Deep Dive host bridge: the Field Guide iframe (opaque-origin) can't persist or
+  // reach the API, so the host owns read/copy persistence (restored across reopens),
+  // the +100-point upload, and the Mark-complete gate (dd.complete folds read+copy+upload).
+  const ddIframeRef = useRef<HTMLIFrameElement>(null);
+  const dd = useDeepDiveHost(card.id, isDeepDive && !preview && !done, ddIframeRef);
 
   return (
     <>
@@ -254,7 +246,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
               : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
         ) : isDeepDive ? (
           content?.body_html
-            ? <iframe className="tld-lessonframe tld-readerframe" title="Field Guide" sandbox="allow-scripts allow-modals" srcDoc={content.body_html} />
+            ? <iframe ref={ddIframeRef} className="tld-lessonframe tld-readerframe" title="Field Guide" sandbox="allow-scripts allow-modals" srcDoc={content.body_html} />
             : <div className="tld-note" style={{ margin: 20 }}>This Field Guide has not been added yet.</div>
         ) : (<>
         <div className="tld-chiprow">
@@ -310,15 +302,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         )}
 
-        {/* The type's fixed picture (Studio thumbnail) as the card hero — every
-            card of the type shares the image; only the title varies. Video-ish
-            bands and Skills Course keep their own visual instead. An explicit
-            card image (blog cover) wins below. */}
-        {!isVideo && !isSkillsJar && !card.image && card.type_thumbnail && (
-          <div className="tld-player">
-            <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', borderRadius: 12 }} />
-          </div>
-        )}
+        {/* The type's Studio thumbnail is NOT repeated at the top of the drawer —
+            it already shows on the classroom tile, so a hero here is redundant
+            (Ali 2026-07-19). Video/blog keep their own visual below. */}
 
         {/* Non-video items with their OWN image (blog cover etc.) show it as a hero. */}
         {!isVideo && card.image && (
@@ -380,7 +366,22 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}
-            {content.body_html && <iframe className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'} title="Lesson content" sandbox={isReader ? 'allow-scripts' : ''} srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)} />}
+            {content.body_html && <iframe
+              className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'}
+              title="Lesson content"
+              // Generic content: allow-same-origin (no scripts) so we can size the
+              // frame to its content and avoid a second inner scroll — the drawer
+              // is the single scroll. The reader keeps its own scripted scroll.
+              sandbox={isReader ? 'allow-scripts' : 'allow-same-origin'}
+              srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)}
+              onLoad={isReader ? undefined : (e) => {
+                const f = e.currentTarget;
+                try {
+                  const h = f.contentWindow?.document.body?.scrollHeight;
+                  if (h) f.style.height = `${h + 4}px`;
+                } catch { /* cross-origin/measure failed — keep the CSS height fallback */ }
+              }}
+            />}
             {Array.isArray(content.questions) && content.questions.length > 0 && (
               <><div className="tld-sublab">Questions to consider</div>
                 <ul className="tld-alist">{content.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></>
@@ -426,9 +427,13 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isReader && !readerProg.complete && readerProg.total > 0 && (
                   <span className="tld-gatemsg">{readerProg.done} of {readerProg.total} sections read</span>
                 )}
-                {isDeepDive && !ddProg.complete && ddProg.total > 0 && (
-                  <span className="tld-gatemsg">{ddProg.done} of {ddProg.total} sections read</span>
+                {isDeepDive && !dd.complete && dd.total > 0 && (
+                  <span className="tld-gatemsg">{dd.done} of {dd.total} sections read</span>
                 )}
+                {isDeepDive && dd.message && <span className="tld-gatemsg">{dd.message}</span>}
+                {/* The guide's "Choose HTML file" button posts to the host; this hidden
+                    input is the real picker the host opens for the +100-point upload. */}
+                {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
                 {onClose && <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>}
                 {/* Media cards collect points here, gated by the server's watch check.
                     When the gate is active but unmet, the button is disabled with the
@@ -452,7 +457,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isReader && readerProg.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
                 )}
-                {isDeepDive && ddProg.complete && completeSafely && (
+                {isDeepDive && dd.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
                 )}
               </>

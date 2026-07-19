@@ -114,6 +114,12 @@ export const env = {
   enableVisitorTracking: process.env.ENABLE_VISITOR_TRACKING === 'true',
   visitorSessionTimeoutMinutes: parseInt(process.env.VISITOR_SESSION_TIMEOUT || '30', 10),
   enableChat: process.env.ENABLE_CHAT === 'true',
+  // Today Timeline v2 — the never-ending engagement feed (Phase 1). Default OFF;
+  // set TODAY_FEED_V2_ENABLED=true to expose GET /api/portal/runtime/today.
+  todayFeedV2Enabled: process.env.TODAY_FEED_V2_ENABLED === 'true',
+  // Project backend v2 — persisted student-projects read API (P1). Default OFF;
+  // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
+  projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',

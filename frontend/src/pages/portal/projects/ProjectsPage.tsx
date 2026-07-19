@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
@@ -10,6 +10,7 @@ import {
   useProjectsList, createProjectFromAnswers, projectProgress, reqVerified, nextTask,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
+import { syncActiveProjectToBackend } from './projectSync';
 import './projects.css';
 import '../today/TodayShell.css';
 
@@ -53,6 +54,8 @@ function BuildCard({ p, onOpen }: { p: StudentProject; onOpen: () => void }) {
 
 const ProjectsPage: React.FC = () => {
   const projects = useProjectsList();
+  // P1: mirror the student's project to the persisted backend (flag-gated, best-effort).
+  useEffect(() => { void syncActiveProjectToBackend(projects); }, [projects]);
   const demo = useIsExplorer();   // Explorer = demo mode: no real builds get created
   const [view, setView] = useState<View>({ kind: 'overview' });
 

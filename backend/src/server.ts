@@ -399,6 +399,7 @@ async function ensureStudentTaskMergeSchema() {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(30)`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS fulfills JSONB`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS release_key VARCHAR(60)`,
+    `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS blocked_by JSONB`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_story ON student_tasks (story_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_story ON student_tasks (project_id, story_id) WHERE story_id IS NOT NULL`,
   ];
@@ -809,6 +810,10 @@ async function ensureExperienceBuilderSchema() {
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS dependencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS version_locked BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS renderers JSONB NOT NULL DEFAULT '{}'::jsonb`,
+    // Surface placement (Today Timeline v2, Phase 0) — additive/nullable; seeded from the type registry.
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS home_surface VARCHAR(20)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_mode VARCHAR(20)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS today_eligible BOOLEAN NOT NULL DEFAULT TRUE`,
     // Curriculum-inclusion approval gate: only approved components may be used by the Curriculum Composer.
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
@@ -1066,6 +1071,35 @@ async function ensureBlogSchema() {
     catch (err: any) { console.warn('[DB] Blog schema statement failed:', err.message?.split('\n')[0]); }
   }
   console.log('[DB] Blog schema ensured');
+}
+
+// Today Timeline v2 (Phase 1): per-student append-only feed sequence backing the
+// never-ending engagement feed. Deterministic pagination + interact-to-hide;
+// sibling of the *_views ledgers. Idempotent DDL, DB-side defaults.
+async function ensureTodayFeedSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS today_feed_impressions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       position INTEGER NOT NULL,
+       kind VARCHAR(12) NOT NULL,
+       ref TEXT NOT NULL,
+       provider VARCHAR(20),
+       card_id UUID,
+       item JSONB NOT NULL DEFAULT '{}'::jsonb,
+       served_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       interacted_at TIMESTAMPTZ,
+       interaction VARCHAR(16),
+       UNIQUE (enrollment_id, position)
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_tfi_enrollment_ref ON today_feed_impressions (enrollment_id, ref)`,
+    `CREATE INDEX IF NOT EXISTS idx_tfi_enrollment_pos ON today_feed_impressions (enrollment_id, position)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Today feed schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Today feed schema ensured');
 }
 
 // Enhance the existing (stub) `testimonial` curriculum type into the working
@@ -1724,6 +1758,7 @@ async function start(): Promise<void> {
   // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
+  await ensureTodayFeedSchema();
   import('./services/blog/blogIngestionService')
     .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
     .catch((err: any) => console.warn('[DB] Blog boot refresh skipped:', err?.message?.split('\n')[0]));
