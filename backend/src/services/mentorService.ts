@@ -2,11 +2,10 @@ import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from './openaiInstrumented';
 import { Op } from 'sequelize';
 import MentorConversation from '../models/MentorConversation';
-import UserCurriculumProfile from '../models/UserCurriculumProfile';
 import CurriculumLesson from '../models/CurriculumLesson';
 import CurriculumModule from '../models/CurriculumModule';
 import LessonInstance from '../models/LessonInstance';
-import { Enrollment } from '../models';
+import { getLearnerContextBlock } from './learnerContextService';
 
 let _openai: OpenAI | null = null;
 function getOpenAI(): OpenAI {
@@ -55,26 +54,11 @@ BOUNDARIES:
 - If asked to do their work, redirect to the relevant lesson or prompt deeper reflection
 - You may explain concepts, provide analogies, and suggest approaches`);
 
-  // Add learner context
-  const profile = await UserCurriculumProfile.findOne({
-    where: { enrollment_id: enrollmentId },
-  });
-
-  if (profile) {
-    parts.push('\nLEARNER CONTEXT:');
-    if (profile.company_name) parts.push(`Company: ${profile.company_name}`);
-    if (profile.industry) parts.push(`Industry: ${profile.industry}`);
-    if (profile.role) parts.push(`Role: ${profile.role}`);
-    if (profile.goal) parts.push(`Goal: ${profile.goal}`);
-    if (profile.ai_maturity_level) parts.push(`AI Maturity: ${profile.ai_maturity_level}/5`);
-    if (profile.identified_use_case) parts.push(`Use Case: ${profile.identified_use_case}`);
-  }
-
-  // Add enrollment info
-  const enrollment = await Enrollment.findByPk(enrollmentId);
-  if (enrollment) {
-    parts.push(`\nParticipant: ${enrollment.full_name}`);
-  }
+  // Shared learner-360 (persona, competency, assessment history, project) — the
+  // SAME context the runtime mentor uses, assembled once in learnerContextService
+  // so the two mentors never drift. Fail-safe: '' when nothing is known yet.
+  const learnerBlock = await getLearnerContextBlock(enrollmentId);
+  if (learnerBlock) parts.push('\n' + learnerBlock);
 
   // Add current lesson context if on a specific lesson
   if (lessonId) {
