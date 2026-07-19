@@ -16,6 +16,7 @@ export interface AttemptLike {
   correct_count: number;
   total_count: number;
   passed: boolean | null;
+  pass_threshold?: number | null; // eval pass bar (0..1); read from the attempt so the copy never drifts
   responses: AssessmentResponseItem[];
 }
 
@@ -30,10 +31,11 @@ export function renderAttempt(a: AttemptLike): { text: string; graded_lock: bool
   const reveal = !graded || a.passed === true;
   const graded_lock = graded && a.passed !== true;
   const pct = Math.round((a.score || 0) * 100);
+  const need = a.pass_threshold != null ? `, needs ${Math.round(a.pass_threshold * 100)}%` : '';
   const lines: string[] = [];
   lines.push(
     `${graded ? 'Evaluation' : 'Knowledge Check'}: ${a.correct_count}/${a.total_count} correct (${pct}%)` +
-    `${graded ? (a.passed ? ' — passed' : ' — not yet passed, needs 75%') : ''}.`
+    `${graded ? (a.passed ? ' — passed' : ` — not yet passed${need}`) : ''}.`
   );
   const items = Array.isArray(a.responses) ? a.responses : [];
   const right = items.filter((it) => it.is_correct);

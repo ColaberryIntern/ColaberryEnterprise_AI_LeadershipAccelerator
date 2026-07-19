@@ -9275,3 +9275,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: New raw-Playwright E2E (no framework dep — reuses the existing `playwright` package like scripts/capture*.js) that drives the whole points loop against a live target: fresh throwaway guest → complete a card → asserts award == the card's "+N pts" badge value → points total rises → the top-bar HUD renders the new total in a real browser → clicking the HUD deep-links to Settings ▸ Points. Fresh @colaberry-test.local guest per run, so it is safe to re-run.
   - Verification: RAN green against prod — 9/9 checks pass, including "award (10) == card badge (10) [warmup]", which independently re-confirms the badge-parity fix is live. Exit 0; screenshot saved to tests/systemV2/logs/.
   - Notes: On-demand / scheduled, NOT per-PR CI (each run writes a guest + one completion to the target). Point it anywhere with BASE_URL. Establishes the tests/systemV2 E2E dir the CLAUDE.md structure references. Not picked up by backend/frontend jest or tsc (outside their roots), so it can't break CI.
+
+### AI Mentor Phase 0 — merge main + pass-threshold drift fix — 2026-07-18
+- [x] Merged latest main into the Phase 0 branch and made the mentor's pass-threshold copy read from the attempt instead of a hardcoded 75%
+  - Date: 2026-07-18
+  - Session: CC-20260718-a9k2
+  - What changed: PR #350's branch was ~30 commits behind main; merged `origin/main` (clean auto-merge — only PROGRESS.md overlapped, no code conflicts). Main's PR #348 lowered `EVAL_PASS_THRESHOLD` 75% -> 70%, which made `mentorContextFormat.renderAttempt`'s hardcoded "needs 75%" stale. Fixed `renderAttempt` to read `pass_threshold` off the attempt (`AttemptLike` gains an optional `pass_threshold`) so the copy tracks the real bar and can't drift again; updated the leak-guard test to assert "needs 70%".
+  - Verification: jest `mentorContextFormat.test.ts` 6/6 pass; `tsc --noEmit` clean for our source (only the known zod v4 `.d.cts` local errors remain).
+  - Notes: Same PR #350 / branch `workstream/mentor-intelligence`. Surfaced by checking merge-readiness when asked "is it ready?" — good thing, or the mentor would have told students the wrong pass bar.

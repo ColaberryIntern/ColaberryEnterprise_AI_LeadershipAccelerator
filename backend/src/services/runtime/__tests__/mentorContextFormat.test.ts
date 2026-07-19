@@ -39,10 +39,11 @@ describe('renderAttempt', () => {
   });
 
   it('LEAK GUARD — unpassed evaluation withholds the correct option and locks', () => {
-    const a: AttemptLike = { kind: 'evaluation', score: 0.6, correct_count: 6, total_count: 10, passed: false, responses: [CORRECT, MISSED] };
+    const a: AttemptLike = { kind: 'evaluation', score: 0.6, correct_count: 6, total_count: 10, passed: false, pass_threshold: 0.7, responses: [CORRECT, MISSED] };
     const { text, graded_lock } = renderAttempt(a);
     expect(graded_lock).toBe(true);
-    expect(text).toContain('not yet passed, needs 75%');
+    // threshold copy is read from the attempt, not hardcoded (main moved it 75% -> 70%)
+    expect(text).toContain('not yet passed, needs 70%');
     // the whole point: the answer key must NOT appear for a retryable graded eval
     expect(text).not.toContain('Correct answer:');
     expect(text).not.toContain('A word piece');
