@@ -56,14 +56,29 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, July 19, 2026 at 12:45 PM</div>
-    <div><span class="sid">CC-20260719-k3m9</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Sunday, July 19, 2026 at 2:56 PM</div>
+    <div><span class="sid">CC-20260719-k3m9</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
       <article class="card">
         <div class="card-head">
           <span class="num">01</span>
+          <h2>**Replaced the static Mermaid overview map with an interactive board so cards can be reordered/activated/deleted without expanding**</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Syntax/JSX clean via the TypeScript compiler API on the edited file (0 errors); no dangling refs to the removed Mermaid helpers. Full frontend `tsc` in CI (authoritative). Browser-verified on dev after deploy (see the reliable-drag entry&#39;s harness): the interactive board renders and drag persists across reload.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Same session/PR as the drag-reorder fix (PR #395). The expand-to-full-list view (large 16:9 previews) is preserved behind the header caret + the &quot;open full view&quot; link. Built in the dedicated worktree pinned off `origin/main`.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
           <h2>**Fixed drag-to-reorder not saving, and surfaced per-card Activate/Deactivate + Delete on the timeline board**</h2>
           <span class="badge">2026-07-19</span>
         </div>
