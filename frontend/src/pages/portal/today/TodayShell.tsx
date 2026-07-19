@@ -35,7 +35,6 @@ const TodayShell: React.FC = () => {
   const [visibleCount, setVisibleCount] = useState(5);
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
   const sentinelRef = React.useRef<HTMLDivElement | null>(null);
-  const [claudeDone, setClaudeDone] = useState<boolean>(() => { try { return localStorage.getItem('te_claude_code_v1') === '1'; } catch { return false; } });
 
   const me = useMemo(readParticipant, []);
   const { flags } = usePortalFlags();
@@ -132,20 +131,8 @@ const TodayShell: React.FC = () => {
     } catch { flash('Could not claim your streak right now'); } finally { setBusy(false); }
   };
 
-  // Claude Code — the AI tool students build with. There is no server-side
-  // verification, so this is self-attested: opening the link marks it done
-  // locally so Setup can complete.
-  const CLAUDE_CODE_URL = 'https://claude.com/product/claude-code';
-  const markClaudeCode = () => {
-    try { localStorage.setItem('te_claude_code_v1', '1'); } catch { /* ignore */ }
-    setClaudeDone(true);
-    window.open(CLAUDE_CODE_URL, '_blank', 'noopener');
-    flash('Opened Claude Code — marked as set up');
-  };
-
   const steps = [
     { key: 'account', title: 'Create your free account', done: true, meta: 'Welcome to Colaberry', pts: 0, action: null as null | (() => void) },
-    { key: 'claude', title: 'Get your Claude Code subscription', done: claudeDone, meta: 'The AI coding tool you build with', pts: 0, action: !claudeDone ? markClaudeCode : null },
     { key: 'resume', title: 'Upload your resume or LinkedIn PDF', done: hasBackground, meta: 'Personalizes your experience in the background', pts: 25, action: !hasBackground ? () => setShowUpload((v) => !v) : null },
   ];
 
@@ -155,9 +142,7 @@ const TodayShell: React.FC = () => {
   const streakCount = streak?.count ?? 0;
   const streakWeek = streak?.week ?? [];
   // State-aware "what's next" for the command band — reflects the real setup state.
-  const nextStepLabel = !hasBackground ? 'upload your résumé to personalize everything'
-    : !claudeDone ? 'grab your Claude Code subscription — the tool you build with'
-    : null;
+  const nextStepLabel = !hasBackground ? 'upload your résumé to personalize everything' : null;
 
   // The Today timeline mirrors the Classroom curriculum — an endless FB-style
   // feed of the real cards (Week 0 for a free Explorer). Cycles as you scroll so
@@ -186,11 +171,9 @@ const TodayShell: React.FC = () => {
                 : <><b>{total.toLocaleString()} points</b> and set up — we're personalizing the rest in the background.</>}
             </p>
             <div className="ctas">
-              {!hasBackground ? (
+              {!hasBackground && (
                 <button className="te-btn cherry" type="button" onClick={() => setShowUpload(true)}>Upload résumé / LinkedIn</button>
-              ) : !claudeDone ? (
-                <button className="te-btn cherry" type="button" onClick={markClaudeCode}>Get Claude Code</button>
-              ) : null}
+              )}
               <Link className="te-btn ghost" to="/portal/path">See your path</Link>
               <Link className="te-btn ghost" to="/portal/points">Break down my points</Link>
             </div>
