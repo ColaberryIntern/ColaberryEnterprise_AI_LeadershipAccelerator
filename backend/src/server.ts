@@ -1032,6 +1032,35 @@ async function ensureBlogSchema() {
   console.log('[DB] Blog schema ensured');
 }
 
+// Today Timeline v2 (Phase 1): per-student append-only feed sequence backing the
+// never-ending engagement feed. Deterministic pagination + interact-to-hide;
+// sibling of the *_views ledgers. Idempotent DDL, DB-side defaults.
+async function ensureTodayFeedSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS today_feed_impressions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       position INTEGER NOT NULL,
+       kind VARCHAR(12) NOT NULL,
+       ref TEXT NOT NULL,
+       provider VARCHAR(20),
+       card_id UUID,
+       item JSONB NOT NULL DEFAULT '{}'::jsonb,
+       served_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       interacted_at TIMESTAMPTZ,
+       interaction VARCHAR(16),
+       UNIQUE (enrollment_id, position)
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_tfi_enrollment_ref ON today_feed_impressions (enrollment_id, ref)`,
+    `CREATE INDEX IF NOT EXISTS idx_tfi_enrollment_pos ON today_feed_impressions (enrollment_id, position)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Today feed schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Today feed schema ensured');
+}
+
 // Enhance the existing (stub) `testimonial` curriculum type into the working
 // "Testimonials" type: relabel, publish its link-vs-random settings schema, and
 // mark it approved for the Composer. Idempotent; runs after the type is seeded.
@@ -1686,6 +1715,7 @@ async function start(): Promise<void> {
   // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
+  await ensureTodayFeedSchema();
   import('./services/blog/blogIngestionService')
     .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
     .catch((err: any) => console.warn('[DB] Blog boot refresh skipped:', err?.message?.split('\n')[0]));
