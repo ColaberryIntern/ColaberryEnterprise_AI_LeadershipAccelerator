@@ -37,7 +37,7 @@ async function seedOne(g: Guide, programId: string): Promise<{ week: number; cre
   const existing: any = await TimelineCard.findOne({ where: { cohort_id: null, program_id: programId, week: g.week, type: 'deep_dive' } });
   if (existing) {
     const meta = { ...(existing.metadata || {}), content, content_at: new Date().toISOString(), locked: true, authored: true, requires_field_guide_upload: g.requiresUpload };
-    await existing.update({ metadata: meta, visibility: 'published', status: 'active' });
+    await existing.update({ metadata: meta, title: g.title, description: g.description, visibility: 'published', status: 'active' });
     return { week: g.week, created: false, card_id: existing.id };
   }
   const def = resolveOrThrow('deep_dive');
