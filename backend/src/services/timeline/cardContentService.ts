@@ -50,9 +50,11 @@ function cost(model: string, res: any): number {
  * "what you'll cover this week" summary is never stale. Returns null when there
  * is no roster (nothing to fingerprint / non-roster type).
  */
-function sectionFingerprint(roster: { items: Array<{ type: string; title: string }> } | null): string | null {
+function sectionFingerprint(roster: { items: Array<{ type: string; title: string; bucket?: string; est_minutes?: number }> } | null): string | null {
   if (!roster || !roster.items.length) return null;
-  const basis = roster.items.map((i) => `${i.type}|${(i.title || '').trim().toLowerCase()}`).join('~');
+  // Includes phase (bucket) + est_minutes so a re-timed or re-phased week also
+  // resets the summary — not just added/removed/retitled activities.
+  const basis = roster.items.map((i) => `${i.type}|${(i.title || '').trim().toLowerCase()}|${i.bucket || ''}|${i.est_minutes ?? ''}`).join('~');
   return createHash('sha1').update(basis).digest('hex').slice(0, 16);
 }
 

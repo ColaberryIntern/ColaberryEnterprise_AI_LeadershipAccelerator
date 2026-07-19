@@ -33,6 +33,7 @@ export interface FieldGuideUploadResult {
 }
 export interface PromptEval { score: number; architect_score: number; strengths: string[]; gaps: string[]; suggestions: string[]; better_prompt: string }
 export interface MentorReply { reply: string; kind: string }
+export interface Nudge { struggling: boolean; reasons: string[]; message: string | null }
 export interface CardComment { id: string; body: string; author: string; mine: boolean; created_at: string }
 export interface SurveyAnswerItem { question: string; rating: number | null; comment: string | null }
 export interface SurveyAnswers { items: SurveyAnswerItem[]; open: string | null }
@@ -74,6 +75,7 @@ export interface AssessmentSubmit {
 
 export const runtimeApi = {
   open: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}`).then((r) => r.data as RtOpen),
+  nudge: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/nudge`).then((r) => r.data as Nudge),
   mentor: (cardId: string, mode: string, message: string, history: Array<{ role: string; content: string }>) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/mentor`, { mode, message, history }).then((r) => r.data as MentorReply),
   reflection: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/reflection`).then((r) => r.data as { questions: string[] }),

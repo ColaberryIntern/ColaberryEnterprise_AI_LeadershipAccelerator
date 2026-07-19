@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import api from '../../../utils/api';
+import { SURFACE_ORDER, surfaceDefFor } from '../../../constants/surfaces';
 
 interface TypeDefinition {
   id: string;
@@ -17,6 +18,10 @@ interface TypeDefinition {
   is_system: boolean;
   is_active: boolean;
   display_order: number;
+  // Surface placement (Today Timeline v2, Phase 0).
+  home_surface?: string | null;
+  feed_mode?: string | null;
+  today_eligible?: boolean;
 }
 
 const BADGE_OPTIONS = [
@@ -253,66 +258,88 @@ export default function CurriculumTypesTab() {
         </div>
       )}
 
-      {/* Type Cards Grid */}
-      <div className="row g-3">
-        {types.map(t => (
-          <div key={t.id} className="col-12 col-lg-6">
-            <div className="card border-0 shadow-sm h-100">
-              <div className="card-body">
-                <div className="d-flex justify-content-between align-items-start mb-2">
-                  <div className="d-flex align-items-center gap-2">
-                    <span className={`badge ${t.badge_class}`}>
-                      <i className={`bi ${t.icon} me-1`}></i>{t.label}
-                    </span>
-                    {t.is_system && <span className="badge bg-light text-muted border">System</span>}
+      {/* Type Cards — grouped by section (Today Timeline v2). Colour = section marker. */}
+      {SURFACE_ORDER.map(surface => {
+        const group = types.filter(t => surfaceDefFor(t.home_surface).id === surface.id);
+        if (group.length === 0) return null;
+        return (
+          <div key={surface.id} className="mb-4">
+            {/* Section header — subtle colour dot + label + count */}
+            <div className="d-flex align-items-center gap-2 mb-2 pb-1 border-bottom">
+              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', backgroundColor: surface.color, flex: 'none' }} />
+              <span className="fw-semibold small">{surface.label}</span>
+              <span className="badge rounded-pill" style={{ backgroundColor: surface.soft, color: surface.color }}>{group.length}</span>
+              <span className="text-muted small d-none d-md-inline">{surface.description}</span>
+            </div>
+            <div className="row g-3">
+              {group.map(t => (
+                <div key={t.id} className="col-12 col-lg-6">
+                  {/* Subtle per-card marker: 3px left-edge accent in the section colour */}
+                  <div className="card border-0 shadow-sm h-100" style={{ borderLeft: `3px solid ${surface.color}` }}>
+                    <div className="card-body">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <div className="d-flex align-items-center gap-2 flex-wrap">
+                          <span className={`badge ${t.badge_class}`}>
+                            <i className={`bi ${t.icon} me-1`}></i>{t.label}
+                          </span>
+                          {t.is_system && <span className="badge bg-light text-muted border">System</span>}
+                          {t.feed_mode === 'ambient' && (
+                            <span className="badge" style={{ backgroundColor: surface.soft, color: surface.color }}>Ambient</span>
+                          )}
+                          {t.today_eligible === false && (
+                            <span className="badge bg-light text-muted border">Not in Today</span>
+                          )}
+                        </div>
+                        <div className="d-flex gap-1">
+                          <button className="btn btn-sm btn-outline-secondary" onClick={() => startEdit(t)} title="Edit">
+                            <i className="bi bi-pencil"></i>
+                          </button>
+                          <button className="btn btn-sm btn-outline-secondary" onClick={() => handleDuplicate(t.id)} title="Duplicate">
+                            <i className="bi bi-copy"></i>
+                          </button>
+                          <button className="btn btn-sm btn-outline-secondary" onClick={() => handleReverseEngineer(t.id)} title="Reverse Engineer">
+                            <i className="bi bi-arrow-repeat"></i>
+                          </button>
+                          {!t.is_system && (
+                            <button className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(t.id)} title="Delete">
+                              <i className="bi bi-trash"></i>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mb-2">
+                        <small className="text-muted">Student sees: </small>
+                        <small className="fw-medium">{t.student_label}</small>
+                      </div>
+                      <p className="small text-muted mb-2" style={{ lineHeight: '1.4' }}>
+                        {t.description || 'No description'}
+                      </p>
+                      <div className="d-flex flex-wrap gap-2 mb-2">
+                        {t.can_create_variables && (
+                          <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
+                            <i className="bi bi-braces me-1"></i>Creates Variables
+                          </span>
+                        )}
+                        {t.can_create_artifacts && (
+                          <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
+                            <i className="bi bi-file-earmark me-1"></i>Creates Artifacts
+                          </span>
+                        )}
+                        {(t.applicable_prompt_pairs || []).map(p => (
+                          <span key={p} className="badge bg-light text-dark border">{p}</span>
+                        ))}
+                      </div>
+                      <div className="small text-muted">
+                        Used in {usageCounts[t.slug] || 0} mini-section(s)
+                      </div>
+                    </div>
                   </div>
-                  <div className="d-flex gap-1">
-                    <button className="btn btn-sm btn-outline-secondary" onClick={() => startEdit(t)} title="Edit">
-                      <i className="bi bi-pencil"></i>
-                    </button>
-                    <button className="btn btn-sm btn-outline-secondary" onClick={() => handleDuplicate(t.id)} title="Duplicate">
-                      <i className="bi bi-copy"></i>
-                    </button>
-                    <button className="btn btn-sm btn-outline-secondary" onClick={() => handleReverseEngineer(t.id)} title="Reverse Engineer">
-                      <i className="bi bi-arrow-repeat"></i>
-                    </button>
-                    {!t.is_system && (
-                      <button className="btn btn-sm btn-outline-danger" onClick={() => handleDelete(t.id)} title="Delete">
-                        <i className="bi bi-trash"></i>
-                      </button>
-                    )}
-                  </div>
                 </div>
-                <div className="mb-2">
-                  <small className="text-muted">Student sees: </small>
-                  <small className="fw-medium">{t.student_label}</small>
-                </div>
-                <p className="small text-muted mb-2" style={{ lineHeight: '1.4' }}>
-                  {t.description || 'No description'}
-                </p>
-                <div className="d-flex flex-wrap gap-2 mb-2">
-                  {t.can_create_variables && (
-                    <span className="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25">
-                      <i className="bi bi-braces me-1"></i>Creates Variables
-                    </span>
-                  )}
-                  {t.can_create_artifacts && (
-                    <span className="badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25">
-                      <i className="bi bi-file-earmark me-1"></i>Creates Artifacts
-                    </span>
-                  )}
-                  {(t.applicable_prompt_pairs || []).map(p => (
-                    <span key={p} className="badge bg-light text-dark border">{p}</span>
-                  ))}
-                </div>
-                <div className="small text-muted">
-                  Used in {usageCounts[t.slug] || 0} mini-section(s)
-                </div>
-              </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+        );
+      })}
 
       {/* Edit/Create Modal */}
       {editing && (

@@ -59,6 +59,7 @@ const RuntimeWorkspace: React.FC = () => {
   // mentor
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [mentorInput, setMentorInput] = useState('');
+  const [nudge, setNudge] = useState<string | null>(null);   // proactive struggle nudge — the mentor offers help first
   const mentorEnd = useRef<HTMLDivElement>(null);
 
   // cohort comments (media cards) — newest first
@@ -69,10 +70,12 @@ const RuntimeWorkspace: React.FC = () => {
     (async () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
-        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null);
+        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null); setNudge(null);
         setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
         // Every card type has a cohort comment thread in its workspace.
         runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
+        // Proactive nudge — if the student looks stuck on this card, the mentor offers help first.
+        runtimeApi.nudge(cardId).then((n) => setNudge(n.message)).catch(() => { /* nudge is optional */ });
       } catch { setError('Could not open this activity.'); }
     })();
   }, [cardId]);
@@ -340,6 +343,15 @@ const RuntimeWorkspace: React.FC = () => {
             {msgs.map((m, i) => <div key={i} className={`rt-msg ${m.role}`}>{m.content}</div>)}
             <div ref={mentorEnd} />
           </div>
+          {nudge && (
+            <div className="rt-nudge">
+              <div className="rt-nudge-msg">{nudge}</div>
+              <div className="rt-nudge-actions">
+                <button className="rt-btn pri" disabled={busy === 'mentor'} onClick={() => { setNudge(null); ask('ask', 'Yes — walk me through the next step, one at a time.'); }}>Yes, walk me through it</button>
+                <button className="rt-btn" onClick={() => setNudge(null)}>Not now</button>
+              </div>
+            </div>
+          )}
           <div className="rt-modes">
             {(['hint', 'explain', 'review'] as const).map((mo) => <button key={mo} className="rt-chip" disabled={busy === 'mentor'} onClick={() => ask(mo, mo === 'review' ? (isLab ? prompt : reflectionText) || 'Review my work.' : `Give me a ${mo}.`)}>{mo}</button>)}
           </div>

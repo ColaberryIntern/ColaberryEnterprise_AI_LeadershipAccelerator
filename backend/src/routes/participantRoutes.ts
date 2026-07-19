@@ -48,6 +48,7 @@ import {
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide,
 } from '../controllers/runtimeController';
+import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import workspaceRoutes from './workspaceRoutes';
@@ -72,6 +73,9 @@ router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 // Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
 router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);
+// Today Timeline v2 — never-ending engagement feed (flag-gated in the controller).
+router.get('/api/portal/runtime/today', requireParticipant, handleGetToday);
+router.post('/api/portal/runtime/today/:cardRef/interact', requireParticipant, handleTodayInteract);
 router.get('/api/portal/runtime/notebook', requireParticipant, handleListNotes);
 router.post('/api/portal/runtime/notebook', requireParticipant, handleCreateNote);
 router.delete('/api/portal/runtime/notebook/:id', requireParticipant, handleDeleteNote);
