@@ -9311,6 +9311,13 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: frontend tsc --noEmit 0 errors in TodayShell.tsx (junctioned typecheck). nginx-only deploy; CI + prod smoke on deploy.
   - Notes: Deploy nginx only.
 
+### Classroom: completed cards inline + compact (regular smaller feed post) — 2026-07-19
+- [x] Reverted the collapsible "Completed (N)" section — completed cards now stay INLINE in timeline order but render compact (a smaller FB-style post: text + social footer, no big media tile)
+  - Date: 2026-07-19
+  - Session: CC-20260718-k9r2
+  - What changed: Ali's follow-up on the prior collapse work — "completed should still be in the timeline, but look more like a regular post on FB which is smaller." Removed the collapsible bottom section (`groupCompleted` + `doneOpen`/`tl-completed-open` persistence + the `.tl-donebar`/`.tl-donegrp`/`.tl-donelist` UI). Completed cards now render INLINE in their normal week order via a new `compactCompleted` prop on `TimelineFeed`, which passes `compact` to any completed card. The `compact` variant of `TimelineCard` now KEEPS the description text and drops only the 16:9 media tile (was dropping the whole body), and `.fcard.compact` tightens header/icon/title/body/footer sizing — so a finished card reads like a regular, smaller feed post while keeping likes + the inline Comment thread + Workspace. Files: frontend TimelineFeed.tsx, TimelineCard.tsx, timeline.css, ClassroomPage.tsx.
+  - Verification: PR CI (Frontend typecheck, authoritative) + prod nginx build. Post-deploy: completed classroom items appear in place in the feed as smaller text-style posts (no big media), still likeable/commentable; active cards unchanged.
+  - Notes: Supersedes the collapsible-section design from earlier this session (same feature, revised per feedback). [[reference_timeline_engine_student_runtime]] Branch `workstream/classroom-completed-inline` off main. Frontend-only -> nginx.
 - [x] Learning Runtime workspace: carry over the portal light/dark theme (was always light)
   - Date: 2026-07-19
   - Session: CC-20260718-9m4x
