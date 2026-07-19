@@ -97,9 +97,14 @@ export function useDeepDiveHost(
       if (typeof d.total === 'number') {
         setState({ done: Number(d.done) || 0, total: Number(d.total) || 0, complete: !!d.complete });
         const ids = Array.isArray(d.ids) ? d.ids.filter((x): x is string => typeof x === 'string') : [];
-        const copied = !!d.copied || copiedRef.current;
+        // Progress only accumulates. UNION with what's stored so the guide's initial
+        // empty render (posted before the restore round-trips) can't wipe saved
+        // progress — that was the "starts over in the workspace" bug.
+        const prev = readStored(cardId);
+        const seenIds = Array.from(new Set(prev.seenIds.concat(ids)));
+        const copied = !!d.copied || prev.copied || copiedRef.current;
         copiedRef.current = copied;
-        writeStored(cardId, { seenIds: ids, copied });
+        writeStored(cardId, { seenIds, copied });
       }
     };
     window.addEventListener('message', onMsg);
