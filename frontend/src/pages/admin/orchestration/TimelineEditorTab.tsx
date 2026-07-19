@@ -123,13 +123,30 @@ const SortableCard: React.FC<{
   return (
     <div ref={setNodeRef} id={`te-card-${card.id}`} style={style} className={`te-card${isDragging ? ' dragging' : ''}`}>
       <div className="te-chead">
-        <span {...attributes} {...listeners} className="te-drag" title="Drag to reorder">⋮⋮</span>
+        <span
+          {...attributes}
+          {...listeners}
+          className="te-drag"
+          role="button"
+          aria-label={`Drag to reorder "${card.title}"`}
+          title="Drag to reorder — drops save automatically"
+        >⠿</span>
         <TypeThumb band={band} size={38} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="te-ttl" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{card.title}</div>
           <div className="te-sub">{card.type.replace(/_/g, ' ')} · {pts(card.points)} pts{card.estimated_time ? ` · ${card.estimated_time}m` : ''}{card.week != null ? ` · Week ${card.week}` : ''}</div>
         </div>
-        <span className="te-badge" style={{ background: published ? '#E7F5E9' : '#F0F0F0', color: published ? '#3C7A26' : '#8A8A8A' }}>{published ? 'LIVE' : card.visibility.toUpperCase()}</span>
+        {/* Status badge doubles as the one-click Activate/Deactivate toggle:
+            active (published) = students see it; click to deactivate (hide). */}
+        <button
+          type="button"
+          className="te-badge te-badge-btn"
+          onClick={() => onPublish(card)}
+          title={published
+            ? 'Active — students see this card. Click to deactivate (hide it).'
+            : 'Inactive — hidden from students. Click to activate.'}
+          style={{ background: published ? '#E7F5E9' : '#F0F0F0', color: published ? '#3C7A26' : '#8A8A8A' }}
+        >{published ? 'LIVE' : card.visibility.toUpperCase()}</button>
       </div>
 
       <div className="te-media">
@@ -138,9 +155,12 @@ const SortableCard: React.FC<{
 
       <div className="te-foot">
         <button className="te-act pri" onClick={() => onEdit(card)}>✎ Edit</button>
-        <button className="te-act" onClick={() => onPublish(card)}>{published ? 'Unpublish' : 'Publish'}</button>
+        <button className="te-act" onClick={() => onPublish(card)}
+          title={published ? 'Deactivate — hide this card from students (stays in the curriculum)' : 'Activate — publish this card so students see it'}>
+          {published ? '◐ Deactivate' : '● Activate'}
+        </button>
         <button className="te-act" onClick={() => onClone(card)}>Clone</button>
-        <button className="te-act danger" onClick={() => onDelete(card)}>Delete</button>
+        <button className="te-act danger" onClick={() => onDelete(card)} title="Delete this card from the Classroom for every batch">🗑 Delete</button>
       </div>
     </div>
   );
@@ -159,12 +179,19 @@ const BucketSection: React.FC<{
 }> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, hasGating, onEditGating, cardActions }) => {
   const [collapsed, setCollapsed] = useState(true);   // collapse by default
   const [focusCardId, setFocusCardId] = useState<string | null>(null);
+  // While a card is being dragged we neutralize the inline video iframes in this
+  // lane (see .te-lane.dragging CSS). Iframes are separate browsing contexts that
+  // swallow pointer events, so without this the pointer is "lost" the moment the
+  // cursor passes over another card's player — dnd-kit then reports over=null and
+  // the drop silently no-ops (the "drag doesn't save" bug).
+  const [dragging, setDragging] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
   const ids = cards.map((c) => c.id);
   const onDragEnd = (e: DragEndEvent) => {
+    setDragging(false);
     const { active, over } = e;
     if (!over || active.id === over.id) return;
     const oldI = ids.indexOf(String(active.id));
@@ -248,12 +275,20 @@ const BucketSection: React.FC<{
           </div>
         )
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-            {cards.length === 0
-              ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
-              : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} typeThumbUrl={thumbOf(c.type)} {...cardActions} />)}
-          </SortableContext>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={() => setDragging(true)}
+          onDragCancel={() => setDragging(false)}
+          onDragEnd={onDragEnd}
+        >
+          <div className={`te-lane${dragging ? ' dragging' : ''}`}>
+            <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+              {cards.length === 0
+                ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
+                : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} typeThumbUrl={thumbOf(c.type)} {...cardActions} />)}
+            </SortableContext>
+          </div>
         </DndContext>
       )}
     </div>
@@ -570,6 +605,7 @@ const TimelineEditorTab: React.FC = () => {
   const [bpContext, setBpContext] = useState<BlueprintContextDTO | null>(null);
   const [sectionGating, setSectionGating] = useState<Bucket | null>(null);   // which section's gating modal is open
   const [savingSection, setSavingSection] = useState(false);
+  const [orderSaved, setOrderSaved] = useState(false);   // transient "order saved" confirmation after a drag
 
   // Load the courses once and default to the AI Systems Architect Accelerator —
   // the Timeline is scoped to one course.
@@ -661,10 +697,20 @@ const TimelineEditorTab: React.FC = () => {
   const onReorder = async (bucket: Bucket, ids: string[]) => {
     if (!board) return;
     const orderMap = new Map(ids.map((id, i) => [id, i]));
+    // Optimistic: reflect the new order immediately in the lane.
     setBoard({ ...board, cards: board.cards.map((c) => (orderMap.has(c.id) ? { ...c, order: orderMap.get(c.id)! } : c)) });
+    setError('');
     try {
       await api.put('/api/admin/orchestration/timeline/cards/reorder', { items: ids.map((id, i) => ({ id, order: i })) });
-    } catch { setError('Reorder failed'); loadBoard(); }
+      // Confirm the save so the author knows the new order stuck.
+      setOrderSaved(true);
+      window.setTimeout(() => setOrderSaved(false), 1800);
+    } catch (e: any) {
+      // Surface the real reason (404 route, 500, validation) instead of a generic
+      // message, and revert to the server truth so the board never lies.
+      setError(e?.response?.data?.error || e?.message || 'Reorder failed — the new order was not saved');
+      loadBoard();
+    }
   };
 
   const openAdd = (bucket: Bucket, wk?: number | null) => {
@@ -875,11 +921,25 @@ const TimelineEditorTab: React.FC = () => {
         .te-ttl{font-size:15px;font-weight:700;color:#1A1A1A}
         .te-sub{font-size:12px;color:#8A8A8A;margin-top:1px}
         .te-badge{font-size:10px;font-weight:800;padding:3px 9px;border-radius:999px;letter-spacing:.03em;flex:none}
+        /* Status badge is also the Activate/Deactivate toggle. */
+        .te-badge-btn{font-family:inherit;line-height:1.4;border:1px solid transparent;cursor:pointer;transition:filter .12s ease,box-shadow .12s ease}
+        .te-badge-btn:hover{filter:brightness(.96);box-shadow:0 0 0 2px rgba(54,120,149,.18)}
+        .te-badge-btn:focus-visible{outline:2px solid #367895;outline-offset:2px}
         .te-media{padding:12px 14px 2px}
         .te-hero{aspect-ratio:16/9;border-radius:10px;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden;color:#fff}
         .te-desc{padding:10px 14px 0;font-size:13.5px;color:#4A4A4A;line-height:1.5;margin:0}
         .te-foot{display:flex;align-items:center;gap:8px;padding:12px 14px;border-top:1px solid #F2F2F2;margin-top:12px;flex-wrap:wrap}
-        .te-drag{cursor:grab;color:#B8B8B8;font-size:16px;user-select:none;flex:none}
+        .te-drag{display:inline-flex;align-items:center;justify-content:center;cursor:grab;color:#B0B0B0;font-size:18px;line-height:1;user-select:none;flex:none;padding:4px 3px;border-radius:6px;touch-action:none}
+        .te-drag:hover{background:#F0F2F4;color:#5A6B72}
+        .te-drag:active{cursor:grabbing}
+        /* Drag shield: while a lane is dragging, neutralize the inline video
+           iframes so the pointer stays with dnd-kit and drops register + save. */
+        .te-lane.dragging .te-media{pointer-events:none}
+        .te-lane.dragging iframe{pointer-events:none}
+        .te-lane.dragging{cursor:grabbing}
+        /* Transient "order saved" confirmation next to the card counts. */
+        .te-saved{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;color:#3C7A26;background:#E7F5E9;border-radius:999px;padding:2px 10px;animation:te-fadein .15s ease}
+        @keyframes te-fadein{from{opacity:0;transform:translateY(-2px)}to{opacity:1;transform:none}}
         .te-act{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:6px 13px;border:1px solid #DADADA;background:#fff;border-radius:7px;cursor:pointer;color:#4A4A4A}
         .te-act:hover{background:#F5F5F5}
         .te-act:disabled{opacity:.55;cursor:not-allowed}
@@ -950,7 +1010,12 @@ const TimelineEditorTab: React.FC = () => {
           {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <div style={{ fontSize: 12, color: '#8A8A8A' }}>this course's student timeline · every batch sees it</div>
-        {board && <div style={{ fontSize: 12, color: '#8A8A8A', marginLeft: 'auto' }}><b style={{ color: '#1A1A1A' }}>{board.cards.length}</b> cards · <b style={{ color: '#3C7A26' }}>{publishedCount}</b> live</div>}
+        {board && (
+          <div style={{ fontSize: 12, color: '#8A8A8A', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+            {orderSaved && <span className="te-saved">✓ Order saved</span>}
+            <span><b style={{ color: '#1A1A1A' }}>{board.cards.length}</b> cards · <b style={{ color: '#3C7A26' }}>{publishedCount}</b> live</span>
+          </div>
+        )}
       </div>
 
       {error && <div style={{ background: '#FDECEC', color: '#C20E1E', padding: '8px 12px', borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{error}</div>}

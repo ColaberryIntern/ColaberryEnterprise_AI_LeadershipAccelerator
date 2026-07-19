@@ -10,6 +10,22 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Orchestration Timeline editor — reliable drag-reorder + clear Activate/Deactivate + Delete (2026-07-19)
+- [x] **Fixed drag-to-reorder not saving, and surfaced per-card Activate/Deactivate + Delete on the timeline board**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k3m9
+  - What changed:
+    - `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx` (only file touched):
+      - **Drag reliability (the "reorder doesn't save" bug):** `BucketSection` now tracks a `dragging` flag via `DndContext` `onDragStart`/`onDragCancel`/`onDragEnd`, and wraps the sortable list in a `.te-lane` container. New CSS `.te-lane.dragging .te-media, .te-lane.dragging iframe { pointer-events:none }` neutralizes the inline video iframes during a drag so dnd-kit keeps the pointer and the drop resolves (over≠null) instead of silently no-op'ing. Enlarged/clarified the drag handle (bigger hit area, hover state, ⠿ glyph, "drops save automatically" tooltip).
+      - **Save feedback + real errors:** `onReorder` now shows a transient "✓ Order saved" chip by the card counts on success, and on failure surfaces the real server error (`err.response.data.error` / message) instead of the generic "Reorder failed", then reloads to the server truth. (Backend `PUT .../cards/reorder` was already correct.)
+      - **Activate/Deactivate:** the per-card status badge is now a one-click toggle (LIVE→hidden and back) and the footer button reads **● Activate / ◐ Deactivate** (mapped to `visibility` published↔draft per Ali's choice: deactivate = hide from students, stays in the curriculum). No backend/DB change.
+      - **Delete:** relabeled to **🗑 Delete** with an explicit tooltip; existing confirm + `DELETE .../cards/:id` unchanged.
+  - Why: On production (enterprise.colaberry.ai `/admin/orchestration` → Timeline) Ali reported drag-drop in the expanded lane didn't persist ("moved it, still not at the top") and wanted delete + activate/deactivate as obvious per-card controls. Root cause of the drag bug: each sortable card renders a full interactive student card whose video iframe swallows pointer events, breaking dnd-kit drop detection — the canonical iframe+dnd-kit failure.
+  - Verification: Syntax/JSX clean via the TypeScript compiler API (`ts.transpileModule`, jsx=React) on the edited file — 0 errors. Full frontend `tsc --noEmit` deferred to CI (authoritative per repo convention; this OneDrive-synced host has no local frontend tsc/@dnd-kit). Behavior not yet run on a live instance (frontend can't build locally here) — see Notes.
+  - Notes: Built in a worktree off `origin/main` (`a986a022`, the exact commit prod runs; local `main` was stale/881 behind). Backend reorder/delete endpoints already existed and are correct, so this is frontend-only. Could not reproduce the drag failure on this box (no local frontend build), so the fix hardens the three most-likely causes (iframe pointer capture, tiny handle, silent persist failure) AND makes any remaining server failure visible instead of silent. Next: deploy to a dev instance for Ali to confirm drag persists across reload, then fold into a prod deploy (after-hours).
+
+---
+
 ### Announcement curriculum type — friendly weekly kickoff that scans the section (2026-07-19)
 - [x] **Announcement authored as the section-opener: live-generated "mini report" that scans the week's roster, resets when the curriculum changes; Week 0 locked hand-authored free-preview welcome**
   - Date: 2026-07-19
