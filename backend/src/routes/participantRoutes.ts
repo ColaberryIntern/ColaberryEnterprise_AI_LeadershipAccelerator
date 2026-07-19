@@ -3,6 +3,11 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { requireOrgManager } from '../middlewares/orgAuth';
+import {
+  handleOrgRegister, handleOrgInvites, handleOrgOverview,
+  handleOrgRoster, handleOrgMemberDetail, handleOrgFeed,
+} from '../controllers/orgController';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { strategyPrepUpload, certificateUpload, fieldGuideUpload } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
@@ -58,6 +63,7 @@ const router = Router();
 
 // Public auth endpoints
 router.post('/api/portal/free-signup', handleFreeSignup); // self-serve free/guest account
+router.post('/api/portal/org/register', handleOrgRegister); // free management account (dual account)
 router.post('/api/portal/request-link', handleRequestMagicLink);
 router.get('/api/portal/verify', handleVerifyMagicLink);
 // Portal feature flags (public — the shell reads these to pick the Today
@@ -144,6 +150,13 @@ router.delete('/api/portal/settings/avatar', requireParticipant, handleClearAvat
 router.post('/api/portal/settings/resume', requireParticipant, handleSetResume);
 router.get('/api/portal/settings/resume', requireParticipant, handleGetResume);
 router.delete('/api/portal/settings/resume', requireParticipant, handleClearResume);
+
+// Organization / Manager layer — all require an authed participant who manages an org.
+router.post('/api/portal/org/invites', requireParticipant, requireOrgManager, handleOrgInvites);
+router.get('/api/portal/org/overview', requireParticipant, requireOrgManager, handleOrgOverview);
+router.get('/api/portal/org/members', requireParticipant, requireOrgManager, handleOrgRoster);
+router.get('/api/portal/org/members/:enrollmentId', requireParticipant, requireOrgManager, handleOrgMemberDetail);
+router.get('/api/portal/org/feed', requireParticipant, requireOrgManager, handleOrgFeed);
 
 // Curriculum endpoints
 router.get('/api/portal/curriculum', requireParticipant, handleGetCurriculum);

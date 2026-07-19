@@ -143,7 +143,7 @@ interface Step {
 }
 
 const HOW_IT_WORKS: Step[] = [
-  { k: '01', title: 'Get in through a door', desc: 'Join as an individual on a $149/mo membership, or redeem a seat code your employer sponsored. Same class either way.' },
+  { k: '01', title: 'Start free', desc: 'Create a free account and explore the whole platform yourself, as both the learner and the admin. Add your seat or bring your team when you are ready.' },
   { k: '02', title: 'Learn with Claude, build for real', desc: 'Work real projects on your own time. Every shipped build, review, and demo earns points toward your tier.' },
   { k: '03', title: 'Climb the leaderboard', desc: 'Points roll up to a public leaderboard and a private, company-scoped board your sponsor can see.' },
   { k: '04', title: 'Present at Demo Day', desc: 'Top builders each season showcase their capstone live. Winners are crowned and seats are reassigned for the next run.' },
@@ -204,7 +204,7 @@ function SponsorChallengePage() {
       <style>{CSS}</style>
       <SEOHead
         title="The Challenge"
-        description="One class, two doors. Learn with Claude, build through Colaberry, and climb the leaderboard. Bronze, Silver, Gold tiers, seasonal play, and a live Demo Day."
+        description="Start free and explore the whole platform yourself. Learn with Claude, build through Colaberry, and climb the leaderboard. Bronze, Silver, Gold tiers, seasonal play, and a live Demo Day."
       />
 
       {/* HERO */}
@@ -219,11 +219,11 @@ function SponsorChallengePage() {
             Colaberry. Deploy In The Real World.
           </p>
           <div className="cbc-hero-cta">
-            <CtaButton to="/enroll" size="lg" trailingIcon={<span aria-hidden>→</span>}>
-              Join the Challenge
+            <CtaButton to="/try" size="lg" data-track="challenge_hero_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
-            <CtaButton to="/sponsorship" size="lg" variant="outline">
-              Sponsor Your Team
+            <CtaButton to="/contact" size="lg" variant="outline" data-track="challenge_hero_book_walkthrough">
+              Book a walkthrough
             </CtaButton>
           </div>
           <div className="cbc-hero-stats">
@@ -235,37 +235,36 @@ function SponsorChallengePage() {
         </div>
       </header>
 
-      {/* TWO DOORS */}
+      {/* START FREE, THEN YOUR TEAM */}
       <section className="cbc-sec">
         <div className="cbc-wrap">
-          <div className="cbc-eyebrow">One Class, Two Doors</div>
-          <h2 className="cbc-h2 cbc-mt2">Same program. Two ways in.</h2>
+          <div className="cbc-eyebrow">Start Free</div>
+          <h2 className="cbc-h2 cbc-mt2">Try it yourself first. Bring your team when ready.</h2>
           <p className="cbc-lead cbc-mt4 cbc-narrow">
-            There is one Challenge. You enter it as an individual or as part of a team your employer sponsors.
-            From there, everyone competes on the same field.
+            There is one Challenge, and one way in. Start free and explore the whole platform yourself, as both
+            the learner and the admin. When you are ready, bring your team along on reassignable seats.
           </p>
           <div className="cbc-doors">
             <Card accent="red" elevation="md" className="cbc-door">
-              <Badge solid>Door A — Individuals</Badge>
-              <h3>Join on your own</h3>
+              <Badge solid>Start here</Badge>
+              <h3>Explore it yourself, free</h3>
               <p>
-                Self-serve a $149/month membership and start building this week. Pick a track, ship your first
-                project, and get on the public leaderboard. Cancel anytime.
+                Create a free account and start building this week. Pick a track, ship your first project, and
+                get on the public leaderboard. No credit card.
               </p>
-              <CtaButton to="/enroll" tone="red" trailingIcon={<span aria-hidden>→</span>}>
-                Join the Challenge
+              <CtaButton to="/try" tone="red" data-track="challenge_doors_start_free" trailingIcon={<span aria-hidden>→</span>}>
+                Start free
               </CtaButton>
             </Card>
             <Card accent="blue" elevation="md" className="cbc-door">
-              <Badge tone="blue">Door B — Employers</Badge>
-              <h3>Sponsor your team</h3>
+              <Badge tone="blue">When you are ready</Badge>
+              <h3>Bring your team</h3>
               <p>
-                Buy annual seats and hand out redemption codes. Your people learn on their own time, climb a
-                company-scoped leaderboard, and present at Demo Day. Seats are reassignable, so turnover never
-                wastes a seat.
+                Once you have seen it for yourself, invite your team on annual, reassignable seats. Your people
+                learn on their own time, climb a company-scoped leaderboard, and present at Demo Day.
               </p>
-              <CtaButton to="/sponsorship" variant="outline" tone="blue" trailingIcon={<span aria-hidden>→</span>}>
-                Sponsor Your Team
+              <CtaButton to="/contact" variant="outline" tone="blue" data-track="challenge_doors_book_walkthrough" trailingIcon={<span aria-hidden>→</span>}>
+                Book a walkthrough
               </CtaButton>
             </Card>
           </div>
@@ -401,7 +400,7 @@ function SponsorChallengePage() {
             ]}
             caption="Most people consume AI. Very few learn to build with it."
             side="right"
-            cta={{ label: 'Join the Challenge', to: '/enroll' }}
+            cta={{ label: 'Start free', to: '/try' }}
           />
         </div>
       </section>
@@ -428,17 +427,17 @@ function SponsorChallengePage() {
       <section className="cbc-sec cbc-alt cbc-closing">
         <div className="cbc-wrap">
           <div className="cbc-eyebrow">Ready When You Are</div>
-          <h2 className="cb-balance cbc-mt4">Pick your door and start building.</h2>
+          <h2 className="cb-balance cbc-mt4">Start free and start building.</h2>
           <p className="cbc-lead">
-            Individuals start this week. Employers turn the Challenge into talent discovery: find out who your
-            real AI builders are, without taking anyone off the job.
+            Explore the whole platform yourself this week, as both the learner and the admin. When you are ready,
+            bring your team and find out who your real AI builders are, without taking anyone off the job.
           </p>
           <div className="cbc-closing-cta">
-            <CtaButton to="/enroll" size="lg" trailingIcon={<span aria-hidden>→</span>}>
-              Join the Challenge
+            <CtaButton to="/try" size="lg" data-track="challenge_final_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
-            <CtaButton to="/sponsorship" size="lg" variant="outline">
-              Sponsor Your Team
+            <CtaButton to="/contact" size="lg" variant="outline" data-track="challenge_final_book_walkthrough">
+              Book a walkthrough
             </CtaButton>
             <CtaButton to="/leaderboard" size="lg" variant="ghost">
               View the Leaderboard

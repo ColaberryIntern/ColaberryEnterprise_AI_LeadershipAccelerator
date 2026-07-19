@@ -47,12 +47,14 @@ export type NavItem = {
 };
 
 /**
- * "One Class, Many Doors" navigation.
- * Two doors into ONE program:
- *   Door A — individuals self-serve ($149/mo membership personas) → "Join the Challenge"
- *   Door B — employers sponsor annual seats (talent discovery)     → "Sponsor Your Team"
- * Advisory / pilot / strategy-call links are demoted out of the primary nav.
- * The two-door CTAs render as buttons in PublicNavbar (see PRIMARY_CTA / SECONDARY_CTA).
+ * Single-persona navigation.
+ * There is ONE visitor: a decision-maker who is also the learner, evaluating
+ * the platform for their company and wanting to experience it themselves. No
+ * two-door split. One primary CTA everywhere: "Start free" -> /try (the
+ * free-account funnel that gives them BOTH the learner experience and their own
+ * organization / management view). A soft secondary invites a guided walkthrough.
+ * Nav carries informational links only; the CTAs render as buttons in
+ * PublicNavbar (see PRIMARY_CTA / SECONDARY_CTA).
  */
 export const NAV_LINKS: NavItem[] = [
   { path: '/', label: 'Home' },
@@ -65,28 +67,19 @@ export const NAV_LINKS: NavItem[] = [
       { path: '/demo-day', label: 'Demo Day' },
     ],
   },
-  {
-    label: 'For Employers',
-    children: [
-      { path: '/sponsorship', label: 'Sponsor Your Team' },
-      { path: '/consulting', label: 'Consulting' },
-      { path: '/sponsor/dashboard', label: 'Employer Dashboard' },
-    ],
-  },
   { path: '/contact', label: 'Contact' },
 ];
 
-/** The two doors, surfaced as the primary nav CTAs. */
-export const PRIMARY_CTA = { path: '/enroll', label: 'Join the Challenge' };
-export const SECONDARY_CTA = { path: '/sponsorship', label: 'Sponsor Your Team' };
+/** One primary CTA everywhere: start a free account. Soft secondary for a guided walkthrough. */
+export const PRIMARY_CTA = { path: '/try', label: 'Start free' };
+export const SECONDARY_CTA = { path: '/contact', label: 'Book a walkthrough' };
 
-/** Footer link columns. Advisory / pilot / strategy-call intentionally omitted. */
+/** Footer link columns. Informational only; the free-start CTA lives in its own column. */
 export const FOOTER_LINKS = [
   { path: '/program', label: 'How It Works' },
-  { path: '/enroll', label: 'Join the Challenge' },
-  { path: '/sponsorship', label: 'Sponsor Your Team' },
+  { path: '/pricing', label: 'Pricing' },
   { path: '/case-studies', label: 'Case Studies' },
-  { path: '/pricing', label: 'Pricing & Seats' },
+  { path: '/demo-day', label: 'Demo Day' },
   { path: '/contact', label: 'Contact' },
 ];
 

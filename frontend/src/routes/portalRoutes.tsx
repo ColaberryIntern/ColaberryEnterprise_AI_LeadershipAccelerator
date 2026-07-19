@@ -22,6 +22,7 @@ import SchedulePage from '../pages/portal/schedule/SchedulePage';
 import PointsPage from '../pages/portal/points/PointsPage';
 import ProjectsPage from '../pages/portal/projects/ProjectsPage';
 import CommunityPage from '../pages/portal/community/CommunityPage';
+import CompanyPage from '../pages/portal/company/CompanyPage';
 import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
 
 // The old AI Project Builder ("Cory") portal surfaces — CoryHome, Blueprint,
@@ -48,6 +49,10 @@ const portalRoutes = (
       <Route path="/portal/points" element={<PointsPage />} />
       <Route path="/portal/projects" element={<ProjectsPage />} />
       <Route path="/portal/community" element={<CommunityPage />} />
+      {/* Manager surface — renders its own PortalShell chrome; the shell adds the
+          "Your company" nav group only for org managers, and the page itself
+          shows a friendly error if a non-manager reaches it. */}
+      <Route path="/portal/company" element={<CompanyPage />} />
       <Route path="/portal/classroom" element={<ClassroomPage />} />
       {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
       <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />

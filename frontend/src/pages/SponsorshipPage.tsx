@@ -4,215 +4,159 @@ import LeadCaptureForm from '../components/LeadCaptureForm';
 import { Button } from '../colaberry/components/core/Button';
 import { Badge } from '../colaberry/components/core/Badge';
 import { Card } from '../colaberry/components/core/Card';
-import { Table } from '../colaberry/components/core/Table';
-import EmployerDashboardPreview from '../components/visuals/EmployerDashboardPreview';
-import CohortUrgency from '../components/visuals/CohortUrgency';
 import PartnerStrip from '../components/visuals/PartnerStrip';
-import MermaidDiagram from '../components/visuals/MermaidDiagram';
-import SectionFigure from '../components/visuals/SectionFigure';
+import MaturityJourney from '../components/visuals/MaturityJourney';
+import CompanyMomentumDashboard from '../components/capability/CompanyMomentumDashboard';
+import CapabilityIndex from '../components/capability/CapabilityIndex';
+import EcosystemPillars from '../components/capability/EcosystemPillars';
+import EcosystemTimeline from '../components/capability/EcosystemTimeline';
+import ArchitectNetwork from '../components/capability/ArchitectNetwork';
 import StrategyCallModal from '../components/StrategyCallModal';
 import OpenHouseModal from '../components/membership/OpenHouseModal';
 
 /* ------------------------------------------------------------------ *
- * Sponsor Your Team — The AI Builder Challenge
- * Flagship employer page (Door B of "One Class, Many Doors").
- * The corporate value prop is TALENT DISCOVERY, not training.
- * Built entirely on the Colaberry design system: DS components +
- * semantic tokens only (never raw hex), so a re-pointed brand palette
- * flows through automatically.
+ * Roll it out to your organization: the org-rollout page for
+ * enterprise.colaberry.ai. Single persona (a decision-maker who is also
+ * the learner), reached AFTER they have tried the platform free. The
+ * framing is "you tried it yourself, now bring it to your team."
+ *
+ * The value prop is a durable, measurable AI capability across your
+ * workforce: self-paced learning, certification, real projects, a
+ * network of AI Architects, weekly live events, and ONE live dashboard
+ * leadership watches. Training is one part of the platform. Hero primary
+ * CTA is "Start free" -> /try; the lead form, pricing tiers, and modals
+ * all stay for when they are ready to roll it out.
+ *
+ * Design idiom mirrors HomePage: Colaberry DS components + semantic
+ * tokens only (never raw hex), alternating page/sunken surfaces, so a
+ * re-pointed brand palette flows through automatically.
  * ------------------------------------------------------------------ */
 
-const S = {
-  /* Page sections */
-  page: { background: 'var(--surface-page)', color: 'var(--text-body)' } as React.CSSProperties,
-  hero: {
-    position: 'relative',
-    overflow: 'hidden',
-    background: 'var(--surface-inverse)',
-    color: 'var(--text-on-inverse)',
-    padding: 'var(--space-24) var(--space-6) var(--space-20)',
-  } as React.CSSProperties,
-  section: { padding: 'var(--space-20) var(--space-6)' } as React.CSSProperties,
-  sectionAlt: {
-    padding: 'var(--space-20) var(--space-6)',
-    background: 'var(--surface-subtle)',
-  } as React.CSSProperties,
-  inner: { maxWidth: 'var(--container-lg)', margin: '0 auto' } as React.CSSProperties,
-  innerNarrow: { maxWidth: 'var(--container-md)', margin: '0 auto' } as React.CSSProperties,
+/** Single-persona destination: start a free account (learner + org view). */
+const TRY_PATH = '/try';
 
-  /* Type roles */
-  eyebrow: {
-    fontSize: 'var(--fs-overline)',
-    fontWeight: 'var(--fw-bold)',
-    letterSpacing: 'var(--ls-overline)',
-    textTransform: 'uppercase',
-    color: 'var(--brand-accent)',
-    margin: '0 0 var(--space-4)',
-  } as React.CSSProperties,
-  h2: {
-    fontSize: 'var(--fs-h2)',
-    fontWeight: 'var(--fw-bold)',
-    color: 'var(--text-strong)',
-    letterSpacing: 'var(--ls-tight)',
-    margin: '0 0 var(--space-4)',
-  } as React.CSSProperties,
-  lead: {
-    fontSize: 'var(--fs-body-lg)',
-    lineHeight: 'var(--lh-relaxed)',
-    color: 'var(--text-muted)',
-    margin: '0 0 var(--space-12)',
-  } as React.CSSProperties,
-  cardTitle: {
-    fontSize: 'var(--fs-h4)',
-    fontWeight: 'var(--fw-bold)',
-    color: 'var(--text-strong)',
-    margin: '0 0 var(--space-2)',
-  } as React.CSSProperties,
-  cardBody: {
-    fontSize: 'var(--fs-body-sm)',
-    lineHeight: 'var(--lh-relaxed)',
-    color: 'var(--text-muted)',
-    margin: 0,
-  } as React.CSSProperties,
-  grid3: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-    gap: 'var(--space-6)',
-  } as React.CSSProperties,
-  grid2: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
-    gap: 'var(--space-6)',
-  } as React.CSSProperties,
-  iconTile: {
-    display: 'grid',
-    placeItems: 'center',
-    width: '48px',
-    height: '48px',
-    borderRadius: 'var(--radius-md)',
-    background: 'var(--surface-brand-subtle)',
-    color: 'var(--brand-accent)',
-    fontSize: '22px',
-    marginBottom: 'var(--space-4)',
-  } as React.CSSProperties,
+const h2Style: React.CSSProperties = {
+  fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--fs-h2)',
+  lineHeight: 'var(--lh-heading)', letterSpacing: 'var(--ls-tight)', color: 'var(--text-strong)',
+  margin: '0 0 var(--space-4)',
+};
+const leadStyle: React.CSSProperties = {
+  fontSize: 'var(--fs-body)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0,
+};
+const cardTitleStyle: React.CSSProperties = {
+  fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'var(--fs-h5)',
+  lineHeight: 'var(--lh-snug)', color: 'var(--text-strong)', margin: '0 0 var(--space-2)',
+};
+const cardBodyStyle: React.CSSProperties = {
+  fontSize: 'var(--fs-body-sm)', lineHeight: 'var(--lh-relaxed)', color: 'var(--text-muted)', margin: 0,
+};
+const iconTileStyle: React.CSSProperties = {
+  display: 'grid', placeItems: 'center', width: 48, height: 48,
+  borderRadius: 'var(--radius-md)', background: 'var(--surface-brand-subtle)',
+  color: 'var(--brand-accent)', fontSize: 22, marginBottom: 'var(--space-4)',
 };
 
-interface Step {
-  n: string;
-  title: string;
-  body: string;
+type Tone = 'neutral' | 'red' | 'green' | 'blue' | 'warning';
+
+/** Centered section header: eyebrow badge, balanced h2, lead paragraph. */
+function SectionHead({ badge, tone, title, lead }: { badge: string; tone: Tone; title: string; lead: string }) {
+  return (
+    <div style={{ textAlign: 'center', maxWidth: 760, margin: '0 auto var(--space-12)' }}>
+      <Badge tone={tone} style={{ marginBottom: 'var(--space-4)' }}>{badge}</Badge>
+      <h2 className="cb-balance" style={h2Style}>{title}</h2>
+      <p style={leadStyle}>{lead}</p>
+    </div>
+  );
 }
+
+interface Feature { icon: string; title: string; body: string; }
+
+const PROBLEMS: Feature[] = [
+  {
+    icon: '\u{1F575}\u{FE0F}',
+    title: 'Tools, not capability',
+    body: 'You bought the licenses and adoption looks fine. But usage is not capability, and a seat count cannot tell you who can actually build.',
+  },
+  {
+    icon: '\u{1F3AF}',
+    title: 'The loudest are not the best',
+    body: 'The people who talk about AI in meetings are rarely the ones quietly shipping it. Real builders are invisible on your org chart.',
+  },
+  {
+    icon: '\u{1F4B8}',
+    title: 'Hiring blind is expensive',
+    body: 'So you hire externally at a premium, hoping for a builder, while the person who could have done it sits two desks away, undiscovered.',
+  },
+];
+
+interface Step { n: string; title: string; body: string; }
 
 const HOW_IT_WORKS: Step[] = [
   {
-    n: '1',
-    title: 'Buy annual seats',
-    body: 'Sponsor a block of seats for the year at a volume-discounted rate. One PO, one invoice, no per-person procurement.',
+    n: '01',
+    title: 'Give reassignable seats',
+    body: 'Buy a block of annual seats and hand access to whoever you choose. Seats reassign across the org all year, so the capability stays with the company, not one person.',
   },
   {
-    n: '2',
-    title: 'Distribute redemption codes',
-    body: 'You receive codes to hand to whoever you choose. Reassign any unused code at any time — seats follow the talent, not the headcount.',
-  },
-  {
-    n: '3',
+    n: '02',
     title: 'They learn on their own time',
-    body: 'Employees join the cohort and build with Claude after hours and on weekends. Nobody comes off the job. No backfill, no lost output.',
+    body: 'Self-paced paths anyone can start any day, plus optional weekly live events and office hours. Nobody comes off the job. No backfill, no lost output.',
   },
   {
-    n: '4',
-    title: 'Watch the leaderboard',
-    body: 'A company-scoped leaderboard ranks your people by what they actually ship — not by who volunteered loudest. Real signal, in real time.',
+    n: '03',
+    title: 'They build on your workflows',
+    body: 'Every path ends in a real, deployed build on your own processes and data, guided hands-on in Anthropic-partner training. Working systems, not slideware.',
   },
   {
-    n: '5',
-    title: 'They present at Demo Day',
-    body: 'Top builders demo working systems they built on your real workflows. You see exactly who can turn AI into deployed value.',
+    n: '04',
+    title: 'You watch one live dashboard',
+    body: 'A company-scoped view ranks your people by what they ship and shows who is advancing from Aware to Builder to Architect, in real time.',
+  },
+  {
+    n: '05',
+    title: 'They get certified',
+    body: 'Builders earn the Certified Anthropic AI Systems Architect credential and join a standing network of architects across companies and phases.',
   },
 ];
 
-interface Benefit {
-  icon: string;
-  title: string;
-  body: string;
-}
-
-const WHAT_YOU_GET: Benefit[] = [
+const WHAT_YOU_GET: Feature[] = [
+  {
+    icon: '\u{1F6E0}\u{FE0F}',
+    title: 'Durable capability, not attendance',
+    body: 'Real, deployed builds on your workflows. You get working systems and a workforce that keeps building after the program, not a stack of completion certificates.',
+  },
   {
     icon: '\u{1F5FA}\u{FE0F}',
     title: 'A ranked talent map',
-    body: 'Find out who your real AI builders are. Walk away with a defensible, evidence-based ranking of who can actually build — across every team you sponsored.',
-  },
-  {
-    icon: '\u{1F6E0}\u{FE0F}',
-    title: 'Projects shipped on your workflows',
-    body: 'Participants build against your real processes and data patterns. You get working prototypes, not slideware — capability that lands inside the business.',
-  },
-  {
-    icon: '\u{1F517}',
-    title: 'Retention that pays for itself',
-    body: 'Your highest-potential people get invested in, recognized, and promoted from within. Growth is the cheapest retention lever you have.',
+    body: 'An evidence-based ranking of who can actually build with AI, across every team you sponsored. Discover the builders already on your payroll.',
   },
   {
     icon: '\u{1F4CA}',
-    title: 'A board-ready story',
-    body: '"Here is who in our org can build with AI, here is what they shipped, here is our plan." A concrete answer to the question every board is now asking.',
+    title: 'One live leadership view',
+    body: 'A single dashboard of readiness, adoption, and ROI. A concrete before-and-after story for the board, updated in real time.',
+  },
+  {
+    icon: '\u{1F393}',
+    title: 'A credential and a network',
+    body: 'Graduates earn the Certified Anthropic AI Systems Architect credential and stay in a network of architects across companies and phases.',
   },
 ];
 
-interface ZeroRisk {
-  icon: string;
-  title: string;
-  body: string;
-}
-
-const ZERO_RISK: ZeroRisk[] = [
+const ZERO_RISK: Feature[] = [
   {
     icon: '\u{23F0}',
     title: 'On their own time',
-    body: 'Learning happens after hours. Zero hit to current output — nobody is pulled off billable or operational work.',
+    body: 'Self-paced learning around the work they already do. Zero hit to current output, nobody pulled off billable or operational work.',
   },
   {
     icon: '\u{1F501}',
     title: 'Reassignable seats',
-    body: '"What if they quit?" Reassign the seat. The investment stays with the company, never walks out the door with one person.',
+    body: 'If someone leaves, reassign the seat. The capability stays a company asset. It never walks out the door with one person.',
   },
   {
     icon: '\u{1F4B0}',
     title: 'Cheaper than a bad hire',
-    body: 'One mis-hired senior AI engineer costs six figures. A full block of seats costs a fraction — and tells you who to promote instead.',
-  },
-];
-
-interface Objection {
-  concern: string;
-  answer: string;
-}
-
-const OBJECTIONS: Objection[] = [
-  {
-    concern: '"I can’t take people off the job to train them."',
-    answer: 'You don’t. Everyone learns on their own time. Current output is untouched — that’s the entire point of the model.',
-  },
-  {
-    concern: '"What if we invest and they leave?"',
-    answer: 'Seats are reassignable, so the investment stays with the company. And the people you invest in and promote are the ones who stay.',
-  },
-  {
-    concern: '"We already pay for AI tool licenses."',
-    answer: 'Most people consume AI. Very few learn to build with it. Licenses give access; this tells you who can actually turn that access into shipped systems.',
-  },
-  {
-    concern: '"How do I know it’s working?"',
-    answer: 'A live, company-scoped leaderboard ranks people by what they ship, and Demo Day puts working builds in front of you. The signal is objective.',
-  },
-  {
-    concern: '"My team isn’t technical enough."',
-    answer: 'The challenge surfaces builders you didn’t know you had — often outside IT. That discovery is the value, not a prerequisite for entry.',
-  },
-  {
-    concern: '"I don’t have budget approval yet."',
-    answer: 'Start with a small block to prove the signal, then scale. Volume pricing means the next block is cheaper, not a fresh negotiation.',
+    body: 'One mis-hired senior AI engineer costs six figures. A block of annual seats costs a fraction, and tells you who to develop and promote instead.',
   },
 ];
 
@@ -231,7 +175,7 @@ const TIERS: Tier[] = [
     seats: '5–14 seats',
     per: '$1,200',
     note: 'per seat / year',
-    badge: 'Pilot the signal',
+    badge: 'Start the capability',
   },
   {
     name: 'Department',
@@ -246,25 +190,12 @@ const TIERS: Tier[] = [
     seats: '50+ seats',
     per: 'Custom',
     note: 'volume pricing',
-    badge: 'Org-wide talent map',
+    badge: 'Org-wide capability',
   },
 ];
 
-/* The sponsorship flow, as a Mermaid flowchart. Buy seats → redeem codes →
-   learn on own time → climb the leaderboard → Demo Day → certified. */
-const SPONSOR_FLOW = `flowchart LR
-  A([Buy seats]) --> B([Redeem codes])
-  B --> C([Learn on own time])
-  C --> D([Company leaderboard])
-  D --> E([Demo Day])
-  E --> F([Certified Anthropic<br/>AI Systems Architect])
-  classDef step fill:#FFE7E8,stroke:#FB2832,stroke-width:1.5px,color:#1A1A1A;
-  classDef win fill:#1A1A1A,stroke:#FB2832,stroke-width:2px,color:#FFFFFF;
-  class A,B,C,D,E step;
-  class F win;`;
-
 /* Scoped: an outline button that stays legible on the dark (inverse)
-   surfaces. Pure DS tokens — no raw hex — so a re-pointed palette flows
+   hero surface. Pure DS tokens, no raw hex, so a re-pointed palette flows
    through. Scoped under #sponsor-team-page to avoid leaking globally. */
 const SCOPED_CSS = `
 #sponsor-team-page .cb-btn--on-dark {
@@ -278,6 +209,13 @@ const SCOPED_CSS = `
 }
 `;
 
+const grid3: React.CSSProperties = {
+  display: 'grid', gap: 'var(--space-6)', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+};
+const grid2: React.CSSProperties = {
+  display: 'grid', gap: 'var(--space-6)', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+};
+
 function SponsorshipPage() {
   const [submitted, setSubmitted] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
@@ -287,336 +225,280 @@ function SponsorshipPage() {
     <>
       <style>{SCOPED_CSS}</style>
       <SEOHead
-        title="Sponsor Your Team — The AI Builder Challenge"
-        description="Find out who your real AI builders are — without taking anyone off the job. Sponsor annual seats; your people learn on their own time, climb a company leaderboard, and present working systems at Demo Day."
+        title="Roll It Out to Your Organization"
+        description="Tried the platform free? Roll it out across your organization: certification, real projects on your workflows, a network of AI Architects, weekly live events, and one live dashboard leadership watches. Reassignable annual seats. No one comes off the job."
       />
 
-      <div id="sponsor-team-page" style={S.page}>
+      <div id="sponsor-team-page" style={{ background: 'var(--surface-page)', color: 'var(--text-body)' }}>
         {/* ============================ HERO ============================ */}
-        <section style={S.hero}>
+        <section
+          aria-label="Build a measurable AI capability across your team"
+          style={{
+            position: 'relative', overflow: 'hidden',
+            background: 'var(--surface-inverse)', color: 'var(--text-on-inverse)',
+            padding: 'var(--space-32) 0 var(--space-20)',
+          }}
+        >
           <div
             aria-hidden="true"
             style={{
-              position: 'absolute',
-              inset: 0,
-              zIndex: 0,
+              position: 'absolute', inset: 0, zIndex: 0,
               backgroundImage:
-                "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 76%, transparent), color-mix(in srgb, var(--surface-inverse) 90%, transparent)), url('/hero/hero-sponsor.jpg')",
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
+                "linear-gradient(180deg, color-mix(in srgb, var(--surface-inverse) 78%, transparent), color-mix(in srgb, var(--surface-inverse) 92%, transparent)), url('/hero/hero-sponsor.jpg')",
+              backgroundSize: 'cover', backgroundPosition: 'center',
             }}
           />
-          <div style={{ ...S.innerNarrow, position: 'relative', zIndex: 1, textAlign: 'center' }}>
-            <Badge solid>The AI Builder Challenge</Badge>
+          <div className="container" style={{ position: 'relative', zIndex: 1, maxWidth: 1000, paddingInline: 'var(--space-6)', textAlign: 'center' }}>
+            <Badge solid style={{ marginBottom: 'var(--space-6)' }}>Bring your team</Badge>
             <h1
               className="cb-balance"
               style={{
-                fontSize: 'var(--fs-hero-fluid)',
-                fontWeight: 'var(--fw-black)',
-                lineHeight: 'var(--lh-tight)',
-                letterSpacing: 'var(--ls-tighter)',
-                color: 'var(--text-on-inverse)',
-                margin: 'var(--space-6) 0 var(--space-5)',
+                fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'var(--fs-hero-fluid)',
+                lineHeight: 'var(--lh-tight)', letterSpacing: 'var(--ls-tighter)',
+                color: 'var(--text-on-inverse)', margin: '0 0 var(--space-6)',
               }}
             >
-              Find out who your real AI builders are.
+              Tried it yourself? Now bring it{' '}
+              <span style={{ color: 'var(--brand-accent)' }}>to your whole team.</span>
             </h1>
             <p
               style={{
-                fontSize: 'var(--fs-body-lg)',
-                lineHeight: 'var(--lh-relaxed)',
-                color: 'color-mix(in srgb, var(--text-on-inverse) 88%, transparent)',
-                maxWidth: 'var(--container-sm)',
-                margin: '0 auto var(--space-3)',
+                fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-relaxed)',
+                color: 'color-mix(in srgb, var(--text-on-inverse) 86%, transparent)',
+                maxWidth: 780, margin: '0 auto var(--space-6)',
               }}
             >
-              Without taking a single person off the job. Sponsor your team for the cohort,
-              and watch who actually ships working systems with AI &mdash; trained hands-on
-              with Claude Code, in Anthropic-partner hands.
+              You have explored the platform free. Now roll it out to your organization: your people learn
+              on their own time, build real systems on your workflows, and get certified, while you watch
+              capability climb on the same live dashboard you already know. No one comes off the job.
             </p>
             <p
               style={{
-                fontSize: 'var(--fs-body)',
-                fontWeight: 'var(--fw-bold)',
-                color: 'var(--neutral-0)',
-                maxWidth: 'var(--container-sm)',
-                margin: '0 auto var(--space-8)',
+                fontSize: 'var(--fs-body)', fontWeight: 'var(--fw-bold)', color: 'var(--neutral-0)',
+                maxWidth: 780, margin: '0 auto var(--space-8)',
               }}
             >
-              Most people consume AI. Very few learn to build with it.
+              Training is one part. The capability is the point.
             </p>
-            <div
-              style={{
-                display: 'flex',
-                gap: 'var(--space-4)',
-                justifyContent: 'center',
-                flexWrap: 'wrap',
-              }}
-            >
-              <Button variant="primary" size="lg" onClick={() => setShowBooking(true)} data-track="sponsor_hero_book_call">
-                Book a Strategy Call
+            <div style={{ display: 'flex', gap: 'var(--space-4)', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Button as="a" href={TRY_PATH} size="lg" data-track="sponsor_hero_start_free">
+                Start free
               </Button>
-              <Button variant="outline" size="lg" className="cb-btn--on-dark" onClick={() => setShowInfoSession(true)} data-track="sponsor_hero_info_session">
-                Attend a Live Info Session
+              <Button variant="outline" size="lg" className="cb-btn--on-dark" onClick={() => setShowBooking(true)} data-track="sponsor_hero_book_call">
+                Book a walkthrough
               </Button>
             </div>
-            <p
-              style={{
-                fontSize: 'var(--fs-caption)',
-                color: 'color-mix(in srgb, var(--text-on-inverse) 72%, transparent)',
-                margin: 'var(--space-4) 0 0',
-              }}
-            >
-              Ready to sponsor?{' '}
+            <p style={{ fontSize: 'var(--fs-caption)', color: 'color-mix(in srgb, var(--text-on-inverse) 72%, transparent)', margin: 'var(--space-6) 0 0' }}>
+              Already tried it free?{' '}
               <a href="#sponsor-inquiry" style={{ color: 'var(--neutral-0)', fontWeight: 'var(--fw-bold)' }}>
                 Jump to seat tiers &rarr;
               </a>
+              {' '}or{' '}
+              <button
+                type="button"
+                onClick={() => setShowInfoSession(true)}
+                data-track="sponsor_hero_info_session"
+                style={{ background: 'none', border: 0, padding: 0, cursor: 'pointer', font: 'inherit', color: 'var(--neutral-0)', fontWeight: 'var(--fw-bold)', textDecoration: 'underline' }}
+              >
+                attend a live info session
+              </button>
+              .
             </p>
-            <p
-              style={{
-                fontSize: 'var(--fs-caption)',
-                color: 'color-mix(in srgb, var(--text-on-inverse) 72%, transparent)',
-                margin: 'var(--space-8) 0 0',
-              }}
-            >
+            <p style={{ fontSize: 'var(--fs-caption)', color: 'color-mix(in srgb, var(--text-on-inverse) 66%, transparent)', margin: 'var(--space-8) 0 0', fontWeight: 600, letterSpacing: 'var(--ls-wide)' }}>
               Learn With Claude. Build Through Colaberry. Deploy In The Real World.
             </p>
           </div>
         </section>
 
         {/* ===================== PARTNER TRUST BAND ===================== */}
-        <section style={{ padding: 'var(--space-12) var(--space-6) 0' }}>
-          <div style={S.inner}>
+        <section aria-label="Anthropic partnership and trust" style={{ background: 'var(--surface-page)', padding: 'var(--space-16) 0 0' }}>
+          <div className="container" style={{ maxWidth: 1000, paddingInline: 'var(--space-6)' }}>
             <PartnerStrip />
           </div>
         </section>
 
-        {/* ===================== THE PROBLEM A CEO FEELS ===================== */}
-        <section style={S.section}>
-          <div style={S.innerNarrow}>
-            <p style={S.eyebrow}>The problem you can&rsquo;t see</p>
-            <h2 style={S.h2}>You have no idea who in your company can actually build with AI.</h2>
-            <p style={S.lead}>
-              Every leadership meeting now has an AI line item. But ask the honest question and the
-              room goes quiet: who here can turn AI into something deployed? You&rsquo;re guessing.
-            </p>
-            <div style={S.grid3}>
-              {[
-                {
-                  icon: '\u{1F575}\u{FE0F}',
-                  title: 'Tools, not talent',
-                  body: 'You bought the licenses. Adoption dashboards look fine. But usage is not capability — and you can’t tell the difference from a seat count.',
-                },
-                {
-                  icon: '\u{1F3AF}',
-                  title: 'The loudest aren’t the best',
-                  body: 'The people who talk about AI in meetings are rarely the ones quietly shipping it. Real builders are invisible to your org chart.',
-                },
-                {
-                  icon: '\u{1F4B8}',
-                  title: 'Hiring blind is expensive',
-                  body: 'So you hire externally at a premium, hoping for a builder — while the person who could have done it sits two desks away, undiscovered.',
-                },
-              ].map((p) => (
-                <Card key={p.title} padded accent="red">
-                  <div style={S.iconTile} aria-hidden="true">{p.icon}</div>
-                  <h3 style={S.cardTitle}>{p.title}</h3>
-                  <p style={S.cardBody}>{p.body}</p>
+        {/* ================== THE PROBLEM LEADERSHIP FEELS ================== */}
+        <section aria-label="The capability you cannot see" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1160, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="The problem you cannot see"
+              tone="red"
+              title="You cannot see who in your company can actually build with AI."
+              lead="Every leadership meeting now has an AI line item. Ask the honest question and the room goes quiet: who here can turn AI into something deployed? Capability is invisible, so you are guessing."
+            />
+            <div style={grid3}>
+              {PROBLEMS.map((p) => (
+                <Card key={p.title} padded accent="red" style={{ height: '100%' }}>
+                  <div style={iconTileStyle} aria-hidden="true">{p.icon}</div>
+                  <h3 style={cardTitleStyle}>{p.title}</h3>
+                  <p style={cardBodyStyle}>{p.body}</p>
                 </Card>
               ))}
             </div>
+          </div>
+        </section>
+
+        {/* ====================== THE ECOSYSTEM ====================== */}
+        <section aria-label="An AI systems capability ecosystem" style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1160, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="More than training"
+              tone="red"
+              title="Access to an AI systems capability ecosystem"
+              lead="Training is one part of it. Your team also gets certified, builds real projects on your workflows, joins a network of AI Architects, attends weekly live events, and stays current as the field moves."
+            />
+            <EcosystemPillars />
+          </div>
+        </section>
+
+        {/* ====================== THE MATURITY CLIMB ====================== */}
+        <section aria-label="From AI Aware to AI Architect" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1200, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="The climb"
+              tone="blue"
+              title="From AI Aware to AI Architect"
+              lead="Five levels your people climb, and the platform measures every one. You build organizational maturity you can prove, not classes you hope stick."
+            />
+            <MaturityJourney />
+          </div>
+        </section>
+
+        {/* ====================== AI CAPABILITY INDEX ====================== */}
+        <section aria-label="The AI Capability Index baseline" style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1000, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="Start with a baseline"
+              tone="warning"
+              title="One score for where your organization stands today"
+              lead="Establish your AI Capability Index across seven dimensions before anyone starts. A concrete before-and-after story for the board, and the baseline every seat improves."
+            />
+            <CapabilityIndex ctaHref="#sponsor-inquiry" />
           </div>
         </section>
 
         {/* ========================= HOW IT WORKS ========================= */}
-        <section id="how-it-works" style={S.sectionAlt}>
-          <div style={S.inner}>
-            <div style={{ textAlign: 'center', maxWidth: 'var(--container-md)', margin: '0 auto' }}>
-              <p style={S.eyebrow}>How it works</p>
-              <h2 style={S.h2}>One program. Two doors. You sponsor the door your team walks through.</h2>
-              <p style={S.lead}>
-                The same cohort individuals join — but entered as a company. Five steps from purchase
-                order to a ranked roster of your real builders.
-              </p>
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-                gap: 'var(--space-6)',
-              }}
-            >
+        <section aria-label="How it works, self-paced" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1160, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="How it works"
+              tone="blue"
+              title="Self-paced access, not a fixed cohort"
+              lead="Give reassignable seats, your people learn on their own time plus weekly live events, they build on your workflows, you watch the dashboard, they get certified. Five steps, nobody off the job."
+            />
+            <ol style={{ listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 'var(--space-6)', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
               {HOW_IT_WORKS.map((step) => (
-                <Card key={step.n} padded elevation="sm">
-                  <div
-                    style={{
-                      display: 'grid',
-                      placeItems: 'center',
-                      width: '40px',
-                      height: '40px',
-                      borderRadius: 'var(--radius-pill)',
-                      background: 'var(--surface-brand)',
-                      color: 'var(--text-on-accent)',
-                      fontWeight: 'var(--fw-black)',
-                      fontSize: 'var(--fs-body)',
-                      marginBottom: 'var(--space-3)',
-                    }}
-                    aria-hidden="true"
-                  >
-                    {step.n}
-                  </div>
-                  <h3 style={S.cardTitle}>{step.title}</h3>
-                  <p style={S.cardBody}>{step.body}</p>
-                </Card>
+                <li key={step.n} className="cb-min0">
+                  <Card elevation="sm" padded style={{ height: '100%' }}>
+                    <span aria-hidden="true" style={{
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44,
+                      borderRadius: 'var(--radius-pill)', background: 'var(--surface-brand-subtle)', color: 'var(--brand-accent)',
+                      fontFamily: 'var(--font-mono)', fontWeight: 700, fontSize: 'var(--fs-body-sm)', marginBottom: 'var(--space-4)',
+                    }}>{step.n}</span>
+                    <h3 style={cardTitleStyle}>{step.title}</h3>
+                    <p style={cardBodyStyle}>{step.body}</p>
+                  </Card>
+                </li>
               ))}
-            </div>
-
-            {/* The same five steps as a single, scannable flow. */}
-            <div style={{ maxWidth: 'var(--container-md)', margin: 'var(--space-10) auto 0' }}>
-              <MermaidDiagram
-                chart={SPONSOR_FLOW}
-                caption="The sponsorship flow end to end: buy seats, redeem codes, your people learn on their own time, climb the company leaderboard, present at Demo Day, and graduate as a Certified Anthropic AI Systems Architect."
-              />
-            </div>
+            </ol>
           </div>
         </section>
 
-        {/* ================== EMPLOYER DASHBOARD PREVIEW ================== */}
-        <section style={S.section}>
-          <div style={S.inner}>
-            <div style={{ textAlign: 'center', maxWidth: 'var(--container-md)', margin: '0 auto var(--space-10)' }}>
-              <p style={S.eyebrow}>Your sponsor view</p>
-              <h2 style={S.h2}>See exactly how your people build skills.</h2>
-              <p style={{ ...S.lead, marginBottom: 0 }}>
-                A live, company-scoped dashboard ranks your sponsored builders by what they actually
-                ship &mdash; team readiness, skill mastery, and your Demo Day shortlist, in real time.
-                This is the talent map you walk away with.
-              </p>
-            </div>
-            <EmployerDashboardPreview
-              companyName="Your Company"
-              sponsoredCount={14}
-              cohortLabel="Cohort 1"
+        {/* ==================== YOUR SPONSOR DASHBOARD ==================== */}
+        <section aria-label="Your sponsor dashboard" style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1080, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="Your sponsor dashboard"
+              tone="blue"
+              title="One live view leadership watches"
+              lead="A company-scoped dashboard ranks your sponsored people by what they ship and shows who is advancing from Aware to Builder to Architect. The same live view every leader sees, in real time."
             />
+            <CompanyMomentumDashboard />
           </div>
         </section>
 
         {/* ========================= WHAT YOU GET ========================= */}
-        <section style={S.section}>
-          <div style={S.inner}>
-            <div style={{ maxWidth: 'var(--container-md)' }}>
-              <p style={S.eyebrow}>What you walk away with</p>
-              <h2 style={S.h2}>This isn&rsquo;t training. It&rsquo;s talent discovery.</h2>
-              <p style={S.lead}>
-                You&rsquo;re not buying courses. You&rsquo;re buying the answer to who can build &mdash; backed by
-                what they actually shipped.
-              </p>
-            </div>
-            <div style={S.grid2}>
+        <section aria-label="What you walk away with" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="What you walk away with"
+              tone="green"
+              title="Durable capability, and a map of who can build"
+              lead="You are not buying attendance. You are building a capability that stays with the company, and getting the evidence of who can turn AI into deployed value."
+            />
+            <div style={grid2}>
               {WHAT_YOU_GET.map((b) => (
-                <Card key={b.title} padded accent="green">
-                  <div
-                    style={{ ...S.iconTile, background: 'var(--surface-green-subtle)', color: 'var(--status-success)' }}
-                    aria-hidden="true"
-                  >
+                <Card key={b.title} padded accent="green" style={{ height: '100%' }}>
+                  <div style={{ ...iconTileStyle, background: 'var(--surface-green-subtle)', color: 'var(--status-success)' }} aria-hidden="true">
                     {b.icon}
                   </div>
-                  <h3 style={S.cardTitle}>{b.title}</h3>
-                  <p style={S.cardBody}>{b.body}</p>
+                  <h3 style={cardTitleStyle}>{b.title}</h3>
+                  <p style={cardBodyStyle}>{b.body}</p>
                 </Card>
               ))}
-            </div>
-
-            {/* Real photo: the partnership + credential story. */}
-            <div style={{ marginTop: 'var(--space-16)' }}>
-              <SectionFigure
-                src="/img/handshake-deal.jpg"
-                alt="Two business leaders shaking hands to close a team-sponsorship agreement."
-                side="right"
-                eyebrow="Anthropic-partner hands"
-                title="Put your people in Anthropic-partner hands."
-                body={[
-                  'Colaberry is an Anthropic / Claude Code partner. Your sponsored builders train hands-on with the same tools and workflows teams ship with in production — not slideware, and not a generic course library.',
-                  'Graduates earn the Certified Anthropic AI Systems Architect credential (CCA-F prep) — a defensible, evidence-backed signal of who on your team can turn AI into deployed value.',
-                ]}
-                caption="One continuous 12-week program — four phases, one cohort, real shipped work."
-                cta={{ label: 'Sponsor Your Team', to: '/sponsorship#sponsor-inquiry' }}
-              />
             </div>
           </div>
         </section>
 
-        {/* ========================= WHY ZERO RISK ========================= */}
-        <section style={S.sectionAlt}>
-          <div style={S.inner}>
-            <div style={{ textAlign: 'center', maxWidth: 'var(--container-md)', margin: '0 auto' }}>
-              <p style={S.eyebrow}>Why it&rsquo;s zero-risk</p>
-              <h2 style={S.h2}>The three objections, already answered.</h2>
-              <p style={S.lead}>
-                The model is built so the easy "no" never lands. Own time. Reassignable seats.
-                A fraction of a bad hire.
-              </p>
-            </div>
-            <div style={S.grid3}>
+        {/* =================== CERTIFICATION + NETWORK =================== */}
+        <section aria-label="Certification and the architect network" style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1160, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="Certification and network"
+              tone="green"
+              title="A credential your people earn, and a network they keep"
+              lead="Graduates earn the Certified Anthropic AI Systems Architect credential, CCA-F prep, a defensible signal of who can build. They join a standing network of architects across companies and phases, where capability compounds long after any course ends."
+            />
+            <ArchitectNetwork />
+          </div>
+        </section>
+
+        {/* ================= WEEKLY LIVE EVENTS / TIMELINE ================= */}
+        <section aria-label="Weekly live events and staying current" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1000, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="Stay current"
+              tone="blue"
+              title="What is on the timeline this week"
+              lead="AI changes weekly, so a one-time course goes stale. Every seat includes a rolling stream of weekly live events, new modules, and model updates, so your people never fall behind."
+            />
+            <EcosystemTimeline />
+          </div>
+        </section>
+
+        {/* ========================= WHY ZERO-RISK ========================= */}
+        <section aria-label="Why it is zero-risk" style={{ background: 'var(--surface-page)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="Why it is zero-risk"
+              tone="green"
+              title="The three objections, already answered"
+              lead="The model is built so the easy no never lands. Own time, reassignable seats, a fraction of a bad hire."
+            />
+            <div style={grid3}>
               {ZERO_RISK.map((z) => (
-                <Card key={z.title} padded accent="blue">
-                  <div
-                    style={{ ...S.iconTile, background: 'var(--surface-blue-subtle)', color: 'var(--status-info)' }}
-                    aria-hidden="true"
-                  >
+                <Card key={z.title} padded accent="blue" style={{ height: '100%' }}>
+                  <div style={{ ...iconTileStyle, background: 'var(--surface-blue-subtle)', color: 'var(--status-info)' }} aria-hidden="true">
                     {z.icon}
                   </div>
-                  <h3 style={S.cardTitle}>{z.title}</h3>
-                  <p style={S.cardBody}>{z.body}</p>
+                  <h3 style={cardTitleStyle}>{z.title}</h3>
+                  <p style={cardBodyStyle}>{z.body}</p>
                 </Card>
               ))}
             </div>
-          </div>
-        </section>
-
-        {/* ===================== OBJECTION HANDLING ===================== */}
-        <section style={S.section}>
-          <div style={S.inner}>
-            <div style={{ maxWidth: 'var(--container-md)' }}>
-              <p style={S.eyebrow}>Straight answers</p>
-              <h2 style={S.h2}>Every reason to say no — and why it doesn&rsquo;t hold.</h2>
-              <p style={S.lead}>
-                The questions a CFO and a CHRO will both raise, answered plainly.
-              </p>
-            </div>
-            <Table
-              hover
-              columns={[
-                {
-                  key: 'concern',
-                  header: 'The concern',
-                  render: (v: string) => (
-                    <span style={{ fontWeight: 'var(--fw-bold)', color: 'var(--text-strong)' }}>{v}</span>
-                  ),
-                },
-                {
-                  key: 'answer',
-                  header: 'The answer',
-                  render: (v: string) => <span style={{ color: 'var(--text-body)' }}>{v}</span>,
-                },
-              ]}
-              data={OBJECTIONS}
-            />
           </div>
         </section>
 
         {/* ============================ PRICING ============================ */}
-        <section style={S.sectionAlt}>
-          <div style={S.inner}>
-            <div style={{ textAlign: 'center', maxWidth: 'var(--container-md)', margin: '0 auto' }}>
-              <p style={S.eyebrow}>Pricing</p>
-              <h2 style={S.h2}>Annual seats, volume-discounted. One invoice.</h2>
-              <p style={S.lead}>
-                Buy a block, distribute codes, reassign anytime. The more builders you want to find,
-                the less each seat costs.
-              </p>
-            </div>
-            <div style={S.grid3}>
+        <section aria-label="Ecosystem access pricing" style={{ background: 'var(--surface-sunken)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 1120, paddingInline: 'var(--space-6)' }}>
+            <SectionHead
+              badge="Pricing"
+              tone="warning"
+              title="Ecosystem access, annual seats. One invoice."
+              lead="Buy a block of reassignable seats and give access to whoever you choose. Every seat includes the full ecosystem: self-paced paths, weekly live events, real projects, the network, and certification prep. The more of your workforce you develop, the less each seat costs."
+            />
+            <div style={grid3}>
               {TIERS.map((t) => (
                 <Card
                   key={t.name}
@@ -625,12 +507,12 @@ function SponsorshipPage() {
                   accent={t.featured ? 'red' : undefined}
                   style={
                     t.featured
-                      ? { boxShadow: 'var(--shadow-brand)', outline: '2px solid var(--brand-accent)' }
-                      : undefined
+                      ? { height: '100%', boxShadow: 'var(--shadow-brand)', outline: '2px solid var(--brand-accent)' }
+                      : { height: '100%' }
                   }
                 >
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--space-2)' }}>
-                    <h3 style={{ ...S.cardTitle, margin: 0 }}>{t.name}</h3>
+                    <h3 style={{ ...cardTitleStyle, margin: 0 }}>{t.name}</h3>
                     {t.badge && (t.featured ? <Badge solid>{t.badge}</Badge> : <Badge tone="blue">{t.badge}</Badge>)}
                   </div>
                   <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', margin: '0 0 var(--space-4)' }}>
@@ -647,84 +529,73 @@ function SponsorshipPage() {
                     href="#sponsor-inquiry"
                     variant={t.featured ? 'primary' : 'outline'}
                     fullWidth
+                    data-track={`sponsor_pricing_${t.name.toLowerCase()}`}
                   >
-                    {t.per === 'Custom' ? 'Talk to us' : 'Sponsor this block'}
+                    {t.per === 'Custom' ? 'Talk to us' : 'Bring your team'}
                   </Button>
                 </Card>
               ))}
             </div>
             <p style={{ textAlign: 'center', fontSize: 'var(--fs-caption)', color: 'var(--text-muted)', marginTop: 'var(--space-6)' }}>
-              Seats are reassignable across your organization for the full year. Demo Day access included for every sponsored seat.
+              Seats are reassignable across your organization for the full year. Every sponsored seat includes the full ecosystem: weekly live events, the architect network, and certification prep.
             </p>
           </div>
         </section>
 
-        {/* ========================= COHORT URGENCY ========================= */}
-        <section style={S.section}>
-          <div style={S.inner}>
-            <CohortUrgency startDateISO="2026-07-23" seatsTotal={40} seatsLeft={7} />
-          </div>
-        </section>
-
         {/* ===================== FINAL CTA / INQUIRY ===================== */}
-        <section id="sponsor-inquiry" style={{ ...S.section, background: 'var(--surface-inverse)' }}>
-          <div style={{ maxWidth: 'var(--container-md)', margin: '0 auto' }}>
+        <section id="sponsor-inquiry" aria-label="Sponsor your team inquiry" style={{ background: 'var(--surface-inverse)', padding: 'var(--space-24) 0' }}>
+          <div className="container" style={{ maxWidth: 820, paddingInline: 'var(--space-6)' }}>
             <div style={{ textAlign: 'center', marginBottom: 'var(--space-10)' }}>
-              <Badge solid>Sponsor Your Team</Badge>
+              <Badge solid>Bring your team</Badge>
               <h2
                 className="cb-balance"
                 style={{
-                  fontSize: 'var(--fs-h1)',
-                  fontWeight: 'var(--fw-black)',
-                  color: 'var(--text-on-inverse)',
-                  letterSpacing: 'var(--ls-tight)',
+                  fontFamily: 'var(--font-display)', fontSize: 'var(--fs-h1)', fontWeight: 'var(--fw-black)',
+                  color: 'var(--text-on-inverse)', letterSpacing: 'var(--ls-tight)',
                   margin: 'var(--space-5) 0 var(--space-4)',
                 }}
               >
-                See who can build. Before your competitors do.
+                Build the capability. Before your competitors do.
               </h2>
               <p
                 style={{
-                  fontSize: 'var(--fs-body-lg)',
-                  lineHeight: 'var(--lh-relaxed)',
-                  color: 'var(--neutral-300)',
-                  maxWidth: 'var(--container-sm)',
-                  margin: '0 auto',
+                  fontSize: 'var(--fs-body-lg)', lineHeight: 'var(--lh-relaxed)', color: 'var(--neutral-300)',
+                  maxWidth: 'var(--container-sm)', margin: '0 auto',
                 }}
               >
-                Tell us about your team. We&rsquo;ll send seat pricing, the Demo Day calendar, and a
-                short plan for turning the challenge into your AI talent map.
+                Tell us about your team. We will send seat pricing, the live-event calendar, and a short
+                plan for turning access into a measurable AI capability across your workforce.
               </p>
             </div>
 
             <Card padded elevation="md">
               {submitted ? (
                 <div style={{ textAlign: 'center', padding: 'var(--space-8) var(--space-4)' }} role="status">
-                  <div style={{ ...S.iconTile, margin: '0 auto var(--space-4)', background: 'var(--surface-green-subtle)', color: 'var(--status-success)' }} aria-hidden="true">
+                  <div style={{ ...iconTileStyle, margin: '0 auto var(--space-4)', background: 'var(--surface-green-subtle)', color: 'var(--status-success)' }} aria-hidden="true">
                     {'✓'}
                   </div>
-                  <h3 style={S.cardTitle}>Your inquiry is in.</h3>
-                  <p style={S.cardBody}>
-                    Expect seat pricing and the Demo Day calendar within one business day. We&rsquo;ll
-                    tailor the plan to the team size you told us about.
+                  <h3 style={cardTitleStyle}>Your inquiry is in.</h3>
+                  <p style={cardBodyStyle}>
+                    Expect seat pricing and the live-event calendar within one business day. We will tailor
+                    the plan to the team size you told us about.
                   </p>
                 </div>
               ) : (
                 <LeadCaptureForm
                   formType="sponsor_inquiry"
                   fields={['name', 'email', 'company', 'title', 'company_size']}
-                  submitLabel="Sponsor Your Team"
+                  submitLabel="Bring your team"
                   buttonClassName="cb-btn cb-btn--primary cb-btn--lg cb-btn--full"
-                  successMessage="Your sponsor inquiry is in — we'll be in touch within one business day."
+                  successMessage="Your rollout request is in, we'll be in touch within one business day."
                   onSuccess={() => setSubmitted(true)}
                 />
               )}
             </Card>
 
             <p style={{ textAlign: 'center', fontSize: 'var(--fs-caption)', color: 'var(--neutral-400)', marginTop: 'var(--space-6)' }}>
-              Prefer to start small for one person?{' '}
-              <a href="/enroll" style={{ color: 'var(--text-link)', fontWeight: 'var(--fw-bold)' }}>
-                Join the Challenge as an individual
+              Want to try it yourself first?{' '}
+              <a href={TRY_PATH} style={{ color: 'var(--text-link)', fontWeight: 'var(--fw-bold)' }}>
+                Start free
               </a>
               .
             </p>
@@ -733,7 +604,7 @@ function SponsorshipPage() {
       </div>
 
       {/* Employer first-touch: book a meeting (primary) or a live info session
-          (secondary) — the info session registers to the SAME open-house event,
+          (secondary). The info session registers to the SAME open-house event,
           employer-framed via an open_house_* lead formType. */}
       <StrategyCallModal show={showBooking} onClose={() => setShowBooking(false)} />
       <OpenHouseModal
@@ -742,8 +613,8 @@ function SponsorshipPage() {
         personaSlug="employer_info_session"
         submitLabel="Reserve my info-session seat"
         title="Reserve your Live Info Session seat"
-        subtitle="A free, live online session — see the program your team would join and how the talent-discovery works. No pitch."
-        successMessage="You’re registered. We’ll email you the Live Info Session details shortly."
+        subtitle="A free, live online session. See the ecosystem your team would join and how the capability builds. No pitch."
+        successMessage="You're registered. We'll email you the Live Info Session details shortly."
       />
     </>
   );

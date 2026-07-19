@@ -7,6 +7,7 @@ import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import BuildToast from '../projects/BuildToast';
 import { useIsExplorer } from '../useIsExplorer';
+import { useIsOrgManager } from '../useIsOrgManager';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
 // icon per item. Today / Path / Schedule / Projects / Classroom / Community are
@@ -60,10 +61,17 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
-// Bottom tab bar (mobile) — the built, navigable destinations. Fixes the gap
-// where the sidebar was display:none on phones with no replacement, leaving
-// Path/Schedule/Projects/Classroom/Community unreachable. Account stays top-right.
-const TAB_ITEMS = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.to && !i.soon);
+// "Your company" — prepended above "Your day" only for org managers. Single item
+// to the real, authed manager page. Kept out of NAV_GROUPS so normal students
+// never see it.
+const COMPANY_NAV_GROUP: NavGroup = {
+  grp: 'Your company',
+  items: [
+    { label: 'Your company', to: '/portal/company', icon: (
+      <svg viewBox="0 0 24 24" fill="none"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M12 9h.01M15 9h.01M9 13h.01M12 13h.01M15 13h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+    ) },
+  ],
+};
 
 type PortalShellProps = {
   children: React.ReactNode;
@@ -80,6 +88,17 @@ type PortalShellProps = {
 const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const location = useLocation();
   const isExplorer = useIsExplorer();   // Explorer = demo tier — shows a Demo pill on Projects
+  const isOrgManager = useIsOrgManager(); // manager = also sees a "Your company" nav group
+  // Effective nav: managers get "Your company" prepended above "Your day".
+  const groups = useMemo<NavGroup[]>(
+    () => (isOrgManager ? [COMPANY_NAV_GROUP, ...NAV_GROUPS] : NAV_GROUPS),
+    [isOrgManager],
+  );
+  // Mobile bottom tab bar mirrors the effective, navigable destinations.
+  const tabItems = useMemo(
+    () => groups.flatMap((g) => g.items).filter((i) => i.to && !i.soon),
+    [groups],
+  );
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
@@ -230,7 +249,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
 
       {/* ── nav ── */}
       <nav className="te-nav">
-        {NAV_GROUPS.map((group) => (
+        {groups.map((group) => (
           <React.Fragment key={group.grp}>
             <div className="grp">{group.grp}</div>
             {group.items.map((n) => {
@@ -264,7 +283,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
 
       {/* ── bottom tab bar (mobile only via CSS) — nav reachable on phones ── */}
       <nav className="te-tabbar">
-        {TAB_ITEMS.map((t) => {
+        {tabItems.map((t) => {
           const on = !!t.to && (active === t.to || active.startsWith(t.to + '/'));
           return (
             <Link key={t.label} to={t.to!} className={`te-tab${on ? ' active' : ''}`}>

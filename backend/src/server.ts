@@ -509,6 +509,46 @@ async function ensurePointsSchema() {
   }
 }
 
+async function ensureOrgSchema() {
+  // Free-trial Organization / Manager layer. A manager registers free → gets a
+  // management org + their own free enrollment; teammates join as free members.
+  // Explicit idempotent DDL (sequelize.sync is disabled on this graph). The unique
+  // index on (org_id, email) makes inviting the same teammate twice a no-op.
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS organizations (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       name VARCHAR(255) NOT NULL,
+       owner_enrollment_id UUID NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS organizations_owner_enrollment_unique ON organizations (owner_enrollment_id)`,
+    `CREATE TABLE IF NOT EXISTS org_members (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       org_id UUID NOT NULL,
+       enrollment_id UUID,
+       email VARCHAR(255) NOT NULL,
+       team VARCHAR(120),
+       role VARCHAR(20) NOT NULL DEFAULT 'member',
+       invite_status VARCHAR(20) NOT NULL DEFAULT 'invited',
+       invited_by UUID,
+       joined_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS org_members_org_email_unique ON org_members (org_id, email)`,
+    `CREATE INDEX IF NOT EXISTS idx_org_members_org_id ON org_members (org_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_org_members_enrollment_id ON org_members (enrollment_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] org schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureSubscriptionSchema() {
   // Student self-serve subscriptions. Explicit idempotent create (sequelize.sync
   // is disabled on this graph). One row per checkout; payment_ref is the
@@ -1687,6 +1727,8 @@ async function start(): Promise<void> {
   await ensureEnrollmentColumns();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
+  // Free-trial Organization / Manager layer — org + roster tables (idempotent).
+  await ensureOrgSchema();
   // Student self-serve subscriptions (idempotent).
   await ensureSubscriptionSchema();
   // Account credits — Open House $50 deposits applied to next payment (idempotent).
