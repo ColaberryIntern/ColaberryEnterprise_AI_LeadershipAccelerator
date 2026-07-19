@@ -50,6 +50,40 @@ const writeViewSnapshot = (snap: ViewSnapshot): void => {
   try { window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(snap)); } catch { /* private mode / quota — non-fatal */ }
 };
 
+// Restore window scroll to targetY, but only once the feed is tall enough to
+// actually reach it. The feed's card thumbnails (video/podcast posters) load
+// AFTER the cards render, so right after a remount the document is short and a
+// naive window.scrollTo(0, targetY) clamps near the top — which is the "back
+// sends me to the top" bug. So we poll per animation frame until the document
+// can reach targetY (images have grown it back to the height it had when we
+// saved), then scroll once. We bail the moment the student scrolls themselves,
+// so we never fight them, and give up after a cap so a genuinely-shorter feed
+// (e.g. a card was completed/removed) doesn't spin.
+function restoreScroll(targetY: number): void {
+  if (!targetY || targetY <= 0) return;
+  let done = false;
+  const cleanup = () => {
+    window.removeEventListener('wheel', onUser);
+    window.removeEventListener('touchstart', onUser);
+  };
+  function onUser() { done = true; cleanup(); }
+  window.addEventListener('wheel', onUser, { passive: true });
+  window.addEventListener('touchstart', onUser, { passive: true });
+  const start = performance.now();
+  const tick = () => {
+    if (done) return;
+    const maxY = document.documentElement.scrollHeight - window.innerHeight;
+    if (maxY >= targetY - 4 || performance.now() - start > 3000) {
+      window.scrollTo(0, targetY);
+      done = true;
+      cleanup();
+    } else {
+      requestAnimationFrame(tick);
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
 /** ms until the next Thursday 10:00 (client-side schedule anchor until live sessions are wired). */
 function nextThursday(now: number): number {
   const d = new Date(now);
@@ -110,11 +144,10 @@ const ClassroomPage: React.FC = () => {
       const snap = readViewSnapshot();
       if (snap && snap.week != null && weeks.includes(snap.week)) {
         setWeek(snap.week);
-        // Restore scroll after the feed has painted at full height. App-level
-        // ScrollToTop zeroes the window on every route change, so this must run
-        // after it — two rAFs lands us past layout + that reset.
-        const y = snap.scrollY || 0;
-        if (y > 0) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+        // Restore scroll once the feed is tall enough (its thumbnails have
+        // loaded). restoreScroll waits for that, so it runs after App-level
+        // ScrollToTop's reset AND after the images that give the page its height.
+        restoreScroll(snap.scrollY || 0);
         return;
       }
     }
