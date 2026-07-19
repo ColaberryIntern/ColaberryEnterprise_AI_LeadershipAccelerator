@@ -10,6 +10,18 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Announcement — Week 0 live-generates in the new format (free-preview branch); ready to build out all weeks (2026-07-19)
+- [x] **Week 0 now live-generates in the same wide/mapped/time-budget format as every other week, via a free-preview branch in the prompt — no more hand-authored lock; reads from the curriculum like the rest**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/seeds/seedComponentAuthoring.ts` — `ANNOUNCEMENT_GENERATION_PROMPT` gains a FREE PREVIEW branch: when the WEEK CONTEXT is Week 0 / "Free AI Preview" / the free lead-magnet tier, the title becomes exactly "Welcome to Your Free AI Preview", the hero welcomes them to their free week, the first stat tile reads "🆓 Free" (not a time), and an extra "🚀 Where this can take you" band invites them to unlock the full ecosystem (training/projects/certifications/internships) with an affordable membership — no price. Every other week is unchanged.
+    - `backend/src/scripts/setupAnnouncementCards.ts` — dropped the hand-authored Week 0 lock; now treats weeks 0-12 uniformly (dedup + clear stale content), so Week 0 unlocks and live-generates like the rest. Removed the `announcementWeek0` dependency.
+    - Deleted `backend/src/data/announcementWeek0.ts` (the hand-authored locked Week 0 body — no longer used).
+  - Why: Ali approved the announcement format and asked that Week 0 follow it too (then build out weeks 2-12). Keeping Week 0 special (free-preview title + ecosystem pitch) but live-generated means it reads from the curriculum and never goes stale, consistent with weeks 1-12.
+  - Verification: `tsc` + jest via CI. Post-deploy: run `setupAnnouncementCards.js` (unlocks Week 0 + dedups) then generate all weeks 0-12; confirm Week 0 shows the free-preview title + ecosystem band and 2-12 show the full mapped format.
+  - Notes: SDLC re-theming (Week 0=SDLC, Week 1=Business Analysis, …) is a SEPARATE, deferred curriculum edit in production — the announcements auto-follow whatever the curriculum says, so no announcement change is needed for it.
+
 ### Announcement — curriculum-derived time budget: total at top + per-phase + per-activity (2026-07-19)
 - [x] **The week map now shows a real time budget pulled from the curriculum: a "how much work" overview at the top, each phase's time on its heading, each activity's minutes on its card — and it refreshes when the curriculum's timing changes**
   - Date: 2026-07-19
