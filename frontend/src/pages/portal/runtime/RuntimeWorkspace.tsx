@@ -25,15 +25,11 @@ const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 const RuntimeWorkspace: React.FC = () => {
   const { cardId = '' } = useParams();
   const navigate = useNavigate();
-  // Go back to wherever the student came from — normally the classroom, which
-  // restores their week / open card / scroll from a session snapshot. Pop real
-  // in-app history so the browser back button stays clean (no stacked entries);
-  // fall back to the classroom on a direct/deep link with no history to pop.
-  const goBack = useCallback(() => {
-    const idx = (window.history.state && (window.history.state as { idx?: number }).idx) || 0;
-    if (idx > 0) navigate(-1);
-    else navigate('/portal/classroom');
-  }, [navigate]);
+  // Always return to the Classroom — this button is literally "Back to Classroom",
+  // and the Classroom restores the student's week + scroll from a session snapshot
+  // and loads reliably. (navigate(-1) landed on the slower Today feed when the
+  // student entered the workspace from there, which never restored its position.)
+  const goBack = useCallback(() => navigate('/portal/classroom'), [navigate]);
   const [data, setData] = useState<RtOpen | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [error, setError] = useState('');

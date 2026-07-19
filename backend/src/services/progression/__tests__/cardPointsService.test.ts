@@ -58,24 +58,20 @@ describe('resolveCardEngagementPoints', () => {
     expect(await resolveCardEngagementPoints({ id: 'c1', type: 'reading' })).toBe(7);
   });
 
-  it('uses the band fallback map when no config exists (survey=10, quiz=15, evaluation=20)', async () => {
-    mockResolveType.mockReturnValue({ render_band: 'survey' });
-    expect(await resolveCardEngagementPoints({ id: 'c1', type: 'warmup' })).toBe(10);
-    mockResolveType.mockReturnValue({ render_band: 'quiz' });
-    expect(await resolveCardEngagementPoints({ id: 'c2', type: 'quiz' })).toBe(15);
-    mockResolveType.mockReturnValue({ render_band: 'evaluation' });
-    expect(await resolveCardEngagementPoints({ id: 'c3', type: 'evaluation' })).toBe(20);
+  it('awards the sum of card.points (the exact badge value) when no config override exists', async () => {
+    expect(await resolveCardEngagementPoints({ id: 'c1', type: 'knowledge_check', points: { learning: 15 } })).toBe(15);
+    expect(await resolveCardEngagementPoints({ id: 'c2', type: 'prompt_challenge', points: { builder: 50, learning: 5 } })).toBe(55);
+    expect(await resolveCardEngagementPoints({ id: 'c3', type: 'reflection', points: { learning: 5, community: 5 } })).toBe(10);
   });
 
-  it('defaults an unknown band/type to 5', async () => {
-    mockResolveType.mockReturnValue({ render_band: 'mystery' });
-    expect(await resolveCardEngagementPoints({ id: 'c1', type: 'mystery' })).toBe(5);
+  it('is 0 when the card has no points (badge hidden → nothing to award)', async () => {
+    expect(await resolveCardEngagementPoints({ id: 'c1', type: 'announcement', points: { learning: 0, builder: 0, community: 0 } })).toBe(0);
+    expect(await resolveCardEngagementPoints({ id: 'c2', type: 'announcement' })).toBe(0);
   });
 
-  it('never throws — a config read error falls back to the code map', async () => {
+  it('never throws — a config read error falls back to the badge value', async () => {
     mockFindOne.mockRejectedValue(new Error('db down'));
-    mockResolveType.mockReturnValue({ render_band: 'survey' });
-    await expect(resolveCardEngagementPoints({ id: 'c1', type: 'warmup' })).resolves.toBe(10);
+    await expect(resolveCardEngagementPoints({ id: 'c1', type: 'quiz', points: { learning: 15 } })).resolves.toBe(15);
   });
 });
 
@@ -86,10 +82,10 @@ describe('awardCardCompletionPoints', () => {
     expect(mockAward).not.toHaveBeenCalled();
   });
 
-  it('awards the resolved points, keyed idempotently by card, and returns the amount', async () => {
+  it('awards the sum of card.points, keyed idempotently by card, and returns the amount', async () => {
     mockResolveType.mockReturnValue({ render_band: 'quiz' });
     mockAward.mockResolvedValue({ awarded: true, points: 15 });
-    const got = await awardCardCompletionPoints('enr-1', { id: 'card-9', type: 'quiz' });
+    const got = await awardCardCompletionPoints('enr-1', { id: 'card-9', type: 'quiz', points: { learning: 15 } });
     expect(got).toBe(15);
     const arg = mockAward.mock.calls[0];
     expect(arg[0]).toBe('enr-1');
@@ -99,7 +95,7 @@ describe('awardCardCompletionPoints', () => {
   it('returns 0 on an idempotent re-completion (award reports not-created)', async () => {
     mockResolveType.mockReturnValue({ render_band: 'survey' });
     mockAward.mockResolvedValue({ awarded: false, points: 0 });
-    expect(await awardCardCompletionPoints('enr-1', { id: 'card-9', type: 'warmup' })).toBe(0);
+    expect(await awardCardCompletionPoints('enr-1', { id: 'card-9', type: 'warmup', points: { learning: 10 } })).toBe(0);
   });
 
   it('does not award when the resolved amount is 0', async () => {
@@ -112,7 +108,7 @@ describe('awardCardCompletionPoints', () => {
   it('never throws — an award failure is swallowed and returns 0 (non-fatal)', async () => {
     mockResolveType.mockReturnValue({ render_band: 'quiz' });
     mockAward.mockRejectedValue(new Error('write failed'));
-    await expect(awardCardCompletionPoints('enr-1', { id: 'c1', type: 'quiz' })).resolves.toBe(0);
+    await expect(awardCardCompletionPoints('enr-1', { id: 'c1', type: 'quiz', points: { learning: 15 } })).resolves.toBe(0);
   });
 });
 

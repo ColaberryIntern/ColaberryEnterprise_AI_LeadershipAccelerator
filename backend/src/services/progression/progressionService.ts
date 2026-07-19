@@ -104,8 +104,9 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
   const community_xp = await awardCommunityXp(enrollmentId, { id: card.id, type: card.type }, (await getTypeXp(card.type)).community);
 
   // Engagement points for the HUD (StudentPointsEvent) — a separate ledger from XP.
-  // Non-fatal + idempotent per (enrollment, card): re-completing awards 0.
-  const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type });
+  // Amount = the card's "+N pts" badge value (sum of card.points). Non-fatal +
+  // idempotent per (enrollment, card): re-completing awards 0.
+  const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type, points: card.points });
 
   await recomputeForEnrollment(enrollmentId);
   const promotion = await evaluateForEnrollment(enrollmentId);

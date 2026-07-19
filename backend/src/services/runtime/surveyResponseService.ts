@@ -74,7 +74,7 @@ export async function getSurvey(enrollmentId: string, cardId: string): Promise<S
  *  Submitting the survey is what completes the card, so it also awards engagement
  *  points (idempotent per card — re-submitting never re-awards). */
 export async function saveSurvey(enrollmentId: string, cardId: string, payload: any): Promise<{ saved: true; answers: SurveyAnswers; points_awarded: number }> {
-  const card = await TimelineCard.findByPk(cardId, { attributes: ['id', 'type', 'program_id', 'week', 'metadata'] });
+  const card = await TimelineCard.findByPk(cardId, { attributes: ['id', 'type', 'program_id', 'week', 'metadata', 'points'] });
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
   const { questions } = questionsFromCard(card.metadata);
   const answers = normalizeAnswers(payload, questions);
@@ -88,6 +88,6 @@ export async function saveSurvey(enrollmentId: string, cardId: string, payload: 
       answers,
     });
   }
-  const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type });
+  const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type, points: (card as any).points });
   return { saved: true, answers, points_awarded };
 }
