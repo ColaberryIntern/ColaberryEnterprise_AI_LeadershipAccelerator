@@ -42,6 +42,8 @@ export interface FeedContent {
 export interface FeedCourse {
   name: string | null;
   url: string | null;
+  completion?: 'certificate' | 'progress'; // 'progress' = interim (upload a progress screenshot)
+  sections?: string;                        // which sections this part covers (split course)
 }
 
 /** A blog post on the card (Blog type) — a fixed pasted post, or the per-student
@@ -143,7 +145,10 @@ export function courseFromMetadata(metadata: any): FeedCourse | null {
   if (!c || typeof c !== 'object') return null;
   const name = typeof c.name === 'string' && c.name.trim() ? c.name.trim() : null;
   const url = typeof c.url === 'string' && c.url.trim() ? c.url.trim() : null;
-  return name || url ? { name, url } : null;
+  if (!name && !url) return null;
+  const completion = c.completion === 'progress' ? 'progress' : undefined;
+  const sections = typeof c.sections === 'string' && c.sections.trim() ? c.sections.trim() : undefined;
+  return { name, url, ...(completion ? { completion } : {}), ...(sections ? { sections } : {}) };
 }
 
 export interface TimelineFeed {

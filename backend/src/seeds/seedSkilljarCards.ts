@@ -17,7 +17,7 @@ import { connectDatabase, sequelize } from '../config/database';
 import '../models';
 import TimelineCard from '../models/TimelineCard';
 import { createCard, updateCard } from '../services/timeline/timelineAdminService';
-import { WEEK_BLUEPRINTS, CANONICAL_PROGRAM_ID } from '../data/weekBlueprints';
+import { WEEK_BLUEPRINTS, CANONICAL_PROGRAM_ID, WeekBlueprintContent } from '../data/weekBlueprints';
 
 export interface SkilljarSeedResult {
   created: number;
@@ -25,18 +25,34 @@ export interface SkilljarSeedResult {
   weeks: Array<{ week: number; action: 'created' | 'updated'; title: string; minutes: number | null }>;
 }
 
+interface CourseCardSpec {
+  title: string;
+  url: string;
+  minutes: number | null;
+  completion: 'certificate' | 'progress';
+  sections?: string;
+}
+
+/** The course card for a week: an explicit `anthropic_course_card` override (used
+ *  for a split course) wins; otherwise derive from a `skilljar`-kind `anthropic`. */
+function specForWeek(w: WeekBlueprintContent): CourseCardSpec | null {
+  if (w.anthropic_course_card) return { ...w.anthropic_course_card };
+  if (w.anthropic.kind === 'skilljar' && w.anthropic.url) {
+    return { title: w.anthropic.title as string, url: w.anthropic.url, minutes: w.anthropic_course_minutes ?? null, completion: 'certificate' };
+  }
+  return null;
+}
+
 export async function seedSkilljarCards(opts?: { programId?: string }): Promise<SkilljarSeedResult> {
   const programId = opts?.programId || process.env.SKILLJAR_CARDS_PROGRAM_ID || CANONICAL_PROGRAM_ID;
-  const skilljarWeeks = WEEK_BLUEPRINTS.filter((w) => w.anthropic.kind === 'skilljar' && w.anthropic.url);
+  const targets = WEEK_BLUEPRINTS.map((w) => ({ w, spec: specForWeek(w) })).filter((x): x is { w: WeekBlueprintContent; spec: CourseCardSpec } => !!x.spec);
 
-  console.log(`[skilljar-cards] program_id=${programId} — ensuring ${skilljarWeeks.length} Skilljar course cards`);
+  console.log(`[skilljar-cards] program_id=${programId} — ensuring ${targets.length} Skilljar course cards`);
 
   const result: SkilljarSeedResult = { created: 0, updated: 0, weeks: [] };
 
-  for (const w of skilljarWeeks) {
-    const title = w.anthropic.title as string;
-    const url = w.anthropic.url as string;
-    const minutes = w.anthropic_course_minutes ?? null;
+  for (const { w, spec } of targets) {
+    const course = { name: spec.title, url: spec.url, completion: spec.completion, ...(spec.sections ? { sections: spec.sections } : {}) };
 
     const existing = await TimelineCard.findOne({
       where: { program_id: programId, week: w.week, type: 'anthropic_skills_jar' },
@@ -45,33 +61,33 @@ export async function seedSkilljarCards(opts?: { programId?: string }): Promise<
 
     if (existing) {
       await updateCard(existing.id, {
-        title,
+        title: spec.title,
         difficulty: 'core',
         visibility: 'published',
-        ...(minutes != null ? { estimated_time: minutes } : {}),
-        course: { name: title, url },
+        ...(spec.minutes != null ? { estimated_time: spec.minutes } : {}),
+        course,
       });
       result.updated += 1;
-      result.weeks.push({ week: w.week, action: 'updated', title, minutes });
-      console.log(`  wk${w.week}: updated -> "${title}" (${minutes ?? 'type-default'}m) ${url}`);
+      result.weeks.push({ week: w.week, action: 'updated', title: spec.title, minutes: spec.minutes });
+      console.log(`  wk${w.week}: updated -> "${spec.title}" (${spec.minutes ?? 'type-default'}m · ${spec.completion}) ${spec.url}`);
     } else {
       await createCard({
         type: 'anthropic_skills_jar',
         week: w.week,
         program_id: programId,
-        title,
+        title: spec.title,
         difficulty: 'core',
         visibility: 'published',
-        ...(minutes != null ? { estimated_time: minutes } : {}),
-        course: { name: title, url },
+        ...(spec.minutes != null ? { estimated_time: spec.minutes } : {}),
+        course,
       } as any);
       result.created += 1;
-      result.weeks.push({ week: w.week, action: 'created', title, minutes });
-      console.log(`  wk${w.week}: created -> "${title}" (${minutes ?? 'type-default'}m) ${url}`);
+      result.weeks.push({ week: w.week, action: 'created', title: spec.title, minutes: spec.minutes });
+      console.log(`  wk${w.week}: created -> "${spec.title}" (${spec.minutes ?? 'type-default'}m · ${spec.completion}) ${spec.url}`);
     }
   }
 
-  console.log(`[skilljar-cards] done — ${result.created} created, ${result.updated} updated (${skilljarWeeks.length} Skilljar weeks; re-runs are idempotent).`);
+  console.log(`[skilljar-cards] done — ${result.created} created, ${result.updated} updated (${targets.length} course cards; re-runs are idempotent).`);
   return result;
 }
 
