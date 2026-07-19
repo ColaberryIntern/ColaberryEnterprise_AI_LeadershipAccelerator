@@ -10,6 +10,18 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Announcement — full-week curriculum MAP: wide/responsive, covers every activity grouped by phase (2026-07-19)
+- [x] **Rebuilt the announcement generation so it maps the WHOLE week (all activities grouped by phase), widens in the workspace, and has more emoji/spacing**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/services/timeline/sectionCurriculumContext.ts` — `buildSectionCurriculumText` now leads with the TOTAL activity count and tags each item with its journey PHASE (`[Prep]`/`[Learn]`/…), so a week-summary generator covers the whole week grouped by phase (was: a flat list, model cherry-picked 4). Added `PHASE_LABEL`. (Also feeds Overview.)
+    - `backend/src/seeds/seedComponentAuthoring.ts` — rewrote `ANNOUNCEMENT_GENERATION_PROMPT`: emits a fixed, WIDE, responsive `<style>` (copied verbatim: `body max-width:1080px`, a `repeat(auto-fill,minmax(280px,1fr))` grid so activity cards flow into multiple columns in the workspace and single-column in the ~400px drawer), a per-activity emoji on every card, phase-grouped sections covering EVERY activity, more spacing. Title locked to the exact WEEK CONTEXT topic (verbatim, no paraphrase). No hours/minutes.
+    - `backend/src/services/timeline/__tests__/sectionCurriculumContext.test.ts` — updated for the new count+phase format; asserts `announcement` in `SECTION_ROSTER_TYPES`.
+  - Why: Ali reviewed the live Week 1 card — it only showed 4 of ~14 activities and didn't map to the curriculum; he wants the full week mapped, wider in the workspace, more emoji + spacing for readability.
+  - Verification: iterated on prod against the real Week 1 roster (14 activities) — final v3 covered ALL 14 grouped by phase, copied the wide/responsive CSS verbatim (multi-column in workspace, single-column in drawer), per-activity emoji. Ali approved the look. `tsc` + jest via CI (authoritative Docker gate).
+  - Notes: builds on the announcement type (prior entry / PR #389). Post-merge: deploy, then regenerate the prod Week 1 card via the deployed path (title-locked); weeks 2-12 inherit on first open.
+
 ### Announcement curriculum type — friendly weekly kickoff that scans the section (2026-07-19)
 - [x] **Announcement authored as the section-opener: live-generated "mini report" that scans the week's roster, resets when the curriculum changes; Week 0 locked hand-authored free-preview welcome**
   - Date: 2026-07-19
@@ -9436,3 +9448,36 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: THE actual root cause of "back sends me to the top" (three prior fixes — PR #339 save/restore, #371 wait-for-images — never moved it). The snapshot was written in a useEffect UNMOUNT CLEANUP: `useEffect(() => () => writeViewSnapshot({week, scrollY: window.scrollY}), [])`. But useEffect cleanups are PASSIVE — React runs them AFTER it has already swapped ClassroomPage's DOM out for the workspace and App-level ScrollToTop has zeroed the window — so `window.scrollY` read ~0 at that point. Every save recorded `scrollY: 0`, so every restore faithfully restored to 0 (the top); no restore-side fix could ever help. Fix in `frontend/src/pages/portal/ClassroomPage.tsx`: replaced the unmount-cleanup save with a live throttled `scroll` listener (active while `uiState==='ready'`, one write/frame via rAF) that persists `{week, scrollY}` WHILE the page is still mounted and scrolled — capturing the real position. Kept the wait-for-height `restoreScroll` from #371 for the restore side; the two now compose correctly.
   - Verification: frontend `tsc --noEmit` — zero errors in ClassroomPage.tsx (junctioned typecheck). Diagnostic confirmation: on the live (pre-fix) bundle, `sessionStorage.getItem('classroom-view')` shows `scrollY: 0` even after scrolling far — proving the save side; with this fix it shows the real scroll offset.
   - Notes: Built in isolated worktree on branch `workstream/classroom-scroll-save-fix` off `origin/main`. Frontend-only → deploy nginx. Also ruled out (this session) as NOT the cause: inner scroll container (the classroom scrolls the WINDOW — `.te-shell` min-height:100vh, no overflow anywhere on the feed path), service worker (none), Cloudflare stale HTML (index.html is no-store/DYNAMIC, serves the current bundle). Lesson: never read scroll position in a passive-effect unmount cleanup — capture it live.
+
+### AI Mentor Intelligence — Phase 5: proactive struggle nudges (backend) — 2026-07-19
+- [x] The mentor can now reach out UNPROMPTED when a student looks stuck — the true proactive nudge (Phases 0-4a shipped the struggle-AWARE half; this adds the initiate-help half)
+  - Date: 2026-07-19
+  - Session: CC-20260718-a9k2
+  - What changed:
+    - New `backend/src/services/runtime/mentorNudgeFormat.ts` — PURE `detectStruggle` (signals, worst-first: `not_yet_passed` from a graded eval not passed, `multiple_attempts` >=3, `low_score` <50%, `many_questions` >=4 prior mentor turns on the card) + `nudgeMessage` (a warm, deterministic opener per top reason — always OFFERS help, never reveals graded answers) + `buildNudge`.
+    - New `backend/src/services/runtime/mentorNudgeService.ts` — `getNudge(enrollmentId, cardId)`: read-only + fail-safe (`MentorTurn.count` + `TimelineCardProgress.attempts` + latest `AssessmentAttempt`), returns `{ struggling, reasons, message }` (or a no-nudge on any error, so it can never break card-open).
+    - New endpoint `GET /api/portal/runtime/cards/:cardId/nudge` (`handleNudge` in `runtimeController` + route in `participantRoutes`, `requireParticipant`). Deterministic message = no LLM cost, safe to call on every card open.
+    - New test `mentorNudgeFormat.test.ts` (9 cases incl. worst-first ordering + the never-reveal-answers assertion).
+  - Why: completes the mentor's proactivity — 4a made it struggle-aware when the student engages; this lets it initiate. The remaining piece is the FRONTEND surface (call `/nudge` on card open, render the message as a friendly opener that launches the mentor) — a noted follow-on. [[project_ai_mentor_intelligence_build]]
+  - Verification: jest `mentorNudgeFormat.test.ts` 9/9; `tsc --noEmit` clean for our source. Backend-only.
+  - Notes: Branch `workstream/mentor-proactive-nudge` off `main` (2b1878dc). Additive — the endpoint exists but nothing calls it until the frontend wires it, so deploying is behavior-neutral. Beyond the original 5-phase plan (a MENTOR-14 follow-on); opened as a PR for review, not auto-deployed.
+### Embeddable portal-login script for partner sites (2026-07-19)
+- [x] **Shipped `portal-login.js` — a single-tag, dependency-free magic-link sign-in widget any external site can embed**
+  - Date: 2026-07-19
+  - Session: CC-20260719-h7q4
+  - What changed: NEW static asset `frontend/public/embeds/portal-login.js` (baked into the nginx image by the CRA build, served at `/embeds/portal-login.js`). A partner adds one `<script>` tag (plus an optional `<div id="colaberry-portal-login">`); the loader renders a passwordless sign-in card into the host page's own DOM (NOT an iframe, so nginx's global `X-Frame-Options: SAMEORIGIN` is irrelevant) and POSTs `{email}` to `{portal}/api/portal/request-link`. Configurable via `data-portal|data-heading|data-subtext|data-mount` on the script tag (or a `window.ColaberryPortalLogin` object). Handles the three real API outcomes: generic anti-enumeration "link sent", `success:false` pending-approval, and network/error; 15s AbortController timeout on the outbound call; scoped `cbp-` styles, dark-mode aware, accessible (labelled input + aria-live). Chose a script loader over an iframe HTML page because cross-origin iframes are blocked by the SAMEORIGIN header whereas a `<script>` + CORS-allowed `fetch` is not.
+  - Verification: request-link contract verified against code — `backend/src/controllers/participantController.ts:11` (`{email}` body) and `backend/src/services/participantService.ts:10-43` (generic message + `success:false` pending branch); CORS open at `backend/src/server.ts:40`; nginx serves real files before the SPA fallback via `try_files $uri` (`nginx/nginx.conf:152`), so `/embeds/portal-login.js` resolves to the asset. Pure static file under `frontend/public/` (copied verbatim by CRA, not compiled) so no tsc/ESLint gate applies. Live-URL verification pending the prod nginx rebuild (ships via PR to main).
+  - Notes: Built on an isolated git worktree off `origin/main` because the working branch was 904 commits behind main; committed only the owned file(s). Deploy = merge PR to protected `main`, then `ssh root@95.216.199.47 "cd /opt/colaberry-accelerator && git pull origin main && docker compose -f docker-compose.production.yml up -d --build nginx"`. Authenticates EXISTING portal-enabled enrollments only (not a signup). If the API CORS is later narrowed to an allowlist, partner origins must be added.
+
+### AI Mentor Intelligence — personalization: greet + address by first name — 2026-07-19
+- [x] The mentor now addresses the student by their FIRST NAME and speaks to them personally (Ali: "make sure the AI is personal and uses their name")
+  - Date: 2026-07-19
+  - Session: CC-20260718-a9k2
+  - What changed:
+    - `runtime/mentorService.coach()` — the base SYSTEM prompt now instructs the mentor to be personal (address by first name, speak directly, weave in their goal/situation, "feel like their own mentor, not a generic bot"), and `coach()` injects the student's actual first name (derived from the 360's `identity.full_name`) into the system prompt so the LLM greets them by name.
+    - `runtime/mentorNudgeFormat.personalize` (new PURE helper) + `mentorNudgeService.getNudge` — the proactive nudge now greets by first name too (fetches `Enrollment.full_name` in the same parallel read); e.g. "Sofia — I noticed this one hasn't clicked yet…".
+    - Legacy `mentorService.buildMentorSystemPrompt` — added "Address the learner by their FIRST NAME (from the profile) and speak to them personally" to the personality prompt, for consistency across both mentor surfaces.
+    - Test: `mentorNudgeFormat.test.ts` gains a `personalize` case (10/10).
+  - Why: Ali confirmed the mentor "works great" and asked to make it personal / use their name. The name was already in the 360 context but the mentor wasn't explicitly told to use it. [[project_ai_mentor_intelligence_build]]
+  - Verification: jest `mentorNudgeFormat.test.ts` 10/10; `tsc --noEmit` clean for our source. Backend-only. Landed together with Phase 5 (nudges) in the same PR/deploy.
+  - Notes: Branch `workstream/mentor-proactive-nudge` (folds nudges + personalization). Deployed to prod + dev.
