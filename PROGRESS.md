@@ -9437,3 +9437,15 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Phase 1 of `docs/TODAY_TIMELINE_V2_PLAN.md` — the "keep them scrolling" payoff, built on the Phase 0 surface axis. Backend engine first (flag-gated, zero live impact) so the risky logic is CI-verified before the frontend consumes it. [[project_today_timeline_v2]]
   - Verification: pure planner covered by jest (`todayFeedPlan.test.ts`); backend `tsc` + jest are the CI gate (backend TS not installed locally). Pre-push audit confirmed every imported export (FeedCard/FeedVideo/FeedBlog/FeedContent/TimelineFeed, `env`, `req.participant`) and every SQL column (podcasts.published_at, network_videos.ingested_at/playable/is_active) exists.
   - Notes: Branch `workstream/today-timeline-v2-p1` stacked on the Phase 0 branch (a00b15f1), worktree `C:/Users/ali_m/Downloads/acc-today-wt`. Additive only. Frontend infinite-scroll = next push. TestimonialRefresh cron still deferred (needs a CCPP-MSSQL ingestion service first — `ingestNetworkVideos.js` has no exports).
+
+### Today Timeline v2 — Phase 1b: frontend infinite-scroll Today — 2026-07-19
+- [x] The Today page now scrolls the real never-ending engine feed (flag-gated), falling back to the looped classroom when the flag is off
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - `frontend/src/pages/portal/today/todayFeedApi.ts` (NEW) — participant client for `GET/POST /api/portal/runtime/today` (`list(cursor,limit)` + `interact(ref,action)`), portalApi thunk convention.
+    - `frontend/src/pages/portal/today/TodayFeedV2.tsx` (NEW) — self-contained infinite-scroll feed. On mount it tries the real cursor endpoint (mode `v2`); on 404 (flag off) or error it falls back to the existing looped-classroom feed (mode `fallback`) so the surface always renders. An IntersectionObserver sentinel fetches the next cursor page and appends (v2) or reveals more (fallback); firing `interact('open')` on card open (interact-to-hide is server-enforced); shows a "You're all caught up" tail. Renders through the existing `TimelineCard` via a strict-null-safe `TodayFeedItem → TimelineFeedCard` adapter.
+    - `frontend/src/pages/portal/today/TodayShell.tsx` — swapped the looped feed block + its IntersectionObserver/`visibleCount`/`looped` scaffolding for `<TodayFeedV2 fallbackCards={curriculum} …/>`; dropped the now-unused `TimelineCard` default import + sentinel state so the prod eslint build stays clean.
+  - Why: Phase 1b of `docs/TODAY_TIMELINE_V2_PLAN.md` — the visible payoff on the Phase 1a engine. Progressive enhancement: zero change to the live Today surface until `TODAY_FEED_V2_ENABLED` is on. [[project_today_timeline_v2]]
+  - Verification: frontend `tsc --noEmit -p frontend/tsconfig.json` — zero errors in the 3 changed files, none outside the known local-env `@types/d3` noise; CI frontend typecheck authoritative.
+  - Notes: Same branch/PR as 1a (#398 → now the complete Phase 1). Follow-ons: a dismiss BUTTON (vs open) and scroll-restore-on-return. TestimonialRefresh cron still deferred (CCPP-MSSQL ingestion service).
