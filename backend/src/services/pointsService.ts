@@ -20,6 +20,7 @@ export const POINT_EVENTS: Record<string, number> = {
   knowledge_check: 15,
   evaluation_passed: 20,
   lesson_complete: 10,
+  deep_dive_field_guide: 100,   // one-time bonus for uploading a Deep Dive Field Guide built in Claude Code
 };
 
 export interface AwardInput {
