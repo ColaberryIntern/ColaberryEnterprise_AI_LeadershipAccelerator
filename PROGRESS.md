@@ -10,6 +10,17 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Roster-card titles are deterministic from the blueprint theme (SDLC re-theme) (2026-07-19)
+- [x] **Announcement/Overview titles are now always "This Week — {blueprint theme}" / "Overview — {theme}", taken from the blueprint (synced from the Deep Dive), not the model — so the week theme name never drifts**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/services/timeline/cardContentService.ts` — `generateCardContent` now overrides the generated `content.title` for `announcement` → `This Week — {bp.title}` and `overview` → `Overview — {bp.title}` (from `getBlueprintContext().title`). The model's title is ignored for these roster-summary types.
+    - Prod data (this session, via script): synced every week's `curriculum_blueprints.title` from its Deep Dive theme (W1 = Business Analyst, W2 = Solution Architect, … W12 = AI Solution Architect — the real role/SDLC curriculum), and set the current announcement/overview titles to match.
+  - Why: Ali — the deep dive titles are the correct week themes (roles), but the announcements showed the wrong Anthropic-mapped names, and when regenerated the model paraphrased against the Claude-Code focus (e.g. "Build Your AI Foundation"). Making the title deterministic fixes the name for good.
+  - Verification: `tsc` + jest via CI. Post-deploy: regenerate a week's announcement and confirm the title stays `This Week — {theme}`. Prod titles already corrected via script.
+  - Notes: this is the "name only" fix Ali asked for — the announcement BODY still maps the real activities (Claude-Code-named); a fuller content re-theme is a separate, deferred decision. Deep dive title is the source of truth; re-run the blueprint-title sync if a deep dive is retitled.
+
 ### Skills Course workspace — style the panel like the drawer + drop the hero image (2026-07-19)
 - [x] **The Skills Course workspace panel now renders styled like the right-side drawer (was a giant unstyled icon) and no longer shows a redundant hero image**
   - Date: 2026-07-19
