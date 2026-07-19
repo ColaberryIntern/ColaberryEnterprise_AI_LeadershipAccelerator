@@ -575,10 +575,15 @@ When finished, open the file in the browser.</pre>
   }
   function markSeen(id){ if(!seen[id]){ seen[id]=true; try{localStorage.setItem(KEY,JSON.stringify(seen));}catch(e){} render(); } }
   if('IntersectionObserver' in window){
-    var spy=new IntersectionObserver(function(es){ es.forEach(function(en){ if(en.isIntersecting){
-      for(var k in railLinks)railLinks[k].classList.remove('active');
-      var a=railLinks[en.target.id]; if(a)a.classList.add('active'); markSeen(en.target.id);
-    }}); },{root:panel,rootMargin:'-40% 0px -55% 0px',threshold:0});
+    // A section counts as read only after it has been the active (centered) section for
+    // 5 continuous seconds — scrolling past it fast does not mark it. Leaving cancels the timer.
+    var dwell={}, DWELL=5000;
+    var spy=new IntersectionObserver(function(es){ es.forEach(function(en){ var id=en.target.id, a=railLinks[id];
+      if(en.isIntersecting){
+        for(var k in railLinks)railLinks[k].classList.remove('active'); if(a)a.classList.add('active');
+        if(!seen[id] && !dwell[id]){ dwell[id]=setTimeout(function(){ dwell[id]=null; markSeen(id); }, DWELL); }
+      } else if(dwell[id]){ clearTimeout(dwell[id]); dwell[id]=null; }
+    }); },{root:panel,rootMargin:'-40% 0px -55% 0px',threshold:0});
     secs.forEach(function(s){spy.observe(s);});
   } else { secs.forEach(function(s){seen[s.id]=true;}); }
   render();

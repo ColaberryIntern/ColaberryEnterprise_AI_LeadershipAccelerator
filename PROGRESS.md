@@ -9481,3 +9481,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali confirmed the mentor "works great" and asked to make it personal / use their name. The name was already in the 360 context but the mentor wasn't explicitly told to use it. [[project_ai_mentor_intelligence_build]]
   - Verification: jest `mentorNudgeFormat.test.ts` 10/10; `tsc --noEmit` clean for our source. Backend-only. Landed together with Phase 5 (nudges) in the same PR/deploy.
   - Notes: Branch `workstream/mentor-proactive-nudge` (folds nudges + personalization). Deployed to prod + dev.
+
+### Deep Dive Field Guides — 5-second dwell-per-section read gate — 2026-07-19
+- [x] A section only counts as read after 5 continuous seconds on it (no more scroll-past-to-complete) — Wk0 + Wk1
+  - Date: 2026-07-19
+  - Session: CC-20260718-k9x2
+  - What changed: The IntersectionObserver in both guides (`docs/deep-dive/wk0-sdlc-command-center.html`, `wk1-business-analysis-command-center.html`) previously called `markSeen(id)` the instant a section entered the center band — so fast-scrolling marked everything read. Now each section starts a 5000ms dwell timer when it becomes the active (centered) section; the section is marked read only if the timer completes, and leaving the section (`!isIntersecting`) clears it. Same `postMessage`/gated-complete flow downstream (Wk1's read-checkpoint still feeds its 3-step gate). Regenerated the base64 modules `backend/src/data/deepDiveWeek0Html.ts` + `deepDiveWeek1Html.ts` (round-trip byte-identical); guides now 54792 / 55231 bytes (still < 64KB srcDoc limit).
+  - Why: Ali — "You need to spend at least 5 seconds on each section in order for them to be marked complete. I think that's the last piece."
+  - Verification: Hot-deployed to both live cards (bb9a1f6a wk0, b4f22d0a wk1); DB content query confirms the dwell code is present in both (`'%5 continuous seconds%'` → DWELL-PRESENT). base64 round-trip OK. Reconciled the prod image via backend rebuild + idempotent reseed so `seedDeepDiveFieldGuides` reproduces the live content.
+  - Notes: [[reference_deep_dive_field_guide_platform]] Content-only change (HTML + base64); no frontend/nginx change needed — the renderer is unchanged.
