@@ -182,6 +182,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isSurvey = card.render_band === 'survey';   // bespoke live survey experience
   const isAssessment = card.render_band === 'quiz' || card.render_band === 'evaluation';   // interactive Knowledge Check / Evaluation
   const isReader = card.render_band === 'warmup';   // Self Study: immersive reader (sticky nav + scrollspy + progress)
+  // Deep Dive Command Center: a self-contained HTML artifact rendered in a sandboxed
+  // iframe. `blog` shares the 'deepdive' band, so gate on type to not hijack it.
+  const isDeepDive = card.render_band === 'deepdive' && card.type === 'deep_dive';
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
@@ -214,6 +217,21 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // live reader cards (not admin preview).
   const readerProg = useReaderProgress(card.id, isReader && !preview);
 
+  // Deep Dive gating: the Field Guide iframe (opaque-origin) posts read-progress via
+  // postMessage; Mark Complete appears only once every section has been read.
+  const [ddProg, setDdProg] = useState<{ done: number; total: number; complete: boolean }>({ done: 0, total: 0, complete: false });
+  useEffect(() => {
+    setDdProg({ done: 0, total: 0, complete: false });
+    if (!isDeepDive || preview) return;
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as { source?: string; done?: number; total?: number; complete?: boolean } | null;
+      if (!d || d.source !== 'deepdive') return;
+      setDdProg({ done: Number(d.done) || 0, total: Number(d.total) || 0, complete: !!d.complete });
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [card.id, isDeepDive, preview]);
+
   return (
     <>
       <div className="tld-head">
@@ -225,13 +243,17 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         )}
       </div>
 
-      <div className={isReader ? 'tld-body tld-body--reader' : 'tld-body'}>
+      <div className={isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}>
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
+        ) : isDeepDive ? (
+          content?.body_html
+            ? <iframe className="tld-lessonframe tld-readerframe" title="Field Guide" sandbox="allow-scripts allow-modals" srcDoc={content.body_html} />
+            : <div className="tld-note" style={{ margin: 20 }}>This Field Guide has not been added yet.</div>
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>
@@ -402,6 +424,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isReader && !readerProg.complete && readerProg.total > 0 && (
                   <span className="tld-gatemsg">{readerProg.done} of {readerProg.total} sections read</span>
                 )}
+                {isDeepDive && !ddProg.complete && ddProg.total > 0 && (
+                  <span className="tld-gatemsg">{ddProg.done} of {ddProg.total} sections read</span>
+                )}
                 {onClose && <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>}
                 {/* Media cards collect points here, gated by the server's watch check.
                     When the gate is active but unmet, the button is disabled with the
@@ -419,10 +444,13 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 )}
                 {/* Survey completes in-body via its own Submit; the workspace link
                     stays as a quiet secondary, not the primary CTA. */}
-                {onEnterWorkspace && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {onEnterWorkspace && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
                 {/* Self Study: the Mark Complete button only appears once every section
                     has been read (>=10s each), matching the workstation's gate + style. */}
                 {isReader && readerProg.complete && completeSafely && (
+                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
+                )}
+                {isDeepDive && ddProg.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
                 )}
               </>
