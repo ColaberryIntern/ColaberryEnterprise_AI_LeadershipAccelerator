@@ -769,6 +769,10 @@ async function ensureExperienceBuilderSchema() {
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS dependencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS version_locked BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS renderers JSONB NOT NULL DEFAULT '{}'::jsonb`,
+    // Surface placement (Today Timeline v2, Phase 0) — additive/nullable; seeded from the type registry.
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS home_surface VARCHAR(20)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_mode VARCHAR(20)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS today_eligible BOOLEAN NOT NULL DEFAULT TRUE`,
     // Curriculum-inclusion approval gate: only approved components may be used by the Curriculum Composer.
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ`,
