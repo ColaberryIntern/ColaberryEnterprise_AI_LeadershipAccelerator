@@ -10,6 +10,33 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Announcement — full-week curriculum MAP: wide/responsive, covers every activity grouped by phase (2026-07-19)
+- [x] **Rebuilt the announcement generation so it maps the WHOLE week (all activities grouped by phase), widens in the workspace, and has more emoji/spacing**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/services/timeline/sectionCurriculumContext.ts` — `buildSectionCurriculumText` now leads with the TOTAL activity count and tags each item with its journey PHASE (`[Prep]`/`[Learn]`/…), so a week-summary generator covers the whole week grouped by phase (was: a flat list, model cherry-picked 4). Added `PHASE_LABEL`. (Also feeds Overview.)
+    - `backend/src/seeds/seedComponentAuthoring.ts` — rewrote `ANNOUNCEMENT_GENERATION_PROMPT`: emits a fixed, WIDE, responsive `<style>` (copied verbatim: `body max-width:1080px`, a `repeat(auto-fill,minmax(280px,1fr))` grid so activity cards flow into multiple columns in the workspace and single-column in the ~400px drawer), a per-activity emoji on every card, phase-grouped sections covering EVERY activity, more spacing. Title locked to the exact WEEK CONTEXT topic (verbatim, no paraphrase). No hours/minutes.
+    - `backend/src/services/timeline/__tests__/sectionCurriculumContext.test.ts` — updated for the new count+phase format; asserts `announcement` in `SECTION_ROSTER_TYPES`.
+  - Why: Ali reviewed the live Week 1 card — it only showed 4 of ~14 activities and didn't map to the curriculum; he wants the full week mapped, wider in the workspace, more emoji + spacing for readability.
+  - Verification: iterated on prod against the real Week 1 roster (14 activities) — final v3 covered ALL 14 grouped by phase, copied the wide/responsive CSS verbatim (multi-column in workspace, single-column in drawer), per-activity emoji. Ali approved the look. `tsc` + jest via CI (authoritative Docker gate).
+  - Notes: builds on the announcement type (prior entry / PR #389). Post-merge: deploy, then regenerate the prod Week 1 card via the deployed path (title-locked); weeks 2-12 inherit on first open.
+
+### Announcement curriculum type — friendly weekly kickoff that scans the section (2026-07-19)
+- [x] **Announcement authored as the section-opener: live-generated "mini report" that scans the week's roster, resets when the curriculum changes; Week 0 locked hand-authored free-preview welcome**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/seeds/seedComponentAuthoring.ts` — added the `announcement` authoring entry (approved, capabilities `ai_chat`/`comments`/`likes`/`bookmarks`, thumbnail) plus `ANNOUNCEMENT_GENERATION_PROMPT`: a warm, emoji-rich, self-contained-CSS "mini report" that scans THIS WEEK'S ACTIVITIES and names the real videos/labs/courses/builds, introduces the Workspace + AI Mentor, and nudges community comments. Applied on boot (`server.ts:1741`).
+    - `backend/src/services/timeline/sectionCurriculumContext.ts` — `SECTION_ROSTER_TYPES` += `announcement` (already in `EXCLUDED_TYPES`, so it never lists itself).
+    - `backend/src/services/timeline/cardContentService.ts` — announcement/overview now (a) auto-generate on first open when empty, and (b) reset when the week's roster changes: a `section_fingerprint` (sha1 of the ordered roster) is stamped on generate and compared in `ensureFreshContent` ahead of the 30-day TTL. Locked cards (Week 0) never regenerate.
+    - Frontend casing — `RuntimeWorkspace.tsx`, `TimelineCard.tsx`, `CardDetailBody.tsx`: exempt `announcement` from `toTitleCase` so "Welcome to Your Free AI Preview" keeps its authored casing.
+    - `backend/src/data/announcementWeek0.ts` (new) — the approved hand-authored Week 0 body (fixed free-preview marketing copy).
+    - `backend/src/scripts/setupAnnouncementCards.ts` (new) — idempotent: locks Week 0 with the hand-authored content, collapses duplicate weekly announcements to one, clears stale pre-rollout content so weeks 1-12 regenerate with the new prompt.
+  - Why: Ali wants the announcement to be the friendly first card in each section that scans the week and reports what's ahead in a semi-detailed, emoji-rich, spacious style; Week 0 stays the fixed "Welcome to Your Free AI Preview" free-preview welcome (soft ecosystem pitch, no price).
+  - Verification: generation validated live on the dev instance (`accelerator-dev-backend`, DB `accelerator_dev1`) against Week 1's real 21-card roster — produced "This Week — Claude Code Foundations + Workspace" naming the actual activities (Claude Code 101, Live Class — Architecture Day, the Hands-On Lab, Build Your First Project), branded teal/indigo look, no hours. `tsc` via CI (authoritative Docker gate).
+  - Notes: NOT yet merged/deployed. Post-merge: prod deploy, then `node dist/scripts/setupAnnouncementCards.js` in the backend container to lock Week 0 + dedup weekly announcements. Week 0 hand-authored/locked; weeks 1-12 generate live on first open.
+
 ### Dashboard Revenue = real collected cash (PaySimple) + per-participant paid amount on Accelerator (2026-07-17)
 - [x] **Revenue KPI now sums actual amount_paid instead of count × $4,500; Accelerator Participants show each person's paid amount**
   - Date: 2026-07-17
@@ -9362,6 +9389,19 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: frontend tsc --noEmit 0 errors in RuntimeWorkspace.tsx / runtimeKit.tsx (junctioned typecheck). nginx-only deploy; CI + prod smoke on deploy.
   - Notes: The lesson-reader iframe keeps its own (light) document styling — out of scope; only the workspace chrome themes. Deploy nginx only.
 
+### Deep Dive Field Guides — Week 0 + Week 1 LIVE on prod; workspace renderer + size/responsive fixes — 2026-07-19
+- [x] Week 0 (SDLC, read-only) + Week 1 (Business Analysis, build-prompt) Deep Dive "Field Guides" are LIVE on prod, rendering in BOTH the drawer and the workspace runtime
+  - Date: 2026-07-19
+  - Session: CC-20260718-k9x2
+  - What changed:
+    - **Workspace renderer (the missing piece):** `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx` gains a `deepdive` arm. It previously rendered deep_dive via the generic lesson path (`sandbox=""` + `lessonDoc()`), so the Field Guide's inline JS was blocked in the workspace (thin rail, no labels/nav, ungated complete). Now: `isDeepDive` (gated on `card.type==='deep_dive'`) renders in `sandbox="allow-scripts allow-modals"` + raw `srcDoc={body_html}` (full-bleed via `fill`), listens for `postMessage {source:'deepdive', complete}`, and GATES "Mark complete" until the guide reports read-all-sections + copy-the-build-prompt. (The drawer's `CardDetailBody` deepdive arm shipped in PR #375.)
+    - **Size fix (critical):** a `srcDoc` over ~64KB silently truncates the trailing `<script>` in the sandboxed iframe → NO JS runs (CSS still applies). De-inlined the logo in both guides (data-URI → `<img src="/colaberry-logo-transparent.png">`): 105KB→54KB, 104KB→54KB. Guides MUST stay under ~64KB.
+    - **Responsive:** panel fills its container (`.panel{width:100%}`, no right-dock/backdrop); `@media (min-width:600px)` switches the thin icon rail → a labeled sidebar with comfortable content (so the ~700px workspace reads like an app, not a stretched phone; the ~560px drawer keeps the compact rail). Nav uses explicit `scrollIntoView` click handlers (bare #anchors don't scroll the panel in a sandboxed iframe).
+    - **Week 1 evident CTA + required checkpoint:** a prominent "Start here — copy this prompt and run it in Claude Code" banner at the top; copying the build prompt is a required completion step (Mark complete gated on it in both surfaces).
+    - **Content + durability:** guides stored at `timeline_cards.metadata.content.body_html` (`locked=true`) on Week 0/1 of the canonical program. Sources `docs/deep-dive/wk0-…`,`wk1-…`; base64 modules `backend/src/data/deepDiveWeek0Html.ts`+`deepDiveWeek1Html.ts`; seed `backend/src/scripts/seedDeepDiveFieldGuides.ts` (replaces seedDeepDiveWeek0.ts) seeds both weeks idempotently.
+  - Why: Ali — build out Week 0 (read-only SDLC map) + Week 1 (BA; student copies a prompt into their own Claude Code to build a searchable branded Field Guide with Mermaid/Power-BI visuals + HTML/PDF/Excel doc exports); running the prompt must be an obvious first step AND a required checkpoint; the workspace must not look like a stretched phone.
+  - Verification: Week 0 (bb9a1f6a) + Week 1 (b4f22d0a) published/locked on prod, 54KB each. Drawer confirmed working by Ali. Workspace fix validated by the prod nginx CRA build (the TS check I can't run locally). base64 round-trips byte-identical. Content was live via locked DB hot-update during review; this commit syncs source+base64 so a reseed/fresh env matches.
+  - Notes: Branch `workstream/deep-dive-overhaul`. `deepdive` render_band SHARED with `blog` — the `type==='deep_dive'` guard is load-bearing in BOTH CardDetailBody and RuntimeWorkspace. Week 1 upload is still a placeholder (click-through); the real upload → Architect Library → 100-points-on-upload is the deferred backend build. Weeks 2-12 are now mostly content. See [[reference_deep_dive_field_guide_platform]].
 ### AI Mentor Intelligence — Phase 2: durable conversation memory — 2026-07-19
 - [x] The runtime mentor now reads its own stored MentorTurn history back (survives page reloads + return visits) with a rolling summary of older exchanges
   - Date: 2026-07-19
@@ -9449,3 +9489,35 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Phase 1b of `docs/TODAY_TIMELINE_V2_PLAN.md` — the visible payoff on the Phase 1a engine. Progressive enhancement: zero change to the live Today surface until `TODAY_FEED_V2_ENABLED` is on. [[project_today_timeline_v2]]
   - Verification: frontend `tsc --noEmit -p frontend/tsconfig.json` — zero errors in the 3 changed files, none outside the known local-env `@types/d3` noise; CI frontend typecheck authoritative.
   - Notes: Same branch/PR as 1a (#398 → now the complete Phase 1). Follow-ons: a dismiss BUTTON (vs open) and scroll-restore-on-return. TestimonialRefresh cron still deferred (CCPP-MSSQL ingestion service).
+### AI Mentor Intelligence — Phase 5: proactive struggle nudges (backend) — 2026-07-19
+- [x] The mentor can now reach out UNPROMPTED when a student looks stuck — the true proactive nudge (Phases 0-4a shipped the struggle-AWARE half; this adds the initiate-help half)
+  - Date: 2026-07-19
+  - Session: CC-20260718-a9k2
+  - What changed:
+    - New `backend/src/services/runtime/mentorNudgeFormat.ts` — PURE `detectStruggle` (signals, worst-first: `not_yet_passed` from a graded eval not passed, `multiple_attempts` >=3, `low_score` <50%, `many_questions` >=4 prior mentor turns on the card) + `nudgeMessage` (a warm, deterministic opener per top reason — always OFFERS help, never reveals graded answers) + `buildNudge`.
+    - New `backend/src/services/runtime/mentorNudgeService.ts` — `getNudge(enrollmentId, cardId)`: read-only + fail-safe (`MentorTurn.count` + `TimelineCardProgress.attempts` + latest `AssessmentAttempt`), returns `{ struggling, reasons, message }` (or a no-nudge on any error, so it can never break card-open).
+    - New endpoint `GET /api/portal/runtime/cards/:cardId/nudge` (`handleNudge` in `runtimeController` + route in `participantRoutes`, `requireParticipant`). Deterministic message = no LLM cost, safe to call on every card open.
+    - New test `mentorNudgeFormat.test.ts` (9 cases incl. worst-first ordering + the never-reveal-answers assertion).
+  - Why: completes the mentor's proactivity — 4a made it struggle-aware when the student engages; this lets it initiate. The remaining piece is the FRONTEND surface (call `/nudge` on card open, render the message as a friendly opener that launches the mentor) — a noted follow-on. [[project_ai_mentor_intelligence_build]]
+  - Verification: jest `mentorNudgeFormat.test.ts` 9/9; `tsc --noEmit` clean for our source. Backend-only.
+  - Notes: Branch `workstream/mentor-proactive-nudge` off `main` (2b1878dc). Additive — the endpoint exists but nothing calls it until the frontend wires it, so deploying is behavior-neutral. Beyond the original 5-phase plan (a MENTOR-14 follow-on); opened as a PR for review, not auto-deployed.
+### Embeddable portal-login script for partner sites (2026-07-19)
+- [x] **Shipped `portal-login.js` — a single-tag, dependency-free magic-link sign-in widget any external site can embed**
+  - Date: 2026-07-19
+  - Session: CC-20260719-h7q4
+  - What changed: NEW static asset `frontend/public/embeds/portal-login.js` (baked into the nginx image by the CRA build, served at `/embeds/portal-login.js`). A partner adds one `<script>` tag (plus an optional `<div id="colaberry-portal-login">`); the loader renders a passwordless sign-in card into the host page's own DOM (NOT an iframe, so nginx's global `X-Frame-Options: SAMEORIGIN` is irrelevant) and POSTs `{email}` to `{portal}/api/portal/request-link`. Configurable via `data-portal|data-heading|data-subtext|data-mount` on the script tag (or a `window.ColaberryPortalLogin` object). Handles the three real API outcomes: generic anti-enumeration "link sent", `success:false` pending-approval, and network/error; 15s AbortController timeout on the outbound call; scoped `cbp-` styles, dark-mode aware, accessible (labelled input + aria-live). Chose a script loader over an iframe HTML page because cross-origin iframes are blocked by the SAMEORIGIN header whereas a `<script>` + CORS-allowed `fetch` is not.
+  - Verification: request-link contract verified against code — `backend/src/controllers/participantController.ts:11` (`{email}` body) and `backend/src/services/participantService.ts:10-43` (generic message + `success:false` pending branch); CORS open at `backend/src/server.ts:40`; nginx serves real files before the SPA fallback via `try_files $uri` (`nginx/nginx.conf:152`), so `/embeds/portal-login.js` resolves to the asset. Pure static file under `frontend/public/` (copied verbatim by CRA, not compiled) so no tsc/ESLint gate applies. Live-URL verification pending the prod nginx rebuild (ships via PR to main).
+  - Notes: Built on an isolated git worktree off `origin/main` because the working branch was 904 commits behind main; committed only the owned file(s). Deploy = merge PR to protected `main`, then `ssh root@95.216.199.47 "cd /opt/colaberry-accelerator && git pull origin main && docker compose -f docker-compose.production.yml up -d --build nginx"`. Authenticates EXISTING portal-enabled enrollments only (not a signup). If the API CORS is later narrowed to an allowlist, partner origins must be added.
+
+### AI Mentor Intelligence — personalization: greet + address by first name — 2026-07-19
+- [x] The mentor now addresses the student by their FIRST NAME and speaks to them personally (Ali: "make sure the AI is personal and uses their name")
+  - Date: 2026-07-19
+  - Session: CC-20260718-a9k2
+  - What changed:
+    - `runtime/mentorService.coach()` — the base SYSTEM prompt now instructs the mentor to be personal (address by first name, speak directly, weave in their goal/situation, "feel like their own mentor, not a generic bot"), and `coach()` injects the student's actual first name (derived from the 360's `identity.full_name`) into the system prompt so the LLM greets them by name.
+    - `runtime/mentorNudgeFormat.personalize` (new PURE helper) + `mentorNudgeService.getNudge` — the proactive nudge now greets by first name too (fetches `Enrollment.full_name` in the same parallel read); e.g. "Sofia — I noticed this one hasn't clicked yet…".
+    - Legacy `mentorService.buildMentorSystemPrompt` — added "Address the learner by their FIRST NAME (from the profile) and speak to them personally" to the personality prompt, for consistency across both mentor surfaces.
+    - Test: `mentorNudgeFormat.test.ts` gains a `personalize` case (10/10).
+  - Why: Ali confirmed the mentor "works great" and asked to make it personal / use their name. The name was already in the 360 context but the mentor wasn't explicitly told to use it. [[project_ai_mentor_intelligence_build]]
+  - Verification: jest `mentorNudgeFormat.test.ts` 10/10; `tsc --noEmit` clean for our source. Backend-only. Landed together with Phase 5 (nudges) in the same PR/deploy.
+  - Notes: Branch `workstream/mentor-proactive-nudge` (folds nudges + personalization). Deployed to prod + dev.
