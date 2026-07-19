@@ -9750,3 +9750,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: P1b (write half) of `docs/PROJECT_BACKEND_PLAN.md` — the backend can now persist a student's projects + task progress. Additive + flag-gated (`PROJECT_API_ENABLED`, default OFF) → zero behaviour change. Next: P1b-2 (point the frontend `projectsStore` at the API) + flag-on.
   - Verification: pure jest `projectWriteDto.test.ts`; backend tsc + jest = CI gate. Zod v4 (`err.issues`) at the route boundary.
   - Notes: Branch `workstream/project-backend-p1b` off main. Reconciling StudentTask (task layer) vs RequirementsMap (requirement catalog) as the single source of truth is a P2 item. Not deployed.
+
+### Project Backend — P1b-2: frontend mirrors localStorage projects to the backend — 2026-07-19
+- [x] The projects page mirrors the student's build to the persisted backend on load (flag-gated, best-effort); import upserts so it stays current
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - Frontend `projectSync.ts` (NEW): maps the localStorage `StudentProject` → the import payload (state→status, lists→cluster, tasks→story_id/prompt/acceptance/blocked_by) and fire-and-forgets `POST /api/portal/projects/import` once per session. Best-effort + flag-gated (404 = off → silent no-op); the demo/sample build is NOT persisted. Wired into `ProjectsPage` via a `useEffect` on the projects list — no page/async/store changes (localStorage stays the render source).
+    - Backend `projectWriteService.importProject` now UPSERTS: on an existing task it updates content/status (never the dedup keys or requirement link), so a re-import each load keeps the backend a faithful mirror of the working localStorage source.
+  - Why: P1b-2 of `docs/PROJECT_BACKEND_PLAN.md` — student projects now durably persist server-side (survive localStorage clears; available to Project→Today) while the UI is unchanged. Still flag-gated (`PROJECT_API_ENABLED`).
+  - Verification: frontend `tsc --noEmit` clean for the 2 changed files (only known @types/d3 local-env noise); backend tsc/jest = CI gate.
+  - Notes: Branch `workstream/project-backend-p1b2` off main. Mirror direction is localStorage→backend for now (backend = synced copy); flipping the READ path to backend-source (true cross-device) + per-task write-through are the next refinement. Syncs one project (first non-sample) per session.
