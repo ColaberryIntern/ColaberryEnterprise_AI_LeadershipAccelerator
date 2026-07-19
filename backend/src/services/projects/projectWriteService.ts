@@ -68,7 +68,25 @@ export async function importProject(enrollmentId: string, payload: ImportProject
           ? { project_id: project.id, requirement_key: attrs.requirement_key }
           : null;
       if (where) {
-        await StudentTask.findOrCreate({ where, defaults: attrs });
+        const [row, created] = await StudentTask.findOrCreate({ where, defaults: attrs });
+        if (!created) {
+          // Mirror the client's current state onto the existing row (localStorage
+          // is the working source until the read path flips to backend). Only
+          // content/state — never the dedup keys or the requirement link.
+          await row.update({
+            title: attrs.title,
+            description: attrs.description,
+            status: attrs.status,
+            position: attrs.position,
+            owner_agent: attrs.owner_agent,
+            execution_mode: attrs.execution_mode,
+            release_key: attrs.release_key,
+            acceptance: attrs.acceptance,
+            build: attrs.build,
+            blocked_by: attrs.blocked_by,
+            task_list_id: attrs.task_list_id,
+          });
+        }
       } else {
         await StudentTask.create(attrs);
       }
