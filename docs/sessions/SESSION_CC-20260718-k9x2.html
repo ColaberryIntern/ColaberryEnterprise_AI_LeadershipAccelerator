@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, July 19, 2026 at 2:06 PM</div>
-    <div><span class="sid">CC-20260718-k9x2</span><span class="count">4 changes</span></div>
+    <div class="meta">Generated Sunday, July 19, 2026 at 2:40 PM</div>
+    <div><span class="sid">CC-20260718-k9x2</span><span class="count">5 changes</span></div>
   </header>
   <main>
     
@@ -117,6 +117,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #405 → prod at HEAD e857c9be; backend tsc gate + nginx CRA build both passed. Reseed set `requires_field_guide_upload=true` on Week 1 (bb9a1f6a wk0=false/read-only, b4f22d0a wk1=true, HOST-WIRED). Served bundle contains the `field-guide`/`deepdive-host` upload code; route responds 401 (auth-gated, exists). End-to-end smoke test on the live backend (synthetic enrollments, cleaned up) — 9/9 PASS: first upload awards 100, re-upload awards 0 (idempotent), exactly one artifact + one points event, status uploaded, gate PASSES when uploaded, gate BLOCKS with 422 `field_guide_required` when not, non-html rejected 400. Pure guards also covered by `fieldGuideService.test.ts` (jest not runnable locally — no worktree node_modules; test files are excluded from the prod tsc build).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">[[reference_deep_dive_field_guide_platform]] The uploaded guide lands in the EXISTING portfolio feed (readiness.portfolio); a dedicated branded &quot;Architect Library&quot; page + an in-app sandboxed viewer of the uploaded guide are noted follow-ons. Points: 100 on upload is SEPARATE from the card&#39;s small base completion points; flag me if it should be exactly 100.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Reskinned both guides to the official Colaberry brand and fixed the completion-unlock + progress-reset bugs Ali reported</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #409 → prod at HEAD 5e4c66b5; backend tsc + nginx CRA builds both passed. Reseed pushed the reskinned guides; DB confirms both cards carry BRAND (#FB2832), the scroll-position read-tracker (&quot;scroll-position&quot;), and the host contract (&quot;deepdive-host&quot;); served bundle contains the `dd:progress` host-persistence key. Upload regression re-run on the live backend: 9/9 PASS (100 once, idempotent, gate pass/block, non-html reject). Both guides&#39; JS parses clean (vm.Script), round-trip base64 OK, &lt; 64 KB, zero emoji.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Structural color = berry blue (authoritative), cherry = fixed accent, green = progress — matches the brand hierarchy. Roboto loads via Google Fonts @import with a system fallback (sandboxed iframe still fetches fonts; degrades gracefully).</span></div>
           
         </div>
       </article>
