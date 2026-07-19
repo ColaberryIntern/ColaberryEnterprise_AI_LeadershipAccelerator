@@ -227,15 +227,16 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
     week: 3,
     title: 'Claude API + Workflow Assistant',
     anthropic_course_minutes: 486, // Building with the Claude API — 8.1 hrs of video (Skilljar, verified 2026-07-18)
-    // Course SPLIT across wk3+wk4: Part 1 = 6 of 7 sections (~65 of 75 lessons ≈ 421 min).
-    // Certificate is whole-course-only, so Part 1 completes via a PROGRESS screenshot; the
-    // certificate is the wk4 Part 2 task. Sum of the two parts = 486 (the full course).
+    // Course SPLIT across wk3+wk4, BALANCED by lesson count: Part 1 = 3 sections
+    // (35 of 75 lessons ≈ 227 min) — the "build the Workflow Assistant" core.
+    // Certificate is whole-course-only, so Part 1 completes via a PROGRESS screenshot;
+    // the certificate is the wk4 Part 2 task. The two parts sum to 486 (the full course).
     anthropic_course_card: {
       title: 'Building with the Claude API · Part 1',
       url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
-      minutes: 421,
+      minutes: 227,
       completion: 'progress',
-      sections: 'Getting Started, Tool Use, RAG, Features, Claude Code & Computer Use, Agents & Workflows',
+      sections: 'Getting Started, Tool Use, Agents & Workflows',
     },
     difficulty: 'core',
     estimated_hours: 8,
@@ -283,16 +284,16 @@ export const WEEK_BLUEPRINTS: WeekBlueprintContent[] = [
   {
     week: 4,
     title: 'Prompt Engineering + Prompt Library',
-    // Part 2 of the split "Building with the Claude API" course: the on-topic
-    // "Prompt engineering & evaluation" section (~10 of 75 lessons ≈ 65 min). By now
-    // the whole course is finished, so completion = upload the Certificate. Week 4
-    // stays Colaberry-original for its own Prompt Library (this is an added card).
+    // Part 2 of the split "Building with the Claude API" course (BALANCED): 4 sections
+    // (40 of 75 lessons ≈ 259 min). By now the whole course is finished, so completion
+    // = upload the Certificate. Week 4 stays Colaberry-original for its own Prompt Library
+    // (this is an added card). MCP is previewed here and taught fully in weeks 5-6.
     anthropic_course_card: {
-      title: 'Building with the Claude API · Part 2 — Prompt Engineering & Evaluation',
+      title: 'Building with the Claude API · Part 2 (Prompt, Retrieval & Integration)',
       url: 'https://anthropic.skilljar.com/claude-with-the-anthropic-api',
-      minutes: 65,
+      minutes: 259,
       completion: 'certificate',
-      sections: 'Prompt engineering & evaluation',
+      sections: 'Prompt Engineering & Evaluation, RAG, Model Context Protocol, Claude Code & Computer Use',
     },
     difficulty: 'core',
     estimated_hours: 7,

@@ -72,4 +72,20 @@ export const runtimeCss = `
 .rt-stat .l{font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;color:#7d8b92}
 .rt-stat .v{font-family:var(--mono);font-size:16px;font-weight:700;color:#fff}.rt-stat .v.sm{font-size:12.5px}.rt-stat .v small{font-size:10px;color:#8b97a0;font-weight:400}
 .rt-gap{margin-left:auto;font-size:12px;color:#AEBDC4}.rt-gap b{color:#F5C25B}
+
+/* ── dark theme — carries over the portal's setting (data-theme is stamped on
+   the .rt root + <html> from localStorage 'te-theme'). Most colors flow through
+   the tokens below; the few that reuse --ink as a DARK surface (user bubble,
+   evidence bar) get explicit overrides so they don't flip to light. ── */
+.rt[data-theme="dark"]{
+  --ink:#F4F4F4; --paper:#1E1E1E; --mist:#151515; --sunken:#272727; --line:#3A3A3A; --line-soft:#2C2C2C;
+  --berry-soft:#22343B; --cherry-soft:#3A1B1E; --leaf-soft:#22331C; --amber-soft:#3A2E12;
+  --muted:#9C9C9C; --muted2:#7E8891;
+}
+.rt[data-theme="dark"] .rt-msg.user{background:var(--berry);color:#fff}
+.rt[data-theme="dark"] .rt-msg.assistant{color:#CFE0E6}
+.rt[data-theme="dark"] .rt-cwho{color:var(--muted)}
+.rt[data-theme="dark"] .rt-bar{background:#0F1214}
+.rt[data-theme="dark"] .rt-list.warn li{color:#E8920C}
+.rt[data-theme="dark"] .rt-readerframe{background:#151515}
 `;

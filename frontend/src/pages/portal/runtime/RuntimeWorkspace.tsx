@@ -30,6 +30,16 @@ const RuntimeWorkspace: React.FC = () => {
   // and loads reliably. (navigate(-1) landed on the slower Today feed when the
   // student entered the workspace from there, which never restored its position.)
   const goBack = useCallback(() => navigate('/portal/classroom'), [navigate]);
+  // Carry over the portal's light/dark setting: the workspace renders its own
+  // chrome (not PortalShell), so read 'te-theme' and stamp data-theme on the .rt
+  // root (drives runtimeCss) and on <html> (drives :root-scoped child components
+  // + a direct page load that never rendered PortalShell).
+  const theme = React.useMemo<'light' | 'dark'>(() => {
+    try { return localStorage.getItem('te-theme') === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
+  }, []);
+  useEffect(() => {
+    try { document.documentElement.setAttribute('data-theme', theme); } catch { /* ignore */ }
+  }, [theme]);
   const [data, setData] = useState<RtOpen | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [error, setError] = useState('');
@@ -138,8 +148,8 @@ const RuntimeWorkspace: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
 
-  if (error) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← Classroom</button></div></div>;
-  if (!card) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
+  if (error) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← Classroom</button></div></div>;
+  if (!card) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
 
   const emp = readiness?.employment; const cert = readiness?.certification; const jr = readiness?.journey; const evd = readiness?.evidence;
 
@@ -174,7 +184,7 @@ const RuntimeWorkspace: React.FC = () => {
   );
 
   return (
-    <div className="rt">
+    <div className="rt" data-theme={theme}>
       <style>{runtimeCss}</style>
       <header className="rt-top">
         <button className="rt-back" onClick={goBack} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>

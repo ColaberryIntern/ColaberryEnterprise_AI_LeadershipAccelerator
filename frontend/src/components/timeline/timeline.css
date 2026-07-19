@@ -141,24 +141,19 @@
 .tl-de .pip svg{width:14px;height:14px}
 .tl-de .pip.done{color:var(--leaf-text)} .tl-de .pip.up{color:var(--text-muted)} .tl-de .pip.lock{color:var(--text-muted)}
 
-/* ── Completed section: fold finished cards into one expandable bar (Classroom) ── */
-.tl-de .tl-donegrp{margin:2px 0 16px}
-.tl-de .tl-donebar{width:100%;display:flex;align-items:center;gap:11px;padding:12px 18px;
-  background:var(--surface-subtle);border:1px solid var(--border-default);border-radius:var(--r-12);
-  font-family:inherit;font-size:14px;font-weight:700;color:var(--text-strong);transition:.16s var(--ease)}
-.tl-de .tl-donebar:hover{border-color:var(--leaf-action);background:var(--surface-sunken)}
-.tl-de .tl-donebar:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
-.tl-de .tl-donebar .db-l{display:inline-flex;align-items:center;gap:9px}
-.tl-de .tl-donebar .db-ic{width:24px;height:24px;border-radius:50%;background:var(--leaf-action);color:#fff;display:flex;align-items:center;justify-content:center;flex:none}
-.tl-de .tl-donebar .db-ic svg{width:15px;height:15px}
-.tl-de .tl-donebar .db-n{font-family:var(--mono);font-size:12.5px;color:var(--leaf-text);background:rgba(91,166,60,.14);border-radius:var(--r-pill);padding:1px 9px}
-.tl-de .tl-donebar .db-chev{margin-left:auto;display:flex;color:var(--text-muted);transition:transform .2s var(--ease)}
-.tl-de .tl-donebar .db-chev svg{width:18px;height:18px}
-.tl-de .tl-donebar.open .db-chev{transform:rotate(180deg)}
-.tl-de .tl-donelist{margin-top:12px}
-/* Compact completed card: header + social footer only (media tile + description dropped) */
-.tl-de .fcard.compact{opacity:.9}
+/* ── Compact completed card: a regular, smaller feed post. Stays inline in the
+   timeline but keeps only the text + social footer (the big 16:9 media tile is
+   dropped), and tightens every dimension so finished work reads light. ── */
+.tl-de .fcard.compact{opacity:.96}
 .tl-de .fcard.compact:hover{opacity:1}
+.tl-de .fcard.compact .fc-head{padding:12px 16px 8px}
+.tl-de .fcard.compact .fc-head .ico{width:30px;height:30px;border-radius:var(--r-8)}
+.tl-de .fcard.compact .fc-head .ico svg{width:16px;height:16px}
+.tl-de .fcard.compact .fc-head .ttl{font-size:14.5px}
+.tl-de .fcard.compact .fc-body{padding:0 16px 8px}
+.tl-de .fcard.compact .fc-body p{font-size:13.5px;margin:0}
+.tl-de .fcard.compact .fc-foot{padding:8px 16px}
+.tl-de .fcard.compact .fc-foot .like,.tl-de .fcard.compact .fc-foot .cmt{padding:5px 11px;font-size:12.5px}
 
 /* media: branded SVG thumbnail + video frame */
 .tl-de .mthumb{position:relative;border-radius:var(--r-12);overflow:hidden;width:100%;display:block;border:none;padding:0;aspect-ratio:16/9;text-align:left;cursor:pointer}

@@ -334,13 +334,15 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         </div>
         <span className="st-ic"><StatePip status={card.status} /></span>
       </div>
-      {/* Compact (folded completed card) hides the body entirely — no media tile,
-          no description — so the header + social footer are all that remain. */}
-      {!compact && (
+      {/* Compact completed card reads like a regular (smaller) feed post: keep the
+          text, drop the big 16:9 media tile. The body is skipped entirely only
+          when a compact card has no description to show. */}
+      {(!compact || card.description) && (
       <div className="fc-body">
         {card.description && <p>{card.description}</p>}
         {/* Locked: a big lock over the tile, dimmed, and an overlay that swallows
             every pointer/keyboard interaction so nothing opens or plays. */}
+        {!compact && (
         <div className="fc-media-wrap">
           {media}
           {locked && (
@@ -351,6 +353,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
             </div>
           )}
         </div>
+        )}
       </div>
       )}
       <div className="fc-foot">
