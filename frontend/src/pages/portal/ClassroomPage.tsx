@@ -157,16 +157,23 @@ const ClassroomPage: React.FC = () => {
     }
   }, [feed, weeks, week]);
 
-  // Snapshot the current view on unmount (i.e. when navigating to the workspace
-  // or anywhere else) so the restore above has something to return to. A ref
-  // holds the latest week so the cleanup captures the real position, not a stale
-  // closure. window.scrollY is read before App-level ScrollToTop resets it
-  // (unmount cleanups run before the new route's effects).
+  // Continuously remember the current scroll position (and week) so returning
+  // from the workspace can restore it. This MUST be done live, on scroll — NOT in
+  // an unmount cleanup: a useEffect cleanup is passive and runs AFTER React has
+  // already swapped the classroom DOM out for the workspace and ScrollToTop has
+  // zeroed the window, so window.scrollY reads ~0 there. (That was the "back
+  // always lands at the top" bug — every save recorded scrollY: 0.) A ref holds
+  // the latest week so each save tags the right one. Throttled to one write/frame.
   const viewRef = useRef<number | null>(week);
   viewRef.current = week;
-  useEffect(() => () => {
-    writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY });
-  }, []);
+  useEffect(() => {
+    if (uiState !== 'ready') return;
+    let raf = 0;
+    const persist = () => { raf = 0; writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY }); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(persist); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [uiState]);
 
   const weekCards = useMemo(() => {
     if (!feed) return [];
