@@ -41,6 +41,25 @@ function extractNavIcons(navHtml) {
 const decodeEntities = (s) => String(s).replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#3?9;/g, "'");
 const esc = (s) => decodeEntities(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
+// The ONE Colaberry brand spec, injected into every build prompt so every document a
+// student builds is IDENTICALLY, professionally branded (Ali: the built guides were
+// coming out with different invented logos + color sets). Pins the real logo, the exact
+// design-system palette, and the typefaces — leaving nothing for the model to invent.
+const BRAND_SPEC =
+  'BRANDING (MANDATORY — use these EXACT Colaberry specs, identical in every document; never invent, draw, recreate, or vary the logo or colors): ' +
+  'LOGO: the ONLY logo is the official Colaberry logo at https://enterprise.colaberry.ai/colaberry-logo-transparent.png — fetch it and embed it inline as a base64 data URI (header top-left, about 38px tall, and on the print/PDF cover); if you cannot fetch it, reference that exact URL instead. Never draw, generate, or substitute a logo. ' +
+  'COLORS (use ONLY these exact hex values, nothing else): Cherry Red #FB2832 is the fixed accent for primary buttons and key highlights and never changes; Berry Blue #367895 for headings and structure; Leaf Green #5BA63C for success and positive states; neutrals #1A1A1A text, #6B6B6B muted text, #E4E4E3 borders, #FFFFFF and #F8F8F7 surfaces; dark mode cherry #FF5960, berry #5EA9C4, leaf #8AC759 on #0F0F0F; Amber #E8920C for warnings only. ' +
+  'FONTS: Roboto for headings and body, Roboto Mono for code and data/labels, with a system-ui/Arial fallback so it renders offline. ' +
+  'No emoji. Voice: executive, calm, authoritative. Keep the file self-contained: inline all CSS and JS (only the logo image, and optionally the Roboto webfont, may load externally).';
+
+// Replace the loose "BRANDING & QUALITY: ..." paragraph agents wrote with the exact spec;
+// if it isn't found, prepend the spec so the document is still pinned.
+function applyBrand(prompt) {
+  const re = /BRANDING\s*&\s*QUALITY:[\s\S]*?(?=\n\s*\n|$)/;
+  if (re.test(prompt)) return prompt.replace(re, BRAND_SPEC);
+  return prompt.replace(/(\.\s*)(\n\s*\n)/, `$1\n\n${BRAND_SPEC}$2`);
+}
+
 function buildGuide(spec) {
   const tpl = fs.readFileSync(TEMPLATE, 'utf8');
   const STYLE = slice(tpl, '<style>', '</style>');
@@ -143,7 +162,7 @@ ${sectionsHtml}
       </div>
 
       <!-- The build prompt is intentionally NOT shown — the Copy buttons put it on the clipboard. -->
-      <pre id="promptText" style="display:none">${esc(buildPrompt)}</pre>
+      <pre id="promptText" style="display:none">${esc(applyBrand(buildPrompt))}</pre>
 
     </div>
   </div>
