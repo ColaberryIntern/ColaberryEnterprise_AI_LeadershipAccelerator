@@ -37,7 +37,7 @@ export interface TimelineFeedCard {
   video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
   image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // title = the generated lesson title ("Overview — {week topic}"), display beats the raw card title
-  course?: { name: string | null; url: string | null } | null;   // Skills Course (skills_jar): class name + link
+  course?: { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null;   // Skills Course (skills_jar): class name + link + completion mode
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;   // Blog post (blog type): fixed or auto-matched
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
   type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
@@ -134,11 +134,16 @@ interface Props {
   onComments?: (card: TimelineFeedCard) => void;
   /** Workspace shortcut: open the card's full runtime workspace (video + AI Mentor + comments). */
   onWorkspace?: (card: TimelineFeedCard) => void;
+  /** Compact mode: drop the tall media tile + description, keep the header and the
+      social footer (likes / comments). Used for completed cards folded into the
+      "Completed" section so finished work stops eating vertical space but the
+      cohort can still like and comment on it. */
+  compact?: boolean;
   likes?: number;
   liked?: boolean;
 }
 
-const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWorkspace, likes = 0, liked = false }) => {
+const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWorkspace, compact = false, likes = 0, liked = false }) => {
   const v = visualFor(card.render_band);
   // Podcast with a direct audio episode: clicking the tile plays it RIGHT HERE —
   // and while playing, clicking the artwork toggles pause/play (the bar has the
@@ -317,7 +322,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   );
 
   return (
-    <div className={`tl-card fcard${locked ? ' locked' : ''}`}>
+    <div className={`tl-card fcard${locked ? ' locked' : ''}${compact ? ' compact' : ''}`}>
       <div className="fc-head">
         <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>
         <div style={{ minWidth: 0 }}>
@@ -329,10 +334,15 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         </div>
         <span className="st-ic"><StatePip status={card.status} /></span>
       </div>
+      {/* Compact completed card reads like a regular (smaller) feed post: keep the
+          text, drop the big 16:9 media tile. The body is skipped entirely only
+          when a compact card has no description to show. */}
+      {(!compact || card.description) && (
       <div className="fc-body">
         {card.description && <p>{card.description}</p>}
         {/* Locked: a big lock over the tile, dimmed, and an overlay that swallows
             every pointer/keyboard interaction so nothing opens or plays. */}
+        {!compact && (
         <div className="fc-media-wrap">
           {media}
           {locked && (
@@ -343,7 +353,9 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
             </div>
           )}
         </div>
+        )}
       </div>
+      )}
       <div className="fc-foot">
         <button type="button" className={`like${liked ? ' liked' : ''}`} disabled={locked} onClick={() => !locked && onLike?.(card)}>
           <svg viewBox="0 0 24 24" fill={liked ? 'currentColor' : 'none'}><path d="M12 21s-7-4.5-9.5-9C.8 8.5 2.5 5 6 5c2 0 3.2 1.3 4 2.5C10.8 6.3 12 5 14 5c3.5 0 5.2 3.5 3.5 7C19 16.5 12 21 12 21z" stroke="currentColor" strokeWidth="2" /></svg> {likes}

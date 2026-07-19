@@ -55,7 +55,7 @@ describe('saveSurvey (points wiring)', () => {
   const mockFindResp = (CardSurveyResponse as any).findOne as jest.Mock;
   const mockCreateResp = (CardSurveyResponse as any).create as jest.Mock;
   const mockAwardCard = awardCardCompletionPoints as jest.Mock;
-  const CARD = { id: 'card-1', type: 'warmup', program_id: 'prog-1', week: 0, metadata: { content: { questions: QS, reflection: 'What would help?' } } };
+  const CARD = { id: 'card-1', type: 'warmup', program_id: 'prog-1', week: 0, points: { learning: 10 }, metadata: { content: { questions: QS, reflection: 'What would help?' } } };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -70,8 +70,8 @@ describe('saveSurvey (points wiring)', () => {
     expect(res.saved).toBe(true);
     expect(res.points_awarded).toBe(10);
     expect(mockCreateResp).toHaveBeenCalledTimes(1);
-    // Award is keyed on the survey card; idempotency is enforced inside cardPointsService.
-    expect(mockAwardCard).toHaveBeenCalledWith('enr-1', { id: 'card-1', type: 'warmup' });
+    // Award is keyed on the survey card (with its points → the badge value); idempotency is inside cardPointsService.
+    expect(mockAwardCard).toHaveBeenCalledWith('enr-1', { id: 'card-1', type: 'warmup', points: { learning: 10 } });
   });
 
   it('returns points_awarded=0 when the ledger already credited this card (idempotent)', async () => {

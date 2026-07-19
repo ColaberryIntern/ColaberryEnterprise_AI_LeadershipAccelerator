@@ -25,6 +25,21 @@ const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 const RuntimeWorkspace: React.FC = () => {
   const { cardId = '' } = useParams();
   const navigate = useNavigate();
+  // Always return to the Classroom — this button is literally "Back to Classroom",
+  // and the Classroom restores the student's week + scroll from a session snapshot
+  // and loads reliably. (navigate(-1) landed on the slower Today feed when the
+  // student entered the workspace from there, which never restored its position.)
+  const goBack = useCallback(() => navigate('/portal/classroom'), [navigate]);
+  // Carry over the portal's light/dark setting: the workspace renders its own
+  // chrome (not PortalShell), so read 'te-theme' and stamp data-theme on the .rt
+  // root (drives runtimeCss) and on <html> (drives :root-scoped child components
+  // + a direct page load that never rendered PortalShell).
+  const theme = React.useMemo<'light' | 'dark'>(() => {
+    try { return localStorage.getItem('te-theme') === 'dark' ? 'dark' : 'light'; } catch { return 'light'; }
+  }, []);
+  useEffect(() => {
+    try { document.documentElement.setAttribute('data-theme', theme); } catch { /* ignore */ }
+  }, [theme]);
   const [data, setData] = useState<RtOpen | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [error, setError] = useState('');
@@ -86,6 +101,12 @@ const RuntimeWorkspace: React.FC = () => {
   // unlocks once every section has been read (>=10s each), via the reader's postMessages.
   const isReader = band === 'warmup' && !!card?.content?.body_html;
   const readerProg = useReaderProgress(cardId, isReader && !completed);
+  // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
+  // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
+  // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
+  // the right rail. This is the single-scroll workstation layout applied to every type.
+  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !!card?.content?.body_html;
+  const fill = isReader || isLesson;
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -127,25 +148,56 @@ const RuntimeWorkspace: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
 
-  if (error) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={() => navigate('/portal/classroom')}>← Classroom</button></div></div>;
-  if (!card) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
+  if (error) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← Classroom</button></div></div>;
+  if (!card) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
 
   const emp = readiness?.employment; const cert = readiness?.certification; const jr = readiness?.journey; const evd = readiness?.evidence;
 
+  // Complete gate + comments are shared so Self Study can host them in the reader foot /
+  // right rail (single-scroll layout) while every other card keeps them in the center.
+  const completeLabel = busy === 'complete' ? 'Generating evidence…'
+    : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
+    : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete';
+  const completeGate = completed
+    ? <span className="rt-pill done">✓ Completed — evidence generated</span>
+    : isReader && !readerProg.complete
+      ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
+      : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
+  // Comments always render in the right rail now (every card type), so the center is a
+  // single, clean scroll.
+  const commentsBlock = (
+    <section className="rt-comments rt-comments--rail">
+      <div className="rt-lab">Comments</div>
+      <div className="rt-cpost">
+        <input className="rt-in" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commentInput.trim() && postComment()} placeholder="Share a thought with your cohort…" />
+        <button className="rt-btn pri" disabled={busy === 'comment' || !commentInput.trim()} onClick={postComment}>Post</button>
+      </div>
+      {comments.length === 0
+        ? <p className="rt-muted" style={{ margin: '8px 2px' }}>No comments yet — be the first.</p>
+        : comments.map((cm) => (
+            <div key={cm.id} className="rt-comment">
+              <div className="rt-cwho"><b>{cm.mine ? 'You' : cm.author}</b><span>{new Date(cm.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
+              <p>{cm.body}</p>
+            </div>
+          ))}
+    </section>
+  );
+
   return (
-    <div className="rt">
+    <div className="rt" data-theme={theme}>
       <style>{runtimeCss}</style>
       <header className="rt-top">
-        <button className="rt-back" onClick={() => navigate('/portal/classroom')} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+        <button className="rt-back" onClick={goBack} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
         <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
         <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>
       </header>
 
       <div className="rt-body">
         {/* CENTER — activity */}
-        <main className="rt-mid">
-          {/* Hero — the type's picture with the lesson title ON the image (video bands keep their player). */}
-          {!isVideo && card.type_thumbnail && (
+        <main className={`rt-mid${fill ? ' rt-mid--reader' : ''}`}>
+          {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
+              their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
+          {!isVideo && !fill && card.type_thumbnail && (
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
@@ -221,60 +273,38 @@ const RuntimeWorkspace: React.FC = () => {
             <AssessmentPanel cardId={card.id} onCompleted={(r) => { if (r) { setReadiness(r); setCompleted(true); } }} />
           )}
 
-          {/* Self Study reading: same immersive reader as the card drawer (diagrams,
-              icon cards, sticky nav) so the format carries over into the workspace. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && band === 'warmup' && card.content?.body_html && (
-            <div className="rt-card" style={{ padding: 0, overflow: 'hidden' }}>
-              <iframe title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(card.content.body_html, card.content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} style={{ width: '100%', border: 0, height: 'min(80vh, 900px)', background: '#F7F4EE', borderRadius: 8, display: 'block' }} />
+          {/* Content-in-iframe cards (the Self Study immersive reader OR a generic lesson)
+              FILL the center as the single scroll, with the complete gate in a slim foot —
+              so there are never dueling scrollbars. The reader runs scripts (sticky nav +
+              read-gate); a plain lesson stays inert (sandbox=""). */}
+          {fill && (
+            <div className="rt-readerwrap">
+              <iframe
+                className="rt-readerframe"
+                title={isReader ? 'Self Study reading' : 'Lesson'}
+                sandbox={isReader ? 'allow-scripts' : ''}
+                srcDoc={isReader
+                  ? readerDoc(card.content?.body_html || '', card.content?.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })
+                  : lessonDoc(card.content?.body_html || '')}
+              />
+              <div className="rt-readerfoot">{completeGate}</div>
             </div>
           )}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !(band === 'warmup' && card.content?.body_html) && (
+          {/* Fallback for a non-media card with no body yet — just its description. */}
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !fill && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
-              {card.content?.body_html
-                ? <iframe title="Lesson" sandbox="" srcDoc={lessonDoc(card.content.body_html)} style={{ width: '100%', border: 0, minHeight: 420, background: '#fff', borderRadius: 8 }} />
-                : card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
+              {card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
             </div>
           )}
 
           {artifact && <div className="rt-artifact"><div className="rt-lab">Portfolio artifact created</div><b>{artifact.title}</b><p className="rt-muted">{artifact.summary}</p></div>}
 
-          {/* Surveys + assessments complete via their own flow (answers/score must be
-              stored first), so the generic completion bar is hidden for them. */}
-          {!isSurvey && !isAssessment && (
-            <div className="rt-complete">
-              {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
-                : isReader && !readerProg.complete
-                  ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
-                  : <button
-                      className={isReader ? 'ss-complete-btn' : 'rt-btn cta'}
-                      disabled={busy === 'complete' || watchGated}
-                      title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined}
-                      onClick={complete}
-                    >
-                      {busy === 'complete' ? 'Generating evidence…'
-                        : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
-                        : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}
-                    </button>}
-            </div>
+          {/* Surveys + assessments complete via their own flow; fill cards host the gate in
+              their foot. Everything else gets the completion bar here in the center. */}
+          {!isSurvey && !isAssessment && !fill && (
+            <div className="rt-complete">{completeGate}</div>
           )}
-
-          {/* COHORT COMMENTS — every card type has a thread, newest first */}
-          <section className="rt-comments">
-              <div className="rt-lab">Comments</div>
-              <div className="rt-cpost">
-                <input className="rt-in" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commentInput.trim() && postComment()} placeholder="Share a thought with your cohort…" />
-                <button className="rt-btn pri" disabled={busy === 'comment' || !commentInput.trim()} onClick={postComment}>Post</button>
-              </div>
-              {comments.length === 0
-                ? <p className="rt-muted" style={{ margin: '8px 2px' }}>No comments yet — be the first.</p>
-                : comments.map((cm) => (
-                    <div key={cm.id} className="rt-comment">
-                      <div className="rt-cwho"><b>{cm.mine ? 'You' : cm.author}</b><span>{new Date(cm.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
-                      <p>{cm.body}</p>
-                    </div>
-                  ))}
-          </section>
         </main>
 
         {/* RIGHT — AI Mentor */}
@@ -291,6 +321,9 @@ const RuntimeWorkspace: React.FC = () => {
             <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && mentorInput.trim() && ask('ask', mentorInput)} placeholder="Ask your mentor…" />
             <button className="rt-btn pri" disabled={busy === 'mentor' || !mentorInput.trim()} onClick={() => ask('ask', mentorInput)}>Send</button>
           </div>
+          {/* Cohort comments live in the rail for every card type, so the center is a
+              single clean scroll (no comments stacked under a tall activity). */}
+          {commentsBlock}
         </aside>
       </div>
 

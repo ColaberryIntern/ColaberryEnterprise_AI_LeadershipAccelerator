@@ -36,6 +36,7 @@ import { handleExecutePromptLab } from '../controllers/promptLabController';
 import { listPodcastsPortal } from '../controllers/podcastController';
 import { handleGetClassroomFeed, handleCompleteCard } from '../controllers/timelineController';
 import { handleListCardComments, handleCreateCardComment } from '../controllers/timelineCommentController';
+import { handleCreateHandoff, handleExchangeHandoff, handleGetPortalFlags } from '../controllers/portalHandoffController';
 import {
   handleGetSettings, handleUpdateProfile, handleSetAvatar, handleClearAvatar,
   handleSetResume, handleGetResume, handleClearResume,
@@ -56,6 +57,10 @@ const router = Router();
 router.post('/api/portal/free-signup', handleFreeSignup); // self-serve free/guest account
 router.post('/api/portal/request-link', handleRequestMagicLink);
 router.get('/api/portal/verify', handleVerifyMagicLink);
+// Portal feature flags (public — the shell reads these to pick the Today
+// experience) and the phone-handoff exchange (public — no session yet).
+router.get('/api/portal/flags', handleGetPortalFlags);
+router.get('/api/portal/handoff/exchange', handleExchangeHandoff);
 
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
@@ -116,6 +121,8 @@ router.get('/api/portal/events', requireParticipant, handleGetPublicEvents); // 
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
 router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
 router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);
+// "Open on your phone" — authed desktop mints a single-use QR handoff code.
+router.post('/api/portal/handoff', requireParticipant, handleCreateHandoff);
 
 // Student account Settings — profile, photo, resume file, account read.
 // Photo + resume are base64 JSON bodies (they ride the global 5mb express.json

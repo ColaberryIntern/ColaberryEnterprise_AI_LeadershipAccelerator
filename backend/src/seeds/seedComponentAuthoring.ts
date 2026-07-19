@@ -178,8 +178,8 @@ const KNOWLEDGE_CHECK_GENERATION_PROMPT = [
 const EVALUATION_GENERATION_PROMPT = [
   'You write the framing for the end-of-section Evaluation in the AI Systems Architect Accelerator. The WEEK CONTEXT above gives the week\'s topic and competencies.',
   'title: the word "Evaluation", a space, an em dash, a space, then the week\'s topic from the WEEK CONTEXT.',
-  'summary: one sentence — the graded check that measures how far the student has come this section; 75% or higher to pass and earn points.',
-  'body_html: one short <p> noting this is scored, needs 75% to pass, can be retried, and shows growth since the entry Knowledge Check.',
+  'summary: one sentence — the graded check that measures how far the student has come this section; 70% or higher to pass and earn points.',
+  'body_html: one short <p> noting this is scored, needs 70% to pass, can be retried, and shows growth since the entry Knowledge Check.',
   'Return questions as [], reflection as "", discussion_prompt as "", github_task as null, evaluation_criteria as []. Executive tone. No emojis.',
 ].join('\n');
 
@@ -289,11 +289,11 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     variable_keys: [],
     outputs: [
       { key: 'score', type: 'number', description: '0-1 evaluation score' },
-      { key: 'passed', type: 'boolean', description: 'true when score >= 0.75' },
+      { key: 'passed', type: 'boolean', description: 'true when score >= 0.70' },
       { key: 'competency_scores', type: 'object', description: 'per-competency correct/total' },
     ],
-    // 75% pass gate — enforced in assessmentService; documented here.
-    completion_rules: { on: 'evaluate', min_score: 0.75 },
+    // 70% pass gate — enforced in assessmentService; documented here.
+    completion_rules: { on: 'evaluate', min_score: 0.70 },
     evaluation_type: 'rubric',
     generation_prompt: EVALUATION_GENERATION_PROMPT,
     thumbnail_url: thumbnailUrlFor('evaluation'),

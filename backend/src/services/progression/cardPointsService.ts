@@ -5,10 +5,10 @@
  * (XpEvent) that drives readiness/promotion.
  *
  * Design:
- *  - Config-driven amounts with safe code fallbacks. A per-card override
- *    (points_config scope='card_override', config.engagement) wins; then a
- *    per-type override (scope='type_default', config.engagement); then a
- *    band/type fallback below. Change the economy by editing config, not code.
+ *  - The amount equals the number the card's "+N pts" badge shows — the sum of the
+ *    card's points {learning,builder,community} — so the badge and the HUD can
+ *    never drift apart. A points_config override (card_override → type_default,
+ *    config.engagement) can still force a specific amount when needed.
  *  - Idempotent per (enrollment, card|lesson) via a stable event_key, leaning on
  *    the student_points_events unique index — re-completing never double-counts.
  *  - Failure-first: award is best-effort and NEVER throws. A points hiccup must
@@ -25,21 +25,17 @@ import { env } from '../../config/env';
 export interface CardLike {
   id: string;
   type: string;
+  points?: { learning?: number | null; builder?: number | null; community?: number | null } | null;
 }
 
-// Fallback engagement award per render band / card type when no config row exists.
-// Kept small + meaningful; the HUD ladder is Apprentice 0 → Builder 150, so a
-// week of ~10 items should move a student a meaningful fraction toward Builder.
-const BAND_AWARD: Record<string, number> = {
-  survey: 10,
-  quiz: 15,
-  evaluation: 20,
-  reflection: 10,
-  video: 5,
-  reading: 5,
-  overview: 5,
-};
-const DEFAULT_CARD_AWARD = 5;
+/** Sum of a card's points {learning,builder,community} — the exact number its
+ *  "+N pts" badge renders (the feed sends `card.points` verbatim, and the badge
+ *  is totalPoints(card.points)). Awarding this keeps the badge and the HUD
+ *  provably identical. */
+function badgePoints(card: CardLike): number {
+  const p = card.points || {};
+  return Math.max(0, (p.learning || 0) + (p.builder || 0) + (p.community || 0));
+}
 
 /** The event_type recorded for a card completion (drives the "Recent points" label). */
 export function eventTypeForCard(card: CardLike): string {
@@ -52,9 +48,10 @@ export function eventTypeForCard(card: CardLike): string {
 }
 
 /**
- * Resolve how many engagement points a card completion is worth:
- * per-card override → per-type override → band/type fallback → default.
- * Never throws; on any config-read error it uses the code fallback.
+ * Resolve how many engagement points a card completion is worth: an explicit
+ * points_config override (per-card → per-type) wins; otherwise it's the card's
+ * own badge value (sum of its points). Never throws; on any config-read error it
+ * falls back to the badge value.
  */
 export async function resolveCardEngagementPoints(card: CardLike): Promise<number> {
   try {
@@ -64,13 +61,10 @@ export async function resolveCardEngagementPoints(card: CardLike): Promise<numbe
     const typeCfg = await PointsConfig.findOne({ where: { scope: 'type_default', key: card.type, is_active: true } });
     if (typeCfg && typeof (typeCfg as any).config?.engagement === 'number') return Math.max(0, (typeCfg as any).config.engagement);
   } catch {
-    /* fall through to code defaults — config is an optimization, not a dependency */
+    /* fall through — config is an optional override, not a dependency */
   }
-  const def = resolveType(card.type);
-  const band = (def?.render_band as string) || card.type;
-  if (typeof BAND_AWARD[band] === 'number') return BAND_AWARD[band];
-  if (typeof BAND_AWARD[card.type] === 'number') return BAND_AWARD[card.type];
-  return DEFAULT_CARD_AWARD;
+  // Award exactly what the card's "+N pts" badge shows, so badge and HUD stay in lockstep.
+  return badgePoints(card);
 }
 
 /**

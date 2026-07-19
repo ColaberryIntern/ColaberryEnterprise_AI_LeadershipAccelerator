@@ -6,7 +6,7 @@ import PortalLayout from '../components/Layout/PortalLayout';
 import PortalLoginPage from '../pages/portal/PortalLoginPage';
 import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
-import PortalDashboardPage from '../pages/portal/PortalDashboardPage';
+import PortalHandoffPage from '../pages/portal/PortalHandoffPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
 import RuntimeWorkspace from '../pages/portal/runtime/RuntimeWorkspace';
@@ -15,21 +15,6 @@ import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
 import PortalSessionDetailPage from '../pages/portal/PortalSessionDetailPage';
 import PortalAssignmentsPage from '../pages/portal/PortalAssignmentsPage';
 import PortalProgressPage from '../pages/portal/PortalProgressPage';
-import ProjectDashboard from '../pages/project/ProjectDashboard';
-import SystemBlueprint from '../pages/project/SystemBlueprint';
-import SystemViewV2 from '../pages/project/SystemViewV2';
-import ProjectArtifacts from '../pages/project/ProjectArtifacts';
-import ProjectPortfolio from '../pages/project/ProjectPortfolio';
-import ExecutiveDeliverable from '../pages/project/ExecutiveDeliverable';
-import CoryFullscreen from '../pages/project/CoryFullscreen';
-import RequirementsBuilder from '../pages/project/RequirementsBuilder';
-import SystemBuildDemo from '../pages/project/SystemBuildDemo';
-import VisualWorkspacePage from '../features/visualWorkspace/VisualWorkspacePage';
-import WalkCapsPage from '../pages/portal/WalkCapsPage';
-import WalkSummaryPage from '../pages/portal/WalkSummaryPage';
-import PhantomCapsTriage from '../pages/project/PhantomCapsTriage';
-import CoryHome from '../pages/portal/CoryHome';
-import ArchitectDashboard from '../pages/portal/ArchitectDashboard';
 import TodayShell from '../pages/portal/today/TodayShell';
 import SettingsPage from '../pages/portal/settings/SettingsPage';
 import PathPage from '../pages/portal/path/PathPage';
@@ -37,42 +22,40 @@ import SchedulePage from '../pages/portal/schedule/SchedulePage';
 import PointsPage from '../pages/portal/points/PointsPage';
 import ProjectsPage from '../pages/portal/projects/ProjectsPage';
 import CommunityPage from '../pages/portal/community/CommunityPage';
-import ProjectDnaWizard from '../pages/portal/ProjectDnaWizard';
-import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
 import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
-import ExecutionLane from '../pages/project/ExecutionLane';
-import SystemView from '../pages/project/SystemView';
+
+// The old AI Project Builder ("Cory") portal surfaces — CoryHome, Blueprint,
+// System, Critique / visual-workspace, RequirementsBuilder, walk-caps, the DNA
+// wizard, architect dashboard, etc. — were removed from the frontend on
+// 2026-07-18 so students only ever see the Design E student platform.
+// `/portal/home` and `/portal/dashboard` now redirect to the student home
+// (Today); every other retired builder URL simply 404s.
 
 const portalRoutes = (
   <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
     <Route path="/portal/login" element={<PortalLoginPage />} />
     <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
+    {/* Phone handoff — public: exchanges a one-time QR code for a session, then lands on Today. */}
+    <Route path="/portal/handoff" element={<PortalHandoffPage />} />
     <Route element={<PortalProtectedRoute />}>
-      {/* Today shell (Design E onboarding experience) renders its own chrome,
-          so it sits outside PortalLayout. */}
+      {/* Design E student surfaces — each renders its own PortalShell chrome,
+          so they sit OUTSIDE PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
-      {/* Settings renders its own PortalShell chrome, like Today. */}
       <Route path="/portal/settings" element={<SettingsPage />} />
-      {/* Path + Schedule share the Design E shell (PortalShell), like Today. */}
       <Route path="/portal/path" element={<PathPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />
       <Route path="/portal/points" element={<PointsPage />} />
-      {/* Projects tab: portal-native builds (lists + tasks, FB vibe), opens on
-          the new-build wizard. Renders its own PortalShell chrome like Today. */}
       <Route path="/portal/projects" element={<ProjectsPage />} />
       <Route path="/portal/community" element={<CommunityPage />} />
-      {/* Classroom (Design E timeline) renders its own PortalShell chrome, like Today/Path/Projects. */}
       <Route path="/portal/classroom" element={<ClassroomPage />} />
       {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
       <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />
+      {/* Retired AI Project Builder entry points → student home. */}
+      <Route path="/portal/home" element={<Navigate to="/portal/today" replace />} />
+      <Route path="/portal/dashboard" element={<Navigate to="/portal/today" replace />} />
+      {/* Legacy student pages that still use the lean PortalLayout chrome. */}
       <Route element={<PortalLayout />}>
-        <Route path="/portal/home" element={<CoryHome />} />
-        <Route path="/portal/architect-dashboard" element={<ArchitectDashboard />} />
-        <Route path="/portal/project-builder" element={<ProjectDnaWizard />} />
-        <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
-        {/* Legacy redirect — old `/portal/dashboard` now lands on Cory Home. */}
-        <Route path="/portal/dashboard" element={<Navigate to="/portal/home" replace />} />
         <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
         <Route path="/portal/classroom/week/:weekNum" element={<ClassroomWeekPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
@@ -80,40 +63,9 @@ const portalRoutes = (
         <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
         <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
         <Route path="/portal/progress" element={<PortalProgressPage />} />
-        <Route path="/portal/project" element={<Navigate to="/portal/project/blueprint" replace />} />
-        {/* Blueprint Simplification Sprint: /blueprint now serves the lean
-            ExecutionLane (6-step flow). The legacy SystemBlueprint surface
-            is preserved at /blueprint-legacy for rollback only. */}
-        <Route path="/portal/project/blueprint" element={<ExecutionLane />} />
-        <Route path="/portal/project/blueprint-legacy" element={<SystemBlueprint />} />
-        {/* System Surface Maturity Sprint, 2026-05-12 — "v2" leakage purged.
-            The lean 5-tab SystemView now serves the canonical `/system`
-            URL. The old project dashboard is archived. The two `-v2`
-            routes redirect to their non-v2 equivalents so any external
-            link (Basecamp, email, etc.) still lands the operator on the
-            right surface without exposing the legacy naming. */}
-        <Route path="/portal/project/system" element={<SystemView />} />
-        <Route path="/portal/project/system-legacy" element={<SystemViewV2 />} />
-        <Route path="/portal/project/system-v2" element={<Navigate to="/portal/project/system" replace />} />
-        <Route path="/portal/project/system-v2-legacy" element={<Navigate to="/portal/project/system-legacy" replace />} />
-        <Route path="/portal/project/legacy-dashboard" element={<ProjectDashboard />} />
-        <Route path="/portal/project/artifacts" element={<ProjectArtifacts />} />
-        <Route path="/portal/project/portfolio" element={<ProjectPortfolio />} />
-        <Route path="/portal/project/executive" element={<ExecutiveDeliverable />} />
-        <Route path="/portal/project/cory" element={<CoryFullscreen />} />
-        <Route path="/portal/project/requirements-builder" element={<RequirementsBuilder />} />
-        <Route path="/portal/project/demo" element={<SystemBuildDemo />} />
-        <Route path="/portal/visual-workspace" element={<VisualWorkspacePage />} />
-        {/* Phase B (2026-05-20): walk through caps one at a time. */}
-        <Route path="/portal/walk-caps" element={<WalkCapsPage />} />
-        {/* Phase C (2026-05-20): walk summary + compile-prompt. */}
-        <Route path="/portal/walk-caps/summary" element={<WalkSummaryPage />} />
-        {/* 2026-05-21: phantom-cap triage. */}
-        <Route path="/portal/project/phantoms" element={<PhantomCapsTriage />} />
       </Route>
     </Route>
   </Route>
 );
 
 export default portalRoutes;
-

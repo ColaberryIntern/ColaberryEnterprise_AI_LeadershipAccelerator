@@ -7,10 +7,11 @@
  */
 import { chatText, chatJson } from './runtimeAi';
 import MentorTurn from '../../models/MentorTurn';
+import { buildMentorContext, MentorContext } from './mentorContext';
 
 export type MentorMode = 'ask' | 'hint' | 'explain' | 'review';
 
-interface CardCtx { id: string; type: string; title: string; description?: string | null; student_label?: string; metadata?: any }
+interface CardCtx { id: string; type: string; title: string; description?: string | null; student_label?: string; metadata?: any; program_id?: string | null; week?: number | null }
 
 const SYSTEM =
   'You are a Senior AI Systems Architect acting as a warm, sharp personal mentor to a student in an AI Systems ' +
@@ -28,7 +29,22 @@ function modeInstruction(mode: MentorMode): string {
 }
 
 export async function coach(enrollmentId: string, card: CardCtx, mode: MentorMode, message: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = []) {
-  const system = `${SYSTEM}\n\nActivity: "${card.title}" (${card.student_label || card.type}). ${card.description ? `Context: ${card.description}` : ''}\n${modeInstruction(mode)}`;
+  // Assignment-aware context: the student's actual work on this card (answers,
+  // score, saved work, section growth). Degrade gracefully — a context-assembly
+  // failure must NOT 500 the chat; the mentor just falls back to card-only coaching.
+  let learner: MentorContext = { block: '', graded_lock: false, has_work: false };
+  try {
+    learner = await buildMentorContext(enrollmentId, card);
+  } catch (e: any) {
+    console.warn(JSON.stringify({ level: 'warn', service: 'runtime_mentor', event: 'context_assembly_failed', card_id: card.id, error_class: e?.name || 'Error', message: String(e?.message || e) }));
+  }
+  const work = learner.block
+    ? `\n\nWHAT THE STUDENT HAS DONE ON THIS ACTIVITY (this is their real work — reference it specifically, never say you can't see it):\n${learner.block}`
+    : '';
+  const lock = learner.graded_lock
+    ? '\nThis is a graded Evaluation the student can retake: do NOT reveal the correct option for any question they missed — coach them toward it with a question or a hint.'
+    : '';
+  const system = `${SYSTEM}\n\nActivity: "${card.title}" (${card.student_label || card.type}). ${card.description ? `Context: ${card.description}` : ''}${work}${lock}\n${modeInstruction(mode)}`;
   const msgs = [...history.slice(-6), { role: 'user' as const, content: message || 'Help me get started.' }];
   const r = await chatText('runtime_mentor', system, msgs, undefined, 500);
   await MentorTurn.create({ enrollment_id: enrollmentId, card_id: card.id, mode, question: message, reply: r.text }).catch(() => {});

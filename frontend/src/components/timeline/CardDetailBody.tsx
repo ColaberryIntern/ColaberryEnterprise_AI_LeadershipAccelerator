@@ -38,7 +38,7 @@ function stripUnsafe(html: string): string {
 /** Wrap AI body_html in a minimal styled doc for a SANDBOXED iframe (no scripts run → inert/safe). */
 export function lessonDoc(bodyHtml: string): string {
   return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
-    body{font-family:Roboto,system-ui,sans-serif;margin:0;padding:2px;color:#1A1A1A;font-size:14.5px;line-height:1.62}
+    body{font-family:Roboto,system-ui,sans-serif;margin:0 auto;max-width:760px;padding:20px 22px;color:#1A1A1A;font-size:14.5px;line-height:1.62}
     h1,h2,h3{line-height:1.3;margin:14px 0 6px} h1{font-size:18px} h2{font-size:16px} h3{font-size:14.5px}
     p{margin:0 0 10px} ul,ol{padding-left:20px;margin:0 0 10px} li{margin-bottom:4px} a{color:#367895} img{max-width:100%}
     pre,code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;background:#F5F5F5;border-radius:6px}
@@ -107,6 +107,8 @@ export function readerDoc(bodyHtml: string, title?: string, opts?: ReaderOpts): 
     .stat span{display:block;font-size:12.5px;color:#4a4a4a;margin-top:4px}
     #nav a.read{border-color:#5BA63C;color:#3f7d27}
     #nav a.read::after{content:"";display:inline-block;width:13px;height:13px;margin-left:6px;vertical-align:-2px;border-radius:50%;background:#5BA63C url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12l4 4L18 7' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/11px no-repeat}
+    #nav a.active.read{background:#3f8f2e;border-color:#3f8f2e;color:#fff}
+    #nav a.active.read::after{background-color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12l4 4L18 7' fill='none' stroke='%233f8f2e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
     .ss section.read>h2::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#5BA63C;margin-right:9px;vertical-align:middle}
     @media(prefers-color-scheme:dark){.illus,.stat{background:#2c2723;border-color:#3a342e}.illus figcaption,.stat span{color:#a89f94}.herofig{background:linear-gradient(135deg,#2f3a40,#231f1b);border-color:#3a342e}#nav a.read{color:#8fce6f}}
     @media(prefers-color-scheme:dark){body{background:#231f1b;color:#ece7e0}#nav{background:rgba(35,31,27,.95);border-color:#3a342e}#nav a{background:#2c2723;border-color:#3a342e;color:#c9beb2}#nav a.active{color:#231f1b;background:#ff6b83;border-color:#ff6b83}.hero .eyebrow{color:#ff6b83}.note,.term,.figure,.prereq{background:#2c2723;border-color:#3a342e}.ss section{border-color:#3a342e}.ss .lead,.term h3,.term h4,.warn b{color:#ff6b83}.term h3,.term h4{color:#ece7e0}.why{color:#a89f94}.warn{background:#2c2723;border-color:#3a342e}th{background:#2c2723}th,td{border-color:#3a342e}.dg-txt{fill:#ece7e0}}

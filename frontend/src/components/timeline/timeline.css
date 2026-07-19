@@ -21,7 +21,11 @@
   font-family:var(--sans); color:var(--text-body); line-height:1.55;
   background:var(--surface-subtle); min-height:100%;
 }
-.tl-de[data-theme="dark"]{
+/* Dark mode follows the ONE global theme the portal header toggle sets on <html>
+   (data-theme, via PortalShell). Scoped to .te-main so the Classroom shell follows
+   it, while the admin Experience-Studio previews that reuse .tl-de (outside .te-main)
+   keep their standalone light rendering. */
+:root[data-theme="dark"] .te-main .tl-de{
   --surface-page:#0F0F0F; --surface-subtle:#1A1A1A; --surface-sunken:#161616;
   --text-strong:#FFFFFF; --text-body:#E4E4E3; --text-muted:#B4B4B4;
   --border-default:rgba(255,255,255,.14); --border-subtle:rgba(255,255,255,.10);
@@ -136,6 +140,20 @@
 .tl-de .pip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700}
 .tl-de .pip svg{width:14px;height:14px}
 .tl-de .pip.done{color:var(--leaf-text)} .tl-de .pip.up{color:var(--text-muted)} .tl-de .pip.lock{color:var(--text-muted)}
+
+/* ── Compact completed card: a regular, smaller feed post. Stays inline in the
+   timeline but keeps only the text + social footer (the big 16:9 media tile is
+   dropped), and tightens every dimension so finished work reads light. ── */
+.tl-de .fcard.compact{opacity:.96}
+.tl-de .fcard.compact:hover{opacity:1}
+.tl-de .fcard.compact .fc-head{padding:12px 16px 8px}
+.tl-de .fcard.compact .fc-head .ico{width:30px;height:30px;border-radius:var(--r-8)}
+.tl-de .fcard.compact .fc-head .ico svg{width:16px;height:16px}
+.tl-de .fcard.compact .fc-head .ttl{font-size:14.5px}
+.tl-de .fcard.compact .fc-body{padding:0 16px 8px}
+.tl-de .fcard.compact .fc-body p{font-size:13.5px;margin:0}
+.tl-de .fcard.compact .fc-foot{padding:8px 16px}
+.tl-de .fcard.compact .fc-foot .like,.tl-de .fcard.compact .fc-foot .cmt{padding:5px 11px;font-size:12.5px}
 
 /* media: branded SVG thumbnail + video frame */
 .tl-de .mthumb{position:relative;border-radius:var(--r-12);overflow:hidden;width:100%;display:block;border:none;padding:0;aspect-ratio:16/9;text-align:left;cursor:pointer}

@@ -60,6 +60,11 @@ export const NAV_GROUPS: NavGroup[] = [
   },
 ];
 
+// Bottom tab bar (mobile) — the built, navigable destinations. Fixes the gap
+// where the sidebar was display:none on phones with no replacement, leaving
+// Path/Schedule/Projects/Classroom/Community unreachable. Account stays top-right.
+const TAB_ITEMS = NAV_GROUPS.flatMap((g) => g.items).filter((i) => i.to && !i.soon);
+
 type PortalShellProps = {
   children: React.ReactNode;
   /** Count badge shown on the Today nav item (open onboarding steps). */
@@ -256,6 +261,20 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
 
       {/* ── main ── */}
       <main className="te-main">{children}</main>
+
+      {/* ── bottom tab bar (mobile only via CSS) — nav reachable on phones ── */}
+      <nav className="te-tabbar">
+        {TAB_ITEMS.map((t) => {
+          const on = !!t.to && (active === t.to || active.startsWith(t.to + '/'));
+          return (
+            <Link key={t.label} to={t.to!} className={`te-tab${on ? ' active' : ''}`}>
+              <span className="ic">{t.icon}</span>
+              <span className="lb">{t.label}</span>
+              {t.label === 'Today' && !!todayBadge && todayBadge > 0 && <span className="tdot" />}
+            </Link>
+          );
+        })}
+      </nav>
 
       {/* global build-ready toast (fires on any portal page) */}
       <BuildToast />

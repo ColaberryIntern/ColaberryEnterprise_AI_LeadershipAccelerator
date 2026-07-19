@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
@@ -32,8 +32,23 @@ interface Feed {
 const wkLabel = (w: number | null): string => (w === 0 ? 'Free Preview' : w != null ? `Week ${w}` : 'Classroom');
 
 const titleCase = (s: string): string => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-const readTheme = (): 'light' | 'dark' =>
-  (typeof window !== 'undefined' && window.localStorage.getItem('tl-theme') === 'dark') ? 'dark' : 'light';
+
+// Persist the classroom view (selected week + window scroll) so that leaving for
+// the runtime workspace and coming back — via the workspace Back button OR the
+// browser's own back button — returns the student to the same spot in the list,
+// instead of remounting fresh and resetting to the top of the default week.
+// Session-scoped (per browser tab); cleared naturally when the tab closes.
+const VIEW_KEY = 'classroom-view';
+interface ViewSnapshot { week: number | null; scrollY: number }
+const readViewSnapshot = (): ViewSnapshot | null => {
+  try {
+    const raw = window.sessionStorage.getItem(VIEW_KEY);
+    return raw ? (JSON.parse(raw) as ViewSnapshot) : null;
+  } catch { return null; }
+};
+const writeViewSnapshot = (snap: ViewSnapshot): void => {
+  try { window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(snap)); } catch { /* private mode / quota — non-fatal */ }
+};
 
 /** ms until the next Thursday 10:00 (client-side schedule anchor until live sessions are wired). */
 function nextThursday(now: number): number {
@@ -50,7 +65,6 @@ const ClassroomPage: React.FC = () => {
   const navigate = useNavigate();
   const [feed, setFeed] = useState<Feed | null>(null);
   const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'error'>('loading');
-  const [theme, setTheme] = useState<'light' | 'dark'>(readTheme);
   const [week, setWeek] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState<number>(() => (typeof performance !== 'undefined' ? Date.now() : 0));
@@ -85,12 +99,41 @@ const ClassroomPage: React.FC = () => {
     return Array.from(set).sort((a, b) => a - b);
   }, [feed]);
 
-  // default to the first week that still has an incomplete card
+  // Restore the last-viewed week (+ scroll position) when the student returns
+  // from the runtime workspace; otherwise default to the first week that still
+  // has an incomplete card. Runs once, after the feed loads.
+  const restoredRef = useRef(false);
   useEffect(() => {
-    if (!feed || week != null || weeks.length === 0) return;
-    const firstOpen = weeks.find((w) => feed.cards.some((c) => c.week === w && c.status !== 'completed'));
-    setWeek(firstOpen ?? weeks[0]);
+    if (!feed || weeks.length === 0) return;
+    if (!restoredRef.current) {
+      restoredRef.current = true;
+      const snap = readViewSnapshot();
+      if (snap && snap.week != null && weeks.includes(snap.week)) {
+        setWeek(snap.week);
+        // Restore scroll after the feed has painted at full height. App-level
+        // ScrollToTop zeroes the window on every route change, so this must run
+        // after it — two rAFs lands us past layout + that reset.
+        const y = snap.scrollY || 0;
+        if (y > 0) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+        return;
+      }
+    }
+    if (week == null) {
+      const firstOpen = weeks.find((w) => feed.cards.some((c) => c.week === w && c.status !== 'completed'));
+      setWeek(firstOpen ?? weeks[0]);
+    }
   }, [feed, weeks, week]);
+
+  // Snapshot the current view on unmount (i.e. when navigating to the workspace
+  // or anywhere else) so the restore above has something to return to. A ref
+  // holds the latest week so the cleanup captures the real position, not a stale
+  // closure. window.scrollY is read before App-level ScrollToTop resets it
+  // (unmount cleanups run before the new route's effects).
+  const viewRef = useRef<number | null>(week);
+  viewRef.current = week;
+  useEffect(() => () => {
+    writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY });
+  }, []);
 
   const weekCards = useMemo(() => {
     if (!feed) return [];
@@ -119,20 +162,6 @@ const ClassroomPage: React.FC = () => {
   }, [load]);
   const selectedCard = useMemo(() => feed?.cards.find((c) => c.id === selectedId) ?? null, [feed, selectedId]);
 
-  const toggleTheme = () => {
-    const next = theme === 'dark' ? 'light' : 'dark';
-    setTheme(next);
-    try { window.localStorage.setItem('tl-theme', next); } catch { /* ignore */ }
-  };
-
-  const themeBtn = (
-    <button type="button" className="tl-toggle" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Light mode' : 'Dark mode'} title={theme === 'dark' ? 'Light mode' : 'Dark mode'}>
-      {theme === 'dark'
-        ? <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="2" /><path d="M12 2v2M12 20v2M4 12H2M22 12h-2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-        : <svg viewBox="0 0 24 24" fill="none"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>}
-    </button>
-  );
-
   if (uiState === 'loading') return <PortalShell><div className="tl-de"><div className="tl-empty">Loading your classroom…</div></div></PortalShell>;
   if (uiState === 'disabled') return (
     <PortalShell><div className="tl-de"><div className="tl-empty">
@@ -151,7 +180,7 @@ const ClassroomPage: React.FC = () => {
 
   return (
     <PortalShell>
-    <div className="tl-de" data-theme={theme}>
+    <div className="tl-de">
       <div className="tl-top">
         <div>
           <div className="tl-crumb">{wkLabel(week)}</div>
@@ -160,7 +189,6 @@ const ClassroomPage: React.FC = () => {
             ? 'Your free AI Preview — watch testimonials, listen to podcasts, read, and try short lessons and quizzes. Enroll to unlock the full Accelerator.'
             : 'Your week as a feed. Watch, build, test, reflect — every item scores on-site and feeds your points. Complete each card to advance.'}</div>
         </div>
-        {themeBtn}
       </div>
 
       {feed.is_explorer && (
@@ -196,7 +224,7 @@ const ClassroomPage: React.FC = () => {
 
           {weekCards.length === 0
             ? <div className="tl-empty">No cards here yet.</div>
-            : <TimelineFeed cards={weekCards} onOpen={openCard} onComplete={completeCard} onComments={(c) => navigate(`/portal/runtime/${c.id}`)} onWorkspace={(c) => navigate(`/portal/runtime/${c.id}`)} />}
+            : <TimelineFeed cards={weekCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={(c) => navigate(`/portal/runtime/${c.id}`)} onWorkspace={(c) => navigate(`/portal/runtime/${c.id}`)} />}
         </div>
 
         <aside className="tl-side">

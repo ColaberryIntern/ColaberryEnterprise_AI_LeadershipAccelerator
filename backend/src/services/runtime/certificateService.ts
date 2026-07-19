@@ -79,16 +79,97 @@ export async function verifyCertificate(filePath: string, mime: string, classNam
   }
 }
 
+/* ------------------------------------------------------------------ */
+/*  Progress-screenshot verification (for a course split across weeks)  */
+/*  When a card's completion mode is 'progress' (e.g. the first part of  */
+/*  a multi-week course, before the whole-course certificate exists) the */
+/*  student uploads a Skilljar PROGRESS screenshot instead. Lighter check.*/
+/* ------------------------------------------------------------------ */
+
+const PROGRESS_SYSTEM = 'You verify whether an uploaded image is a genuine screenshot of an online-course PROGRESS or COMPLETION view — e.g. a course page showing "X of N lessons completed", a curriculum list with completed/checkmarked lessons, or a progress bar. Be reasonably lenient for a real course-progress screenshot; reject unrelated photos, invoices, memes, or blank images. Return STRICT json.';
+
+function progressUserText(className?: string | null): string {
+  return `Is this a screenshot showing progress or completion in an online course${className ? ` (expected: "${className}" on Anthropic / SkillsJar)` : ''}? ` +
+    `Return json { "is_progress": boolean, "reason": string (one short sentence for the student explaining the decision) }.`;
+}
+
+async function classifyProgress(messages: any[]): Promise<{ valid: boolean; reason: string }> {
+  const client = getInstrumentedOpenAI({ workflow_id: 'skillsjar_progress_verify' });
+  const res = await client.chat.completions.create({
+    model: VERIFY_MODEL, temperature: 0, max_tokens: 300, response_format: { type: 'json_object' }, messages,
+  });
+  let p: any = {};
+  try { p = JSON.parse(res.choices?.[0]?.message?.content || '{}'); } catch { p = {}; }
+  const valid = p.is_progress === true;
+  const reason = typeof p.reason === 'string' && p.reason.trim()
+    ? p.reason.trim()
+    : (valid ? 'Progress verified.' : 'That does not look like a course-progress screenshot.');
+  return { valid, reason };
+}
+
+/** Verify a course-progress screenshot (image via vision, PDF via extracted text). */
+export async function verifyProgress(filePath: string, mime: string, className?: string | null): Promise<{ valid: boolean; reason: string }> {
+  const ext = path.extname(filePath).toLowerCase();
+  const isImage = mime.startsWith('image/') || ext in IMAGE_MIME_BY_EXT;
+  try {
+    if (isImage) {
+      const buf = await fs.readFile(filePath);
+      const imgMime = mime.startsWith('image/') ? mime : (IMAGE_MIME_BY_EXT[ext] || 'image/png');
+      const dataUrl = `data:${imgMime};base64,${buf.toString('base64')}`;
+      return await classifyProgress([
+        { role: 'system', content: PROGRESS_SYSTEM },
+        { role: 'user', content: [{ type: 'text', text: progressUserText(className) }, { type: 'image_url', image_url: { url: dataUrl } }] },
+      ]);
+    }
+    const buf = await fs.readFile(filePath);
+    let text = '';
+    try {
+      const mod: any = await import('pdf-parse');
+      const pdf = mod.pdf || mod.default || mod;
+      const parsed = await pdf(buf);
+      text = (parsed?.text || '').slice(0, 6000);
+    } catch { text = ''; }
+    if (!text.trim()) {
+      return { valid: false, reason: 'Could not read that file — please upload a clear screenshot (PNG/JPG) of your course progress.' };
+    }
+    return await classifyProgress([
+      { role: 'system', content: PROGRESS_SYSTEM },
+      { role: 'user', content: `${progressUserText(className)}\n\n--- Extracted text ---\n${text}` },
+    ]);
+  } catch {
+    return { valid: false, reason: 'Could not verify the file — please try another screenshot of your progress.' };
+  }
+}
+
 /**
  * Verify an uploaded certificate for a Skills Course card and record it as
  * evidence on the student's progress row. Returns the verdict; the client
  * completes the card on `valid`.
+ *
+ * When the card's course.completion mode is 'progress' (a split course's interim
+ * part), verifies a PROGRESS screenshot instead of a whole-course certificate
+ * (no co-branding — a progress screenshot is not a shareable certificate).
  */
 export async function uploadCertificate(enrollmentId: string, cardId: string, file: { path: string; filename: string; mimetype: string }): Promise<CertVerifyResult & { branded: boolean }> {
   const card = await TimelineCard.findByPk(cardId);
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
   const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
-  const className = meta.course && typeof meta.course === 'object' ? (meta.course.name || null) : null;
+  const course = meta.course && typeof meta.course === 'object' ? meta.course : null;
+  const className = course ? (course.name || null) : null;
+
+  // Progress mode: verify an interim progress screenshot, record it, no cert branding.
+  if (course && course.completion === 'progress') {
+    const pr = await verifyProgress(file.path, file.mimetype, className);
+    try {
+      const [prog] = await TimelineCardProgress.findOrCreate({
+        where: { card_id: cardId, enrollment_id: enrollmentId },
+        defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'in_progress' } as any,
+      });
+      const evidence = prog.evidence && typeof prog.evidence === 'object' ? prog.evidence : {};
+      await prog.update({ evidence: { ...evidence, progress: { file: file.filename, mime: file.mimetype, verified: pr.valid, reason: pr.reason, at: new Date().toISOString() } } });
+    } catch { /* evidence is a convenience; the verdict already stands */ }
+    return { valid: pr.valid, is_certificate: false, matches: pr.valid, reason: pr.reason, branded: false };
+  }
 
   const result = await verifyCertificate(file.path, file.mimetype, className);
 
