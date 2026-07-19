@@ -10,6 +10,21 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Announcement curriculum type — friendly weekly kickoff that scans the section (2026-07-19)
+- [x] **Announcement authored as the section-opener: live-generated "mini report" that scans the week's roster, resets when the curriculum changes; Week 0 locked hand-authored free-preview welcome**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/seeds/seedComponentAuthoring.ts` — added the `announcement` authoring entry (approved, capabilities `ai_chat`/`comments`/`likes`/`bookmarks`, thumbnail) plus `ANNOUNCEMENT_GENERATION_PROMPT`: a warm, emoji-rich, self-contained-CSS "mini report" that scans THIS WEEK'S ACTIVITIES and names the real videos/labs/courses/builds, introduces the Workspace + AI Mentor, and nudges community comments. Applied on boot (`server.ts:1741`).
+    - `backend/src/services/timeline/sectionCurriculumContext.ts` — `SECTION_ROSTER_TYPES` += `announcement` (already in `EXCLUDED_TYPES`, so it never lists itself).
+    - `backend/src/services/timeline/cardContentService.ts` — announcement/overview now (a) auto-generate on first open when empty, and (b) reset when the week's roster changes: a `section_fingerprint` (sha1 of the ordered roster) is stamped on generate and compared in `ensureFreshContent` ahead of the 30-day TTL. Locked cards (Week 0) never regenerate.
+    - Frontend casing — `RuntimeWorkspace.tsx`, `TimelineCard.tsx`, `CardDetailBody.tsx`: exempt `announcement` from `toTitleCase` so "Welcome to Your Free AI Preview" keeps its authored casing.
+    - `backend/src/data/announcementWeek0.ts` (new) — the approved hand-authored Week 0 body (fixed free-preview marketing copy).
+    - `backend/src/scripts/setupAnnouncementCards.ts` (new) — idempotent: locks Week 0 with the hand-authored content, collapses duplicate weekly announcements to one, clears stale pre-rollout content so weeks 1-12 regenerate with the new prompt.
+  - Why: Ali wants the announcement to be the friendly first card in each section that scans the week and reports what's ahead in a semi-detailed, emoji-rich, spacious style; Week 0 stays the fixed "Welcome to Your Free AI Preview" free-preview welcome (soft ecosystem pitch, no price).
+  - Verification: generation validated live on the dev instance (`accelerator-dev-backend`, DB `accelerator_dev1`) against Week 1's real 21-card roster — produced "This Week — Claude Code Foundations + Workspace" naming the actual activities (Claude Code 101, Live Class — Architecture Day, the Hands-On Lab, Build Your First Project), branded teal/indigo look, no hours. `tsc` via CI (authoritative Docker gate).
+  - Notes: NOT yet merged/deployed. Post-merge: prod deploy, then `node dist/scripts/setupAnnouncementCards.js` in the backend container to lock Week 0 + dedup weekly announcements. Week 0 hand-authored/locked; weeks 1-12 generate live on first open.
+
 ### Dashboard Revenue = real collected cash (PaySimple) + per-participant paid amount on Accelerator (2026-07-17)
 - [x] **Revenue KPI now sums actual amount_paid instead of count × $4,500; Accelerator Participants show each person's paid amount**
   - Date: 2026-07-17

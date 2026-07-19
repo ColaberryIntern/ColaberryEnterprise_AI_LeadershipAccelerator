@@ -88,7 +88,7 @@ const RuntimeWorkspace: React.FC = () => {
   // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
   // beats the card's raw title everywhere the student sees it. Curriculum titles
   // are Title-Cased for display; media/external keep their authored casing.
-  const externalTitle = isVideo || band === 'skills_jar' || ['testimonial', 'blog', 'podcast'].includes(card?.type || '');
+  const externalTitle = isVideo || band === 'skills_jar' || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card?.type || '');
   const rawTitle = card?.week_title || card?.content?.title || card?.title || '';
   const displayTitle = externalTitle ? rawTitle : toTitleCase(rawTitle);
   // Watch gate: report play heartbeats while not yet completed; the "Mark complete"
