@@ -2,7 +2,7 @@
  * Pure planner invariants for the Today Timeline v2 engagement engine (Phase 1).
  * No I/O — exercises todayFeedPlan.planSlots directly.
  */
-import { planSlots } from '../todayFeedPlan';
+import { planSlots, anchoredWeekAllowed } from '../todayFeedPlan';
 import type { AmbientProviderSlug } from '../ambientPool';
 
 const P3: AmbientProviderSlug[] = ['blog', 'podcast', 'testimonial'];
@@ -85,5 +85,18 @@ describe('planSlots — determinism', () => {
   it('same inputs → identical output', () => {
     const args = { ...base, count: 15, anchoredAvailable: 6, providers: P3 };
     expect(planSlots({ ...args })).toEqual(planSlots({ ...args }));
+  });
+});
+
+describe('anchoredWeekAllowed — free-tier / current-week gate', () => {
+  it('paid members see any week', () => {
+    for (const w of [0, 1, 5, 12, null]) expect(anchoredWeekAllowed(w, false)).toBe(true);
+  });
+  it('free/Explorer members see ONLY Week 0 curriculum', () => {
+    expect(anchoredWeekAllowed(0, true)).toBe(true);
+    for (const w of [1, 2, 5, 12]) expect(anchoredWeekAllowed(w, true)).toBe(false);
+  });
+  it('free members do not see non-week (null) curriculum', () => {
+    expect(anchoredWeekAllowed(null, true)).toBe(false);
   });
 });

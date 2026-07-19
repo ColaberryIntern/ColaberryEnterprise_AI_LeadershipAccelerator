@@ -28,7 +28,7 @@ import { getFeed, type FeedCard, type FeedVideo, type FeedBlog, type FeedContent
 import { resolve as resolveType } from './typeRegistry';
 import { isAmbient, isTodayEligible, surfaceOf } from './surfaces';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
-import { planSlots, type TodayItemKind } from './todayFeedPlan';
+import { planSlots, anchoredWeekAllowed, type TodayItemKind } from './todayFeedPlan';
 
 /** Inject one ambient item after every CADENCE anchored items. */
 const CADENCE = 2;
@@ -131,12 +131,14 @@ async function loadImpressions(enrollmentId: string): Promise<ImpressionRow[]> {
 async function loadAnchoredQueue(enrollmentId: string, placedCardIds: Set<string>): Promise<FeedCard[]> {
   try {
     const feed = await getFeed(enrollmentId);
+    const isExplorer = feed.is_explorer === true; // free tier — Week 0 curriculum only
     return feed.cards.filter(
       (c) =>
         isTodayEligible(c.type) &&
         !isAmbient(c.type) &&
         c.status !== 'locked' &&
         c.status !== 'completed' &&
+        anchoredWeekAllowed(c.week, isExplorer) &&
         !placedCardIds.has(c.id),
     );
   } catch (err: any) {
