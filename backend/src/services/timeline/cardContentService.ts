@@ -99,6 +99,15 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
     reflection: typeof parsed.reflection === 'string' ? parsed.reflection : undefined,
   };
 
+  // Roster-summary titles are DETERMINISTIC — the week's blueprint theme is the
+  // source of truth (synced from the Deep Dive), so the theme name never drifts
+  // when the model paraphrases against Claude-Code-flavored objectives. This also
+  // kills the "random title" bug (e.g. "Build Your AI Foundation").
+  if (bp?.title) {
+    if (card.type === 'announcement') content.title = `This Week — ${bp.title}`;
+    else if (card.type === 'overview') content.title = `Overview — ${bp.title}`;
+  }
+
   // Persist onto the shared card so every student sees EXACTLY this. Stamp
   // content_at so the copy expires after 30 days (see ensureFreshContent), and
   // section_fingerprint so a roster-summary card resets when the week changes.
