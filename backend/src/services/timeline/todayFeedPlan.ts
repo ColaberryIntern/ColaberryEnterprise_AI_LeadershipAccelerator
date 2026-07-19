@@ -59,3 +59,15 @@ export function planSlots(opts: {
   }
   return { slots, anchoredUsed, ambientUsed };
 }
+
+/**
+ * Access gate for ANCHORED curriculum in the Today feed. Free / Explorer members
+ * (no paid membership) never see curriculum beyond Week 0; paid members see up to
+ * the current week, which is enforced upstream by the shared feed's release/unlock
+ * gating (the composer already drops `locked` cards). Ambient content
+ * (blog/podcast/testimonial) is unaffected — free users still get the full stream.
+ */
+export function anchoredWeekAllowed(week: number | null, isExplorer: boolean): boolean {
+  if (!isExplorer) return true;   // paid: current-week bound handled by lock gating
+  return week === 0;              // free: Week 0 curriculum only
+}
