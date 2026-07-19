@@ -30,6 +30,17 @@ window.CURRICULUM_DATA = {
     { category:"overview", tags:["who for","working professionals","career changers"],
       q:"Who is the curriculum built for?",
       a:"Working professionals, career changers, builders, and technical professionals who want to go from using AI to architecting it. No degree and no tests are required to begin, and the difficulty ramps as your foundation grows." },
+    { category:"overview", tags:["philosophy","architecture","direct evaluate approve","approach","judgment"],
+      q:"What is Colaberry's architecture philosophy?",
+      a:"In an AI world the scarce skill is not building the system, it is architecting it. AI now does most of the doing, so the Accelerator trains the one skill that outlasts the tooling: the judgment to direct, evaluate, and approve AI-built work across every discipline of the software lifecycle. You learn enough of each discipline to judge it, not to do it, and by the end you can architect a complete AI solution the business can trust.",
+      detail:"The through-line is that a real system must be traceable end to end, from requirement to design to build to test to run to govern, and the architect is the one who holds that thread. The one-page overview linked here explains the philosophy in full.",
+      ref:"downloads/colaberry-architecture-philosophy.html", refLabel:"The architecture philosophy (one-pager)" },
+    { category:"overview", tags:["direct","evaluate","approve","architect role","three verbs"],
+      q:"What does it mean to direct, evaluate, and approve?",
+      a:"An engineer does the task. An architect directs it by setting the intent and the definition of done, evaluates it by judging the output against what good looks like, and approves it by owning the gate. As AI absorbs the doing, these three verbs become the entire job, and they are the loop you practice every week when you direct an AI to build a real deliverable and then review it." },
+    { category:"overview", tags:["disciplines","twenty percent","arc","lifecycle","synthesis","deep dive"],
+      q:"Why does the program cover so many disciplines?",
+      a:"A real system passes through many hands: business analysis, architecture, project management, engineering, UX, quality, integration, AI, data, DevOps, and governance. The architect is accountable for all of them at once. So each week is a deep dive into one discipline and the twenty percent of it you need to direct that role, evaluate their work, and approve it, building toward the final week where you synthesize them all into one buildable, governable solution." },
 
     // intensives
     { category:"intensives", tags:["structure","four intensives","weeks","phases"],

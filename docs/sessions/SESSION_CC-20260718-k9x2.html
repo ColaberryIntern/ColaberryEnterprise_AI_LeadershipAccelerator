@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, July 19, 2026 at 2:40 PM</div>
-    <div><span class="sid">CC-20260718-k9x2</span><span class="count">5 changes</span></div>
+    <div class="meta">Generated Sunday, July 19, 2026 at 4:58 PM</div>
+    <div><span class="sid">CC-20260718-k9x2</span><span class="count">8 changes</span></div>
   </header>
   <main>
     
@@ -132,6 +132,51 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #409 → prod at HEAD 5e4c66b5; backend tsc + nginx CRA builds both passed. Reseed pushed the reskinned guides; DB confirms both cards carry BRAND (#FB2832), the scroll-position read-tracker (&quot;scroll-position&quot;), and the host contract (&quot;deepdive-host&quot;); served bundle contains the `dd:progress` host-persistence key. Upload regression re-run on the live backend: 9/9 PASS (100 once, idempotent, gate pass/block, non-html reject). Both guides&#39; JS parses clean (vm.Script), round-trip base64 OK, &lt; 64 KB, zero emoji.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Structural color = berry blue (authoritative), cherry = fixed accent, green = progress — matches the brand hierarchy. Roboto loads via Google Fonts @import with a system fallback (sandboxed iframe still fetches fonts; degrades gracefully).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Read progress now truly carries drawer→workspace (the prior host-persistence fix had a race that wiped it)</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`useDeepDiveHost` persisted the guide&#39;s progress on every tick by OVERWRITING localStorage with the posted ids. On workspace load the guide&#39;s `seen` is empty, so its FIRST render posts `ids:[]` BEFORE the `ready`→`restore` round-trip — which overwrote the stored `[s1,s2,s3]` with `[]`, so restore then sent back nothing and the guide started over. Fix: persistence is now MONOTONIC — the host UNIONs the posted ids with what&#39;s already stored (`new Set(prev.seenIds.concat(ids))`) and OR-s `copied`, so an empty initial render can never erase saved progress. Restore then finds the real ids and re-checks the sections.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #413 → prod at HEAD d21a7faf; nginx CRA build passed (tsc gate), new bundle main.65df4491.js served with the `dd:progress` persistence key; site 200. Logic verified by trace (empty-first-render no longer clobbers stored ids; restore re-checks). Frontend-only (useDeepDiveHost.ts) — no backend/base64/reseed; guides unchanged. Browser retest of drawer→workspace carry-over is Ali&#39;s to confirm.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">[[reference_deep_dive_field_guide_platform]] Key lesson: a host that mirrors an iframe&#39;s self-reported progress must treat progress as accumulate-only, or the iframe&#39;s fresh-load empty state clobbers the restore it is about to receive.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Three Week-1 fixes from Ali&#39;s screenshots</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">&lt;FILL: prod backend+nginx build + reseed&gt;. wk1 JS parses clean (vm.Script), base64 round-trip OK, 56991 bytes (&lt; 64 KB), zero `completeBtn`/&quot;Business Analysis&quot; left.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Auto-return scoped to `isDeepDive` only (other card types keep the stay-on-workspace + readiness behavior). Weeks 2-12 (same format) are the next build — arc from the Wk0 roadmap: Solution Architecture, Project Management, Software Engineering, UX, QA, Integration, AI Systems, Data Architecture, DevOps, Ops &amp; Governance, AI Solution Architecture.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>All 11 remaining Deep Dive Field Guides (Wk2 Solution Architect → Wk12 AI Solution Architect capstone) authored in the Week-1 format and seeded into the canonical program&#39;s Learn section</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #426 → prod at HEAD 18053a51; backend tsc (over the 11 new base64 imports) + nginx builds passed. Reseed created 9 new Learn cards + filled the 2 stray empty deep_dive cards (wk4 fa0f8624, wk11 838e6f88) — no duplicates. DB confirms all 13 weeks: bucket `learn`, published, role titles, 55.9-63.2 KB body_html (&lt; 64 KB), requires_field_guide_upload true (2-12) / false (wk0). Live-card spot-check (wk2/6/12): MACHINERY-OK (deepdive-host + scroll-position read-tracker + #FB2832 brand + uploadBtn all present). All 11 validated by buildWeeks (15 sections, machinery byte-identical to wk1, JS parses, no emoji, no double-escape). Renders via the already-verified deep_dive drawer+workspace arm; upload/points/gate covered by the prior 9/9 backend smoke.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">11 content specs authored by parallel subagents against a shared brief; oversized ones (wk9/11/12 near 64 KB) trimmed to &lt; 58.5 KB. The generator makes future weeks / edits a one-file change. [[reference_deep_dive_field_guide_platform]]</span></div>
           
         </div>
       </article>
