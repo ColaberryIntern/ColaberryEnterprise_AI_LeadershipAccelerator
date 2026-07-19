@@ -9310,3 +9310,10 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: Reverted the just-added "Get your Claude Code subscription" onboarding task per Ali — free/Explorer accounts shouldn't be asked to get Claude Code (that's for people starting the class). Removed the step, the claudeDone localStorage state, the markClaudeCode handler + CLAUDE_CODE_URL, and the Claude branches in nextStepLabel + the band CTA. Onboarding checklist is now account (done) + upload résumé; Setup is x/2. State-aware band status line retained. Frontend-only; TodayShell.tsx.
   - Verification: frontend tsc --noEmit 0 errors in TodayShell.tsx (junctioned typecheck). nginx-only deploy; CI + prod smoke on deploy.
   - Notes: Deploy nginx only.
+
+- [x] Learning Runtime workspace: carry over the portal light/dark theme (was always light)
+  - Date: 2026-07-19
+  - Session: CC-20260718-9m4x
+  - What changed: The per-card workspace (/portal/runtime/:cardId, RuntimeWorkspace) renders its own chrome (not PortalShell) and never read the theme, so it always used the light runtimeCss palette even when the portal was in dark mode. Fix: (1) runtimeKit.tsx — added a .rt[data-theme="dark"] block flipping the tokenized palette to the portal's dark tokens (#151515/#1E1E1E/#272727/#F4F4F4/#3A3A3A), with explicit overrides for the spots that reuse --ink as a DARK surface (AI-mentor user bubble → berry, evidence bar → #0F1214) so they don't invert, plus dark tweaks for comment meta / warn list / reader-frame bg. (2) RuntimeWorkspace.tsx — reads localStorage 'te-theme' and stamps data-theme on the .rt root (drives runtimeCss) + on <html> via useEffect (drives :root-scoped child panels + a direct page load). Frontend-only.
+  - Verification: frontend tsc --noEmit 0 errors in RuntimeWorkspace.tsx / runtimeKit.tsx (junctioned typecheck). nginx-only deploy; CI + prod smoke on deploy.
+  - Notes: The lesson-reader iframe keeps its own (light) document styling — out of scope; only the workspace chrome themes. Deploy nginx only.
