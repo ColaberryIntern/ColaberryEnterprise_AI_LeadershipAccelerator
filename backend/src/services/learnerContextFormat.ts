@@ -12,6 +12,7 @@
  * mentor) render, so a student's persona, competency, assessment history and
  * project readiness are described one way, in one place.
  */
+import { renderMemoryLine, DistilledMemory } from './runtime/learnerMemoryFormat';
 
 export interface LearnerIdentity { full_name: string | null; status: string | null; cohort: string | null; readiness: number | null; }
 export interface LearnerPersona { company?: string | null; industry?: string | null; role?: string | null; goal?: string | null; ai_maturity?: number | null; use_case?: string | null; }
@@ -25,6 +26,7 @@ export interface LearnerContext {
   competency: LearnerCompetency;
   assessments: LearnerAssessments;
   project: LearnerProject | null;
+  memory?: Partial<DistilledMemory> | null; // the evolving profile (Phase 3), null if not distilled yet
 }
 
 const clip = (s: string, n = 120) => (s || '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -46,6 +48,7 @@ export function emptyLearnerContext(): LearnerContext {
     competency: { proficiency_pct: null, skills_mastered: 0, total_skills: 0, top_gaps: [] },
     assessments: { evals_taken: 0, evals_passed: 0, avg_eval_pct: null, weak_competencies: [] },
     project: null,
+    memory: null,
   };
 }
 
@@ -107,6 +110,10 @@ export function renderLearnerContext(ctx: LearnerContext, budget = 900): string 
     if (pr.requirements_pct != null) seg.push(`requirements ${Math.round(pr.requirements_pct)}% complete`);
     lines.push(`- Project ${seg.join(', ')}.`);
   }
+
+  // longitudinal memory (Phase 3) — what the mentor has learned over weeks
+  const memLine = renderMemoryLine(ctx.memory);
+  if (memLine) lines.push(`- ${memLine}`);
 
   if (!lines.length) return '';
   const header = 'STUDENT PROFILE (what you know about this learner so far — personalize with it; never use it to do their graded work):';
