@@ -10,6 +10,16 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Skills Course workspace — style the panel like the drawer + drop the hero image (2026-07-19)
+- [x] **The Skills Course workspace panel now renders styled like the right-side drawer (was a giant unstyled icon) and no longer shows a redundant hero image**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx` — (a) wrapped the workspace `SkillsJarPanel` in a `.tl-de` container so it picks up the Design-E palette + the `tld-jar*` styling (defined in `timeline.css`, scoped under `.tl-de`); without it the panel rendered unstyled (a huge raw graduation-cap icon). (b) Skip the workspace hero image for `skills_jar` (the marbles picture at the top was redundant).
+  - Why: Ali — the Skills Course workspace should look like the right-side panel (just widened) and not show the picture at the top.
+  - Verification: Frontend `tsc` via CI. Post-deploy (nginx): Enter workspace on a Skills Course card — the branded SkillsJar panel + Open-in-course + upload should look like the drawer, wider, with no top image.
+  - Notes: frontend-only → nginx rebuild. The workspace column (~820px) is wider than the ~520px drawer, so it reads as the same panel, widened.
+
 ### Anthropic Skills Course — tile interactions + the workspace now carries the course (2026-07-19)
 - [x] **Skills Course tile: click the picture → drawer, chevron → the course, removed the extra "Open" overlay; and the WORKSPACE now renders the course panel instead of a generic fallback**
   - Date: 2026-07-19
