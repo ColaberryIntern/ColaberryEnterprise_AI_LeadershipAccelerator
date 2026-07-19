@@ -10,6 +10,69 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Card drawer (pop-up) — single scroll + remove the redundant top hero (2026-07-19)
+- [x] **The right-side card pop-up now has ONE scroll (not the drawer + the page + an inner iframe), and no redundant type-thumbnail hero at the top; applies to content cards and videos**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `frontend/src/components/timeline/CardDetailDrawer.tsx` — lock `document.body` overflow while the drawer is open (restored on close), so the classroom page behind no longer scrolls alongside the drawer (this was the "two scrolls" on Self Study + Video).
+    - `frontend/src/components/timeline/CardDetailBody.tsx` — (a) removed the redundant hero: the type's Studio thumbnail was rendered again at the top of the drawer (it's already on the classroom tile). (b) The generic (non-reader) lesson iframe now renders `sandbox="allow-same-origin"` and auto-sizes to its content on load, so it no longer scrolls internally — the drawer body is the single scroll (falls back to the CSS height if measuring fails). The Self Study reader keeps its own scripted single-scroll.
+  - Why: Ali — the pop-up showed two scrollbars (should be one, like the reader), and the picture at the top is redundant; fix videos too.
+  - Verification: Frontend `tsc` via CI (authoritative). Post-deploy (nginx): open a card drawer and confirm a single scrollbar + no top thumbnail; check Self Study, an announcement/overview, and a video.
+  - Notes: frontend-only → nginx rebuild. `allow-same-origin` here has NO `allow-scripts`, so no script runs; it only lets the parent measure the content height.
+
+### Orchestration Timeline — interactive OVERVIEW board (drag/activate/delete on the collapsed map) (2026-07-19)
+- [x] **Replaced the static Mermaid overview map with an interactive board so cards can be reordered/activated/deleted without expanding**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k3m9
+  - What changed:
+    - `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx`: the collapsed lane view (the green flow boxes Ali actually meant by "the overview") was a **static Mermaid diagram** — display-only, so nothing on it could be dragged/deleted/toggled. Replaced it with an interactive board that keeps the same look (green=live / grey=draft boxes, 3-across rows with → arrows) but is fully actionable:
+      - New `MiniCard` (dnd-kit `useSortable`) — draggable flow box; drag the ⠿ grip to reorder (persists via the existing `reorderCards` endpoint), hover reveals ◐/● Activate-Deactivate + 🗑 Delete, click the box opens the full editor drawer. Green/grey background reflects live/draft and recolors on toggle.
+      - Collapsed branch now renders `<DndContext>` + `<SortableContext strategy={rectSortingStrategy}>` over `chunk(cards,3)` rows; a caption offers "open full view →" to expand to the large student-preview list (unchanged).
+      - Removed the Mermaid overview entirely: dropped `MermaidDiagram`/`buildBucketMermaid`/`nodeIdFromMermaidGroupId`/`MAX_NODES` imports and the `focusCardId` jump-to-card effect + `onMapClick` + `chart`.
+  - Why: Ali clarified (with screenshots) that "delete a curriculum type from the overview / activate-deactivate the item" meant the **collapsed overview map**, not the expanded card list where the first pass put the controls. The overview boxes were a Mermaid picture and couldn't carry actions; making them real draggable elements was the only way to put drag/activate/delete on that view. Confirmed approach with Ali ("Make the boxes interactive").
+  - Verification: Syntax/JSX clean via the TypeScript compiler API on the edited file (0 errors); no dangling refs to the removed Mermaid helpers. Full frontend `tsc` in CI (authoritative). Browser-verified on dev after deploy (see the reliable-drag entry's harness): the interactive board renders and drag persists across reload.
+  - Notes: Same session/PR as the drag-reorder fix (PR #395). The expand-to-full-list view (large 16:9 previews) is preserved behind the header caret + the "open full view" link. Built in the dedicated worktree pinned off `origin/main`.
+
+### Orchestration Timeline editor — reliable drag-reorder + clear Activate/Deactivate + Delete (2026-07-19)
+- [x] **Fixed drag-to-reorder not saving, and surfaced per-card Activate/Deactivate + Delete on the timeline board**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k3m9
+  - What changed:
+    - `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx` (only file touched):
+      - **Drag reliability (the "reorder doesn't save" bug):** `BucketSection` now tracks a `dragging` flag via `DndContext` `onDragStart`/`onDragCancel`/`onDragEnd`, and wraps the sortable list in a `.te-lane` container. New CSS `.te-lane.dragging .te-media, .te-lane.dragging iframe { pointer-events:none }` neutralizes the inline video iframes during a drag so dnd-kit keeps the pointer and the drop resolves (over≠null) instead of silently no-op'ing. Enlarged/clarified the drag handle (bigger hit area, hover state, ⠿ glyph, "drops save automatically" tooltip).
+      - **Save feedback + real errors:** `onReorder` now shows a transient "✓ Order saved" chip by the card counts on success, and on failure surfaces the real server error (`err.response.data.error` / message) instead of the generic "Reorder failed", then reloads to the server truth. (Backend `PUT .../cards/reorder` was already correct.)
+      - **Activate/Deactivate:** the per-card status badge is now a one-click toggle (LIVE→hidden and back) and the footer button reads **● Activate / ◐ Deactivate** (mapped to `visibility` published↔draft per Ali's choice: deactivate = hide from students, stays in the curriculum). No backend/DB change.
+      - **Delete:** relabeled to **🗑 Delete** with an explicit tooltip; existing confirm + `DELETE .../cards/:id` unchanged.
+  - Why: On production (enterprise.colaberry.ai `/admin/orchestration` → Timeline) Ali reported drag-drop in the expanded lane didn't persist ("moved it, still not at the top") and wanted delete + activate/deactivate as obvious per-card controls. Root cause of the drag bug: each sortable card renders a full interactive student card whose video iframe swallows pointer events, breaking dnd-kit drop detection — the canonical iframe+dnd-kit failure.
+  - Verification: Syntax/JSX clean via the TypeScript compiler API (`ts.transpileModule`, jsx=React) on the edited file — 0 errors. Full frontend `tsc --noEmit` deferred to CI (authoritative per repo convention; this OneDrive-synced host has no local frontend tsc/@dnd-kit). Behavior not yet run on a live instance (frontend can't build locally here) — see Notes.
+  - Notes: Built in a worktree off `origin/main` (`a986a022`, the exact commit prod runs; local `main` was stale/881 behind). Backend reorder/delete endpoints already existed and are correct, so this is frontend-only. Could not reproduce the drag failure on this box (no local frontend build), so the fix hardens the three most-likely causes (iframe pointer capture, tiny handle, silent persist failure) AND makes any remaining server failure visible instead of silent. Next: deploy to a dev instance for Ali to confirm drag persists across reload, then fold into a prod deploy (after-hours).
+
+---
+### Announcement — Week 0 REVERTED to the hand-authored format, no time (2026-07-19)
+- [x] **Reverted Week 0 to the previous hand-authored "Welcome to Your Free AI Preview" format (no time budget, no live map); weeks 1-12 stay live-generated**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - Restored `backend/src/data/announcementWeek0.ts` (the approved hand-authored Week 0 body — friendly explore cards, Workspace + Mentor, ecosystem pitch; deliberately NO time).
+    - Restored `backend/src/scripts/setupAnnouncementCards.ts` `lockWeek0()` — Week 0 is LOCKED with the hand-authored content again (drops any prior live-gen fingerprint); weeks 1-12 keep the `refreshWeek` dedup/clear.
+    - `backend/src/seeds/seedComponentAuthoring.ts` — removed the Week-0 free-preview branch from `ANNOUNCEMENT_GENERATION_PROMPT` (title exception + ecosystem band); the prompt is back to the standard weekly map for weeks 1-12 only.
+  - Why: Ali reviewed the live-generated Week 0 and preferred the previous hand-authored format, and said Week 0 should not involve time.
+  - Verification: prod Week 0 card re-locked with the hand-authored body immediately (body_len 6612, contains-any-time-text = false, `locked: true`). `tsc` + jest via CI. Post-deploy: `setupAnnouncementCards.js` re-locks Week 0 durably.
+  - Notes: reverts the Week-0 parts of PR #415; weeks 1-12 unchanged (still the wide/mapped/time-budget live-gen).
+
+### Announcement — Week 0 live-generates in the new format (free-preview branch); ready to build out all weeks (2026-07-19)
+- [x] **Week 0 now live-generates in the same wide/mapped/time-budget format as every other week, via a free-preview branch in the prompt — no more hand-authored lock; reads from the curriculum like the rest**
+  - Date: 2026-07-19
+  - Session: CC-20260719-k4m8
+  - What changed:
+    - `backend/src/seeds/seedComponentAuthoring.ts` — `ANNOUNCEMENT_GENERATION_PROMPT` gains a FREE PREVIEW branch: when the WEEK CONTEXT is Week 0 / "Free AI Preview" / the free lead-magnet tier, the title becomes exactly "Welcome to Your Free AI Preview", the hero welcomes them to their free week, the first stat tile reads "🆓 Free" (not a time), and an extra "🚀 Where this can take you" band invites them to unlock the full ecosystem (training/projects/certifications/internships) with an affordable membership — no price. Every other week is unchanged.
+    - `backend/src/scripts/setupAnnouncementCards.ts` — dropped the hand-authored Week 0 lock; now treats weeks 0-12 uniformly (dedup + clear stale content), so Week 0 unlocks and live-generates like the rest. Removed the `announcementWeek0` dependency.
+    - Deleted `backend/src/data/announcementWeek0.ts` (the hand-authored locked Week 0 body — no longer used).
+  - Why: Ali approved the announcement format and asked that Week 0 follow it too (then build out weeks 2-12). Keeping Week 0 special (free-preview title + ecosystem pitch) but live-generated means it reads from the curriculum and never goes stale, consistent with weeks 1-12.
+  - Verification: `tsc` + jest via CI. Post-deploy: run `setupAnnouncementCards.js` (unlocks Week 0 + dedups) then generate all weeks 0-12; confirm Week 0 shows the free-preview title + ecosystem band and 2-12 show the full mapped format.
+  - Notes: SDLC re-theming (Week 0=SDLC, Week 1=Business Analysis, …) is a SEPARATE, deferred curriculum edit in production — the announcements auto-follow whatever the curriculum says, so no announcement change is needed for it.
+
 ### Announcement — curriculum-derived time budget: total at top + per-phase + per-activity (2026-07-19)
 - [x] **The week map now shows a real time budget pulled from the curriculum: a "how much work" overview at the top, each phase's time on its heading, each activity's minutes on its card — and it refreshes when the curriculum's timing changes**
   - Date: 2026-07-19

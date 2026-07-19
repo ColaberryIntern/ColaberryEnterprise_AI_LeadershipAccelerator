@@ -302,15 +302,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         )}
 
-        {/* The type's fixed picture (Studio thumbnail) as the card hero — every
-            card of the type shares the image; only the title varies. Video-ish
-            bands and Skills Course keep their own visual instead. An explicit
-            card image (blog cover) wins below. */}
-        {!isVideo && !isSkillsJar && !card.image && card.type_thumbnail && (
-          <div className="tld-player">
-            <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', borderRadius: 12 }} />
-          </div>
-        )}
+        {/* The type's Studio thumbnail is NOT repeated at the top of the drawer —
+            it already shows on the classroom tile, so a hero here is redundant
+            (Ali 2026-07-19). Video/blog keep their own visual below. */}
 
         {/* Non-video items with their OWN image (blog cover etc.) show it as a hero. */}
         {!isVideo && card.image && (
@@ -372,7 +366,22 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}
-            {content.body_html && <iframe className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'} title="Lesson content" sandbox={isReader ? 'allow-scripts' : ''} srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)} />}
+            {content.body_html && <iframe
+              className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'}
+              title="Lesson content"
+              // Generic content: allow-same-origin (no scripts) so we can size the
+              // frame to its content and avoid a second inner scroll — the drawer
+              // is the single scroll. The reader keeps its own scripted scroll.
+              sandbox={isReader ? 'allow-scripts' : 'allow-same-origin'}
+              srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)}
+              onLoad={isReader ? undefined : (e) => {
+                const f = e.currentTarget;
+                try {
+                  const h = f.contentWindow?.document.body?.scrollHeight;
+                  if (h) f.style.height = `${h + 4}px`;
+                } catch { /* cross-origin/measure failed — keep the CSS height fallback */ }
+              }}
+            />}
             {Array.isArray(content.questions) && content.questions.length > 0 && (
               <><div className="tld-sublab">Questions to consider</div>
                 <ul className="tld-alist">{content.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></>
