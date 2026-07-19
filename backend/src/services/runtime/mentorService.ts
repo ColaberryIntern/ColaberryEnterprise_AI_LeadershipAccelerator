@@ -8,8 +8,10 @@
 import { chatText, chatJson } from './runtimeAi';
 import MentorTurn from '../../models/MentorTurn';
 import { buildMentorContext, MentorContext } from './mentorContext';
-import { getLearnerContextBlock } from '../learnerContextService';
+import { getLearnerContext } from '../learnerContextService';
+import { renderLearnerContext } from '../learnerContextFormat';
 import { loadConversation } from './mentorMemory';
+import { adaptiveInstruction } from './mentorAdaptive';
 
 export type MentorMode = 'ask' | 'hint' | 'explain' | 'review';
 
@@ -37,7 +39,13 @@ export async function coach(enrollmentId: string, card: CardCtx, mode: MentorMod
   // The shared learner-360 (persona, competency, assessment history, project) —
   // this is what makes the mentor smarter over time. Never throws (returns '' on
   // failure). Kick it off in parallel with the card-scoped context below.
-  const profileP = getLearnerContextBlock(enrollmentId);
+  // Typed learner-360 (persona, competency, assessment history, project, distilled
+  // memory) — fetched once so we can both RENDER it and read maturity/mastery for
+  // adaptive tone. Never breaks the turn (falls back to no-360 on error).
+  const ctxP = getLearnerContext(enrollmentId).catch((e: any) => {
+    console.warn(JSON.stringify({ level: 'warn', service: 'runtime_mentor', event: 'learner_360_failed', enrollment_id: enrollmentId, error_class: e?.name || 'Error', message: String(e?.message || e) }));
+    return null;
+  });
   // Durable conversation memory: read prior MentorTurns back so context survives
   // page reloads and return visits (never throws — empty window on failure).
   const memoryP = loadConversation(enrollmentId, card.id);
@@ -47,8 +55,9 @@ export async function coach(enrollmentId: string, card: CardCtx, mode: MentorMod
   } catch (e: any) {
     console.warn(JSON.stringify({ level: 'warn', service: 'runtime_mentor', event: 'context_assembly_failed', card_id: card.id, error_class: e?.name || 'Error', message: String(e?.message || e) }));
   }
-  const profile = await profileP;
+  const ctx = await ctxP;
   const convo = await memoryP;
+  const profile = ctx ? renderLearnerContext(ctx) : '';
   const profileBlock = profile ? `\n\n${profile}` : '';
   const memoryBlock = convo.summary ? `\n\nEARLIER IN THIS CONVERSATION: ${convo.summary}.` : '';
   const work = learner.block
@@ -57,7 +66,17 @@ export async function coach(enrollmentId: string, card: CardCtx, mode: MentorMod
   const lock = learner.graded_lock
     ? '\nThis is a graded Evaluation the student can retake: do NOT reveal the correct option for any question they missed — coach them toward it with a question or a hint.'
     : '';
-  const system = `${SYSTEM}${profileBlock}${memoryBlock}\n\nActivity: "${card.title}" (${card.student_label || card.type}). ${card.description ? `Context: ${card.description}` : ''}${work}${lock}\n${modeInstruction(mode)}`;
+  // Adaptive coaching register: meet the student at their level, and get extra
+  // supportive when they look stuck (many prior turns on this card, or a graded lock).
+  const priorTurns = Math.floor((convo.recent.length || 0) / 2);
+  const struggling = priorTurns >= 4 || learner.graded_lock;
+  const adaptive = adaptiveInstruction({
+    aiMaturity: ctx?.persona?.ai_maturity ?? null,
+    proficiencyPct: ctx?.competency?.proficiency_pct ?? null,
+    struggling,
+  });
+  const adaptiveBlock = adaptive ? `\n${adaptive}` : '';
+  const system = `${SYSTEM}${profileBlock}${memoryBlock}\n\nActivity: "${card.title}" (${card.student_label || card.type}). ${card.description ? `Context: ${card.description}` : ''}${work}${lock}${adaptiveBlock}\n${modeInstruction(mode)}`;
   // Prefer the DB-durable conversation (survives reloads); fall back to the
   // client-sent history only when there are no stored turns yet.
   const priorMsgs = convo.recent.length ? convo.recent : history.slice(-6);
