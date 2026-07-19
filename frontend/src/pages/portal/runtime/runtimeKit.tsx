@@ -39,6 +39,10 @@ export const runtimeCss = `
 .rt-modes{display:flex;gap:6px;padding:0 14px 8px}
 .rt-chip{font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:5px 11px;border:1px solid var(--line);background:var(--paper);border-radius:999px;cursor:pointer;color:var(--muted)}
 .rt-chip:hover{border-color:var(--berry);color:var(--berry)}.rt-chip:disabled{opacity:.5;cursor:not-allowed}
+.rt-nudge{margin:0 14px 10px;padding:11px 13px;border:1px solid var(--berry);background:var(--berry-soft);border-radius:12px;display:flex;flex-direction:column;gap:9px}
+.rt-nudge-msg{font-size:13.5px;line-height:1.5;color:#1c3d49}
+.rt-nudge-actions{display:flex;gap:7px;flex-wrap:wrap}
+.rt-nudge-actions .rt-btn{font-size:12.5px;padding:7px 12px}
 .rt-ask{display:flex;gap:7px;padding:12px 14px;border-top:1px solid var(--line-soft)}
 .rt-in{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13.5px;font-family:inherit;background:var(--paper);color:var(--ink)}
 .rt-in.mono{font-family:var(--mono);font-size:13px}
@@ -84,6 +88,7 @@ export const runtimeCss = `
 }
 .rt[data-theme="dark"] .rt-msg.user{background:var(--berry);color:#fff}
 .rt[data-theme="dark"] .rt-msg.assistant{color:#CFE0E6}
+.rt[data-theme="dark"] .rt-nudge-msg{color:#CFE0E6}
 .rt[data-theme="dark"] .rt-cwho{color:var(--muted)}
 .rt[data-theme="dark"] .rt-bar{background:#0F1214}
 .rt[data-theme="dark"] .rt-list.warn li{color:#E8920C}

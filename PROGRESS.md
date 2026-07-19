@@ -9482,6 +9482,17 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: jest `mentorNudgeFormat.test.ts` 10/10; `tsc --noEmit` clean for our source. Backend-only. Landed together with Phase 5 (nudges) in the same PR/deploy.
   - Notes: Branch `workstream/mentor-proactive-nudge` (folds nudges + personalization). Deployed to prod + dev.
 
+### AI Mentor Intelligence — Nudge UI: mentor speaks first in the runtime workspace — 2026-07-19
+- [x] The proactive-nudge backend now has a front end: when a student is stuck, the AI Mentor panel greets them first with a warm offer + one-click help
+  - Date: 2026-07-19
+  - Session: CC-20260718-a9k2
+  - What changed (frontend, runtime workspace):
+    - `runtimeApi.ts` — new `Nudge` type + `nudge(cardId)` client for `GET /api/portal/runtime/cards/:cardId/nudge`.
+    - `RuntimeWorkspace.tsx` — new `nudge` state; on card open it fetches the nudge (reset on card change, fail-safe), and when a message comes back the mentor panel renders a highlighted proactive bubble above the shortcut chips: the message (already personalized by first name), a **"Yes, walk me through it"** button that dismisses the nudge and starts a real mentor turn (`ask('ask', 'Yes — walk me through the next step…')`, using the full 360/answers/memory context), and a **"Not now"** dismiss. Shown once per card visit.
+    - `runtimeKit.tsx` — themed `.rt-nudge` styles (berry accent, matches the panel) + a dark-mode text override.
+  - Why: Ali asked to build the nudge UI. Completes MENTOR-14 end to end — the mentor no longer only reacts, it reaches out. Default behavior chosen: on-open trigger, once-per-visit, deterministic template message (no LLM cost until the student clicks "Yes"). [[project_ai_mentor_intelligence_build]]
+  - Verification: manual review (type-safe, eslint-clean — no unused/hooks/disable issues); local frontend tsc/eslint blocked by the junction limitation (jsx-runtime resolves only in a real npm install — see [[reference_frontend_prod_build_needs_docker_not_junction]]), so validated via CI Frontend typecheck + the nginx Docker build (dev-first, then prod).
+  - Notes: Branch `workstream/mentor-nudge-ui` off `main` (2a88ac07). Frontend-only → nginx deploy. Backend nudge endpoint already live from the prior PR.
 ### Portal login embed posted to Basecamp Reference Kits + regeneration script committed (2026-07-19)
 - [x] **Version-controlled the portal-login embed as a Reference Kit (BC vault ticket + idempotent post script)**
   - Date: 2026-07-19
