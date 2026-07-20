@@ -24,11 +24,11 @@
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
-import { getFeed, type FeedCard, type FeedVideo, type FeedBlog, type FeedContent } from './timelineService';
+import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineService';
 import { resolve as resolveType } from './typeRegistry';
-import { isAmbient, isTodayEligible, surfaceOf } from './surfaces';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
-import { planSlots, anchoredWeekAllowed, type TodayItemKind } from './todayFeedPlan';
+import { planSlots, type TodayItemKind } from './todayFeedPlan';
+import { gatherAnchored } from './todayAnchoredSources';
 
 /** Inject one ambient item after every CADENCE anchored items. */
 const CADENCE = 2;
@@ -72,29 +72,6 @@ interface ImpressionRow {
   interacted_at: Date | null;
 }
 
-function anchoredItemFromCard(fc: FeedCard, position: number): TodayFeedItem {
-  return {
-    position,
-    kind: 'anchored',
-    ref: `card:${fc.id}`,
-    surface: surfaceOf(fc.type) ?? 'class',
-    type: fc.type,
-    render_band: fc.render_band,
-    card_id: fc.id,
-    title: fc.title ?? null,
-    subtitle: fc.subtitle ?? null,
-    description: fc.description ?? null,
-    image: fc.image ?? fc.type_thumbnail ?? null,
-    video: fc.video ?? null,
-    blog: fc.blog ?? null,
-    content: fc.content ?? null,
-    week: fc.week ?? null,
-    estimated_time: fc.estimated_time ?? null,
-    status: fc.status ?? null,
-    interacted: false,
-  };
-}
-
 function ambientItemFrom(a: AmbientItem, position: number): TodayFeedItem {
   const def = resolveType(a.provider);
   return {
@@ -127,26 +104,6 @@ async function loadImpressions(enrollmentId: string): Promise<ImpressionRow[]> {
   );
 }
 
-/** Anchored curriculum cards eligible for Today, in feed order, minus what's placed. */
-async function loadAnchoredQueue(enrollmentId: string, placedCardIds: Set<string>): Promise<FeedCard[]> {
-  try {
-    const feed = await getFeed(enrollmentId);
-    const isExplorer = feed.is_explorer === true; // free tier — Week 0 curriculum only
-    return feed.cards.filter(
-      (c) =>
-        isTodayEligible(c.type) &&
-        !isAmbient(c.type) &&
-        c.status !== 'locked' &&
-        c.status !== 'completed' &&
-        anchoredWeekAllowed(c.week, isExplorer) &&
-        !placedCardIds.has(c.id),
-    );
-  } catch (err: any) {
-    console.warn('[todayFeedComposer] anchored queue failed (ambient-only fallback):', err?.message?.split('\n')[0]);
-    return [];
-  }
-}
-
 async function persistImpression(enrollmentId: string, it: TodayFeedItem, provider: string | null): Promise<void> {
   await sequelize.query(
     `INSERT INTO today_feed_impressions
@@ -167,7 +124,7 @@ async function persistImpression(enrollmentId: string, it: TodayFeedItem, provid
 async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need: number): Promise<TodayFeedItem[]> {
   const anchoredPlaced = existing.filter((r) => r.kind === 'anchored').length;
   const ambientPlaced = existing.filter((r) => r.kind === 'ambient').length;
-  const placedCardIds = new Set(existing.filter((r) => r.card_id).map((r) => String(r.card_id)));
+  const placedRefs = new Set(existing.map((r) => r.ref));
   const placedMedia: Record<AmbientProviderSlug, string[]> = { blog: [], podcast: [], testimonial: [] };
   for (const r of existing) {
     if (r.kind === 'ambient' && r.provider && r.ref.includes(':')) {
@@ -176,7 +133,7 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     }
   }
 
-  const anchoredQueue = await loadAnchoredQueue(enrollmentId, placedCardIds);
+  const anchoredQueue = await gatherAnchored(enrollmentId, placedRefs);
   const plan = planSlots({
     count: need,
     anchoredAvailable: anchoredQueue.length,
@@ -201,8 +158,8 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     let item: TodayFeedItem | null = null;
     let provider: string | null = null;
     if (slot.kind === 'anchored') {
-      const fc = anchoredQueue[anchoredCur++];
-      if (fc) item = anchoredItemFromCard(fc, pos);
+      const cand = anchoredQueue[anchoredCur++];
+      if (cand) item = { ...cand, position: pos };
     } else if (slot.provider) {
       const a = ambientQueues[slot.provider].shift();
       if (a) { item = ambientItemFrom(a, pos); provider = slot.provider; }

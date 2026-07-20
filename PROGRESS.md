@@ -9787,3 +9787,16 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: P1b-2 of `docs/PROJECT_BACKEND_PLAN.md` — student projects now durably persist server-side (survive localStorage clears; available to Project→Today) while the UI is unchanged. Still flag-gated (`PROJECT_API_ENABLED`).
   - Verification: frontend `tsc --noEmit` clean for the 2 changed files (only known @types/d3 local-env noise); backend tsc/jest = CI gate.
   - Notes: Branch `workstream/project-backend-p1b2` off main. Mirror direction is localStorage→backend for now (backend = synced copy); flipping the READ path to backend-source (true cross-device) + per-task write-through are the next refinement. Syncs one project (first non-sample) per session.
+
+### Today aggregation — Phase 2: Class + Project + Community blend into Today (flag-gated) — 2026-07-19
+- [x] The Today feed's anchored source now blends Class curriculum + Project tasks + Community posts (round-robin); default OFF
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - `todayAnchoredBlend.ts` (NEW, PURE): `blendSurfaces` round-robin interleave of ordered queues (+ test).
+    - `todayAnchoredSources.ts` (NEW, I/O): `gatherAnchored(enrollmentId, placedRefs)` — Class (getFeed + existing filter incl. free-tier Week-0 gate), Project (getActiveProjectTree → incomplete StudentTasks), Community (community_posts by cohort). Each fail-soft (errors→[]); Project+Community gated behind `env.todayAggregateSources` (default OFF); blended via blendSurfaces. `anchoredItemFromCard` moved here.
+    - `todayFeedComposer.ts`: anchored source swapped from `loadAnchoredQueue` (FeedCard[]) to `gatherAnchored` (pre-built TodayFeedItem[]); dedup by `ref` (was card_id); extendFeed assigns positions. Flag-OFF path byte-identical to before (Class-only, `card:<id>` ref ≡ old card_id dedup).
+    - `env.todayAggregateSources` (`TODAY_AGGREGATE_SOURCES`, default off).
+  - Why: Phase 2 of the Today plan — Today becomes the true aggregator (Class + Project + Community flow IN; the one-way valve). Unblocked now that projects have a backend. Additive + flag-gated → live Today feed unchanged until enabled.
+  - Verification: pure jest `todayAnchoredBlend.test.ts`; backend tsc + jest = CI gate. Flag-off preserves current Class-only behavior.
+  - Notes: Branch `workstream/today-aggregate-sources` off main. Frontend renders Project/Community via the existing TodayFeedItem→TimelineCard path (surface colour shows the section). Click-through deep-links + relevance-weighted blend are follow-ups.
