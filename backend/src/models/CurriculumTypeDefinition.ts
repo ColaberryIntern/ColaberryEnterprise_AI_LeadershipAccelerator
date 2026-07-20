@@ -37,6 +37,9 @@ export interface CurriculumTypeDefinitionAttributes {
   home_surface?: string | null;   // today | class | project | community | group
   feed_mode?: string | null;      // anchored | ambient
   today_eligible?: boolean;
+  feed_cadence?: number | null;        // Feed Control: type-default Today cadence
+  feed_frequency_cap?: number | null;  // Feed Control: type-default max shows/student
+  feed_cooldown_days?: number | null;  // Feed Control: type-default reappear cooldown
   // Experience Builder (Phase 1) — every Type is a versioned AI Component. All
   // additive/nullable so the live registry is untouched until backfilled.
   design_prompt?: string | null;      // pipeline stage 0 — how the experience is designed
@@ -116,6 +119,9 @@ class CurriculumTypeDefinition extends Model<CurriculumTypeDefinitionAttributes>
   declare home_surface: string | null;
   declare feed_mode: string | null;
   declare today_eligible: boolean;
+  declare feed_cadence: number | null;
+  declare feed_frequency_cap: number | null;
+  declare feed_cooldown_days: number | null;
   declare design_prompt: string | null;
   declare renderer_prompt: string | null;
   declare generation_prompt: string | null;
@@ -248,6 +254,9 @@ CurriculumTypeDefinition.init(
     home_surface: { type: DataTypes.STRING(20), allowNull: true },
     feed_mode: { type: DataTypes.STRING(20), allowNull: true },
     today_eligible: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: true },
+    feed_cadence: { type: DataTypes.INTEGER, allowNull: true },
+    feed_frequency_cap: { type: DataTypes.INTEGER, allowNull: true },
+    feed_cooldown_days: { type: DataTypes.INTEGER, allowNull: true },
     // Experience Builder — AI Component fields (additive/nullable).
     design_prompt: { type: DataTypes.TEXT, allowNull: true },
     renderer_prompt: { type: DataTypes.TEXT, allowNull: true },

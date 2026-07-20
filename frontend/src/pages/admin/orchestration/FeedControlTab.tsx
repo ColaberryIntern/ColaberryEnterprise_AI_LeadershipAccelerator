@@ -1,0 +1,325 @@
+/**
+ * FeedControlTab — the Feed Control plane: route curriculum types to surfaces
+ * (Today / class sections / community / …) and tune cadence, frequency, pin, and
+ * scheduling, with a live "what a student sees next + why" simulator.
+ *
+ * Surfaces are lanes; drag a type between lanes (or multi-select + "Route to…") to
+ * re-home it. A per-type drawer sets its feed defaults; the Global Policy panel
+ * sets the cadence/providers/caps the transparent ranker consumes. All writes go
+ * to /api/admin/feed-control/*; the whole feed engine is flag-gated by
+ * FEED_CONTROL_ENABLED (this UI configures it regardless).
+ */
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import api from '../../../utils/api';
+
+interface SurfaceDef { id: string; label: string; description: string; color: string; soft: string; order: number; }
+interface FCType {
+  slug: string; label: string; student_label: string;
+  home_surface: string; feed_mode: string; today_eligible: boolean;
+  bucket: string; render_band: string; difficulty: string;
+  cadence: number | null; frequency_cap: number | null; cooldown_days: number | null;
+}
+interface Lane { surface: SurfaceDef; types: FCType[]; }
+interface Policy {
+  todayCadence: number; ambientProviders: string[];
+  defaultFrequencyCap: number; defaultCooldownDays: number;
+  recencyHalfLifeDays: number; explorationPct: number; priorityWeight: number;
+}
+interface Board { lanes: Lane[]; policy: Policy; buckets: string[]; }
+interface SimItem { kind: string; type: string; title: string | null; score?: number; reasons: string[]; render_band?: string; }
+
+const AMBIENT = ['blog', 'podcast', 'testimonial'];
+
+export default function FeedControlTab() {
+  const [board, setBoard] = useState<Board | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [drawer, setDrawer] = useState<FCType | null>(null);
+  const [policyOpen, setPolicyOpen] = useState(false);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [simEnroll, setSimEnroll] = useState('');
+  const [sim, setSim] = useState<SimItem[] | null>(null);
+  const [simBusy, setSimBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true); setErr(null);
+    try { const r = await api.get('/api/admin/feed-control/board'); setBoard(r.data); }
+    catch (e: any) { setErr(e?.response?.data?.error || e?.message || 'Failed to load'); }
+    finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2200); };
+
+  const routeTypes = useCallback(async (slugs: string[], patch: any) => {
+    if (!slugs.length) return;
+    setBusy(true);
+    try {
+      if (slugs.length === 1) await api.post('/api/admin/feed-control/route-type', { slug: slugs[0], patch });
+      else await api.post('/api/admin/feed-control/bulk-route-types', { slugs, patch });
+      flash(`Routed ${slugs.length} type${slugs.length > 1 ? 's' : ''}`);
+      await load();
+    } catch (e: any) { flash(e?.response?.data?.error || 'Route failed'); }
+    finally { setBusy(false); }
+  }, [load]);
+
+  const savePolicy = useCallback(async (patch: Partial<Policy>) => {
+    setBusy(true);
+    try { const r = await api.put('/api/admin/feed-control/policy', patch); setBoard((b) => (b ? { ...b, policy: r.data.policy } : b)); flash('Policy saved'); }
+    catch (e: any) { flash(e?.response?.data?.error || 'Save failed'); }
+    finally { setBusy(false); }
+  }, []);
+
+  const runSim = useCallback(async () => {
+    if (!simEnroll.trim()) { flash('Enter an enrollment id'); return; }
+    setSimBusy(true); setSim(null);
+    try { const r = await api.get('/api/admin/feed-control/simulate', { params: { enrollment_id: simEnroll.trim(), limit: 14 } }); setSim(r.data.items || []); }
+    catch (e: any) { flash(e?.response?.data?.error || 'Simulate failed'); }
+    finally { setSimBusy(false); }
+  }, [simEnroll]);
+
+  const toggleSel = (slug: string) => setSelected((s) => { const n = new Set(s); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
+
+  const onDropLane = (surfaceId: string) => (e: React.DragEvent) => {
+    e.preventDefault(); setDragOver(null);
+    const slug = e.dataTransfer.getData('text/plain');
+    if (!slug) return;
+    const slugs = selected.size && selected.has(slug) ? Array.from(selected) : [slug];
+    routeTypes(slugs, { home_surface: surfaceId, today_eligible: surfaceId === 'today' ? true : undefined });
+    setSelected(new Set());
+  };
+
+  const selArr = useMemo(() => Array.from(selected), [selected]);
+
+  if (loading) return <div className="fc-wrap"><div className="fc-note">Loading Feed Control…</div><style>{CSS}</style></div>;
+  if (err) return <div className="fc-wrap"><div className="fc-note err">{err}</div><button className="fc-btn" onClick={load}>Retry</button><style>{CSS}</style></div>;
+  if (!board) return null;
+
+  return (
+    <div className="fc-wrap">
+      <style>{CSS}</style>
+      <div className="fc-head">
+        <div>
+          <h2 className="fc-h">Feed Control</h2>
+          <p className="fc-sub">Route curriculum types to surfaces and tune how often students see them. Drag a type between lanes, or select several and route them together.</p>
+        </div>
+        <button className="fc-btn ghost" onClick={() => setPolicyOpen(true)}>⚙ Global Policy</button>
+      </div>
+
+      {selArr.length > 0 && (
+        <div className="fc-bulk">
+          <b>{selArr.length} selected</b>
+          <span>Route to</span>
+          {board.lanes.map((l) => (
+            <button key={l.surface.id} className="fc-chip-btn" style={{ borderColor: l.surface.color, color: l.surface.color }}
+              onClick={() => { routeTypes(selArr, { home_surface: l.surface.id, today_eligible: l.surface.id === 'today' ? true : undefined }); setSelected(new Set()); }}>
+              {l.surface.label}
+            </button>
+          ))}
+          <button className="fc-btn ghost sm" onClick={() => setSelected(new Set())}>Clear</button>
+        </div>
+      )}
+
+      <div className="fc-lanes">
+        {board.lanes.map((lane) => (
+          <div key={lane.surface.id}
+            className={`fc-lane ${dragOver === lane.surface.id ? 'over' : ''}`}
+            onDragOver={(e) => { e.preventDefault(); setDragOver(lane.surface.id); }}
+            onDragLeave={() => setDragOver((d) => (d === lane.surface.id ? null : d))}
+            onDrop={onDropLane(lane.surface.id)}>
+            <div className="fc-lane-h" style={{ borderTopColor: lane.surface.color }}>
+              <span className="fc-dot" style={{ background: lane.surface.color }} />
+              <b>{lane.surface.label}</b>
+              <span className="fc-count">{lane.types.length}</span>
+            </div>
+            <div className="fc-lane-desc">{lane.surface.description}</div>
+            <div className="fc-lane-body">
+              {lane.types.length === 0 && <div className="fc-empty">Drop types here</div>}
+              {lane.types.map((t) => (
+                <div key={t.slug} draggable
+                  onDragStart={(e) => e.dataTransfer.setData('text/plain', t.slug)}
+                  className={`fc-card ${selected.has(t.slug) ? 'sel' : ''}`}>
+                  <input type="checkbox" checked={selected.has(t.slug)} onChange={() => toggleSel(t.slug)} onClick={(e) => e.stopPropagation()} />
+                  <div className="fc-card-body" onClick={() => setDrawer(t)}>
+                    <div className="fc-card-title">{t.student_label || t.label}</div>
+                    <div className="fc-card-meta">
+                      <span className={`fc-tag ${t.feed_mode === 'ambient' ? 'amb' : 'anc'}`}>{t.feed_mode}</span>
+                      {t.today_eligible && <span className="fc-tag today">today</span>}
+                      <span className="fc-mut">{t.bucket}</span>
+                      {t.cadence != null && <span className="fc-mut">cad {t.cadence}</span>}
+                    </div>
+                  </div>
+                  <button className="fc-gear" onClick={() => setDrawer(t)} aria-label="Settings">⚙</button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Simulator */}
+      <div className="fc-sim">
+        <div className="fc-sim-h">
+          <b>▶ Student sees next</b>
+          <input className="fc-inp" placeholder="enrollment id" value={simEnroll} onChange={(e) => setSimEnroll(e.target.value)} />
+          <button className="fc-btn sm" disabled={simBusy} onClick={runSim}>{simBusy ? 'Simulating…' : 'Simulate'}</button>
+          <span className="fc-mut">Dry-run · reads the real feed + policy, writes nothing</span>
+        </div>
+        {sim && (
+          <ol className="fc-sim-list">
+            {sim.length === 0 && <div className="fc-empty">No items (check the enrollment id / feature flag).</div>}
+            {sim.map((it, i) => (
+              <li key={i} className={`fc-sim-item ${it.kind}`}>
+                <span className="fc-sim-idx">{i + 1}</span>
+                <span className="fc-sim-kind">{it.kind === 'ambient' ? 'ambient' : it.type}</span>
+                <span className="fc-sim-title">{it.title || '(untitled)'}</span>
+                {it.score != null && <span className="fc-sim-score">{it.score}</span>}
+                <span className="fc-sim-why">{it.reasons.join(' · ')}</span>
+              </li>
+            ))}
+          </ol>
+        )}
+      </div>
+
+      {drawer && <TypeDrawer t={drawer} buckets={board.buckets} surfaces={board.lanes.map((l) => l.surface)} busy={busy}
+        onClose={() => setDrawer(null)}
+        onSave={async (patch) => { await routeTypes([drawer.slug], patch); setDrawer(null); }} />}
+
+      {policyOpen && <PolicyPanel policy={board.policy} busy={busy} onClose={() => setPolicyOpen(false)}
+        onSave={async (patch) => { await savePolicy(patch); setPolicyOpen(false); }} />}
+
+      {toast && <div className="fc-toast">{toast}</div>}
+    </div>
+  );
+}
+
+function TypeDrawer({ t, buckets, surfaces, busy, onClose, onSave }: {
+  t: FCType; buckets: string[]; surfaces: SurfaceDef[]; busy: boolean;
+  onClose: () => void; onSave: (patch: any) => void;
+}) {
+  const [surface, setSurface] = useState(t.home_surface);
+  const [feedMode, setFeedMode] = useState(t.feed_mode);
+  const [todayEligible, setTodayEligible] = useState(t.today_eligible);
+  const [bucket, setBucket] = useState(t.bucket);
+  const [cadence, setCadence] = useState<string>(t.cadence != null ? String(t.cadence) : '');
+  const [cap, setCap] = useState<string>(t.frequency_cap != null ? String(t.frequency_cap) : '');
+  const [cool, setCool] = useState<string>(t.cooldown_days != null ? String(t.cooldown_days) : '');
+  const num = (s: string) => (s.trim() === '' ? null : Math.max(0, parseInt(s, 10) || 0));
+  return (
+    <div className="fc-scrim" onClick={onClose}>
+      <aside className="fc-drawer" onClick={(e) => e.stopPropagation()}>
+        <div className="fc-drawer-h"><b>{t.student_label || t.label}</b><button className="fc-x" onClick={onClose}>✕</button></div>
+        <label className="fc-f">Surface
+          <select value={surface} onChange={(e) => setSurface(e.target.value)}>{surfaces.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
+        <label className="fc-f">Feed mode
+          <select value={feedMode} onChange={(e) => setFeedMode(e.target.value)}><option value="anchored">anchored (homed, flows into Today)</option><option value="ambient">ambient (Today-only, rotated)</option></select></label>
+        <label className="fc-f row"><input type="checkbox" checked={todayEligible} onChange={(e) => setTodayEligible(e.target.checked)} /> Eligible for the Today feed</label>
+        <label className="fc-f">Default section (bucket)
+          <select value={bucket} onChange={(e) => setBucket(e.target.value)}>{buckets.map((b) => <option key={b} value={b}>{b}</option>)}</select></label>
+        <div className="fc-f3">
+          <label className="fc-f">Cadence<input type="number" min={0} placeholder="policy" value={cadence} onChange={(e) => setCadence(e.target.value)} /></label>
+          <label className="fc-f">Freq cap<input type="number" min={0} placeholder="policy" value={cap} onChange={(e) => setCap(e.target.value)} /></label>
+          <label className="fc-f">Cooldown d<input type="number" min={0} placeholder="policy" value={cool} onChange={(e) => setCool(e.target.value)} /></label>
+        </div>
+        <p className="fc-hint">Blank = inherit the Global Policy default. Cadence = curriculum items between this being injected; freq cap = max times a student sees it; cooldown = days before it can reappear.</p>
+        <div className="fc-drawer-foot">
+          <button className="fc-btn ghost" onClick={onClose}>Cancel</button>
+          <button className="fc-btn" disabled={busy} onClick={() => onSave({
+            home_surface: surface, feed_mode: feedMode, today_eligible: todayEligible, bucket_default: bucket,
+            feed_cadence: num(cadence), feed_frequency_cap: num(cap), feed_cooldown_days: num(cool),
+          })}>{busy ? 'Saving…' : 'Save routing'}</button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function PolicyPanel({ policy, busy, onClose, onSave }: { policy: Policy; busy: boolean; onClose: () => void; onSave: (p: Partial<Policy>) => void; }) {
+  const [p, setP] = useState<Policy>(policy);
+  const set = (k: keyof Policy, v: any) => setP((x) => ({ ...x, [k]: v }));
+  const toggleProv = (prov: string) => setP((x) => ({ ...x, ambientProviders: x.ambientProviders.includes(prov) ? x.ambientProviders.filter((a) => a !== prov) : [...x.ambientProviders, prov] }));
+  return (
+    <div className="fc-scrim" onClick={onClose}>
+      <aside className="fc-drawer wide" onClick={(e) => e.stopPropagation()}>
+        <div className="fc-drawer-h"><b>Global Feed Policy</b><button className="fc-x" onClick={onClose}>✕</button></div>
+        <label className="fc-f">Today cadence — curriculum items between each ambient injection
+          <input type="number" min={1} max={20} value={p.todayCadence} onChange={(e) => set('todayCadence', parseInt(e.target.value, 10) || 1)} /></label>
+        <div className="fc-f">Ambient providers (rotate into Today)
+          <div className="fc-provs">{AMBIENT.map((a) => (
+            <button key={a} className={`fc-chip-btn ${p.ambientProviders.includes(a) ? 'on' : ''}`} onClick={() => toggleProv(a)}>{a}</button>
+          ))}</div>
+        </div>
+        <div className="fc-f3">
+          <label className="fc-f">Default freq cap<input type="number" min={0} value={p.defaultFrequencyCap} onChange={(e) => set('defaultFrequencyCap', parseInt(e.target.value, 10) || 0)} /></label>
+          <label className="fc-f">Default cooldown d<input type="number" min={0} value={p.defaultCooldownDays} onChange={(e) => set('defaultCooldownDays', parseInt(e.target.value, 10) || 0)} /></label>
+          <label className="fc-f">Recency half-life d<input type="number" min={1} value={p.recencyHalfLifeDays} onChange={(e) => set('recencyHalfLifeDays', parseInt(e.target.value, 10) || 1)} /></label>
+        </div>
+        <label className="fc-f">Exploration ({Math.round(p.explorationPct * 100)}%) — fresh/exploratory share
+          <input type="range" min={0} max={100} value={Math.round(p.explorationPct * 100)} onChange={(e) => set('explorationPct', (parseInt(e.target.value, 10) || 0) / 100)} /></label>
+        <label className="fc-f">Priority weight ({p.priorityWeight}) — how strongly a card's priority boosts rank
+          <input type="range" min={0} max={10} value={Math.round(p.priorityWeight * 100)} onChange={(e) => set('priorityWeight', (parseInt(e.target.value, 10) || 0) / 100)} /></label>
+        <div className="fc-drawer-foot">
+          <button className="fc-btn ghost" onClick={onClose}>Cancel</button>
+          <button className="fc-btn" disabled={busy} onClick={() => onSave(p)}>{busy ? 'Saving…' : 'Save policy'}</button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+const CSS = `
+.fc-wrap{--fc-bg:#fff;--fc-sub:#6b7280;--fc-bd:#e5e7eb;--fc-soft:#f8fafc;--fc-ink:#111827;--fc-acc:#2563eb;font-family:'Inter','Segoe UI',system-ui,sans-serif;color:var(--fc-ink)}
+@media (prefers-color-scheme: dark){.fc-wrap{--fc-bg:#0f1216;--fc-sub:#9aa7b4;--fc-bd:#242c35;--fc-soft:#161b21;--fc-ink:#e8eef4}}
+.fc-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px}
+.fc-h{margin:0;font-size:20px} .fc-sub{margin:4px 0 0;color:var(--fc-sub);font-size:13px;max-width:640px}
+.fc-note{padding:24px;color:var(--fc-sub)} .fc-note.err{color:#dc2626}
+.fc-btn{background:var(--fc-acc);color:#fff;border:0;border-radius:9px;padding:9px 15px;font-weight:700;font-size:13px;cursor:pointer}
+.fc-btn.ghost{background:transparent;color:var(--fc-ink);border:1px solid var(--fc-bd)} .fc-btn.sm{padding:6px 11px;font-size:12.5px}
+.fc-bulk{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--fc-soft);border:1px solid var(--fc-bd);border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:13px}
+.fc-chip-btn{background:transparent;border:1px solid var(--fc-bd);border-radius:999px;padding:4px 12px;font-size:12.5px;font-weight:700;cursor:pointer;color:var(--fc-ink)}
+.fc-chip-btn.on{background:var(--fc-acc);color:#fff;border-color:var(--fc-acc)}
+.fc-lanes{display:grid;grid-auto-flow:column;grid-auto-columns:minmax(240px,1fr);gap:12px;overflow-x:auto;padding-bottom:8px}
+.fc-lane{background:var(--fc-soft);border:1px solid var(--fc-bd);border-radius:14px;min-height:180px;display:flex;flex-direction:column}
+.fc-lane.over{outline:2px dashed var(--fc-acc);outline-offset:-3px}
+.fc-lane-h{display:flex;align-items:center;gap:8px;padding:11px 13px 8px;border-top:3px solid;border-radius:14px 14px 0 0;font-size:14px}
+.fc-dot{width:9px;height:9px;border-radius:50%} .fc-count{margin-left:auto;color:var(--fc-sub);font-size:12px;font-weight:700}
+.fc-lane-desc{font-size:11px;color:var(--fc-sub);padding:0 13px 8px;line-height:1.4}
+.fc-lane-body{padding:8px;display:flex;flex-direction:column;gap:7px;flex:1}
+.fc-empty{border:1px dashed var(--fc-bd);border-radius:9px;padding:14px;text-align:center;color:var(--fc-sub);font-size:12px}
+.fc-card{display:flex;align-items:flex-start;gap:8px;background:var(--fc-bg);border:1px solid var(--fc-bd);border-radius:10px;padding:9px 10px;cursor:grab}
+.fc-card.sel{border-color:var(--fc-acc);box-shadow:0 0 0 1px var(--fc-acc)}
+.fc-card-body{flex:1;min-width:0}
+.fc-card-title{font-size:13.5px;font-weight:600;line-height:1.25}
+.fc-card-meta{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
+.fc-tag{font-size:10px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;border-radius:5px;padding:1px 6px}
+.fc-tag.anc{background:#dbeafe;color:#1d4ed8} .fc-tag.amb{background:#ede9fe;color:#6d28d9} .fc-tag.today{background:#fef3c7;color:#b45309}
+@media (prefers-color-scheme: dark){.fc-tag.anc{background:#1e3a8a55;color:#93c5fd}.fc-tag.amb{background:#4c1d9555;color:#c4b5fd}.fc-tag.today{background:#78350f55;color:#fcd34d}}
+.fc-mut{font-size:11px;color:var(--fc-sub)}
+.fc-gear{background:transparent;border:0;cursor:pointer;color:var(--fc-sub);font-size:14px;padding:2px}
+.fc-sim{margin-top:16px;background:var(--fc-soft);border:1px solid var(--fc-bd);border-radius:14px;padding:14px}
+.fc-sim-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px}
+.fc-inp,.fc-f input,.fc-f select{border:1px solid var(--fc-bd);border-radius:8px;padding:7px 10px;font-size:13px;background:var(--fc-bg);color:var(--fc-ink)}
+.fc-sim-list{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:5px}
+.fc-sim-item{display:flex;align-items:center;gap:10px;background:var(--fc-bg);border:1px solid var(--fc-bd);border-radius:9px;padding:8px 11px;font-size:12.5px}
+.fc-sim-item.ambient{opacity:.8;border-style:dashed}
+.fc-sim-idx{font-weight:800;color:var(--fc-sub);width:18px}
+.fc-sim-kind{font-weight:700;color:var(--fc-acc);min-width:120px}
+.fc-sim-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fc-sim-score{font-variant-numeric:tabular-nums;color:var(--fc-sub);font-weight:700}
+.fc-sim-why{color:var(--fc-sub);font-size:11.5px}
+.fc-scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1200;display:flex;justify-content:flex-end}
+.fc-drawer{width:min(420px,94vw);height:100%;background:var(--fc-bg);border-left:1px solid var(--fc-bd);padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
+.fc-drawer.wide{width:min(520px,96vw)}
+.fc-drawer-h{display:flex;align-items:center;justify-content:space-between;font-size:16px}
+.fc-x{background:transparent;border:0;font-size:16px;cursor:pointer;color:var(--fc-sub)}
+.fc-f{display:flex;flex-direction:column;gap:5px;font-size:12.5px;font-weight:600;color:var(--fc-ink)}
+.fc-f.row{flex-direction:row;align-items:center;gap:8px;font-weight:500}
+.fc-f3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.fc-provs{display:flex;gap:8px}
+.fc-hint,.fc-drawer .fc-hint{font-size:11.5px;color:var(--fc-sub);line-height:1.5;font-weight:400}
+.fc-drawer-foot{margin-top:auto;display:flex;gap:10px;justify-content:flex-end;padding-top:8px}
+.fc-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:1300}
+`;

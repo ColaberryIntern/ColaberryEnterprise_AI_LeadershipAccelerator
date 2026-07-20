@@ -274,6 +274,29 @@ github_task: if {{setup_topic}} involves GitHub, a repository, commits, pushes, 
 
 Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", evaluation_criteria = []. completion: "Marked complete when the participant proves the outcome — verified automatically where a real check exists (e.g. GitHub), otherwise by submitting evidence."`;
 
+const PROMPT_LAB_GENERATION_PROMPT = `You author a "Prompt Lab" for the AI Systems Architect Accelerator — a catalog of hands-on PRACTICE PROMPTS a NON-TECHNICAL business executive pastes into Claude Code to practice this week by building small real things. Use ALL of the context above: the WEEK CONTEXT (the week's topic + objectives), THIS WEEK'S ACTIVITIES (the roster — especially the Deep Dive and the Anthropic course named there), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
+
+Ground the catalog in that context:
+- Include at least one or two prompts that have the student BUILD one of the documents/artifacts named in WHAT STUDENTS BUILD THIS WEEK or covered by this week's Deep Dive.
+- Include at least one prompt that reinforces the concepts from the Anthropic course / the week's learning objectives.
+- The remaining prompts can be lighter warm-up practice on the week's topic.
+
+Produce a CATALOG of 4 to 6 practice prompts grouped into 2 or 3 CATEGORIES that rise in ambition (for example "Warm up", "Build something real", "Push further").
+
+title: the words "Prompt Lab", a space, an em dash, a space, then the week's topic exactly as named in the WEEK CONTEXT.
+summary: one vivid sentence on what they will practice building this week.
+
+body_html: clean, semantic, fully-balanced HTML — NO <style>, NO colors, NO inline styles, NO scripts, NO images (the workspace supplies the theme). Use ONLY these tags: h3, h4, p, strong, em, ol, ul, li, pre, code. Structure it EXACTLY like this, in order:
+For each category:
+  <h3>Category name</h3>
+  then for each practice prompt in that category, in order:
+    <h4>A short action title for the prompt</h4>
+    <p>One or two plain sentences: what this prompt has Claude Code build for them, and why it is good practice for this week (name the document or concept it connects to). This explanation is always visible.</p>
+    <pre>The full, first-person, paste-ready prompt addressed to Claude Code — natural language, copy-paste runnable exactly as written, that has Claude Code build the thing AND explain each step for a non-technical person. 3 to 7 sentences.</pre>
+Every <h4> is followed by exactly one <p> then exactly one <pre>. Every opening tag has a matching closing tag. 4 to 6 prompts total across the categories.
+
+Voice: warm, confident, encouraging, plain English; make a non-technical executive feel these are doable. Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", github_task = null, evaluation_criteria = []. completion: "Marked complete when the participant copies a prompt, builds it in Claude Code, and submits what they made."`;
+
 // ── Intelligence Pipeline types (news / research / tools / video / quote /
 //    architecture / build / MCP / technique / market) ─────────────────────────
 // These 10 types are reusable content GENERATORS: each turns one external item
@@ -516,6 +539,27 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     evaluation_type: 'none',
     generation_prompt: SETUP_LAB_GENERATION_PROMPT,
     thumbnail_url: thumbnailUrlFor('setup_lab'),
+    approved: true,
+    status: 'ready',
+  },
+  prompt_lab: {
+    student_label: 'Prompt Lab',
+    category: 'Practice',
+    icon: 'bi-lightning-charge',
+    badge_class: 'bg-danger',
+    estimated_time: 45,
+    capabilities: ['ai_chat', 'hint_system', 'mentor_review', 'comments', 'evidence'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Prompt Lab — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Practice-prompt catalog: categories (h3), each prompt = h4 title, p explanation, pre prompt' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: PROMPT_LAB_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('prompt_lab'),
     approved: true,
     status: 'ready',
   },

@@ -1799,6 +1799,21 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
+  // Feed Control — publish scheduled timeline cards whose release_date has arrived
+  // (every 15 min). Idempotent; a no-op unless a card is scheduled with a date.
+  cron.schedule(
+    '*/15 * * * *',
+    () => {
+      instrumentCronJob('FeedReleaseTick', async () => {
+        const { publishDueCards } = await import('./timeline/feedControlService');
+        await publishDueCards();
+      }).catch((err) => {
+        console.error('[Scheduler] Feed release tick error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
   // AI News Flash intelligence pipeline — daily (03:15 America/Chicago). Fetches
   // free AI-lab RSS feeds, dedup-upserts the library, and (when
   // AI_NEWS_INGEST_ENABLED=true) materializes up to a dozen executive news cards.
