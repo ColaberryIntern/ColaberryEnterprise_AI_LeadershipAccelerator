@@ -7,6 +7,7 @@ import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import '../../components/timeline/timeline.css';
 import PortalShell from './today/PortalShell';
 import { emitPointsEarned, onPointsEarned } from '../../services/pointsFx';
+import { filterCardsByQuery, tokenizeQuery } from '../../utils/classroomSearch';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -101,6 +102,7 @@ const ClassroomPage: React.FC = () => {
   const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'error'>('loading');
   const [week, setWeek] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState<string>('');
   const [now, setNow] = useState<number>(() => (typeof performance !== 'undefined' ? Date.now() : 0));
 
   const load = useCallback(async () => {
@@ -190,6 +192,13 @@ const ClassroomPage: React.FC = () => {
   const done = weekCards.filter((c) => c.status === 'completed').length;
   const pct = weekCards.length ? Math.round((done / weekCards.length) * 100) : 0;
 
+  // Live search filter. The banner + "This week" progress stay bound to the full
+  // weekCards (above) so the progress bar doesn't jump around as the student
+  // types — only the rendered feed narrows to the matches.
+  const searchTokens = useMemo(() => tokenizeQuery(query), [query]);
+  const visibleCards = useMemo(() => filterCardsByQuery(weekCards, query), [weekCards, query]);
+  const searching = searchTokens.length > 0;
+
   // Opening a card now shows its detail drawer (preview + in-app video player);
   // completion is an explicit action inside the drawer, not a side effect of opening.
   const openCard = useCallback((card: TimelineFeedCard) => { setSelectedId(card.id); }, []);
@@ -262,9 +271,39 @@ const ClassroomPage: React.FC = () => {
             </div>
           </div>
 
+          {weekCards.length > 0 && (
+            <>
+              <div className="tl-search">
+                <svg className="tl-search-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                <input
+                  type="search"
+                  className="tl-search-input"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
+                  placeholder="Search this week — try “Prompt Lab”"
+                  aria-label="Search this week's cards"
+                  autoComplete="off"
+                />
+                {searching && (
+                  <button type="button" className="tl-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                  </button>
+                )}
+              </div>
+              {searching && (
+                <div className="tl-search-count tl-small" role="status" aria-live="polite">
+                  {visibleCards.length} of {weekCards.length} {weekCards.length === 1 ? 'card' : 'cards'} match “{query.trim()}”
+                </div>
+              )}
+            </>
+          )}
+
           {weekCards.length === 0
             ? <div className="tl-empty">No cards here yet.</div>
-            : <TimelineFeed cards={weekCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={(c) => navigate(`/portal/runtime/${c.id}`)} onWorkspace={(c) => navigate(`/portal/runtime/${c.id}`)} />}
+            : visibleCards.length === 0
+              ? <div className="tl-empty">No cards match “{query.trim()}”. <button type="button" className="tl-btn sm primary" style={{ marginLeft: 8 }} onClick={() => setQuery('')}>Clear search</button></div>
+              : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={(c) => navigate(`/portal/runtime/${c.id}`)} onWorkspace={(c) => navigate(`/portal/runtime/${c.id}`)} />}
         </div>
 
         <aside className="tl-side">
