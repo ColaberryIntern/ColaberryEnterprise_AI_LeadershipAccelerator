@@ -202,6 +202,9 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
           {messages === null && <div className="rm-empty">Loading conversation…</div>}
           {messages !== null && messages.length === 0 && <div className="rm-empty">No messages yet — say hello 👋</div>}
           {messages?.map((m) => {
+            if (m.kind === 'system') {
+              return <div key={m.id} className="rm-sysmsg">{m.content}</div>;
+            }
             const isQuestion = m.kind === 'question';
             const isVerifiedAnswer = verifiedAnswerIds.has(m.id);
             const canMarkAnswer = iHaveOpenQuestion && !!m.enrollment_id && m.enrollment_id !== myId && !isQuestion && !isVerifiedAnswer;

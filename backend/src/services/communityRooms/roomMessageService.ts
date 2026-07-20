@@ -52,6 +52,37 @@ export async function postMessage(ctx: RoomAccessContext, roomId: string, input:
   return message;
 }
 
+// System notice posted into a room by "Commons" itself (reminders, waitlist
+// promotions). No author, no entitlement check (the system is always allowed).
+// Idempotent when a marker is supplied — a message carrying the same marker is
+// never posted twice (belt-and-suspenders on top of the outbox's once-only
+// delivery), so retries can't duplicate a notice.
+export async function postSystemMessage(
+  roomId: string,
+  content: string,
+  opts: { marker?: string; bookingId?: string } = {},
+): Promise<RoomMessage | null> {
+  if (opts.marker) {
+    const existing = await RoomMessage.findOne({
+      // JSONB containment (metadata @> {marker}). Sequelize's WhereOptions typing
+      // doesn't model Op.contains on a JSONB object column, so this clause is cast
+      // to any — the runtime object keeps the Op.contains symbol and emits `@>`.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      where: { room_id: roomId, kind: 'system', metadata: { [Op.contains]: { marker: opts.marker } } } as any,
+    });
+    if (existing) return existing;
+  }
+  return RoomMessage.create({
+    room_id: roomId,
+    booking_id: opts.bookingId ?? null,
+    enrollment_id: null,
+    sender_name: 'Commons',
+    content,
+    kind: 'system',
+    metadata: opts.marker ? { marker: opts.marker } : {},
+  });
+}
+
 export interface ListMessagesResult {
   messages: RoomMessage[];
   active_count: number;

@@ -179,3 +179,6 @@
 .rm-markans:hover{background:var(--leaf-bg,#EAF6E4)}
 .rm-askbtn{flex:none;width:36px;height:36px;border-radius:var(--r-8,8px);border:1px solid var(--border,#D8D8D8);background:var(--surface,#fff);font-size:16px;cursor:pointer;line-height:1}
 .rm-askbtn.on{border-color:var(--berry,#367895);background:var(--berry-bg,#EAF2F6)}
+
+/* System notices (reminders, waitlist promotions) — Phase B #5 */
+.rm-sysmsg{align-self:center;max-width:90%;margin:6px auto;padding:5px 12px;border-radius:999px;background:var(--sunken,#F1F1F0);color:var(--muted,#6B6B6B);font-size:12px;font-weight:600;text-align:center}

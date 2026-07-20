@@ -8,6 +8,7 @@ import { emitRoomEvent } from './roomOutboxService';
 import { ROOM_EVENTS } from './roomEvents';
 import { createRoom } from './roomService';
 import { recordContribution } from './roomRecognitionService';
+import { promoteWaitlist } from './roomReminderService';
 import { notFoundError, forbiddenError, validationError, conflictError, log } from './roomShared';
 
 // Booking lifecycle (spec §5 wizard + §11 state machine): create → publish →
@@ -159,14 +160,16 @@ export async function rsvp(
     throw conflictError('RSVP has closed for this session');
   }
 
+  // Prior state drives waitlist bookkeeping AND seat-release promotion below.
+  const existing = await RoomBookingAttendee.findOne({ where: { booking_id: bookingId, enrollment_id: ctx.enrollmentId } });
+  const priorState: RoomRsvpState = existing?.rsvp_state ?? 'none';
+
   let effective: RoomRsvpState = desired;
   let waitlistPosition: number | null = null;
   if (desired === 'going' && booking.capacity != null) {
     const current = await goingCount(bookingId);
     // Count the seat only if this enrollment isn't already 'going'.
-    const already = await RoomBookingAttendee.findOne({ where: { booking_id: bookingId, enrollment_id: ctx.enrollmentId } });
-    const alreadyGoing = already?.rsvp_state === 'going';
-    if (!alreadyGoing && current >= booking.capacity) {
+    if (priorState !== 'going' && current >= booking.capacity) {
       effective = 'waitlisted';
       waitlistPosition = (await RoomBookingAttendee.count({ where: { booking_id: bookingId, rsvp_state: 'waitlisted' } })) + 1;
     }
@@ -190,6 +193,13 @@ export async function rsvp(
     aggregateId: attendee.id,
     payload: { booking_id: bookingId, state: effective },
   });
+
+  // A freed seat (someone who was 'going' now isn't) → promote the waitlist.
+  // Best-effort: a promotion failure must never break the caller's own RSVP.
+  if (priorState === 'going' && effective !== 'going') {
+    try { await promoteWaitlist(bookingId); }
+    catch (e) { log('warn', 'waitlist_promote_failed', { booking_id: bookingId, message: (e as Error)?.message }); }
+  }
   return attendee;
 }
 

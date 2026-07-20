@@ -2326,6 +2326,14 @@ async function start(): Promise<void> {
         .then(({ drainOutbox }) => drainOutbox(25))
         .catch((err) => console.warn('[CommunityRoomsOutbox] drain failed:', err?.message));
     });
+
+    // Sweep RSVP reminders into the outbox every 5 minutes. Idempotent — the
+    // outbox de-dups each (booking, window) reminder; the drain above delivers.
+    cron.schedule('*/5 * * * *', () => {
+      import('./services/communityRooms/roomReminderService')
+        .then(({ sweepReminders }) => sweepReminders())
+        .catch((err) => console.warn('[CommunityRoomsReminders] sweep failed:', err?.message));
+    });
   }
 
   // Start follow-up email scheduler if enabled
