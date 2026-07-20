@@ -727,6 +727,31 @@ export async function toggleLike(
     await CommunityMember.increment('points', { by: 1, where: { id: authorMemberId } });
     await CommunityPointsEvent.create({ member_id: authorMemberId, points: 1 });
     if (post) await post.increment('like_count', { by: 1 });
+    // Notify the author that someone liked their content (Ali feedback 2026-07-20).
+    // Only on a real new like (created) and never for a self-like. The notify is a
+    // secondary side effect: a like must never fail because its notification failed.
+    // This also keeps the like path working during a deploy where the new 'like'
+    // code lands before the CHECK-constraint migration (20260720) runs — the insert
+    // would be rejected, but the like itself still succeeds.
+    if (authorMemberId !== member.id) {
+      try {
+        await CommunityNotification.create({
+          member_id: authorMemberId,
+          actor_member_id: member.id,
+          notification_type: 'like',
+          source_type: likeableType,
+          source_id: likeableId,
+        });
+      } catch (err) {
+        log('warn', 'like_notification_failed', {
+          error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+          author_member_id: authorMemberId,
+          actor_member_id: member.id,
+          likeable_type: likeableType,
+          likeable_id: likeableId,
+        });
+      }
+    }
     liked = true;
   } else {
     await likeRow.destroy();

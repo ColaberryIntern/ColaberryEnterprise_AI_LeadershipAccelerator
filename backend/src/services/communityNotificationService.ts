@@ -1,10 +1,12 @@
-import CommunityNotification from '../models/CommunityNotification';
+import CommunityNotification, { CommunityNotificationType } from '../models/CommunityNotification';
 import CommunityMember from '../models/CommunityMember';
 import { getOrCreateMember } from './communityService';
 
 export interface NotificationItem {
   id: string;
-  notification_type: 'mention' | 'reply';
+  // Mirrors the model's union (mention | reply | like) — kept as the model type
+  // so widening the notification kinds can't drift this DTO out of sync again.
+  notification_type: CommunityNotificationType;
   source_type: 'post' | 'comment';
   source_id: string;
   read: boolean;
