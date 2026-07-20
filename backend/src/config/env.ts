@@ -123,6 +123,10 @@ export const env = {
   // Today aggregation — blend Project + Community cards into the Today feed
   // (Phase 2). Default OFF; the feed stays Class-only until enabled.
   todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',
+  // Feed Control plane — config-driven cadence/providers + rule-based ranker +
+  // per-card/type routing. Default OFF; flag-off keeps the legacy hardcoded
+  // CADENCE=2 + fixed provider list + week→bucket→order behavior byte-identical.
+  feedControlEnabled: process.env.FEED_CONTROL_ENABLED === 'true',
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',

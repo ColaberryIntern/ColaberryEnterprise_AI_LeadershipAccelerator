@@ -1143,6 +1143,30 @@ async function ensureTodayFeedSchema() {
   console.log('[DB] Today feed schema ensured');
 }
 
+// Feed Control plane — additive per-card + per-type routing/cadence columns.
+// `priority` + `release_date` already exist on timeline_cards (activated here);
+// these add the surface override + cadence/frequency/pin knobs. All nullable →
+// a card/type with no override falls back to its type default then the policy.
+async function ensureFeedControlSchema() {
+  const statements = [
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_surface VARCHAR(20)`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_cadence INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_frequency_cap INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_cooldown_days INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS pinned_until TIMESTAMPTZ`,
+    `CREATE INDEX IF NOT EXISTS idx_tc_priority ON timeline_cards (priority DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_tc_pinned ON timeline_cards (pinned_until)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_cadence INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_frequency_cap INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_cooldown_days INTEGER`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Feed control schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Feed control schema ensured');
+}
+
 // Enhance the existing (stub) `testimonial` curriculum type into the working
 // "Testimonials" type: relabel, publish its link-vs-random settings schema, and
 // mark it approved for the Composer. Idempotent; runs after the type is seeded.
@@ -2015,6 +2039,7 @@ async function start(): Promise<void> {
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
   await ensureTodayFeedSchema();
+  await ensureFeedControlSchema();
   await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
     .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
@@ -2100,6 +2125,10 @@ async function start(): Promise<void> {
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
+      // Feed Control: re-apply stored type routing to the registry AFTER the seed
+      // (typeSeeder re-asserts surface columns from code, so routing must win last).
+      const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');
+      await applyFeedRoutingToRegistry();
     } catch (err: any) {
       console.warn('[TimelineEngine] seed failed:', err?.message);
     }

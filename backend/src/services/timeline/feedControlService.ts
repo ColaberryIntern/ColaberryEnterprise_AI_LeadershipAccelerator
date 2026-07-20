@@ -1,0 +1,227 @@
+/**
+ * feedControlService — the Feed Control plane's write + read API.
+ *
+ * Routes curriculum TYPES and individual CARDS to surfaces (Today / class section /
+ * community / …) and sets their cadence, frequency, pin, priority, and publish
+ * window — the knobs the transparent ranker (feedRanker) + composer consume.
+ *
+ * Durability note: `typeSeeder` re-asserts a type's home_surface/feed_mode/
+ * today_eligible from the CODE registry on every boot, so a raw DB edit to those
+ * columns is reverted. Type routing therefore lives in a `SystemSetting` map
+ * (`feed_type_routing`) that is applied to the in-memory registry LIVE (on edit)
+ * and again at boot AFTER the seed — so it survives restarts. Card-level overrides
+ * are plain columns on `timeline_cards` (not touched by any seed).
+ */
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../../config/database';
+import { getSetting, setSetting } from '../settingsService';
+import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
+import TimelineCard from '../../models/TimelineCard';
+import { resolve as resolveType, register, allTypes, type SurfaceId, type FeedMode } from './typeRegistry';
+import { SURFACE_ORDER } from './surfaces';
+import { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigService';
+import { rankCandidates, type RankCandidate } from './feedRanker';
+import { getFeed } from './timelineService';
+
+export { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigService';
+
+const ROUTING_KEY = 'feed_type_routing';
+const SURFACES: SurfaceId[] = ['today', 'class', 'project', 'community', 'group'];
+const BUCKETS = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
+
+export interface TypeRouting {
+  home_surface?: SurfaceId;
+  feed_mode?: FeedMode;
+  today_eligible?: boolean;
+  bucket_default?: string;
+  feed_cadence?: number | null;
+  feed_frequency_cap?: number | null;
+  feed_cooldown_days?: number | null;
+}
+
+async function getRoutingMap(): Promise<Record<string, TypeRouting>> {
+  const raw = await getSetting(ROUTING_KEY);
+  return raw && typeof raw === 'object' ? raw : {};
+}
+
+/** Apply one type's stored routing onto the in-memory registry (makes it live). */
+function applyOne(slug: string, r: TypeRouting): void {
+  const def = resolveType(slug);
+  if (!def) return;
+  register({
+    ...def,
+    home_surface: (r.home_surface ?? def.home_surface) as SurfaceId,
+    feed_mode: (r.feed_mode ?? def.feed_mode) as FeedMode,
+    today_eligible: r.today_eligible ?? def.today_eligible,
+    bucket: (r.bucket_default ?? def.bucket) as any,
+  });
+}
+
+/** Boot hook — re-apply all stored type routing to the registry + mirror to the DB
+ *  (run AFTER typeSeeder so it wins). Never throws. */
+export async function applyFeedRoutingToRegistry(): Promise<number> {
+  try {
+    const map = await getRoutingMap();
+    const slugs = Object.keys(map);
+    for (const slug of slugs) {
+      applyOne(slug, map[slug]);
+      const r = map[slug];
+      await CurriculumTypeDefinition.update(
+        {
+          ...(r.home_surface ? { home_surface: r.home_surface } : {}),
+          ...(r.feed_mode ? { feed_mode: r.feed_mode } : {}),
+          ...(r.today_eligible != null ? { today_eligible: r.today_eligible } : {}),
+          ...(r.bucket_default ? { bucket_default: r.bucket_default } : {}),
+          ...(r.feed_cadence !== undefined ? { feed_cadence: r.feed_cadence } : {}),
+          ...(r.feed_frequency_cap !== undefined ? { feed_frequency_cap: r.feed_frequency_cap } : {}),
+          ...(r.feed_cooldown_days !== undefined ? { feed_cooldown_days: r.feed_cooldown_days } : {}),
+        } as any,
+        { where: { slug } },
+      ).catch(() => {});
+    }
+    if (slugs.length) console.log(`[FeedControl] applied routing to ${slugs.length} type(s)`);
+    return slugs.length;
+  } catch (err: any) {
+    console.warn('[FeedControl] applyFeedRoutingToRegistry failed:', err?.message);
+    return 0;
+  }
+}
+
+/** Route a TYPE to a surface + set its feed defaults. Durable + live. */
+export async function routeType(slug: string, patch: TypeRouting, adminId?: string): Promise<{ slug: string; routing: TypeRouting }> {
+  if (!resolveType(slug)) throw Object.assign(new Error(`unknown type ${slug}`), { status: 404 });
+  if (patch.home_surface && !SURFACES.includes(patch.home_surface)) throw Object.assign(new Error('bad surface'), { status: 400 });
+  if (patch.bucket_default && !BUCKETS.includes(patch.bucket_default)) throw Object.assign(new Error('bad bucket'), { status: 400 });
+  const map = await getRoutingMap();
+  const merged: TypeRouting = { ...map[slug], ...patch };
+  map[slug] = merged;
+  await setSetting(ROUTING_KEY, map, adminId);
+  applyOne(slug, merged); // live
+  await CurriculumTypeDefinition.update(
+    {
+      ...(merged.home_surface ? { home_surface: merged.home_surface } : {}),
+      ...(merged.feed_mode ? { feed_mode: merged.feed_mode } : {}),
+      ...(merged.today_eligible != null ? { today_eligible: merged.today_eligible } : {}),
+      ...(merged.bucket_default ? { bucket_default: merged.bucket_default } : {}),
+      ...(merged.feed_cadence !== undefined ? { feed_cadence: merged.feed_cadence } : {}),
+      ...(merged.feed_frequency_cap !== undefined ? { feed_frequency_cap: merged.feed_frequency_cap } : {}),
+      ...(merged.feed_cooldown_days !== undefined ? { feed_cooldown_days: merged.feed_cooldown_days } : {}),
+    } as any,
+    { where: { slug } },
+  ).catch(() => {});
+  return { slug, routing: merged };
+}
+
+const CARD_FIELDS = ['feed_surface', 'bucket', 'week', 'priority', 'pinned_until', 'feed_cadence', 'feed_frequency_cap', 'feed_cooldown_days', 'visibility', 'release_date'] as const;
+export type CardRoutingPatch = Partial<Record<(typeof CARD_FIELDS)[number], any>>;
+
+/** Route a single CARD (overrides its type default). */
+export async function routeCard(cardId: string, patch: CardRoutingPatch, adminId?: string): Promise<{ id: string }> {
+  const card = await TimelineCard.findByPk(cardId);
+  if (!card) throw Object.assign(new Error('card not found'), { status: 404 });
+  const clean: any = {};
+  for (const k of CARD_FIELDS) if (k in patch && patch[k] !== undefined) clean[k] = patch[k];
+  if (clean.pinned_until) clean.pinned_until = new Date(clean.pinned_until);
+  if (clean.release_date) clean.release_date = new Date(clean.release_date);
+  await card.update(clean);
+  return { id: card.id };
+}
+
+/** Bulk route many types (e.g. "put these 10 on Today"). */
+export async function bulkRouteTypes(slugs: string[], patch: TypeRouting, adminId?: string): Promise<{ routed: string[] }> {
+  const routed: string[] = [];
+  for (const slug of slugs) {
+    try { await routeType(slug, patch, adminId); routed.push(slug); } catch { /* skip bad slug */ }
+  }
+  return { routed };
+}
+
+/** The board payload: surfaces + the types grouped under their effective surface + policy. */
+export async function getBoard(): Promise<any> {
+  const [policy, routing] = await Promise.all([getFeedPolicy(), getRoutingMap()]);
+  const lanes = SURFACE_ORDER.map((s) => ({
+    surface: s,
+    types: allTypes()
+      .filter((t) => !t.system && !t.event && t.home_surface === s.id)
+      .map((t) => ({
+        slug: t.slug, label: t.label, student_label: t.student_label,
+        home_surface: t.home_surface, feed_mode: t.feed_mode, today_eligible: t.today_eligible,
+        bucket: t.bucket, render_band: t.render_band, difficulty: t.difficulty,
+        cadence: routing[t.slug]?.feed_cadence ?? null,
+        frequency_cap: routing[t.slug]?.feed_frequency_cap ?? null,
+        cooldown_days: routing[t.slug]?.feed_cooldown_days ?? null,
+      })),
+  }));
+  return { lanes, policy, buckets: BUCKETS };
+}
+
+/**
+ * READ-ONLY simulator: what would this student see next in Today, and WHY.
+ * Ranks the student's today-eligible anchored cards with the transparent ranker
+ * and interleaves ambient placeholders per the policy cadence. No side effects
+ * (never persists impressions) — it mirrors the live composer's inputs.
+ */
+export async function simulate(enrollmentId: string, limit = 12): Promise<{ items: any[]; policy: FeedPolicy }> {
+  const now = new Date();
+  const policy = await getFeedPolicy();
+
+  // Seen state from the real impression ledger (no writes).
+  const seen = await sequelize.query<{ ref: string; n: number; last: Date | null; dismissed: boolean }>(
+    `SELECT ref, COUNT(*)::int AS n, MAX(served_at) AS last,
+            bool_or(interaction = 'dismiss') AS dismissed
+       FROM today_feed_impressions WHERE enrollment_id = :eid GROUP BY ref`,
+    { replacements: { eid: enrollmentId }, type: QueryTypes.SELECT },
+  ).catch(() => [] as any[]);
+  const seenByRef = new Map(seen.map((s) => [s.ref, s]));
+
+  let feed: any;
+  try { feed = await getFeed(enrollmentId); } catch { return { items: [], policy }; }
+  const anchored = (feed.cards || []).filter((c: any) =>
+    resolveType(c.type)?.today_eligible && resolveType(c.type)?.feed_mode !== 'ambient'
+    && c.status !== 'locked' && c.status !== 'completed');
+
+  const cands: (RankCandidate & { title: string | null; render_band: string; card_id: string })[] = anchored.map((c: any) => {
+    const s = seenByRef.get(`card:${c.id}`);
+    const def = resolveType(c.type);
+    return {
+      ref: `card:${c.id}`, type: c.type, surface: def?.home_surface ?? 'class', card_id: c.id,
+      priority: c.priority ?? 0, pinned_until: c.pinned_until ? new Date(c.pinned_until) : null,
+      released_at: c.release_date ? new Date(c.release_date) : (c.created_at ? new Date(c.created_at) : null),
+      frequency_cap: c.feed_frequency_cap ?? null, // null → ranker uses policy.defaultFrequencyCap
+      cooldown_days: c.feed_cooldown_days ?? null, // null → ranker uses policy.defaultCooldownDays
+      seen_count: s?.n ?? 0, last_seen_at: s?.last ? new Date(s.last) : null, dismissed: !!s?.dismissed,
+      title: c.title, render_band: c.render_band,
+    };
+  });
+
+  const ranked = rankCandidates(cands, policy, now);
+
+  // Interleave ambient placeholders on the policy cadence.
+  const items: any[] = [];
+  const cad = Math.max(1, policy.todayCadence);
+  let sinceAmbient = 0;
+  let ai = 0;
+  for (const r of ranked) {
+    items.push({ kind: 'anchored', type: r.type, title: r.title, card_id: r.card_id, render_band: r.render_band, score: Number(r.score.toFixed(3)), reasons: r.reasons });
+    sinceAmbient++;
+    if (policy.ambientProviders.length && sinceAmbient >= cad) {
+      const provider = policy.ambientProviders[ai % policy.ambientProviders.length];
+      items.push({ kind: 'ambient', type: provider, title: `(${provider} rotation)`, reasons: ['rotation · least-recently-seen'] });
+      ai++; sinceAmbient = 0;
+    }
+    if (items.length >= limit) break;
+  }
+  return { items: items.slice(0, limit), policy };
+}
+
+/** Cron worker: publish scheduled cards whose release_date has arrived. Idempotent. */
+export async function publishDueCards(): Promise<{ published: number }> {
+  const [rows]: any = await sequelize.query(
+    `UPDATE timeline_cards SET visibility = 'published', updated_at = NOW()
+       WHERE visibility = 'scheduled' AND release_date IS NOT NULL AND release_date <= NOW()
+       RETURNING id`,
+  );
+  const published = Array.isArray(rows) ? rows.length : 0;
+  if (published) console.log(`[FeedControl] published ${published} scheduled card(s)`);
+  return { published };
+}
