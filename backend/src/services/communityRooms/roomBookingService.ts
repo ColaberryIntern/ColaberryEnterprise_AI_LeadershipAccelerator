@@ -7,6 +7,7 @@ import { assertTransition } from './roomStateMachine';
 import { emitRoomEvent } from './roomOutboxService';
 import { ROOM_EVENTS } from './roomEvents';
 import { createRoom } from './roomService';
+import { recordContribution } from './roomRecognitionService';
 import { notFoundError, forbiddenError, validationError, conflictError, log } from './roomShared';
 
 // Booking lifecycle (spec §5 wizard + §11 state machine): create → publish →
@@ -227,6 +228,13 @@ export async function joinBooking(
     payload: { booking_id: bookingId, enrollment_id: ctx.enrollmentId },
   });
   log('info', 'booking_join', { booking_id: bookingId, enrollment_id: ctx.enrollmentId, outcome: 'authorized' });
+  // Recognition: showing up counts (Reliable Study Partner), once per session.
+  try {
+    await recordContribution(ctx.enrollmentId, {
+      category: 'reliable_study_partner', action: 'attended', points: 5,
+      roomId: room.id, bookingId: booking.id, idempotencyKey: `attend:${booking.id}:${ctx.enrollmentId}`,
+    });
+  } catch (e) { log('warn', 'recognition_attend_failed', { booking_id: bookingId, message: (e as Error)?.message }); }
   return { join_url: booking.meeting_link, state: booking.state };
 }
 
@@ -239,6 +247,15 @@ export async function completeBooking(ctx: RoomAccessContext, bookingId: string)
   assertTransition(booking.state, 'completed');
   await booking.update({ state: 'completed' });
   await emitRoomEvent({ eventType: ROOM_EVENTS.SessionCompleted, aggregateType: 'booking', aggregateId: booking.id });
+  // Recognition: the host earns Community Host credit for a completed session.
+  if (booking.host_enrollment_id) {
+    try {
+      await recordContribution(booking.host_enrollment_id, {
+        category: 'community_host', action: 'hosted_session', points: 25,
+        roomId: room.id, bookingId: booking.id, idempotencyKey: `host_complete:${booking.id}`,
+      });
+    } catch (e) { log('warn', 'recognition_host_failed', { booking_id: booking.id, message: (e as Error)?.message }); }
+  }
   return booking;
 }
 
