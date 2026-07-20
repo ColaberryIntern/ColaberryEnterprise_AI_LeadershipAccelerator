@@ -169,18 +169,23 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
   // ── DRAWER: orientation / resume / summary ──────────────────────────────────
   if (variant === 'drawer') {
     const principle = scenario?.principle || 'An architect sees the entire system surrounding the requested feature.';
+    const isBaseline = scenario ? !!scenario.baseline : true;
+    const weekLabel = scenario ? `Week ${scenario.week}` : 'Architect Mindset';
     return (
       <div className="am am-drawer"><Style />
         <Aperture />
-        <div className="am-d-cap"><div className="am-series">Architect Mindset</div><div className="am-d-title">{scenario?.title || 'Welcome to the Architect Time Machine'}</div></div>
+        <div className="am-d-cap"><div className="am-series">Architect Mindset · {weekLabel}</div><div className="am-d-title">{scenario?.title || 'Welcome to the Architect Time Machine'}</div></div>
         <div className="am-d-body">
           <div className="am-principle"><b>This week's principle.</b> {principle}</div>
+          {!completed && scenario?.request && (
+            <div className="am-brief"><b>This week's brief.</b> &ldquo;{scenario.request.text}&rdquo;</div>
+          )}
           {completed ? (
             <>
               <div className="am-sec">Experience Receipt</div>
               {receipt && <Receipt receipt={receipt} compact />}
               {progress?.commitment && <div className="am-commit">&ldquo;{progress.commitment}&rdquo;<span>Your Architect Commitment</span></div>}
-              <p className="am-note">Week 0 is a baseline. Week 1 begins your scored growth.</p>
+              <p className="am-note">{isBaseline ? 'Week 0 is a baseline. Week 1 begins your scored growth.' : 'A scored lesson. Your Architect Mindset Score is on the completion screen.'}</p>
             </>
           ) : (
             <>
@@ -194,14 +199,14 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
                 <li>See the consequences play out across time</li>
                 <li>Re-architect, and receive your Decision Record</li>
               </ol>
-              <p className="am-note">Week 0 is a baseline demonstration (about 13 minutes). It is not scored as your first lesson. Your progress autosaves.</p>
+              <p className="am-note">{isBaseline ? 'Week 0 is a baseline demonstration (about 13 minutes), not scored as your first lesson.' : `A scored lesson (about ${receipt?.minutes || 25} minutes).`} Your progress autosaves.</p>
             </>
           )}
         </div>
         {!preview && onEnterWorkspace && !completed && (
           <button type="button" className="am-cta" onClick={onEnterWorkspace}>Enter the Time Machine →</button>
         )}
-        {completed && <div className="am-done-pill">✓ Completed · baseline set</div>}
+        {completed && <div className="am-done-pill">✓ Completed · {isBaseline ? 'baseline set' : 'lesson complete'}</div>}
         {preview && <p className="am-note" style={{ padding: '0 4px' }}>Preview — in the live card, this panel orients the student and the button opens the full Workspace experience.</p>}
       </div>
     );
@@ -487,6 +492,7 @@ const AM_CSS = `
 .am-d-title{font-size:19px;font-weight:800;color:var(--am-strong);line-height:1.2;margin-top:3px}
 .am-d-body{padding:8px 4px;flex:1;overflow-y:auto}
 .am-principle{background:var(--am-sunken);border:1px solid var(--am-line);border-left:3px solid var(--am-berry);border-radius:10px;padding:11px 13px;font-size:13.5px}.am-principle b{color:var(--am-strong)}
+.am-brief{background:var(--am-page);border:1px solid var(--am-line);border-left:3px solid var(--am-amber);border-radius:10px;padding:11px 13px;font-size:13.5px;margin-top:9px;font-style:italic;color:var(--am-body)}.am-brief b{color:var(--am-strong);font-style:normal}
 .am-sec{font:700 11px var(--am-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--am-berry);margin:16px 0 8px}
 .am-flow{margin:0;padding-left:20px}.am-flow li{font-size:13px;margin:5px 0;color:var(--am-body)}
 .am-note{font-size:12px;color:var(--am-muted);margin:10px 0 0;line-height:1.5}

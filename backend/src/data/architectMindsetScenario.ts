@@ -65,9 +65,13 @@ export interface AmScenario {
   commitment_prompt: string;
 }
 
-/** The mandatory, reusable experience-compression qualification (canonical section 8). */
-export const AM_QUALIFICATION =
-  'Illustrative and scenario-based. This represents patterns studied, not employment experience earned, and is not a guarantee of competence or job readiness.';
+/**
+ * The mandatory, reusable experience-compression qualification (canonical section 8).
+ * Defined in a leaf module and re-exported here so existing importers are unaffected,
+ * while the per-week scenario files can import it without a circular dependency.
+ */
+export { AM_QUALIFICATION } from './architectMindsetQualification';
+import { AM_QUALIFICATION } from './architectMindsetQualification';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WEEK 0 — "You Don't Become an Architect by Learning More Tools"
@@ -419,10 +423,29 @@ export const WEEK1_SCENARIO: AmScenario = {
   commitment_prompt: 'Before I build, I will always',
 };
 
-/** Scenario registry by week. Weeks 0 and 1 are authored; later weeks generate. */
+// Weeks 2-12 are authored as data in architectMindsetWeeks/* (same AmScenario
+// contract as Weeks 0-1). They import AmScenario type-only + AM_QUALIFICATION from
+// the leaf module, so importing them here creates no circular dependency.
+import { WEEK2_SCENARIO, WEEK3_SCENARIO, WEEK4_SCENARIO } from './architectMindsetWeeks/weeks02to04';
+import { WEEK5_SCENARIO, WEEK6_SCENARIO, WEEK7_SCENARIO } from './architectMindsetWeeks/weeks05to07';
+import { WEEK8_SCENARIO, WEEK9_SCENARIO, WEEK10_SCENARIO } from './architectMindsetWeeks/weeks08to10';
+import { WEEK11_SCENARIO, WEEK12_SCENARIO } from './architectMindsetWeeks/weeks11to12';
+
+/** Scenario registry by week. Week 0 = baseline; Weeks 1-12 = scored lessons. */
 export const AM_SCENARIOS: Record<number, AmScenario> = {
   0: WEEK0_SCENARIO,
   1: WEEK1_SCENARIO,
+  2: WEEK2_SCENARIO,
+  3: WEEK3_SCENARIO,
+  4: WEEK4_SCENARIO,
+  5: WEEK5_SCENARIO,
+  6: WEEK6_SCENARIO,
+  7: WEEK7_SCENARIO,
+  8: WEEK8_SCENARIO,
+  9: WEEK9_SCENARIO,
+  10: WEEK10_SCENARIO,
+  11: WEEK11_SCENARIO,
+  12: WEEK12_SCENARIO,
 };
 
 export function scenarioForWeek(week: number | null | undefined): AmScenario | null {

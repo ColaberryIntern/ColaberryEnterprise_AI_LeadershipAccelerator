@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260720-am01 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Monday, July 20, 2026 at 6:30 PM</div>
+    <div><span class="sid">CC-20260720-am01</span><span class="count">3 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Phase 1 (Documentation + Design): documented the curriculum type + the 13-week experience, designed the 3 required visual surfaces, approved at the design gate**</h2>
+          <span class="badge">2026-07-20</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New docs-only deliverable under `docs/architect-mindset/` (15 files): canonical decisions (source of truth), product/curriculum(wk0-12)/experience-design/technical-architecture/compression-scoring specs, implementation &amp; approval plan, test plan, decision log, README, and 3 self-contained interactive HTML prototypes (thumbnail, right-side panel, full workspace) + the visual design review. Architecture decided: additive extension (new type + new `render_band architect_mindset` + one self-styled bespoke renderer wired into the existing drawer + workspace + a backend service modeled on `assessmentService`, storing state in the existing `timeline_card_progress.student_progress` JSONB) — NO new DB table, NO schema migration for Week 0.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Design-phase deliverable (docs + interactive prototypes); grounded in a read-only inspection of `origin/main` (3 Explore agents mapped the render pipeline, persistence/completion model, and registry/seed/blueprint/thumbnail mechanics). Design approved by Ali (human gate) → authorized the Week 0 build.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Original design docs authored in the primary checkout (branch `workstream/chapter-quality-and-worker`); the durable feature home is branch `workstream/architect-mindset-week0` (cut from `main`, where the Curriculum Type subsystem lives — the feature branch has only the legacy 18-col model). Four separate human approval gates: Design → Week 0 → Week 1 → Weeks 2-12; none cascades.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Phase 2 (Week 0 build): implemented &quot;You Don&#39;t Become an Architect by Learning More Tools&quot; end to end**</h2>
+          <span class="badge">2026-07-20</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Backend — new `architect_mindset` registry entry (`typeRegistry.ts`); hand-authored Week 0 scenario + `AmScenario` type (`data/architectMindsetScenario.ts`); PURE logic module (`services/runtime/architectMindsetLogic.ts` — 24-state machine + transition rules, the 14 completion gates, interview validation, baseline assessment, Experience Receipt + compression ratio, derived Mindset Ledger); I/O service (`services/runtime/architectMindsetService.ts` — getState/advance/saveInterview/evaluate/complete/getLedger; stores state in `timeline_card_progress.student_progress`; graceful AI eval with deterministic fallback; 14-gate backend-authoritative completion → `onCardCompleted`; ADR as a `PortfolioArtifact` kind `architecture_decision`, dedup one-per-card; idempotent); 6 new `/api/portal/runtime/cards/:cardId/architect/*` participant routes + controller handlers (gap-aware error responder); authored entry + `THUMBNAIL_SLUGS` + generation prompt (`seedComponentAuthoring.ts`). Frontend — new self-styled bespoke renderer `ArchitectTimeMachine.tsx` (drawer + workspace variants, own `--am-*` CSS, cinematic dream stage, reduced-motion, light/dark, required-state validation + custom-answer + consequence-reveal + completed states); wired into `TimelineCard.tsx` (new `kind:&#39;timemachine&#39;` + BAND + gradient + icon), `CardDetailBody.tsx` (drawer arm + footer de-dupe), `RuntimeWorkspace.tsx` (workspace fill arm; AI Mentor rail + comments + readiness bar retained), `runtimeApi.ts` (typed client + types). Shipped a real 900×300 thumbnail (`frontend/public/thumbnails/curriculum-types/architect_mindset.jpg`, vector-derived from the approved art direction; gpt-image-2 scene prompt registered in `prompts.json`). Tests — new `architectMindsetLogic.test.ts` (20 tests, all pass); bumped `typeRegistry.test.ts` (51→52 + added `architect_mindset` and fixed the pre-existing `intel`-band omission from the mirror set).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` (TS 5.9.3) and frontend `tsc --noEmit` (TS 5.9.3) both CLEAN for all shipped code (the only tsc errors are genuinely-uninstalled deps in UNTOUCHED files in this local checkout — `@anthropic-ai/sdk`, `@dnd-kit/*` — which resolve in Docker/CI). Jest: `architectMindsetLogic.test.ts` 20/20 PASS; `seedComponentAuthoring.test.ts` 4/4 PASS (validates the thumbnail `.jpg` on disk + `thumbnail_url`); `typeRegistry.test.ts` — 52-count + render-band coverage PASS (1 remaining failure is PRE-EXISTING on `origin/main`: `community_live_session` ships `event:true`+`community_xp:10`, a Community-module decision left untouched). Zero new DB table / schema migration. Week 0 demonstration report at `docs/architect-mindset/10-week0-demonstration-report.html`.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/architect-mindset-week0` (off `main`). STOPPED at the Week 0 approval gate — Week 1 NOT built; Week 0 approval does not authorize Week 1. Live end-to-end demonstration against a running dev instance is PENDING and NOT claimed as run: the dev-exec pattern runs main&#39;s compiled code (not this uncommitted branch), the dev Postgres is not reachable locally, and JSONB models can&#39;t run on SQLite — so exercising the real HTTP→service→DB path needs a dev-instance deploy of this branch (a shared-infra action I&#39;m confirming before taking). Core behavior (idempotent progress, transition rejection, 14-gate enforcement, custom-empty rejection, derived evidence, receipt, ledger) is proven by the passing unit tests. No commit-to-prod; after-hours deploy policy respected.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>Author Weeks 2-12 as AmScenario data on the same runtime; wire into AM_SCENARIOS; week-aware drawer</h2>
+          <span class="badge">2026-07-20</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Weeks 2-12 shipped as pure DATA on the already-prod Week 0/1 runtime (runtime code unchanged). 11 new scenarios in `backend/src/data/architectMindsetWeeks/{weeks02to04,weeks05to07,weeks08to10,weeks11to12}.ts` — locked titles/principles from the curriculum spec (W2 boundaries, W3 failure-path, W4 coupling, W5 data lifecycle, W6 security, W7 observability, W8 AI-confidence, W9 optimize-the-decision, W10 life-after-the-builder, W11 org-leadership, W12 capstone &quot;Final Horizon&quot;). Each scenario: request, first_decision, 4-layer zoom_out, signature_reveals, interview part 1 (3-4 Q) + part 2 (r1=tradeoff / r2=failure), consequence horizon (+dashboard where it fits), re-architecture, Experience Receipt (represented_hours 3400→6800), ADR-002..ADR-012, project_transfer. Registry `data/architectMindsetScenario.ts` now maps weeks 0-12 in `AM_SCENARIOS`. Extracted the shared `AM_QUALIFICATION` to a leaf module `data/architectMindsetQualification.ts`; week files `import type { AmScenario }` + import the value from the leaf so `scenario → weeks → qualification` is acyclic (prevents a circular-import undefined-qualification bug). Frontend `ArchitectTimeMachine.tsx` drawer is now week-aware: header &quot;Architect Mindset · Week N&quot; + the week&#39;s own title, a new &quot;This week&#39;s brief&quot; panel showing that week&#39;s actual client request, and the Week-0-only baseline copy made conditional on `scenario.baseline` — fixes the &quot;Week 1 looks like Week 0&quot; confusion.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest `architectMindsetLogic` 31/31 (8 new coverage tests — all 13 weeks resolve with distinct titles; wk0 baseline / 1-12 scored; every week carries assumption_discovery + tradeoff_quality + failure_anticipation; r1=tradeoff &amp; r2=failure for all scored weeks; every week derives evidence + clears the 14 gates; every scored week yields an in-range 8-dim score; represented_hours strictly increasing to the 6800 capstone; ADR-001..012 unique). Isolated `tsc --noEmit --strict` of the AM chain (types disabled) clean. Full-project + frontend tsc = CI authoritative (local repo-root TypeScript is a stale pre-5.0 copy that can&#39;t parse zod v4 / d3 `.d.ts`; the AM files import neither).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/architect-mindset-weeks-2-12` off origin/main. Runtime service/routes/state-machine/renderer logic UNCHANGED from the prod Week 1 path — Weeks 2-12 are additive data. Prod deploy = backend + nginx; then place published `architect_mindset` cards weeks 2-12 on program 92b98a72 so students see them. [[project_canonical_course_structure]]</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260720-am01</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
