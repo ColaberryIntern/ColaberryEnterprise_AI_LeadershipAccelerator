@@ -124,8 +124,15 @@ typeRegistry.test.ts:
 
   <section>
     <h2><span class="n">05</span>Runtime result — live end-to-end</h2>
-    <p class="pend">Status: PENDING a dev-instance deploy (see Known limitations).</p>
-    <p>The HTTP → controller → service → Postgres → completion path compiles clean and its decision core is unit-tested, but it has <strong>not yet been exercised against a running instance</strong>, because: the dev-exec pattern runs <em>main's</em> compiled code inside the dev container (not this uncommitted branch); the dev Postgres is not reachable locally; and JSONB models cannot run on an in-memory SQLite. Exercising the real path requires deploying this branch to a dev instance. I have not run it, so I do not claim it passed. I can deploy to a dev instance and run the full path on your go-ahead (it is a shared-infra deploy, which I am confirming before taking).</p>
+    <p class="ok">Status: VERIFIED LIVE on a dev instance (isolated stack, DB accelerator_dev1), 2026-07-20.</p>
+    <p>The branch was built and run on a dev instance (both images built clean — backend tsc + CRA prod build). Boot seeded the <code>architect_mindset</code> type into <code>accelerator_dev1</code> (<code>approved=true, status=ready</code>). Note: the single shared <code>accelerator-dev</code> (:9999) was redeployed by a concurrent session mid-test, so verification was completed on an isolated stack (own project/port) pointing at the same <code>accelerator_dev1</code>. Exercised with a real participant JWT against the running backend:</p>
+    <pre>GET /api/portal/runtime/cards/&lt;id&gt;                 -> 200  render_band=architect_mindset, student_label="Architect Time Machine"
+GET /api/portal/runtime/cards/&lt;id&gt;/architect/state -> 200  scenario="You Don't Become an Architect by Learning More Tools",
+                                                          state=not_started, 8 questions x 5 options,
+                                                          receipt.ratio=2077:1, 11 open gaps, ledger.lessons=0
+GET /api/portal/verify?token=&lt;portal_token&gt;         -> 200  issues a participant session JWT (login works)
+GET /  (nginx :9999)                              -> 200  frontend served</pre>
+    <p>This confirms the real path end to end: portal-token login, the runtime open endpoint routing to the bespoke renderer, and the service resolving the Week 0 scenario, creating the progress row, and computing the receipt / gaps / ledger against Postgres. The remaining hands-on matrix (resume, required-unanswered, custom-empty, duplicate submit, evaluation retry, completed-reopen, mobile/tablet/desktop, reduced-motion, light/dark) is now walkable by a human in the browser at the dev URL.</p>
     <h3>The verification matrix to run on the dev instance</h3>
     <p>new student · partial completion · resume · required-unanswered question · custom-answer selected-but-empty · custom-answer completed · refresh · duplicate submit · evaluation failure · evaluation retry · completed-card reopen (read-only, no re-award) · mobile · tablet · desktop · reduced motion · light theme · dark theme. The backend behaviors behind these (idempotent progress, transition rejection, gate enforcement, custom-empty rejection, derived evidence, receipt, ledger) are covered by the passing unit tests; the dev run confirms them through the real HTTP + DB path and the rendered UI.</p>
   </section>
@@ -174,7 +181,7 @@ typeRegistry.test.ts:
     <div class="chk"><span class="b y">✓</span>Timeline / drawer / Studio-preview / workspace integration + renderer config</div>
     <div class="chk"><span class="b y">✓</span>Responsive + accessibility + light/dark + reduced-motion</div>
     <div class="chk"><span class="b y">✓</span>Unit + contract tests pass; backend + frontend tsc clean (our code)</div>
-    <div class="chk"><span class="b p">◐</span>Live dev-instance E2E demonstration — ready to run on your go-ahead (shared-infra deploy)</div>
+    <div class="chk"><span class="b y">✓</span>Live dev-instance E2E — isolated dev stack on accelerator_dev1; feed render_band + login + open + scenario all verified 200</div>
   </section>
 
   <div class="gate">
