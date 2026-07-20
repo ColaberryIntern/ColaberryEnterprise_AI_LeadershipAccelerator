@@ -35,7 +35,20 @@ export async function createSession(data: {
   curriculum_json?: any;
   materials_json?: any;
 }) {
-  return LiveSession.create(data as any);
+  const session = await LiveSession.create(data as any);
+  // Colaberry Commons — auto-create the linked cohort room for this official
+  // session (acceptance criterion #1). Best-effort, idempotent, and flag-gated:
+  // it never blocks or fails session creation, and does nothing when the feature
+  // is off. Lazily imported so the community-rooms tree only loads when enabled.
+  if (env.communityRoomsEnabled) {
+    try {
+      const { ensureRoomForSession } = await import('./communityRooms/roomService');
+      await ensureRoomForSession(session);
+    } catch (err: any) {
+      console.warn('[CommunityRooms] ensureRoomForSession failed (non-fatal):', err?.message);
+    }
+  }
+  return session;
 }
 
 export async function updateSession(sessionId: string, data: Partial<{
