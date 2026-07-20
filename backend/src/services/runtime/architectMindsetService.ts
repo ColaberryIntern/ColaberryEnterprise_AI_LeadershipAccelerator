@@ -53,10 +53,14 @@ async function load(enrollmentId: string, cardId: string) {
 
 async function save(row: TimelineCardProgress, progress: AmProgress, status?: 'in_progress' | 'completed') {
   progress.last_saved_at = new Date().toISOString();
-  const patch: any = { student_progress: progress };
-  if (status) patch.status = status;
-  if (!row.started_at && progress.started_at) patch.started_at = new Date(progress.started_at);
-  await row.update(patch);
+  // Sequelize does NOT detect in-place mutations of a JSONB field, and complete()
+  // saves the same row twice in one request (completion_eligible -> completed). Take
+  // a decoupled snapshot and force the field dirty so every state change persists.
+  row.set('student_progress', JSON.parse(JSON.stringify(progress)));
+  row.changed('student_progress', true);
+  if (status) row.set('status', status);
+  if (!row.started_at && progress.started_at) row.set('started_at', new Date(progress.started_at));
+  await row.save();
 }
 
 // ── GET state (resume) ───────────────────────────────────────────────────────
