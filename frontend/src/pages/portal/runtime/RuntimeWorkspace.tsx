@@ -353,10 +353,7 @@ const RuntimeWorkspace: React.FC = () => {
               the center; completion (points on first build) reveals on the right after a copy. */}
           {isBuildArtifacts && (
             <div className="rt-readerwrap">
-              <BuildArtifactsRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} variant="workspace" onCopied={() => setLabCopied(true)} />
-              <div className="rt-readerfoot">
-                {!completed && !labCopied && <span className="rt-muted">Pick an artifact + project, copy the build prompt, build it in Claude Code, then submit on the right →</span>}
-              </div>
+              <BuildArtifactsRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} variant="workspace" cardId={cardId} completed={completed} onComplete={complete} />
             </div>
           )}
           {/* Anthropic Skills Course — the external-course panel + certificate upload
@@ -402,12 +399,6 @@ const RuntimeWorkspace: React.FC = () => {
           {isPromptCatalog && (allPromptsCopied || completed) && (
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
               {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Built one in Claude Code?</div>}
-              {completeGate}
-            </div>
-          )}
-          {isBuildArtifacts && (labCopied || completed) && (
-            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
-              {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Built your artifact?</div>}
               {completeGate}
             </div>
           )}

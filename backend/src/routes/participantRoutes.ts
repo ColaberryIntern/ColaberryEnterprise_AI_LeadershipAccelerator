@@ -97,6 +97,18 @@ router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, 
 // Deep Dive Field Guide — upload the .html built in Claude Code (+100 pts, once); GET = status.
 router.post('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, fieldGuideUpload.single('file'), handleUploadFieldGuide);
 router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, handleGetFieldGuide);
+
+// Build Artifact(s) Lab — upload the file the student built in Claude Code. Reuses
+// the strategy-prep multer config (PDF/Word/PPT/Excel/RTF/Text/Markdown/CSV), which
+// validates the file type server-side; a bad type returns a clear 400. The card is
+// then marked complete via the normal /complete endpoint (points on the first build).
+router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, (req: Request, res: Response) => {
+  strategyPrepUpload.single('file')(req, res, (err: any) => {
+    if (err) return res.status(400).json({ error: err.message || 'Upload failed. Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV.' });
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded — pick the artifact file Claude Code built for you.' });
+    res.json({ ok: true, filename: req.file.originalname, size: req.file.size });
+  });
+});
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 // Weekly feedback Survey — read the questions + saved answers, and store answers.

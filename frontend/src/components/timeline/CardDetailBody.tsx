@@ -269,7 +269,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
               : <div className="tld-note" style={{ margin: 20 }}>This prompt catalog has not been generated yet.</div>
         ) : isBuildArtifacts ? (
           content && content.body_html
-            ? <BuildArtifactsRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" onCopied={() => setCopyGateMet(true)} />
+            ? <BuildArtifactsRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" cardId={card.id} completed={done} onComplete={completeSafely} />
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This build station has not been generated yet.</div>
@@ -456,7 +456,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                   <span className="tld-gatemsg">{dd.done} of {dd.total} sections read</span>
                 )}
                 {isDeepDive && dd.message && <span className="tld-gatemsg">{dd.message}</span>}
-                {(isSetupLab || isPromptCatalog || isBuildArtifacts) && !copyGateMet && completeSafely && <span className="tld-gatemsg">{isPromptCatalog ? 'Copy all the prompts to complete this lab' : isBuildArtifacts ? 'Copy a build prompt, then build it in Claude Code' : 'Copy the prompt to complete this lab'}</span>}
+                {(isSetupLab || isPromptCatalog) && !copyGateMet && completeSafely && <span className="tld-gatemsg">{isPromptCatalog ? 'Copy all the prompts to complete this lab' : 'Copy the prompt to complete this lab'}</span>}
                 {/* The guide's "Choose HTML file" button posts to the host; this hidden
                     input is the real picker the host opens for the +100-point upload. */}
                 {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
@@ -486,8 +486,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isDeepDive && dd.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
                 )}
-                {(isSetupLab || isPromptCatalog || isBuildArtifacts) && copyGateMet && completeSafely && (
-                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>{isBuildArtifacts ? 'Submit your build' : 'Complete & generate evidence'}</button>
+                {(isSetupLab || isPromptCatalog) && copyGateMet && completeSafely && (
+                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Complete &amp; generate evidence</button>
                 )}
               </>
             )}
