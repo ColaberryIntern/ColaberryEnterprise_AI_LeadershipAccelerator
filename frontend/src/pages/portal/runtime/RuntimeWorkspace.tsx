@@ -122,6 +122,7 @@ const RuntimeWorkspace: React.FC = () => {
   const isSetupLab = band === 'setup_lab' && !!card?.content?.body_html;
   const isPromptCatalog = band === 'prompt_catalog' && !!card?.content?.body_html;   // Prompt Lab: practice-prompt catalog
   const [labCopied, setLabCopied] = useState(false);   // Setup Lab: reveal completion only after the prompt is copied
+  const [allPromptsCopied, setAllPromptsCopied] = useState(false);   // Prompt Lab: reveal completion only after ALL prompts are copied
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
@@ -338,8 +339,10 @@ const RuntimeWorkspace: React.FC = () => {
               filling the center as a single scroll; standard completion in the foot. */}
           {isPromptCatalog && (
             <div className="rt-readerwrap">
-              <PromptCatalogRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} variant="workspace" />
-              <div className="rt-readerfoot">{completeGate}</div>
+              <PromptCatalogRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} variant="workspace" onAllCopied={() => setAllPromptsCopied(true)} />
+              <div className="rt-readerfoot">
+                {!completed && !allPromptsCopied && <span className="rt-muted">Copy all the prompts, build them in Claude Code, then complete on the right →</span>}
+              </div>
             </div>
           )}
           {/* Anthropic Skills Course — the external-course panel + certificate upload
@@ -379,6 +382,12 @@ const RuntimeWorkspace: React.FC = () => {
           {isSetupLab && (labCopied || completed) && (
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
               {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Finished in Claude Code?</div>}
+              {completeGate}
+            </div>
+          )}
+          {isPromptCatalog && (allPromptsCopied || completed) && (
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
+              {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Built one in Claude Code?</div>}
               {completeGate}
             </div>
           )}

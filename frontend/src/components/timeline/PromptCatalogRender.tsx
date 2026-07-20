@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 
 /**
  * PromptCatalogRender — the bespoke renderer for the `prompt_lab` (render_band
@@ -62,14 +62,16 @@ const CSS = `
 .plc-copy.done{color:var(--green);border-color:var(--green)}
 .plc-pre{background:var(--code);border-left:3px solid var(--accent);color:#e7eefc;padding:13px 15px;border-radius:8px;overflow:auto;
   font-family:Consolas,Menlo,monospace;font-size:12px;line-height:1.55;white-space:pre-wrap;margin:10px 0 0}
+.plc-progress{font-size:12px;font-weight:600;color:var(--mut);background:#f4f6fb;border:1px solid var(--line);border-radius:8px;padding:8px 12px;margin:2px 0 14px}
+.plc-progress.done{color:var(--green);background:#eafaf1;border-color:#bfe6cd}
 .tld-body--promptcatalog{padding:0 !important;background:#fff !important;overflow:hidden !important;display:flex !important}
 `;
 
-const PromptRow: React.FC<{ p: PromptItem }> = ({ p }) => {
+const PromptRow: React.FC<{ p: PromptItem; onCopied?: () => void }> = ({ p, onCopied }) => {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const copy = () => {
-    const done = () => { setCopied(true); window.setTimeout(() => setCopied(false), 1500); };
+    const done = () => { setCopied(true); onCopied?.(); window.setTimeout(() => setCopied(false), 1500); };
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(p.prompt).then(done, done);
     else done();
   };
@@ -86,10 +88,20 @@ const PromptRow: React.FC<{ p: PromptItem }> = ({ p }) => {
   );
 };
 
-interface Props { bodyHtml: string; title?: string | null; summary?: string | null; variant?: 'drawer' | 'workspace'; }
+interface Props { bodyHtml: string; title?: string | null; summary?: string | null; variant?: 'drawer' | 'workspace'; onAllCopied?: () => void; }
 
-const PromptCatalogRender: React.FC<Props> = ({ bodyHtml, title, summary, variant }) => {
+const PromptCatalogRender: React.FC<Props> = ({ bodyHtml, title, summary, variant, onAllCopied }) => {
   const cats = useMemo(() => parseCatalog(bodyHtml || ''), [bodyHtml]);
+  // Give every prompt a stable global index so we can track "all copied".
+  const grouped = useMemo(() => {
+    let gi = 0;
+    return cats.map((c) => ({ name: c.name, prompts: c.prompts.map((p) => ({ ...p, gi: gi++ })) }));
+  }, [cats]);
+  const total = useMemo(() => grouped.reduce((s, c) => s + c.prompts.length, 0), [grouped]);
+  const [copied, setCopied] = useState<Set<number>>(new Set());
+  const allCopied = total > 0 && copied.size >= total;
+  useEffect(() => { if (allCopied) onAllCopied?.(); }, [allCopied, onAllCopied]);
+  const markCopied = (gi: number) => setCopied((prev) => { const n = new Set(prev); n.add(gi); return n; });
   return (
     <div className={`plc-render plc-${variant || 'drawer'}`}>
       <style>{CSS}</style>
@@ -97,10 +109,15 @@ const PromptCatalogRender: React.FC<Props> = ({ bodyHtml, title, summary, varian
         <span className="plc-badge">&#9670; CLAUDE CODE &middot; PROMPT LAB</span>
         {title && <h2 className="plc-h">{title}</h2>}
         {summary && <p className="plc-sum">{summary}</p>}
-        {cats.map((c, i) => (
+        {total > 0 && (
+          <div className={`plc-progress${allCopied ? ' done' : ''}`}>
+            {allCopied ? `✓ All ${total} prompts copied — you can complete this lab` : `${copied.size} of ${total} prompts copied — copy them all to unlock completion`}
+          </div>
+        )}
+        {grouped.map((c, i) => (
           <div key={i} className="plc-cat">
             <div className="plc-cathead">{CAT_EMOJI[i % CAT_EMOJI.length]} {c.name}</div>
-            {c.prompts.map((p, j) => <PromptRow key={j} p={p} />)}
+            {c.prompts.map((p) => <PromptRow key={p.gi} p={p} onCopied={() => markCopied(p.gi)} />)}
           </div>
         ))}
       </div>

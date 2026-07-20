@@ -92,6 +92,10 @@ export const BAND: Record<string, Visual> = {
 };
 export const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
 
+// Curriculum types that run IN Claude Code — the tile shows a "Claude Code" corner
+// strip so a student knows they'll need Claude Code open to complete the activity.
+export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'github_sync']);
+
 const KIND_GRADIENT: Record<Kind, string> = {
   video: 'linear-gradient(135deg,#367895,#2E6A86)',
   skilljar: 'linear-gradient(135deg,#367895,#2E6A86)',
@@ -314,7 +318,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       aria-label={playable ? `Play ${card.video?.title || card.title}` : `Open ${card.title}`}
     >
       {watermark}
-      {v.kind === 'setuplab' && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#D97757,#C4633A)' }}>Claude Code</span>}
+      {CLAUDE_CODE_TYPES.has(card.type) && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#D97757,#C4633A)' }}>Claude Code</span>}
       {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
       {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
