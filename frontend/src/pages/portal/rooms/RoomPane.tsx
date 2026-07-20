@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  fetchRoom, fetchRoomMessages, postRoomMessage, joinRoom, requestRoomAccess, joinVideoRoom,
+  fetchRoom, fetchRoomMessages, postRoomMessage, requestRoomAccess, joinVideoRoom,
   touchRoomPresence, deleteRoom, inviteToRoom, fetchPeople, myEnrollmentId,
   RoomView, RoomMessage, RoomPerson,
 } from '../../../services/roomsApi';
@@ -113,7 +113,6 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
       setMessages((prev) => [...(prev || []), msg]);
     } catch { setDraft(text); }
   };
-  const doJoin = async () => { try { await joinRoom(roomId); await loadRoom(); onChanged(); } catch { /* not eligible */ } };
   const doRequest = async () => { try { await requestRoomAccess(roomId); window.alert('Access requested — a host will review it.'); } catch { /* no-op */ } };
   const doJoinVideo = async () => {
     try {
@@ -135,7 +134,6 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   if (view === 'error') return <div className="rm-pane"><div className="rm-empty">This room isn’t available.</div></div>;
 
   const { room, membership, visibility } = view;
-  const isMember = membership?.access_state === 'active';
   const isOwner = !!room.owner_enrollment_id && room.owner_enrollment_id === myEnrollmentId();
   const canManage = isOwner || ['owner', 'host', 'cohost', 'moderator'].includes(membership?.role || '');
   const emoji = room.metadata?.emoji || CAT_EMOJI[room.category] || '💬';
@@ -164,7 +162,6 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
         <span style={{ flex: 1 }} />
         {room.is_video && <button type="button" className="te-btn cherry sm" onClick={doJoinVideo}>📹 Join call</button>}
         {canManage && <button type="button" className="te-btn ghost sm" onClick={() => setShowInvite(true)}>Invite</button>}
-        {!isMember && <button type="button" className="te-btn berry sm" onClick={doJoin}>Join</button>}
         {isOwner && !room.is_system && <button type="button" className="te-btn ghost sm rm-danger" onClick={doDelete}>Delete</button>}
       </div>
 
