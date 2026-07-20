@@ -6,6 +6,7 @@ import { fetchSettings, readCachedAvatar } from '../../../services/portalSetting
 import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import BuildToast from '../projects/BuildToast';
+import { COHORT_CONTACTS, onlineCount } from './cohortContactsStub';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
 
@@ -129,6 +130,15 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   useEffect(() => {
     try { localStorage.setItem('te_nav_collapsed', navCollapsed ? '1' : '0'); } catch { /* ignore */ }
   }, [navCollapsed]);
+  // Right contacts rail collapse — mirrors navCollapsed. On narrow viewports the
+  // rail auto-collapses (CSS) regardless of this flag; this drives the manual
+  // toggle + persistence at full width.
+  const [contactsCollapsed, setContactsCollapsed] = useState<boolean>(() => {
+    try { return localStorage.getItem('te_contacts_collapsed') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('te_contacts_collapsed', contactsCollapsed ? '1' : '0'); } catch { /* ignore */ }
+  }, [contactsCollapsed]);
 
   const load = useCallback(async () => {
     const [p, s] = await Promise.allSettled([fetchPoints(), fetchSchedule()]);
@@ -202,8 +212,13 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const cohortName = schedule?.first_class?.cohort_name || 'Your cohort';
   const active = location.pathname;
 
+  // Cohort contacts rail data (stub until GET /api/portal/cohort/presence lands).
+  const online = onlineCount(COHORT_CONTACTS);
+  const onlineList = COHORT_CONTACTS.filter((c) => c.presence !== 'offline');
+  const offlineList = COHORT_CONTACTS.filter((c) => c.presence === 'offline');
+
   return (
-    <div className={`te-shell${navCollapsed ? ' collapsed' : ''}`}>
+    <div className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}`}>
       {/* ── topbar ── */}
       <header className="te-top">
         <button type="button" className="te-navtoggle" onClick={() => setNavCollapsed((c) => !c)}
@@ -283,6 +298,50 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
 
       {/* ── main ── */}
       <main className="te-main">{children}</main>
+
+      {/* ── right contacts rail (Facebook-style cohort presence) ──
+          Shell-level, so it appears on every PortalShell page. On narrow
+          viewports it is the FIRST thing to collapse (avatar-only rail), before
+          the left nav — see the staged .te-contacts media rules in TodayShell.css. */}
+      <aside className="te-contacts" aria-label="Cohort contacts">
+        <div className="te-ct-head">
+          <h3>Contacts</h3>
+          <button
+            type="button"
+            className="te-ct-toggle"
+            onClick={() => setContactsCollapsed((c) => !c)}
+            title={contactsCollapsed ? 'Expand contacts' : 'Collapse contacts'}
+            aria-label="Toggle contacts panel"
+            aria-expanded={!contactsCollapsed}
+          >
+            <svg viewBox="0 0 24 24" fill="none" style={{ transform: contactsCollapsed ? 'rotate(180deg)' : 'none' }}>
+              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+        <button type="button" className="te-ct-find" title="Find people">
+          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+          <span>Find people</span>
+        </button>
+        <div className="te-ct-list">
+          <div className="te-ct-grp">{cohortName} · {online} online</div>
+          {onlineList.map((c) => (
+            <button key={c.name} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
+              <span className="te-ctav" style={{ background: c.color }}>{c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
+              <span className="te-ctname">{c.name}</span>
+              <span className={`te-ctpres ${c.presence}`} />
+            </button>
+          ))}
+          {offlineList.length > 0 && <div className="te-ct-grp">Offline</div>}
+          {offlineList.map((c) => (
+            <button key={c.name} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
+              <span className="te-ctav" style={{ background: c.color }}>{c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
+              <span className="te-ctname">{c.name}</span>
+              <span className={`te-ctpres ${c.presence}`} />
+            </button>
+          ))}
+        </div>
+      </aside>
 
       {/* ── bottom tab bar (mobile only via CSS) — nav reachable on phones ── */}
       <nav className="te-tabbar">
