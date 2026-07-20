@@ -51,6 +51,8 @@ const portalRoutes = (
       <Route path="/portal/points" element={<PointsPage />} />
       <Route path="/portal/projects" element={<ProjectsPage />} />
       <Route path="/portal/community" element={<CommunityPage />} />
+      <Route path="/portal/rooms" element={<RoomsPage />} />
+      <Route path="/portal/rooms/:roomId" element={<RoomDetailPage />} />
       {/* Manager surface — renders its own PortalShell chrome; the shell adds the
           "Your company" nav group only for org managers, and the page itself
           shows a friendly error if a non-manager reaches it. */}
