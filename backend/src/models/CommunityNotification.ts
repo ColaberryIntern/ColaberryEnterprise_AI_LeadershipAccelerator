@@ -1,7 +1,7 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type CommunityNotificationType = 'mention' | 'reply';
+export type CommunityNotificationType = 'mention' | 'reply' | 'like';
 export type CommunityNotificationSourceType = 'post' | 'comment';
 
 export interface CommunityNotificationAttributes {
@@ -51,7 +51,7 @@ CommunityNotification.init(
       references: { model: 'community_members', key: 'id' },
     },
     notification_type: {
-      type: DataTypes.ENUM('mention', 'reply'),
+      type: DataTypes.ENUM('mention', 'reply', 'like'),
       allowNull: false,
     },
     source_type: {

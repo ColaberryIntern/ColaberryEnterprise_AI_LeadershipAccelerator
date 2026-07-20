@@ -9,6 +9,7 @@ import {
 
 function notifText(n: CommunityNotification): string {
   const who = n.actor?.display_name ?? 'Someone';
+  if (n.notification_type === 'like') return `${who} liked your ${n.source_type}`;
   if (n.notification_type === 'mention') return `${who} mentioned you in a ${n.source_type}`;
   return n.source_type === 'comment' ? `${who} replied to you` : `${who} commented on your post`;
 }
