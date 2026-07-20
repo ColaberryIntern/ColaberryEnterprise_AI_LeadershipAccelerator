@@ -75,6 +75,7 @@ export const BAND: Record<string, Visual> = {
   exam: { kind: 'test', color: '#5BA63C' },
   evaluation: { kind: 'test', color: '#5BA63C' },
   promptlab: { kind: 'lab', color: '#FB2832' },
+  prompt_catalog: { kind: 'lab', color: '#D97757' },   // Prompt Lab — Claude Code practice-prompt catalog
   task: { kind: 'lab', color: '#FB2832' },
   artifact: { kind: 'lab', color: '#FB2832' },
   presentation: { kind: 'lab', color: '#FB2832' },
