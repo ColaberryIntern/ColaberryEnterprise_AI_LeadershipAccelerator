@@ -205,6 +205,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // updates the bar + Mark-complete enablement; the server enforces regardless.
   const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
   const [gateMsg, setGateMsg] = useState<string | null>(null);
+  const [copyGateMet, setCopyGateMet] = useState(false);   // Claude Code labs (drawer): reveal completion once the prompt(s) are copied — phone users complete here
   useEffect(() => { setWatch(null); setGateMsg(null); }, [card.id]);
   const live = !preview && !done;
   const handleWatchBeat = live
@@ -254,13 +255,13 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             : <div className="tld-note" style={{ margin: 20 }}>This Field Guide has not been added yet.</div>
         ) : isSetupLab ? (
           content && content.body_html
-            ? <SetupLabRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} estMin={card.estimated_time} points={pts} difficulty={card.difficulty} variant="drawer" />
+            ? <SetupLabRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} estMin={card.estimated_time} points={pts} difficulty={card.difficulty} variant="drawer" onCopied={() => setCopyGateMet(true)} />
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This lab has not been generated yet.</div>
         ) : isPromptCatalog ? (
           content && content.body_html
-            ? <PromptCatalogRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" />
+            ? <PromptCatalogRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" onAllCopied={() => setCopyGateMet(true)} />
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This prompt catalog has not been generated yet.</div>
@@ -447,6 +448,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                   <span className="tld-gatemsg">{dd.done} of {dd.total} sections read</span>
                 )}
                 {isDeepDive && dd.message && <span className="tld-gatemsg">{dd.message}</span>}
+                {(isSetupLab || isPromptCatalog) && !copyGateMet && completeSafely && <span className="tld-gatemsg">{isPromptCatalog ? 'Copy all the prompts to complete this lab' : 'Copy the prompt to complete this lab'}</span>}
                 {/* The guide's "Choose HTML file" button posts to the host; this hidden
                     input is the real picker the host opens for the +100-point upload. */}
                 {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
@@ -475,6 +477,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 )}
                 {isDeepDive && dd.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
+                )}
+                {(isSetupLab || isPromptCatalog) && copyGateMet && completeSafely && (
+                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Complete &amp; generate evidence</button>
                 )}
               </>
             )}
