@@ -862,6 +862,17 @@ router.post('/api/portal/community/presence/ping', requireParticipant, async (re
   }
 });
 
+// Cohort presence for the portal right-rail "Contacts" panel (PortalShell).
+router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) => {
+  try {
+    const { getCohortPresence } = await import('../services/cohortPresenceService');
+    const contacts = await getCohortPresence(req.participant!.sub, req.participant!.cohort_id);
+    res.json({ contacts });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
 router.get('/api/portal/community/members/:memberId', requireParticipant, async (req, res) => {
   const paramsParsed = MemberIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) {
