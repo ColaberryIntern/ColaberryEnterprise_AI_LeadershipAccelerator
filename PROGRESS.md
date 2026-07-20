@@ -9852,3 +9852,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali's punch-list — video rooms (Meet) creatable on the fly, 10 always-open defaults (fruit theme), fix the lonely People-online panel, and a more visual/spunky design (per the exec-grade "data-storytelling" design ref, BC 10039770075). [[project_colaberry_commons_build]]
   - Verification: backend + frontend `tsc --noEmit` exit 0; nginx Docker build "Compiled successfully"; deployed to dev — boot logged "default rooms: 10 created", API returns 14 rooms (10 video), and `join-video` minted a real link `https://meet.google.com/ouh-ndyj-gce`. Branch `workstream/community-rooms-frontend`.
   - Notes: dev only; not merged to prod (Rooms nav would 404 in prod until the backend flag is on). Meet links minted via the dev Google service account.
+
+### Colaberry Commons — Discord two-pane Rooms + live presence counts + create/delete/invite — 2026-07-20
+- [x] Rebuilt Rooms as a two-pane channel layout with live occupancy counts, public/private split, and room management
+  - Date: 2026-07-20
+  - Session: CC-20260719-cm3x
+  - What changed:
+    - Backend: new `room_presence` table + `RoomPresence` model + `roomPresenceService` (touch heartbeat + `hereCounts`); `POST /rooms/:id/presence`; room list now returns `here_count` per room. `createRoom` coerces member rooms to private/cohort (no public) + stores a chosen `emoji` in metadata; new `deleteRoom` (owner-only, blocked by upcoming sessions) + `DELETE /rooms/:id`; `inviteMembers` grant-access + `POST /rooms/:id/invite`. `getHome`/`listEvents` now show public + private/cohort-with-access bookings and tag each with its room emoji (Up-next icon).
+    - Frontend: RoomsPage rebuilt as a **two-pane Discord layout** — a rail of rooms grouped **Public/Private × Text/Video** each with a live green "here" count (polled 15s), and a right pane (`RoomPane`) with chat (3s poll + presence heartbeat), video Join, Invite (owner/host), and Delete (owner). New-room modal is private/cohort-only with an emoji picker. Welcome pane shows Happening-now / Up-next with room emojis. `/portal/rooms/:roomId` now renders the two-pane (retired `RoomDetailPage`).
+  - Why: Ali's mockup + punch-list — Discord-style layout, see how many people are in each room at all times, split public/private, members create private rooms only + pick an emoji, delete own rooms, grant access, and correct event visibility. [[project_colaberry_commons_build]]
+  - Verification: backend + frontend `tsc --noEmit` exit 0; nginx build "Compiled successfully"; deployed to dev — `room_presence` created, presence ping → `here_count:1`, 15 public/10 video rooms, member "public" create coerced to private with emoji stored. Branch `workstream/community-rooms-frontend`.
+  - Notes: dev only. "Who's in a room" = who has it open / in its video (poll heartbeat, 70s freshness) — real Meet occupancy needs the Reports API (later).
