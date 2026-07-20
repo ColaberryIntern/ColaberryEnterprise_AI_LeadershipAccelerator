@@ -166,9 +166,13 @@ export async function getBoard(): Promise<any> {
  * and interleaves ambient placeholders per the policy cadence. No side effects
  * (never persists impressions) — it mirrors the live composer's inputs.
  */
-export async function simulate(enrollmentId: string, limit = 12): Promise<{ items: any[]; policy: FeedPolicy; context?: any }> {
+export async function simulate(enrollmentId: string, limit = 12, includeTypes?: string[]): Promise<{ items: any[]; policy: FeedPolicy; context?: any; sandbox?: boolean }> {
   const now = new Date();
   const policy = await getFeedPolicy();
+  // Sandbox / what-if: when includeTypes is provided (even an empty array), treat ONLY
+  // those slugs as active instead of the live today_eligible routing. Never persists.
+  const sandbox = Array.isArray(includeTypes);
+  const includeSet = sandbox ? new Set(includeTypes) : null;
 
   // Seen state from the real impression ledger (no writes).
   const seen = await sequelize.query<{ ref: string; n: number; last: Date | null; dismissed: boolean }>(
@@ -181,9 +185,11 @@ export async function simulate(enrollmentId: string, limit = 12): Promise<{ item
 
   let feed: any;
   try { feed = await getFeed(enrollmentId); } catch { return { items: [], policy }; }
-  const anchored = (feed.cards || []).filter((c: any) =>
-    resolveType(c.type)?.today_eligible && resolveType(c.type)?.feed_mode !== 'ambient'
-    && c.status !== 'locked' && c.status !== 'completed');
+  const anchored = (feed.cards || []).filter((c: any) => {
+    const def = resolveType(c.type);
+    const active = sandbox ? includeSet!.has(c.type) : def?.today_eligible;
+    return active && def?.feed_mode !== 'ambient' && c.status !== 'locked' && c.status !== 'completed';
+  });
 
   const cands: (RankCandidate & { title: string | null; render_band: string; card_id: string; student_label: string; week: number | null; thumbnail: string | null })[] = anchored.map((c: any) => {
     const s = seenByRef.get(`card:${c.id}`);
@@ -205,13 +211,15 @@ export async function simulate(enrollmentId: string, limit = 12): Promise<{ item
   // Interleave ambient placeholders on the policy cadence.
   const items: any[] = [];
   const cad = Math.max(1, policy.todayCadence);
+  // In sandbox, only rotate the ambient providers the user has actually included.
+  const activeProviders = sandbox ? policy.ambientProviders.filter((p) => includeSet!.has(p)) : policy.ambientProviders;
   let sinceAmbient = 0;
   let ai = 0;
   for (const r of ranked) {
     items.push({ kind: 'anchored', type: r.type, student_label: r.student_label, title: r.title, card_id: r.card_id, render_band: r.render_band, surface: r.surface, week: r.week, thumbnail: r.thumbnail, score: Number(r.score.toFixed(3)), reasons: r.reasons });
     sinceAmbient++;
-    if (policy.ambientProviders.length && sinceAmbient >= cad) {
-      const provider = policy.ambientProviders[ai % policy.ambientProviders.length];
+    if (activeProviders.length && sinceAmbient >= cad) {
+      const provider = activeProviders[ai % activeProviders.length];
       const pdef = resolveType(provider);
       items.push({ kind: 'ambient', type: provider, student_label: pdef?.student_label || provider, title: `${pdef?.student_label || provider} (rotating)`, surface: 'today', thumbnail: null, reasons: ['rotation · least-recently-seen'] });
       ai++; sinceAmbient = 0;
@@ -230,7 +238,7 @@ export async function simulate(enrollmentId: string, limit = 12): Promise<{ item
     already_seen: seen.length,
     max_week: cards.filter((c) => c.status !== 'locked' && c.week != null).reduce((m, c) => Math.max(m, c.week), 0),
   };
-  return { items: items.slice(0, limit), policy, context };
+  return { items: items.slice(0, limit), policy, context, sandbox };
 }
 
 export interface EnrollmentOption { id: string; label: string; cohort_id: string | null; type: string; status: string }
