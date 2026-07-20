@@ -148,19 +148,25 @@ export function isCompletionEligible(p: AmProgress, s: AmScenario): boolean {
  */
 export function deriveEvidence(p: AmProgress, s: AmScenario): { assumptions: string[]; tradeoffs: string[]; failure_modes: string[] } {
   const ans = p.interview || {};
-  const labelFor = (qid: string): string | null => {
-    const q = [...(s.interview_part_1 || []), ...(s.interview_part_2 || [])].find((x) => x.id === qid);
-    const a = ans[qid];
-    if (!q || !a) return null;
+  const questions = [...(s.interview_part_1 || []), ...(s.interview_part_2 || [])];
+  const labelOfQ = (q: AmInterviewQuestion): string | null => {
+    const a = ans[q.id];
+    if (!a) return null;
     if (a.choice) { const opt = q.options.find((o) => o.id === a.choice); if (opt?.custom) return isMeaningful(a.custom) ? String(a.custom).trim() : null; return opt ? opt.label : null; }
     return isMeaningful(a.custom) ? String(a.custom).trim() : null;
+  };
+  // Derive by DIMENSION (scenario-agnostic), not by hardcoded question ids — so any
+  // week's assumption/tradeoff/failure question feeds the corresponding evidence.
+  const byDimension = (dim: string): string | null => {
+    for (const q of questions) { if (q.dimension === dim) { const v = labelOfQ(q); if (v) return v; } }
+    return null;
   };
   const assumptions = cleanList(p.assumptions);
   const tradeoffs = cleanList(p.tradeoffs);
   const failure_modes = cleanList(p.failure_modes);
-  if (!assumptions.length) { const v = labelFor('q3'); if (v) assumptions.push(v); }
-  if (!tradeoffs.length) { const v = labelFor('q7'); if (v) tradeoffs.push(v); }
-  if (!failure_modes.length) { const v = labelFor('r1'); if (v) failure_modes.push(v); }
+  if (!assumptions.length) { const v = byDimension('assumption_discovery'); if (v) assumptions.push(v); }
+  if (!tradeoffs.length) { const v = byDimension('tradeoff_quality'); if (v) tradeoffs.push(v); }
+  if (!failure_modes.length) { const v = byDimension('failure_anticipation'); if (v) failure_modes.push(v); }
   return { assumptions, tradeoffs, failure_modes };
 }
 
@@ -198,6 +204,59 @@ export function assessBaseline(p: AmProgress, s: AmScenario): { signal: number; 
     ? 'You entered describing systems, owners, and failure paths rather than tools. That is the architect move.'
     : 'You entered focused on the feature and the build. The series will widen that lens week by week.';
   return { signal, stage, observation };
+}
+
+// ── Formal Architect Mindset Score (scored weeks; Week 1+) ───────────────────
+// 8 transparent, weighted dimensions (canonical section 9). Deterministic and
+// evidence-based: it rewards ENGAGEMENT and DEPTH (answering, reasoning, naming
+// assumptions/tradeoffs/failures), never picking a "correct" architecture — there
+// is none. The AI narrative (service) may enrich the observation on top of this.
+export interface AmDimensionDef { key: string; label: string; weight: number }
+export const AM_DIMENSIONS: AmDimensionDef[] = [
+  { key: 'system_scope', label: 'System scope recognition', weight: 20 },
+  { key: 'assumption_discovery', label: 'Assumption discovery', weight: 15 },
+  { key: 'stakeholder_awareness', label: 'Stakeholder awareness', weight: 10 },
+  { key: 'tradeoff_quality', label: 'Tradeoff quality', weight: 15 },
+  { key: 'failure_anticipation', label: 'Failure anticipation', weight: 15 },
+  { key: 'evidence_observability', label: 'Evidence & observability', weight: 10 },
+  { key: 'governance_ownership', label: 'Governance & ownership', weight: 10 },
+  { key: 'decision_communication', label: 'Decision communication', weight: 5 },
+];
+export interface AmDimensionScore { key: string; label: string; weight: number; score: number; evidence: string; strength: string; gap: string }
+export interface AmScore { dimensions: AmDimensionScore[]; total: number; stage: AmStage }
+
+export function scoreMindset(p: AmProgress, s: AmScenario): AmScore {
+  const allQ = [...(s.interview_part_1 || []), ...(s.interview_part_2 || [])];
+  const ev = deriveEvidence(p, s);
+  const engaged = (qid: string) => {
+    const a = (p.interview || {})[qid];
+    if (!a) return 0;
+    let v = 0.55;                                            // answered
+    if (isMeaningful(a.custom) || isMeaningful(a.explanation)) v += 0.30;   // own words / reasoning
+    return v;
+  };
+  const dimensions: AmDimensionScore[] = AM_DIMENSIONS.map((d) => {
+    const qs = allQ.filter((q) => q.dimension === d.key);
+    let raw = qs.length ? qs.map((q) => engaged(q.id)).reduce((x, y) => x + y, 0) / qs.length : 0.4;
+    // cross-cutting evidence boosts (engagement across the whole experience)
+    if (d.key === 'assumption_discovery' && ev.assumptions.length) raw = Math.max(raw, 0.72);
+    if (d.key === 'failure_anticipation' && ev.failure_modes.length) raw = Math.max(raw, 0.72);
+    if (d.key === 'tradeoff_quality' && ev.tradeoffs.length) raw = Math.max(raw, 0.72);
+    if (d.key === 'evidence_observability' && isMeaningful(p.reflection)) raw = Math.max(raw, 0.6);
+    if (d.key === 'governance_ownership' && isMeaningful(p.commitment)) raw = Math.max(raw, 0.6);
+    if (d.key === 'decision_communication' && (isMeaningful(p.first_decision?.reasoning) || isMeaningful(p.reflection))) raw = Math.max(raw, 0.62);
+    if (d.key === 'system_scope' && (p.flags?.zoom_out_viewed && p.flags?.consequence_viewed)) raw = Math.max(raw, 0.55);
+    const score = Math.round(Math.min(1, Math.max(0, raw)) * 100);
+    const strong = score >= 70;
+    return {
+      key: d.key, label: d.label, weight: d.weight, score,
+      evidence: qs.length ? `${qs.length} interview response(s) tagged to this dimension, plus your decisions and evidence.` : 'Inferred from your assumptions, tradeoffs, reflection, and commitment.',
+      strength: strong ? 'You engaged this dimension with your own reasoning, not just a selection.' : 'You touched this dimension.',
+      gap: strong ? 'Deepen it next week by tying it to a measurable business outcome.' : 'Next week, explain your reasoning in your own words and name the evidence behind it.',
+    };
+  });
+  const total = Math.round(dimensions.reduce((sum, d) => sum + d.score * (d.weight / 100), 0));
+  return { dimensions, total, stage: stageForScore(total) };
 }
 
 // ── Experience Receipt + compression ratio ───────────────────────────────────
