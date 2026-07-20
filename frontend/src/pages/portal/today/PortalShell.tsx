@@ -229,9 +229,16 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const cohortName = schedule?.first_class?.cohort_name || 'Your cohort';
   const active = location.pathname;
 
-  // Contacts rail — show only who's online now (no full-roster dump of registered
-  // strangers). The friends model + DMs will replace this; see follow-up.
-  const onlineList = contacts.filter((c) => c.presence !== 'offline');
+  // Contacts rail — up to RAIL_MAX people shown as faces, most-active first (the
+  // API sorts online → idle → offline). Capped so there's never a long scroll.
+  // Friends-first ordering arrives with the friends feature.
+  const [railView, setRailView] = useState<'people' | 'find'>('people');
+  const RAIL_MAX = 15;
+  const people = contacts.slice(0, RAIL_MAX);
+  const onlineNow = contacts.filter((c) => c.presence !== 'offline').length;
+  // "Find people" flips the rail to the full cohort directory; a back button
+  // flips home. Only meaningful when the rail is expanded.
+  const showFind = railView === 'find' && !contactsCollapsed;
 
   return (
     <div className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}`}>
@@ -321,38 +328,67 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
           viewports it is the FIRST thing to collapse (avatar-only rail), before
           the left nav — see the staged .te-contacts media rules in TodayShell.css. */}
       <aside className="te-contacts" aria-label="Cohort contacts">
-        <div className="te-ct-head">
-          <h3>Contacts</h3>
-          <button
-            type="button"
-            className="te-ct-toggle"
-            onClick={() => setContactsCollapsed((c) => !c)}
-            title={contactsCollapsed ? 'Expand contacts' : 'Collapse contacts'}
-            aria-label="Toggle contacts panel"
-            aria-expanded={!contactsCollapsed}
-          >
-            <svg viewBox="0 0 24 24" fill="none" style={{ transform: contactsCollapsed ? 'rotate(180deg)' : 'none' }}>
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-        <button type="button" className="te-ct-find" title="Find people">
-          <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-          <span>Find people</span>
-        </button>
-        <div className="te-ct-list">
-          {onlineList.length > 0 && <div className="te-ct-grp">Online now · {onlineList.length}</div>}
-          {onlineList.map((c) => (
-            <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
-              <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
-              <span className="te-ctname">{c.name}</span>
-              <span className={`te-ctpres ${c.presence}`} />
+        {showFind ? (
+          <>
+            {/* Find-people view — the full cohort directory, reachable by clicking
+                "Find people" and dismissed with the back arrow. */}
+            <div className="te-ct-head">
+              <button type="button" className="te-ct-back" onClick={() => setRailView('people')} aria-label="Back to contacts" title="Back">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+              <h3>Find people</h3>
+            </div>
+            <div className="te-ct-list">
+              <div className="te-ct-grp">{cohortName} · {contacts.length}</div>
+              {contacts.map((c) => (
+                <div key={c.id} className="te-ctrow te-ctrow-static" title={c.name}>
+                  <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
+                  <span className="te-ctname">{c.name}</span>
+                  <button type="button" className="te-ct-add" disabled title="Friend requests are coming soon">Add</button>
+                </div>
+              ))}
+              {contacts.length === 0 && (
+                <div className="te-ct-empty">No one from your cohort is here yet.</div>
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Default view — up to RAIL_MAX faces, most-active first. */}
+            <div className="te-ct-head">
+              <h3>Contacts</h3>
+              <button
+                type="button"
+                className="te-ct-toggle"
+                onClick={() => setContactsCollapsed((c) => !c)}
+                title={contactsCollapsed ? 'Expand contacts' : 'Collapse contacts'}
+                aria-label="Toggle contacts panel"
+                aria-expanded={!contactsCollapsed}
+              >
+                <svg viewBox="0 0 24 24" fill="none" style={{ transform: contactsCollapsed ? 'rotate(180deg)' : 'none' }}>
+                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </div>
+            <button type="button" className="te-ct-find" title="Find people" onClick={() => { setContactsCollapsed(false); setRailView('find'); }}>
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              <span>Find people</span>
             </button>
-          ))}
-          {onlineList.length === 0 && (
-            <div className="te-ct-empty">No connections yet. Use <b>Find people</b> to connect with your cohort and start a conversation.</div>
-          )}
-        </div>
+            <div className="te-ct-list">
+              {people.length > 0 && <div className="te-ct-grp">{cohortName} · {onlineNow} online</div>}
+              {people.map((c) => (
+                <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
+                  <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
+                  <span className="te-ctname">{c.name}</span>
+                  <span className={`te-ctpres ${c.presence}`} />
+                </button>
+              ))}
+              {contacts.length === 0 && (
+                <div className="te-ct-empty">No one from your cohort yet. Check back soon.</div>
+              )}
+            </div>
+          </>
+        )}
       </aside>
 
       {/* ── bottom tab bar (mobile only via CSS) — nav reachable on phones ── */}
