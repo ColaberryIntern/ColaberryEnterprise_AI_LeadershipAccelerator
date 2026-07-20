@@ -65,6 +65,8 @@ export const ListMessagesQuerySchema = z.object({
 
 export const QuestionStatusSchema = z.object({ question_status: questionStatus });
 
+export const VerifyAnswerSchema = z.object({ answer_message_id: z.string().uuid() });
+
 export const CreateBookingSchema = z.object({
   room_id: z.string().uuid().optional(),
   variant: bookingVariant.optional(),

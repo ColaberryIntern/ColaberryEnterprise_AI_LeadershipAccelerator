@@ -1958,6 +1958,21 @@ async function ensureCommunityRoomsSchema() {
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS room_presence_unique ON room_presence (room_id, enrollment_id)`,
     `CREATE INDEX IF NOT EXISTS idx_room_presence_room_seen ON room_presence (room_id, last_seen_at)`,
+
+    `CREATE TABLE IF NOT EXISTS community_contributions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       category VARCHAR(30) NOT NULL,
+       action VARCHAR(40) NOT NULL,
+       points INTEGER NOT NULL DEFAULT 0,
+       room_id UUID,
+       booking_id UUID,
+       message_id UUID,
+       idempotency_key VARCHAR(180) NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_contributions_idem_unique ON community_contributions (idempotency_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_community_contributions_enrollment_cat ON community_contributions (enrollment_id, category)`,
   ];
   for (const sql of statements) {
     try {
@@ -2312,6 +2327,14 @@ async function start(): Promise<void> {
       import('./services/communityRooms/roomOutboxService')
         .then(({ drainOutbox }) => drainOutbox(25))
         .catch((err) => console.warn('[CommunityRoomsOutbox] drain failed:', err?.message));
+    });
+
+    // Sweep RSVP reminders into the outbox every 5 minutes. Idempotent — the
+    // outbox de-dups each (booking, window) reminder; the drain above delivers.
+    cron.schedule('*/5 * * * *', () => {
+      import('./services/communityRooms/roomReminderService')
+        .then(({ sweepReminders }) => sweepReminders())
+        .catch((err) => console.warn('[CommunityRoomsReminders] sweep failed:', err?.message));
     });
   }
 

@@ -319,6 +319,7 @@ import RoomResource from './RoomResource';
 import RoomOutboxEvent from './RoomOutboxEvent';
 import RoomReport from './RoomReport';
 import RoomPresence from './RoomPresence';
+import ContributionEvent from './ContributionEvent';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
@@ -1261,6 +1262,7 @@ export {
   RoomOutboxEvent,
   RoomReport,
   RoomPresence,
+  ContributionEvent,
   StudentPointsEvent,
   OpenHouseEvent,
   OnboardingProfile,
