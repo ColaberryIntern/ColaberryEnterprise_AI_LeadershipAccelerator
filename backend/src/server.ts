@@ -387,6 +387,15 @@ async function ensureStudentTaskMergeSchema() {
   // path) and story/engine-based tasks live in one table. Idempotent. The
   // partial unique on (project_id, story_id) keeps engine upserts idempotent
   // without affecting requirement-based rows (story_id NULL).
+  // Base tables first (idempotent CREATE) so a fresh/partial DB always has
+  // student_task_lists + student_tasks BEFORE the ALTERs run — otherwise the
+  // merge schema silently no-ops on a DB that never created them.
+  try {
+    const { seedStudentTaskTables } = await import('./seeds/seedStudentTasks');
+    await seedStudentTaskTables();
+  } catch (err: any) {
+    console.warn('[DB] student-task base tables ensure failed:', err?.message);
+  }
   const statements = [
     `ALTER TABLE student_tasks ALTER COLUMN requirement_key DROP NOT NULL`,
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS story_id VARCHAR(60)`,

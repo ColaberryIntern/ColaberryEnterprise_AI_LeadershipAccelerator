@@ -9800,3 +9800,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Phase 2 of the Today plan — Today becomes the true aggregator (Class + Project + Community flow IN; the one-way valve). Unblocked now that projects have a backend. Additive + flag-gated → live Today feed unchanged until enabled.
   - Verification: pure jest `todayAnchoredBlend.test.ts`; backend tsc + jest = CI gate. Flag-off preserves current Class-only behavior.
   - Notes: Branch `workstream/today-aggregate-sources` off main. Frontend renders Project/Community via the existing TodayFeedItem→TimelineCard path (surface colour shows the section). Click-through deep-links + relevance-weighted blend are follow-ups.
+
+### Project Backend fix — self-heal student_task base tables on boot (+ prod repair) — 2026-07-19
+- [x] Boot ensure now CREATEs student_task_lists + student_tasks before ALTERing; repaired prod's stale/incompatible student_tasks
+  - Date: 2026-07-19
+  - Session: CC-20260719-p4k7
+  - What changed:
+    - `server.ts ensureStudentTaskMergeSchema()` now runs `seedStudentTaskTables()` (idempotent CREATE TABLE IF NOT EXISTS for student_task_lists + student_tasks) BEFORE the story-column ALTERs. Previously the base tables were created only by a manual `ts-node` seed → on prod, `student_task_lists` was never created and `student_tasks` was a stale, incompatible older table (story-driven: sprint_id/assignee/verifier_score, no task_list_id), so the project backend's writes silently failed (fail-soft).
+    - PROD DB repaired directly: renamed the stale empty (0 rows) `student_tasks` → `student_tasks_legacy_storydriven` (reversible), recreated `student_tasks` + `student_task_lists` with the correct unified schema (task_list_id, nullable requirement_key, position, + story columns + blocked_by). Columns verified against the StudentTask model.
+  - Why: verifying the aggregation on dev surfaced that the project backend (P1) shipped to prod could NOT actually persist — prod's `student_tasks` was the wrong table. This makes the base tables self-heal on every boot so it can never silently be missing/wrong again. [[project_student_project_backend]]
+  - Verification: backend tsc + jest = CI gate; prod `student_tasks` columns verified post-repair. Idempotent.
+  - Notes: Branch `workstream/student-task-base-ensure` off main. `seedStudentTasks.ts` still creates requirement_key NOT NULL; the ensure ALTER relaxes it on boot (full seed reconcile = tidy-up). Dev DB separately stale (missing requirements_maps etc.) — dev-hygiene follow-up.
