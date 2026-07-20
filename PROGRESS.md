@@ -10229,6 +10229,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: backend communityNotificationService jest 7/7; frontend tsc clean (my files; only pre-existing @dnd-kit env errors remain); backend tsc --skipLibCheck clean on changed files.
   - Notes: Fires on mention + comment/reply (existing). "Someone liked your post" deferred (needs a 'like' value on the notification_type enum = a migration). Click lands on the feed; deep-link-to-post is a fast-follow.
 
+### Build Artifact(s) Lab: portfolio evidence + auto-generate on first open — 2026-07-20
+- [x] Uploaded build artifact persisted as PortfolioArtifact; build cards self-heal on first open
+  - Date: 2026-07-20
+  - Session: CC-20260720-h3k9
+  - What changed: (1) New `backend/src/services/runtime/buildArtifactService.ts` `uploadBuildArtifact()` stores the file the student built in Claude Code as a `PortfolioArtifact` linked to (enrollment, card) (kind `build_artifact`), one per enrollment+card, idempotent replace (re-upload swaps the file + unlinks the previous one from the persistent `uploads` volume). Previously the upload endpoint only acknowledged the file (`{ok,filename,size}`) — orphaned on disk, invisible to instructor review + portfolio. `completeActivity` already finds this existing artifact and won't synthesise a placeholder over it. Route now uses named handler `handleBuildArtifactUpload` (runtimeController). Mirrors the proven `fieldGuideService` pattern. (2) `cardContentService.ensureFreshContent` added `GENERATE_ON_FIRST_OPEN = {setup_lab, implementation_task, artifact_submission}` so an un-warmed Claude Code card generates on first open instead of rendering blank (the root cause of wks 6-11 looking "not built out") — same try/catch path as warmup, never 500s a student view.
+  - Files: backend/src/services/runtime/buildArtifactService.ts (new), backend/src/services/runtime/__tests__/buildArtifactService.test.ts (new), backend/src/controllers/runtimeController.ts, backend/src/routes/participantRoutes.ts, backend/src/services/timeline/cardContentService.ts.
+  - Verification: backend tsc clean (dev Docker build); functional smoke on dev (accelerator_dev1) — auto-gen regenerated a content-wiped build card (regenerated=true, 5 artifacts); uploadBuildArtifact created a PortfolioArtifact + idempotent re-upload kept exactly 1 row; getBuildArtifactStatus reflects the upload; unit test `buildArtifactService.test.ts` (jest via CI).
+  - Notes: Branch `workstream/build-artifacts-lab`. No server-side hard-gate on completion (client already gates upload-before-complete); a metadata-flag gate like the Field Guide's is a possible follow-up. Points-once is handled by card-completion idempotency (no separate bonus). [[project_claude_code_type_spine]]
 - [x] Contacts rail fixes: re-expandable when collapsed + no full-roster dump
   - Date: 2026-07-20
   - Session: CC-20260720-8xqz
