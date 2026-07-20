@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { SetPortfolioSharingSchema } from '../schemas/portfolioShareSchema';
@@ -402,6 +403,36 @@ router.post('/api/portal/projects', requireParticipant, async (req: Request, res
   } catch (err: any) {
     console.error('[ProjectRoutes] POST /projects error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+const SetProjectNameSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+
+/**
+ * PATCH /api/portal/project/name — get-or-create the active project and save
+ * its name as soon as step 0 of the builder wizard is answered. Without
+ * this, no project row exists until the requirements-generation step, so a
+ * page reload before then has nothing to resume from and always resets to
+ * step 0.
+ */
+router.patch('/api/portal/project/name', requireParticipant, async (req: Request, res: Response) => {
+  const parsed = SetProjectNameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { createProjectForEnrollment } = await import('../services/projectService');
+    const project = await createProjectForEnrollment(enrollmentId);
+    (project as any).name = parsed.data.name;
+    await project.save();
+    res.json({ id: project.id, name: (project as any).name });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] PATCH /project/name error:', err.message);
+    res.status(500).json({ error: 'Failed to save project name' });
   }
 });
 

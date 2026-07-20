@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { runtimeApi, RtOpen, Readiness, PromptEval } from './runtimeApi';
-import VideoEmbed from '../../../components/timeline/VideoEmbed';
-import { parseVideoUrl } from '../../../utils/videoEmbed';
+import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment } from './runtimeApi';
+import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
+import AssessmentPanel from './AssessmentPanel';
+import { lessonDoc, readerDoc } from '../../../components/timeline/CardDetailBody';
+import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
+import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
+import { toTitleCase } from '../../../utils/titleCase';
+import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -20,6 +25,15 @@ const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 const RuntimeWorkspace: React.FC = () => {
   const { cardId = '' } = useParams();
   const navigate = useNavigate();
+  // Go back to wherever the student came from — normally the classroom, which
+  // restores their week / open card / scroll from a session snapshot. Pop real
+  // in-app history so the browser back button stays clean (no stacked entries);
+  // fall back to the classroom on a direct/deep link with no history to pop.
+  const goBack = useCallback(() => {
+    const idx = (window.history.state && (window.history.state as { idx?: number }).idx) || 0;
+    if (idx > 0) navigate(-1);
+    else navigate('/portal/classroom');
+  }, [navigate]);
   const [data, setData] = useState<RtOpen | null>(null);
   const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [error, setError] = useState('');
@@ -32,18 +46,26 @@ const RuntimeWorkspace: React.FC = () => {
   const [reflectionText, setReflectionText] = useState('');
   const [artifact, setArtifact] = useState<any>(null);
   const [completed, setCompleted] = useState(false);
+  // Server-truth watch state for the 75% gate (video/testimonial/podcast).
+  const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
 
   // mentor
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [mentorInput, setMentorInput] = useState('');
   const mentorEnd = useRef<HTMLDivElement>(null);
 
+  // cohort comments (media cards) — newest first
+  const [comments, setComments] = useState<CardComment[]>([]);
+  const [commentInput, setCommentInput] = useState('');
+
   useEffect(() => {
     (async () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
-        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed');
-        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null);
+        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        // Every card type has a cohort comment thread in its workspace.
+        runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
       } catch { setError('Could not open this activity.'); }
     })();
   }, [cardId]);
@@ -54,7 +76,31 @@ const RuntimeWorkspace: React.FC = () => {
   const band = card?.render_band || 'overview';
   const isVideo = VIDEO_BANDS.includes(band);
   const isLab = band === 'promptlab';
-  const isReflect = ['reflection', 'survey', 'question'].includes(band);
+  const isSurvey = band === 'survey';   // captured via the interactive SurveyForm
+  const isAssessment = band === 'quiz' || band === 'evaluation';   // Knowledge Check + Evaluation, self-contained
+  const isReflect = ['reflection', 'question'].includes(band);
+  // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
+  // beats the card's raw title everywhere the student sees it. Curriculum titles
+  // are Title-Cased for display; media/external keep their authored casing.
+  const externalTitle = isVideo || band === 'skills_jar' || ['testimonial', 'blog', 'podcast'].includes(card?.type || '');
+  const rawTitle = card?.week_title || card?.content?.title || card?.title || '';
+  const displayTitle = externalTitle ? rawTitle : toTitleCase(rawTitle);
+  // Watch gate: report play heartbeats while not yet completed; the "Mark complete"
+  // button stays disabled until the server confirms the 75% threshold is met.
+  const onWatchBeat: ((beat: WatchBeatPayload) => void) | undefined = card && !completed
+    ? (beat) => { runtimeApi.watch(card.id, beat).then(setWatch).catch(() => { /* best-effort */ }); }
+    : undefined;
+  const watchGated = isVideo && watch?.required_pct != null && !watch?.met;
+  // Self Study reading: same per-section read-gate as the drawer — Mark complete only
+  // unlocks once every section has been read (>=10s each), via the reader's postMessages.
+  const isReader = band === 'warmup' && !!card?.content?.body_html;
+  const readerProg = useReaderProgress(cardId, isReader && !completed);
+  // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
+  // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
+  // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
+  // the right rail. This is the single-scroll workstation layout applied to every type.
+  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !!card?.content?.body_html;
+  const fill = isReader || isLesson;
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -66,6 +112,17 @@ const RuntimeWorkspace: React.FC = () => {
       setMsgs((m) => [...m, { role: 'assistant', content: r.reply, kind: r.kind }]);
     } catch { setMsgs((m) => [...m, { role: 'assistant', content: 'I had trouble reaching you — try again.', kind: 'error' }]); } finally { setBusy(''); }
   }, [card, msgs]);
+
+  const postComment = async () => {
+    const body = commentInput.trim();
+    if (!card || !body) return;
+    setBusy('comment');
+    try {
+      const r = await runtimeApi.comment(card.id, body);
+      setComments((c) => [r.comment, ...c]);   // newest first
+      setCommentInput('');
+    } catch { /* keep the draft in the input */ } finally { setBusy(''); }
+  };
 
   const runLab = async () => {
     if (!card || !prompt.trim()) return; setBusy('lab');
@@ -85,25 +142,84 @@ const RuntimeWorkspace: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
 
-  if (error) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={() => navigate('/portal/classroom')}>← Classroom</button></div></div>;
+  if (error) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← Classroom</button></div></div>;
   if (!card) return <div className="rt"><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
 
   const emp = readiness?.employment; const cert = readiness?.certification; const jr = readiness?.journey; const evd = readiness?.evidence;
+
+  // Complete gate + comments are shared so Self Study can host them in the reader foot /
+  // right rail (single-scroll layout) while every other card keeps them in the center.
+  const completeLabel = busy === 'complete' ? 'Generating evidence…'
+    : watchGated ? `Keep watching · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%`
+    : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete';
+  const completeGate = completed
+    ? <span className="rt-pill done">✓ Completed — evidence generated</span>
+    : isReader && !readerProg.complete
+      ? <span className="rt-muted">{readerProg.total > 0 ? `${readerProg.done} of ${readerProg.total} sections read — read all to finish` : 'Read the material to finish'}</span>
+      : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
+  // Comments always render in the right rail now (every card type), so the center is a
+  // single, clean scroll.
+  const commentsBlock = (
+    <section className="rt-comments rt-comments--rail">
+      <div className="rt-lab">Comments</div>
+      <div className="rt-cpost">
+        <input className="rt-in" value={commentInput} onChange={(e) => setCommentInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && commentInput.trim() && postComment()} placeholder="Share a thought with your cohort…" />
+        <button className="rt-btn pri" disabled={busy === 'comment' || !commentInput.trim()} onClick={postComment}>Post</button>
+      </div>
+      {comments.length === 0
+        ? <p className="rt-muted" style={{ margin: '8px 2px' }}>No comments yet — be the first.</p>
+        : comments.map((cm) => (
+            <div key={cm.id} className="rt-comment">
+              <div className="rt-cwho"><b>{cm.mine ? 'You' : cm.author}</b><span>{new Date(cm.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span></div>
+              <p>{cm.body}</p>
+            </div>
+          ))}
+    </section>
+  );
 
   return (
     <div className="rt">
       <style>{runtimeCss}</style>
       <header className="rt-top">
-        <button className="rt-back" onClick={() => navigate('/portal/classroom')} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
-        <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{card.title}</div></div>
+        <button className="rt-back" onClick={goBack} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+        <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
         <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>
       </header>
 
       <div className="rt-body">
         {/* CENTER — activity */}
-        <main className="rt-mid">
+        <main className={`rt-mid${fill ? ' rt-mid--reader' : ''}`}>
+          {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
+              their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
+          {!isVideo && !fill && card.type_thumbnail && (
+            <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
+              <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
+              <div style={{ position: 'absolute', left: 16, right: 16, bottom: 12, color: '#fff', fontWeight: 800, fontSize: 20, lineHeight: 1.25, textShadow: '0 1px 3px rgba(0,0,0,.45)' }}>{displayTitle}</div>
+            </div>
+          )}
+
           {isVideo && (
-            <VideoEmbed source={parseVideoUrl(card.video?.url)} title={card.title} poster={card.video?.poster || null} />
+            <>
+              <VideoEmbed
+                source={parseVideoUrl(card.video?.url)}
+                title={card.video?.title || card.title}
+                poster={card.video?.poster || videoThumbnail(parseVideoUrl(card.video?.url))}
+                badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+                onWatchBeat={onWatchBeat}
+                fallbackDurationS={card.estimated_time ? card.estimated_time * 60 : null}
+              />
+              {!completed && card.video?.url && (
+                <div className="tlv-watch">
+                  <div className="tlv-watchbar"><i style={{ width: `${Math.min(100, watch?.watched_pct ?? 0)}%` }} /></div>
+                  <span className="tlv-watchpct">
+                    {watch?.required_pct != null
+                      ? (watch.met ? '✓ Watched — points unlocked' : `Watched ${watch?.watched_pct ?? 0}% · reach ${watch.required_pct}% to collect your points`)
+                      : `Watched ${watch?.watched_pct ?? 0}%`}
+                  </span>
+                </div>
+              )}
+            </>
           )}
 
           {isLab && (
@@ -122,6 +238,19 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
 
+          {/* Weekly feedback survey — the bespoke live experience (same component
+              the right-side drawer uses), captured + stored on submit. */}
+          {isSurvey && (
+            <CardSurveyExperience
+              cardId={card.id}
+              questions={card.content?.questions || []}
+              openPrompt={card.content?.reflection || null}
+              title={displayTitle}
+              completed={completed}
+              onComplete={complete}
+            />
+          )}
+
           {isReflect && (
             <div>
               {reflectionQs.length === 0 ? <button className="rt-btn pri" disabled={busy === 'reflect'} onClick={loadReflection}>{busy === 'reflect' ? 'Thinking…' : '✦ Get my reflection prompts'}</button>
@@ -130,16 +259,46 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
 
-          {!isVideo && !isLab && !isReflect && (
-            <div className="rt-card">{card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}</div>
+          {/* The workspace OPENS with the saved lesson (same content as the card drawer),
+              so the student reads it here and asks the Mentor about it. */}
+          {/* Knowledge Check (quiz) + Evaluation — self-contained assessment flow,
+              handles its own scoring, 75% gate, and completion. */}
+          {isAssessment && (
+            <AssessmentPanel cardId={card.id} onCompleted={(r) => { if (r) { setReadiness(r); setCompleted(true); } }} />
+          )}
+
+          {/* Content-in-iframe cards (the Self Study immersive reader OR a generic lesson)
+              FILL the center as the single scroll, with the complete gate in a slim foot —
+              so there are never dueling scrollbars. The reader runs scripts (sticky nav +
+              read-gate); a plain lesson stays inert (sandbox=""). */}
+          {fill && (
+            <div className="rt-readerwrap">
+              <iframe
+                className="rt-readerframe"
+                title={isReader ? 'Self Study reading' : 'Lesson'}
+                sandbox={isReader ? 'allow-scripts' : ''}
+                srcDoc={isReader
+                  ? readerDoc(card.content?.body_html || '', card.content?.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })
+                  : lessonDoc(card.content?.body_html || '')}
+              />
+              <div className="rt-readerfoot">{completeGate}</div>
+            </div>
+          )}
+          {/* Fallback for a non-media card with no body yet — just its description. */}
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !fill && (
+            <div className="rt-card">
+              {card.content?.summary && <p>{card.content.summary}</p>}
+              {card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
+            </div>
           )}
 
           {artifact && <div className="rt-artifact"><div className="rt-lab">Portfolio artifact created</div><b>{artifact.title}</b><p className="rt-muted">{artifact.summary}</p></div>}
 
-          <div className="rt-complete">
-            {completed ? <span className="rt-pill done">✓ Completed — evidence generated</span>
-              : <button className="rt-btn cta" disabled={busy === 'complete'} onClick={complete}>{busy === 'complete' ? 'Generating evidence…' : card.evidence_required ? 'Complete & generate evidence' : 'Mark complete'}</button>}
-          </div>
+          {/* Surveys + assessments complete via their own flow; fill cards host the gate in
+              their foot. Everything else gets the completion bar here in the center. */}
+          {!isSurvey && !isAssessment && !fill && (
+            <div className="rt-complete">{completeGate}</div>
+          )}
         </main>
 
         {/* RIGHT — AI Mentor */}
@@ -156,6 +315,9 @@ const RuntimeWorkspace: React.FC = () => {
             <input className="rt-in" value={mentorInput} onChange={(e) => setMentorInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && mentorInput.trim() && ask('ask', mentorInput)} placeholder="Ask your mentor…" />
             <button className="rt-btn pri" disabled={busy === 'mentor' || !mentorInput.trim()} onClick={() => ask('ask', mentorInput)}>Send</button>
           </div>
+          {/* Cohort comments live in the rail for every card type, so the center is a
+              single clean scroll (no comments stacked under a tall activity). */}
+          {commentsBlock}
         </aside>
       </div>
 

@@ -7,10 +7,12 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import {
   listTimeline, createCard, updateCard, deleteCard, reorderCards, cloneCard,
+  getSectionRules, setSectionRule,
 } from '../services/timeline/timelineAdminService';
 import { generateCardContent } from '../services/timeline/cardContentService';
 import { generateVideoDraft } from '../services/timeline/videoDraftService';
 import { generateCourseDraft } from '../services/timeline/courseDraftService';
+import { getBlueprintContext } from '../services/timeline/blueprintContext';
 
 const bucketEnum = z.enum(['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance']);
 const visibilityEnum = z.enum(['draft', 'scheduled', 'published', 'archived']);
@@ -39,6 +41,37 @@ const courseSchema = z.object({
   name: z.string().max(300).nullable().optional(),
   url: z.string().max(2000).nullable().optional(),
 }).nullable().optional();
+// The item's OWN display image (blog cover etc.) — metadata.image.
+const imageSchema = z.string().max(2000).nullable().optional();
+// Testimonials type: link mode plays a specific video; random mode picks a
+// matched testimonial per student from the network_videos library.
+const testimonialSchema = z.object({
+  mode: z.enum(['link', 'random']).nullable().optional(),
+  category: z.string().max(64).nullable().optional(),
+}).nullable().optional();
+// Podcast type: link mode plays a pasted episode/video; random mode picks a matched
+// episode per student from the Buzzsprout `podcasts` catalog (blank category = whole catalog).
+const podcastSourceSchema = z.object({
+  mode: z.enum(['link', 'random']).nullable().optional(),
+  category: z.string().max(64).nullable().optional(),
+}).nullable().optional();
+// Blog type: link mode shows one specific post; random mode auto-matches a post per
+// student (profile + the week they're on) from the training-site `blog_posts` library.
+const blogSourceSchema = z.object({
+  mode: z.enum(['link', 'random']).nullable().optional(),
+  url: z.string().max(2000).nullable().optional(),
+}).nullable().optional();
+// Gating: per-card unlock predicates. Loose here (all fields optional); the
+// service's normalizeRules() enforces the per-kind required fields and drops junk.
+const unlockPredicateSchema = z.object({
+  kind: z.enum(['card_complete', 'section_complete', 'type_complete']),
+  card_id: z.string().optional(),
+  bucket: bucketEnum.optional(),
+  type: z.string().optional(),
+  scope: z.enum(['week', 'all']).optional(),
+  label: z.string().max(200).optional(),
+});
+const unlockRulesSchema = z.array(unlockPredicateSchema).max(30).optional();
 
 const createSchema = z.object({
   type: z.string().min(1),
@@ -54,9 +87,14 @@ const createSchema = z.object({
   visibility: visibilityEnum.optional(),
   release_date: z.string().datetime().nullable().optional(),
   program_id: z.string().uuid().nullable().optional(),
+  unlock_rules: unlockRulesSchema,
   video: videoSchema,
   content: contentSchema,
   course: courseSchema,
+  image: imageSchema,
+  testimonial: testimonialSchema,
+  podcast: podcastSourceSchema,
+  blog: blogSourceSchema,
 });
 
 const updateSchema = z.object({
@@ -73,10 +111,22 @@ const updateSchema = z.object({
   release_date: z.string().datetime().nullable().optional(),
   priority: z.number().int().optional(),
   order: z.number().int().optional(),
+  unlock_rules: unlockRulesSchema,
   video: videoSchema,
   content: contentSchema,
   course: courseSchema,
+  image: imageSchema,
+  testimonial: testimonialSchema,
+  podcast: podcastSourceSchema,
+  blog: blogSourceSchema,
 }).strict();
+
+// Section gating: set/replace one section's (bucket's) unlock predicates.
+const sectionRuleSchema = z.object({
+  program_id: z.string().uuid(),
+  bucket: bucketEnum,
+  rules: z.array(unlockPredicateSchema).max(30).default([]),
+});
 
 // One-click: build a full video-card draft from a title (find a real video +
 // write the copy/content). Returned to the editor as a draft to review + save.
@@ -85,6 +135,8 @@ const videoDraftSchema = z.object({
   title: z.string().max(500).nullable().optional(),
   subtitle: z.string().max(500).nullable().optional(),
   description: z.string().nullable().optional(),
+  program_id: z.string().uuid().nullable().optional(),
+  week: z.number().int().nullable().optional(),
   video: videoSchema,
   anchor: z.enum(['title', 'video']).optional(),
 });
@@ -92,6 +144,8 @@ const videoDraftSchema = z.object({
 const courseDraftSchema = z.object({
   type: z.string().min(1),
   url: z.string().min(1).max(2000),
+  program_id: z.string().uuid().nullable().optional(),
+  week: z.number().int().nullable().optional(),
 });
 
 const reorderSchema = z.object({
@@ -109,9 +163,9 @@ function fail(res: Response, err: any, next: NextFunction) {
   return next(err);
 }
 
-export async function handleListTimeline(_req: Request, res: Response, next: NextFunction) {
+export async function handleListTimeline(req: Request, res: Response, next: NextFunction) {
   try {
-    res.json(await listTimeline());
+    res.json(await listTimeline((req.query.program_id as string) || undefined));
   } catch (err) { fail(res, err, next); }
 }
 
@@ -173,5 +227,28 @@ export async function handleGenerateCourseDraft(req: Request, res: Response, nex
   try {
     const b = courseDraftSchema.parse(req.body);
     res.json(await generateCourseDraft(b));
+  } catch (err) { fail(res, err, next); }
+}
+
+// Read-only: the week's Blueprint context that gets auto-injected into every
+// generator for this (course, week). Powers the grayed-out "week context" block.
+export async function handleGetBlueprintContext(req: Request, res: Response, next: NextFunction) {
+  try {
+    const programId = (req.query.program_id as string) || undefined;
+    const week = req.query.week != null && req.query.week !== '' ? Number(req.query.week) : undefined;
+    res.json(await getBlueprintContext(programId, week));
+  } catch (err) { fail(res, err, next); }
+}
+
+// Gating: list a program's per-section rules; upsert one section's rules.
+export async function handleGetSectionRules(req: Request, res: Response, next: NextFunction) {
+  try {
+    res.json({ sectionRules: await getSectionRules((req.query.program_id as string) || null) });
+  } catch (err) { fail(res, err, next); }
+}
+export async function handleSetSectionRule(req: Request, res: Response, next: NextFunction) {
+  try {
+    const b = sectionRuleSchema.parse(req.body);
+    res.json(await setSectionRule(b.program_id, b.bucket, b.rules));
   } catch (err) { fail(res, err, next); }
 }

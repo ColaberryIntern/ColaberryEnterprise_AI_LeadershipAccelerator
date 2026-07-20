@@ -1686,6 +1686,68 @@ export function startScheduler(): void {
     });
   });
 
+  // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
+  // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
+  cron.schedule(
+    '0 3 * * 1',
+    () => {
+      instrumentCronJob('PodcastRefresh', async () => {
+        const { refreshPodcasts } = await import('./podcast/podcastIngestionService');
+        await refreshPodcasts();
+      }).catch((err) => {
+        console.error('[Scheduler] Podcast refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Refresh the student blog library once per week (Monday 03:30 America/Chicago).
+  // One fetch of training.colaberry.com/blog (__NEXT_DATA__ JSON) upserted by slug —
+  // new posts appear automatically in the Blog type's auto-match pool.
+  cron.schedule(
+    '30 3 * * 1',
+    () => {
+      instrumentCronJob('BlogRefresh', async () => {
+        const { refreshBlogPosts } = await import('./blog/blogIngestionService');
+        await refreshBlogPosts();
+      }).catch((err) => {
+        console.error('[Scheduler] Blog refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Reconcile enrollment payment state from PaySimple every 30 minutes: payments
+  // that went through become revenue; failed/reversed ones are subtracted. Ships
+  // dark — only scheduled when PAYSIMPLE_SYNC_ENABLED=true (needs live read creds).
+  if (env.paysimpleSyncEnabled) {
+    cron.schedule('*/30 * * * *', () => {
+      instrumentCronJob('PaySimplePaymentSync', async () => {
+        const { syncPaySimplePayments } = await import('./paymentSyncService');
+        await syncPaySimplePayments({});
+      }).catch((err) => {
+        console.error('[Scheduler] PaySimple payment sync error:', err);
+      });
+    });
+    console.log('[Scheduler] PaySimplePaymentSync scheduled (*/30 * * * *)');
+  }
+
+  // Heal missed-webhook membership payments every 20 minutes: for OUR checkout
+  // customers whose enrollment is still unpaid, link their live PaySimple membership
+  // payment (scoped to our stored customer ids only — no amount/email matching, so
+  // shared-gateway charges can't leak). Ships dark — PAYSIMPLE_APP_RECONCILE_ENABLED=true.
+  if (env.paysimpleAppReconcileEnabled) {
+    cron.schedule('*/20 * * * *', () => {
+      instrumentCronJob('AppPaymentReconcile', async () => {
+        const { reconcileAppPayments } = await import('./appPaymentReconcileService');
+        await reconcileAppPayments({});
+      }).catch((err) => {
+        console.error('[Scheduler] App payment reconcile error:', err);
+      });
+    });
+    console.log('[Scheduler] AppPaymentReconcile scheduled (*/20 * * * *)');
+  }
+
   // Reap idle preview stacks every 5 minutes (stops stacks untouched for 30 min).
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('PreviewStackReaper', async () => {

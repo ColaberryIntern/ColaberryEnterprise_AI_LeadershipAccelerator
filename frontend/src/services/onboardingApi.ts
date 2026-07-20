@@ -35,10 +35,19 @@ export interface OnboardingSchedule {
   next_open_house: OpenHouseView | null;
   my_rsvp: boolean;
   first_class: FirstClassView | null;
+  is_explorer?: boolean;   // free Explorer tier — drives the Today conversion funnel
 }
 
+export interface ResumeProfileFields {
+  full_name?: string; title?: string; company?: string; company_size?: string; phone?: string; linkedin_url?: string;
+}
+export interface ResumePersonalization {
+  industry?: string; role?: string; seniority?: string; years_experience?: string; skills?: string; goals?: string; location?: string; ai_maturity_level?: string;
+}
 export interface OnboardingProfileView {
   prefill: Record<string, any>;
+  profile?: ResumeProfileFields;
+  personalization?: ResumePersonalization;
   linkedin_url: string | null;
   has_resume: boolean;
 }
@@ -57,6 +66,47 @@ export async function freeSignup(body: { full_name: string; email: string }): Pr
 
 export async function fetchPoints(): Promise<PointsSummary> {
   const { data } = await portalApi.get<PointsSummary>('/api/portal/points');
+  return data;
+}
+
+// ── Daily streak (server-authoritative, escalating) ──────────────────────────
+export interface StreakDay { date: string; label: string; hit: boolean; is_today: boolean; }
+export interface StreakView {
+  count: number;
+  claimed_today: boolean;
+  week: StreakDay[];            // last 7 Central days, oldest → today
+  total_streak_points: number;
+  next_points: number;         // what a claim right now would award (0 if claimed)
+}
+export async function fetchStreak(): Promise<StreakView> {
+  const { data } = await portalApi.get<StreakView>('/api/portal/streak');
+  return data;
+}
+
+// ── Points drill-down: three lenses (engagement / skill XP / readiness) ───────
+export interface DrilldownView {
+  engagement: {
+    total: number;
+    streak_days: number;
+    streak_points: number;
+    recent: Array<{ event_type: string; points: number; created_at: string }>;
+  };
+  skill_xp: { learning: number; builder: number; community: number; total: number } | null;
+  readiness: {
+    pct: number;
+    level: string;
+    rank: number;
+    next_level: string | null;
+    at_max: boolean;
+    gaps: string[];
+  } | null;
+}
+export async function fetchPointsDrilldown(): Promise<DrilldownView> {
+  const { data } = await portalApi.get<DrilldownView>('/api/portal/points/drilldown');
+  return data;
+}
+export async function claimDailyStreak(): Promise<{ awarded: boolean; points: number; streak: StreakView }> {
+  const { data } = await portalApi.post('/api/portal/streak/claim');
   return data;
 }
 
@@ -83,7 +133,7 @@ export async function rsvpOpenHouse(id: string): Promise<{ ok: boolean; awarded?
 
 export async function ingestBackground(
   body: { resume_text?: string; linkedin_url?: string },
-): Promise<{ ok: boolean; parsed: boolean; prefill: Record<string, any>; linkedin_url: string | null }> {
+): Promise<{ ok: boolean; parsed: boolean; prefill: Record<string, any>; profile?: ResumeProfileFields; personalization?: ResumePersonalization; linkedin_url: string | null }> {
   const { data } = await portalApi.post('/api/portal/onboarding/ingest-background', body);
   return data;
 }

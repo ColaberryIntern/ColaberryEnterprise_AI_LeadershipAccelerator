@@ -25,6 +25,16 @@ interface DayMetrics {
   project_id: string | null;
 }
 
+interface GithubActivity {
+  connected: boolean;
+  repo_url: string | null;
+  commits_last_7d: number;
+  open_prs: number;
+  total_stars: number;
+  contribution_graph: Array<{ date: string; count: number }>;
+  synced_at: string | null;
+}
+
 const METRIC_TILES = (m: DayMetrics) => [
   { label: 'Completed today', value: String(m.tasks_completed_today), color: '#10b981', icon: 'bi-check-circle-fill' },
   { label: 'Remaining',       value: String(m.tasks_remaining),        color: '#3b82f6', icon: 'bi-list-task' },
@@ -34,6 +44,7 @@ const METRIC_TILES = (m: DayMetrics) => [
 const ArchitectDashboard: React.FC = () => {
   const [metrics, setMetrics] = useState<DayMetrics | null>(null);
   const [evaluation, setEvaluation] = useState<ArchitectEvaluation | null>(null);
+  const [github, setGithub] = useState<GithubActivity | null>(null);
   const [studentQueue, setStudentQueue] = useState<StudentQueueItem[]>([]);
   const [sqLoading, setSqLoading] = useState(true);
   const [sqError, setSqError] = useState<string | null>(null);
@@ -49,15 +60,17 @@ const ArchitectDashboard: React.FC = () => {
       setSqLoading(true);
       setSqError(null);
       try {
-        const [queueRes, metricsRes, evalRes] = await Promise.all([
+        const [queueRes, metricsRes, evalRes, githubRes] = await Promise.all([
           portalApi.get<{ items: StudentQueueItem[] }>('/api/portal/student-ops/my-queue'),
           portalApi.get<DayMetrics>('/api/portal/student-ops/metrics/today').catch(() => ({ data: null })),
           portalApi.get<ArchitectEvaluation | null>('/api/portal/project/evaluation').catch(() => ({ data: null })),
+          portalApi.get<GithubActivity>('/api/portal/student-ops/github-activity').catch(() => ({ data: null })),
         ]);
         if (!cancelled) {
           setStudentQueue(queueRes.data.items || []);
           if (metricsRes.data) setMetrics(metricsRes.data);
           if (evalRes.data) setEvaluation(evalRes.data);
+          if (githubRes.data) setGithub(githubRes.data);
         }
       } catch (err: any) {
         if (!cancelled) setSqError(err?.response?.data?.error || err?.message || 'Failed to load queue');
@@ -250,6 +263,69 @@ const ArchitectDashboard: React.FC = () => {
                 Update Project DNA
               </a>
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* GitHub Activity — soft-fail: hidden when the fetch itself fails */}
+      {github && (
+        <div className="card border-0 shadow-sm mb-4">
+          <div className="card-body">
+            <div className="d-flex align-items-center justify-content-between mb-3">
+              <h2 className="h6 fw-bold mb-0" style={{ color: '#1e293b' }}>
+                <i className="bi bi-github me-2" style={{ color: '#FB2832' }}></i>
+                GitHub Activity
+              </h2>
+              {github.synced_at && (
+                <span className="text-muted" style={{ fontSize: 11 }}>
+                  Synced {new Date(github.synced_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+              )}
+            </div>
+
+            {!github.connected ? (
+              <p className="text-muted small mb-0">
+                No repository connected yet.{' '}
+                <a href="/portal/project-builder" style={{ color: 'var(--color-primary)', textDecoration: 'none' }}>
+                  Connect GitHub
+                </a>{' '}
+                to see your commit and pull request activity here.
+              </p>
+            ) : (
+              <>
+                <div className="row g-3 mb-3">
+                  <div className="col-4 text-center">
+                    <div className="fw-bold" style={{ fontSize: 22, color: '#3b82f6' }}>{github.commits_last_7d}</div>
+                    <div className="text-muted small">Commits (7d)</div>
+                  </div>
+                  <div className="col-4 text-center">
+                    <div className="fw-bold" style={{ fontSize: 22, color: '#f59e0b' }}>{github.open_prs}</div>
+                    <div className="text-muted small">Open PRs</div>
+                  </div>
+                  <div className="col-4 text-center">
+                    <div className="fw-bold" style={{ fontSize: 22, color: '#10b981' }}>{github.total_stars}</div>
+                    <div className="text-muted small">Stars</div>
+                  </div>
+                </div>
+                {github.contribution_graph.length > 0 && (
+                  <div className="d-flex gap-1">
+                    {github.contribution_graph.map((day) => (
+                      <div
+                        key={day.date}
+                        title={`${day.date}: ${day.count} commit${day.count === 1 ? '' : 's'}`}
+                        style={{
+                          flex: 1,
+                          height: 24,
+                          borderRadius: 4,
+                          background: day.count > 0 ? '#10b981' : '#e2e8f0',
+                          opacity: day.count > 0 ? Math.min(1, 0.4 + day.count * 0.15) : 1,
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </div>
       )}

@@ -128,23 +128,22 @@ export async function processNewEmails(): Promise<ProcessResult> {
       // Inbox COS sees Gmail/IMAP replies that bypass the Mandrill webhook handler.
       // Without this, leads who reply "unsubscribe" stay in the active queue.
       try {
-        const bodyLower = (email.body_text || '').toLowerCase().trim();
-        const subjectLower = (email.subject || '').toLowerCase().trim();
-        const unsubKeywords = ['unsubscribe', 'remove me', 'opt out', 'opt-out', 'take me off', 'no more emails', 'stop emailing', 'don\'t email', 'dont email', 'don\'t contact', 'dont contact'];
-        const subjectIsUnsub = /^(re:\s*)?unsubscribe\b/i.test(email.subject || '');
-        const bodyHasUnsub = unsubKeywords.some(kw => bodyLower.includes(kw));
-        if (subjectIsUnsub || bodyHasUnsub) {
+        const { detectInboxUnsubscribeIntent, processOptOut } = require('../unsubscribeEnforcementService');
+        // Tightened detection (see unsubscribeEnforcementService): skips internal
+        // staff senders, ignores quoted/forwarded history, and treats the bare word
+        // "unsubscribe" as intent only in a short reply — so discussing or forwarding
+        // campaign content no longer auto-opts-out the sender.
+        const detection = detectInboxUnsubscribeIntent(email.subject, email.body_text, email.from_address);
+        if (detection.matched) {
           const { Lead } = require('../../models');
           const lead = await Lead.findOne({
             where: sequelize.where(sequelize.fn('LOWER', sequelize.col('email')), email.from_address.toLowerCase()),
           });
           if (lead) {
-            const { processOptOut } = require('../unsubscribeEnforcementService');
-            const reason = subjectIsUnsub
-              ? `Inbox unsubscribe reply (subject): "${(email.subject || '').substring(0, 100)}"`
-              : `Inbox unsubscribe reply (body): "${bodyLower.substring(0, 100)}"`;
+            const snippet = (detection.via === 'subject' ? email.subject : email.body_text) || '';
+            const reason = `Inbox unsubscribe reply (${detection.via}): "${snippet.substring(0, 100)}"`;
             await processOptOut(lead.id, 'email', reason, 'inbox_reply');
-            console.log(`${LOG_PREFIX} Auto-unsubscribed lead ${lead.id} (${email.from_address}) via Inbox COS`);
+            console.log(`${LOG_PREFIX} Auto-unsubscribed lead ${lead.id} (${email.from_address}) via Inbox COS (${detection.via})`);
           }
         }
       } catch (unsubErr: any) {

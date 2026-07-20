@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import portalApi from '../../../utils/portalApi';
-import { fetchSchedule, fetchPublicEvents, OpenHouseView, FirstClassView } from '../../../services/onboardingApi';
+import { fetchSchedule, fetchPublicEvents, fetchPoints, OpenHouseView, FirstClassView, PointsEvent } from '../../../services/onboardingApi';
 import { fmtCentralTime, centralParts } from '../today/shellUtils';
 import './SchedulePage.css';
 
@@ -70,6 +70,22 @@ function hourOf(t: string | null | undefined, from?: Date): number {
 }
 
 const KIND_CLASS: Record<EvKind, string> = { class: 'learning', event: 'event' };
+
+/** A human label for a points-ledger event, from its type/metadata. */
+function labelForPointsEvent(e: PointsEvent): string {
+  const OVERRIDES: Record<string, string> = {
+    open_house_rsvp: 'Open House RSVP',
+    daily_streak: 'Daily streak',
+    profile_complete: 'Profile completed',
+    background_added: 'Background added',
+    first_login: 'First login',
+    card_complete: 'Lesson completed',
+    lesson_complete: 'Lesson completed',
+  };
+  if (OVERRIDES[e.event_type]) return OVERRIDES[e.event_type];
+  const t = (e.event_type || 'Points').replace(/[_:]+/g, ' ').trim();
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
 
 function stateForSession(status: string, day: Date, today: Date): EvState {
   if (status === 'completed') return 'done';
@@ -158,6 +174,7 @@ const SchedulePage: React.FC = () => {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [events, setEvents] = useState<OpenHouseView[]>([]);
   const [firstClass, setFirstClass] = useState<FirstClassView | null>(null);
+  const [pointsEvents, setPointsEvents] = useState<PointsEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 
@@ -166,15 +183,17 @@ const SchedulePage: React.FC = () => {
     (async () => {
       // Each fetch resolves to its own fallback on error, so Promise.all never
       // rejects and the calendar degrades gracefully (e.g. guests have no sessions).
-      const [ss, ev, ko] = await Promise.all([
+      const [ss, ev, ko, pts] = await Promise.all([
         portalApi.get('/api/portal/sessions').then((r) => (r.data.sessions || []) as SessionItem[]).catch(() => [] as SessionItem[]),
         fetchPublicEvents(90).catch(() => [] as OpenHouseView[]),
         fetchSchedule().then((s) => s.first_class ?? null).catch(() => null),
+        fetchPoints().then((p) => p.events || []).catch(() => [] as PointsEvent[]),
       ]);
       if (cancelled) return;
       setSessions(ss);
       setEvents(ev);
       setFirstClass(ko);
+      setPointsEvents(pts);
       setLoading(false);
     })().catch(() => { if (!cancelled) { setError(true); setLoading(false); } });
     return () => { cancelled = true; };
@@ -182,6 +201,22 @@ const SchedulePage: React.FC = () => {
 
   const sched = useMemo(() => buildSchedule(sessions, events, firstClass, today), [sessions, events, firstClass, today]);
   const totalItems = useMemo(() => Object.values(sched).reduce((n, arr) => n + arr.length, 0), [sched]);
+
+  // Points history bucketed by Central day: a per-day total (for the month/week
+  // badges) plus the ordered breakdown (for the agenda). Sourced from the
+  // `student_points_events` ledger via `/api/portal/points`.
+  const { pointsByDay, pointsDetailByDay } = useMemo(() => {
+    const by: Record<string, number> = {};
+    const det: Record<string, { label: string; points: number; time: string }[]> = {};
+    for (const e of pointsEvents) {
+      const cp = centralParts(e.created_at);
+      if (!cp) continue;
+      const k = dkey(new Date(cp.y, cp.mo, cp.d));
+      by[k] = (by[k] || 0) + (e.points || 0);
+      (det[k] = det[k] || []).push({ label: labelForPointsEvent(e), points: e.points || 0, time: fmtCentralTime(e.created_at) });
+    }
+    return { pointsByDay: by, pointsDetailByDay: det };
+  }, [pointsEvents]);
 
   // Week numbering anchor: cohort kickoff, else earliest session, else today.
   const anchorMon = useMemo(() => {
@@ -261,10 +296,12 @@ const SchedulePage: React.FC = () => {
         </>,
       ));
       const more = evs.length > 3 ? <div className="mmore">+{evs.length - 3} more</div> : null;
+      const dayPts = pointsByDay[dkey(d)];
       cells.push(
         <div key={i} className={`mcell${out ? ' out' : ''}${isToday(d) ? ' today' : ''}`}>
           <div className="dn"><span>{d.getDate()}</span>{wk && d.getDay() === 1 ? <span className="wkn">W{wk}</span> : null}</div>
           {dots}{more}
+          {dayPts ? <div className="mdot" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26', fontWeight: 800 }} title={`${dayPts} points earned`}>+{dayPts} pts</div> : null}
         </div>
       );
     }
@@ -293,9 +330,11 @@ const SchedulePage: React.FC = () => {
           <div className="tg-corner" />
           {days.map((dn, i) => {
             const d = new Date(ws); d.setDate(ws.getDate() + i);
+            const dayPts = pointsByDay[dkey(d)];
             return (
               <div key={i} className={`tg-dayhead${isToday(d) ? ' today' : ''}`}>
                 <div className="d">{dn}</div><div className="n">{d.getDate()}</div>
+                {dayPts ? <div style={{ fontSize: 10, fontWeight: 800, color: '#3C7A26' }} title={`${dayPts} points earned`}>+{dayPts} pts</div> : null}
               </div>
             );
           })}
@@ -332,27 +371,50 @@ const SchedulePage: React.FC = () => {
     for (let i = 0; i < 7; i++) {
       const d = new Date(ws); d.setDate(ws.getDate() + i);
       const evs = sched[dkey(d)] || [];
-      if (!evs.length) continue;
+      const pts = pointsDetailByDay[dkey(d)] || [];
+      if (!evs.length && !pts.length) continue;
+      const dayPtsTotal = pts.reduce((n, p) => n + p.points, 0);
       blocks.push(
         <div key={dkey(d)}>
-          <div className="agenda-day"><div className="dh">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}{isToday(d) ? ' — Today' : ''}</div></div>
-          <div className="queue agenda-queue">
-            {evs.map((ev) => renderItem(
-              ev, `qtask${ev.state === 'done' ? ' done' : ''}`,
-              <>
-                <span className="qrank">{ev.state === 'done' ? '✓' : ev.state === 'live' ? '●' : '·'}</span>
-                <span className="qbody">
-                  <span className="qtitle">{ev.title}</span>
-                  <span className="qmeta">
-                    <span className={`chip ${KIND_CLASS[ev.kind]}`}><span className="sw" />{ev.kind === 'class' ? 'Class' : 'Event'}</span>
-                    {ev.time ? <span className="ptbadge">{ev.time}</span> : null}
-                    {' · '}{ev.sub}{ev.state === 'live' ? ' · live now' : ''}
-                  </span>
-                </span>
-                {ev.href ? <svg className="qgo" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> : null}
-              </>,
-            ))}
+          <div className="agenda-day">
+            <div className="dh">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}{isToday(d) ? ' — Today' : ''}</div>
+            {dayPtsTotal ? <span className="ptbadge" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26' }}>+{dayPtsTotal} pts</span> : null}
           </div>
+          {pts.length ? (
+            <div className="queue agenda-queue">
+              {pts.map((p, idx) => (
+                <div key={`pts-${idx}`} className="qtask done">
+                  <span className="qrank" style={{ color: '#3C7A26' }}>+{p.points}</span>
+                  <span className="qbody">
+                    <span className="qtitle">{p.label}</span>
+                    <span className="qmeta">
+                      <span className="chip learning"><span className="sw" style={{ background: '#5BA63C' }} />Points</span>
+                      {p.time ? <span className="ptbadge">{p.time}</span> : null}
+                    </span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {evs.length ? (
+            <div className="queue agenda-queue">
+              {evs.map((ev) => renderItem(
+                ev, `qtask${ev.state === 'done' ? ' done' : ''}`,
+                <>
+                  <span className="qrank">{ev.state === 'done' ? '✓' : ev.state === 'live' ? '●' : '·'}</span>
+                  <span className="qbody">
+                    <span className="qtitle">{ev.title}</span>
+                    <span className="qmeta">
+                      <span className={`chip ${KIND_CLASS[ev.kind]}`}><span className="sw" />{ev.kind === 'class' ? 'Class' : 'Event'}</span>
+                      {ev.time ? <span className="ptbadge">{ev.time}</span> : null}
+                      {' · '}{ev.sub}{ev.state === 'live' ? ' · live now' : ''}
+                    </span>
+                  </span>
+                  {ev.href ? <svg className="qgo" width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> : null}
+                </>,
+              ))}
+            </div>
+          ) : null}
         </div>
       );
     }

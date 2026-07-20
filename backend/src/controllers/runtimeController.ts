@@ -6,9 +6,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
+import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
+import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
+import { getAssessment, submitAssessment, sectionResultsSummary } from '../services/runtime/assessmentService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
 import fs from 'fs/promises';
@@ -34,7 +37,13 @@ export async function handleMentor(req: Request, res: Response, next: NextFuncti
 }
 
 export async function handleReflection(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await reflectionPrompts(await cardContext(String(req.params.cardId)))); } catch (e) { fail(res, e, next); }
+  try {
+    const ctx = await cardContext(String(req.params.cardId));
+    // The reflection sits after the section's Evaluation + Survey — feed their
+    // results in so the questions help the student make sense of them.
+    const results = await sectionResultsSummary(eid(req), (ctx as any).program_id, (ctx as any).week);
+    res.json(await reflectionPrompts(ctx, results));
+  } catch (e) { fail(res, e, next); }
 }
 // The first student to open a card whose content is missing or >30 days old
 // regenerates it once (class-wide); the fresh copy then lasts 30 days.
@@ -73,12 +82,53 @@ export async function handlePromptLab(req: Request, res: Response, next: NextFun
 }
 
 const completeSchema = z.object({ work: z.string().optional(), reflection: z.string().optional() });
+const watchBeatSchema = z.object({
+  delta_s: z.number().min(0).max(600),
+  position_s: z.number().min(0).nullable().optional(),
+  duration_s: z.number().min(0).nullable().optional(),
+  provider: z.string().max(32).nullable().optional(),
+});
+
+/** POST /api/portal/runtime/cards/:cardId/watch — throttled watch heartbeat.
+ *  Returns { watched_pct, required_pct, met } so the UI can sync the gate. */
+export async function handleWatchBeat(req: Request, res: Response, next: NextFunction) {
+  try {
+    const beat = watchBeatSchema.parse(req.body);
+    res.json(await recordWatchBeat(eid(req), String(req.params.cardId), beat));
+  } catch (err) { fail(res, err, next); }
+}
+
 export async function handleComplete(req: Request, res: Response, next: NextFunction) {
   try { res.json(await completeActivity(eid(req), String(req.params.cardId), completeSchema.parse(req.body || {}))); } catch (e) { fail(res, e, next); }
 }
 
 export async function handleReadiness(req: Request, res: Response, next: NextFunction) {
   try { res.json(await readinessSummary(eid(req))); } catch (e) { fail(res, e, next); }
+}
+
+// weekly feedback survey — capture + store the student's answers
+export async function handleGetSurvey(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getSurvey(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSaveSurvey(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await saveSurvey(eid(req), String(req.params.cardId), req.body || {})); } catch (e) { fail(res, e, next); }
+}
+
+// Knowledge Check (quiz) + Evaluation — load questions (no answers leaked) / submit + score
+const submitAssessmentSchema = z.object({
+  responses: z.array(z.object({
+    index: z.number().int(),
+    selected_index: z.number().int().nullable(),
+    time_ms: z.number().nullable().optional(),
+  })).default([]),
+  duration_ms: z.number().nullable().optional(),
+  started_at: z.string().nullable().optional(),
+});
+export async function handleGetAssessment(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getAssessment(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSubmitAssessment(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await submitAssessment(eid(req), String(req.params.cardId), submitAssessmentSchema.parse(req.body || {}))); } catch (e) { fail(res, e, next); }
 }
 
 // notebook

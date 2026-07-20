@@ -80,13 +80,47 @@ export default function ProjectBuilderFlow() {
   const [reqDoc, setReqDoc] = useState<ReqDoc | null>(null);
   const [taskLists, setTaskLists] = useState<TaskList[]>([]);
   const [githubConnected, setGithubConnected] = useState(false);
+  const [githubNeedsRepo, setGithubNeedsRepo] = useState(false);
   const [githubRepo, setGithubRepo] = useState('');
+  const [repoUrl, setRepoUrl] = useState('');
+  const [connectingRepo, setConnectingRepo] = useState(false);
   const [loading, setLoading] = useState('');
   const [err, setErr] = useState('');
 
-  // On mount: load DNA chips + github status, detect OAuth return
+  // On mount: resume an in-progress project, load DNA chips + github status,
+  // detect OAuth return. Idea text and sharpening Q&A are never persisted
+  // server-side (only the generated artifacts are), so a resumed session
+  // jumps to the furthest step whose output actually exists in the DB rather
+  // than replaying the whole wizard.
   useEffect(() => {
     (async () => {
+      let resumeStep: number | null = null;
+      try {
+        const projectRes = await portalApi.get('/api/portal/project');
+        const project = projectRes?.data;
+        if (project) {
+          setProjectName(project.name || '');
+          const tasksRes = await portalApi.get('/api/portal/project/tasks').catch(() => null);
+          const lists: TaskList[] = tasksRes?.data?.taskLists ?? [];
+          if (lists.length > 0) {
+            setTaskLists(lists);
+            resumeStep = 4;
+          } else if (project.requirements_document) {
+            setReqDoc({
+              technical_requirements: String(project.requirements_document)
+                .split('\n')
+                .map((l: string) => l.replace(/^[-*•]\s*/, '').trim())
+                .filter(Boolean),
+              non_functional_requirements: [],
+              error: null,
+            });
+            resumeStep = 3;
+          } else {
+            resumeStep = 1;
+          }
+        }
+      } catch { /* 404 — no existing project, start fresh at step 0 */ }
+
       try {
         const [dnaRes, ghRes] = await Promise.all([
           portalApi.get('/api/portal/project-dna').catch(() => null),
@@ -104,14 +138,17 @@ export default function ProjectBuilderFlow() {
         }
         if (ghRes?.data?.connected) {
           setGithubConnected(true);
-          setGithubRepo(`${ghRes.data.repo_owner ?? ''}/${ghRes.data.repo_name ?? ''}`);
+          setGithubRepo(`${ghRes.data.repoOwner ?? ''}/${ghRes.data.repoName ?? ''}`);
+        } else if (ghRes?.data?.hasToken) {
+          setGithubNeedsRepo(true);
         }
       } catch { /* non-critical */ }
 
-      // Return from GitHub OAuth — jump to GitHub step
+      // Return from GitHub OAuth — jump to GitHub step regardless of resume state
       if (searchParams.get('github_connected') === '1') {
-        setGithubConnected(true);
         setStep(5);
+      } else if (resumeStep !== null) {
+        setStep(resumeStep);
       }
     })();
   }, [searchParams]);
@@ -120,6 +157,20 @@ export default function ProjectBuilderFlow() {
 
   const goNext = useCallback(async () => {
     setErr('');
+
+    if (step === 0) {
+      // Persist the project name immediately — without this, no project row
+      // exists yet, so a page reload before requirements are generated has
+      // nothing to resume from and always resets to step 0.
+      if (!projectName.trim()) { setErr('Name your project first.'); return; }
+      setLoading('Saving…');
+      try {
+        await portalApi.patch('/api/portal/project/name', { name: projectName.trim() });
+      } catch { /* non-critical — resume-on-reload just won't work yet if this fails */ }
+      finally { setLoading(''); }
+      setStep(1);
+      return;
+    }
 
     if (step === 1) {
       // Generate sharpening questions from idea
@@ -393,6 +444,30 @@ export default function ProjectBuilderFlow() {
           ? <div style={{ background: 'var(--leaf-bg)', border: '1px solid var(--leaf-action)33', borderRadius: 'var(--r-16)', padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
               <i className="ri-checkbox-circle-fill" style={{ fontSize: 24, color: 'var(--leaf-action)' }} />
               <div><div style={{ fontWeight: 700, color: 'var(--leaf-text)' }}>Repository connected</div><div style={{ fontSize: 13, color: 'var(--color-text-light)' }}>{githubRepo}</div></div>
+            </div>
+          : githubNeedsRepo
+          ? <div style={{ background: 'var(--n50)', border: '1px solid var(--n300)', borderRadius: 'var(--r-16)', padding: '18px 20px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{ width: 44, height: 44, borderRadius: 'var(--r-12)', background: 'var(--n900)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}><i className="ri-github-fill" /></div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, color: 'var(--n900)', fontSize: 15 }}>Which repo are you building in?</div>
+                <div style={{ fontSize: 13, color: 'var(--color-text-light)', marginTop: 2 }}>GitHub is authorized — paste the URL of the one repo to link.</div>
+                <input className="form-control" style={{ marginTop: 10 }} value={repoUrl} onChange={e => setRepoUrl(e.target.value)} placeholder="https://github.com/you/your-repo" disabled={connectingRepo} />
+                <button style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'var(--cherry)', color: '#fff', border: 'none', borderRadius: 'var(--r-pill)', padding: '9px 18px', fontWeight: 700, fontSize: 13, marginTop: 12, cursor: 'pointer', opacity: connectingRepo ? 0.7 : 1 }}
+                  disabled={connectingRepo}
+                  onClick={async () => {
+                    if (!repoUrl.trim()) { setErr('Enter your repository URL.'); return; }
+                    setErr(''); setConnectingRepo(true);
+                    try {
+                      const res = await portalApi.post('/api/portal/github/connect', { repo_url: repoUrl.trim() });
+                      setGithubConnected(true);
+                      setGithubNeedsRepo(false);
+                      setGithubRepo(`${res.data.repo_owner ?? ''}/${res.data.repo_name ?? ''}`);
+                    } catch { setErr('Could not connect that repository. Check the URL and try again.'); }
+                    finally { setConnectingRepo(false); }
+                  }}>
+                  <i className="ri-link" /> {connectingRepo ? 'Connecting…' : 'Link repository'}
+                </button>
+              </div>
             </div>
           : <div style={{ background: 'var(--n50)', border: '1px solid var(--n300)', borderRadius: 'var(--r-16)', padding: '18px 20px', display: 'flex', gap: 14, alignItems: 'flex-start' }}>
               <div style={{ width: 44, height: 44, borderRadius: 'var(--r-12)', background: 'var(--n900)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24, flexShrink: 0 }}><i className="ri-github-fill" /></div>

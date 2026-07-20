@@ -23,6 +23,9 @@ export async function handleGetClassroomFeed(req: Request, res: Response): Promi
     await initProgress(enrollmentId);
     const feed = await getFeed(enrollmentId);
     const progression = await getProgressionSummary(enrollmentId);
+    // The feed is per-student, live curriculum data — never let the browser or a
+    // CDN serve a stale copy (a newly-published card must appear on next load).
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
     res.json({ ...feed, progression });
   } catch (err: any) {
     console.error('[timelineController] classroom feed failed', err?.message);
@@ -48,6 +51,12 @@ export async function handleCompleteCard(req: Request, res: Response): Promise<v
     const outcome = await onCardCompleted(enrollmentId, cardId);
     res.json(outcome);
   } catch (err: any) {
+    // Gate errors (e.g. the 75% watch requirement) carry a status + student-readable
+    // message — pass them through instead of flattening to a 500.
+    if (err && typeof err.status === 'number') {
+      res.status(err.status).json({ error: err.message, code: err.code, watched_pct: err.watched_pct, required_pct: err.required_pct });
+      return;
+    }
     console.error('[timelineController] complete card failed', err?.message);
     res.status(500).json({ error: 'card_complete_failed', message: err?.message || 'unknown' });
   }

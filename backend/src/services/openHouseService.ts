@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { Enrollment, Cohort, OpenHouseEvent } from '../models';
 import { award, hasAwarded } from './pointsService';
 import { getNextPublicEvent, isKnownPublicEvent } from './publicEventsService';
+import { isEmailRegisteredForOpenHouse } from './openHouseOnboardingService';
 import type { FirstClassView, OnboardingSchedule } from './openHouseTypes';
 
 export type { OpenHouseView, FirstClassView, OnboardingSchedule } from './openHouseTypes';
@@ -61,7 +62,13 @@ export async function getOnboardingSchedule(enrollmentId: string): Promise<Onboa
   // Next event = soonest live public Open House from the CCPP Eventbrite pipeline
   // (publicEventsService caches and falls back to the seeded Postgres table).
   const next = await getNextPublicEvent();
-  const myRsvp = next ? await hasAwarded(enrollmentId, `open_house_rsvp:${next.id}`) : false;
+  let myRsvp = next ? await hasAwarded(enrollmentId, `open_house_rsvp:${next.id}`) : false;
+  // Also honor an existing Eventbrite/CCPP registration — if their email already
+  // signed up for the Open House, treat them as RSVP'd so we stop asking.
+  if (!myRsvp && enrollment) {
+    const email = (enrollment as any).email as string | undefined;
+    if (email && await isEmailRegisteredForOpenHouse(email)) myRsvp = true;
+  }
 
   let firstClass: FirstClassView | null = null;
   const ownCohort = enrollment ? (enrollment as any).get?.('cohort') : null;

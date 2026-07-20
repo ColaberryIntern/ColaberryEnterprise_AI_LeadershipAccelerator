@@ -57,11 +57,17 @@
 .tl-de .tl-wkmid{min-width:160px;text-align:center}
 .tl-de .tl-wklbl{font-size:16px;font-weight:700;color:var(--text-strong);line-height:1.1}
 
-/* two-column classroom layout */
+/* two-column classroom layout. FB-style responsive rule: when the screen
+   shrinks, the feed NEVER shrinks with it — the right rail disappears first
+   and the feed keeps its normal card/image size, centered like a FB feed. */
 .tl-de .tl-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
 .tl-de .tl-feedcol{min-width:0}
 .tl-de .tl-side{display:flex;flex-direction:column;gap:16px;position:sticky;top:20px;align-self:start}
-@media(max-width:1000px){.tl-de .tl-grid{grid-template-columns:1fr}.tl-de .tl-side{position:static}}
+@media(max-width:1180px){
+  .tl-de .tl-grid{grid-template-columns:minmax(0,1fr)}
+  .tl-de .tl-side{display:none}
+  .tl-de .tl-feedcol{max-width:720px;margin:0 auto;width:100%}
+}
 
 /* card shell + chips + buttons (Design E) */
 .tl-de .tl-card{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-24);box-shadow:var(--shadow-md)}
@@ -99,6 +105,19 @@
 .tl-de .fc-head .st-ic{margin-left:auto;flex:none}
 .tl-de .fc-body{padding:0 20px 14px}
 .tl-de .fc-body p{margin:0 0 14px;color:var(--text-body);font-size:14.5px}
+/* ── Locked card: big lock over a dimmed tile; every interaction is blocked ── */
+.tl-de .fc-media-wrap{position:relative}
+.tl-de .fcard.locked .fc-media-wrap > .mthumb{filter:grayscale(.5) brightness(.62);pointer-events:none}
+.tl-de .fcard.locked .fc-media-wrap > .mthumb *{pointer-events:none}
+.tl-de .fc-lock{position:absolute;inset:0;z-index:5;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  border-radius:var(--r-12);background:linear-gradient(180deg,rgba(20,24,27,.42),rgba(20,24,27,.66));color:#fff;text-align:center;padding:16px;cursor:not-allowed}
+.tl-de .fc-lock-ic{width:66px;height:66px;border-radius:50%;background:rgba(255,255,255,.16);backdrop-filter:blur(2px);display:flex;align-items:center;justify-content:center}
+.tl-de .fc-lock-ic svg{width:34px;height:34px;color:#fff}
+.tl-de .fc-lock-txt{font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+.tl-de .fc-lock-sub{font-size:12.5px;font-weight:600;opacity:.95;max-width:280px;line-height:1.4;text-shadow:0 1px 3px rgba(0,0,0,.4)}
+.tl-de .fcard.locked{opacity:.96}
+.tl-de .fcard.locked .fc-foot .like,.tl-de .fcard.locked .fc-foot .cmt{opacity:.4;cursor:not-allowed}
+.tl-de .fcard.locked .fc-foot .like:hover,.tl-de .fcard.locked .fc-foot .cmt:hover{color:inherit}
 .tl-de .fc-foot{display:flex;align-items:center;gap:8px;padding:12px 20px;border-top:1px solid var(--border-subtle);background:var(--surface-subtle);flex-wrap:wrap}
 .tl-de .fc-foot .like,.tl-de .fc-foot .cmt{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-default);
   background:var(--surface-page);border-radius:var(--r-pill);padding:7px 14px;font-size:13px;font-weight:700;color:var(--text-muted);font-family:inherit;transition:.16s var(--ease)}
@@ -127,6 +146,33 @@
 .tl-de .mthumb .mt-meta b{display:block;font-size:15px;line-height:1.2;text-shadow:0 1px 4px rgba(0,0,0,.3)}
 .tl-de .mthumb .mt-meta span{font-size:12px;font-family:var(--mono);opacity:.9}
 .tl-de .mthumb .mt-open{position:absolute;right:16px;bottom:14px;z-index:3;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.95);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(0,0,0,.32);transition:transform .16s var(--ease)}
+/* Non-playable cards: an "Open" pill (right-panel intent) instead of the ▶ circle */
+.tl-de .mthumb .mt-openpill{position:absolute;right:16px;bottom:14px;z-index:3;display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.95);color:var(--cherry-deep);font-family:var(--sans);font-size:13px;font-weight:700;padding:9px 16px;border-radius:var(--r-pill);box-shadow:0 6px 18px rgba(0,0,0,.28);transition:transform .16s var(--ease)}
+.tl-de .mthumb:hover .mt-openpill{transform:translateY(-1px)} .tl-de .mthumb .mt-openpill svg{width:15px;height:15px}
+/* Testimonial watermark ribbon on the feed thumbnail (top-right, clear of the type chip) */
+.tl-de .mthumb .mt-ribbon{position:absolute;top:15px;right:-42px;z-index:3;transform:rotate(45deg);background:var(--cherry-deep,#a4161a);color:#fff;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;padding:4px 48px;box-shadow:0 2px 6px rgba(0,0,0,.35);pointer-events:none;white-space:nowrap}
+
+/* ===== Animated testimonial treatment (motion-safe) ===== */
+.tlv-ribbon,.tl-de .mthumb .mt-ribbon{overflow:hidden}
+/* Blog ribbon variant — deepdive blue instead of testimonial cherry */
+.tlv-ribbon.blue,.tl-de .mthumb .mt-ribbon.blue{background:#2E6A86}
+/* Blog article header link (drawer) — the whole poster opens the post */
+.tlv-bloglink{display:flex;cursor:pointer;text-decoration:none}
+@media (prefers-reduced-motion:no-preference){
+  /* gloss sweep across the TESTIMONIAL ribbon */
+  .tlv-ribbon::after,.tl-de .mthumb .mt-ribbon::after{content:'';position:absolute;top:0;left:-70%;width:55%;height:100%;
+    background:linear-gradient(120deg,transparent,rgba(255,255,255,.6),transparent);animation:cbRibbonGloss 3.6s ease-in-out infinite}
+  @keyframes cbRibbonGloss{0%,55%{left:-70%}100%{left:135%}}
+  /* slow ken-burns on the detail-drawer poster image */
+  .tlv-posterimg{animation:cbKenburns 22s ease-in-out infinite alternate;transform-origin:58% 42%;will-change:transform}
+  @keyframes cbKenburns{from{transform:scale(1)}to{transform:scale(1.09)}}
+  /* gentle idle pulse ring behind the big play button */
+  .tlv-bigplay::before{content:'';position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 0 rgba(255,255,255,.55);animation:cbPlayPulse 2.6s ease-out infinite}
+  @keyframes cbPlayPulse{to{box-shadow:0 0 0 20px rgba(255,255,255,0)}}
+  /* subtle drift on the feed testimonial thumbnail */
+  .tl-de .mthumb.testimonial,.tl-de .mthumb.blog{animation:cbThumbDrift 20s ease-in-out infinite alternate}
+  @keyframes cbThumbDrift{from{background-position:50% 47%}to{background-position:50% 55%}}
+}
 .tl-de .mthumb:hover .mt-open{transform:scale(1.07)} .tl-de .mthumb .mt-open svg{width:24px;height:24px;color:var(--cherry-deep)}
 .tl-de .mthumb.done .mt-open{background:var(--leaf-action)} .tl-de .mthumb.done .mt-open svg{color:#fff}
 .tl-de .vframe{position:relative;border-radius:var(--r-12);aspect-ratio:16/9;overflow:hidden;display:flex;align-items:center;justify-content:center;width:100%;cursor:pointer}
@@ -188,6 +234,7 @@
 .tl-de .tld-meta span{display:inline-flex;align-items:center;gap:6px} .tl-de .tld-meta svg{width:15px;height:15px}
 .tl-de .tld-diff{font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em;font-size:11.5px}
 .tl-de .tld-player{margin-bottom:18px}
+.tl-de .tld-hero{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:var(--r-12);border:1px solid var(--border-subtle);margin-bottom:18px}
 .tl-de .tld-about{margin-bottom:16px}
 .tl-de .tld-lab{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px}
 .tl-de .tld-desc{color:var(--text-body);font-size:15px;line-height:1.6;margin:0 0 12px}
@@ -202,6 +249,25 @@
 .tl-de .tld-alist b{font-family:var(--mono);font-size:12px;color:var(--cherry-deep);margin-right:4px}
 .tl-de .tld-lesson{margin-bottom:16px}
 .tl-de .tld-lessonframe{width:100%;height:340px;border:1px solid var(--border-subtle);border-radius:var(--r-12);background:#fff;display:block}
+/* Self Study immersive reader: the iframe fills the whole drawer body full-bleed
+   (its own sticky nav + scrollspy + progress live inside it). */
+.tl-de .tld-body--reader{padding:0;overflow:hidden;display:flex}
+.tl-de .tld-body--reader .tld-lessonframe{flex:1;height:auto;width:100%;border:0;border-radius:0}
+.tl-de .tld-readerframe{height:min(74vh,780px)}
+/* Self Study: generating-on-open loader (shown full-bleed while the reading is produced) */
+.tl-de .ssgen{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;padding:32px;text-align:center;color:var(--text-body);background:var(--surface-page)}
+.tl-de .ssgen-orb{position:relative;width:64px;height:64px;margin-bottom:22px}
+.tl-de .ssgen-orb span{position:absolute;inset:0;border-radius:50%;border:3px solid transparent;border-top-color:var(--cherry);animation:ssgen-spin 1.1s linear infinite}
+.tl-de .ssgen-orb span:nth-child(2){inset:9px;border-top-color:#367895;animation-duration:1.5s;animation-direction:reverse}
+.tl-de .ssgen-orb span:nth-child(3){inset:18px;border-top-color:#5BA63C;animation-duration:1.9s}
+.tl-de .ssgen-title{font-size:16px;font-weight:700;color:var(--text-strong);margin-bottom:8px}
+.tl-de .ssgen-step{font-size:13.5px;color:var(--text-muted);min-height:20px}
+.tl-de .ssgen-bar{width:min(280px,70%);height:4px;border-radius:999px;background:var(--surface-sunken);overflow:hidden;margin:18px 0 14px}
+.tl-de .ssgen-bar i{display:block;height:100%;width:38%;border-radius:999px;background:var(--cherry);animation:ssgen-slide 1.3s ease-in-out infinite}
+.tl-de .ssgen-note{font-size:12px;color:var(--text-muted);max-width:290px;line-height:1.5}
+@keyframes ssgen-spin{to{transform:rotate(360deg)}}
+@keyframes ssgen-slide{0%{transform:translateX(-120%)}100%{transform:translateX(330%)}}
+@media(prefers-reduced-motion:reduce){.tl-de .ssgen-orb span,.tl-de .ssgen-bar i{animation:none}}
 .tl-de .tld-note{font-size:13px;color:var(--text-muted);background:var(--surface-sunken);border:1px solid var(--border-subtle);
   border-radius:var(--r-12);padding:12px 14px}
 
@@ -254,12 +320,31 @@
 .tlv-poster:hover .tlv-bigplay{transform:scale(1.08)} .tlv-bigplay svg{width:30px;height:30px;color:var(--cherry-deep);margin-left:4px}
 .tlv-postertitle{position:absolute;left:16px;bottom:14px;z-index:2;color:#fff;font-weight:700;font-size:15px;
   text-shadow:0 1px 6px rgba(0,0,0,.5);max-width:80%;text-align:left}
+/* Diagonal corner ribbon (e.g. "Testimonial") — clipped by the frame's overflow:hidden */
+.tlv-ribbon{position:absolute;top:15px;left:-42px;z-index:3;transform:rotate(-45deg);
+  background:var(--cherry-deep,#a4161a);color:#fff;font-size:10.5px;font-weight:800;letter-spacing:.09em;
+  text-transform:uppercase;padding:4px 48px;box-shadow:0 2px 6px rgba(0,0,0,.35);pointer-events:none;white-space:nowrap}
 .tlv-link{background:var(--surface-sunken);border:1px solid var(--border-subtle)}
 .tlv-linkbody{position:relative;z-index:2;text-align:center;color:var(--text-body);padding:20px}
 .tlv-linkbody p{margin:0 0 12px;font-size:14px}
 .tlv-none{aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;text-align:center;
   color:var(--text-muted);font-size:14px;background:var(--surface-sunken);border:1px dashed var(--border-default);border-radius:var(--r-12);padding:20px}
+/* Watch-progress bar under the player — how much has actually been watched vs the
+   threshold to collect points (server-truth; the bar mirrors it, never sets it). */
+.tlv-watch{margin-top:10px;display:grid;gap:5px}
+.tlv-watchbar{height:6px;border-radius:999px;background:var(--surface-sunken,#e7edf0);overflow:hidden}
+.tlv-watchbar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#367895,#4a97b8);
+  transition:width .5s var(--ease,ease)}
+.tlv-watchpct{font-size:12.5px;font-weight:600;color:var(--text-muted)}
 @media(prefers-reduced-motion:reduce){
   .tl-de .tld-scrim,.tl-de .tld-panel{animation:none}
   .tlv-poster:hover .tlv-bigplay{transform:none}
+  .tlv-watchbar i{transition:none}
 }
+/* Watch-gate rejection message in the drawer footer */
+.tld-gatemsg{font-size:12.5px;font-weight:600;color:var(--cherry-deep,#a4161a);margin-right:auto;align-self:center}
+/* Shared Self Study "Mark complete" CTA — UNSCOPED so the drawer footer (.tl-de) and
+   the workstation (.rt) render it identically in color + size (Ali: they must match). */
+.ss-complete-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #c20e1e;background:#c20e1e;color:#fff;font:600 14px/1 Roboto,system-ui,-apple-system,sans-serif;padding:11px 22px;border-radius:999px;cursor:pointer;transition:background .15s,border-color .15s}
+.ss-complete-btn:hover{background:#a50c1a;border-color:#a50c1a}
+.ss-complete-btn:disabled{opacity:.6;cursor:not-allowed}

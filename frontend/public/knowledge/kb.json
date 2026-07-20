@@ -270,8 +270,8 @@
       "status": "active"
     }
   ],
-  "generated_at": "2026-07-03T15:12:55.138Z",
-  "count": 213,
+  "generated_at": "2026-07-17T19:47:32.556Z",
+  "count": 214,
   "entries": [
     {
       "id": "sales-1",
@@ -399,7 +399,7 @@
       "category_key": "program-basics",
       "question": "What's your refund or cancellation policy if it isn't a fit?",
       "answer": "On the monthly plan you can cancel anytime and keep access through the month you paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff; after that it's non-refundable, but your membership stays active the full year and your founding rate stays locked.",
-      "detail": "These refund terms are proposed and pending final approval, so confirm before committing them in writing to a prospect.",
+      "detail": "Approved policy.",
       "tags": [
         "refund",
         "cancellation",
@@ -407,7 +407,7 @@
       ],
       "reference": "sales/index.html#cat-program-basics",
       "reference_label": "Program basics & format",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
       "id": "sales-9",
@@ -486,7 +486,7 @@
       "category_key": "pricing-billing",
       "question": "Can I cancel anytime?",
       "answer": "Yes. On the monthly plan at $199 a month you can cancel anytime and keep access through the month you have paid for, with no partial-month refund. The annual plan is the better value if you are committed to the full program.",
-      "detail": "DRAFT cancellation terms pending Ali's final approval: monthly cancels anytime, access through the paid month, no partial-month refund.",
+      "detail": "Approved policy: monthly cancels anytime, access through the paid month, no partial-month refund.",
       "tags": [
         "cancellation",
         "monthly",
@@ -494,7 +494,7 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
       "id": "sales-14",
@@ -503,7 +503,7 @@
       "category_key": "pricing-billing",
       "question": "Is there a refund if I change my mind on the annual plan?",
       "answer": "The annual plan has a 14-day money-back window from the July 23 kickoff. After that it is non-refundable, but your membership stays active for the full year and your founding rate stays locked.",
-      "detail": "DRAFT refund terms pending Ali's final approval: 14-day money-back window from kickoff (Jul 23, 2026); after that non-refundable, membership remains active the full year, founding rate locked.",
+      "detail": "Approved policy: 14-day money-back window from kickoff (Jul 23, 2026); after that non-refundable, membership remains active the full year, founding rate locked.",
       "tags": [
         "refund",
         "annual",
@@ -512,7 +512,7 @@
       ],
       "reference": "sales/index.html#cat-pricing-billing",
       "reference_label": "Pricing & billing",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
       "id": "sales-15",
@@ -641,7 +641,7 @@
       "category_key": "founding-urgency",
       "question": "What if I reserve a seat now but the program isn't right for me?",
       "answer": "On the annual plan you have a 14-day money-back window from the July 23 kickoff, so you can join, experience the first sessions, and still step back if it is not a fit. On monthly, you can cancel anytime and keep access through the month you paid for.",
-      "detail": "These refund and cancellation terms are proposed and pending final approval, so confirm before putting them in writing to a prospect.",
+      "detail": "Approved policy.",
       "tags": [
         "refund",
         "risk",
@@ -649,7 +649,7 @@
       ],
       "reference": "sales/index.html#cat-founding-urgency",
       "reference_label": "Founding Cohort & urgency",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
       "id": "sales-23",
@@ -881,7 +881,7 @@
       "category_key": "time-schedule",
       "question": "What happens if I cancel or fall behind, time-wise?",
       "answer": "On the monthly plan you can cancel anytime and keep access through the month you've paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff, and after that your membership stays active for the full year with your founding rate locked in.",
-      "detail": "These cancellation terms are proposed and pending final approval, so confirm before committing them in writing. Annual: 14-day refund window from kickoff, then non-refundable but access continues the full year. Monthly: cancel anytime, access through the paid month, no partial-month refund.",
+      "detail": "Approved policy. Annual: 14-day refund window from kickoff, then non-refundable but access continues the full year. Monthly: cancel anytime, access through the paid month, no partial-month refund.",
       "tags": [
         "cancel",
         "refund",
@@ -889,7 +889,7 @@
       ],
       "reference": "sales/index.html#cat-time-schedule",
       "reference_label": "Time & schedule",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
       "id": "sales-37",
@@ -1136,7 +1136,7 @@
       "category_key": "refunds-guarantee",
       "question": "If I sign up and it's not for me, can I get my money back?",
       "answer": "Yes. On the annual plan you have a 14-day money-back window starting from kickoff on July 23, so you can join the founding cohort, experience the program, and get a full refund if it isn't the right fit within those first two weeks.",
-      "detail": "Annual plan: 14-day money-back window from the July 23 kickoff. After that the membership is non-refundable but stays active the full year and your founding rate stays locked. These terms are pending final approval, so confirm before quoting verbatim.",
+      "detail": "Annual plan: 14-day money-back window from the July 23 kickoff. After that the membership is non-refundable but stays active the full year and your founding rate stays locked.",
       "tags": [
         "refund",
         "money-back",
@@ -1144,7 +1144,7 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
       "id": "sales-52",
@@ -1153,7 +1153,7 @@
       "category_key": "refunds-guarantee",
       "question": "Can I cancel the monthly plan whenever I want?",
       "answer": "Yes, the monthly plan cancels anytime. You keep full access through the month you've already paid for, and there's no partial-month refund.",
-      "detail": "Monthly plan is $199/mo, cancel anytime, access continues through the paid month, no partial-month refund. Terms are proposed and pending Ali's final approval.",
+      "detail": "Monthly plan is $199/mo, cancel anytime, access continues through the paid month, no partial-month refund.",
       "tags": [
         "cancellation",
         "monthly",
@@ -1161,7 +1161,7 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
       "id": "sales-53",
@@ -1187,7 +1187,7 @@
       "category_key": "refunds-guarantee",
       "question": "If I pay annually and decide to leave halfway through the year, do I get a refund?",
       "answer": "After the 14-day money-back window from kickoff, the annual plan is non-refundable, but your membership stays active for the full year and your founding rate stays locked the entire time. So you don't lose access by changing your mind midway.",
-      "detail": "Annual: full refund within 14 days of the July 23 kickoff; after that non-refundable, membership active the full year, founding rate locked. Pending Ali's final approval.",
+      "detail": "Annual: full refund within 14 days of the July 23 kickoff; after that non-refundable, membership active the full year, founding rate locked.",
       "tags": [
         "annual",
         "refund",
@@ -1195,7 +1195,7 @@
       ],
       "reference": "sales/index.html#cat-refunds-guarantee",
       "reference_label": "Refunds & guarantees",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
       "id": "sales-55",
@@ -1234,6 +1234,24 @@
     {
       "id": "sales-57",
       "domain": "sales",
+      "category": "Refunds & guarantees",
+      "category_key": "refunds-guarantee",
+      "question": "How does a refund actually get issued, and how long does it take?",
+      "answer": "Refunds are issued from the admin panel under Revenue → Refunds. An admin looks up the PaySimple payment and issues a full reversal. While a card or bank charge is still in its short authorization window it can be voided instantly; once it has settled (usually a few business days) it's reversed as a refund. If the payment had added a credit to the member's account — like the $50 Open House founding-seat deposit — that credit is automatically removed when the payment is refunded, so nothing is double-counted.",
+      "detail": "Internal/operational: PaySimple can only refund a payment after it settles, and reversals are full-payment only (no partial refunds). This describes how a refund is processed — the refund/cancellation policy terms themselves are covered in the other refund entries.",
+      "tags": [
+        "refund",
+        "process",
+        "billing",
+        "operations"
+      ],
+      "reference": "sales/index.html#cat-refunds-guarantee",
+      "reference_label": "Refunds & guarantees",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-58",
+      "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
       "question": "What will I actually have to show for this when I'm done?",
@@ -1249,7 +1267,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-58",
+      "id": "sales-59",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1266,7 +1284,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-59",
+      "id": "sales-60",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1283,7 +1301,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-60",
+      "id": "sales-61",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1300,7 +1318,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-61",
+      "id": "sales-62",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1317,7 +1335,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-62",
+      "id": "sales-63",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1334,7 +1352,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-63",
+      "id": "sales-64",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1351,7 +1369,7 @@
       "needs_verification": true
     },
     {
-      "id": "sales-64",
+      "id": "sales-65",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1368,7 +1386,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-65",
+      "id": "sales-66",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1385,7 +1403,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-66",
+      "id": "sales-67",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1402,7 +1420,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-67",
+      "id": "sales-68",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1419,7 +1437,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-68",
+      "id": "sales-69",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1436,13 +1454,13 @@
       "needs_verification": false
     },
     {
-      "id": "sales-69",
+      "id": "sales-70",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
       "question": "If I sign up and it is not for me, can I get my money back?",
       "answer": "Yes, you are protected. On the monthly plan you can cancel anytime and keep access through the month you paid for. On the annual plan you get a 14-day money-back window from the July 23 kickoff. After that the annual plan is non-refundable, but your membership stays active the full year and your founding rate stays locked.",
-      "detail": "Refund terms are proposed and pending Ali's final approval. Monthly: cancel anytime, access through paid month, no partial-month refund. Annual: 14-day money-back from kickoff (Jul 23), then non-refundable but membership stays active full year.",
+      "detail": "Approved policy. Monthly: cancel anytime, access through paid month, no partial-month refund. Annual: 14-day money-back from kickoff (Jul 23), then non-refundable but membership stays active full year.",
       "tags": [
         "refund",
         "cancellation",
@@ -1450,10 +1468,10 @@
       ],
       "reference": "sales/index.html#cat-enrollment-logistics",
       "reference_label": "Enrollment & onboarding",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
-      "id": "sales-70",
+      "id": "sales-71",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1470,7 +1488,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-71",
+      "id": "sales-72",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1487,7 +1505,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-72",
+      "id": "sales-73",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1504,7 +1522,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-73",
+      "id": "sales-74",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1521,7 +1539,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-74",
+      "id": "sales-75",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1538,13 +1556,13 @@
       "needs_verification": false
     },
     {
-      "id": "sales-75",
+      "id": "sales-76",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
       "question": "If I try the DIY route and don't like this, am I stuck paying for a year?",
       "answer": "No. The monthly plan is cancel anytime, so you keep access through the month you've paid for. On the annual plan there's a 14-day money-back window from the July 23 kickoff, and after that the membership stays active the full year with your founding rate locked. Either way you can start without feeling trapped.",
-      "detail": "Refund and cancellation terms are proposed and pending Ali's final approval, so confirm before quoting them as policy. Monthly is $199/mo; annual is $149/mo (founding rate).",
+      "detail": "Approved policy. Monthly is $199/mo; annual is $149/mo (founding rate).",
       "tags": [
         "refund",
         "cancellation",
@@ -1552,10 +1570,10 @@
       ],
       "reference": "sales/index.html#cat-objections-comparisons",
       "reference_label": "Objections & comparisons",
-      "needs_verification": true
+      "needs_verification": false
     },
     {
-      "id": "sales-76",
+      "id": "sales-77",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -1574,7 +1592,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-77",
+      "id": "sales-78",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -1593,7 +1611,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-78",
+      "id": "sales-79",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -1612,7 +1630,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-79",
+      "id": "sales-80",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import api from '../../utils/api';
 import { useToast } from '../../components/ui/ToastProvider';
 import ConfirmModal from '../../components/ui/ConfirmModal';
@@ -56,6 +57,7 @@ interface EnrollmentInfo {
   status: string;
   payment_status?: string;
   payment_method?: string;
+  amount_paid?: number;
   portal_enabled?: boolean;
   created_at?: string;
   enrollment_type?: string;
@@ -142,6 +144,21 @@ function AdminAcceleratorPage() {
   const [portalFilter, setPortalFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'paid' | 'pending_invoice' | 'failed'>('all');
   const [historyTarget, setHistoryTarget] = useState<{ id: string; name: string } | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Deep-link: /admin/accelerator?enrollment=<id>&name=<name> opens that student's
+  // profile drawer directly (used by the Revenue page's per-row "Student" link). The
+  // drawer fetches its own person-360 data by enrollment id, so no cohort context is
+  // needed. Consume the params once so a refresh/close doesn't re-open it.
+  useEffect(() => {
+    const enrollmentId = searchParams.get('enrollment');
+    if (!enrollmentId) return;
+    setHistoryTarget({ id: enrollmentId, name: searchParams.get('name') || 'Student' });
+    const next = new URLSearchParams(searchParams);
+    next.delete('enrollment');
+    next.delete('name');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     api.get('/api/admin/cohorts').then((res) => {
@@ -673,7 +690,14 @@ function AdminAcceleratorPage() {
                           )}
                           {e.utm_campaign && <div className="text-muted" style={{ fontSize: '0.72rem' }}>{e.utm_campaign}</div>}
                         </td>
-                        <td>{paymentBadge(e.payment_status || 'failed')}</td>
+                        <td>
+                          {paymentBadge(e.payment_status || 'failed')}
+                          {typeof e.amount_paid === 'number' && e.amount_paid > 0 ? (
+                            <div className="text-muted" style={{ fontSize: '0.72rem' }}>
+                              ${e.amount_paid.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} paid
+                            </div>
+                          ) : null}
+                        </td>
                         <td>
                           <div className="d-flex gap-1 align-items-center">
                             {e.portal_enabled ? (

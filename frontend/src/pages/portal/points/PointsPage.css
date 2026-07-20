@@ -1,0 +1,140 @@
+/* PointsPage — the points drill-down. Self-contained styles scoped under
+   .points-root so it doesn't depend on the ported Design-E token set. Light
+   surface to match the portal shell. */
+
+.points-root {
+  --pr-ink: #1A1A1A;
+  --pr-mut: #6B6B6B;
+  --pr-line: #E7E6E3;
+  --pr-card: #FFFFFF;
+  --pr-sunken: #F1F1F0;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 4px 0 40px;
+}
+
+.points-root .pts-empty,
+.points-root .pts-mut { color: var(--pr-mut); font-size: 13px; }
+.points-root .pts-empty { padding: 40px 0; text-align: center; }
+
+/* Hero: where you are → where you're headed */
+.points-root .pts-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: linear-gradient(180deg, #FFFFFF, #FBFAF8);
+  border: 1px solid var(--pr-line);
+  border-radius: 16px;
+  padding: 18px 22px;
+  margin-bottom: 18px;
+}
+.points-root .pts-hero-now,
+.points-root .pts-hero-next { flex: 1; min-width: 0; }
+.points-root .pts-hero .k {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--pr-mut); margin-bottom: 3px;
+}
+.points-root .pts-hero .v { font-size: 18px; color: var(--pr-ink); }
+.points-root .pts-hero .v b { font-weight: 800; }
+.points-root .pts-hero-arrow { width: 30px; height: 30px; color: #C7C6C2; flex: none; }
+
+/* Lens grid */
+.points-root .pts-lenses {
+  display: grid;
+  /* Always 3 lenses across (minmax(0,1fr) lets them shrink to fit any width,
+     e.g. the narrower Settings > Points tab). Collapses to 1 column on phones. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+@media (max-width: 680px) {
+  .points-root .pts-lenses { grid-template-columns: 1fr; }
+}
+/* Tighter internals so the 3 lenses stay clean at narrow column widths. */
+.points-root .pts-lens { padding: 15px 15px; }
+.points-root .pts-big { font-size: 32px; }
+.points-root .pts-ring { width: 74px; height: 74px; }
+.points-root .pts-readi { gap: 12px; }
+.points-root .pts-lens-h h3 { font-size: 15px; }
+.points-root .pts-lens {
+  background: var(--pr-card);
+  border: 1px solid var(--pr-line);
+  border-top: 3px solid #C7C6C2;
+  border-radius: 14px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+}
+.points-root .pts-lens.accent-berry { border-top-color: #FB2832; }
+.points-root .pts-lens.accent-blue { border-top-color: #367895; }
+.points-root .pts-lens.accent-leaf { border-top-color: #5BA63C; }
+
+.points-root .pts-lens-h { margin-bottom: 10px; }
+.points-root .pts-lens-h .tag {
+  display: inline-block; font-size: 10.5px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; color: var(--pr-mut); margin-bottom: 4px;
+}
+.points-root .pts-lens-h h3 { font-size: 16px; font-weight: 800; color: var(--pr-ink); margin: 0; }
+
+.points-root .pts-big { font-size: 40px; font-weight: 800; color: var(--pr-ink); line-height: 1; font-family: 'Roboto Mono', monospace; }
+.points-root .pts-big span { font-size: 15px; font-weight: 700; color: var(--pr-mut); margin-left: 4px; }
+.points-root .pts-big.pts-dim { color: #C7C6C2; }
+
+.points-root .pts-levelrow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0 6px; }
+.points-root .pts-chip {
+  font-size: 12px; font-weight: 800; color: #C20E1E; background: rgba(251,40,50,.1);
+  border-radius: 999px; padding: 3px 10px;
+}
+.points-root .pts-mut { color: var(--pr-mut); font-size: 12px; }
+
+.points-root .pts-track { height: 8px; background: var(--pr-sunken); border-radius: 999px; overflow: hidden; }
+.points-root .pts-track i { display: block; height: 100%; border-radius: 999px; }
+
+.points-root .pts-streak {
+  display: flex; align-items: center; gap: 6px; margin-top: 14px;
+  font-size: 13px; color: var(--pr-ink);
+}
+.points-root .pts-streak svg { width: 18px; height: 18px; flex: none; }
+.points-root .pts-streak b { font-weight: 800; font-size: 15px; }
+
+/* Skill XP bars */
+.points-root .pts-xps { display: flex; flex-direction: column; gap: 10px; margin: 14px 0 10px; }
+.points-root .pts-xprow { display: flex; flex-direction: column; gap: 4px; }
+.points-root .pts-xplab { display: flex; align-items: baseline; justify-content: space-between; font-size: 12.5px; color: var(--pr-ink); }
+.points-root .pts-xplab b { font-weight: 800; font-family: 'Roboto Mono', monospace; }
+.points-root .pts-lens-empty { display: flex; flex-direction: column; gap: 10px; }
+.points-root .pts-lens-empty p { font-size: 13px; color: var(--pr-mut); margin: 0; line-height: 1.5; }
+
+/* Readiness */
+.points-root .pts-readi { display: flex; align-items: center; gap: 16px; margin: 6px 0 12px; }
+.points-root .pts-readi-meta .lvl { font-size: 16px; font-weight: 800; color: var(--pr-ink); text-transform: capitalize; }
+.points-root .pts-gaps { border-top: 1px solid var(--pr-line); padding-top: 12px; margin-top: auto; }
+.points-root .pts-gaps-h { display: block; font-size: 12px; font-weight: 800; color: var(--pr-ink); margin-bottom: 8px; }
+.points-root .pts-gaps ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.points-root .pts-gaps li {
+  font-size: 12.5px; color: #3C7A26; background: rgba(91,166,60,.1);
+  border-radius: 8px; padding: 6px 10px; text-transform: capitalize;
+}
+
+/* Recent activity */
+.points-root .pts-recent {
+  background: var(--pr-card); border: 1px solid var(--pr-line); border-radius: 14px; padding: 18px;
+}
+.points-root .pts-recent-h { font-size: 14px; font-weight: 800; color: var(--pr-ink); margin-bottom: 12px; }
+.points-root .pts-recent-list { display: flex; flex-direction: column; }
+.points-root .pts-recent-row {
+  display: flex; align-items: center; gap: 12px; padding: 9px 0;
+  border-bottom: 1px solid var(--pr-line); font-size: 13px;
+}
+.points-root .pts-recent-row:last-child { border-bottom: none; }
+.points-root .pts-recent-pts {
+  font-weight: 800; color: #3C7A26; font-family: 'Roboto Mono', monospace;
+  min-width: 42px;
+}
+.points-root .pts-recent-lab { flex: 1; color: var(--pr-ink); }
+.points-root .pts-recent-date { color: var(--pr-mut); font-size: 12px; }
+
+@media (max-width: 640px) {
+  .points-root .pts-hero { flex-direction: column; align-items: stretch; gap: 10px; }
+  .points-root .pts-hero-arrow { transform: rotate(90deg); align-self: center; }
+}

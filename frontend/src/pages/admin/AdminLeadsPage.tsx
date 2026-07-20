@@ -48,6 +48,7 @@ const STATUS_OPTIONS = ['new', 'contacted', 'qualified', 'enrolled', 'lost'];
 
 const SOURCE_OPTIONS = [
   { value: '', label: 'All Sources' },
+  { value: 'open_house', label: 'Open House' },
   { value: 'executive_overview_download', label: 'Executive Briefing' },
   { value: 'contact', label: 'Contact Form' },
   { value: 'interest', label: 'Interest Form' },

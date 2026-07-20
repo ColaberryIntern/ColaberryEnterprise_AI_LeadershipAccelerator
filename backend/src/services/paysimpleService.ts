@@ -98,7 +98,16 @@ export async function findCustomerByEmail(
       'GET',
       `/v4/customer?email=${encodeURIComponent(email)}`
     );
-    return Array.isArray(results) && results.length > 0 ? results[0] : null;
+    if (!Array.isArray(results) || results.length === 0) return null;
+    // GUARD: PaySimple does not always honor the ?email filter server-side — when it
+    // doesn't, it returns the whole (paged) account and results[0] is just the first
+    // customer in the merchant account (the same shared id for everyone). Returning
+    // that stored the wrong customer id on subscriptions (a shared 7095991 reused
+    // across different people). Only accept a customer whose email actually matches;
+    // otherwise report "not found" so findOrCreateCustomer creates a real one.
+    const want = email.trim().toLowerCase();
+    const match = results.find((c) => (c.Email || '').trim().toLowerCase() === want);
+    return match || null;
   } catch {
     return null;
   }
@@ -136,11 +145,14 @@ export async function createPaymentLink(params: {
   customerFirstName: string;
   customerLastName: string;
   customerEmail: string;
+  // When true, charge `amount` verbatim even in test mode (used by subscriptions,
+  // which set their own small test amounts). Otherwise test mode forces $0.01.
+  exactAmount?: boolean;
 }): Promise<HostedPaymentLink> {
-  const amount = isTestMode() ? 0.01 : params.amount;
+  const amount = (isTestMode() && !params.exactAmount) ? 0.01 : params.amount;
 
   if (isTestMode()) {
-    console.log(`[PaySimple] TEST MODE ACTIVE - $${amount} transaction (production: $${params.amount})`);
+    console.log(`[PaySimple] TEST MODE${params.exactAmount ? ' (exact amount)' : ''} - $${amount} transaction (list price: $${params.amount})`);
   }
 
   const result = await apiRequest<HostedPaymentLink>('POST', '/ps/payment_link', {
@@ -175,6 +187,94 @@ export async function createPaymentLink(params: {
 export async function deletePaymentLink(linkId: string): Promise<void> {
   await apiRequest('DELETE', `/ps/payment_link/${linkId}`);
   console.log(`[PaySimple] Deleted payment link ${linkId}`);
+}
+
+/* ------------------------------------------------------------------ */
+/*  Payments — lookup, void, refund (API v4)                           */
+/* ------------------------------------------------------------------ */
+
+export interface PaySimplePayment {
+  Id: number;
+  Status: string;                 // Authorized | Posted | Settled | Failed | Voided | Refunded | ...
+  Amount: number;
+  CustomerId?: number;
+  CustomerFirstName?: string;
+  CustomerLastName?: string;
+  PaymentDate?: string;
+  ActualSettledDate?: string | null;    // set once the payment settles; null while in flight
+  EstimatedSettleDate?: string | null;  // when it is expected to settle
+  CanVoidUntil?: string | null;   // void allowed only while now < CanVoidUntil
+}
+
+/** Fetch a single payment. Used to read the amount/status/void-window before a refund. */
+export async function getPayment(paymentId: string | number): Promise<PaySimplePayment> {
+  return apiRequest<PaySimplePayment>('GET', `/v4/payment/${paymentId}`);
+}
+
+/**
+ * List payments most-recent-first, paging until we pass `since` (or run out).
+ * Used by the app-scoped payment reconcile to find a member's PaySimple payment
+ * when the checkout webhook failed to link it. The CALLER must filter to our own
+ * stored customer ids — this returns raw pages from the shared gateway. Bounded by
+ * `maxPages` so a bad `since` can't page the whole account.
+ */
+export async function listRecentPayments(params: {
+  since: Date;
+  pageSize?: number;
+  maxPages?: number;
+}): Promise<PaySimplePayment[]> {
+  const pageSize = params.pageSize ?? 200;
+  const maxPages = params.maxPages ?? 20;
+  const sinceMs = params.since.getTime();
+  const out: PaySimplePayment[] = [];
+  for (let page = 1; page <= maxPages; page++) {
+    const rows = await apiRequest<PaySimplePayment[]>(
+      'GET',
+      `/v4/payment?pagesize=${pageSize}&page=${page}&sortby=PaymentDate&direction=DESC`
+    );
+    if (!Array.isArray(rows) || rows.length === 0) break;
+    out.push(...rows);
+    const earliest = rows[rows.length - 1]?.PaymentDate;
+    if (earliest && Date.parse(earliest) < sinceMs) break;
+    if (rows.length < pageSize) break;
+  }
+  return out;
+}
+
+/** Fetch a customer by id (to resolve the payer email for a payment). Null on error. */
+export async function getCustomerById(customerId: string | number): Promise<PaySimpleCustomer | null> {
+  try {
+    return await apiRequest<PaySimpleCustomer>('GET', `/v4/customer/${customerId}`);
+  } catch {
+    return null;
+  }
+}
+
+/** True while the payment can still be voided (full reversal, no fee). PaySimple
+ *  only voids a payment in Authorized status, inside its CanVoidUntil window. */
+export function isVoidable(payment: Pick<PaySimplePayment, 'CanVoidUntil'>, nowMs: number = Date.now()): boolean {
+  if (!payment.CanVoidUntil) return false;
+  const until = Date.parse(payment.CanVoidUntil);
+  return Number.isFinite(until) && until > nowMs;
+}
+
+/** True once the payment has settled — PaySimple only reverses/refunds a
+ *  SETTLED payment (verified against the live API: "Only Settled payments can
+ *  be Refunded"). */
+export function isSettled(payment: Pick<PaySimplePayment, 'ActualSettledDate' | 'Status'>): boolean {
+  return !!payment.ActualSettledDate || payment.Status === 'Settled';
+}
+
+/** Void an authorized payment (full reversal, no fee). PaySimple: PUT /v4/payment/{id}/void. */
+export async function voidPayment(paymentId: string | number): Promise<any> {
+  return apiRequest('PUT', `/v4/payment/${paymentId}/void`);
+}
+
+/** Refund (reverse) a SETTLED payment — full reversal. PaySimple's endpoint is
+ *  PUT /v4/payment/{id}/reverse (there is no /refund route; PaySimple reverses
+ *  the whole payment, so partial refunds are not supported here). */
+export async function refundPayment(paymentId: string | number): Promise<any> {
+  return apiRequest('PUT', `/v4/payment/${paymentId}/reverse`);
 }
 
 /* ------------------------------------------------------------------ */

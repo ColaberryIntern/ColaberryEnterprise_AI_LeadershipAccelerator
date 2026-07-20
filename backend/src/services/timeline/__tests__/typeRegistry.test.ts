@@ -22,9 +22,10 @@ const SUPPORTED_RENDER_BANDS = new Set<string>([
 ]);
 
 describe('typeRegistry', () => {
-  it('registers the 36 canonical curriculum types', () => {
-    expect(CARD_TYPES.length).toBe(36);
-    expect(allTypes().length).toBeGreaterThanOrEqual(36);
+  it('registers the 39 canonical curriculum types', () => {
+    // 36 originals + testimonial, podcast, blog (Week-0 lead-magnet content).
+    expect(CARD_TYPES.length).toBe(39);
+    expect(allTypes().length).toBeGreaterThanOrEqual(39);
   });
 
   it('resolves a known type with its metadata', () => {

@@ -64,6 +64,7 @@ import inboxRoutes from './admin/inboxRoutes';
 import missedOpportunitiesRoutes from './admin/missedOpportunitiesRoutes';
 import contentQueueRoutes from './admin/contentQueueRoutes';
 import sourceRoutes from './admin/sourceRoutes';
+import refundRoutes from './admin/refundRoutes';
 import formDefinitionRoutes from './admin/formDefinitionRoutes';
 import routingRuleRoutes from './admin/routingRuleRoutes';
 import ingestLogRoutes from './admin/ingestLogRoutes';
@@ -77,6 +78,7 @@ import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
 import mentorReviewRoutes from './admin/mentorReviewRoutes';
 import trustRoutes from './admin/trustRoutes';
 import communityModerationRoutes from './admin/communityModerationRoutes';
+import podcastRoutes from './admin/podcastRoutes';
 
 const router = Router();
 
@@ -145,6 +147,8 @@ router.use(inboxRoutes);
 router.use(missedOpportunitiesRoutes);
 router.use(contentQueueRoutes);
 router.use(sourceRoutes);
+router.use(refundRoutes);
+router.use(podcastRoutes);
 router.use(formDefinitionRoutes);
 router.use(routingRuleRoutes);
 router.use(ingestLogRoutes);

@@ -14,8 +14,15 @@ export interface PaletteType {
   evidence_required: boolean; github_required: boolean; portfolio_eligible: boolean;
 }
 export interface PlanCard {
+  // `id` is set only when the card is a LIVE published timeline_cards row (canvas
+  // synced with the Timeline). Draft/generated plan cards have no id and are not
+  // writable — the Apply-to-live affordances are gated on it.
+  id?: string | null;
   type: string; title: string; subtitle?: string | null; description?: string | null; bucket: string;
   week: number | null; difficulty: string; estimated_time: number;
+  // Lane position within (week, bucket). Present on live cards; undefined on
+  // freshly generated draft cards (their order is implied by array position).
+  order?: number;
   points: { learning: number; builder: number; community: number };
   competencies: string[]; rationale?: string | null; video_url?: string | null;
 }
@@ -36,10 +43,34 @@ export interface Blueprint {
   generated_plan?: Plan | null; published_card_ids?: string[]; assessment?: Assessment | null; [k: string]: any;
 }
 
+// A "Course" is a ProgramBlueprint — the Composer + Timeline are scoped to one.
+export interface Course { id: string; name: string; is_active?: boolean }
+
+// The read-only week-Blueprint context auto-injected into every AI generation,
+// from GET /api/admin/orchestration/timeline/blueprint-context. Mirrors the
+// backend BlueprintContext (backend/src/services/timeline/blueprintContext.ts).
+// Shared by the Timeline editor and Experience Studio so the "defaults" block
+// never drifts between the two surfaces.
+export interface BlueprintContextDTO {
+  week: number;
+  title: string;
+  purpose: string | null;
+  difficulty: string | null;
+  estimated_hours: number | null;
+  competencies: string[];
+  learning_objectives: string[];
+  architect_domains: string[];
+  success_criteria: string[];
+  student_outcomes: string[];
+  prompt_text: string;
+}
+
 // ── API client ───────────────────────────────────────────────────────────────
 export const composerApi = {
   palette: () => api.get('/api/admin/composer/palette').then((r) => r.data.types as PaletteType[]),
-  list: () => api.get('/api/admin/composer/blueprints').then((r) => r.data.blueprints as Blueprint[]),
+  courses: () => api.get('/api/admin/orchestration/programs').then((r) => (r.data as Course[]).map((c) => ({ id: c.id, name: c.name, is_active: c.is_active }))),
+  createCourse: (name: string) => api.post('/api/admin/orchestration/programs', { name }).then((r) => r.data as Course),
+  list: (programId?: string) => api.get('/api/admin/composer/blueprints', { params: programId ? { program_id: programId } : {} }).then((r) => r.data.blueprints as Blueprint[]),
   get: (id: string) => api.get(`/api/admin/composer/blueprints/${id}`).then((r) => r.data as Blueprint),
   create: (b: Partial<Blueprint>) => api.post('/api/admin/composer/blueprints', b).then((r) => r.data as Blueprint),
   update: (id: string, b: Partial<Blueprint>) => api.put(`/api/admin/composer/blueprints/${id}`, b).then((r) => r.data as Blueprint),
@@ -47,7 +78,48 @@ export const composerApi = {
   generate: (id: string, instruction: string, scope?: string) => api.post(`/api/admin/composer/blueprints/${id}/generate`, { instruction, scope }).then((r) => r.data as { plan: Plan; source: string; cost_usd: number; assessment: Assessment }),
   validate: (id: string) => api.get(`/api/admin/composer/blueprints/${id}/validate`).then((r) => r.data as { plan: Plan; assessment: Assessment }),
   publish: (id: string) => api.post(`/api/admin/composer/blueprints/${id}/publish`).then((r) => r.data),
+  // The LIVE Timeline board (same source the Timeline tab + student feed read) —
+  // lets the Composer canvas mirror what's actually published, not a stale plan.
+  timelineBoard: (programId: string) => api.get('/api/admin/orchestration/timeline', { params: { program_id: programId } }).then((r) => r.data as { cards: TimelineBoardCard[] }),
+  // Write a canvas edit back to ONE live card (idempotent — same body ⇒ same
+  // end state). Only title/order/bucket flow from the canvas today; the endpoint
+  // accepts more but the Composer sends only what it edits.
+  updateLiveCard: (cardId: string, patch: Partial<{ title: string; bucket: string; order: number; visibility: string }>) =>
+    api.put(`/api/admin/orchestration/timeline/cards/${cardId}`, patch).then((r) => r.data),
+  // Persist a reorder within a (week, bucket) lane in one call. Idempotent:
+  // re-sending the same orders is a no-op end state.
+  reorderLiveCards: (items: Array<{ id: string; order: number; week: number | null; bucket: string }>) =>
+    api.put('/api/admin/orchestration/timeline/cards/reorder', { items }).then((r) => r.data),
 };
+
+// A published timeline_cards row as the board returns it (only the fields the
+// Composer canvas needs to render + order).
+export interface TimelineBoardCard {
+  id: string; type: string; title: string; subtitle: string | null; description: string | null;
+  week: number | null; bucket: string; order: number; difficulty: string; estimated_time: number | null;
+  points?: { learning?: number; builder?: number; community?: number };
+  visibility: string; metadata?: any;
+}
+
+const CANVAS_BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
+
+/** Map the LIVE published timeline_cards for one week into the canvas Plan shape,
+ *  in the section order the week actually reads (pre_class → … → advance). */
+export function livePlanForWeek(cards: TimelineBoardCard[], week: number | null): Plan {
+  const bIdx = (b: string) => { const i = CANVAS_BUCKET_ORDER.indexOf(b); return i < 0 ? CANVAS_BUCKET_ORDER.length : i; };
+  const wkCards = cards
+    .filter((c) => c.week === week && c.visibility === 'published')
+    .sort((a, b) => bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order)
+    .map((c): PlanCard => ({
+      id: c.id,   // carry the live row id so canvas edits can write back
+      order: c.order,   // lane position — reorder edits diff against this
+      type: c.type, title: c.title, subtitle: c.subtitle, description: c.description, bucket: c.bucket,
+      week: c.week, difficulty: c.difficulty, estimated_time: c.estimated_time ?? 0,
+      points: { learning: c.points?.learning ?? 0, builder: c.points?.builder ?? 0, community: c.points?.community ?? 0 },
+      competencies: [], video_url: c.metadata?.video?.url ?? null,
+    }));
+  return { scope: 'week', week, cards: wkCards };
+}
 
 export const money = (n?: number) => (n == null ? '—' : n < 0.001 ? `$${n.toExponential(1)}` : `$${n.toFixed(4)}`);
 
@@ -102,6 +174,16 @@ export const composerCss = `
 .cc .cc-tcard .body{min-width:0;flex:1}.cc .cc-tcard .t{font-weight:600;font-size:13px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.cc .cc-tcard .s{font-family:var(--mono);font-size:10px;color:var(--muted2)}
 .cc .cc-tcard .xp{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--leaf-deep);background:var(--leaf-soft);padding:2px 7px;border-radius:999px;flex:none}
 .cc .cc-tcard .warn{font-family:var(--mono);font-size:9px;color:var(--amber-deep);flex:none}
+.cc .cc-tcard .cc-tedit{width:100%;border:1px solid transparent;background:transparent;font-weight:600;font-size:13px;line-height:1.2;padding:2px 5px;margin:-2px -5px;border-radius:6px;font-family:inherit;color:var(--ink)}
+.cc .cc-tcard .cc-tedit:hover{border-color:var(--line-soft);background:var(--mist)}
+.cc .cc-tcard .cc-tedit:focus{outline:none;border-color:var(--berry);background:#fff}
+.cc .cc-tcard.editing{border-color:var(--berry);box-shadow:0 0 0 2px var(--berry-soft)}
+.cc .cc-move{display:flex;flex-direction:column;gap:2px;flex:none}
+.cc .cc-move button{border:1px solid var(--line);background:var(--paper);color:var(--muted2);width:22px;height:16px;line-height:1;font-size:8px;cursor:pointer;border-radius:4px;padding:0;display:flex;align-items:center;justify-content:center}
+.cc .cc-move button:hover:not(:disabled){border-color:var(--berry);color:var(--berry)}
+.cc .cc-move button:disabled{opacity:.3;cursor:not-allowed}
+.cc .cc-livehint{font-size:11.5px;color:var(--berry-deep);background:var(--berry-soft);border:1px solid var(--line-soft);border-radius:8px;padding:8px 11px;margin-bottom:12px;line-height:1.45}
+.cc .cc-livehint.dirty{color:var(--amber-deep);background:var(--amber-soft)}
 .cc .cc-rec{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:9px 10px;margin-bottom:7px}
 .cc .cc-rec .rt{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;margin-bottom:3px}.cc .cc-rec p{margin:0 0 6px;font-size:11px;color:var(--muted);line-height:1.45}
 .cc .cc-rec .ap{font-family:var(--mono);font-size:10px;font-weight:700;color:var(--berry-deep);background:var(--berry-soft);border:none;padding:3px 9px;border-radius:999px;cursor:pointer}
