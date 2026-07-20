@@ -18,14 +18,14 @@ const SUPPORTED_RENDER_BANDS = new Set<string>([
   'question', 'announcement', 'discussion', 'community', 'study', 'warmup', 'survey',
   'reflection', 'quiz', 'exam', 'evaluation', 'promptlab', 'task', 'artifact',
   'presentation', 'demo', 'interview', 'build_story', 'github', 'skills_jar',
-  'milestone', 'achievement', 'badge', 'streak',
+  'milestone', 'achievement', 'badge', 'streak', 'setup_lab',
 ]);
 
 describe('typeRegistry', () => {
-  it('registers the 39 canonical curriculum types', () => {
-    // 36 originals + testimonial, podcast, blog (Week-0 lead-magnet content).
-    expect(CARD_TYPES.length).toBe(39);
-    expect(allTypes().length).toBeGreaterThanOrEqual(39);
+  it('registers the 40 canonical curriculum types', () => {
+    // 36 originals + testimonial, podcast, blog (Week-0 lead-magnet) + setup_lab (Claude Code enablement).
+    expect(CARD_TYPES.length).toBe(40);
+    expect(allTypes().length).toBeGreaterThanOrEqual(40);
   });
 
   it('resolves a known type with its metadata', () => {
