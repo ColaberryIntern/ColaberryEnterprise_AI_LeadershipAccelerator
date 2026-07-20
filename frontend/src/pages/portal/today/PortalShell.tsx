@@ -7,7 +7,7 @@ import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
-import { CohortContact, fetchCohortPresence, onlineCount } from '../../../services/cohortPresenceApi';
+import { CohortContact, fetchCohortPresence } from '../../../services/cohortPresenceApi';
 import { pingPresence } from '../../../services/communityApi';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
@@ -229,10 +229,9 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const cohortName = schedule?.first_class?.cohort_name || 'Your cohort';
   const active = location.pathname;
 
-  // Cohort contacts rail data (live presence, split online-first / offline).
-  const online = onlineCount(contacts);
+  // Contacts rail — show only who's online now (no full-roster dump of registered
+  // strangers). The friends model + DMs will replace this; see follow-up.
   const onlineList = contacts.filter((c) => c.presence !== 'offline');
-  const offlineList = contacts.filter((c) => c.presence === 'offline');
 
   return (
     <div className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}`}>
@@ -342,7 +341,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
           <span>Find people</span>
         </button>
         <div className="te-ct-list">
-          <div className="te-ct-grp">{cohortName} · {online} online</div>
+          {onlineList.length > 0 && <div className="te-ct-grp">Online now · {onlineList.length}</div>}
           {onlineList.map((c) => (
             <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
               <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
@@ -350,16 +349,8 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
               <span className={`te-ctpres ${c.presence}`} />
             </button>
           ))}
-          {offlineList.length > 0 && <div className="te-ct-grp">Offline</div>}
-          {offlineList.map((c) => (
-            <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
-              <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
-              <span className="te-ctname">{c.name}</span>
-              <span className={`te-ctpres ${c.presence}`} />
-            </button>
-          ))}
-          {contacts.length === 0 && (
-            <div className="te-ct-empty">Your cohort will appear here once you’re enrolled.</div>
+          {onlineList.length === 0 && (
+            <div className="te-ct-empty">No connections yet. Use <b>Find people</b> to connect with your cohort and start a conversation.</div>
           )}
         </div>
       </aside>
