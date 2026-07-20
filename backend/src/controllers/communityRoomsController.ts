@@ -15,7 +15,7 @@ import { derivePresence } from '../services/communityService';
 import { hereCounts, touchRoomPresence } from '../services/communityRooms/roomPresenceService';
 import {
   CreateRoomSchema, UpdateRoomSchema, ListRoomsQuerySchema, NotificationPrefSchema,
-  PostMessageSchema, ListMessagesQuerySchema, QuestionStatusSchema,
+  PostMessageSchema, ListMessagesQuerySchema, QuestionStatusSchema, VerifyAnswerSchema,
   CreateBookingSchema, RsvpSchema, ReportSchema, InviteSchema, PresenceSchema,
 } from '../schemas/communityRoomsSchemas';
 
@@ -199,6 +199,15 @@ export async function setQuestionStatus(req: Request, res: Response): Promise<vo
   try {
     const message = await messages.setQuestionStatus(ctxOf(req), String(req.params.id), String(req.params.messageId), parsed.data.question_status);
     res.json({ message });
+  } catch (err) { fail(res, err); }
+}
+
+export async function verifyAnswer(req: Request, res: Response): Promise<void> {
+  const parsed = VerifyAnswerSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid answer', issues: parsed.error.issues }); return; }
+  try {
+    const result = await messages.verifyAnswer(ctxOf(req), String(req.params.id), String(req.params.messageId), parsed.data.answer_message_id);
+    res.json(result);
   } catch (err) { fail(res, err); }
 }
 

@@ -117,6 +117,8 @@ export interface RoomMessage {
   content: string;
   kind: string;
   question_status: string | null;
+  thread_root_id?: string | null;
+  metadata?: { verified_answer_id?: string; verified_answer_by?: string; verified_at?: string; [k: string]: unknown } | null;
   created_at: string;
 }
 
@@ -208,9 +210,18 @@ export async function fetchRoomMessages(roomId: string, since?: string): Promise
   return data;
 }
 
-export async function postRoomMessage(roomId: string, content: string): Promise<RoomMessage> {
-  const { data } = await portalApi.post<{ message: RoomMessage }>(`/api/portal/community/rooms/${roomId}/messages`, { content });
+export async function postRoomMessage(roomId: string, content: string, kind?: 'message' | 'question'): Promise<RoomMessage> {
+  const { data } = await portalApi.post<{ message: RoomMessage }>(`/api/portal/community/rooms/${roomId}/messages`, kind ? { content, kind } : { content });
   return data.message;
+}
+
+// Verified-help loop: the asker/mod marks a reply as the answer to their question.
+export async function verifyAnswer(roomId: string, questionId: string, answerMessageId: string): Promise<{ question: RoomMessage; answer: RoomMessage }> {
+  const { data } = await portalApi.post<{ question: RoomMessage; answer: RoomMessage }>(
+    `/api/portal/community/rooms/${roomId}/messages/${questionId}/verify-answer`,
+    { answer_message_id: answerMessageId },
+  );
+  return data;
 }
 
 export async function fetchEvents(): Promise<BookingCard[]> {

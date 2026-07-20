@@ -45,6 +45,7 @@ router.patch(`${P}/rooms/:id/notification`, flagGate, requireParticipant, c.setN
 router.get(`${P}/rooms/:id/messages`, flagGate, requireParticipant, c.listMessages);
 router.post(`${P}/rooms/:id/messages`, flagGate, requireParticipant, c.postMessage);
 router.patch(`${P}/rooms/:id/messages/:messageId/question`, flagGate, requireParticipant, c.setQuestionStatus);
+router.post(`${P}/rooms/:id/messages/:messageId/verify-answer`, flagGate, requireParticipant, c.verifyAnswer);
 
 router.post(`${P}/bookings`, flagGate, requireParticipant, c.createBooking);
 router.post(`${P}/bookings/:id/publish`, flagGate, requireParticipant, c.publishBooking);
