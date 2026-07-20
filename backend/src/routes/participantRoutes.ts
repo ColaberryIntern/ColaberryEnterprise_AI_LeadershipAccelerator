@@ -102,7 +102,7 @@ router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, 
 // the strategy-prep multer config (PDF/Word/PPT/Excel/RTF/Text/Markdown/CSV), which
 // validates the file type server-side; a bad type returns a clear 400. The card is
 // then marked complete via the normal /complete endpoint (points on the first build).
-router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, strategyPrepUpload.single('file'), (req: Request, res: Response) => {
+router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, strategyPrepUpload.single('file'), (req, res) => {
   const file = (req as any).file;
   if (!file) return res.status(400).json({ error: 'No file uploaded — pick the artifact file Claude Code built for you.' });
   res.json({ ok: true, filename: file.originalname, size: file.size });
