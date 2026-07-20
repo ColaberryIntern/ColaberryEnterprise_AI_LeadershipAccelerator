@@ -29,8 +29,12 @@ import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, type TodayItemKind } from './todayFeedPlan';
 import { gatherAnchored } from './todayAnchoredSources';
+import { env } from '../../config/env';
+import { getFeedPolicy } from './feedConfigService';
 
-/** Inject one ambient item after every CADENCE anchored items. */
+/** Legacy default: inject one ambient item after every CADENCE anchored items.
+ *  When FEED_CONTROL_ENABLED, cadence + the active ambient providers come from
+ *  the editable feed policy instead (feedConfigService). */
 const CADENCE = 2;
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 30;
@@ -133,12 +137,19 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     }
   }
 
+  // Cadence + active ambient providers come from the editable policy when the
+  // Feed Control plane is on; otherwise the legacy hardcoded constants (flag-off
+  // ≡ byte-identical to before).
+  const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
+  const cadence = policy ? policy.todayCadence : CADENCE;
+  const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
+
   const anchoredQueue = await gatherAnchored(enrollmentId, placedRefs);
   const plan = planSlots({
     count: need,
     anchoredAvailable: anchoredQueue.length,
-    providers: AMBIENT_PROVIDERS,
-    cadence: CADENCE,
+    providers,
+    cadence,
     anchoredPlaced,
     ambientPlaced,
   });
@@ -147,7 +158,7 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   const perProviderNeed: Record<AmbientProviderSlug, number> = { blog: 0, podcast: 0, testimonial: 0 };
   for (const s of plan.slots) if (s.kind === 'ambient' && s.provider) perProviderNeed[s.provider]++;
   const ambientQueues: Record<AmbientProviderSlug, AmbientItem[]> = { blog: [], podcast: [], testimonial: [] };
-  for (const p of AMBIENT_PROVIDERS) {
+  for (const p of providers) {
     if (perProviderNeed[p] > 0) ambientQueues[p] = await pickAmbientBatch(enrollmentId, p, perProviderNeed[p], placedMedia[p]);
   }
 

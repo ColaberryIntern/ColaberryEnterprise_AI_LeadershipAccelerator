@@ -1143,6 +1143,30 @@ async function ensureTodayFeedSchema() {
   console.log('[DB] Today feed schema ensured');
 }
 
+// Feed Control plane — additive per-card + per-type routing/cadence columns.
+// `priority` + `release_date` already exist on timeline_cards (activated here);
+// these add the surface override + cadence/frequency/pin knobs. All nullable →
+// a card/type with no override falls back to its type default then the policy.
+async function ensureFeedControlSchema() {
+  const statements = [
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_surface VARCHAR(20)`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_cadence INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_frequency_cap INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_cooldown_days INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS pinned_until TIMESTAMPTZ`,
+    `CREATE INDEX IF NOT EXISTS idx_tc_priority ON timeline_cards (priority DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_tc_pinned ON timeline_cards (pinned_until)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_cadence INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_frequency_cap INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_cooldown_days INTEGER`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Feed control schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Feed control schema ensured');
+}
+
 // Enhance the existing (stub) `testimonial` curriculum type into the working
 // "Testimonials" type: relabel, publish its link-vs-random settings schema, and
 // mark it approved for the Composer. Idempotent; runs after the type is seeded.
@@ -1764,6 +1788,9 @@ async function ensureCommunityRoomsSchema() {
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_cohort ON community_rooms (linked_cohort_id)`,
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_category ON community_rooms (category)`,
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_privacy_status ON community_rooms (privacy, status)`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS is_video BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS always_open BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS meeting_link VARCHAR(600)`,
 
     `CREATE TABLE IF NOT EXISTS room_memberships (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1917,6 +1944,18 @@ async function ensureCommunityRoomsSchema() {
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS room_reports_idem_unique ON room_reports (idempotency_key) WHERE idempotency_key IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_room_reports_status ON room_reports (status)`,
+
+    `CREATE TABLE IF NOT EXISTS room_presence (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       in_video BOOLEAN NOT NULL DEFAULT false,
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_presence_unique ON room_presence (room_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_presence_room_seen ON room_presence (room_id, last_seen_at)`,
   ];
   for (const sql of statements) {
     try {
@@ -2000,6 +2039,7 @@ async function start(): Promise<void> {
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
   await ensureTodayFeedSchema();
+  await ensureFeedControlSchema();
   await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
     .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
@@ -2020,6 +2060,17 @@ async function start(): Promise<void> {
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
   // env.communityRoomsEnabled at the route/worker/linkage layers.
   await ensureCommunityRoomsSchema();
+  // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
+  // Gated on the feature flag so it only populates envs where Rooms is enabled.
+  if (env.communityRoomsEnabled) {
+    try {
+      const { seedDefaultCommunityRooms } = await import('./seeds/seedDefaultCommunityRooms');
+      const r = await seedDefaultCommunityRooms();
+      console.log(`[CommunityRooms] default rooms: ${r.created} created, ${r.existing} existing`);
+    } catch (err: any) {
+      console.warn('[CommunityRooms] default room seed failed:', err?.message);
+    }
+  }
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any
   // missing column as NULLABLE; never drops/alters. Fixes the recurring
@@ -2074,6 +2125,10 @@ async function start(): Promise<void> {
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
+      // Feed Control: re-apply stored type routing to the registry AFTER the seed
+      // (typeSeeder re-asserts surface columns from code, so routing must win last).
+      const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');
+      await applyFeedRoutingToRegistry();
     } catch (err: any) {
       console.warn('[TimelineEngine] seed failed:', err?.message);
     }
