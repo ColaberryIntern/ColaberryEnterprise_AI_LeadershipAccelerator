@@ -164,6 +164,17 @@ export async function pingPresence(): Promise<{ presence: CommunityPresenceStatu
   return data;
 }
 
+// Upload a small image from the student's computer; returns a relative media
+// URL to add to a post's media_urls. The backend validates type + size (8MB).
+export async function uploadCommunityMedia(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await portalApi.post<{ url: string }>('/api/portal/community/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data.url;
+}
+
 // Cohort-scoped member profile lookup for the profile drawer. The backend
 // returns 404 (not 403) for a member in another cohort, preserving the
 // anti-enumeration behavior — the drawer surfaces that as "member not found".

@@ -3,7 +3,13 @@ import { z } from 'zod';
 export const CreatePostSchema = z.object({
   body: z.string().min(1, 'Post body cannot be empty').max(10000),
   category: z.string().min(1).max(100).optional(),
-  media_urls: z.array(z.string().url()).max(10).optional(),
+  // http(s) URL (pasted link / YouTube) OR an uploaded community-media path.
+  media_urls: z.array(
+    z.string().refine(
+      (s) => /^https?:\/\//.test(s) || s.startsWith('/api/portal/community/media/'),
+      'must be an http(s) URL or an uploaded community media path'
+    )
+  ).max(10).optional(),
   mentioned_member_ids: z.array(z.string().uuid()).max(20).optional(),
   min_level: z.number().int().min(0).max(10).optional(),
 });

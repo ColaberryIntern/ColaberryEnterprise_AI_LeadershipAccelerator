@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import Avatar from './Avatar';
-import { isVideoUrl } from './communityUtils';
-import { CommunityMemberProfile } from '../../../services/communityApi';
+import { isVideoUrl, youtubeId, youtubeThumb } from './communityUtils';
+import { CommunityMemberProfile, uploadCommunityMedia } from '../../../services/communityApi';
 
 export interface ComposerSubmit {
   body: string;
@@ -26,7 +26,9 @@ const Composer: React.FC<{
   const [showMediaInput, setShowMediaInput] = useState(false);
   const [mediaUrl, setMediaUrl] = useState('');
   const [busy, setBusy] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const expand = () => {
     setExpanded(true);
@@ -52,6 +54,24 @@ const Composer: React.FC<{
     if (!ok || media.length >= 10 || media.includes(url)) { setMediaUrl(''); return; }
     setMedia((m) => [...m, url]);
     setMediaUrl('');
+  };
+
+  // Upload a small image straight from the student's computer.
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { window.alert('That image is over 8MB — please pick a smaller one.'); return; }
+    if (media.length >= 10) return;
+    setUploading(true);
+    try {
+      const url = await uploadCommunityMedia(file);
+      setMedia((m) => (m.includes(url) ? m : [...m, url]));
+    } catch {
+      window.alert('Upload failed — try a smaller image or a different file.');
+    } finally {
+      setUploading(false);
+    }
   };
 
   const canPost = !!body.trim() && !busy;
@@ -103,7 +123,9 @@ const Composer: React.FC<{
             <div className="cm-composer-media-item" key={url}>
               {isVideoUrl(url)
                 ? <video src={url} muted playsInline preload="metadata" />
-                : <img src={url} alt="" />}
+                : youtubeId(url)
+                  ? <img src={youtubeThumb(youtubeId(url) as string)} alt="" />
+                  : <img src={url} alt="" />}
               <button type="button" aria-label="Remove media" onClick={() => setMedia((m) => m.filter((u) => u !== url))}>×</button>
             </div>
           ))}
@@ -112,14 +134,18 @@ const Composer: React.FC<{
 
       {showMediaInput && (
         <div className="cm-composer-media-input">
+          <button type="button" className="cm-upload-btn" onClick={() => fileInputRef.current?.click()} disabled={uploading}>
+            {uploading ? 'Uploading…' : 'Upload image'}
+          </button>
           <input
             value={mediaUrl}
             onChange={(e) => setMediaUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addMedia(); } }}
-            placeholder="Paste an image or video URL…"
+            placeholder="…or paste an image / video / YouTube URL"
             aria-label="Media URL"
           />
           <button type="button" onClick={addMedia}>Add</button>
+          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={handleFile} />
         </div>
       )}
 
