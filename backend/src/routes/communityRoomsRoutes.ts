@@ -28,6 +28,7 @@ const A = '/api/admin/community/rooms';
 router.get(`${P}/home`, flagGate, requireParticipant, c.getHome);
 router.get(`${P}/people`, flagGate, requireParticipant, c.getPeople);
 router.get(`${P}/events`, flagGate, requireParticipant, c.listEvents);
+router.get(`${P}/impact`, flagGate, requireParticipant, c.impact);
 
 router.get(`${P}/rooms`, flagGate, requireParticipant, c.listRooms);
 router.post(`${P}/rooms`, flagGate, requireParticipant, c.createRoom);

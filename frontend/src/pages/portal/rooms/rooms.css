@@ -149,3 +149,20 @@
 
 .rm-danger{color:var(--cherry-text,#E5121D)}
 .rm-sess-emoji{width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;font-size:18px;background:var(--sunken,#F1F1F0)}
+
+/* Recognition / impact panel (Phase B #3) */
+.rm-impact-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
+.rm-lvlpill{flex:none;font-size:12px;font-weight:800;color:var(--berry-text,#2A6076);background:var(--berry-bg,#EAF2F6);border-radius:999px;padding:3px 10px}
+.rm-badges{display:flex;flex-wrap:wrap;gap:8px}
+.rm-badge{display:inline-flex;align-items:center;gap:7px;padding:6px 11px 6px 8px;border-radius:999px;background:linear-gradient(135deg,var(--cherry-bg,#FFF0F1),var(--berry-bg,#EAF2F6));border:1px solid var(--border-subtle,#E4E4E3)}
+.rm-badge-emoji{font-size:16px;line-height:1}
+.rm-badge-label{font-size:12.5px;font-weight:700;color:var(--strong,#1A1A1A)}
+.rm-badge-count{font-size:12px;font-weight:800;color:var(--cherry-deep,#C20E1E)}
+.rm-impact-empty{margin:0;color:var(--muted,#6B6B6B);font-size:13px;line-height:1.5}
+.rm-reco{margin-top:14px;border-top:1px solid var(--border-subtle,#E4E4E3);padding-top:10px}
+.rm-reco-hdr{font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.06em;color:var(--muted,#6B6B6B);margin-bottom:4px}
+.rm-reco-row{display:flex;align-items:center;gap:9px;padding:6px 0}
+.rm-reco-emoji{font-size:16px;flex:none;width:22px;text-align:center}
+.rm-reco-txt{flex:1;min-width:0;font-size:13px;color:var(--body,#2B2B2B);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm-reco-txt b{color:var(--strong,#1A1A1A)}
+.rm-reco-ago{flex:none;font-size:11.5px;color:var(--muted,#6B6B6B)}

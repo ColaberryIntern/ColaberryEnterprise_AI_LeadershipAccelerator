@@ -9,6 +9,20 @@ export type ContributionCategory =
   | 'community_host' | 'helpful_guide' | 'demo_leader' | 'connector'
   | 'reliable_study_partner' | 'thoughtful_reviewer' | 'cohort_encourager' | 'consistent_builder';
 
+// Single source of truth for how each contribution reads to a human (badge label
+// + emoji + one-line meaning). Used by the recognition read API and any surface
+// that renders a badge, so the wording stays consistent everywhere.
+export const CATEGORY_META: Record<ContributionCategory, { label: string; emoji: string; blurb: string }> = {
+  community_host: { label: 'Community Host', emoji: '🏆', blurb: 'Hosted a live session start to finish' },
+  helpful_guide: { label: 'Helpful Guide', emoji: '🧭', blurb: 'Answered a question that got verified' },
+  demo_leader: { label: 'Demo Leader', emoji: '🎤', blurb: 'Led a demo or showcase' },
+  connector: { label: 'Connector', emoji: '🔗', blurb: 'Brought people together' },
+  reliable_study_partner: { label: 'Reliable Study Partner', emoji: '🤝', blurb: 'Showed up for a session they RSVP’d' },
+  thoughtful_reviewer: { label: 'Thoughtful Reviewer', emoji: '🔍', blurb: 'Gave feedback on someone’s work' },
+  cohort_encourager: { label: 'Cohort Encourager', emoji: '📣', blurb: 'Cheered a cohortmate on' },
+  consistent_builder: { label: 'Consistent Builder', emoji: '🧱', blurb: 'Kept showing up and building' },
+};
+
 export interface ContributionEventAttributes {
   id?: string;
   enrollment_id: string;

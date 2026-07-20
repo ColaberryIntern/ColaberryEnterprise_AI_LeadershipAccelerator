@@ -6,6 +6,7 @@ import '../feed/feed.css';
 import '../community/community.css';
 import './rooms.css';
 import RoomPane from './RoomPane';
+import ImpactPanel from './ImpactPanel';
 import { fmtCentralDateTime } from '../today/shellUtils';
 import {
   fetchRoomsHome, fetchRooms, joinBooking, createBooking, createRoom,
@@ -225,6 +226,7 @@ const RoomsPage: React.FC = () => {
                   {home.up_next.map((b) => <SessionRow key={b.id} booking={b} onJoin={joinSession} />)}
                 </div>
               )}
+              <ImpactPanel />
             </div>
           )}
         </div>
