@@ -435,6 +435,34 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     approved: true,
     status: 'ready',
   },
+  community_live_session: {
+    student_label: 'Live Session',
+    category: 'Community',
+    icon: 'bi-camera-video',
+    badge_class: 'bg-danger',
+    estimated_time: 60,
+    // Colaberry Commons — a live community room session (study/demo/office-hours/
+    // etc). The card is delivered by the 'event' renderer; its body is populated
+    // from the booking (purpose, outcome, host, time, Join). Comments/likes let
+    // the cohort react before and after.
+    capabilities: ['comments', 'likes', 'bookmarks'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Session title' },
+      { key: 'body_html', type: 'html', description: 'Session purpose, outcome, host, time, and Join CTA' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing of the session' },
+    ],
+    completion_rules: { on: 'view' },
+    evaluation_type: 'none',
+    generation_prompt:
+      'Write a concise, inviting card for an upcoming community live session using the provided booking fields ' +
+      '(title, variant, purpose/outcome, host, start time, timezone). Output a friendly title, a short body_html ' +
+      '(2-4 short paragraphs: what it is, who it is for, the outcome, and a clear "Join" call to action), and a ' +
+      'one-sentence summary. Do not invent details that are not in the booking.',
+    approved: true,
+    status: 'published',
+  },
 };
 
 export async function seedComponentAuthoring(): Promise<{ updated: string[]; missing: string[] }> {
