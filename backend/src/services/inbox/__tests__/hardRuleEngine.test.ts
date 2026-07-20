@@ -7,7 +7,36 @@
  * and "X completed a to-do" status pings do not. This pins the boundary that
  * regressed on 2026-06-24 (week 1/2/3 todo mentions auto-archived to AUTOMATION).
  */
-import { isBasecampDirectMention, isBasecampDirectComment, isBasecampSender } from '../hardRuleEngine';
+jest.mock('../../../models/InboxVip', () => ({ findOne: jest.fn() }));
+jest.mock('../../../models/InboxRule', () => ({ findAll: jest.fn() }));
+jest.mock('../senderHistory', () => ({ countPriorEmailsFromSender: jest.fn() }));
+
+import { isBasecampDirectMention, isBasecampDirectComment, isBasecampSender, evaluateHardRules } from '../hardRuleEngine';
+import InboxVip from '../../../models/InboxVip';
+import InboxRule from '../../../models/InboxRule';
+
+const findOneVip = InboxVip.findOne as jest.Mock;
+const findAllRules = InboxRule.findAll as jest.Mock;
+
+function baseCoraEmail(overrides: Record<string, any> = {}) {
+  return {
+    id: 'email-1',
+    from_address: 'student@example.com',
+    from_name: 'A Student',
+    to_addresses: ['support@colaberry.com'],
+    cc_addresses: [],
+    subject: 'Question about the program',
+    body_text: 'Hi, I have a question.',
+    headers: {},
+    ...overrides,
+  };
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  findOneVip.mockResolvedValue(null);
+  findAllRules.mockResolvedValue([]);
+});
 
 describe('isBasecampSender', () => {
   it('matches the current app.basecamp.com notification host', () => {
@@ -190,5 +219,71 @@ describe('isBasecampDirectComment', () => {
 
   it('handles a null body', () => {
     expect(isBasecampDirectComment({ from_address: BC, subject: reThread, body_text: null })).toBe(false);
+  });
+});
+
+// Regression tests for the 2026-07-14 mail-loop incident (BC #10095332194):
+// Cora replied to her own sent messages because (a) the "is this a Cora
+// inquiry" check matched ANY header substring, including her own From: line,
+// and (b) nothing checked whether the message was FROM her own address.
+describe('evaluateHardRules — Cora support inbox rule (cora_0c)', () => {
+  it('happy path: routes a real inbound inquiry addressed to support@ to the Cora agent', async () => {
+    const result = await evaluateHardRules(baseCoraEmail());
+
+    expect(result).toMatchObject({ matched: true, state: 'AUTOMATION', rule_id: 'cora_0c' });
+  });
+
+  it('happy path: matches via Delivered-To when support@ is not in To/Cc directly', async () => {
+    const result = await evaluateHardRules(
+      baseCoraEmail({ to_addresses: ['ali@colaberry.com'], headers: { 'Delivered-To': 'support@colaberry.com' } })
+    );
+
+    expect(result).toMatchObject({ matched: true, rule_id: 'cora_0c' });
+  });
+
+  it('happy path: matches via X-Original-To', async () => {
+    const result = await evaluateHardRules(
+      baseCoraEmail({ to_addresses: ['ali@colaberry.com'], headers: { 'X-Original-To': 'support@colaberry.com' } })
+    );
+
+    expect(result).toMatchObject({ matched: true, rule_id: 'cora_0c' });
+  });
+
+  it('regression: does NOT match on a From: header containing support@colaberry.com (the exact loop bug)', async () => {
+    // This is Cora's own outgoing reply, re-ingested as if it were new inbound
+    // mail. Before the fix, the header-blob substring check matched her own
+    // From: line and this would have routed straight back into the Cora agent.
+    const result = await evaluateHardRules(
+      baseCoraEmail({
+        from_address: 'support@colaberry.com',
+        to_addresses: ['student@example.com'],
+        headers: { From: 'Cora (Colaberry Enterprise AI) <support@colaberry.com>' },
+      })
+    );
+
+    expect(result.rule_id).not.toBe('cora_0c');
+  });
+
+  it('regression: a message FROM support@colaberry.com never matches cora_0c even when also addressed back to support@', async () => {
+    // Belt-and-suspenders: even if a loop somehow sent support@ mail to
+    // support@ itself, the explicit from-address guard blocks it.
+    const result = await evaluateHardRules(
+      baseCoraEmail({ from_address: 'support@colaberry.com', to_addresses: ['support@colaberry.com'] })
+    );
+
+    expect(result.rule_id).not.toBe('cora_0c');
+  });
+
+  it('boundary: a CORA_SUPPORT_ADDRESS override still applies the same self-send guard', async () => {
+    const original = process.env.CORA_SUPPORT_ADDRESS;
+    process.env.CORA_SUPPORT_ADDRESS = 'help@colaberry.com';
+    try {
+      const result = await evaluateHardRules(
+        baseCoraEmail({ from_address: 'help@colaberry.com', to_addresses: ['help@colaberry.com'] })
+      );
+      expect(result.rule_id).not.toBe('cora_0c');
+    } finally {
+      process.env.CORA_SUPPORT_ADDRESS = original;
+    }
   });
 });
