@@ -10229,6 +10229,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: backend communityNotificationService jest 7/7; frontend tsc clean (my files; only pre-existing @dnd-kit env errors remain); backend tsc --skipLibCheck clean on changed files.
   - Notes: Fires on mention + comment/reply (existing). "Someone liked your post" deferred (needs a 'like' value on the notification_type enum = a migration). Click lands on the feed; deep-link-to-post is a fast-follow.
 
+- [x] Contacts rail fixes: re-expandable when collapsed + no full-roster dump
+  - Date: 2026-07-20
+  - Session: CC-20260720-8xqz
+  - What changed: Two live fixes on the Design-E PortalShell contacts rail. (1) The collapse chevron was `display:none` when the rail was minimized (`.te-shell.contacts-collapsed .te-ct-toggle`), so a minimized rail could not be re-expanded — and the collapsed state persists in localStorage (`te_contacts_collapsed`), so a reload did not help either. Removed that rule so the centered chevron stays clickable when collapsed. (2) The rail dumped the ENTIRE cohort roster (every registered member, mostly offline) = a long scroll of strangers; now it shows only who is ONLINE, with a clean empty state ("No connections yet. Use Find people…") when no one is. Files: frontend/src/pages/portal/today/{PortalShell.tsx, TodayShell.css}.
+  - Verification: frontend types clean (no dangling refs after removing the onlineCount import + online/offlineList vars); authoritative frontend build via the prod nginx Docker image on deploy; live-verified on prod.
+  - Notes: Branch workstream/portal-rail-fixes (off main). Frontend-only -> prod nginx-only rebuild (--no-deps, backend untouched). Interim ahead of the friends model: "online cohort" becomes "your friends" once the friends graph + DMs (Phase 1/2) land; the rail's Find-people CTA + empty-state copy already point there.
 ### Feed Control — "what-if" sandbox: build a feed from empty by checking types, zero student impact — 2026-07-20
 - [x] Let the operator start from an empty timeline and check types on one-by-one to see the feed build, without touching real students (the board is LIVE)
   - Date: 2026-07-20
