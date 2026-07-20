@@ -12,6 +12,7 @@ import { useReaderProgress } from './useReaderProgress';
 import { useDeepDiveHost } from './useDeepDiveHost';
 import SetupLabRender from './SetupLabRender';
 import PromptCatalogRender from './PromptCatalogRender';
+import ArchitectTimeMachine from './ArchitectTimeMachine';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -192,6 +193,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isDeepDive = card.render_band === 'deepdive' && card.type === 'deep_dive';
   const isSetupLab = card.render_band === 'setup_lab';   // Claude Code enablement lab: dark native panel + Copy button
   const isPromptCatalog = card.render_band === 'prompt_catalog';   // Prompt Lab: practice-prompt catalog (categories + reveal + copy)
+  const isArchitectMindset = card.render_band === 'architect_mindset';   // The Architect Time Machine: cinematic decision simulation (bespoke renderer)
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
@@ -242,7 +244,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         )}
       </div>
 
-      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}`}>
+      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}${isArchitectMindset ? ' tld-body--architect' : ''}`}>
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
@@ -265,6 +267,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This prompt catalog has not been generated yet.</div>
+        ) : isArchitectMindset ? (
+          <ArchitectTimeMachine cardId={card.id} variant="drawer" preview={preview} completed={done} onEnterWorkspace={onEnterWorkspace} />
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>
@@ -469,7 +473,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 )}
                 {/* Survey completes in-body via its own Submit; the workspace link
                     stays as a quiet secondary, not the primary CTA. */}
-                {onEnterWorkspace && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {/* Architect Time Machine renders its own "Enter the Time Machine" CTA in-panel (drawer variant). */}
+                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
                 {/* Self Study: the Mark Complete button only appears once every section
                     has been read (>=10s each), matching the workstation's gate + style. */}
                 {isReader && readerProg.complete && completeSafely && (

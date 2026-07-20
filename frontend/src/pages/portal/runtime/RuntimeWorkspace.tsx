@@ -13,6 +13,7 @@ import { useReaderProgress } from '../../../components/timeline/useReaderProgres
 import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
 import SetupLabRender from '../../../components/timeline/SetupLabRender';
 import PromptCatalogRender from '../../../components/timeline/PromptCatalogRender';
+import ArchitectTimeMachine from '../../../components/timeline/ArchitectTimeMachine';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -121,6 +122,7 @@ const RuntimeWorkspace: React.FC = () => {
   // center as a single scroll (its own renderer, not the generic lessonDoc iframe).
   const isSetupLab = band === 'setup_lab' && !!card?.content?.body_html;
   const isPromptCatalog = band === 'prompt_catalog' && !!card?.content?.body_html;   // Prompt Lab: practice-prompt catalog
+  const isArchitectMindset = band === 'architect_mindset';   // The Architect Time Machine: full cinematic experience (self-contained, completes internally)
   const [labCopied, setLabCopied] = useState(false);   // Setup Lab: reveal completion only after the prompt is copied
   const [allPromptsCopied, setAllPromptsCopied] = useState(false);   // Prompt Lab: reveal completion only after ALL prompts are copied
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
@@ -221,10 +223,10 @@ const RuntimeWorkspace: React.FC = () => {
 
       <div className="rt-body">
         {/* CENTER — activity */}
-        <main className={`rt-mid${fill || isSetupLab || isPromptCatalog ? ' rt-mid--reader' : ''}`}>
+        <main className={`rt-mid${fill || isSetupLab || isPromptCatalog || isArchitectMindset ? ' rt-mid--reader' : ''}`}>
           {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
               their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
-          {!isVideo && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && card.type_thumbnail && (
+          {!isVideo && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && card.type_thumbnail && (
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
@@ -345,6 +347,18 @@ const RuntimeWorkspace: React.FC = () => {
               </div>
             </div>
           )}
+          {/* The Architect Time Machine — the full cinematic experience fills the center
+              as a single scroll; it drives its own state machine, evaluation, and the
+              14-gate backend completion (setCompleted + readiness on finish). The AI
+              Mentor rail, comments, and readiness bar stay in the workspace chrome. */}
+          {isArchitectMindset && (
+            <ArchitectTimeMachine
+              cardId={card.id}
+              variant="workspace"
+              completed={completed}
+              onCompleted={(rd) => { if (rd) setReadiness(rd); setCompleted(true); }}
+            />
+          )}
           {/* Anthropic Skills Course — the external-course panel + certificate upload
               (same component as the drawer), so the workspace actually carries the course. */}
           {isSkillsJar && (
@@ -360,7 +374,7 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
           {/* Fallback for a non-media card with no body yet — just its description. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && (
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
@@ -371,7 +385,7 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* Surveys + assessments complete via their own flow; fill cards host the gate in
               their foot. Everything else gets the completion bar here in the center. */}
-          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && (
+          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && (
             <div className="rt-complete">{completeGate}</div>
           )}
         </main>
