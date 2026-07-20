@@ -103,10 +103,11 @@ router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, 
 // validates the file type server-side; a bad type returns a clear 400. The card is
 // then marked complete via the normal /complete endpoint (points on the first build).
 router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, (req: Request, res: Response) => {
-  strategyPrepUpload.single('file')(req, res, (err: any) => {
+  (strategyPrepUpload.single('file') as any)(req, res, (err: any) => {
     if (err) return res.status(400).json({ error: err.message || 'Upload failed. Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV.' });
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded — pick the artifact file Claude Code built for you.' });
-    res.json({ ok: true, filename: req.file.originalname, size: req.file.size });
+    const file = (req as any).file;
+    if (!file) return res.status(400).json({ error: 'No file uploaded — pick the artifact file Claude Code built for you.' });
+    res.json({ ok: true, filename: file.originalname, size: file.size });
   });
 });
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
