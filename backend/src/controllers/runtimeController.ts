@@ -13,6 +13,10 @@ import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
 import { getAssessment, submitAssessment, sectionResultsSummary } from '../services/runtime/assessmentService';
+import {
+  getState as architectState, advance as architectAdvance, saveInterview as architectSaveInterview,
+  evaluate as architectEvaluate, complete as architectComplete, getLedger as architectLedger,
+} from '../services/runtime/architectMindsetService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
 import { uploadFieldGuide, getFieldGuideStatus } from '../services/runtime/fieldGuideService';
@@ -150,6 +154,36 @@ export async function handleGetAssessment(req: Request, res: Response, next: Nex
 }
 export async function handleSubmitAssessment(req: Request, res: Response, next: NextFunction) {
   try { res.json(await submitAssessment(eid(req), String(req.params.cardId), submitAssessmentSchema.parse(req.body || {}))); } catch (e) { fail(res, e, next); }
+}
+
+// ── Architect Time Machine (curriculum type: architect_mindset) ──────────────
+// A gap-aware error responder: gate/transition failures carry `code`/`gaps`/
+// `questions` so the client can show exactly what remains (fail() sends only the message).
+function failArchitect(res: Response, err: any, next: NextFunction) {
+  if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
+  if (err && typeof err.status === 'number') return res.status(err.status).json({ error: err.message, code: err.code, gaps: err.gaps, questions: err.questions });
+  return next(err);
+}
+const architectAdvanceSchema = z.object({ to: z.string().min(1), patch: z.record(z.string(), z.any()).optional() });
+const architectInterviewSchema = z.object({ part: z.union([z.literal(1), z.literal(2)]), answers: z.record(z.string(), z.any()).default({}) });
+
+export async function handleArchitectState(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectState(eid(req), String(req.params.cardId))); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectAdvance(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectAdvance(eid(req), String(req.params.cardId), architectAdvanceSchema.parse(req.body || {}))); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectInterview(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectSaveInterview(eid(req), String(req.params.cardId), architectInterviewSchema.parse(req.body || {}) as any)); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectEvaluate(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectEvaluate(eid(req), String(req.params.cardId))); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectComplete(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectComplete(eid(req), String(req.params.cardId))); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectLedger(req: Request, res: Response, next: NextFunction) {
+  try { res.json({ ledger: await architectLedger(eid(req)) }); } catch (e) { failArchitect(res, e, next); }
 }
 
 // notebook

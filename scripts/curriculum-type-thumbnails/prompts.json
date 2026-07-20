@@ -2,6 +2,11 @@
   "style_suffix": "Wide landscape banner composition with the single main subject centered in the horizontal middle band of the frame and generous negative space around it. Style: premium enterprise editorial illustration, modern 3D-rendered minimalism, matte surfaces, deep navy and teal color palette (deep teal #0d5967, navy #1a365d) with one warm coral-red accent (#e53e3e) used sparingly, soft studio lighting, subtle depth of field, clean uncluttered professional composition, calm authoritative mood. Absolutely no text, no letters, no numbers, no words, no logos, no watermarks, no user interface chrome, no detailed human faces.",
   "types": [
     {
+      "slug": "architect_mindset",
+      "label": "Architect Time Machine",
+      "scene": "A large circular aperture on the left built from concentric architectural blueprint rings receding into deep perspective, like a calm time-machine portal, a single small warm point of light glowing at its exact center. Across the right two-thirds, faint isometric system-diagram nodes connected by thin lines drift in deep teal-navy space, suggesting an entire system unfolding from one point, with a soft amber horizon line low in the frame. Serious, architectural, contemplative."
+    },
+    {
       "slug": "announcement",
       "label": "Announcement",
       "scene": "A glossy megaphone standing on a small podium, broadcasting concentric glowing ripples of sound outward, with two small notification bells floating nearby."

@@ -54,6 +54,8 @@ import {
   handleWatchBeat, handleGetSurvey, handleSaveSurvey,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide,
+  handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
+  handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
 import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
 import projectRoutes from './projectRoutes';
@@ -116,6 +118,15 @@ router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handl
 router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
 router.get('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleGetAssessment);
 router.post('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleSubmitAssessment);
+// The Architect Time Machine (architect_mindset) — state/resume, validated stage
+// advance (autosave), interview answers, graceful evaluation, and the 14-gate
+// backend-authoritative completion, plus the derived Mindset Ledger.
+router.get('/api/portal/runtime/cards/:cardId/architect/state', requireParticipant, handleArchitectState);
+router.post('/api/portal/runtime/cards/:cardId/architect/advance', requireParticipant, handleArchitectAdvance);
+router.post('/api/portal/runtime/cards/:cardId/architect/interview', requireParticipant, handleArchitectInterview);
+router.post('/api/portal/runtime/cards/:cardId/architect/evaluate', requireParticipant, handleArchitectEvaluate);
+router.post('/api/portal/runtime/cards/:cardId/architect/complete', requireParticipant, handleArchitectComplete);
+router.get('/api/portal/runtime/cards/:cardId/architect/ledger', requireParticipant, handleArchitectLedger);
 // Watch-progress heartbeat (~1 per 15s of playback per player; limiter blunts floods).
 const watchBeatRateLimiter = rateLimit({
   windowMs: 60 * 1000,

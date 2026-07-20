@@ -38,6 +38,7 @@ const THUMBNAIL_SLUGS = [
   'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',
   'setup_lab',   // Claude Code "get unblocked" enablement lab
+  'architect_mindset',   // The Architect Time Machine — cinematic decision simulation
   'community_live_session',
   // Intelligence Pipeline types
   'ai_news_flash', 'ai_research_digest', 'ai_tool_of_the_day', 'ai_video_stream',
@@ -528,8 +529,60 @@ const intelAuthoring = (o: {
   status: 'published',
 });
 
+// The Architect Time Machine. Week 0 ships a hand-authored scenario in code
+// (data/architectMindsetScenario.ts — the null-blueprint free-preview tier); this
+// prompt is for the Weeks 1-12 generator, which produces the same structured
+// scenario JSON against the injected WEEK CONTEXT and caches it on the card.
+const ARCHITECT_MINDSET_GENERATION_PROMPT = `You author one weekly scenario for "The Architect Time Machine", a cinematic decision simulation in the AI Systems Architect Accelerator. Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by number. Assume architecture has no single correct answer; reward evidence, assumptions, tradeoffs, failure anticipation, governance, and clear communication, never jargon.
+
+Return STRICT json matching this shape (an AmScenario): {
+  "version": string, "week": number, "baseline": false,
+  "title": string (the week's LOCKED title from WEEK CONTEXT), "series": "Architect Mindset", "experience": "The Architect Time Machine",
+  "principle": string (the week's LOCKED principle), "tagline": "Gain the lessons experience usually teaches too late.",
+  "request": { "from": string, "text": string (a deceptively simple business/system request) },
+  "initial_system": string[] (the 2-4 boxes the request appears to be),
+  "first_decision": { "prompt": string, "options": [{ "id": string, "label": string }, ..., { "id": "custom", "label": "I would do something else", "custom": true }] },
+  "zoom_out": { "people": string[], "information": string[], "decisions": string[], "operations": string[] },
+  "signature_reveals": string[] (2-3 memorable one-line statistics/statements),
+  "interview_part_1": [{ "id": string, "text": string, "mode": "single", "dimension": one of system_scope|assumption_discovery|stakeholder_awareness|tradeoff_quality|failure_anticipation|evidence_observability|governance_ownership|decision_communication, "options": [3-4 plausible professional instincts, then { "id":"custom", "label":"I see it differently, let me write my own answer.", "custom": true }] }],
+  "interview_part_2": [ same shape, asks what changed after the consequences ],
+  "consequence": { "horizon": [{ "point": string, "risk": 0-100, "note": string }], "reveal": string, "lesson": string (ties the principle to the consequences) },
+  "rearchitecture": { "prompt": string },
+  "receipt": { "counts": [{ "label": string, "value": string }], "represented_hours": number, "minutes": number, "qualification": "Illustrative and scenario-based. This represents patterns studied, not employment experience earned, and is not a guarantee of competence or job readiness." },
+  "adr": { "fields": ["context","decision","assumption","consequence","tradeoff","owner"] },
+  "project_transfer": { "prompt": string, "questions": string[] },
+  "commitment_prompt": string
+}
+Multiple-choice options must be plausible professional instincts, never one-obviously-correct plus absurd distractors, and never a memorization test. Do not invent a technical claim the WEEK CONTEXT does not support.`;
+
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
+  architect_mindset: {
+    label: 'Architect Mindset',
+    student_label: 'Architect Time Machine',
+    description: 'A weekly interactive architectural simulation that exposes students to difficult system lessons traditionally learned through years of project experience. The student enters the Architect Time Machine, makes a decision, sees its consequences unfold across time, and is interviewed about what they saw and missed.',
+    category: 'Architect Development',
+    icon: 'bi-hourglass-split',
+    badge_class: 'bg-dark',
+    estimated_time: 28,
+    capabilities: ['evidence', 'artifacts', 'reflection', 'evaluation', 'scoring', 'retry', 'comments', 'portfolio', 'mentor_review'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'interview_responses', type: 'json', description: 'Architect Interview answers (initial + revised, per question)' },
+      { key: 'architect_decision_record', type: 'json', description: 'A structured, student-owned Architect Decision Record (ADR)' },
+      { key: 'mindset_score', type: 'json', description: 'Transparent dimension breakdown + stage (Week 0 = baseline, unscored)' },
+      { key: 'mindset_ledger', type: 'json', description: 'Cumulative Mindset Ledger update (derived)' },
+      { key: 'project_transfer', type: 'json', description: 'The lesson applied to the student personalized project' },
+      { key: 'experience_receipt', type: 'json', description: 'Patterns represented + illustrative estimate + mandatory qualification' },
+    ],
+    completion_rules: { on: 'evaluate' },
+    evaluation_type: 'ai',
+    generation_prompt: ARCHITECT_MINDSET_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('architect_mindset'),
+    approved: true,
+    status: 'ready',
+  },
   setup_lab: {
     label: 'Setup Lab',
     student_label: 'Setup Lab',
