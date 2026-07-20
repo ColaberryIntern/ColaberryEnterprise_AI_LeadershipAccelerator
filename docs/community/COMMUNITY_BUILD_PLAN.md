@@ -63,9 +63,10 @@ not a DM-only system that a later Group Chat build would duplicate.
     flips the `Group Chat` nav item from `soon:true` to routed.
   - **Chat dock** — lower-right dock for DMs/group threads, unread badges, presence,
     polling refresh (WebSockets remain a later, separately-flagged decision).
-- **Taxonomy de-confliction (BASECAMP item 10)** — resolve wins/support/intros
-  appearing as both Community categories and Group Chat channels before seeding the
-  channel set. Blocks the channel seed, not the model.
+- **Taxonomy (DECIDED — Ali, 2026-07-20: both)** — wins/support/intros are both
+  Community categories and Group Chat channels, differentiated by mode. PR 2 seeds
+  the channel set 1:1 with the category set and cross-links the two surfaces so they
+  reinforce (durable gamified posts) rather than compete (live sync discussion).
 
 ## PR 3 — Notifications, saved content, source-tagged posts  (planned)
 

@@ -24,12 +24,15 @@ proceeds. None of them block PR 1 (PR 1 changes nothing that depends on them).
 
 ## Confirm before PR 2 — Community ↔ Group Chat conflict (see ledger D11)
 
-10. **Taxonomy de-confliction.** Group Chat channels (`#wins`, `#project-help`,
-    `#internship`) duplicate Community categories (Wins, Support, Introductions).
-    Decide the split: are these Community categories (async posts), Group Chat
-    channels (sync), or both with a clear distinction (e.g. Community = durable
-    reflection/showcase, Group Chat = live help)? This decision blocks the initial
-    channel seed set.
+10. **Taxonomy de-confliction — DECIDED (Ali, 2026-07-20): both.** wins / support /
+    introductions exist as **both** Community categories **and** Group Chat channels,
+    differentiated by mode: Community = durable, gamified async posts (a win you
+    showcase; a support request that gets threaded answers + points); Group Chat
+    `#channel` = live, ephemeral sync discussion on the same topic (Slack `#wins`
+    vs a LinkedIn "post a win"). PR 2 seeds the channel set to match the category
+    set 1:1 and cross-links them in the UI so the two modes reinforce rather than
+    compete. (Confirm labels/wording against Basecamp when convenient — the
+    both-surfaces decision itself is settled.)
 11. **Unify the messaging backend.** Recommendation: Group Chat channels, group
     conversations, and 1:1 DMs all share one `CommunityConversation` /
     `CommunityMessage` model with `conversation_type: direct | group | channel`

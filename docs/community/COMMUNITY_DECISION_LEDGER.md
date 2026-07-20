@@ -136,5 +136,10 @@ Items needing Basecamp confirmation are in `BASECAMP_CONFIRMATION_NEEDED.md`.
   `CommunityConversation.conversation_type` becomes `direct | group | channel`
   (channel = persistent cohort channel), with voice/video rooms as a later layer on
   top. Group Chat's nav item flips from `soon: true` to routed when that ships.
-- **Status:** Open. **PR 1 is unaffected** (Group Chat is unbuilt; PR 1 never
-  touched it). This reshapes PR 2 (see BUILD_PLAN).
+- **Taxonomy DECIDED (Ali, 2026-07-20): both.** wins / support / introductions
+  exist as both Community categories AND Group Chat channels, differentiated by
+  mode (durable gamified posts vs live sync discussion). PR 2 seeds the channel set
+  1:1 with the category set and cross-links them in the UI.
+- **Status:** Messaging-unification recommendation active; taxonomy resolved.
+  **PR 1 is unaffected** (Group Chat is unbuilt; PR 1 never touched it). This
+  reshapes PR 2 (see BUILD_PLAN).
