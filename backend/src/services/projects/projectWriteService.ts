@@ -8,7 +8,7 @@
 import Project from '../../models/Project';
 import StudentTaskList from '../../models/StudentTaskList';
 import StudentTask from '../../models/StudentTask';
-import { createProjectForEnrollment } from '../projectService';
+import { createProjectForEnrollment, getProjectByEnrollment } from '../projectService';
 import { getOwnedProjectTree } from './projectReadService';
 import { importTaskToAttributes, isTaskStatus, type ImportTaskInput } from './projectWriteDto';
 import type { ProjectTreeDto } from './projectTreeDto';
@@ -33,6 +33,30 @@ export async function setTaskStatus(
   if (!project || String((project as any).enrollment_id) !== String(enrollmentId)) return null;
   await StudentTask.update({ status }, { where: { id: taskId } });
   return { id: taskId, status };
+}
+
+/**
+ * Set a task's status by its client-facing `story_id`, scoped to the student's
+ * ACTIVE project. This is the write-through path the localStorage store uses:
+ * it holds `story_id` (the same key it imported with), never the backend UUID.
+ * Null if the student has no active project or the story isn't found there.
+ */
+export async function setTaskStatusByStory(
+  enrollmentId: string,
+  storyId: string,
+  status: string,
+): Promise<{ id: string; story_id: string; status: string } | null> {
+  if (!isTaskStatus(status)) {
+    const e: any = new Error('Invalid status');
+    e.status = 400;
+    throw e;
+  }
+  const project = await getProjectByEnrollment(enrollmentId);
+  if (!project) return null;
+  const task = await StudentTask.findOne({ where: { project_id: project.id, story_id: storyId } });
+  if (!task) return null;
+  await StudentTask.update({ status }, { where: { id: task.id } });
+  return { id: String(task.id), story_id: storyId, status };
 }
 
 /**
@@ -70,13 +94,17 @@ export async function importProject(enrollmentId: string, payload: ImportProject
       if (where) {
         const [row, created] = await StudentTask.findOrCreate({ where, defaults: attrs });
         if (!created) {
-          // Mirror the client's current state onto the existing row (localStorage
-          // is the working source until the read path flips to backend). Only
-          // content/state — never the dedup keys or the requirement link.
+          // Mirror the client's current content onto the existing row. Status is
+          // MONOTONIC on this bulk path: a completed task never regresses because a
+          // different device (with stale localStorage) mirrored it as not_started.
+          // Un-completing, if it ever exists, goes through the explicit PATCH paths.
+          const nextStatus = row.status === 'complete' && attrs.status !== 'complete'
+            ? 'complete'
+            : attrs.status;
           await row.update({
             title: attrs.title,
             description: attrs.description,
-            status: attrs.status,
+            status: nextStatus,
             position: attrs.position,
             owner_agent: attrs.owner_agent,
             execution_mode: attrs.execution_mode,

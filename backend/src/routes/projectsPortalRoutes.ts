@@ -17,7 +17,7 @@ import {
   getOwnedProjectTree,
   listEnrollmentProjectsSummary,
 } from '../services/projects/projectReadService';
-import { setTaskStatus, importProject, type ImportProjectInput } from '../services/projects/projectWriteService';
+import { setTaskStatus, setTaskStatusByStory, importProject, type ImportProjectInput } from '../services/projects/projectWriteService';
 import { z } from 'zod';
 
 const router = Router();
@@ -91,6 +91,18 @@ router.patch('/api/portal/projects/tasks/:taskId', requireParticipant, async (re
     if (!gate(res)) return;
     const { status } = statusSchema.parse(req.body || {});
     const r = await setTaskStatus(eid(req), String(req.params.taskId), status);
+    if (!r) return res.status(404).json({ error: 'Task not found' });
+    res.json(r);
+  } catch (e) { fail(res, e, next); }
+});
+
+// Write-through by story_id, scoped to the active project. The localStorage store
+// holds story_ids, not backend UUIDs, so this is its per-task status write path.
+router.patch('/api/portal/projects/tasks/by-story/:storyId', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const { status } = statusSchema.parse(req.body || {});
+    const r = await setTaskStatusByStory(eid(req), String(req.params.storyId), status);
     if (!r) return res.status(404).json({ error: 'Task not found' });
     res.json(r);
   } catch (e) { fail(res, e, next); }
