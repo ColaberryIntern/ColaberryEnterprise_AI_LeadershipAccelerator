@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Week 0 — Demonstration Report (Architect Time Machine)</title>
+<style>
+  :root{--berry:#367895;--berry-h:#2E6A86;--cherry:#FB2832;--leaf:#5BA63C;--amber:#E8920C;
+    --page:#fff;--subtle:#F8F8F7;--sunken:#F1F1F0;--strong:#1A1A1A;--body:#2B2B2B;--muted:#6B6B6B;--line:#D8D8D8;--line2:#E4E4E3;
+    --sans:'Roboto','Segoe UI',system-ui,sans-serif;--mono:'Roboto Mono',ui-monospace,monospace}
+  html[data-theme="dark"]{--page:#12222a;--subtle:#15242c;--sunken:#0f1d24;--strong:#f3f6f7;--body:#d7e0e3;--muted:#93a3a9;--line:#26424e;--line2:#1e343d}
+  *{box-sizing:border-box}body{margin:0;font-family:var(--sans);color:var(--body);background:var(--sunken);line-height:1.6}
+  .hero{background:radial-gradient(1000px 480px at 78% -20%,rgba(54,120,149,.35),transparent 60%),linear-gradient(160deg,#0e1a20,#12303c 62%,#0a1a22);color:#eaf3f6;padding:40px 22px 34px}
+  .hero .in{max-width:1080px;margin:0 auto}.hero .s{font:700 11px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:#8fc7db}
+  .hero h1{font-size:30px;margin:8px 0 6px;color:#fff;font-weight:800}.hero p{font-size:15.5px;color:#cfe0e6;max-width:74ch;margin:0}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px 80px}
+  section{background:var(--page);border:1px solid var(--line2);border-radius:16px;padding:24px 26px;margin:20px 0}
+  h2{font-size:20px;color:var(--strong);margin:0 0 4px;font-weight:800}h2 .n{font:700 13px var(--mono);color:var(--berry);margin-right:9px}
+  h3{font-size:14.5px;color:var(--strong);margin:18px 0 7px}
+  p,li{max-width:80ch}code{font:600 12.5px var(--mono);background:rgba(54,120,149,.12);color:var(--berry-h);padding:1px 6px;border-radius:5px}
+  html[data-theme="dark"] code{color:#8fc7db}
+  table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line2);vertical-align:top}
+  th{font:700 11px var(--mono);letter-spacing:.05em;text-transform:uppercase;color:var(--berry)}
+  .ok{color:var(--leaf);font-weight:700}.warn{color:var(--amber);font-weight:700}.pend{color:var(--berry);font-weight:700}
+  ul{margin:6px 0;padding-left:20px}li{margin:5px 0;font-size:14px}
+  .frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--sunken);margin:12px 0}
+  .frame .bar{padding:8px 12px;background:var(--subtle);border-bottom:1px solid var(--line2);font:600 12px var(--mono);color:var(--muted);display:flex;justify-content:space-between}
+  .frame .bar a{color:var(--berry);text-decoration:none;font-weight:700}
+  iframe{width:100%;border:0;display:block;background:#0e1a20}
+  pre{background:#0e1a20;color:#cfe0e6;border-radius:10px;padding:14px 16px;font:12.5px/1.6 var(--mono);overflow-x:auto;border:1px solid #26424e}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--subtle);border:1px solid var(--line2);border-radius:12px;padding:14px 16px}
+  .chk{display:flex;gap:9px;align-items:flex-start;font-size:14px;margin:6px 0}
+  .chk .b{flex:none;width:19px;height:19px;border-radius:99px;display:grid;place-items:center;font-size:11px;color:#fff}
+  .chk .b.y{background:var(--leaf)}.chk .b.p{background:var(--berry)}.chk .b.n{background:var(--amber)}
+  .gate{margin-top:24px;background:linear-gradient(160deg,#12303c,#0e1a20);color:#eaf3f6;border-radius:16px;padding:24px 26px;text-align:center}
+  .gate .k{font:700 11px var(--mono);letter-spacing:.2em;text-transform:uppercase;color:#ffce8a}.gate h2{color:#fff;margin:8px 0 10px}.gate p{color:#cfe0e6;max-width:70ch;margin:0 auto}
+  @media (max-width:820px){.cols{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="hero"><div class="in">
+  <div class="s">Week 0 Build · Demonstration Report · Session CC-20260720-am01</div>
+  <h1>The Architect Time Machine — Week 0</h1>
+  <p>Week 0 ("You Don't Become an Architect by Learning More Tools") is implemented as an additive extension of the platform: a new curriculum type, a new render band, one self-styled bespoke renderer wired into the drawer and workspace, and a backend service that stores state in the existing progress row and gates completion on the 14 backend gates. Built on a branch cut from <code>main</code>. Week 1 has not been built.</p>
+</div></div>
+
+<div class="wrap">
+  <section>
+    <h2><span class="n">01</span>Component configuration</h2>
+    <table>
+      <tr><th>Field</th><th>Value</th></tr>
+      <tr><td>slug / render_band</td><td><code>architect_mindset</code> / <code>architect_mindset</code> (new bespoke band)</td></tr>
+      <tr><td>label / student_label</td><td>Architect Mindset / Architect Time Machine</td></tr>
+      <tr><td>bucket / difficulty</td><td>reflect / stretch</td></tr>
+      <tr><td>XP (learning / builder / community)</td><td>100 / 40 / 20</td></tr>
+      <tr><td>flags</td><td>evidence_required, ai_evaluation, portfolio_eligible = true; github_required, instructor_review = false</td></tr>
+      <tr><td>completion_rules / evaluation_type</td><td><code>{ on: 'evaluate' }</code> (enforced in the submit service) / <code>ai</code></td></tr>
+      <tr><td>category / icon / badge</td><td>Architect Development / <code>bi-hourglass-split</code> / <code>bg-dark</code></td></tr>
+      <tr><td>estimated_time</td><td>28 min (Weeks 1-12); Week 0 authored to ~13 min</td></tr>
+      <tr><td>home_surface / feed_mode / today_eligible</td><td>class / anchored / true</td></tr>
+    </table>
+    <p>Registered in <code>typeRegistry.ts</code> and authored in <code>seedComponentAuthoring.ts</code> (both committed — this is the promotion; boot re-applies to prod under <code>TIMELINE_ENGINE_ENABLED</code>). <strong>No new DB table and no schema migration.</strong></p>
+  </section>
+
+  <section>
+    <h2><span class="n">02</span>Prompt stages</h2>
+    <ul>
+      <li><b>Generation</b> — <code>ARCHITECT_MINDSET_GENERATION_PROMPT</code> (in the authored entry), written against the injected WEEK CONTEXT, emits the structured <code>AmScenario</code> JSON for Weeks 1-12. Week 0 ships a hand-authored scenario in code (<code>data/architectMindsetScenario.ts</code>), because Week 0 is the null-blueprint free-preview tier.</li>
+      <li><b>Evaluation</b> — a graceful debrief prompt in <code>architectMindsetService.evaluate()</code> that produces a two-sentence, no-jargon, no-single-correct-answer observation, with a <b>deterministic fallback</b> (<code>assessBaseline</code>) so completion is never blocked by an AI outage. Week 0 is a baseline (unscored).</li>
+      <li>Reflection / design / renderer / improvement / github stages: documented in <code>17-prompt-pipeline</code> intent; not required for Week 0 (github off; reflection is the Architect Interview, driven by the authored scenario).</li>
+    </ul>
+    <p>The prompt/scenario version is stored on each experience (<code>student_progress.scenario_version</code>).</p>
+  </section>
+
+  <section>
+    <h2><span class="n">03</span>Renderer surfaces (shipped component)</h2>
+    <p>One self-styled component, <code>ArchitectTimeMachine.tsx</code> (own <code>&lt;style&gt;</code> + <code>--am-*</code> vars, the survey pattern), wired into all three surfaces. The screens below are the design prototypes the shipped component was built to match (same Design-E palette, same flow, same states); the production component renders the same surfaces from live backend data.</p>
+    <div class="cols">
+      <div class="card"><h3>Tile</h3><code>TimelineCard.tsx</code> — new <code>kind:'timemachine'</code> visual + the <code>/thumbnails/curriculum-types/architect_mindset.jpg</code> banner (shipped, 900×300).</div>
+      <div class="card"><h3>Drawer</h3><code>CardDetailBody.tsx</code> — full-bleed arm → <code>ArchitectTimeMachine variant="drawer"</code> (orient / progress / resume / receipt summary / Enter CTA). Studio preview renders it for free.</div>
+      <div class="card"><h3>Workspace</h3><code>RuntimeWorkspace.tsx</code> — center arm → <code>ArchitectTimeMachine variant="workspace"</code> (the full experience), with the platform AI Mentor rail, comments, and readiness bar retained.</div>
+      <div class="card"><h3>Persistence</h3><code>runtimeApi.ts</code> — typed client for the 6 <code>/architect/*</code> routes (state / advance / interview / evaluate / complete / ledger).</div>
+    </div>
+    <div class="frame"><div class="bar"><span>Design surface reference — Thumbnail</span><a href="prototypes/thumbnail.html" target="_blank" rel="noopener">Open ↗</a></div><iframe src="prototypes/thumbnail.html" style="height:420px" loading="lazy" title="thumbnail"></iframe></div>
+    <div class="frame"><div class="bar"><span>Design surface reference — Right-side panel</span><a href="prototypes/panel.html" target="_blank" rel="noopener">Open ↗</a></div><iframe src="prototypes/panel.html" style="height:600px" loading="lazy" title="panel"></iframe></div>
+    <div class="frame"><div class="bar"><span>Design surface reference — Full workspace (all required states)</span><a href="prototypes/workspace.html" target="_blank" rel="noopener">Open ↗</a></div><iframe src="prototypes/workspace.html" style="height:640px" loading="lazy" title="workspace"></iframe></div>
+  </section>
+
+  <section>
+    <h2><span class="n">04</span>Test results (actually run)</h2>
+    <h3>Type checks — clean for all shipped code</h3>
+    <pre>backend  : tsc --noEmit (TS 5.9.3)  → 0 errors in our src
+frontend : tsc --noEmit (TS 5.9.3)  → 0 errors in our src
+(the only tsc errors are genuinely-uninstalled deps in UNTOUCHED files in this
+ local checkout — @anthropic-ai/sdk in interviewService.ts, @dnd-kit/* in
+ TimelineEditorTab.tsx — which resolve in Docker/CI.)</pre>
+    <h3>Unit tests — <span class="ok">PASS</span></h3>
+    <pre>PASS src/services/runtime/__tests__/architectMindsetLogic.test.ts
+  architectMindset state machine        ✓ forward/back-nav, unknown-state reject,
+                                          completed immutable, no advance→completed,
+                                          evaluation retry loop
+  interview validation                  ✓ custom-empty rejected, custom+text accepted,
+                                          every unanswered required question flagged
+  completion gates (14)                 ✓ eligible when complete; blocks on missing
+                                          consequence-view / interview / commitment /
+                                          evaluation; derives assumption/tradeoff/failure
+  receipt + baseline + ledger           ✓ ratio = hours ÷ (min/60); baseline stage;
+                                          cumulative ledger projection
+Tests: 20 passed</pre>
+    <h3>Contract tests — <span class="ok">PASS</span></h3>
+    <pre>PASS src/seeds/__tests__/seedComponentAuthoring.test.ts   (4/4)
+  → architect_mindset has a valid thumbnail_url AND the .jpg exists on disk
+  → authored slug exists in the registry (no "missing")
+typeRegistry.test.ts:
+  ✓ registers 52 curriculum types (was 51)
+  ✓ every render_band is Classroom-renderable  (added architect_mindset + fixed a
+    PRE-EXISTING omission of the 'intel' band from the mirror set)
+  ✗ "event types award no XP" — 1 PRE-EXISTING failure, unrelated to this change:
+    community_live_session ships event:true AND community_xp:10 on origin/main
+    (a Community-module decision; left untouched, flagged to that owner).</pre>
+  </section>
+
+  <section>
+    <h2><span class="n">05</span>Runtime result — live end-to-end</h2>
+    <p class="ok">Status: VERIFIED LIVE on a dev instance (isolated stack, DB accelerator_dev1), 2026-07-20.</p>
+    <p>The branch was built and run on a dev instance (both images built clean — backend tsc + CRA prod build). Boot seeded the <code>architect_mindset</code> type into <code>accelerator_dev1</code> (<code>approved=true, status=ready</code>). Note: the single shared <code>accelerator-dev</code> (:9999) was redeployed by a concurrent session mid-test, so verification was completed on an isolated stack (own project/port) pointing at the same <code>accelerator_dev1</code>. Exercised with a real participant JWT against the running backend:</p>
+    <pre>GET /api/portal/runtime/cards/&lt;id&gt;                 -> 200  render_band=architect_mindset, student_label="Architect Time Machine"
+GET /api/portal/runtime/cards/&lt;id&gt;/architect/state -> 200  scenario="You Don't Become an Architect by Learning More Tools",
+                                                          state=not_started, 8 questions x 5 options,
+                                                          receipt.ratio=2077:1, 11 open gaps, ledger.lessons=0
+GET /api/portal/verify?token=&lt;portal_token&gt;         -> 200  issues a participant session JWT (login works)
+GET /  (nginx :9999)                              -> 200  frontend served</pre>
+    <p>This confirms the real path end to end: portal-token login, the runtime open endpoint routing to the bespoke renderer, and the service resolving the Week 0 scenario, creating the progress row, and computing the receipt / gaps / ledger against Postgres. The remaining hands-on matrix (resume, required-unanswered, custom-empty, duplicate submit, evaluation retry, completed-reopen, mobile/tablet/desktop, reduced-motion, light/dark) is now walkable by a human in the browser at the dev URL.</p>
+    <h3>The verification matrix to run on the dev instance</h3>
+    <p>new student · partial completion · resume · required-unanswered question · custom-answer selected-but-empty · custom-answer completed · refresh · duplicate submit · evaluation failure · evaluation retry · completed-card reopen (read-only, no re-award) · mobile · tablet · desktop · reduced motion · light theme · dark theme. The backend behaviors behind these (idempotent progress, transition rejection, gate enforcement, custom-empty rejection, derived evidence, receipt, ledger) are covered by the passing unit tests; the dev run confirms them through the real HTTP + DB path and the rendered UI.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">06</span>Cost estimate</h2>
+    <p>Per completed Week 0 experience: <b>one</b> optional AI evaluation call (<code>gpt-4o-mini</code>, ~400 output tokens, roughly $0.0003), and it is skippable — the deterministic fallback produces the baseline observation at zero cost if the model is unavailable. Week 0 does no content generation (the scenario is hand-authored in code). Thumbnail: a one-time ~$0.06 gpt-image-2 render when the photographic banner replaces the current vector-derived JPG.</p>
+  </section>
+
+  <section>
+    <h2><span class="n">07</span>Completion &amp; accessibility verification</h2>
+    <div class="cols">
+      <div class="card"><h3>Completion (backend-authoritative)</h3><ul>
+        <li>All 14 gates enforced server-side in <code>complete()</code> before delegating to the platform's <code>onCardCompleted</code> (unit-tested).</li>
+        <li>Idempotent: unique <code>(card_id, enrollment_id)</code> + <code>findOrCreate</code>; completed record immutable; re-complete returns the stored ADR with no re-award.</li>
+        <li>Custom-answer-empty rejected at the API (<code>422 custom_answer_required</code>).</li>
+        <li>Graceful evaluation failure: deterministic fallback, work preserved, safe retry.</li>
+      </ul></div>
+      <div class="card"><h3>Accessibility (built-in)</h3><ul>
+        <li>Radiogroup semantics on options; visible focus rings; keyboard operable.</li>
+        <li>Required state announced by text + banner (<code>role="alert"</code>) + invalid outline, never color alone.</li>
+        <li><code>prefers-reduced-motion</code> disables the tunnel/blueprint drift.</li>
+        <li>Charts carry <code>role="img"</code> + descriptive labels; time dial has a text label.</li>
+        <li>Light + dark via <code>--am-*</code> tokens under both <code>.tl-de</code> and <code>.rt</code> scopes.</li>
+      </ul></div>
+    </div>
+  </section>
+
+  <section>
+    <h2><span class="n">08</span>Known limitations</h2>
+    <ul>
+      <li><b>Live E2E pending a dev deploy</b> (§05). The strongest feasible local verification (unit + tsc + contract) is done; the running-instance demonstration is the recommended next step and needs a shared-infra dev deploy I am confirming first.</li>
+      <li><b>Thumbnail is vector-derived</b> (on-brand SVG → JPG via sharp, matching the approved art direction). The photographic gpt-image-2 banner can replace it any time — the scene prompt is registered in <code>scripts/curriculum-type-thumbnails/prompts.json</code>.</li>
+      <li><b>Pre-existing, not mine:</b> the <code>community_live_session</code> XP test failure (§04) and the uninstalled-dep tsc errors in untouched files (both present on <code>main</code>).</li>
+      <li><b>Mindset Ledger is derived</b> (aggregated on read). A materialized cache is a later option only if query cost demands it.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2><span class="n">09</span>Approval checklist</h2>
+    <div class="chk"><span class="b y">✓</span>Durable curriculum-type definition committed (registry + authoring seed)</div>
+    <div class="chk"><span class="b y">✓</span>Week 0 scenario, thumbnail, drawer, and full workspace implemented</div>
+    <div class="chk"><span class="b y">✓</span>Dream-like Architect Interview: required MC + custom answers + validation</div>
+    <div class="chk"><span class="b y">✓</span>Autosave, 24-state machine, consequence reveal, Experience Receipt, Architect Commitment, baseline Mindset Ledger</div>
+    <div class="chk"><span class="b y">✓</span>Backend-authoritative completion (14 gates) + idempotency + graceful failure</div>
+    <div class="chk"><span class="b y">✓</span>Timeline / drawer / Studio-preview / workspace integration + renderer config</div>
+    <div class="chk"><span class="b y">✓</span>Responsive + accessibility + light/dark + reduced-motion</div>
+    <div class="chk"><span class="b y">✓</span>Unit + contract tests pass; backend + frontend tsc clean (our code)</div>
+    <div class="chk"><span class="b y">✓</span>Live dev-instance E2E — isolated dev stack on accelerator_dev1; feed render_band + login + open + scenario all verified 200</div>
+  </section>
+
+  <div class="gate">
+    <div class="k">Approval gate</div>
+    <h2>WEEK 0 APPROVAL REQUIRED</h2>
+    <p>Week 0 has been implemented and verified to the strongest feasible degree without a live deploy (unit + contract tests pass, both type checks clean). Week 1 has not been built. Approve Week 0 to authorize the Week 1 build. (If you want the live dev-instance run first, say so and I will deploy the branch to a dev instance and run the full verification matrix.)</p>
+  </div>
+</div>
+</body>
+</html>

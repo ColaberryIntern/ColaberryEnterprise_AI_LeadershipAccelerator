@@ -9,6 +9,7 @@ jest.mock('../../models/CommunityPost', () => ({ create: jest.fn(), findAll: jes
 jest.mock('../../models/CommunityNotification', () => ({ bulkCreate: jest.fn() }));
 jest.mock('../../models/CommunityLike', () => ({ findAll: jest.fn() }));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
+jest.mock('../../models/CommunityComment', () => ({ findAll: jest.fn() }));
 
 import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
 import Enrollment from '../../models/Enrollment';
@@ -17,6 +18,7 @@ import CommunityPost from '../../models/CommunityPost';
 import CommunityNotification from '../../models/CommunityNotification';
 import CommunityLike from '../../models/CommunityLike';
 import CommunityPointsEvent from '../../models/CommunityPointsEvent';
+import CommunityComment from '../../models/CommunityComment';
 
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
@@ -29,6 +31,7 @@ const findAllLikes = CommunityLike.findAll as jest.Mock;
 const incrementMember = CommunityMember.increment as jest.Mock;
 const findByPkMember = CommunityMember.findByPk as jest.Mock;
 const createPointsEvent = CommunityPointsEvent.create as jest.Mock;
+const findAllComments = CommunityComment.findAll as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -40,6 +43,8 @@ beforeEach(() => {
   incrementMember.mockResolvedValue(undefined);
   createPointsEvent.mockResolvedValue(undefined);
   findByPkMember.mockResolvedValue(null);
+  // recent-commenters query (listPosts) — default to no comments.
+  findAllComments.mockResolvedValue([]);
 });
 
 const enrollmentId = '11111111-1111-1111-1111-111111111111';

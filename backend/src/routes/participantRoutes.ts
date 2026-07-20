@@ -10,6 +10,7 @@ import {
 } from '../controllers/orgController';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import path from 'path';
+import fs from 'fs';
 import { strategyPrepUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
@@ -53,6 +54,8 @@ import {
   handleWatchBeat, handleGetSurvey, handleSaveSurvey,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
+  handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
+  handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
 import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
 import projectRoutes from './projectRoutes';
@@ -112,6 +115,15 @@ router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handl
 router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
 router.get('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleGetAssessment);
 router.post('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleSubmitAssessment);
+// The Architect Time Machine (architect_mindset) — state/resume, validated stage
+// advance (autosave), interview answers, graceful evaluation, and the 14-gate
+// backend-authoritative completion, plus the derived Mindset Ledger.
+router.get('/api/portal/runtime/cards/:cardId/architect/state', requireParticipant, handleArchitectState);
+router.post('/api/portal/runtime/cards/:cardId/architect/advance', requireParticipant, handleArchitectAdvance);
+router.post('/api/portal/runtime/cards/:cardId/architect/interview', requireParticipant, handleArchitectInterview);
+router.post('/api/portal/runtime/cards/:cardId/architect/evaluate', requireParticipant, handleArchitectEvaluate);
+router.post('/api/portal/runtime/cards/:cardId/architect/complete', requireParticipant, handleArchitectComplete);
+router.get('/api/portal/runtime/cards/:cardId/architect/ledger', requireParticipant, handleArchitectLedger);
 // Watch-progress heartbeat (~1 per 15s of playback per player; limiter blunts floods).
 const watchBeatRateLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -630,16 +642,23 @@ router.post('/api/portal/community/upload', requireParticipant, (req, res) => {
   communityMediaUpload.single('file')(req, res, (err: any) => {
     if (err) { res.status(400).json({ error: err.message }); return; }
     if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
-    res.status(201).json({ url: `/api/portal/community/media/${req.file.filename}` });
+    // Return the URL WITHOUT the file extension so nginx's `~* \.png$`
+    // static-asset location can't hijack it — it must proxy to the backend.
+    const id = req.file.filename.replace(/\.[^./]+$/, '');
+    res.status(201).json({ url: `/api/portal/community/media/${id}` });
   });
 });
 
-// Public serve for uploaded community media — no auth so <img> tags load it.
-// Filename is an opaque UUID.ext; the strict regex blocks path traversal.
-router.get('/api/portal/community/media/:filename', (req, res) => {
-  const { filename } = req.params;
-  if (!/^[a-f0-9-]{36}\.(png|jpg|jpeg|webp|gif)$/i.test(filename)) { res.status(400).end(); return; }
-  res.sendFile(path.join(COMMUNITY_MEDIA_DIR, filename), (err) => { if (err) res.status(404).end(); });
+// Public serve — extension-less path so nginx proxies it here (an image-ext URL
+// would be grabbed by the static-asset location). :id is the opaque UUID; the
+// real file (id.ext) is resolved on disk and sendFile sets the content-type.
+router.get('/api/portal/community/media/:id', (req, res) => {
+  const { id } = req.params;
+  if (!/^[a-f0-9-]{36}$/i.test(id)) { res.status(400).end(); return; }
+  let file: string | undefined;
+  try { file = fs.readdirSync(COMMUNITY_MEDIA_DIR).find((f) => f.startsWith(`${id}.`)); } catch { /* dir missing */ }
+  if (!file) { res.status(404).end(); return; }
+  res.sendFile(path.join(COMMUNITY_MEDIA_DIR, file));
 });
 
 router.get('/api/portal/community/calendar', requireParticipant, async (req, res) => {
@@ -657,6 +676,24 @@ router.get('/api/portal/community/notifications', requireParticipant, async (req
     const { listNotifications } = await import('../services/communityNotificationService');
     const notifications = await listNotifications(req.participant!.sub);
     res.json({ notifications });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/notifications/unread-count', requireParticipant, async (req, res) => {
+  try {
+    const { unreadNotificationCount } = await import('../services/communityNotificationService');
+    res.json({ count: await unreadNotificationCount(req.participant!.sub) });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/notifications/read-all', requireParticipant, async (req, res) => {
+  try {
+    const { markAllNotificationsRead } = await import('../services/communityNotificationService');
+    res.json(await markAllNotificationsRead(req.participant!.sub));
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
@@ -817,6 +854,17 @@ router.post('/api/portal/community/presence/ping', requireParticipant, async (re
     const { touchPresence } = await import('../services/communityService');
     const result = await touchPresence(req.participant!.sub);
     res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Cohort presence for the portal right-rail "Contacts" panel (PortalShell).
+router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) => {
+  try {
+    const { getCohortPresence } = await import('../services/cohortPresenceService');
+    const contacts = await getCohortPresence(req.participant!.sub, req.participant!.cohort_id);
+    res.json({ contacts });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }

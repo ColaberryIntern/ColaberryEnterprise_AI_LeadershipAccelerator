@@ -56,7 +56,7 @@ describe('surface taxonomy — known classifications', () => {
     },
   );
 
-  it.each(['implementation_task', 'artifact_submission', 'project_task', 'build_story', 'github_sync'])(
+  it.each(['implementation_task', 'artifact_submission', 'project_task', 'build_story'])(
     '%s is a project surface',
     (slug) => {
       expect(surfaceOf(slug)).toBe('project');
@@ -65,11 +65,6 @@ describe('surface taxonomy — known classifications', () => {
 
   it.each(['discussion', 'community_discussion', 'demo'])('%s is a community surface', (slug) => {
     expect(surfaceOf(slug)).toBe('community');
-  });
-
-  it('github_sync is anchored to project but NOT surfaced in Today', () => {
-    expect(surfaceOf('github_sync')).toBe('project');
-    expect(isTodayEligible('github_sync')).toBe(false);
   });
 
   it('system gamification types are ambient + Today', () => {

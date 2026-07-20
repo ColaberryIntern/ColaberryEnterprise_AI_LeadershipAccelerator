@@ -44,7 +44,7 @@ export function estimateEvidence(cards: PlanCard[]): EvidenceEstimate {
       gh.commits += def.difficulty === 'stretch' ? 5 : 3;
       gh.branches += 1;
       gh.prs += 1;
-      if (['implementation_task', 'project_task', 'github_sync', 'internship_activity'].includes(def.slug)) gh.repos += 1;
+      if (['implementation_task', 'project_task', 'internship_activity'].includes(def.slug)) gh.repos += 1;
     }
     if (def.portfolio_eligible) pf.entries += 1;
     if (def.slug === 'artifact_submission') pf.artifacts += 1;
