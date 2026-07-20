@@ -120,6 +120,9 @@ export const env = {
   // Project backend v2 — persisted student-projects read API (P1). Default OFF;
   // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
   projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
+  // Today aggregation — blend Project + Community cards into the Today feed
+  // (Phase 2). Default OFF; the feed stays Class-only until enabled.
+  todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',
