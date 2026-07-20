@@ -10,6 +10,15 @@ jest.mock('../../models/CommunityNotification', () => ({ bulkCreate: jest.fn() }
 jest.mock('../../models/CommunityLike', () => ({ findAll: jest.fn() }));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 jest.mock('../../models/CommunityComment', () => ({ findAll: jest.fn() }));
+// Points/level fold into the canonical system now; mock so the real model
+// methods don't run (award/getPointsSummary/getTotalsForEnrollments/levelForPoints).
+jest.mock('../../services/pointsService', () => ({
+  award: jest.fn(async () => ({ awarded: true, points: 0 })),
+  getPointsSummary: jest.fn(async () => ({ total: 0, events: [] })),
+  getTotalsForEnrollments: jest.fn(async () => new Map()),
+  levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
+}));
+jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => {}) }));
 
 import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
 import Enrollment from '../../models/Enrollment';

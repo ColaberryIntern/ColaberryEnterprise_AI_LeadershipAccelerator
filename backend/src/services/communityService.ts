@@ -299,7 +299,9 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   });
 
   // The author is creating their own post — never locked to them, so this
-  // is a plain projection rather than a toFeedItem() lock check.
+  // is a plain projection rather than a toFeedItem() lock check. Author badge
+  // uses the canonical level (one ladder).
+  const authorLevel = levelForPoints((await getPointsSummary(enrollmentId)).total).level;
   return {
     id: post.id,
     body: post.body,
@@ -313,7 +315,7 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     min_level: post.min_level,
     locked: false,
     created_at: post.created_at,
-    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: member.level },
+    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: authorLevel },
     recent_commenters: [],
   };
 }
@@ -345,7 +347,7 @@ async function recentCommentersByPost(
   if (postIds.length === 0) return byPost;
   const comments = await CommunityComment.findAll({
     where: { post_id: postIds },
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [['created_at', 'DESC']],
   });
   for (const c of comments as any[]) {
@@ -356,6 +358,21 @@ async function recentCommentersByPost(
     }
   }
   return byPost;
+}
+
+// The post-author level badge must show the ONE canonical level (same ladder as
+// the profile/leaderboard/HUD), not the legacy CommunityMember.level. Batched:
+// one query resolves every distinct author's canonical total → level.
+async function canonicalLevelByMemberId(
+  members: Array<{ id: string; enrollment_id?: string | null; level: number }>,
+): Promise<Map<string, number>> {
+  const enrollmentIds = members.map((m) => m.enrollment_id).filter(Boolean) as string[];
+  const totals = await getTotalsForEnrollments(enrollmentIds);
+  const out = new Map<string, number>();
+  for (const m of members) {
+    out.set(m.id, m.enrollment_id ? levelForPoints(totals.get(m.enrollment_id) ?? 0).level : m.level);
+  }
+  return out;
 }
 
 export async function listPosts(
@@ -388,7 +405,7 @@ export async function listPosts(
 
   const rows = await CommunityPost.findAll({
     where,
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [
       ['pinned', 'DESC'],
       ['created_at', 'DESC'],
@@ -408,6 +425,10 @@ export async function listPosts(
   const posts = pageRows.map((post: any) =>
     toFeedItem(post, viewer.id, viewer.level, likedIds.has(post.id), commentersByPost.get(post.id) ?? []));
 
+  // Author badges show the canonical level (one ladder everywhere).
+  const authorLevels = await canonicalLevelByMemberId(pageRows.map((p: any) => p.member).filter(Boolean));
+  for (const p of posts) p.member.level = authorLevels.get(p.member.id) ?? p.member.level;
+
   const last = pageRows[pageRows.length - 1] as any;
   const next_cursor = hasMore && last ? encodePostCursor(last) : null;
 
@@ -426,10 +447,13 @@ export async function getPostById(enrollmentId: string, postId: string): Promise
 
   const post = await requireVisiblePostInCohort(postId, cohortId);
   const withMember = await CommunityPost.findByPk(post.id, {
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
   });
   const likedIds = await viewerLikedPostIds([post.id], viewer.id);
-  return toFeedItem(withMember as any, viewer.id, viewer.level, likedIds.has(post.id));
+  const item = toFeedItem(withMember as any, viewer.id, viewer.level, likedIds.has(post.id));
+  const author = (withMember as any)?.member;
+  if (author) item.member.level = (await canonicalLevelByMemberId([author])).get(author.id) ?? item.member.level;
+  return item;
 }
 
 // Author-only for v1 (smallest version that satisfies "students can ... pin").
@@ -447,7 +471,7 @@ export async function togglePin(
   ]);
 
   const post = await CommunityPost.findByPk(postId, {
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
   });
   if (!post || post.status === 'removed') {
     throw notFoundError('Post not found');
@@ -470,6 +494,9 @@ export async function togglePin(
   // hardcoding false (which would flicker the like button off after a pin).
   const likedIds = await viewerLikedPostIds([post.id], member.id);
   const postAny = post as any;
+  // Author-only route — the author IS the caller, so the canonical badge level
+  // is the caller's own canonical level (one ladder).
+  const authorLevel = levelForPoints((await getPointsSummary(enrollmentId)).total).level;
   return {
     id: post.id,
     body: post.body,
@@ -487,7 +514,7 @@ export async function togglePin(
       id: postAny.member.id,
       display_name: postAny.member.display_name,
       avatar_url: postAny.member.avatar_url,
-      level: postAny.member.level,
+      level: authorLevel,
     },
     recent_commenters: [],
   };
@@ -595,7 +622,7 @@ export async function listComments(enrollmentId: string, postId: string): Promis
 
   const comments = await CommunityComment.findAll({
     where: { post_id: postId },
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [['created_at', 'ASC']],
   });
 
