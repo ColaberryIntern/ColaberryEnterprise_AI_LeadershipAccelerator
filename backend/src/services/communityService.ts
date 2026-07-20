@@ -5,6 +5,7 @@ import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
+import { awardCommunityXp } from './progression/communityXpService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
@@ -283,6 +284,8 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   // Reward the author for contributing (Ali feedback 2026-07-20 — posting now
   // earns points, not just likes-received).
   await awardContributionPoints(member.id, POINTS_PER_POST);
+  // Community activity feeds the Community lane of the Skill-XP lens.
+  await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${post.id}`, 'community:post').catch(() => {});
 
   log('info', 'post_created', {
     post_id: post.id, member_id: member.id, cohort_id: cohortId, min_level: post.min_level, outcome: 'success',
@@ -509,6 +512,7 @@ export async function createComment(
 
   // Reward the commenter for contributing (Ali feedback 2026-07-20).
   await awardContributionPoints(member.id, POINTS_PER_COMMENT);
+  await awardCommunityXp(enrollmentId, POINTS_PER_COMMENT, `cxp:comment:${comment.id}`, 'community:comment').catch(() => {});
 
   // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
   // comments on their own post/comment.
