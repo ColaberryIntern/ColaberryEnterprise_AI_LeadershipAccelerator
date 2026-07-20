@@ -10192,3 +10192,10 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: The backend half of #492 deployed fine, but the nginx build failed on this one line — CI's `Frontend typecheck` is `tsc --noEmit` only and never runs the CRA/eslint build, so this class of break isn't caught by CI. Confirmed the exact error from the prod nginx build log.
   - Verification: Validated via the prod nginx Docker build (the authoritative frontend build; local react-scripts fails through the node_modules junction). CI frontend + backend typecheck green.
   - Notes: Branch `workstream/feed-control-eslint-fix` off main. HARDEN lesson: never reference `react-hooks/*` rules in eslint-disable directives here; the CRA build's eslint config doesn't register them and errors on the unknown-rule reference. Frontend-only redeploy (backend from #492 already live).
+
+- [x] Community notifications: topbar bell + unread badge + panel
+  - Date: 2026-07-20
+  - Session: CC-20260719-c3v8
+  - What changed: Surfaced the existing CommunityNotification backend as a UI. Added unreadNotificationCount + markAllNotificationsRead services + GET /notifications/unread-count and POST /notifications/read-all routes. NEW NotificationBell.tsx in the PortalShell topbar: bell + unread badge (polls count every 45s), dropdown listing recent notifications (actor avatar + "mentioned you"/"replied"/"commented" + relative time + unread dot), click marks read + jumps to the feed, "Mark all read". Files: backend/src/services/communityNotificationService.ts, backend/src/routes/participantRoutes.ts, frontend/src/services/communityApi.ts, frontend/src/pages/portal/community/{NotificationBell.tsx,community.css}, frontend/src/pages/portal/today/PortalShell.tsx.
+  - Verification: backend communityNotificationService jest 7/7; frontend tsc clean (my files; only pre-existing @dnd-kit env errors remain); backend tsc --skipLibCheck clean on changed files.
+  - Notes: Fires on mention + comment/reply (existing). "Someone liked your post" deferred (needs a 'like' value on the notification_type enum = a migration). Click lands on the feed; deep-link-to-post is a fast-follow.

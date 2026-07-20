@@ -5,6 +5,7 @@ import { fetchPoints, fetchSchedule, levelFor, PointsSummary, OnboardingSchedule
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
+import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
@@ -225,6 +226,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
               <span className="tx"><span className="lbl">Next event</span><span className="when mono">{ohCd ? `${ohCd.d}d ${ohCd.h}h` : '—'}</span></span>
             </span>
           </div>
+          <NotificationBell />
           <button type="button" className="te-iconbtn" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle dark mode">
             {theme === 'dark'
               ? <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4.2" stroke="currentColor" strokeWidth="2" /><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5 5l1.4 1.4M17.6 17.6L19 19M19 5l-1.4 1.4M6.4 17.6L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>

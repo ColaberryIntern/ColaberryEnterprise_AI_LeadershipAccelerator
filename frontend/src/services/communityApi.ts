@@ -172,6 +172,31 @@ export async function pingPresence(): Promise<{ presence: CommunityPresenceStatu
   return data;
 }
 
+export interface CommunityNotification {
+  id: string;
+  notification_type: 'mention' | 'reply';
+  source_type: 'post' | 'comment';
+  source_id: string;
+  read: boolean;
+  created_at: string;
+  actor: { id: string; display_name: string; avatar_url: string | null } | null;
+}
+
+export async function fetchNotifications(): Promise<CommunityNotification[]> {
+  const { data } = await portalApi.get<{ notifications: CommunityNotification[] }>('/api/portal/community/notifications');
+  return data.notifications;
+}
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const { data } = await portalApi.get<{ count: number }>('/api/portal/community/notifications/unread-count');
+  return data.count;
+}
+export async function markNotificationRead(id: string): Promise<void> {
+  await portalApi.post(`/api/portal/community/notifications/${id}/read`);
+}
+export async function markAllNotificationsRead(): Promise<void> {
+  await portalApi.post('/api/portal/community/notifications/read-all');
+}
+
 // Upload a small image from the student's computer; returns a relative media
 // URL to add to a post's media_urls. The backend validates type + size (8MB).
 export async function uploadCommunityMedia(file: File): Promise<string> {
