@@ -57,7 +57,7 @@ export default function FeedControlTab() {
   useEffect(() => { load(); }, [load]);
   useEffect(() => {
     api.get('/api/admin/feed-control/enrollments')
-      .then((r) => { const e: EnrollmentOption[] = r.data.enrollments || []; setEnrolls(e); setSimEnroll((s) => s || (e[0]?.id ?? '')); })
+      .then((r) => { const e: EnrollmentOption[] = r.data.enrollments || []; setEnrolls(e); /* no auto-select: student must be chosen explicitly so the preview never shows a feed nobody picked */ })
       .catch(() => {});
   }, []);
 
@@ -173,8 +173,8 @@ export default function FeedControlTab() {
       <div className="fc-sim">
         <div className="fc-sim-h">
           <b>▶ Preview a student's feed</b>
-          <select className="fc-inp" value={simEnroll} onChange={(e) => setSimEnroll(e.target.value)}>
-            {enrolls.length === 0 && <option value="">Loading students…</option>}
+          <select className="fc-inp" value={simEnroll} onChange={(e) => { setSimEnroll(e.target.value); setSim(null); }}>
+            <option value="">{enrolls.length === 0 ? 'Loading students…' : 'Select a student…'}</option>
             {enrolls.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
           </select>
           <button className="fc-btn sm" disabled={simBusy || !simEnroll} onClick={runSim}>{simBusy ? 'Simulating…' : 'Preview'}</button>
@@ -182,6 +182,12 @@ export default function FeedControlTab() {
         </div>
 
         <p className="fc-explain">Only <b>eligible</b> content is a candidate: published, unlocked for their week, not already completed. The order is then decided by <b>pin → priority → freshness → not-yet-seen → cadence</b>. The chips on each card show why it's there.</p>
+
+        {!sim && !simBusy && (
+          <div className="fc-empty" style={{ marginTop: 10 }}>
+            {simEnroll ? 'Click Preview to load this student’s feed.' : 'Pick a student above, then click Preview to see exactly what their feed shows and why.'}
+          </div>
+        )}
 
         {sim && (
           <>

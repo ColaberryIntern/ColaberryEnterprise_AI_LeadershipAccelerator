@@ -7,6 +7,8 @@ import { assertTransition } from './roomStateMachine';
 import { emitRoomEvent } from './roomOutboxService';
 import { ROOM_EVENTS } from './roomEvents';
 import { createRoom } from './roomService';
+import { recordContribution } from './roomRecognitionService';
+import { promoteWaitlist } from './roomReminderService';
 import { notFoundError, forbiddenError, validationError, conflictError, log } from './roomShared';
 
 // Booking lifecycle (spec §5 wizard + §11 state machine): create → publish →
@@ -158,14 +160,16 @@ export async function rsvp(
     throw conflictError('RSVP has closed for this session');
   }
 
+  // Prior state drives waitlist bookkeeping AND seat-release promotion below.
+  const existing = await RoomBookingAttendee.findOne({ where: { booking_id: bookingId, enrollment_id: ctx.enrollmentId } });
+  const priorState: RoomRsvpState = existing?.rsvp_state ?? 'none';
+
   let effective: RoomRsvpState = desired;
   let waitlistPosition: number | null = null;
   if (desired === 'going' && booking.capacity != null) {
     const current = await goingCount(bookingId);
     // Count the seat only if this enrollment isn't already 'going'.
-    const already = await RoomBookingAttendee.findOne({ where: { booking_id: bookingId, enrollment_id: ctx.enrollmentId } });
-    const alreadyGoing = already?.rsvp_state === 'going';
-    if (!alreadyGoing && current >= booking.capacity) {
+    if (priorState !== 'going' && current >= booking.capacity) {
       effective = 'waitlisted';
       waitlistPosition = (await RoomBookingAttendee.count({ where: { booking_id: bookingId, rsvp_state: 'waitlisted' } })) + 1;
     }
@@ -189,6 +193,13 @@ export async function rsvp(
     aggregateId: attendee.id,
     payload: { booking_id: bookingId, state: effective },
   });
+
+  // A freed seat (someone who was 'going' now isn't) → promote the waitlist.
+  // Best-effort: a promotion failure must never break the caller's own RSVP.
+  if (priorState === 'going' && effective !== 'going') {
+    try { await promoteWaitlist(bookingId); }
+    catch (e) { log('warn', 'waitlist_promote_failed', { booking_id: bookingId, message: (e as Error)?.message }); }
+  }
   return attendee;
 }
 
@@ -227,6 +238,13 @@ export async function joinBooking(
     payload: { booking_id: bookingId, enrollment_id: ctx.enrollmentId },
   });
   log('info', 'booking_join', { booking_id: bookingId, enrollment_id: ctx.enrollmentId, outcome: 'authorized' });
+  // Recognition: showing up counts (Reliable Study Partner), once per session.
+  try {
+    await recordContribution(ctx.enrollmentId, {
+      category: 'reliable_study_partner', action: 'attended', points: 5,
+      roomId: room.id, bookingId: booking.id, idempotencyKey: `attend:${booking.id}:${ctx.enrollmentId}`,
+    });
+  } catch (e) { log('warn', 'recognition_attend_failed', { booking_id: bookingId, message: (e as Error)?.message }); }
   return { join_url: booking.meeting_link, state: booking.state };
 }
 
@@ -239,6 +257,15 @@ export async function completeBooking(ctx: RoomAccessContext, bookingId: string)
   assertTransition(booking.state, 'completed');
   await booking.update({ state: 'completed' });
   await emitRoomEvent({ eventType: ROOM_EVENTS.SessionCompleted, aggregateType: 'booking', aggregateId: booking.id });
+  // Recognition: the host earns Community Host credit for a completed session.
+  if (booking.host_enrollment_id) {
+    try {
+      await recordContribution(booking.host_enrollment_id, {
+        category: 'community_host', action: 'hosted_session', points: 25,
+        roomId: room.id, bookingId: booking.id, idempotencyKey: `host_complete:${booking.id}`,
+      });
+    } catch (e) { log('warn', 'recognition_host_failed', { booking_id: booking.id, message: (e as Error)?.message }); }
+  }
   return booking;
 }
 
