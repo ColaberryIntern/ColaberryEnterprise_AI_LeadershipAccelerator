@@ -9837,3 +9837,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali's live review — the dark drawer/workspace background wasn't wanted, completion should gate on copy and live on the right panel, and the tile needed a real banner. [[project_canonical_course_structure]]
   - Verification: nginx dev rebuild (react-scripts tsc); user visual review on :9999.
   - Notes: Branch `workstream/setup-lab-renderer`, dev-only. The drawer stays light + copy button (no completion in the drawer — it directs to Enter workspace). Wiring the thumbnail_url into `seedComponentAuthoring.ts` is deferred to the prod promotion.
+
+### Setup Lab — prod promotion seed (seedComponentAuthoring) — 2026-07-20
+- [x] Added `setup_lab` to `seedComponentAuthoring.ts` so the authored type (generation prompt + I/O + thumbnail) reaches prod on boot
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed: `backend/src/seeds/seedComponentAuthoring.ts` — `setup_lab` added to `THUMBNAIL_SLUGS` + a `COMPONENT_AUTHORING` entry (the v2 `SETUP_LAB_GENERATION_PROMPT`, inputs `setup_topic`/`setup_context`, outputs incl. `github_task`, capabilities, `completion_rules {on:'submit'}`, `thumbnail_url`, `approved:true`). `typeRegistry.ts` already creates the registry row on boot; this layers the authored experience so it survives a reseed and promotes to prod.
+  - Why: prod promotion — without this, prod's `setup_lab` type would have no `generation_prompt` and its cards couldn't generate content. [[project_canonical_course_structure]]
+  - Verification: CI (backend tsc + jest; typeRegistry 40-type test). Seed is idempotent, keyed on slug (a missing row is reported, never created).
+  - Notes: PR `workstream/setup-lab-renderer` → main. After merge, the prod deploy (backend + nginx rebuild) runs `typeSeeder` + `seedComponentAuthoring` on boot; the 5 timeline cards are then placed on prod via a one-off data script (cards are data, not code).
