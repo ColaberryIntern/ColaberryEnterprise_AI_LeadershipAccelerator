@@ -214,7 +214,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const completeSafely = onComplete
     ? async () => {
         setGateMsg(null);
-        try { await onComplete(); }
+        try { await onComplete(); if (onClose) window.setTimeout(onClose, 1200); }   // completing takes the student back to the curriculum
         catch (err: any) { setGateMsg(err?.response?.data?.error || 'Not quite yet — keep watching to unlock your points.'); }
       }
     : undefined;

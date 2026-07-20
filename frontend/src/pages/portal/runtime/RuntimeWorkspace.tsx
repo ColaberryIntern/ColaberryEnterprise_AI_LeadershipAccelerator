@@ -169,7 +169,9 @@ const RuntimeWorkspace: React.FC = () => {
       setMsgs((m) => [...m, { role: 'assistant', content: r.artifact ? `Nice — I turned your work into a portfolio artifact: "${r.artifact.title}". Your readiness just updated below.` : 'Completed — your progress and readiness updated below.', kind: 'complete' }]);
       // Deep Dive: on completion, return the student to the Classroom right where they
       // left off (it restores their week + scroll) — now with this card marked complete.
-      if (isDeepDive) setTimeout(goBack, 900);
+      // Completing any assignment returns the student to the curriculum (Classroom),
+      // right where they left off — the Deep Dive already did this; now it's universal.
+      setTimeout(goBack, 1200);
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
 
