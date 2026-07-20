@@ -76,7 +76,7 @@ const RuntimeWorkspace: React.FC = () => {
       try {
         const [open, rd] = await Promise.all([runtimeApi.open(cardId), runtimeApi.readiness().catch(() => null)]);
         setData(open); setReadiness(rd); setCompleted(open.progress.status === 'completed'); setWatch(null); setNudge(null);
-        setMsgs([{ role: 'assistant', content: `I'm your AI Mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
+        setMsgs([{ role: 'assistant', content: `I'm Cory, your mentor for "${open.card.week_title || open.card.content?.title || open.card.title}". Ask me anything, or hit a shortcut below — I'll coach, not hand you answers.`, kind: 'intro' }]);
         // Every card type has a cohort comment thread in its workspace.
         runtimeApi.comments(cardId).then((r) => setComments(r.comments)).catch(() => { /* comments are optional */ });
         // Proactive nudge — if the student looks stuck on this card, the mentor offers help first.
@@ -403,7 +403,7 @@ const RuntimeWorkspace: React.FC = () => {
 
         {/* RIGHT — AI Mentor */}
         <aside className="rt-mentor">
-          <div className="rt-mentor-h"><span className="rt-dot" /> AI Mentor</div>
+          <div className="rt-mentor-h"><span className="rt-dot" /> Cory</div>
           {isSetupLab && (labCopied || completed) && (
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
               {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Finished in Claude Code?</div>}
