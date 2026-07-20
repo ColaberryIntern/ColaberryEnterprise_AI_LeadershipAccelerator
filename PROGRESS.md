@@ -9841,3 +9841,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: make the Rooms backend a real, clickable student feature. Student-facing label defaulted to "Rooms" (Ali to confirm final naming; can instead fill the "Group Chat" slot). Frontend-only; the flag `COMMUNITY_ROOMS_ENABLED` still gates the backend it calls. [[project_colaberry_commons_build]]
   - Verification: `cd frontend && npx tsc --noEmit` exit 0; **nginx Docker image built ("Compiled successfully", real react-scripts build + prod eslint)**. Branch `workstream/community-rooms-frontend` off origin/main.
   - Notes: Deployed to dev (:9999) for review before any prod merge. Booking with a start/end triggers real Meet creation via the outbox; undated bookings skip it.
+
+### Colaberry Commons — video rooms + 10 always-open fruit rooms + Rooms redesign — 2026-07-20
+- [x] Added always-open Google Meet video rooms, seeded 10 fruit-themed defaults, and gave the Rooms UI a spunky visual pass
+  - Date: 2026-07-20
+  - Session: CC-20260719-cm3x
+  - What changed:
+    - Backend: `community_rooms` gains `is_video`/`always_open`/`meeting_link` (idempotent ALTERs in `ensureCommunityRoomsSchema`); `roomService.createRoom` takes a video flag; new `POST /api/portal/community/rooms/:id/join-video` (`joinVideoRoom`) lazily mints ONE shared Google Meet link on first join (entitlement re-checked) and reuses it thereafter; `seeds/seedDefaultCommunityRooms.ts` seeds 10 always-open fruit video rooms (Mango Lounge … Grape Gallery, emoji+tagline in metadata) idempotently at boot, flag-gated.
+    - Frontend: `RoomsPage` redesigned — stat hero (rooms/online/live), colorful per-category emoji room cards, live pulse, video badge + one-click Join (opens the Meet), a "+ New room" modal with a Video-room toggle (on-the-fly), and a fixed People-online rail that pings presence (`communityApi.pingPresence`) so the viewer shows up + a "You" tag. `RoomDetailPage` gains the emoji header + a "Join video call" CTA. `roomsApi` adds `joinVideoRoom` + `is_video`/`metadata` fields.
+  - Why: Ali's punch-list — video rooms (Meet) creatable on the fly, 10 always-open defaults (fruit theme), fix the lonely People-online panel, and a more visual/spunky design (per the exec-grade "data-storytelling" design ref, BC 10039770075). [[project_colaberry_commons_build]]
+  - Verification: backend + frontend `tsc --noEmit` exit 0; nginx Docker build "Compiled successfully"; deployed to dev — boot logged "default rooms: 10 created", API returns 14 rooms (10 video), and `join-video` minted a real link `https://meet.google.com/ouh-ndyj-gce`. Branch `workstream/community-rooms-frontend`.
+  - Notes: dev only; not merged to prod (Rooms nav would 404 in prod until the backend flag is on). Meet links minted via the dev Google service account.
