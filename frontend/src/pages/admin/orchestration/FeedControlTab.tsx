@@ -26,7 +26,10 @@ interface Policy {
   recencyHalfLifeDays: number; explorationPct: number; priorityWeight: number;
 }
 interface Board { lanes: Lane[]; policy: Policy; buckets: string[]; }
-interface SimItem { kind: string; type: string; title: string | null; score?: number; reasons: string[]; render_band?: string; }
+interface SimItem { kind: string; type: string; student_label?: string; title: string | null; score?: number; reasons: string[]; render_band?: string; surface?: string; week?: number | null; thumbnail?: string | null; }
+interface SimContext { is_explorer: boolean; total_published: number; candidates: number; locked: number; completed: number; already_seen: number; max_week: number; }
+interface EnrollmentOption { id: string; label: string; cohort_id: string | null; type: string; status: string; }
+const SURF_COLOR: Record<string, string> = { today: '#6d28d9', class: '#2563eb', project: '#059669', community: '#db2777', group: '#d97706' };
 
 const AMBIENT = ['blog', 'podcast', 'testimonial'];
 
@@ -41,8 +44,9 @@ export default function FeedControlTab() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [simEnroll, setSimEnroll] = useState('');
-  const [sim, setSim] = useState<SimItem[] | null>(null);
+  const [sim, setSim] = useState<{ items: SimItem[]; context: SimContext } | null>(null);
   const [simBusy, setSimBusy] = useState(false);
+  const [enrolls, setEnrolls] = useState<EnrollmentOption[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -51,6 +55,11 @@ export default function FeedControlTab() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api.get('/api/admin/feed-control/enrollments')
+      .then((r) => { const e: EnrollmentOption[] = r.data.enrollments || []; setEnrolls(e); setSimEnroll((s) => s || (e[0]?.id ?? '')); })
+      .catch(() => {});
+  }, []);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 2200); };
 
@@ -76,7 +85,7 @@ export default function FeedControlTab() {
   const runSim = useCallback(async () => {
     if (!simEnroll.trim()) { flash('Enter an enrollment id'); return; }
     setSimBusy(true); setSim(null);
-    try { const r = await api.get('/api/admin/feed-control/simulate', { params: { enrollment_id: simEnroll.trim(), limit: 14 } }); setSim(r.data.items || []); }
+    try { const r = await api.get('/api/admin/feed-control/simulate', { params: { enrollment_id: simEnroll.trim(), limit: 14 } }); setSim({ items: r.data.items || [], context: r.data.context }); }
     catch (e: any) { flash(e?.response?.data?.error || 'Simulate failed'); }
     finally { setSimBusy(false); }
   }, [simEnroll]);
@@ -160,27 +169,45 @@ export default function FeedControlTab() {
         ))}
       </div>
 
-      {/* Simulator */}
+      {/* Simulator — what THIS student actually sees, and why */}
       <div className="fc-sim">
         <div className="fc-sim-h">
-          <b>▶ Student sees next</b>
-          <input className="fc-inp" placeholder="enrollment id" value={simEnroll} onChange={(e) => setSimEnroll(e.target.value)} />
-          <button className="fc-btn sm" disabled={simBusy} onClick={runSim}>{simBusy ? 'Simulating…' : 'Simulate'}</button>
-          <span className="fc-mut">Dry-run · reads the real feed + policy, writes nothing</span>
+          <b>▶ Preview a student's feed</b>
+          <select className="fc-inp" value={simEnroll} onChange={(e) => setSimEnroll(e.target.value)}>
+            {enrolls.length === 0 && <option value="">Loading students…</option>}
+            {enrolls.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
+          </select>
+          <button className="fc-btn sm" disabled={simBusy || !simEnroll} onClick={runSim}>{simBusy ? 'Simulating…' : 'Preview'}</button>
+          <span className="fc-mut">Read-only · shows the real feed + why · writes nothing</span>
         </div>
+
+        <p className="fc-explain">Only <b>eligible</b> content is a candidate: published, unlocked for their week, not already completed. The order is then decided by <b>pin → priority → freshness → not-yet-seen → cadence</b>. The chips on each card show why it's there.</p>
+
         {sim && (
-          <ol className="fc-sim-list">
-            {sim.length === 0 && <div className="fc-empty">No items (check the enrollment id / feature flag).</div>}
-            {sim.map((it, i) => (
-              <li key={i} className={`fc-sim-item ${it.kind}`}>
-                <span className="fc-sim-idx">{i + 1}</span>
-                <span className="fc-sim-kind">{it.kind === 'ambient' ? 'ambient' : it.type}</span>
-                <span className="fc-sim-title">{it.title || '(untitled)'}</span>
-                {it.score != null && <span className="fc-sim-score">{it.score}</span>}
-                <span className="fc-sim-why">{it.reasons.join(' · ')}</span>
-              </li>
-            ))}
-          </ol>
+          <>
+            <div className="fc-ctx">
+              <span className={`fc-ctx-tag ${sim.context.is_explorer ? 'free' : 'paid'}`}>{sim.context.is_explorer ? 'Free / Explorer' : 'Paid'}</span>
+              <span className="fc-ctx-i"><b>{sim.context.max_week}</b>reachable week</span>
+              <span className="fc-ctx-i"><b>{sim.context.candidates}</b>eligible now</span>
+              <span className="fc-ctx-i"><b>{sim.context.completed}</b>completed</span>
+              <span className="fc-ctx-i"><b>{sim.context.locked}</b>locked ahead</span>
+              <span className="fc-ctx-i"><b>{sim.context.already_seen}</b>already seen</span>
+            </div>
+            {sim.items.length === 0 && <div className="fc-empty">This student has no eligible feed items right now (all locked/completed, or the Today feed is off for them).</div>}
+            <div className="fc-feed">
+              {sim.items.map((it, i) => (
+                <div key={i} className={`fc-fcard ${it.kind}`} style={{ borderLeftColor: SURF_COLOR[it.surface || 'today'] || '#94a3b8' }}>
+                  <span className="fc-frank">{i + 1}</span>
+                  {it.thumbnail ? <img className="fc-fthumb" src={it.thumbnail} alt="" /> : <span className="fc-fthumb ph" style={{ background: (SURF_COLOR[it.surface || 'today'] || '#94a3b8') + '22' }} />}
+                  <div className="fc-fbody">
+                    <div className="fc-frow"><span className="fc-fchip" style={{ color: SURF_COLOR[it.surface || 'today'], borderColor: (SURF_COLOR[it.surface || 'today'] || '#94a3b8') + '55' }}>{it.student_label || it.type}</span>{it.week != null && <span className="fc-mut">wk {it.week}</span>}{it.kind === 'ambient' && <span className="fc-mut">rotating</span>}{it.score != null && <span className="fc-fscore">score {it.score}</span>}</div>
+                    <div className="fc-ftitle">{it.title || '(generated at open)'}</div>
+                    <div className="fc-fwhy">{it.reasons.map((r, j) => <span key={j} className="fc-why-chip">{r}</span>)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
@@ -310,6 +337,25 @@ const CSS = `
 .fc-sim-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fc-sim-score{font-variant-numeric:tabular-nums;color:var(--fc-sub);font-weight:700}
 .fc-sim-why{color:var(--fc-sub);font-size:11.5px}
+.fc-explain{margin:10px 0 0;font-size:12px;color:var(--fc-sub);line-height:1.55}
+.fc-ctx{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 6px;align-items:stretch}
+.fc-ctx-tag{font-size:11px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;border-radius:7px;padding:6px 10px;align-self:center}
+.fc-ctx-tag.paid{background:#dcfce7;color:#15803d} .fc-ctx-tag.free{background:#fef3c7;color:#b45309}
+@media(prefers-color-scheme:dark){.fc-ctx-tag.paid{background:#14532d55;color:#86efac}.fc-ctx-tag.free{background:#78350f55;color:#fcd34d}}
+.fc-ctx-i{display:flex;flex-direction:column;background:var(--fc-bg);border:1px solid var(--fc-bd);border-radius:9px;padding:6px 12px;font-size:10.5px;color:var(--fc-sub);text-transform:uppercase;letter-spacing:.03em;font-weight:700}
+.fc-ctx-i b{font-size:16px;color:var(--fc-ink)}
+.fc-feed{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.fc-fcard{display:flex;align-items:center;gap:11px;background:var(--fc-bg);border:1px solid var(--fc-bd);border-left:4px solid;border-radius:11px;padding:9px 12px}
+.fc-fcard.ambient{opacity:.9;background:var(--fc-soft)}
+.fc-frank{font-weight:800;color:var(--fc-sub);width:20px;text-align:center;font-size:14px}
+.fc-fthumb{width:74px;height:44px;border-radius:7px;object-fit:cover;flex:none} .fc-fthumb.ph{display:block}
+.fc-fbody{flex:1;min-width:0}
+.fc-frow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.fc-fchip{font-size:11px;font-weight:800;border:1px solid;border-radius:999px;padding:1px 9px}
+.fc-fscore{margin-left:auto;font-size:11px;color:var(--fc-sub);font-variant-numeric:tabular-nums;font-weight:700}
+.fc-ftitle{font-size:13.5px;font-weight:600;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fc-fwhy{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px}
+.fc-why-chip{font-size:10.5px;color:var(--fc-sub);background:var(--fc-soft);border:1px solid var(--fc-bd);border-radius:6px;padding:1px 7px}
 .fc-scrim{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1200;display:flex;justify-content:flex-end}
 .fc-drawer{width:min(420px,94vw);height:100%;background:var(--fc-bg);border-left:1px solid var(--fc-bd);padding:18px;overflow-y:auto;display:flex;flex-direction:column;gap:12px}
 .fc-drawer.wide{width:min(520px,96vw)}
