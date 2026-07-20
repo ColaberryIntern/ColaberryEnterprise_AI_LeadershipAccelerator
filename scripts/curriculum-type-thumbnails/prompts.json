@@ -212,6 +212,11 @@
       "scene": "A chessboard with a few sleek pieces where a glowing neural-network constellation of connected nodes rises from the king piece."
     },
     {
+      "slug": "setup_lab",
+      "label": "Setup Lab",
+      "scene": "A glossy floating terminal console panel with a single glowing coral command-prompt caret on its dark screen, a small sleek rocket of light lifting off out of the panel, and a softly glowing power plug clicking into its side, symbolizing a tool being switched on and getting unblocked."
+    },
+    {
       "slug": "ai_news_flash",
       "label": "AI News Flash",
       "scene": "A glossy 3D broadcast satellite dish tilted upward on a small pedestal, emitting soft glowing concentric signal rings, a single folded newspaper resting beside it."

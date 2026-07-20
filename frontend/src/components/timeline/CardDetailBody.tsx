@@ -10,6 +10,7 @@ import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
 import { useDeepDiveHost } from './useDeepDiveHost';
+import SetupLabRender from './SetupLabRender';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -188,6 +189,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // Deep Dive Command Center: a self-contained HTML artifact rendered in a sandboxed
   // iframe. `blog` shares the 'deepdive' band, so gate on type to not hijack it.
   const isDeepDive = card.render_band === 'deepdive' && card.type === 'deep_dive';
+  const isSetupLab = card.render_band === 'setup_lab';   // Claude Code enablement lab: dark native panel + Copy button
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
@@ -237,7 +239,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         )}
       </div>
 
-      <div className={isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}>
+      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}`}>
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
@@ -248,6 +250,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           content?.body_html
             ? <iframe ref={ddIframeRef} className="tld-lessonframe tld-readerframe" title="Field Guide" sandbox="allow-scripts allow-modals" srcDoc={content.body_html} />
             : <div className="tld-note" style={{ margin: 20 }}>This Field Guide has not been added yet.</div>
+        ) : isSetupLab ? (
+          content && content.body_html
+            ? <SetupLabRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} estMin={card.estimated_time} points={pts} difficulty={card.difficulty} variant="drawer" />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This lab has not been generated yet.</div>
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>

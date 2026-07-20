@@ -37,6 +37,7 @@ const THUMBNAIL_SLUGS = [
   'community_discussion', 'presentation', 'study_session', 'demo',
   'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',
+  'setup_lab',   // Claude Code "get unblocked" enablement lab
   'community_live_session',
   // Intelligence Pipeline types
   'ai_news_flash', 'ai_research_digest', 'ai_tool_of_the_day', 'ai_video_stream',
@@ -249,6 +250,29 @@ const ANNOUNCEMENT_GENERATION_PROMPT = [
   'Every opening tag has a matching closing tag; the CSS must be valid. Set questions to [] and reflection to "".',
   'completion: "Marked complete when the participant opens and reads the weekly announcement."',
 ].join('\n');
+
+const SETUP_LAB_GENERATION_PROMPT = `You author a "Setup Lab" for the AI Systems Architect Accelerator — a short, hands-on "get unblocked" lab that helps a NON-TECHNICAL business executive get ONE technical thing working, with Claude Code doing the heavy lifting. Ground the tone, the example, and the "why now" in the WEEK CONTEXT above, and refer to the week by its section TITLE, never by number. Invent no technical claim the WEEK CONTEXT and the topic below do not support; accuracy beats completeness.
+
+The ONE thing the student must get working in this lab is: {{setup_topic}}.
+{{setup_context}}
+
+Purpose: remove fear and build the core habit of the whole program — let Claude Code do the technical part. Write for a smart executive who has never done this and is a little intimidated. Voice: warm, confident, energizing but never hype; plain English; short sentences; define any unavoidable term in-line. Make them feel this is easy and they have got it.
+
+title: the words "Setup Lab", a space, an em dash, a space, then {{setup_topic}} in sentence case.
+
+summary: one vivid sentence naming the single outcome they will walk away with.
+
+body_html: clean, semantic, fully-balanced HTML — NO <style>, NO colors, NO inline styles, NO scripts, NO images (the workspace supplies the theme). Use ONLY these tags: h3, p, strong, em, ol, ul, li, pre, code. Emit EXACTLY these five sections in order, each opened by an <h3> with this exact wording:
+  <h3>Why this matters</h3> — 2 punchy sentences: what {{setup_topic}} is and why it unlocks this week's work.
+  <h3>Your one outcome</h3> — a single <p><strong>...</strong></p> stating one crisp, checkable win in plain language.
+  <h3>Let your AI do it</h3> — one sentence of framing, then a SINGLE <pre> containing a genuine, first-person, paste-ready prompt the student pastes straight into Claude Code — natural language addressed to Claude Code, telling it to DO {{setup_topic}} for them and to explain and confirm each step for a non-technical person. It must be copy-paste runnable as written, not a checklist. If {{setup_topic}} is installing or first-running Claude Code itself, make this the first prompt they paste once it opens, to confirm it works and orient them. Keep the prompt 3–7 sentences.
+  <h3>Prefer to do it yourself?</h3> — a short <ol> of 3–6 concrete manual steps.
+  <h3>Check it worked</h3> — 1–2 sentences: exactly what counts as done (the real outcome the portal verifies) and what they will see when it passes.
+Every opening tag has a matching closing tag. About 250–420 words.
+
+github_task: if {{setup_topic}} involves GitHub, a repository, commits, pushes, or CI, return a one-line description of the concrete git/CI action the portal should verify; otherwise null.
+
+Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", evaluation_criteria = []. completion: "Marked complete when the participant proves the outcome — verified automatically where a real check exists (e.g. GitHub), otherwise by submitting evidence."`;
 
 // ── Intelligence Pipeline types (news / research / tools / video / quote /
 //    architecture / build / MCP / technique / market) ─────────────────────────
@@ -468,6 +492,33 @@ const intelAuthoring = (o: {
 
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
+  setup_lab: {
+    label: 'Setup Lab',
+    student_label: 'Setup Lab',
+    description: 'A hands-on "get unblocked" lab: get one technical thing working with Claude Code doing the heavy lifting. Five beats — why, the one outcome, let your AI do it (a paste-ready prompt), a manual fallback, and a real check.',
+    category: 'Setup',
+    icon: 'bi-rocket-takeoff',
+    badge_class: 'bg-success',
+    estimated_time: 30,
+    capabilities: ['evidence', 'github', 'hint_system', 'mentor_review', 'comments'],
+    inputs: [
+      { key: 'setup_topic', type: 'string', required: true },
+      { key: 'setup_context', type: 'string', required: false },
+    ],
+    variable_keys: ['setup_topic', 'setup_context'],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Setup Lab — {setup_topic}' },
+      { key: 'body_html', type: 'html', description: 'Five beats: why, the one outcome, let your AI do it, manual fallback, check it worked' },
+      { key: 'summary', type: 'string', description: 'One sentence naming the outcome' },
+      { key: 'github_task', type: 'string', description: 'Commit/push/CI action to verify when the topic involves GitHub, else null' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: SETUP_LAB_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('setup_lab'),
+    approved: true,
+    status: 'ready',
+  },
   warmup: {
     label: 'Self Study',
     student_label: 'Self Study',

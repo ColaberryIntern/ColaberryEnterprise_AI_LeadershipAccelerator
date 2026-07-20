@@ -9812,6 +9812,40 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: backend tsc + jest = CI gate; prod `student_tasks` columns verified post-repair. Idempotent.
   - Notes: Branch `workstream/student-task-base-ensure` off main. `seedStudentTasks.ts` still creates requirement_key NOT NULL; the ensure ALTER relaxes it on boot (full seed reconcile = tidy-up). Dev DB separately stale (missing requirements_maps etc.) — dev-hygiene follow-up.
 
+### Setup Lab curriculum type — bespoke dark "Claude Code" renderer (drawer + workspace + tile) — 2026-07-19
+- [x] `setup_lab` render_band: dark native lab panel with a real per-`<pre>` Copy-prompt button, across all three render surfaces
+  - Date: 2026-07-19
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `frontend/src/components/timeline/SetupLabRender.tsx` (NEW): shared dark renderer — 5 CSS-counter-numbered beat sections, `<pre>` prompt panels each with a working **Copy prompt** button (native DOM `navigator.clipboard`, injected via `useEffect` — a sandboxed iframe can't reach the clipboard), a `CLAUDE CODE · SETUP LAB` badge + title/meta header. Rendered natively (NOT the generic sandboxed `lessonDoc` iframe) so there is no double scrollbar.
+    - `frontend/src/components/timeline/CardDetailBody.tsx`: `isSetupLab` arm — the drawer body goes fully dark + single-scroll (`tld-body--setuplab`) and renders `SetupLabRender` instead of the light iframe.
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: `setup_lab` excluded from the generic `isLesson`/`fill` iframe path; renders `SetupLabRender` in a dark, wide, single-scroll `rt-mid--reader` center with the complete gate in the slim foot; AI Mentor + comments rail unchanged.
+    - `frontend/src/components/timeline/TimelineCard.tsx`: new `setuplab` Kind (terminal `>_` icon, dark gradient, `#D97757` Claude accent) in BAND/KIND_GRADIENT/Icon (satisfies `curriculumFormatContract.test.ts`) + a "Claude Code" corner stripe on the tile.
+    - `backend/src/services/timeline/typeRegistry.ts`: registered `setup_lab` in CARD_TYPES (render_band `setup_lab`, bucket `build`, est 30, builder 100 / learning 20 XP, evidence_required). REQUIRED — the feed resolves render_band via `resolveType()` (the CODE registry), NOT the DB type row, so without this the feed emitted `render_band:'overview'` and the card rendered generic no matter the DB value. `typeRegistry.test.ts`: count 39→40, SUPPORTED_RENDER_BANDS += `setup_lab`.
+  - Why: the placed `setup_lab` cards rendered in the generic light renderer (double scrollbar, no copy button, no Claude Code identity). This is the bespoke frontend slice that makes the live portal match the approved dark design. [[project_canonical_course_structure]]
+  - Verification: deployed to the `:9999` dev instance (accelerator-dev nginx image rebuild); frontend tsc runs inside that Docker build (react-scripts). User visual review pending.
+  - Notes: Branch `workstream/setup-lab-renderer` off main. Dev-only (not merged to main / prod). Type + 5 cards already authored on `accelerator_dev1`. No fake embedded Claude Code terminal — the copy-into-Claude-Code flow + mentor rail is the real UX. Same renderer will serve Prompt Lab / Implementation Task.
+
+### Setup Lab renderer v2 — light theme, copy-gated completion, tile banner — 2026-07-20
+- [x] Light theme (drawer + workspace), completion revealed on the right panel only after Copy, and an AI-generated tile banner
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `frontend/src/components/timeline/SetupLabRender.tsx`: dark → **light** theme (portal-consistent; kept the coral Claude accent, badge, CSS-counter numbered beats). The Copy button now fires an `onCopied` callback (via a ref so the latest handler is always called).
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: `labCopied` state — the completion button ("Complete & generate evidence") is HIDDEN until the prompt is copied, then rendered in the RIGHT rail (under AI Mentor) behind a "Finished in Claude Code?" label; the center foot shows a copy→run→complete hint until copied.
+    - `scripts/curriculum-type-thumbnails/prompts.json`: added a `setup_lab` scene (terminal console + rocket + power plug). Generated one gpt-image render on the VPS host, composited (center-crop 3:1 → 900x300 + Colaberry chip) → `frontend/public/thumbnails/curriculum-types/setup_lab.jpg` (baked into the nginx build; the DB `thumbnail_url` already points to it, so the tile now shows the banner instead of the gradient fallback).
+  - Why: Ali's live review — the dark drawer/workspace background wasn't wanted, completion should gate on copy and live on the right panel, and the tile needed a real banner. [[project_canonical_course_structure]]
+  - Verification: nginx dev rebuild (react-scripts tsc); user visual review on :9999.
+  - Notes: Branch `workstream/setup-lab-renderer`, dev-only. The drawer stays light + copy button (no completion in the drawer — it directs to Enter workspace). Wiring the thumbnail_url into `seedComponentAuthoring.ts` is deferred to the prod promotion.
+
+### Setup Lab — prod promotion seed (seedComponentAuthoring) — 2026-07-20
+- [x] Added `setup_lab` to `seedComponentAuthoring.ts` so the authored type (generation prompt + I/O + thumbnail) reaches prod on boot
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed: `backend/src/seeds/seedComponentAuthoring.ts` — `setup_lab` added to `THUMBNAIL_SLUGS` + a `COMPONENT_AUTHORING` entry (the v2 `SETUP_LAB_GENERATION_PROMPT`, inputs `setup_topic`/`setup_context`, outputs incl. `github_task`, capabilities, `completion_rules {on:'submit'}`, `thumbnail_url`, `approved:true`). `typeRegistry.ts` already creates the registry row on boot; this layers the authored experience so it survives a reseed and promotes to prod.
+  - Why: prod promotion — without this, prod's `setup_lab` type would have no `generation_prompt` and its cards couldn't generate content. [[project_canonical_course_structure]]
+  - Verification: CI (backend tsc + jest; typeRegistry 40-type test). Seed is idempotent, keyed on slug (a missing row is reported, never created).
+  - Notes: PR `workstream/setup-lab-renderer` → main. After merge, the prod deploy (backend + nginx rebuild) runs `typeSeeder` + `seedComponentAuthoring` on boot; the 5 timeline cards are then placed on prod via a one-off data script (cards are data, not code).
 ### Intelligence Pipeline Curriculum Types — 10 new types + AI News Flash reference pipeline — 2026-07-19
 - [x] Ship 10 "intelligence pipeline" Curriculum Types (authoring layer) + one live ingestion pipeline
   - Date: 2026-07-19
