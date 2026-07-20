@@ -17,6 +17,15 @@ jest.mock('../../models/CommunityComment', () => ({ create: jest.fn(), findByPk:
 jest.mock('../../models/CommunityLike', () => ({ findOrCreate: jest.fn(), findAll: jest.fn(), count: jest.fn() }));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 jest.mock('../../models/CommunityNotification', () => ({ create: jest.fn() }));
+// communityService now folds into the canonical points system; mock those so
+// their real model methods don't hit the DB (points/level come from here).
+jest.mock('../../services/pointsService', () => ({
+  award: jest.fn(async () => ({ awarded: true, points: 0 })),
+  getPointsSummary: jest.fn(async () => ({ total: 0, events: [] })),
+  getTotalsForEnrollments: jest.fn(async () => new Map()),
+  levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
+}));
+jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => {}) }));
 
 import {
   createComment, listComments, toggleLike, levelFor,
@@ -342,6 +351,91 @@ describe('toggleLike', () => {
 
     expect(authorAtThreshold.update).toHaveBeenCalledWith({ level: 2 });
   });
+
+  it('notification: liking a post notifies its author (REQ-C6, Ali 2026-07-20)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(mockPost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-4' }, true]);
+    findByPkMember.mockResolvedValue({ ...mockAuthor });
+    countLikes.mockResolvedValue(1);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    expect(createNotification).toHaveBeenCalledWith({
+      member_id: otherMemberId,
+      actor_member_id: memberId,
+      notification_type: 'like',
+      source_type: 'post',
+      source_id: postId,
+    });
+  });
+
+  it('notification boundary: a self-like never notifies the author', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    // Liker IS the author (same member id as the post's member_id).
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, id: otherMemberId }, false]);
+    findByPkPost.mockResolvedValue(mockPost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-self' }, true]);
+    findByPkMember.mockResolvedValue({ ...mockAuthor });
+    countLikes.mockResolvedValue(1);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  it('notification idempotency: unliking a post creates no notification', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(mockPost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-1', destroy: jest.fn() }, false]);
+    findByPkMember.mockResolvedValue({ ...mockAuthor, points: 6 });
+    countLikes.mockResolvedValue(0);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    expect(createNotification).not.toHaveBeenCalled();
+  });
+
+  it('notification failure path: a notification insert error does not fail the like', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(mockPost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-6' }, true]);
+    findByPkMember.mockResolvedValue({ ...mockAuthor });
+    countLikes.mockResolvedValue(1);
+    // Simulates the deploy window where the CHECK constraint still rejects 'like'.
+    // Once-only so the rejection never leaks into later tests (clearAllMocks keeps
+    // implementations, not just call history).
+    createNotification.mockRejectedValueOnce(new Error('violates check constraint'));
+
+    const result = await toggleLike(enrollmentId, 'post', postId);
+
+    expect(result).toEqual({ liked: true, like_count: 1 });
+    expect(incrementMember).toHaveBeenCalledWith('points', { by: 1, where: { id: otherMemberId } });
+  });
+
+  it('notification: liking a comment notifies the comment author', async () => {
+    const commentId = 'comment-notify';
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkComment.mockResolvedValue({ id: commentId, post_id: postId, member_id: otherMemberId });
+    findByPkPost.mockResolvedValue({ id: postId, cohort_id: cohortId });
+    findOrCreateLike.mockResolvedValue([{ id: 'like-5' }, true]);
+    findByPkMember.mockResolvedValue({ ...mockAuthor });
+    countLikes.mockResolvedValue(1);
+
+    await toggleLike(enrollmentId, 'comment', commentId);
+
+    expect(createNotification).toHaveBeenCalledWith({
+      member_id: otherMemberId,
+      actor_member_id: memberId,
+      notification_type: 'like',
+      source_type: 'comment',
+      source_id: commentId,
+    });
+  });
 });
 
 describe('level-gated content (REQ-C4)', () => {
@@ -459,14 +553,13 @@ describe('member profiles + directory', () => {
     expect(memberToUpdate.update).toHaveBeenCalledWith({ bio: 'Building AI systems.' });
   });
 
-  it('listMembers happy path: scopes the directory to the caller\'s cohort, ordered by points', async () => {
+  it('listMembers happy path: scopes the directory to the caller\'s cohort (sorted by canonical points in JS)', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findAllMembers.mockResolvedValue([]);
 
     await listMembers(enrollmentId);
 
     const callArgs = findAllMembers.mock.calls[0][0];
-    expect(callArgs.order).toEqual([['points', 'DESC']]);
     expect(callArgs.include[0].where).toEqual({ cohort_id: cohortId });
   });
 });

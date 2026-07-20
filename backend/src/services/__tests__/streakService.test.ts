@@ -1,7 +1,7 @@
 import { streakPointsFor, centralDateKey, getStreak, claimStreak } from '../streakService';
-import { StudentPointsEvent } from '../../models';
+import StudentPointsEvent from '../../models/StudentPointsEvent';
 
-jest.mock('../../models', () => ({ StudentPointsEvent: { findOrCreate: jest.fn(), findAll: jest.fn(), findOne: jest.fn() } }));
+jest.mock('../../models/StudentPointsEvent', () => ({ __esModule: true, default: { findOrCreate: jest.fn(), findAll: jest.fn(), findOne: jest.fn() } }));
 
 // 2026-07-15 12:00 Central (CDT, UTC-5) → 17:00 UTC.
 const NOW = Date.UTC(2026, 6, 15, 17, 0, 0);

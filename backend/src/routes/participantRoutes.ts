@@ -53,7 +53,7 @@ import {
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
   handleWatchBeat, handleGetSurvey, handleSaveSurvey,
   handleGetAssessment, handleSubmitAssessment,
-  handleUploadFieldGuide, handleGetFieldGuide,
+  handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
   handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
@@ -103,14 +103,11 @@ router.post('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant,
 router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, handleGetFieldGuide);
 
 // Build Artifact(s) Lab — upload the file the student built in Claude Code. Reuses
-// the strategy-prep multer config (PDF/Word/PPT/Excel/RTF/Text/Markdown/CSV), which
-// validates the file type server-side; a bad type returns a clear 400. The card is
-// then marked complete via the normal /complete endpoint (points on the first build).
-router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, strategyPrepUpload.single('file'), (req, res) => {
-  const file = (req as any).file;
-  if (!file) return res.status(400).json({ error: 'No file uploaded — pick the artifact file Claude Code built for you.' });
-  res.json({ ok: true, filename: file.originalname, size: file.size });
-});
+// the strategy-prep multer config (PDF/Word/PPT/Excel/RTF/Text/Markdown/CSV) on the
+// persistent uploads volume; a bad type returns a clear 400. The handler stores it
+// as a PortfolioArtifact (portfolio + instructor review); the card is then marked
+// complete via the normal /complete endpoint (points on the first build).
+router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, strategyPrepUpload.single('file'), handleBuildArtifactUpload);
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 // Weekly feedback Survey — read the questions + saved answers, and store answers.
@@ -870,6 +867,35 @@ router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) =
     res.json({ contacts });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Friends — send a request / respond to one. Idempotent, cohort-scoped. The
+// caller's friendship status toward each cohort-mate rides on /cohort/presence
+// (friendshipStatus), so the rail needs no separate list endpoint.
+router.post('/api/portal/friends/request', requireParticipant, async (req, res) => {
+  const parsed = z.object({ targetId: z.string().uuid() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid targetId' }); return; }
+  try {
+    const { sendFriendRequest } = await import('../services/friendshipService');
+    const result = await sendFriendRequest(req.participant!.sub, parsed.data.targetId);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'FriendRequestError') { res.status(400).json({ error: err.message }); return; }
+    res.status(500).json({ error: 'Could not send friend request' });
+  }
+});
+
+router.post('/api/portal/friends/respond', requireParticipant, async (req, res) => {
+  const parsed = z.object({ requesterId: z.string().uuid(), accept: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request body' }); return; }
+  try {
+    const { respondToRequest } = await import('../services/friendshipService');
+    const result = await respondToRequest(req.participant!.sub, parsed.data.requesterId, parsed.data.accept);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'FriendRequestError') { res.status(400).json({ error: err.message }); return; }
+    res.status(500).json({ error: 'Could not respond to friend request' });
   }
 });
 

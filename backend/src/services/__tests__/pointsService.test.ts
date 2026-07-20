@@ -1,7 +1,7 @@
 import { resolveEventPoints, award, getPointsSummary, hasAwarded, POINT_EVENTS } from '../pointsService';
-import { StudentPointsEvent } from '../../models';
+import StudentPointsEvent from '../../models/StudentPointsEvent';
 
-jest.mock('../../models', () => ({ StudentPointsEvent: { findOrCreate: jest.fn(), findAll: jest.fn(), findOne: jest.fn() } }));
+jest.mock('../../models/StudentPointsEvent', () => ({ __esModule: true, default: { findOrCreate: jest.fn(), findAll: jest.fn(), findOne: jest.fn() } }));
 
 describe('pointsService', () => {
   beforeEach(() => jest.clearAllMocks());

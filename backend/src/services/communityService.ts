@@ -6,6 +6,7 @@ import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
 import { awardCommunityXp } from './progression/communityXpService';
+import { award, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
@@ -288,7 +289,9 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   // Reward the author for contributing (Ali feedback 2026-07-20 — posting now
   // earns points, not just likes-received).
   await awardContributionPoints(member.id, POINTS_PER_POST);
-  // Community activity feeds the Community lane of the Skill-XP lens.
+  // Canonical points (the ONE ledger — HUD total + unified leaderboard) + the
+  // Community lane of the Skill-XP lens. Best-effort; never breaks the post.
+  await award(enrollmentId, { eventType: 'community_post', eventKey: `community_post:${post.id}`, points: POINTS_PER_POST }).catch(() => {});
   await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${post.id}`, 'community:post').catch(() => {});
 
   log('info', 'post_created', {
@@ -296,7 +299,9 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   });
 
   // The author is creating their own post — never locked to them, so this
-  // is a plain projection rather than a toFeedItem() lock check.
+  // is a plain projection rather than a toFeedItem() lock check. Author badge
+  // uses the canonical level (one ladder).
+  const authorLevel = levelForPoints((await getPointsSummary(enrollmentId)).total).level;
   return {
     id: post.id,
     body: post.body,
@@ -310,7 +315,7 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     min_level: post.min_level,
     locked: false,
     created_at: post.created_at,
-    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: member.level },
+    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: authorLevel },
     recent_commenters: [],
   };
 }
@@ -342,7 +347,7 @@ async function recentCommentersByPost(
   if (postIds.length === 0) return byPost;
   const comments = await CommunityComment.findAll({
     where: { post_id: postIds },
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [['created_at', 'DESC']],
   });
   for (const c of comments as any[]) {
@@ -353,6 +358,21 @@ async function recentCommentersByPost(
     }
   }
   return byPost;
+}
+
+// The post-author level badge must show the ONE canonical level (same ladder as
+// the profile/leaderboard/HUD), not the legacy CommunityMember.level. Batched:
+// one query resolves every distinct author's canonical total → level.
+async function canonicalLevelByMemberId(
+  members: Array<{ id: string; enrollment_id?: string | null; level: number }>,
+): Promise<Map<string, number>> {
+  const enrollmentIds = members.map((m) => m.enrollment_id).filter(Boolean) as string[];
+  const totals = await getTotalsForEnrollments(enrollmentIds);
+  const out = new Map<string, number>();
+  for (const m of members) {
+    out.set(m.id, m.enrollment_id ? levelForPoints(totals.get(m.enrollment_id) ?? 0).level : m.level);
+  }
+  return out;
 }
 
 export async function listPosts(
@@ -385,7 +405,7 @@ export async function listPosts(
 
   const rows = await CommunityPost.findAll({
     where,
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [
       ['pinned', 'DESC'],
       ['created_at', 'DESC'],
@@ -405,6 +425,10 @@ export async function listPosts(
   const posts = pageRows.map((post: any) =>
     toFeedItem(post, viewer.id, viewer.level, likedIds.has(post.id), commentersByPost.get(post.id) ?? []));
 
+  // Author badges show the canonical level (one ladder everywhere).
+  const authorLevels = await canonicalLevelByMemberId(pageRows.map((p: any) => p.member).filter(Boolean));
+  for (const p of posts) p.member.level = authorLevels.get(p.member.id) ?? p.member.level;
+
   const last = pageRows[pageRows.length - 1] as any;
   const next_cursor = hasMore && last ? encodePostCursor(last) : null;
 
@@ -423,10 +447,13 @@ export async function getPostById(enrollmentId: string, postId: string): Promise
 
   const post = await requireVisiblePostInCohort(postId, cohortId);
   const withMember = await CommunityPost.findByPk(post.id, {
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
   });
   const likedIds = await viewerLikedPostIds([post.id], viewer.id);
-  return toFeedItem(withMember as any, viewer.id, viewer.level, likedIds.has(post.id));
+  const item = toFeedItem(withMember as any, viewer.id, viewer.level, likedIds.has(post.id));
+  const author = (withMember as any)?.member;
+  if (author) item.member.level = (await canonicalLevelByMemberId([author])).get(author.id) ?? item.member.level;
+  return item;
 }
 
 // Author-only for v1 (smallest version that satisfies "students can ... pin").
@@ -444,7 +471,7 @@ export async function togglePin(
   ]);
 
   const post = await CommunityPost.findByPk(postId, {
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
   });
   if (!post || post.status === 'removed') {
     throw notFoundError('Post not found');
@@ -467,6 +494,9 @@ export async function togglePin(
   // hardcoding false (which would flicker the like button off after a pin).
   const likedIds = await viewerLikedPostIds([post.id], member.id);
   const postAny = post as any;
+  // Author-only route — the author IS the caller, so the canonical badge level
+  // is the caller's own canonical level (one ladder).
+  const authorLevel = levelForPoints((await getPointsSummary(enrollmentId)).total).level;
   return {
     id: post.id,
     body: post.body,
@@ -484,7 +514,7 @@ export async function togglePin(
       id: postAny.member.id,
       display_name: postAny.member.display_name,
       avatar_url: postAny.member.avatar_url,
-      level: postAny.member.level,
+      level: authorLevel,
     },
     recent_commenters: [],
   };
@@ -546,6 +576,7 @@ export async function createComment(
 
   // Reward the commenter for contributing (Ali feedback 2026-07-20).
   await awardContributionPoints(member.id, POINTS_PER_COMMENT);
+  await award(enrollmentId, { eventType: 'community_comment', eventKey: `community_comment:${comment.id}`, points: POINTS_PER_COMMENT }).catch(() => {});
   await awardCommunityXp(enrollmentId, POINTS_PER_COMMENT, `cxp:comment:${comment.id}`, 'community:comment').catch(() => {});
 
   // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
@@ -591,7 +622,7 @@ export async function listComments(enrollmentId: string, postId: string): Promis
 
   const comments = await CommunityComment.findAll({
     where: { post_id: postId },
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [['created_at', 'ASC']],
   });
 
@@ -696,6 +727,31 @@ export async function toggleLike(
     await CommunityMember.increment('points', { by: 1, where: { id: authorMemberId } });
     await CommunityPointsEvent.create({ member_id: authorMemberId, points: 1 });
     if (post) await post.increment('like_count', { by: 1 });
+    // Notify the author that someone liked their content (Ali feedback 2026-07-20).
+    // Only on a real new like (created) and never for a self-like. The notify is a
+    // secondary side effect: a like must never fail because its notification failed.
+    // This also keeps the like path working during a deploy where the new 'like'
+    // code lands before the CHECK-constraint migration (20260720) runs — the insert
+    // would be rejected, but the like itself still succeeds.
+    if (authorMemberId !== member.id) {
+      try {
+        await CommunityNotification.create({
+          member_id: authorMemberId,
+          actor_member_id: member.id,
+          notification_type: 'like',
+          source_type: likeableType,
+          source_id: likeableId,
+        });
+      } catch (err) {
+        log('warn', 'like_notification_failed', {
+          error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+          author_member_id: authorMemberId,
+          actor_member_id: member.id,
+          likeable_type: likeableType,
+          likeable_id: likeableId,
+        });
+      }
+    }
     liked = true;
   } else {
     await likeRow.destroy();
@@ -770,22 +826,25 @@ export interface MemberProfile {
   created_at: Date;
 }
 
-function toMemberProfile(member: CommunityMember): MemberProfile {
+// points/level come from the ONE canonical ledger (StudentPointsEvent + the
+// LEVELS ladder), NOT the legacy CommunityMember.points column — so a member's
+// score/level here matches the top-right HUD everywhere.
+function toMemberProfile(member: CommunityMember, canonicalPoints: number): MemberProfile {
   return {
     id: member.id,
     display_name: member.display_name,
     avatar_url: member.avatar_url,
     bio: member.bio,
-    level: member.level,
-    points: member.points,
+    level: levelForPoints(canonicalPoints).level,
+    points: canonicalPoints,
     presence: derivePresence(member.last_active_at),
     created_at: member.created_at,
   };
 }
 
 export async function getMyProfile(enrollmentId: string): Promise<MemberProfile> {
-  const member = await getOrCreateMember(enrollmentId);
-  return toMemberProfile(member);
+  const [member, summary] = await Promise.all([getOrCreateMember(enrollmentId), getPointsSummary(enrollmentId)]);
+  return toMemberProfile(member, summary.total);
 }
 
 // Cross-member lookups return NotFoundError uniformly whether the member
@@ -800,7 +859,8 @@ export async function getMemberProfileById(enrollmentId: string, targetMemberId:
   if (!target || (target as any).enrollment?.cohort_id !== cohortId) {
     throw notFoundError('Member not found');
   }
-  return toMemberProfile(target);
+  const total = (await getPointsSummary(target.enrollment_id)).total;
+  return toMemberProfile(target, total);
 }
 
 export async function updateMyProfile(enrollmentId: string, input: UpdateProfileInput): Promise<MemberProfile> {
@@ -813,20 +873,22 @@ export async function updateMyProfile(enrollmentId: string, input: UpdateProfile
 
   await member.update(updates);
   log('info', 'profile_updated', { member_id: member.id, fields: Object.keys(updates), outcome: 'success' });
-  return toMemberProfile(member);
+  const total = (await getPointsSummary(enrollmentId)).total;
+  return toMemberProfile(member, total);
 }
 
-// Cohort-scoped directory — ordered by points DESC, reusing the existing
-// idx_community_members_points index. This stays a flat, point-ordered list
-// for the directory surface; ranked/windowed leaderboards live in
-// communityLeaderboardService.ts::getLeaderboard.
+// Cohort-scoped directory — ordered by canonical points DESC. Points/level come
+// from the ONE ledger (batched), so this matches the leaderboard + HUD.
 export async function listMembers(enrollmentId: string): Promise<MemberProfile[]> {
   const cohortId = await resolveCohortId(enrollmentId);
 
   const members = await CommunityMember.findAll({
     include: [{ model: Enrollment, as: 'enrollment', attributes: [], where: { cohort_id: cohortId } }],
-    order: [['points', 'DESC']],
   });
 
-  return members.map(toMemberProfile);
+  const totals = await getTotalsForEnrollments(members.map((m: any) => m.enrollment_id));
+  return members
+    .map((m: any) => ({ profile: toMemberProfile(m, totals.get(m.enrollment_id) ?? 0), pts: totals.get(m.enrollment_id) ?? 0 }))
+    .sort((a, b) => b.pts - a.pts || a.profile.display_name.localeCompare(b.profile.display_name))
+    .map((x) => x.profile);
 }
