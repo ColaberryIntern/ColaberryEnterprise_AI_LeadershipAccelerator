@@ -6,6 +6,13 @@ export interface CommunityPostMember {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  level: number;
+}
+
+export interface CommunityCommenter {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
 }
 
 export interface CommunityPost {
@@ -25,6 +32,7 @@ export interface CommunityPost {
   locked: boolean;
   created_at: string;
   member: CommunityPostMember;
+  recent_commenters: CommunityCommenter[];
 }
 
 export interface CommunityComment {
