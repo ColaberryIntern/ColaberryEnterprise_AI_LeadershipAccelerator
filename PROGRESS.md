@@ -9812,6 +9812,61 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: backend tsc + jest = CI gate; prod `student_tasks` columns verified post-repair. Idempotent.
   - Notes: Branch `workstream/student-task-base-ensure` off main. `seedStudentTasks.ts` still creates requirement_key NOT NULL; the ensure ALTER relaxes it on boot (full seed reconcile = tidy-up). Dev DB separately stale (missing requirements_maps etc.) — dev-hygiene follow-up.
 
+### Setup Lab curriculum type — bespoke dark "Claude Code" renderer (drawer + workspace + tile) — 2026-07-19
+- [x] `setup_lab` render_band: dark native lab panel with a real per-`<pre>` Copy-prompt button, across all three render surfaces
+  - Date: 2026-07-19
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `frontend/src/components/timeline/SetupLabRender.tsx` (NEW): shared dark renderer — 5 CSS-counter-numbered beat sections, `<pre>` prompt panels each with a working **Copy prompt** button (native DOM `navigator.clipboard`, injected via `useEffect` — a sandboxed iframe can't reach the clipboard), a `CLAUDE CODE · SETUP LAB` badge + title/meta header. Rendered natively (NOT the generic sandboxed `lessonDoc` iframe) so there is no double scrollbar.
+    - `frontend/src/components/timeline/CardDetailBody.tsx`: `isSetupLab` arm — the drawer body goes fully dark + single-scroll (`tld-body--setuplab`) and renders `SetupLabRender` instead of the light iframe.
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: `setup_lab` excluded from the generic `isLesson`/`fill` iframe path; renders `SetupLabRender` in a dark, wide, single-scroll `rt-mid--reader` center with the complete gate in the slim foot; AI Mentor + comments rail unchanged.
+    - `frontend/src/components/timeline/TimelineCard.tsx`: new `setuplab` Kind (terminal `>_` icon, dark gradient, `#D97757` Claude accent) in BAND/KIND_GRADIENT/Icon (satisfies `curriculumFormatContract.test.ts`) + a "Claude Code" corner stripe on the tile.
+    - `backend/src/services/timeline/typeRegistry.ts`: registered `setup_lab` in CARD_TYPES (render_band `setup_lab`, bucket `build`, est 30, builder 100 / learning 20 XP, evidence_required). REQUIRED — the feed resolves render_band via `resolveType()` (the CODE registry), NOT the DB type row, so without this the feed emitted `render_band:'overview'` and the card rendered generic no matter the DB value. `typeRegistry.test.ts`: count 39→40, SUPPORTED_RENDER_BANDS += `setup_lab`.
+  - Why: the placed `setup_lab` cards rendered in the generic light renderer (double scrollbar, no copy button, no Claude Code identity). This is the bespoke frontend slice that makes the live portal match the approved dark design. [[project_canonical_course_structure]]
+  - Verification: deployed to the `:9999` dev instance (accelerator-dev nginx image rebuild); frontend tsc runs inside that Docker build (react-scripts). User visual review pending.
+  - Notes: Branch `workstream/setup-lab-renderer` off main. Dev-only (not merged to main / prod). Type + 5 cards already authored on `accelerator_dev1`. No fake embedded Claude Code terminal — the copy-into-Claude-Code flow + mentor rail is the real UX. Same renderer will serve Prompt Lab / Implementation Task.
+
+### Setup Lab renderer v2 — light theme, copy-gated completion, tile banner — 2026-07-20
+- [x] Light theme (drawer + workspace), completion revealed on the right panel only after Copy, and an AI-generated tile banner
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `frontend/src/components/timeline/SetupLabRender.tsx`: dark → **light** theme (portal-consistent; kept the coral Claude accent, badge, CSS-counter numbered beats). The Copy button now fires an `onCopied` callback (via a ref so the latest handler is always called).
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: `labCopied` state — the completion button ("Complete & generate evidence") is HIDDEN until the prompt is copied, then rendered in the RIGHT rail (under AI Mentor) behind a "Finished in Claude Code?" label; the center foot shows a copy→run→complete hint until copied.
+    - `scripts/curriculum-type-thumbnails/prompts.json`: added a `setup_lab` scene (terminal console + rocket + power plug). Generated one gpt-image render on the VPS host, composited (center-crop 3:1 → 900x300 + Colaberry chip) → `frontend/public/thumbnails/curriculum-types/setup_lab.jpg` (baked into the nginx build; the DB `thumbnail_url` already points to it, so the tile now shows the banner instead of the gradient fallback).
+  - Why: Ali's live review — the dark drawer/workspace background wasn't wanted, completion should gate on copy and live on the right panel, and the tile needed a real banner. [[project_canonical_course_structure]]
+  - Verification: nginx dev rebuild (react-scripts tsc); user visual review on :9999.
+  - Notes: Branch `workstream/setup-lab-renderer`, dev-only. The drawer stays light + copy button (no completion in the drawer — it directs to Enter workspace). Wiring the thumbnail_url into `seedComponentAuthoring.ts` is deferred to the prod promotion.
+
+### Setup Lab — prod promotion seed (seedComponentAuthoring) — 2026-07-20
+- [x] Added `setup_lab` to `seedComponentAuthoring.ts` so the authored type (generation prompt + I/O + thumbnail) reaches prod on boot
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed: `backend/src/seeds/seedComponentAuthoring.ts` — `setup_lab` added to `THUMBNAIL_SLUGS` + a `COMPONENT_AUTHORING` entry (the v2 `SETUP_LAB_GENERATION_PROMPT`, inputs `setup_topic`/`setup_context`, outputs incl. `github_task`, capabilities, `completion_rules {on:'submit'}`, `thumbnail_url`, `approved:true`). `typeRegistry.ts` already creates the registry row on boot; this layers the authored experience so it survives a reseed and promotes to prod.
+  - Why: prod promotion — without this, prod's `setup_lab` type would have no `generation_prompt` and its cards couldn't generate content. [[project_canonical_course_structure]]
+  - Verification: CI (backend tsc + jest; typeRegistry 40-type test). Seed is idempotent, keyed on slug (a missing row is reported, never created).
+  - Notes: PR `workstream/setup-lab-renderer` → main. After merge, the prod deploy (backend + nginx rebuild) runs `typeSeeder` + `seedComponentAuthoring` on boot; the 5 timeline cards are then placed on prod via a one-off data script (cards are data, not code).
+### Intelligence Pipeline Curriculum Types — 10 new types + AI News Flash reference pipeline — 2026-07-19
+- [x] Ship 10 "intelligence pipeline" Curriculum Types (authoring layer) + one live ingestion pipeline
+  - Date: 2026-07-19
+  - Session: CC-20260719-p2w9
+  - What changed:
+    - 10 new Curriculum Types authored via the 2-file ship pattern: `services/timeline/typeRegistry.ts` (10 `D({...})` entries) + `seeds/seedComponentAuthoring.ts` (10 `COMPONENT_AUTHORING` entries + `THUMBNAIL_SLUGS` + a shared dual-mode `intelGenerationPrompt(config)` skeleton). Slugs: ai_news_flash, ai_research_digest, ai_tool_of_the_day, ai_video_stream, ai_quote_of_the_day, ai_architecture_breakdown, build_breakdown, mcp_server_spotlight, claude_code_technique, market_intelligence. All approved+published; category "Intelligence"; today-homed anchored.
+    - New `intel` render band → generic `lessonDoc()` iframe; one `BAND` line added in `frontend/src/components/timeline/TimelineCard.tsx` (mapped to the `reading` visual, required by the curriculumFormatContract test). Video type reuses `media` band.
+    - 10 committed thumbnail banners at `frontend/public/thumbnails/curriculum-types/<slug>.jpg` (deterministic branded placeholders via sharp; AI banners are a no-schema-change follow-up).
+    - Reference ingestion pipeline (AI News Flash): `models/AiNewsItem.ts`, `services/intel/rssParser.ts` (RSS 2.0 + Atom via cheerio), `services/intel/aiNewsIngestionService.ts` (collect→normalize→dedup→score→summarize→publish; idempotent by guid + card_id; fail-safe; cost-gated by `AI_NEWS_INGEST_ENABLED`), `scripts/refreshAiNews.ts` CLI, `AiNewsRefresh` cron in `schedulerService.ts`, `ensureAiNewsSchema()` + non-blocking boot ingest in `server.ts`, `POST /api/admin/intel/ai-news/refresh` (`routes/admin/intelRoutes.ts` mounted in `adminRoutes.ts`).
+    - `seeds/seedIntelSampleCards.ts` (one hand-authored published card per type — the sample-cards deliverable + deterministic no-LLM validation). Tests: `services/intel/__tests__/rssParser.test.ts`, `seeds/__tests__/intelCurriculumTypes.test.ts`. Design doc: `docs/architecture/INTELLIGENCE_PIPELINE_CURRICULUM_TYPES.md`.
+  - Why: give AI-architect students a continuously-updated intelligence surface (news/research/tools/videos/quotes/architectures/builds/MCP/technique/market) as first-class Curriculum Types that reuse Experience Studio, the Composer, the Today feed, and the knowledge graph. Scope = all 10 authored + 1 live pipeline (Ali's call); the other 9 pipelines are designed as a documented follow-up. [[reference_curriculum_type_component_architecture]] [[reference_curriculum_type_skill_hardened]]
+  - Verification: backend `tsc --noEmit` clean (only pre-existing `@anthropic-ai/sdk` local-install error); 23 jest tests green (18 backend + 5 frontend curriculumFormatContract). Live against isolated Postgres: 10/10 types authored+approved with real ~3.6KB generation prompts; 10/10 sample cards published+program-wide+feed-queryable, re-run idempotent; Component+TimelineCard graph nodes + USES edge persisted. Live RSS fetch parsed 1,986 items (one bad feed skipped gracefully). Faithful `lessonDoc()` render verified in light + dark (opened in browser).
+  - Notes: Branch `workstream/intelligence-pipeline-types` off origin/main (the current chapter-quality worktree is 993 commits stale and lacks the component subsystem — authored on a fresh main worktree). Pipeline is cost-gated OFF by default. Anthropic RSS URL best-effort (404s, degrades gracefully, env-overridable). Rich graph edges + multi-field student search acknowledged net-new/out-of-scope. Not yet deployed to dev/prod (after-hours deploy is separate).
+
+- [x] Intel types: DISTINCT per-type visual formats + watermarked illustrative thumbnails (design pass)
+  - Date: 2026-07-20
+  - Session: CC-20260719-p2w9
+  - What changed: Ali feedback — the cards looked samey, thumbnails were text banners, and only 2 views were shown. Added `backend/src/seeds/intelCardFormats.ts` — one DISTINCT self-contained styled layout per type (news brief / paper card / spec sheet / watch card / pull-quote / system map / build showcase / server card / technique steps / market dashboard), used as the single source of truth for BOTH the sample cards (seedIntelSampleCards) AND the generation prompts (seedComponentAuthoring now tells the model to copy each type's `<style>` VERBATIM then fill its structure — the intel band's lessonDoc preserves `<style>`). Removed the redundant plain-title headline from bodies (the app chrome shows the title). Regenerated the 10 thumbnails as text-free illustrative scenes each with a "Claude Code" watermark. Updated intelCurriculumTypes.test (distinct-format + unique-style assertions).
+  - Why: make the 10 types visually distinct + editorial-quality, per Ali's review.
+  - Verification: backend `tsc --noEmit` clean (only the pre-existing `@anthropic-ai/sdk` error); 19 jest tests green (added a "styles differ across types" assertion). Faithful 3-view render (tile + pop-up drawer + workspace, light + dark) screenshotted + opened for review — formats visibly distinct, content island readable in dark, no title duplication.
+  - Notes: Same branch/PR #449. Thumbnails are placeholder illustrations; the gpt-image-2 pipeline (scripts/curriculum-type-thumbnails) can replace them later at the same path (no schema change).
 ### Colaberry Commons — Community Rooms backend layer, flag-gated OFF — 2026-07-19
 - [x] Built the Community Rooms backend (room-as-core-object) on top of the existing Epic 4 community feed — additive, flag-gated
   - Date: 2026-07-19
@@ -9863,3 +9918,17 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali's mockup + punch-list — Discord-style layout, see how many people are in each room at all times, split public/private, members create private rooms only + pick an emoji, delete own rooms, grant access, and correct event visibility. [[project_colaberry_commons_build]]
   - Verification: backend + frontend `tsc --noEmit` exit 0; nginx build "Compiled successfully"; deployed to dev — `room_presence` created, presence ping → `here_count:1`, 15 public/10 video rooms, member "public" create coerced to private with emoji stored. Branch `workstream/community-rooms-frontend`.
   - Notes: dev only. "Who's in a room" = who has it open / in its video (poll heartbeat, 70s freshness) — real Meet occupancy needs the Reports API (later).
+### Prompt Lab — practice-prompt catalog (Claude Code type) + Deep Dive/deliverables context — 2026-07-20
+- [x] `prompt_lab` reworked into a practice-prompt catalog that draws from the Deep Dive + Anthropic course + blueprint deliverables
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `backend/src/services/timeline/sectionCurriculumContext.ts`: added `prompt_lab` to `SECTION_ROSTER_TYPES`, and enriched the roster context with the week's DELIVERABLES (github/portfolio/evidence — the documents built) + the Deep Dive card's content summary. So the Prompt Lab generator writes prompts that build the real week artifacts.
+    - `backend/src/services/timeline/typeRegistry.ts`: `prompt_lab` render_band `promptlab` → **`prompt_catalog`** (prompt_challenge keeps `promptlab`/evaluate). Test + frontend `BAND` + `SUPPORTED_RENDER_BANDS` updated.
+    - `frontend/src/components/timeline/PromptCatalogRender.tsx` (NEW): parses the catalog into React — categories, each prompt = visible explanation + hidden/revealable prompt + Copy; a progress line + `onAllCopied` so completion is gated on copying ALL prompts. Wired into the drawer + workspace.
+    - `frontend/src/components/timeline/TimelineCard.tsx`: the "Claude Code" corner strip now shows for ALL Claude Code types (`CLAUDE_CODE_TYPES`: setup_lab, prompt_lab, implementation_task, github_sync), not just setup_lab.
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: for `prompt_catalog`, the completion button is hidden until all prompts are copied, then revealed in the RIGHT rail (mirrors Setup Lab).
+    - `backend/src/seeds/seedComponentAuthoring.ts`: `prompt_lab` authored config (`PROMPT_LAB_GENERATION_PROMPT` + I/O) for prod.
+  - Why: Ali's spec — Prompt Lab should generate categorized practice prompts (copy into Claude Code, reveal-on-demand), grounded in the section's Deep Dive documents, Anthropic course, and blueprint. [[project_canonical_course_structure]]
+  - Verification: built + validated on the `:9999` dev instance (real catalogs, e.g. Week 3 includes "Create Your Workflow Assistant" = the week's deliverable). Frontend tsc via Docker build; typeRegistry jest.
+  - Notes: Branch `workstream/prompt-lab-catalog`. All 14 prompt_lab cards must be regenerated post-deploy (render band flipped). Same renderer pattern will serve Implementation Task.

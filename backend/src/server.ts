@@ -1086,6 +1086,34 @@ async function ensureBlogSchema() {
   console.log('[DB] Blog schema ensured');
 }
 
+// AI News Flash intelligence pipeline — the library table behind the news feed.
+// Idempotent DDL, DB-side defaults; the ingestion service upserts by guid.
+async function ensureAiNewsSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS ai_news_items (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       guid VARCHAR(200) NOT NULL UNIQUE,
+       source VARCHAR(80) NOT NULL,
+       title TEXT NOT NULL,
+       url TEXT,
+       excerpt TEXT,
+       published_at TIMESTAMPTZ,
+       importance INTEGER NOT NULL DEFAULT 0,
+       summary_json JSONB,
+       card_id UUID,
+       first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ai_news_importance ON ai_news_items (importance DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_ai_news_card ON ai_news_items (card_id)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] AI News schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] AI News schema ensured');
+}
+
 // Today Timeline v2 (Phase 1): per-student append-only feed sequence backing the
 // never-ending engagement feed. Deterministic pagination + interact-to-hide;
 // sibling of the *_views ledgers. Idempotent DDL, DB-side defaults.
@@ -1987,9 +2015,15 @@ async function start(): Promise<void> {
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
   await ensureTodayFeedSchema();
+  await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
     .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
     .catch((err: any) => console.warn('[DB] Blog boot refresh skipped:', err?.message?.split('\n')[0]));
+  // AI News Flash pipeline: populate the library on a fresh env (non-blocking).
+  // Card materialization is cost-gated by AI_NEWS_INGEST_ENABLED (see the service).
+  import('./services/intel/aiNewsIngestionService')
+    .then(({ refreshAiNewsIfEmpty }) => refreshAiNewsIfEmpty())
+    .catch((err: any) => console.warn('[DB] AI News boot ingest skipped:', err?.message?.split('\n')[0]));
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();

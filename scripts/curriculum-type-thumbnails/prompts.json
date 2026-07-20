@@ -210,6 +210,66 @@
       "slug": "ai_strategy",
       "label": "AI Strategy",
       "scene": "A chessboard with a few sleek pieces where a glowing neural-network constellation of connected nodes rises from the king piece."
+    },
+    {
+      "slug": "setup_lab",
+      "label": "Setup Lab",
+      "scene": "A glossy floating terminal console panel with a single glowing coral command-prompt caret on its dark screen, a small sleek rocket of light lifting off out of the panel, and a softly glowing power plug clicking into its side, symbolizing a tool being switched on and getting unblocked."
+    },
+    {
+      "slug": "ai_news_flash",
+      "label": "AI News Flash",
+      "scene": "A glossy 3D broadcast satellite dish tilted upward on a small pedestal, emitting soft glowing concentric signal rings, a single folded newspaper resting beside it."
+    },
+    {
+      "slug": "ai_research_digest",
+      "label": "AI Research Digest",
+      "scene": "A calm smooth humanoid figure seen from behind contemplating a large glowing open research document floating in front of them that unfurls into a delicate constellation of connected nodes."
+    },
+    {
+      "slug": "ai_tool_of_the_day",
+      "label": "AI Tool of the Day",
+      "scene": "A sleek robotic arm on a clean pedestal holding up a single softly glowing multi-tool, arranged like a hero product shot under soft studio light."
+    },
+    {
+      "slug": "ai_video_stream",
+      "label": "AI Video Stream",
+      "scene": "A large glossy floating play-button orb rendered as a 3D screen, gentle beams of light projecting outward like a small cinema, subtle sound-wave ridges below."
+    },
+    {
+      "slug": "ai_quote_of_the_day",
+      "label": "AI Quote of the Day",
+      "scene": "A large elegant sculpted 3D quotation mark standing on a pedestal, a small smooth humanoid figure beside it gazing thoughtfully upward."
+    },
+    {
+      "slug": "ai_architecture_breakdown",
+      "label": "AI Architecture Breakdown",
+      "scene": "A translucent exploded-view diagram of glowing interconnected building blocks and nodes floating apart in mid-air, revealing the inner structure of a system like a blueprint."
+    },
+    {
+      "slug": "build_breakdown",
+      "label": "Build Breakdown",
+      "scene": "A small smooth humanoid figure assembling glowing modular blocks into a rising tower of light, a few floating tools orbiting gently nearby."
+    },
+    {
+      "slug": "mcp_server_spotlight",
+      "label": "MCP Server Spotlight",
+      "scene": "A cluster of sleek glowing server modules connected by luminous cables converging into a single central hub, glowing plugs snapping together."
+    },
+    {
+      "slug": "claude_code_technique",
+      "label": "Claude Code Technique",
+      "scene": "A focused smooth humanoid figure seen from behind at a glowing terminal, streams of luminous code flowing upward from the screen, a small bright spark of insight hovering above."
+    },
+    {
+      "slug": "market_intelligence",
+      "label": "Market Intelligence",
+      "scene": "A rising 3D bar chart shaped like a small futuristic city skyline with a glowing coral upward arrow soaring over it, faint streams of data in the soft background."
+    },
+    {
+      "slug": "community_live_session",
+      "label": "Community Live Session",
+      "scene": "A warm inviting virtual meeting room with a ring of softly glowing floating seats around a central holographic round table, gentle light beams and a small live indicator dot, a sense of people gathering."
     }
   ]
 }
