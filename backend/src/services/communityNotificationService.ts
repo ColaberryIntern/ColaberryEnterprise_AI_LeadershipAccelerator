@@ -41,6 +41,23 @@ export async function listNotifications(enrollmentId: string): Promise<Notificat
   }));
 }
 
+// Lightweight unread count for the topbar bell badge (polled). Cheaper than
+// fetching the whole list just to count.
+export async function unreadNotificationCount(enrollmentId: string): Promise<number> {
+  const member = await getOrCreateMember(enrollmentId);
+  return CommunityNotification.count({ where: { member_id: member.id, read_at: null } });
+}
+
+// Mark every unread notification read (the bell's "mark all read"). Idempotent.
+export async function markAllNotificationsRead(enrollmentId: string): Promise<{ updated: number }> {
+  const member = await getOrCreateMember(enrollmentId);
+  const [updated] = await CommunityNotification.update(
+    { read_at: new Date() },
+    { where: { member_id: member.id, read_at: null } }
+  );
+  return { updated };
+}
+
 // Idempotent — marking an already-read notification read again is a no-op.
 export async function markNotificationRead(enrollmentId: string, notificationId: string): Promise<NotificationItem> {
   const member = await getOrCreateMember(enrollmentId);

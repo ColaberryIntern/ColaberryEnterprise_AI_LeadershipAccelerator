@@ -673,6 +673,24 @@ router.get('/api/portal/community/notifications', requireParticipant, async (req
   }
 });
 
+router.get('/api/portal/community/notifications/unread-count', requireParticipant, async (req, res) => {
+  try {
+    const { unreadNotificationCount } = await import('../services/communityNotificationService');
+    res.json({ count: await unreadNotificationCount(req.participant!.sub) });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/notifications/read-all', requireParticipant, async (req, res) => {
+  try {
+    const { markAllNotificationsRead } = await import('../services/communityNotificationService');
+    res.json(await markAllNotificationsRead(req.participant!.sub));
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
 router.post('/api/portal/community/notifications/:notificationId/read', requireParticipant, async (req, res) => {
   const paramsParsed = NotificationIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) {
