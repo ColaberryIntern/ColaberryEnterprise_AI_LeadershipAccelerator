@@ -118,6 +118,24 @@ export const CARD_TYPES: CardTypeDef[] = [
   D({ slug: 'demo_tuesday', label: 'Demo Tuesday', student_label: 'Demo Tuesday', bucket: 'share', render_band: 'event', est_minutes: 60, event: true, home_surface: 'group' }),
   D({ slug: 'kes_wednesday', label: 'Kes Wednesday', student_label: 'Kes Wednesday', bucket: 'learn', render_band: 'event', est_minutes: 60, event: true, home_surface: 'group' }),
   D({ slug: 'marketing_friday', label: 'Marketing Friday', student_label: 'Marketing Friday', bucket: 'share', render_band: 'event', est_minutes: 60, event: true, home_surface: 'group' }),
+  // ── Intelligence Pipeline types ──────────────────────────────────────────
+  // Reusable content generators that turn external information (news, research,
+  // tools, videos, quotes, architectures, builds, MCP servers, Claude Code
+  // techniques, market signals) into standalone Timeline Cards. They render over
+  // the generic 'intel' band (→ inert lessonDoc iframe) except the video stream
+  // (media band, real player). Today-homed + anchored so they flow into the Today
+  // feed without a net-new ambient provider. See seedComponentAuthoring.ts for the
+  // authored generation prompts and INTELLIGENCE_PIPELINE_CURRICULUM_TYPES.md.
+  D({ slug: 'ai_news_flash', label: 'AI News Flash', student_label: 'AI News Flash', bucket: 'learn', render_band: 'intel', est_minutes: 6, learning_xp: 5, difficulty: 'intro', home_surface: 'today' }),
+  D({ slug: 'ai_research_digest', label: 'AI Research Digest', student_label: 'AI Research Digest', bucket: 'learn', render_band: 'intel', est_minutes: 12, learning_xp: 10, difficulty: 'core', competencies: ['architecture'], home_surface: 'today' }),
+  D({ slug: 'ai_tool_of_the_day', label: 'AI Tool of the Day', student_label: 'AI Tool of the Day', bucket: 'learn', render_band: 'intel', est_minutes: 8, learning_xp: 5, difficulty: 'core', competencies: ['architecture'], home_surface: 'today' }),
+  D({ slug: 'ai_video_stream', label: 'AI Video Stream', student_label: 'AI Video Stream', bucket: 'learn', render_band: 'media', est_minutes: 15, learning_xp: 10, difficulty: 'intro', home_surface: 'today' }),
+  D({ slug: 'ai_quote_of_the_day', label: 'AI Quote of the Day', student_label: 'AI Quote of the Day', bucket: 'reflect', render_band: 'intel', est_minutes: 3, learning_xp: 5, difficulty: 'intro', competencies: ['leadership'], home_surface: 'today' }),
+  D({ slug: 'ai_architecture_breakdown', label: 'AI Architecture Breakdown', student_label: 'Architecture Breakdown', bucket: 'learn', render_band: 'intel', est_minutes: 15, learning_xp: 10, difficulty: 'core', competencies: ['architecture'], home_surface: 'today' }),
+  D({ slug: 'build_breakdown', label: 'Build Breakdown', student_label: 'Build Breakdown', bucket: 'learn', render_band: 'intel', est_minutes: 12, learning_xp: 10, difficulty: 'core', competencies: ['architecture'], home_surface: 'today' }),
+  D({ slug: 'mcp_server_spotlight', label: 'MCP Server Spotlight', student_label: 'MCP Server Spotlight', bucket: 'learn', render_band: 'intel', est_minutes: 10, learning_xp: 10, difficulty: 'core', competencies: ['architecture'], home_surface: 'today' }),
+  D({ slug: 'claude_code_technique', label: 'Claude Code Technique', student_label: 'Claude Code Technique', bucket: 'practice', render_band: 'intel', est_minutes: 12, learning_xp: 10, difficulty: 'core', competencies: ['prompt_engineering'], home_surface: 'today' }),
+  D({ slug: 'market_intelligence', label: 'Market Intelligence', student_label: 'Market Intelligence', bucket: 'learn', render_band: 'intel', est_minutes: 8, learning_xp: 5, difficulty: 'core', competencies: ['leadership'], home_surface: 'today' }),
   // Colaberry Commons — the ONE canonical live-room curriculum type (spec §6).
   // Its 8 variants (study/build_room/demo/office_hours/architecture_review/
   // cert_prep/accountability/networking) are a per-card variable, NOT separate
