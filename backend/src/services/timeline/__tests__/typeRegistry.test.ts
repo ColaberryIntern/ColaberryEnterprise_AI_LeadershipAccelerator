@@ -22,10 +22,10 @@ const SUPPORTED_RENDER_BANDS = new Set<string>([
 ]);
 
 describe('typeRegistry', () => {
-  it('registers the 40 canonical curriculum types', () => {
-    // 36 originals + testimonial, podcast, blog (Week-0 lead-magnet) + setup_lab (Claude Code enablement).
-    expect(CARD_TYPES.length).toBe(40);
-    expect(allTypes().length).toBeGreaterThanOrEqual(40);
+  it('registers the 51 canonical curriculum types', () => {
+    // 39 base (36 + testimonial/podcast/blog) + setup_lab (Claude Code enablement) + 11 intelligence-pipeline types (community_live_session + 10 generators).
+    expect(CARD_TYPES.length).toBe(51);
+    expect(allTypes().length).toBeGreaterThanOrEqual(51);
   });
 
   it('resolves a known type with its metadata', () => {
