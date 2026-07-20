@@ -20,6 +20,7 @@ import {
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
 import { uploadFieldGuide, getFieldGuideStatus } from '../services/runtime/fieldGuideService';
+import { uploadBuildArtifact } from '../services/runtime/buildArtifactService';
 import fs from 'fs/promises';
 
 function fail(res: Response, err: any, next: NextFunction) {
@@ -96,6 +97,14 @@ export async function handleUploadFieldGuide(req: Request, res: Response, next: 
 }
 export async function handleGetFieldGuide(req: Request, res: Response, next: NextFunction) {
   try { res.json(await getFieldGuideStatus(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+
+// Build Artifact(s) Lab: the student uploads the document they built in Claude
+// Code. It is stored as a PortfolioArtifact linked to (enrollment, card) so it
+// lands in the portfolio + is available for instructor review. The client then
+// completes the card (points on the first build; completion is idempotent).
+export async function handleBuildArtifactUpload(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await uploadBuildArtifact(eid(req), String(req.params.cardId), (req as any).file)); } catch (e) { fail(res, e, next); }
 }
 
 const labSchema = z.object({ prompt: z.string().min(1), output: z.string().optional() });
