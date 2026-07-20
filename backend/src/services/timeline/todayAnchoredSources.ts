@@ -10,7 +10,7 @@
  * feed stays Class-only until enabled. Each source is fail-soft (errors → []),
  * so one surface can never break the feed.
  */
-import { getFeed, type FeedCard } from './timelineService';
+import { getFeed, type FeedCard, type FeedVideo } from './timelineService';
 import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
 import { anchoredWeekAllowed } from './todayFeedPlan';
 import { resolve as resolveType } from './typeRegistry';
@@ -70,9 +70,25 @@ function projectItem(t: { id: string; title: string | null; description: string 
   };
 }
 
-function communityItem(p: { id: string; body: string }): TodayFeedItem {
+// A community post's media lives in media_urls (JSONB). Carry it into the Today card
+// the same way the Community feed renders it: a YouTube/video link becomes a playable
+// video (TimelineCard derives the thumbnail + play from the url), otherwise the first
+// image is the poster. Without this the timeline card falls back to the blank band tile.
+const YT_RE = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)[\w-]{11}/i;
+const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i;
+
+function communityMedia(mediaUrls: unknown): { video: FeedVideo | null; image: string | null } {
+  const urls = Array.isArray(mediaUrls) ? (mediaUrls.filter((u) => typeof u === 'string' && u.trim()) as string[]) : [];
+  if (!urls.length) return { video: null, image: null };
+  const vid = urls.find((u) => YT_RE.test(u) || VIDEO_EXT_RE.test(u));
+  if (vid) return { video: { url: vid, presenter: null, poster: null }, image: null };
+  return { video: null, image: urls[0] };
+}
+
+function communityItem(p: { id: string; body: string; media_urls?: unknown }): TodayFeedItem {
   const body = (p.body || '').trim();
   const title = body.length > 80 ? `${body.slice(0, 77)}…` : body;
+  const { video, image } = communityMedia(p.media_urls);
   return {
     position: 0,
     kind: 'anchored',
@@ -84,8 +100,8 @@ function communityItem(p: { id: string; body: string }): TodayFeedItem {
     title: title || 'Community post',
     subtitle: null,
     description: body || null,
-    image: null,
-    video: null,
+    image,
+    video,
     blog: null,
     content: null,
     week: null,
