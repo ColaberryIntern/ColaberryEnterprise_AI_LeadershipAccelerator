@@ -7,7 +7,7 @@ import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
-import { CohortContact, fetchCohortPresence } from '../../../services/cohortPresenceApi';
+import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest } from '../../../services/cohortPresenceApi';
 import { pingPresence } from '../../../services/communityApi';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
@@ -144,16 +144,23 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   // while we're anywhere in the portal (not just the Community tab). Fail-soft:
   // any error keeps the last roster and never breaks the shell.
   const [contacts, setContacts] = useState<CohortContact[]>([]);
-  useEffect(() => {
-    let alive = true;
-    const tick = () => {
-      fetchCohortPresence().then((list) => { if (alive) setContacts(list); }).catch(() => { /* keep last roster */ });
-      pingPresence().catch(() => { /* non-fatal */ });
-    };
-    tick();
-    const id = window.setInterval(tick, 60_000);
-    return () => { alive = false; window.clearInterval(id); };
+  const refreshContacts = useCallback(() => {
+    fetchCohortPresence().then(setContacts).catch(() => { /* keep last roster */ });
   }, []);
+  useEffect(() => {
+    refreshContacts();
+    pingPresence().catch(() => { /* non-fatal */ });
+    const id = window.setInterval(() => { refreshContacts(); pingPresence().catch(() => { /* non-fatal */ }); }, 60_000);
+    return () => window.clearInterval(id);
+  }, [refreshContacts]);
+  // Friend actions — fire, then refetch so friendshipStatus (and the friends-first
+  // order) update. Fail-soft: an error just leaves the person addable.
+  const onAddFriend = useCallback((id: string) => {
+    sendFriendRequest(id).then(refreshContacts).catch(() => { /* stays addable */ });
+  }, [refreshContacts]);
+  const onRespondFriend = useCallback((requesterId: string, accept: boolean) => {
+    respondToFriendRequest(requesterId, accept).then(refreshContacts).catch(() => { /* keep request */ });
+  }, [refreshContacts]);
 
   const load = useCallback(async () => {
     const [p, s] = await Promise.allSettled([fetchPoints(), fetchSchedule()]);
@@ -227,12 +234,13 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const cohortName = schedule?.first_class?.cohort_name || 'Your cohort';
   const active = location.pathname;
 
-  // Contacts rail — up to RAIL_MAX people shown as faces, most-active first (the
-  // API sorts online → idle → offline). Capped so there's never a long scroll.
-  // Friends-first ordering arrives with the friends feature.
+  // Contacts rail — up to RAIL_MAX people shown as faces, friends-first then
+  // most-active (the API sorts). Capped so there's never a long scroll. Incoming
+  // friend requests get pulled out into their own Requests section.
   const [railView, setRailView] = useState<'people' | 'find'>('people');
   const RAIL_MAX = 15;
-  const people = contacts.slice(0, RAIL_MAX);
+  const incoming = contacts.filter((c) => c.friendshipStatus === 'incoming');
+  const people = contacts.filter((c) => c.friendshipStatus !== 'incoming').slice(0, RAIL_MAX);
   const onlineNow = contacts.filter((c) => c.presence !== 'offline').length;
   // "Find people" flips the rail to the full cohort directory; a back button
   // flips home. Only meaningful when the rail is expanded.
@@ -342,7 +350,15 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
                 <div key={c.id} className="te-ctrow te-ctrow-static" title={c.name}>
                   <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
                   <span className="te-ctname">{c.name}</span>
-                  <button type="button" className="te-ct-add" disabled title="Friend requests are coming soon">Add</button>
+                  {c.friendshipStatus === 'friend' ? (
+                    <span className="te-ct-added">Friends</span>
+                  ) : c.friendshipStatus === 'requested' ? (
+                    <button type="button" className="te-ct-add" disabled>Requested</button>
+                  ) : c.friendshipStatus === 'incoming' ? (
+                    <button type="button" className="te-ct-add" onClick={() => onRespondFriend(c.id, true)}>Accept</button>
+                  ) : (
+                    <button type="button" className="te-ct-add" onClick={() => onAddFriend(c.id)}>Add</button>
+                  )}
                 </div>
               ))}
               {contacts.length === 0 && (
@@ -372,6 +388,21 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
               <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
               <span>Find people</span>
             </button>
+            {!contactsCollapsed && incoming.length > 0 && (
+              <div className="te-ct-list te-ct-requests">
+                <div className="te-ct-grp">Requests · {incoming.length}</div>
+                {incoming.map((c) => (
+                  <div key={c.id} className="te-ctrow te-ctrow-static" title={c.name}>
+                    <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}</span>
+                    <span className="te-ctname">{c.name}</span>
+                    <span className="te-ct-reqbtns">
+                      <button type="button" className="te-ct-add" onClick={() => onRespondFriend(c.id, true)}>Accept</button>
+                      <button type="button" className="te-ct-decline" onClick={() => onRespondFriend(c.id, false)} aria-label="Decline request">✕</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="te-ct-list">
               {people.length > 0 && <div className="te-ct-grp">{cohortName} · {onlineNow} online</div>}
               {people.map((c) => (
