@@ -31,21 +31,25 @@ const OPS_ALERT_SUBSCRIPTIONS: OpsAlertSubscriptionEntry[] = [
 
 export async function seedOpsAlertSubscriptions(): Promise<void> {
   for (const entry of OPS_ALERT_SUBSCRIPTIONS) {
-    const existing = await AlertSubscription.findOne({
+    // findOrCreate (not a manual findOne-then-branch) — matches the sibling
+    // agentRegistrySeed.ts idiom for the same idempotent-seed-on-boot shape
+    // and closes the read-then-write gap a plain findOne leaves open if this
+    // ever runs twice concurrently (e.g. two boots overlapping).
+    const [row, created] = await AlertSubscription.findOrCreate({
       where: { alert_type: entry.alert_type, impact_area: entry.impact_area },
+      defaults: { ...entry, enabled: true },
     });
 
-    if (existing) {
-      await existing.update({
+    if (created) {
+      console.log(
+        `[OpsAlertSubscriptionSeed] Created subscription: type=${entry.alert_type} area=${entry.impact_area} channels=${entry.channels.join(',')}`
+      );
+    } else {
+      await row.update({
         min_severity: entry.min_severity,
         channels: entry.channels,
         enabled: true,
       });
-    } else {
-      await AlertSubscription.create({ ...entry, enabled: true });
-      console.log(
-        `[OpsAlertSubscriptionSeed] Created subscription: type=${entry.alert_type} area=${entry.impact_area} channels=${entry.channels.join(',')}`
-      );
     }
   }
 }

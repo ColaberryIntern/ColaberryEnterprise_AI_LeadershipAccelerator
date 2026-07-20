@@ -30,6 +30,7 @@ describe('instrumentCronJob', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   it('happy path: runs the job, updates run_count and last_run_at, logs a success activity row', async () => {
@@ -58,7 +59,7 @@ describe('instrumentCronJob', () => {
     expect(createActivityLog).toHaveBeenCalledWith(expect.objectContaining({ result: 'failed', reason: 'job blew up' }));
   });
 
-  it('boundary: a disabled agent is skipped entirely — the job never runs', async () => {
+  it('boundary: a disabled agent is skipped entirely — the job never runs, and the skip is logged, not silent', async () => {
     const agent = mockAgent({ enabled: false });
     findOneAgent.mockResolvedValue(agent);
     const fn = jest.fn();
@@ -66,9 +67,12 @@ describe('instrumentCronJob', () => {
     await instrumentCronJob('TestJob', fn);
 
     expect(fn).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('cron_job_skipped_disabled')
+    );
   });
 
-  it('boundary: a paused agent is skipped entirely — the job never runs', async () => {
+  it('boundary: a paused agent is skipped entirely — the job never runs, and the skip is logged, not silent', async () => {
     const agent = mockAgent({ status: 'paused' });
     findOneAgent.mockResolvedValue(agent);
     const fn = jest.fn();
@@ -76,6 +80,9 @@ describe('instrumentCronJob', () => {
     await instrumentCronJob('TestJob', fn);
 
     expect(fn).not.toHaveBeenCalled();
+    expect(console.warn).toHaveBeenCalledWith(
+      expect.stringContaining('cron_job_skipped_disabled')
+    );
   });
 
   it('boundary: an agent not in the registry still runs, untracked (no AiAgent update)', async () => {

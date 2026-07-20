@@ -61,4 +61,13 @@ describe('classifyError', () => {
     expect(result).toBe('UnknownError');
     expect(result).not.toBe('Error');
   });
+
+  it('regression: a reliable HTTP status code is never overridden by an unrelated word in the message', () => {
+    // A 401 with "network" in the message text used to be misclassified as
+    // UpstreamUnavailable because the message-substring check ran before
+    // the numeric status check.
+    expect(classifyError({ status: 401, message: 'Network authentication required' })).toBe('AuthError');
+    expect(classifyError({ status: 429, message: 'Upstream network congestion, please retry' })).toBe('RateLimitError');
+    expect(classifyError({ status: 400, message: 'Request timed out waiting for a required field' })).toBe('ValidationError');
+  });
 });

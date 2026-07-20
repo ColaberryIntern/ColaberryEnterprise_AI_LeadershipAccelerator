@@ -43,12 +43,18 @@ const WATCHED_EVENT_TYPES: Record<string, string> = {
 };
 
 // ─── Thresholds ─────────────────────────────────────────────────────────────
-// Mirrors cronHealthAlertService.ts's convention (same starting defaults
-// Ali delegated to Kes's discretion on the decision ticket).
+// Absolute failure-count thresholds, not a rate. These event types are only
+// ever emitted on the FAILURE branch (auth middleware and the apollo/ghl/
+// basecamp/synthflow wrappers never emit a matching 'success' outcome for
+// the same event_type — that would mean writing an ai_events row on every
+// authenticated request and every external API call, a much larger and
+// unreviewed instrumentation change of its own). A percentage against that
+// non-existent denominator is meaningless: it always evaluates to 100%, so
+// counting absolute failures in the window is what's actually measurable.
+// Conservative defaults per Ali's "tune conservatively to avoid noise."
 
-const MIN_SAMPLE_SIZE = 5;
-const WARNING_PERCENT = 50;
-const CRITICAL_PERCENT = 80;
+const WARNING_COUNT = 10;
+const CRITICAL_COUNT = 25;
 const WINDOW_HOURS = 1;
 
 // ─── Pure Evaluator ─────────────────────────────────────────────────────────
@@ -61,31 +67,27 @@ export interface SampleFailure {
 
 export function evaluateErrorSpike(
   eventType: string,
-  total: number,
   failed: number,
   sample: SampleFailure | null = null,
 ): ErrorSpikeAlert[] {
-  if (total < MIN_SAMPLE_SIZE) return [];
-
-  const errorRate = Math.round((failed / total) * 100);
-  if (errorRate < WARNING_PERCENT) return [];
+  if (failed < WARNING_COUNT) return [];
 
   const impactArea = WATCHED_EVENT_TYPES[eventType] || 'unknown';
-  const isCritical = errorRate >= CRITICAL_PERCENT;
+  const isCritical = failed >= CRITICAL_COUNT;
 
   return [{
     type: isCritical ? 'critical' : 'warning',
     severity: isCritical ? 5 : 3,
     title: `Error Spike: ${eventType}`,
     description:
-      `${failed}/${total} (${errorRate}%) of "${eventType}" events failed in the last ${WINDOW_HOURS}h. ` +
+      `${failed} "${eventType}" failures in the last ${WINDOW_HOURS}h. ` +
       (impactArea === 'auth'
         ? 'A spike in authentication failures may indicate a broken client, an expired shared secret, or a credential-stuffing attempt.'
         : `The ${impactArea.replace('external_api_', '')} integration may be down or misconfigured.`) +
       (sample?.message ? ` Most recent failure: ${sample.message}` : ''),
     impactArea,
     metadata: {
-      event_type: eventType, error_rate: errorRate, failed, total, window_hours: WINDOW_HOURS,
+      event_type: eventType, failed, window_hours: WINDOW_HOURS,
       sample_failure: sample ? { message: sample.message, ip: sample.ip, occurred_at: sample.occurredAt.toISOString() } : null,
     },
   }];
@@ -97,31 +99,24 @@ export async function checkErrorClassSpikes(): Promise<void> {
   const since = new Date(Date.now() - WINDOW_HOURS * 60 * 60 * 1000);
 
   const rows = await AiEvent.findAll({
-    attributes: ['event_type', 'outcome', [fn('COUNT', col('id')), 'count']],
+    attributes: ['event_type', [fn('COUNT', col('id')), 'count']],
     where: {
       event_type: { [Op.in]: Object.keys(WATCHED_EVENT_TYPES) },
+      outcome: 'failure',
       created_at: { [Op.gte]: since },
     },
-    group: ['event_type', 'outcome'],
+    group: ['event_type'],
     raw: true,
-  }) as unknown as Array<{ event_type: string; outcome: string; count: string }>;
+  }) as unknown as Array<{ event_type: string; count: string }>;
 
-  const byEventType = new Map<string, { total: number; failed: number }>();
   for (const row of rows) {
-    const entry = byEventType.get(row.event_type) || { total: 0, failed: 0 };
-    const count = Number(row.count);
-    entry.total += count;
-    if (row.outcome === 'failure') entry.failed += count;
-    byEventType.set(row.event_type, entry);
-  }
-
-  for (const [eventType, { total, failed }] of byEventType) {
+    const eventType = row.event_type;
+    const failed = Number(row.count);
     try {
       // Cheap pre-check (same threshold logic evaluateErrorSpike applies)
       // before spending a second query fetching the sample failure row.
-      const errorRate = total > 0 ? Math.round((failed / total) * 100) : 0;
       let sample: SampleFailure | null = null;
-      if (total >= MIN_SAMPLE_SIZE && errorRate >= WARNING_PERCENT) {
+      if (failed >= WARNING_COUNT) {
         const latest = await AiEvent.findOne({
           where: { event_type: eventType, outcome: 'failure', created_at: { [Op.gte]: since } },
           order: [['created_at', 'DESC']],
@@ -132,7 +127,7 @@ export async function checkErrorClassSpikes(): Promise<void> {
         }
       }
 
-      const alerts = evaluateErrorSpike(eventType, total, failed, sample);
+      const alerts = evaluateErrorSpike(eventType, failed, sample);
       for (const alert of alerts) {
         await emitAlert({
           type: alert.type,

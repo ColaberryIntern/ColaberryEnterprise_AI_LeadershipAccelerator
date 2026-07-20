@@ -11,13 +11,22 @@ import { classifyError } from '../utils/errorClassifier';
 
 export function logAuthFailure(event: string, err: unknown, actorType: string, ip?: string): void {
   const message = (err as { message?: string })?.message;
-  import('../services/aiEventService').then(({ emitAiEvent }) => {
-    emitAiEvent({
-      event_type: event,
-      outcome: 'failure',
-      error_class: classifyError(err),
-      actor_type: actorType,
-      metadata: { ip: ip || null, message: message ? message.slice(0, 200) : null },
-    }).catch(() => {});
-  }).catch(() => {});
+  const errorClass = classifyError(err);
+  import('../services/aiEventService')
+    .then(({ emitAiEvent }) =>
+      emitAiEvent({
+        event_type: event,
+        outcome: 'failure',
+        error_class: errorClass,
+        actor_type: actorType,
+        metadata: { ip: ip || null, message: message ? message.slice(0, 200) : null },
+      }),
+    )
+    .catch((telemetryErr: any) => {
+      console.error(JSON.stringify({
+        level: 'error', service: 'backend', event: 'auth_failure_telemetry_failed',
+        outcome: 'failure', error_class: telemetryErr?.constructor?.name ?? 'Error',
+        context: { auth_event: event, message: telemetryErr?.message },
+      }));
+    });
 }
