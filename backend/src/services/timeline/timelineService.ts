@@ -16,6 +16,7 @@ import { selectTestimonialForEnrollment } from './networkVideoService';
 import { selectPodcastForEnrollment } from './podcastMediaService';
 import { selectBlogForEnrollment } from './blogMediaService';
 import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingService';
+import { env } from '../../config/env';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -358,7 +359,22 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   // per-(week,bucket) so sorting by it alone interleaves sections (a reflect
   // card could surface above a learn card) — bucket-first keeps reflect last.
   const bIdx = (b: string) => { const i = BUCKET_ORDER.indexOf(b as any); return i < 0 ? BUCKET_ORDER.length : i; };
-  feedCards.sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order);
+  if (env.feedControlEnabled) {
+    // Feed Control: a live pin floats to the top of the feed; within each lane,
+    // higher `priority` rises. The week→bucket structure is otherwise preserved.
+    const now = Date.now();
+    const ctrl = new Map(cards.map((c) => [c.id, { priority: c.priority ?? 0, pinned: c.pinned_until ? new Date(c.pinned_until).getTime() > now : false }]));
+    const pin = (id: string) => (ctrl.get(id)?.pinned ? 1 : 0);
+    const pri = (id: string) => ctrl.get(id)?.priority ?? 0;
+    feedCards.sort((a, b) =>
+      pin(b.id) - pin(a.id)
+      || (a.week ?? 0) - (b.week ?? 0)
+      || bIdx(a.bucket) - bIdx(b.bucket)
+      || pri(b.id) - pri(a.id)
+      || a.order - b.order);
+  } else {
+    feedCards.sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order);
+  }
 
   return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
 }
