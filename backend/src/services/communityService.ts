@@ -5,6 +5,7 @@ import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
+import { awardCommunityXp } from './progression/communityXpService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
@@ -106,7 +107,9 @@ export interface PostFeedItem {
   min_level: number;
   locked: boolean;
   created_at: Date;
-  member: { id: string; display_name: string; avatar_url: string | null };
+  member: { id: string; display_name: string; avatar_url: string | null; level: number };
+  // Up to 3 most-recent distinct commenters (avatar stack on the card).
+  recent_commenters: { id: string; display_name: string; avatar_url: string | null }[];
 }
 
 // Cursor-based feed pagination (Phase 4 #4). The cursor is an opaque, ordering-
@@ -210,10 +213,11 @@ function assertLevelUnlocked(post: CommunityPost, viewerMemberId: string, viewer
 }
 
 function toFeedItem(
-  post: CommunityPost & { member: { id: string; display_name: string; avatar_url: string | null } },
+  post: CommunityPost & { member: { id: string; display_name: string; avatar_url: string | null; level: number } },
   viewerMemberId: string,
   viewerLevel: number,
-  viewerHasLiked: boolean
+  viewerHasLiked: boolean,
+  recentCommenters: PostFeedItem['recent_commenters'] = []
 ): PostFeedItem {
   const locked = post.member_id !== viewerMemberId && viewerLevel < post.min_level;
   return {
@@ -229,7 +233,8 @@ function toFeedItem(
     min_level: post.min_level,
     locked,
     created_at: post.created_at,
-    member: { id: post.member.id, display_name: post.member.display_name, avatar_url: post.member.avatar_url },
+    member: { id: post.member.id, display_name: post.member.display_name, avatar_url: post.member.avatar_url, level: post.member.level },
+    recent_commenters: recentCommenters,
   };
 }
 
@@ -283,6 +288,8 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   // Reward the author for contributing (Ali feedback 2026-07-20 — posting now
   // earns points, not just likes-received).
   await awardContributionPoints(member.id, POINTS_PER_POST);
+  // Community activity feeds the Community lane of the Skill-XP lens.
+  await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${post.id}`, 'community:post').catch(() => {});
 
   log('info', 'post_created', {
     post_id: post.id, member_id: member.id, cohort_id: cohortId, min_level: post.min_level, outcome: 'success',
@@ -303,7 +310,8 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     min_level: post.min_level,
     locked: false,
     created_at: post.created_at,
-    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url },
+    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: member.level },
+    recent_commenters: [],
   };
 }
 
@@ -325,6 +333,28 @@ export interface PostFeedPage {
 // row-value comparison expressed as an Op.or ladder; without a cursor the first
 // page is returned unfiltered (so the existing cohort/category where-shape is
 // unchanged). Fetches limit+1 to detect whether a further page exists.
+// Up to 3 most-recent distinct commenters per post (avatar stack on the card).
+// One query for the whole page; empty input short-circuits.
+async function recentCommentersByPost(
+  postIds: string[]
+): Promise<Map<string, { id: string; display_name: string; avatar_url: string | null }[]>> {
+  const byPost = new Map<string, { id: string; display_name: string; avatar_url: string | null }[]>();
+  if (postIds.length === 0) return byPost;
+  const comments = await CommunityComment.findAll({
+    where: { post_id: postIds },
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
+    order: [['created_at', 'DESC']],
+  });
+  for (const c of comments as any[]) {
+    const list = byPost.get(c.post_id) ?? [];
+    if (list.length < 3 && !list.some((m) => m.id === c.member.id)) {
+      list.push({ id: c.member.id, display_name: c.member.display_name, avatar_url: c.member.avatar_url });
+      byPost.set(c.post_id, list);
+    }
+  }
+  return byPost;
+}
+
 export async function listPosts(
   enrollmentId: string,
   options: ListPostsOptions = {}
@@ -355,7 +385,7 @@ export async function listPosts(
 
   const rows = await CommunityPost.findAll({
     where,
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
     order: [
       ['pinned', 'DESC'],
       ['created_at', 'DESC'],
@@ -367,8 +397,13 @@ export async function listPosts(
   const hasMore = rows.length > limit;
   const pageRows = hasMore ? rows.slice(0, limit) : rows;
 
-  const likedIds = await viewerLikedPostIds(pageRows.map((p: any) => p.id), viewer.id);
-  const posts = pageRows.map((post: any) => toFeedItem(post, viewer.id, viewer.level, likedIds.has(post.id)));
+  const postIds = pageRows.map((p: any) => p.id);
+  const [likedIds, commentersByPost] = await Promise.all([
+    viewerLikedPostIds(postIds, viewer.id),
+    recentCommentersByPost(postIds),
+  ]);
+  const posts = pageRows.map((post: any) =>
+    toFeedItem(post, viewer.id, viewer.level, likedIds.has(post.id), commentersByPost.get(post.id) ?? []));
 
   const last = pageRows[pageRows.length - 1] as any;
   const next_cursor = hasMore && last ? encodePostCursor(last) : null;
@@ -388,7 +423,7 @@ export async function getPostById(enrollmentId: string, postId: string): Promise
 
   const post = await requireVisiblePostInCohort(postId, cohortId);
   const withMember = await CommunityPost.findByPk(post.id, {
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
   });
   const likedIds = await viewerLikedPostIds([post.id], viewer.id);
   return toFeedItem(withMember as any, viewer.id, viewer.level, likedIds.has(post.id));
@@ -409,7 +444,7 @@ export async function togglePin(
   ]);
 
   const post = await CommunityPost.findByPk(postId, {
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
   });
   if (!post || post.status === 'removed') {
     throw notFoundError('Post not found');
@@ -449,7 +484,9 @@ export async function togglePin(
       id: postAny.member.id,
       display_name: postAny.member.display_name,
       avatar_url: postAny.member.avatar_url,
+      level: postAny.member.level,
     },
+    recent_commenters: [],
   };
 }
 
@@ -509,6 +546,7 @@ export async function createComment(
 
   // Reward the commenter for contributing (Ali feedback 2026-07-20).
   await awardContributionPoints(member.id, POINTS_PER_COMMENT);
+  await awardCommunityXp(enrollmentId, POINTS_PER_COMMENT, `cxp:comment:${comment.id}`, 'community:comment').catch(() => {});
 
   // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
   // comments on their own post/comment.
@@ -553,7 +591,7 @@ export async function listComments(enrollmentId: string, postId: string): Promis
 
   const comments = await CommunityComment.findAll({
     where: { post_id: postId },
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level'] }],
     order: [['created_at', 'ASC']],
   });
 
