@@ -2020,3 +2020,66 @@ export async function sendInterviewResult(data: InterviewResultEmailData): Promi
 
   console.log(`[Email] Interview result sent to: ${r.to} | week: ${data.week_number} | score: ${data.total_score} | msgId: ${info.messageId}`);
 }
+
+export interface CommunityDigestEmailEvent {
+  title: string;
+  event_type: string;
+  starts_at: Date;
+}
+
+export interface CommunityDigestEmailData {
+  to: string;
+  fullName: string;
+  digestDate: string;
+  unreadNotificationCount: number;
+  newPostCount: number;
+  upcomingEvents: CommunityDigestEmailEvent[];
+}
+
+// Daily community digest (REQ-C6) — one deduped send per (member, date),
+// enforced upstream by CommunityDigestLog's unique constraint in
+// communityDigestService.ts, not by anything in this function.
+export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping community digest to:', data.to);
+    return;
+  }
+
+  const r = await resolveEmailRecipient(data.to, '[Accelerator] Your Community Digest');
+
+  const eventsHtml = data.upcomingEvents.length
+    ? `<ul style="padding-left:20px;color:#374151">${data.upcomingEvents
+        .slice(0, 5)
+        .map(
+          (e) =>
+            `<li><strong>${e.title}</strong> — ${e.starts_at.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</li>`
+        )
+        .join('')}</ul>`
+    : '<p style="color:#64748b">No upcoming sessions or Open Houses scheduled.</p>';
+
+  const html = `
+<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px">
+  <h2 style="color:#1e293b">Your Community Digest</h2>
+  <p>Hi ${data.fullName},</p>
+  <div style="background:#f8fafc;border-radius:8px;padding:20px;margin:20px 0">
+    <p style="margin:0 0 8px"><strong>${data.unreadNotificationCount}</strong> unread mention${data.unreadNotificationCount === 1 ? '' : 's'}/repl${data.unreadNotificationCount === 1 ? 'y' : 'ies'}</p>
+    <p style="margin:0"><strong>${data.newPostCount}</strong> new post${data.newPostCount === 1 ? '' : 's'} in your cohort since yesterday</p>
+  </div>
+  <h3 style="color:#1e293b">Upcoming</h3>
+  ${eventsHtml}
+  <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0">
+  <p style="color:#64748b;font-size:13px">Colaberry Enterprise AI · AI Systems Architect Accelerator</p>
+</body></html>`;
+
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('community-digest'),
+  });
+
+  console.log(`[Email] Community digest sent to: ${r.to} | date: ${data.digestDate} | msgId: ${info.messageId}`);
+}
