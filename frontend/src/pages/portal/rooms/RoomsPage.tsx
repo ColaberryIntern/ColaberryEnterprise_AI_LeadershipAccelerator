@@ -1,0 +1,239 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import PortalShell from '../today/PortalShell';
+import '../today/TodayShell.css';
+import '../feed/feed.css';
+import '../community/community.css';
+import './rooms.css';
+import RoomPane from './RoomPane';
+import { fmtCentralDateTime } from '../today/shellUtils';
+import {
+  fetchRoomsHome, fetchRooms, joinBooking, createBooking, createRoom,
+  RoomsHome, RoomListItem, BookingCard, CreateBookingInput,
+  ROOM_CATEGORIES, BOOKING_VARIANTS, BookingVariant, RoomPrivacy,
+} from '../../../services/roomsApi';
+
+const EMOJI_CHOICES = ['🎉', '🚀', '🛠️', '🧠', '💡', '🔥', '🌱', '🎯', '🧩', '☕', '🌈', '🦄', '🐙', '🎨', '📚', '🎮', '⚡', '🌟', '💬', '🎧'];
+const CAT_EMOJI: Record<string, string> = {
+  start_here: '👋', your_cohort: '🎓', build_together: '🛠️', career_cert: '💼',
+  demos_events: '🎤', social: '🎉', live_now: '🔴', private_rooms: '🔒',
+};
+
+const SessionRow: React.FC<{ booking: BookingCard; live?: boolean; onJoin: (id: string) => void }> = ({ booking, live, onJoin }) => (
+  <div className="rm-sess">
+    <span className="rm-sess-emoji">{booking.emoji || '📅'}</span>
+    <div className="rm-sess-main">
+      <div className="rm-sess-title">{booking.title}</div>
+      <div className="rm-sess-meta">
+        <span className="rm-variant">{booking.variant.replace(/_/g, ' ')}</span><span>·</span>
+        <span>{booking.start_at ? fmtCentralDateTime(booking.start_at) : 'Now'}</span>
+      </div>
+    </div>
+    <button type="button" className={`te-btn ${live ? 'cherry' : 'berry'} sm`} onClick={() => onJoin(booking.id)}>{live ? 'Join now' : 'RSVP'}</button>
+  </div>
+);
+
+const RailRow: React.FC<{ item: RoomListItem; active: boolean; onOpen: (id: string) => void }> = ({ item, active, onOpen }) => {
+  const { room } = item;
+  const shell = item.visibility === 'shell';
+  const em = shell ? '' : (room.metadata?.emoji || CAT_EMOJI[room.category] || '');
+  const label = shell ? 'Private room' : (em ? `${em} ` : '') + room.name;
+  return (
+    <button type="button" className={`rm-railrow${active ? ' active' : ''}`} onClick={() => onOpen(room.id)}>
+      <span className="rm-railicon">{shell ? '🔒' : room.is_video ? '📹' : '#'}</span>
+      <span className="rm-railname">{label}</span>
+      {(item.here_count ?? 0) > 0 && <span className="rm-railcount"><span className="rm-raildot" />{item.here_count}</span>}
+    </button>
+  );
+};
+
+const RailGroup: React.FC<{ title: string; items: RoomListItem[]; activeId?: string; onOpen: (id: string) => void }> = ({ title, items, activeId, onOpen }) => {
+  if (items.length === 0) return null;
+  return (
+    <div className="rm-railgroup">
+      <div className="rm-railhdr">{title}</div>
+      {items.map((it) => <RailRow key={it.room.id} item={it} active={it.room.id === activeId} onOpen={onOpen} />)}
+    </div>
+  );
+};
+
+const NewRoomModal: React.FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('build_together');
+  const [privacy, setPrivacy] = useState<RoomPrivacy>('private');
+  const [isVideo, setIsVideo] = useState(true);
+  const [emoji, setEmoji] = useState('🎉');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    try { const r = await createRoom({ name: name.trim(), category, privacy, is_video: isVideo, emoji }); onCreated(r.id); onClose(); }
+    catch { setBusy(false); }
+  };
+  return (
+    <div className="rm-overlay" onClick={onClose}>
+      <div className="rm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="rm-modal-h"><h2>New room</h2><button type="button" className="rm-x" onClick={onClose} aria-label="Close">×</button></div>
+        <div className="rm-modal-body">
+          <div className="rm-field"><label>Room name</label><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. MCP Builders" maxLength={200} /></div>
+          <div className="rm-field">
+            <label>Pick an emoji</label>
+            <div className="rm-emojipick">
+              {EMOJI_CHOICES.map((e) => (
+                <button type="button" key={e} className={`rm-emojiopt${emoji === e ? ' on' : ''}`} onClick={() => setEmoji(e)}>{e}</button>
+              ))}
+            </div>
+          </div>
+          <div className="rm-row2">
+            <div className="rm-field"><label>Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value)}>{ROOM_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}</select>
+            </div>
+            <div className="rm-field"><label>Who can join?</label>
+              <select value={privacy} onChange={(e) => setPrivacy(e.target.value as RoomPrivacy)}>
+                <option value="private">Private — invite only</option>
+                <option value="cohort">My cohort</option>
+              </select>
+            </div>
+          </div>
+          <label className={`rm-toggle${isVideo ? ' on' : ''}`}>
+            <input type="checkbox" checked={isVideo} onChange={(e) => setIsVideo(e.target.checked)} />
+            <span className="rm-toggle-txt"><b>📹 Video room</b><span>A Google Meet everyone can jump into.</span></span>
+          </label>
+        </div>
+        <div className="rm-modal-foot">
+          <button type="button" className="te-btn ghost sm" onClick={onClose}>Cancel</button>
+          <button type="button" className="te-btn cherry sm" onClick={submit} disabled={busy || !name.trim()}>{busy ? 'Creating…' : 'Create room'}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BookRoomModal: React.FC<{ onClose: () => void; onCreated: () => void }> = ({ onClose, onCreated }) => {
+  const [variant, setVariant] = useState<BookingVariant>('study');
+  const [title, setTitle] = useState('');
+  const [start, setStart] = useState('');
+  const [duration, setDuration] = useState(60);
+  const [privacy, setPrivacy] = useState<RoomPrivacy>('public');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (!title.trim() || busy) return;
+    setBusy(true);
+    try {
+      const input: CreateBookingInput = { title: title.trim(), variant, privacy };
+      if (start) {
+        const ms = new Date(start).getTime();
+        if (!isNaN(ms)) { input.start_at = new Date(ms).toISOString(); input.end_at = new Date(ms + duration * 60_000).toISOString(); input.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone; }
+      }
+      await createBooking(input); onCreated(); onClose();
+    } catch { setBusy(false); }
+  };
+  return (
+    <div className="rm-overlay" onClick={onClose}>
+      <div className="rm-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="rm-modal-h"><h2>Book a session</h2><button type="button" className="rm-x" onClick={onClose} aria-label="Close">×</button></div>
+        <div className="rm-modal-body">
+          <div className="rm-field"><label>What are you hosting?</label><select value={variant} onChange={(e) => setVariant(e.target.value as BookingVariant)}>{BOOKING_VARIANTS.map((v) => <option key={v.key} value={v.key}>{v.label}</option>)}</select></div>
+          <div className="rm-field"><label>Title</label><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Office hours" maxLength={200} /></div>
+          <div className="rm-row2">
+            <div className="rm-field"><label>When</label><input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} /></div>
+            <div className="rm-field"><label>Duration</label><select value={duration} onChange={(e) => setDuration(Number(e.target.value))}><option value={30}>30 min</option><option value={60}>1 hour</option><option value={90}>90 min</option></select></div>
+          </div>
+          <div className="rm-field"><label>Who can join?</label><select value={privacy} onChange={(e) => setPrivacy(e.target.value as RoomPrivacy)}><option value="public">Public</option><option value="cohort">My cohort</option><option value="private">Private</option></select></div>
+        </div>
+        <div className="rm-modal-foot">
+          <button type="button" className="te-btn ghost sm" onClick={onClose}>Cancel</button>
+          <button type="button" className="te-btn cherry sm" onClick={submit} disabled={busy || !title.trim()}>{busy ? 'Creating…' : 'Create session'}</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const RoomsPage: React.FC = () => {
+  const { roomId } = useParams();
+  const navigate = useNavigate();
+  const [rooms, setRooms] = useState<RoomListItem[] | null>(null);
+  const [home, setHome] = useState<RoomsHome | null>(null);
+  const [modal, setModal] = useState<'none' | 'book' | 'new'>('none');
+
+  const loadRooms = useCallback(async () => { setRooms(await fetchRooms()); }, []);
+  const loadHome = useCallback(async () => { setHome(await fetchRoomsHome()); }, []);
+
+  useEffect(() => {
+    const cycle = () => { loadRooms().catch(() => setRooms([])); };
+    cycle();
+    const id = window.setInterval(cycle, 15000); // refresh live "here" counts
+    return () => window.clearInterval(id);
+  }, [loadRooms]);
+  useEffect(() => { loadHome().catch(() => setHome({ happening_now: [], up_next: [], my_rooms: [] })); }, [loadHome]);
+
+  const open = (id: string) => navigate(`/portal/rooms/${id}`);
+  const joinSession = async (bookingId: string) => {
+    try { const { join_url } = await joinBooking(bookingId); if (join_url) window.open(join_url, '_blank', 'noopener'); else window.alert("You're in — the host hasn't posted the link yet."); }
+    catch { window.alert('You are not eligible to join this session.'); }
+  };
+
+  const items = rooms || [];
+  const pub = items.filter((i) => i.visibility === 'full' && i.room.privacy === 'public');
+  const priv = items.filter((i) => i.room.privacy !== 'public');
+  const privFull = priv.filter((i) => i.visibility === 'full');
+  const totalHere = items.reduce((n, i) => n + (i.here_count ?? 0), 0);
+
+  return (
+    <PortalShell>
+      <div className="page-h" style={{ marginBottom: 12 }}>
+        <div className="crumbs0">Belong</div>
+        <div className="rm-titlerow">
+          <h1 style={{ margin: 0 }}>Rooms</h1>
+          <span className="rm-stat online"><b>{totalHere}</b> here now</span>
+          <span style={{ flex: 1 }} />
+          <button type="button" className="te-btn ghost sm" onClick={() => setModal('new')}>+ New room</button>
+          <button type="button" className="te-btn cherry sm" onClick={() => setModal('book')}>+ Book a session</button>
+        </div>
+      </div>
+
+      <div className="rm-shell">
+        <div className="rm-rail">
+          {rooms === null && <div className="rm-empty">Loading…</div>}
+          <RailGroup title="Public" items={pub.filter((i) => !i.room.is_video)} activeId={roomId} onOpen={open} />
+          <RailGroup title="Public · Video" items={pub.filter((i) => i.room.is_video)} activeId={roomId} onOpen={open} />
+          <RailGroup title="Private" items={privFull.filter((i) => !i.room.is_video)} activeId={roomId} onOpen={open} />
+          <RailGroup title="Private · Video" items={privFull.filter((i) => i.room.is_video)} activeId={roomId} onOpen={open} />
+          <RailGroup title="Locked" items={priv.filter((i) => i.visibility === 'shell')} activeId={roomId} onOpen={open} />
+        </div>
+
+        <div className="rm-panewrap">
+          {roomId ? (
+            <RoomPane roomId={roomId} onDeleted={() => navigate('/portal/rooms')} onChanged={() => { loadRooms().catch(() => {}); loadHome().catch(() => {}); }} />
+          ) : (
+            <div className="rm-welcome">
+              <div className="rm-welcome-hero">
+                <div style={{ fontSize: 34 }}>💬</div>
+                <h2>Pick a room to jump in</h2>
+                <p>Drop into a public room, hop on a video call, or start your own — everyone in your cohort is here.</p>
+              </div>
+              {home && home.happening_now.length > 0 && (
+                <div className="te-card" style={{ padding: 16, marginTop: 16 }}>
+                  <p className="rm-strip-title"><span className="rm-live">Live</span> Happening now</p>
+                  {home.happening_now.map((b) => <SessionRow key={b.id} booking={b} live onJoin={joinSession} />)}
+                </div>
+              )}
+              {home && home.up_next.length > 0 && (
+                <div className="te-card" style={{ padding: 16, marginTop: 16 }}>
+                  <p className="rm-strip-title">Up next</p>
+                  {home.up_next.map((b) => <SessionRow key={b.id} booking={b} onJoin={joinSession} />)}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {modal === 'book' && <BookRoomModal onClose={() => setModal('none')} onCreated={() => { loadRooms().catch(() => {}); loadHome().catch(() => {}); }} />}
+      {modal === 'new' && <NewRoomModal onClose={() => setModal('none')} onCreated={(id) => { loadRooms().catch(() => {}); navigate(`/portal/rooms/${id}`); }} />}
+    </PortalShell>
+  );
+};
+
+export default RoomsPage;

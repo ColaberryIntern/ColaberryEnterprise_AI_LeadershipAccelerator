@@ -314,6 +314,7 @@ import RoomMessage from './RoomMessage';
 import RoomResource from './RoomResource';
 import RoomOutboxEvent from './RoomOutboxEvent';
 import RoomReport from './RoomReport';
+import RoomPresence from './RoomPresence';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
@@ -1246,6 +1247,7 @@ export {
   RoomResource,
   RoomOutboxEvent,
   RoomReport,
+  RoomPresence,
   StudentPointsEvent,
   OpenHouseEvent,
   OnboardingProfile,

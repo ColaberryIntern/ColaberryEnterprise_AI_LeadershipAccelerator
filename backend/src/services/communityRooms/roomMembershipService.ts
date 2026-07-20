@@ -122,3 +122,31 @@ export async function leaveRoom(ctx: RoomAccessContext, roomId: string): Promise
   if (!membership) return; // idempotent
   await membership.update({ access_state: 'left', left_at: new Date() });
 }
+
+// Owner/host grants access to a room so invitees can see + join it (this is how
+// "give access for people to see my rooms" works). Idempotent per enrollment.
+export async function inviteMembers(
+  ctx: RoomAccessContext,
+  roomId: string,
+  enrollmentIds: string[],
+): Promise<number> {
+  const room = await loadRoom(roomId);
+  const mine = await RoomMembership.findOne({ where: { room_id: roomId, enrollment_id: ctx.enrollmentId } });
+  const isOwner = room.owner_enrollment_id === ctx.enrollmentId;
+  if (!isOwner && !canModerate(ctx, mine)) throw forbiddenError('Only the host can invite people to this room');
+  let granted = 0;
+  for (const eid of enrollmentIds) {
+    if (!eid || eid === ctx.enrollmentId) continue;
+    const [m] = await RoomMembership.findOrCreate({
+      where: { room_id: roomId, enrollment_id: eid },
+      defaults: {
+        room_id: roomId, enrollment_id: eid, role: 'member',
+        access_state: 'active', joined_at: new Date(), invited_by: ctx.enrollmentId,
+      },
+    });
+    if (m.access_state !== 'active') await m.update({ access_state: 'active', invited_by: ctx.enrollmentId });
+    granted += 1;
+  }
+  log('info', 'room_invite', { room_id: roomId, by: ctx.enrollmentId, granted });
+  return granted;
+}

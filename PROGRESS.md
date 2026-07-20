@@ -9883,6 +9883,41 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: `cd backend && npx tsc --noEmit` exit 0 (whole backend); `npx jest community` = 6 suites / 128 tests passing (incl. new communityRooms.test.ts 17/17; existing community suites unbroken). Built + validated in worktree `workstream/community-rooms-commons` off origin/main.
   - Notes: Documented follow-ons — frontend Community shell; timeline-card publication for community_live_session (the outbox has the hook); Meet attendance/recording via Reports API. Existing `SessionChatMessage` (legacy per-session chat) intentionally left untouched this run to avoid frontend blast radius; unification bridge is via `community_rooms.linked_live_session_id`.
 
+### Colaberry Commons — Community Rooms student FRONTEND (Design-E "Rooms" tab) — 2026-07-20
+- [x] Built the student-facing Rooms UI in the current Design-E portal shell, wired to the live Rooms backend
+  - Date: 2026-07-20
+  - Session: CC-20260719-cm3x
+  - What changed:
+    - `frontend/src/services/roomsApi.ts` (new): typed portalApi client for the Rooms backend — fetchRoomsHome, fetchRooms, fetchRoom, createRoom, joinRoom, requestRoomAccess, fetchRoomMessages, postRoomMessage, fetchEvents, createBooking, rsvpBooking, joinBooking, fetchPeople. Mirrors communityApi.ts; participant JWT + 401 handling via `utils/portalApi`.
+    - `frontend/src/pages/portal/rooms/RoomsPage.tsx` (new): discovery home — category filter chips, "Happening now" (live sessions + Join now → joinBooking opens the authorized Meet link), "Up next" (RSVP & join), a room grid (private rooms render as a locked shell, never leaking name/detail), right rail (People online with presence dots, Your rooms), and a **Book-a-session modal** (variant → title → outcome → when/duration → privacy → createBooking).
+    - `frontend/src/pages/portal/rooms/RoomDetailPage.tsx` (new): room channel — live chat (3s poll + `since` cursor + active-now presence, mirroring the session-chat pattern), post message, Join room, and a private-room locked shell with Request access.
+    - `frontend/src/pages/portal/rooms/rooms.css` (new): `rm-`-scoped Design-E styles (cherry Live pill, room grid, chat, modal) using brand tokens only.
+    - `frontend/src/pages/portal/today/PortalShell.tsx`: added an active **"Rooms"** nav item under BELONG (kept "Group Chat" as Soon; Rooms is the live one). `frontend/src/routes/portalRoutes.tsx`: `/portal/rooms` + `/portal/rooms/:roomId` (eager, inside PortalProtectedRoute).
+  - Why: make the Rooms backend a real, clickable student feature. Student-facing label defaulted to "Rooms" (Ali to confirm final naming; can instead fill the "Group Chat" slot). Frontend-only; the flag `COMMUNITY_ROOMS_ENABLED` still gates the backend it calls. [[project_colaberry_commons_build]]
+  - Verification: `cd frontend && npx tsc --noEmit` exit 0; **nginx Docker image built ("Compiled successfully", real react-scripts build + prod eslint)**. Branch `workstream/community-rooms-frontend` off origin/main.
+  - Notes: Deployed to dev (:9999) for review before any prod merge. Booking with a start/end triggers real Meet creation via the outbox; undated bookings skip it.
+
+### Colaberry Commons — video rooms + 10 always-open fruit rooms + Rooms redesign — 2026-07-20
+- [x] Added always-open Google Meet video rooms, seeded 10 fruit-themed defaults, and gave the Rooms UI a spunky visual pass
+  - Date: 2026-07-20
+  - Session: CC-20260719-cm3x
+  - What changed:
+    - Backend: `community_rooms` gains `is_video`/`always_open`/`meeting_link` (idempotent ALTERs in `ensureCommunityRoomsSchema`); `roomService.createRoom` takes a video flag; new `POST /api/portal/community/rooms/:id/join-video` (`joinVideoRoom`) lazily mints ONE shared Google Meet link on first join (entitlement re-checked) and reuses it thereafter; `seeds/seedDefaultCommunityRooms.ts` seeds 10 always-open fruit video rooms (Mango Lounge … Grape Gallery, emoji+tagline in metadata) idempotently at boot, flag-gated.
+    - Frontend: `RoomsPage` redesigned — stat hero (rooms/online/live), colorful per-category emoji room cards, live pulse, video badge + one-click Join (opens the Meet), a "+ New room" modal with a Video-room toggle (on-the-fly), and a fixed People-online rail that pings presence (`communityApi.pingPresence`) so the viewer shows up + a "You" tag. `RoomDetailPage` gains the emoji header + a "Join video call" CTA. `roomsApi` adds `joinVideoRoom` + `is_video`/`metadata` fields.
+  - Why: Ali's punch-list — video rooms (Meet) creatable on the fly, 10 always-open defaults (fruit theme), fix the lonely People-online panel, and a more visual/spunky design (per the exec-grade "data-storytelling" design ref, BC 10039770075). [[project_colaberry_commons_build]]
+  - Verification: backend + frontend `tsc --noEmit` exit 0; nginx Docker build "Compiled successfully"; deployed to dev — boot logged "default rooms: 10 created", API returns 14 rooms (10 video), and `join-video` minted a real link `https://meet.google.com/ouh-ndyj-gce`. Branch `workstream/community-rooms-frontend`.
+  - Notes: dev only; not merged to prod (Rooms nav would 404 in prod until the backend flag is on). Meet links minted via the dev Google service account.
+
+### Colaberry Commons — Discord two-pane Rooms + live presence counts + create/delete/invite — 2026-07-20
+- [x] Rebuilt Rooms as a two-pane channel layout with live occupancy counts, public/private split, and room management
+  - Date: 2026-07-20
+  - Session: CC-20260719-cm3x
+  - What changed:
+    - Backend: new `room_presence` table + `RoomPresence` model + `roomPresenceService` (touch heartbeat + `hereCounts`); `POST /rooms/:id/presence`; room list now returns `here_count` per room. `createRoom` coerces member rooms to private/cohort (no public) + stores a chosen `emoji` in metadata; new `deleteRoom` (owner-only, blocked by upcoming sessions) + `DELETE /rooms/:id`; `inviteMembers` grant-access + `POST /rooms/:id/invite`. `getHome`/`listEvents` now show public + private/cohort-with-access bookings and tag each with its room emoji (Up-next icon).
+    - Frontend: RoomsPage rebuilt as a **two-pane Discord layout** — a rail of rooms grouped **Public/Private × Text/Video** each with a live green "here" count (polled 15s), and a right pane (`RoomPane`) with chat (3s poll + presence heartbeat), video Join, Invite (owner/host), and Delete (owner). New-room modal is private/cohort-only with an emoji picker. Welcome pane shows Happening-now / Up-next with room emojis. `/portal/rooms/:roomId` now renders the two-pane (retired `RoomDetailPage`).
+  - Why: Ali's mockup + punch-list — Discord-style layout, see how many people are in each room at all times, split public/private, members create private rooms only + pick an emoji, delete own rooms, grant access, and correct event visibility. [[project_colaberry_commons_build]]
+  - Verification: backend + frontend `tsc --noEmit` exit 0; nginx build "Compiled successfully"; deployed to dev — `room_presence` created, presence ping → `here_count:1`, 15 public/10 video rooms, member "public" create coerced to private with emoji stored. Branch `workstream/community-rooms-frontend`.
+  - Notes: dev only. "Who's in a room" = who has it open / in its video (poll heartbeat, 70s freshness) — real Meet occupancy needs the Reports API (later).
 ### Feed Control plane — timeline/FB-feed control plane (routing + cadence + rule-based ranker + admin board) — 2026-07-20
 - [x] Ship the Feed Control plane: route curriculum types/cards to surfaces + tune cadence/frequency/pin/scheduling via a transparent rule-based ranker + a new admin board
   - Date: 2026-07-20
