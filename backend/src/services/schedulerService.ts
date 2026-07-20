@@ -1799,6 +1799,23 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
+  // AI News Flash intelligence pipeline — daily (03:15 America/Chicago). Fetches
+  // free AI-lab RSS feeds, dedup-upserts the library, and (when
+  // AI_NEWS_INGEST_ENABLED=true) materializes up to a dozen executive news cards.
+  // Idempotent + cost-gated; see aiNewsIngestionService.
+  cron.schedule(
+    '15 3 * * *',
+    () => {
+      instrumentCronJob('AiNewsRefresh', async () => {
+        const { refreshAiNews } = await import('./intel/aiNewsIngestionService');
+        await refreshAiNews({ maxCards: 12 });
+      }).catch((err) => {
+        console.error('[Scheduler] AI News refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
   // Distill each active student's recent sessions into their evolving LearnerMemory
   // once nightly (02:15 America/Chicago) — the AI Mentor's "gets to know you over
   // weeks" engine. Idempotent per (enrollment, day); safe to re-run.
