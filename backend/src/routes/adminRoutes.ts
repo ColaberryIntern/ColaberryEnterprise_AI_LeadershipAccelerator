@@ -79,6 +79,7 @@ import mentorReviewRoutes from './admin/mentorReviewRoutes';
 import trustRoutes from './admin/trustRoutes';
 import communityModerationRoutes from './admin/communityModerationRoutes';
 import podcastRoutes from './admin/podcastRoutes';
+import vaErpRoutes from './admin/vaErpRoutes';
 
 const router = Router();
 
@@ -162,5 +163,6 @@ router.use(qrAnalyticsRoutes);
 router.use(mentorReviewRoutes);
 router.use(trustRoutes);
 router.use(communityModerationRoutes);
+router.use(vaErpRoutes);
 
 export default router;
