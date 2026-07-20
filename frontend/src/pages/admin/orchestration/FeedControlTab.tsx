@@ -104,7 +104,8 @@ export default function FeedControlTab() {
   useEffect(() => {
     if (!refreshTick) return;
     if (simEnroll && sim) runSim();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Keyed only on refreshTick on purpose: adding sim/simEnroll/runSim would re-fire
+    // on every preview update and loop. One re-run per board/policy change is intended.
   }, [refreshTick]);
 
   const toggleSel = (slug: string) => setSelected((s) => { const n = new Set(s); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
