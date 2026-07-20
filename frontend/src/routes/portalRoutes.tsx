@@ -22,6 +22,8 @@ import SchedulePage from '../pages/portal/schedule/SchedulePage';
 import PointsPage from '../pages/portal/points/PointsPage';
 import ProjectsPage from '../pages/portal/projects/ProjectsPage';
 import CommunityPage from '../pages/portal/community/CommunityPage';
+import RoomsPage from '../pages/portal/rooms/RoomsPage';
+import RoomDetailPage from '../pages/portal/rooms/RoomDetailPage';
 import CompanyPage from '../pages/portal/company/CompanyPage';
 import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
 
