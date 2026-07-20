@@ -65,7 +65,13 @@ router.get('/api/admin/feed-control/simulate', requireAdmin, async (req, res) =>
     const enrollmentId = String(req.query.enrollment_id || '');
     if (!enrollmentId) return res.status(400).json({ ok: false, error: 'enrollment_id required' });
     const limit = Math.max(1, Math.min(30, parseInt(String(req.query.limit || '12'), 10) || 12));
-    res.json({ ok: true, ...(await simulate(enrollmentId, limit)) });
+    // Sandbox / what-if: when sandbox=1, treat ONLY the `include` slugs as active
+    // (empty list = empty feed) instead of the live routing. Read-only either way.
+    const sandbox = req.query.sandbox === '1' || req.query.sandbox === 'true';
+    const includeTypes = sandbox
+      ? String(req.query.include || '').split(',').map((s) => s.trim()).filter(Boolean)
+      : undefined;
+    res.json({ ok: true, ...(await simulate(enrollmentId, limit, includeTypes)) });
   } catch (e) { fail(res, e); }
 });
 

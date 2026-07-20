@@ -3,10 +3,10 @@
  * the 14 completion gates, interview-answer validation, baseline, receipt/ratio, and
  * the derived Mindset Ledger. Modeled on assessmentScoring.test.ts.
  */
-import { WEEK0_SCENARIO } from '../../../data/architectMindsetScenario';
+import { WEEK0_SCENARIO, WEEK1_SCENARIO, scenarioForWeek } from '../../../data/architectMindsetScenario';
 import {
   isValidTransition, isAnswerValid, invalidAnswers, completionGaps, isCompletionEligible,
-  deriveEvidence, assessBaseline, computeReceipt, ledgerEntryFor, projectLedger, isMeaningful,
+  deriveEvidence, assessBaseline, scoreMindset, AM_DIMENSIONS, computeReceipt, ledgerEntryFor, projectLedger, isMeaningful,
   AmProgress, AmInterviewAnswer,
 } from '../architectMindsetLogic';
 
@@ -128,5 +128,61 @@ describe('receipt + baseline + ledger', () => {
     expect(total.lessons_completed).toBe(2);
     expect(total.decisions_recorded).toBe(e.decisions * 2);
     expect(total.represented_hours).toBe(S.receipt.represented_hours * 2);
+  });
+});
+
+// ── Week 1 (a new scenario on the same framework) + formal scoring ────────────
+const W1 = WEEK1_SCENARIO;
+function w1Answered(): Record<string, AmInterviewAnswer> {
+  const iv: Record<string, AmInterviewAnswer> = {};
+  for (const q of [...W1.interview_part_1, ...W1.interview_part_2]) iv[q.id] = { choice: q.options[0].id, custom: null };
+  return iv;
+}
+function w1Full(): AmProgress {
+  return {
+    state: 'evaluation_complete',
+    first_decision: { choice: 'measure', reasoning: 'I would measure why students contact staff.' },
+    revised_decision: { choice: 'phased' },
+    interview: w1Answered(),
+    reflection: 'The request named a solution; the requirement was an outcome.',
+    commitment: 'name the outcome and the owner before choosing a tool',
+    flags: { zoom_out_viewed: true, consequence_viewed: true },
+    assumptions: [], tradeoffs: [], failure_modes: [],
+  };
+}
+
+describe('Week 1 scenario (reusability) + formal score', () => {
+  it('Week 1 is registered as a new scenario instance, scored, on the same framework', () => {
+    expect(scenarioForWeek(1)).toBe(W1);
+    expect(W1.baseline).toBe(false);
+    expect(W1.title).toMatch(/Request Is Not the Requirement/);
+    expect(W1.consequence.dashboard && W1.consequence.dashboard.length).toBeGreaterThan(0);   // 30-day dashboard
+    expect(W1.zoom_out.titles?.people).toMatch(/Stakeholders/);
+    expect(W1.adr.title).toMatch(/ADR-001/);
+    expect(computeReceipt(W1).represented_hours).toBe(3200);
+  });
+  it('the 8 dimensions carry the canonical weights (sum 100)', () => {
+    expect(AM_DIMENSIONS.reduce((s, d) => s + d.weight, 0)).toBe(100);
+  });
+  it('scoreMindset produces a weighted total, a stage, and one entry per dimension', () => {
+    const sc = scoreMindset({ ...w1Full(), ...deriveEvidence(w1Full(), W1) }, W1);
+    expect(sc.dimensions.length).toBe(AM_DIMENSIONS.length);
+    expect(sc.total).toBeGreaterThanOrEqual(0);
+    expect(sc.total).toBeLessThanOrEqual(100);
+    expect(sc.stage.label).toBeTruthy();
+    // the weighted total equals the sum of score*weight/100 (transparent)
+    const recomputed = Math.round(sc.dimensions.reduce((s, d) => s + d.score * (d.weight / 100), 0));
+    expect(sc.total).toBe(recomputed);
+  });
+  it('rewards depth: reasoning + custom answers raise the score above a bare click-through', () => {
+    const bare: AmProgress = { state: 'evaluation_complete', interview: w1Answered(), flags: {} };
+    const deep = { ...w1Full(), interview: (() => { const iv = w1Answered(); iv.q1 = { choice: 'hard', custom: 'The hard 18% is exactly who still needs a human.' }; return iv; })() };
+    const low = scoreMindset({ ...bare, ...deriveEvidence(bare, W1) }, W1).total;
+    const high = scoreMindset({ ...deep, ...deriveEvidence(deep as AmProgress, W1) }, W1).total;
+    expect(high).toBeGreaterThan(low);
+  });
+  it('Week 1 completes through the same 14 gates', () => {
+    const p = { ...w1Full(), ...deriveEvidence(w1Full(), W1), evaluation: { baseline: false, total: 60 } } as AmProgress;
+    expect(isCompletionEligible(p, W1)).toBe(true);
   });
 });

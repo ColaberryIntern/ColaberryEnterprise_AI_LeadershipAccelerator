@@ -192,7 +192,7 @@
 .te-shell.contacts-collapsed .te-ct-grp,
 .te-shell.contacts-collapsed .te-ctrow > .te-ctpres{display:none}
 .te-shell.contacts-collapsed .te-ct-head{justify-content:center;padding:15px 0 10px}
-.te-shell.contacts-collapsed .te-ct-toggle{display:none}
+/* keep the collapse toggle visible when collapsed (centered chevron) so the rail can be re-expanded */
 .te-shell.contacts-collapsed .te-ct-find{justify-content:center;margin:10px auto 4px;width:44px;padding:9px 0}
 .te-shell.contacts-collapsed .te-ctrow{justify-content:center;padding:7px 0}
 .te-shell.contacts-collapsed .te-ctrow::after{content:attr(data-name);position:absolute;right:calc(100% + 8px);top:50%;

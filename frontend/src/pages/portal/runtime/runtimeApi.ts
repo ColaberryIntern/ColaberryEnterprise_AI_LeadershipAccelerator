@@ -84,14 +84,14 @@ export interface AmScenario {
   request: { from: string; text: string };
   initial_system: string[];
   first_decision: { prompt: string; options: AmOption[] };
-  zoom_out: { people: string[]; information: string[]; decisions: string[]; operations: string[] };
+  zoom_out: { people: string[]; information: string[]; decisions: string[]; operations: string[]; titles?: { people?: string; information?: string; decisions?: string; operations?: string } };
   signature_reveals: string[];
   interview_part_1: AmInterviewQuestion[];
   interview_part_2: AmInterviewQuestion[];
-  consequence: { horizon: Array<{ point: string; risk: number; note?: string }>; reveal: string; lesson: string };
+  consequence: { horizon: Array<{ point: string; risk: number; note?: string }>; dashboard?: Array<{ label: string; value: string; trend?: 'up' | 'down' | 'flat' }>; reveal: string; lesson: string };
   rearchitecture: { prompt: string };
   receipt: { counts: Array<{ label: string; value: string }>; represented_hours: number; minutes: number; qualification: string };
-  adr: { fields: string[] };
+  adr: { fields: string[]; title?: string };
   project_transfer: { prompt: string; questions: string[] };
   commitment_prompt: string;
 }
@@ -105,7 +105,7 @@ export interface AmProgress {
   reflection?: string | null; commitment?: string | null;
   project_transfer?: { assumed_solution?: string; outcome?: string };
   flags?: { zoom_out_viewed?: boolean; consequence_viewed?: boolean };
-  evaluation?: { baseline?: boolean; signal?: number; stage?: { slug: string; label: string }; observation?: string; source?: string } | null;
+  evaluation?: { baseline?: boolean; signal?: number; total?: number; stage?: { slug: string; label: string }; dimensions?: Array<{ key: string; label: string; weight: number; score: number; evidence: string; strength: string; gap: string }>; observation?: string; source?: string } | null;
 }
 export interface AmReceipt { counts: Array<{ label: string; value: string }>; represented_hours: number; minutes: number; ratio: number; qualification: string }
 export interface AmLedger { lessons_completed: number; decisions_recorded: number; assumptions_discovered: number; failure_modes_examined: number; perspectives_encountered: number; represented_hours: number }
