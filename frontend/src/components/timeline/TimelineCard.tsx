@@ -96,7 +96,7 @@ export const visualFor = (band: string): Visual => BAND[band] || { kind: 'readin
 
 // Curriculum types that run IN Claude Code — the tile shows a "Claude Code" corner
 // strip so a student knows they'll need Claude Code open to complete the activity.
-export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'artifact_submission', 'github_sync']);
+export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'artifact_submission']);
 
 const KIND_GRADIENT: Record<Kind, string> = {
   video: 'linear-gradient(135deg,#367895,#2E6A86)',

@@ -33,7 +33,7 @@ const THUMBNAIL_SLUGS = [
   'deep_dive', 'prompt_challenge', 'implementation_task', 'artifact_submission',
   'ai_video_feedback', 'mock_interview', 'anthropic_skills_jar',
   'certification_exercise', 'evaluation', 'question', 'discussion',
-  'project_task', 'build_story', 'github_sync', 'reflection',
+  'project_task', 'build_story', 'reflection',
   'community_discussion', 'presentation', 'study_session', 'demo',
   'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',

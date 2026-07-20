@@ -10178,6 +10178,22 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: Frontend `tsc --noEmit -p frontend/tsconfig.json` — FeedControlTab.tsx clean (only the pre-existing `@dnd-kit` local-install gap in TimelineEditorTab.tsx). Backend `feedControlService.ts` clean (local root-compiler reports only node_modules `@types`/`zod` version-mismatch noise; Docker/CI tsc authoritative). CI frontend + backend typecheck authoritative.
   - Notes: Branch `workstream/feed-control-tangible` off main. Phase 1 of the "Both, sequenced" plan — tangible/honest UI now; flipping `FEED_CONTROL_ENABLED` on (Phase 2) is a separate, deliberate go. Needs a backend+nginx deploy (getBoard payload changed).
 
+### Remove GitHub Sync curriculum type (github_sync) — cards + type + code — 2026-07-20
+- [x] Remove all "Sync Your Project to GitHub" cards and delete the `github_sync` curriculum type (GitHub sync now handled by the background solution)
+  - Date: 2026-07-20
+  - Session: CC-20260720-g3k8
+  - What changed:
+    - Removed the `github_sync` card type end to end. `typeRegistry.ts`: deleted the `D({ slug:'github_sync' … })` definition (stops the boot `typeSeeder` re-creating the row).
+    - `dependencyEngine.ts`: deleted the `github_sync` DEP_MAP edge and re-pointed `artifact_submission: ['github_sync'] → ['implementation_task']` so plans containing an artifact card stay publishable (else `validationEngine` would FAIL every such plan once github_sync can't be authored).
+    - `composerAi.ts`: dropped `github_sync` from the week/sprint/month/internship/program SEQ scaffolds (prevents the `resolve(slug)!` crash on the no-approvedSet scaffold path).
+    - `certificationReadiness.ts`: `NEXT_FOR['Deployment & Ops']` `github_sync → implementation_task` (stop recommending a dead activity); left `DOMAIN_MAP`'s `github` competency intact (still fed by the GitHub integration, not the card).
+    - Dead-lookup cleanup: `evidenceEngine.ts`, `progressionService.ts`, `portfolioService.ts`, `server.ts` baseline slug list, `seedComponentAuthoring.ts`, `seedTimelineDemo.ts` (demo card spec).
+    - Frontend cosmetic: `TimelineCard.tsx` `CLAUDE_CODE_TYPES`, `OperationsCenterPage.tsx` twin-type selector.
+    - Tests: `surfaces.test.ts` (dropped github_sync surface assertions); `composerEngines.test.ts` (canonical week now 14 cards, not 15).
+    - LEFT INTACT (general GitHub integration the background solution relies on): `githubIntegrationService.ts`, `schedulerService.ts` sync cron, `anomalyDetectionService.ts` `last_github_sync` field, `githubEvidenceService.ts` commit→competency bridge.
+  - Why: Ali — "Remove all the Sync Your Project to GitHub items, we found a background solution for that; then delete that curriculum type." "Sync Your Project to GitHub" was a card instance (title) of the system type `github_sync`, recurring across weeks 1-12. [[reference_curriculum_type_component_architecture]] [[project_claude_code_type_spine]]
+  - Verification: jest green — `surfaces.test`, `composerEngines` (12/12, incl. "publishable canonical week" + "github repos > 0", so artifact-submission publish and GitHub evidence still work). 4 other timeline suites fail identically on a clean origin/main baseline (Sequelize-needs-a-DB local-env issues), NOT a regression from this change. Full backend tsc timed out locally (OneDrive+junction); CI typecheck authoritative — pure removals, no new symbols.
+  - Notes: Branch `workstream/remove-github-sync-type` off origin/main (the working worktree's `workstream/chapter-quality-and-worker` never had github_sync). PROD DB: the 28 `timeline_cards` (type=github_sync; 12 published wk1-12 in program 92b98a72 + 16 archived dupes) hard-deleted per Ali. The `curriculum_type_definitions` github_sync row (is_system=true) must be deleted AFTER this code deploys — the boot seeder re-creates it until typeRegistry ships without it. SQL: `DELETE FROM timeline_cards WHERE type='github_sync'; DELETE FROM curriculum_type_definitions WHERE slug='github_sync';`
 - [x] Community post details: author level badge + recent-commenter avatars
   - Date: 2026-07-20
   - Session: CC-20260719-c3v8

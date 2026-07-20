@@ -10,9 +10,9 @@ import { PlanCard } from '../types';
 const BP = { title: 'Prompt Engineering', week: 4, difficulty: 'core', competencies: ['prompt_engineering', 'context_engineering', 'testing', 'github'], architect_domains: ['prompt_engineering', 'architecture'] };
 
 describe('scaffoldPlan', () => {
-  it('assembles a 15-card week from real registry types with all deps satisfied', () => {
+  it('assembles a 14-card week from real registry types with all deps satisfied', () => {
     const plan = scaffoldPlan(BP, 'week');
-    expect(plan.cards.length).toBe(15);
+    expect(plan.cards.length).toBe(14);
     expect(plan.cards.every((c) => typeof c.type === 'string')).toBe(true);
     expect(checkDependencies(plan.cards).ok).toBe(true);   // canonical sequence is dependency-clean
     expect(plan.cards[0].type).toBe('announcement');
