@@ -10095,6 +10095,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: backend communityService jest 34/34 (new points-awarded test); frontend tsc --noEmit clean (TS 5.9.3).
   - Notes: Point values (post +5 / comment +2) are tunable constants; a post-spam anti-gaming cap is deferred. Reconciling the top-bar vs community points systems is a separate follow-up.
 
+- [x] Community media + sidebar: YouTube thumbnails, local image upload, program identity card
+  - Date: 2026-07-20
+  - Session: CC-20260719-c3v8
+  - What changed: Post-launch feedback from Ali (live). (1) YouTube: composer + post card show the real YouTube thumbnail (youtubeId/youtubeThumb) with a play overlay linking out, instead of a broken tile. (2) Local image upload from the student's computer: new communityMediaUpload multer (PNG/JPG/WEBP/GIF, 8MB) on the persistent /app/uploads volume; POST /api/portal/community/upload (auth) + public GET /api/portal/community/media/:filename (opaque UUID, traversal-guarded); composer "Upload image" button; media_urls schema relaxed to accept the uploaded relative path. (3) Program identity card in the sidebar (Design-E): name + tagline + useful links + Members/Online/Mentors stat tiles + member avatar stack. Files: backend/src/config/upload.ts, backend/src/routes/participantRoutes.ts, backend/src/schemas/communitySchemas.ts, frontend/src/services/communityApi.ts, frontend/src/pages/portal/community/{communityUtils.ts,Composer.tsx,PostCard.tsx,CommunityPage.tsx,community.css}.
+  - Verification: frontend tsc clean; backend communityService jest 34/34; backend tsc --skipLibCheck clean on changed files (full backend typecheck via CI).
+  - Notes: Post author role/level badge + recent-commenter avatars deferred to a fast-follow (needs a PostFeedItem contract change). Mentors count is a proxy (members at level>=3).
 ### Dev/prod schema parity — reusable sync tool + dev DB made faithful — 2026-07-20
 - [x] `scripts/syncDevSchemaFromProd.sh` — make the dev DB schema-faithful to prod; dev synced
   - Date: 2026-07-20

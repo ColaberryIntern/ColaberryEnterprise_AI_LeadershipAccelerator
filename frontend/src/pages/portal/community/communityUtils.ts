@@ -49,3 +49,14 @@ const VIDEO_EXT = /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i;
 export function isVideoUrl(url: string): boolean {
   return VIDEO_EXT.test(url);
 }
+
+// A YouTube link isn't a playable <video> file — pull the 11-char video id from
+// the common URL shapes (watch?v=, youtu.be/, shorts/, embed/) so we can show
+// the real YouTube thumbnail instead of a broken tile.
+export function youtubeId(url: string): string | null {
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+export function youtubeThumb(id: string): string {
+  return `https://img.youtube.com/vi/${id}/hqdefault.jpg`;
+}
