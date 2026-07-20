@@ -180,6 +180,8 @@
 .te-ctpres.online{background:var(--leaf)}
 .te-ctpres.idle{background:var(--amber)}
 .te-ctpres.offline{background:var(--border)}
+.te-ctav img{width:100%;height:100%;border-radius:50%;object-fit:cover}
+.te-ct-empty{padding:14px 12px;color:var(--muted);font-size:13px;line-height:1.45}
 /* presence dot anchored to the avatar (the one that shows when the rail is collapsed) */
 .te-ctav .te-ctpres{position:absolute;right:-1px;bottom:-1px}
 

@@ -6,7 +6,8 @@ import { fetchSettings, readCachedAvatar } from '../../../services/portalSetting
 import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import BuildToast from '../projects/BuildToast';
-import { COHORT_CONTACTS, onlineCount } from './cohortContactsStub';
+import { CohortContact, fetchCohortPresence, onlineCount } from '../../../services/cohortPresenceApi';
+import { pingPresence } from '../../../services/communityApi';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
 
@@ -139,6 +140,21 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   useEffect(() => {
     try { localStorage.setItem('te_contacts_collapsed', contactsCollapsed ? '1' : '0'); } catch { /* ignore */ }
   }, [contactsCollapsed]);
+  // Cohort contacts rail — real presence from GET /api/portal/cohort/presence on
+  // a light 60s poll. Also ping our own presence so cohort-mates see us online
+  // while we're anywhere in the portal (not just the Community tab). Fail-soft:
+  // any error keeps the last roster and never breaks the shell.
+  const [contacts, setContacts] = useState<CohortContact[]>([]);
+  useEffect(() => {
+    let alive = true;
+    const tick = () => {
+      fetchCohortPresence().then((list) => { if (alive) setContacts(list); }).catch(() => { /* keep last roster */ });
+      pingPresence().catch(() => { /* non-fatal */ });
+    };
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => { alive = false; window.clearInterval(id); };
+  }, []);
 
   const load = useCallback(async () => {
     const [p, s] = await Promise.allSettled([fetchPoints(), fetchSchedule()]);
@@ -212,10 +228,10 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const cohortName = schedule?.first_class?.cohort_name || 'Your cohort';
   const active = location.pathname;
 
-  // Cohort contacts rail data (stub until GET /api/portal/cohort/presence lands).
-  const online = onlineCount(COHORT_CONTACTS);
-  const onlineList = COHORT_CONTACTS.filter((c) => c.presence !== 'offline');
-  const offlineList = COHORT_CONTACTS.filter((c) => c.presence === 'offline');
+  // Cohort contacts rail data (live presence, split online-first / offline).
+  const online = onlineCount(contacts);
+  const onlineList = contacts.filter((c) => c.presence !== 'offline');
+  const offlineList = contacts.filter((c) => c.presence === 'offline');
 
   return (
     <div className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}`}>
@@ -326,20 +342,23 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
         <div className="te-ct-list">
           <div className="te-ct-grp">{cohortName} · {online} online</div>
           {onlineList.map((c) => (
-            <button key={c.name} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
-              <span className="te-ctav" style={{ background: c.color }}>{c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
+            <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
+              <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
               <span className="te-ctname">{c.name}</span>
               <span className={`te-ctpres ${c.presence}`} />
             </button>
           ))}
           {offlineList.length > 0 && <div className="te-ct-grp">Offline</div>}
           {offlineList.map((c) => (
-            <button key={c.name} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
-              <span className="te-ctav" style={{ background: c.color }}>{c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
+            <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
+              <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
               <span className="te-ctname">{c.name}</span>
               <span className={`te-ctpres ${c.presence}`} />
             </button>
           ))}
+          {contacts.length === 0 && (
+            <div className="te-ct-empty">Your cohort will appear here once you’re enrolled.</div>
+          )}
         </div>
       </aside>
 
