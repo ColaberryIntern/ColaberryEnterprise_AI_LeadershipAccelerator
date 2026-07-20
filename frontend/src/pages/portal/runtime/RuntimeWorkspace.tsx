@@ -119,6 +119,7 @@ const RuntimeWorkspace: React.FC = () => {
   // Setup Lab (Claude Code enablement): dark native panel + Copy button, filling the
   // center as a single scroll (its own renderer, not the generic lessonDoc iframe).
   const isSetupLab = band === 'setup_lab' && !!card?.content?.body_html;
+  const [labCopied, setLabCopied] = useState(false);   // Setup Lab: reveal completion only after the prompt is copied
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
@@ -325,8 +326,10 @@ const RuntimeWorkspace: React.FC = () => {
               same slim foot as the reader/lesson fill cards. */}
           {isSetupLab && (
             <div className="rt-readerwrap">
-              <SetupLabRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} estMin={card.estimated_time} variant="workspace" />
-              <div className="rt-readerfoot">{completeGate}</div>
+              <SetupLabRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} estMin={card.estimated_time} variant="workspace" onCopied={() => setLabCopied(true)} />
+              <div className="rt-readerfoot">
+                {!completed && !labCopied && <span className="rt-muted">Copy the prompt, run it in Claude Code, then complete this lab on the right →</span>}
+              </div>
             </div>
           )}
           {/* Anthropic Skills Course — the external-course panel + certificate upload
@@ -363,6 +366,12 @@ const RuntimeWorkspace: React.FC = () => {
         {/* RIGHT — AI Mentor */}
         <aside className="rt-mentor">
           <div className="rt-mentor-h"><span className="rt-dot" /> AI Mentor</div>
+          {isSetupLab && (labCopied || completed) && (
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
+              {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Finished in Claude Code?</div>}
+              {completeGate}
+            </div>
+          )}
           <div className="rt-thread">
             {msgs.map((m, i) => <div key={i} className={`rt-msg ${m.role}`}>{m.content}</div>)}
             <div ref={mentorEnd} />

@@ -9825,3 +9825,15 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: the placed `setup_lab` cards rendered in the generic light renderer (double scrollbar, no copy button, no Claude Code identity). This is the bespoke frontend slice that makes the live portal match the approved dark design. [[project_canonical_course_structure]]
   - Verification: deployed to the `:9999` dev instance (accelerator-dev nginx image rebuild); frontend tsc runs inside that Docker build (react-scripts). User visual review pending.
   - Notes: Branch `workstream/setup-lab-renderer` off main. Dev-only (not merged to main / prod). Type + 5 cards already authored on `accelerator_dev1`. No fake embedded Claude Code terminal — the copy-into-Claude-Code flow + mentor rail is the real UX. Same renderer will serve Prompt Lab / Implementation Task.
+
+### Setup Lab renderer v2 — light theme, copy-gated completion, tile banner — 2026-07-20
+- [x] Light theme (drawer + workspace), completion revealed on the right panel only after Copy, and an AI-generated tile banner
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `frontend/src/components/timeline/SetupLabRender.tsx`: dark → **light** theme (portal-consistent; kept the coral Claude accent, badge, CSS-counter numbered beats). The Copy button now fires an `onCopied` callback (via a ref so the latest handler is always called).
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: `labCopied` state — the completion button ("Complete & generate evidence") is HIDDEN until the prompt is copied, then rendered in the RIGHT rail (under AI Mentor) behind a "Finished in Claude Code?" label; the center foot shows a copy→run→complete hint until copied.
+    - `scripts/curriculum-type-thumbnails/prompts.json`: added a `setup_lab` scene (terminal console + rocket + power plug). Generated one gpt-image render on the VPS host, composited (center-crop 3:1 → 900x300 + Colaberry chip) → `frontend/public/thumbnails/curriculum-types/setup_lab.jpg` (baked into the nginx build; the DB `thumbnail_url` already points to it, so the tile now shows the banner instead of the gradient fallback).
+  - Why: Ali's live review — the dark drawer/workspace background wasn't wanted, completion should gate on copy and live on the right panel, and the tile needed a real banner. [[project_canonical_course_structure]]
+  - Verification: nginx dev rebuild (react-scripts tsc); user visual review on :9999.
+  - Notes: Branch `workstream/setup-lab-renderer`, dev-only. The drawer stays light + copy button (no completion in the drawer — it directs to Enter workspace). Wiring the thumbnail_url into `seedComponentAuthoring.ts` is deferred to the prod promotion.
