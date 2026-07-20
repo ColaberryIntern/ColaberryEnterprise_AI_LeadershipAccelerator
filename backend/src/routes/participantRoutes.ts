@@ -870,6 +870,35 @@ router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) =
   }
 });
 
+// Friends — send a request / respond to one. Idempotent, cohort-scoped. The
+// caller's friendship status toward each cohort-mate rides on /cohort/presence
+// (friendshipStatus), so the rail needs no separate list endpoint.
+router.post('/api/portal/friends/request', requireParticipant, async (req, res) => {
+  const parsed = z.object({ targetId: z.string().uuid() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid targetId' }); return; }
+  try {
+    const { sendFriendRequest } = await import('../services/friendshipService');
+    const result = await sendFriendRequest(req.participant!.sub, parsed.data.targetId);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'FriendRequestError') { res.status(400).json({ error: err.message }); return; }
+    res.status(500).json({ error: 'Could not send friend request' });
+  }
+});
+
+router.post('/api/portal/friends/respond', requireParticipant, async (req, res) => {
+  const parsed = z.object({ requesterId: z.string().uuid(), accept: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request body' }); return; }
+  try {
+    const { respondToRequest } = await import('../services/friendshipService');
+    const result = await respondToRequest(req.participant!.sub, parsed.data.requesterId, parsed.data.accept);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'FriendRequestError') { res.status(400).json({ error: err.message }); return; }
+    res.status(500).json({ error: 'Could not respond to friend request' });
+  }
+});
+
 router.get('/api/portal/community/members/:memberId', requireParticipant, async (req, res) => {
   const paramsParsed = MemberIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) {

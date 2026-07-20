@@ -11,11 +11,14 @@ jest.mock('../../models/CommunityPost', () => ({ create: jest.fn(), findAll: jes
 jest.mock('../../models/CommunityNotification', () => ({ bulkCreate: jest.fn() }));
 jest.mock('../../models/CommunityLike', () => ({ findAll: jest.fn() }));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
+jest.mock('../../models/Friendship', () => ({ findAll: jest.fn() }));
 
 import { getCohortPresence } from '../../services/cohortPresenceService';
 import Enrollment from '../../models/Enrollment';
+import Friendship from '../../models/Friendship';
 
 const findAllEnrollment = Enrollment.findAll as jest.Mock;
+const findAllFriendship = Friendship.findAll as jest.Mock;
 
 const enrollmentId = '11111111-1111-1111-1111-111111111111';
 const cohortId = '22222222-2222-2222-2222-222222222222';
@@ -24,6 +27,7 @@ const ago = (ms: number) => new Date(T0.getTime() - ms);
 
 beforeEach(() => {
   jest.clearAllMocks();
+  findAllFriendship.mockResolvedValue([]); // no friendships by default
 });
 
 describe('getCohortPresence', () => {
@@ -60,7 +64,7 @@ describe('getCohortPresence', () => {
       { id: 'e1', full_name: 'No Community', avatar_data_url: null, communityMember: null },
     ]);
     const contacts = await getCohortPresence(enrollmentId, cohortId, T0);
-    expect(contacts).toEqual([{ id: 'e1', name: 'No Community', avatarUrl: null, presence: 'offline' }]);
+    expect(contacts).toEqual([{ id: 'e1', name: 'No Community', avatarUrl: null, presence: 'offline', friendshipStatus: 'none' }]);
   });
 
   it('guard: guest/explorer with no cohort gets an empty list and hits no DB', async () => {
