@@ -14,6 +14,7 @@
  * a reseed and promotes cleanly to prod.
  */
 import CurriculumTypeDefinition, { CurriculumTypeDefinitionAttributes } from '../models/CurriculumTypeDefinition';
+import { INTEL_FORMATS } from './intelCardFormats';
 
 type AuthoredFields = Partial<CurriculumTypeDefinitionAttributes>;
 
@@ -259,52 +260,52 @@ const ANNOUNCEMENT_GENERATION_PROMPT = [
 // falls back to a representative example grounded in the week's WEEK CONTEXT.
 // Only generation_prompt drives the runtime; it emits the fixed 9-key schema.
 interface IntelPromptConfig {
+  slug: string;          // which INTEL_FORMATS design this card emits
   role: string;          // one line: what this card type is
   unit: string;          // what one item is, singular (e.g. "an AI news item")
   titleRule: string;     // how to format the title
-  leadHeading: string;   // heading of the first body section (the item itself)
-  leadBody: string;      // what the first body section must contain (type-specific)
-  sources: string;       // example sources, for the fallback-example instruction
   reflectionSeed: string;
   discussionSeed: string;
   github?: string;       // when set, github_task instruction; otherwise null
+  // legacy fields — no longer used (the design now comes from INTEL_FORMATS[slug])
+  leadHeading?: string;
+  leadBody?: string;
+  sources?: string;
 }
 
-const intelGenerationPrompt = (c: IntelPromptConfig): string => [
-  `You write ${c.role} for the AI Systems Architect Accelerator — a continuously-updated intelligence card that keeps enterprise AI architects current. Executive voice: clear, calm, authoritative (Bloomberg meets Salesforce). No hype, no emojis, no marketing language.`,
-  '',
-  'DATA SOURCE — read this first. An ITEM may be provided below through variables:',
-  '  ITEM title:   {{item_title}}',
-  '  ITEM source:  {{item_source}}',
-  '  ITEM url:     {{item_url}}',
-  '  ITEM date:    {{item_date}}',
-  '  ITEM excerpt: {{item_excerpt}}',
-  `If the ITEM title above is non-empty, base the ENTIRE card on that specific real item (${c.unit}). If the ITEM title is empty, do NOT invent a fake source — instead produce ONE representative, clearly-illustrative example (${c.unit}) grounded in the WEEK CONTEXT above, so the card previews sensibly. Never fabricate a URL, a citation, a metric, or a quote you were not given; when a fact is not supplied, describe the role in general terms and lower the confidence.`,
-  '',
-  `title: ${c.titleRule}`,
-  '',
-  'summary: one sentence (under ~30 words) stating the single most important takeaway.',
-  '',
-  'body_html: clean, self-contained, VALID and fully balanced HTML. Use ONLY <h3>, <h4>, <p>, <ul>, <ol>, <li>, <strong>, <em>, <blockquote>, <a> (with href) and <table>/<thead>/<tbody>/<tr>/<th>/<td>. NO <script>, NO <style>, NO inline style attributes, NO <img> (the reader supplies the styling and the card supplies the thumbnail). Every opening tag must have a matching closing tag. Emit these sections IN THIS ORDER, each opened by an <h3>:',
-  `  1. <h3>${c.leadHeading}</h3> — ${c.leadBody}`,
-  '  2. <h3>Why it matters</h3> — one short paragraph on why this is significant right now.',
-  '  3. <h3>Why an AI Systems Architect should care</h3> — one short paragraph tying it to the architect\'s role (systems design, model/tool selection, governance, enterprise fit).',
-  '  4. <h3>Implications</h3> — a <ul> with exactly three <li>, each led by a bold label: <li><strong>Business:</strong> …</li> <li><strong>Technical:</strong> …</li> <li><strong>Enterprise:</strong> …</li>.',
-  '  5. <h3>Recommended next action</h3> — one concrete, specific action the architect (or their team) could take this week.',
-  '  6. <h3>Related</h3> — a <ul> with three <li> led by bold labels: <li><strong>Skills:</strong> …</li> <li><strong>Technologies:</strong> …</li> <li><strong>Curriculum:</strong> which parts of the AI Systems Architect path this connects to</li>. Keep each to a short comma-separated list.',
-  '  7. <h3>Source</h3> — one short <p>: when a real ITEM was given, "Source: {{item_source}} · {{item_date}}" and, if a url was given, a single <a href="{{item_url}}">link</a>; otherwise write "Source: illustrative example (no live item)". End the paragraph with "Confidence: High|Medium|Low" reflecting how well-grounded the card is (Low whenever it is an illustrative example or facts were missing).',
-  '',
-  `reflection: ${c.reflectionSeed}`,
-  `discussion_prompt: ${c.discussionSeed}`,
-  'questions: [].',
-  c.github ? `github_task: ${c.github}` : 'github_task: null.',
-  'evaluation_criteria: [].',
-  'completion: "Marked complete when the participant reads the card."',
-  '',
-  'Length: about 180 to 300 words of body. Be specific and concrete; prefer real nouns over abstractions.',
-].join('\n');
+// Each type emits its OWN distinct, richly-styled format (intelCardFormats.ts).
+// Because the `intel` band renders through lessonDoc (which preserves <style>),
+// the prompt tells the model to copy that type's <style> VERBATIM, then fill the
+// type's structure — so a live LLM card matches the hand-authored sample design.
+const intelGenerationPrompt = (c: IntelPromptConfig): string => {
+  const f = INTEL_FORMATS[c.slug];
+  return [
+    `You write ${c.role} for the AI Systems Architect Accelerator — a continuously-updated intelligence card that keeps enterprise AI architects current. Executive voice: clear, calm, authoritative (Bloomberg meets Salesforce). No hype, no marketing language.`,
+    '',
+    'DATA SOURCE — read this first. An ITEM may be provided through variables:',
+    '  ITEM title: {{item_title}} | source: {{item_source}} | url: {{item_url}} | date: {{item_date}} | excerpt: {{item_excerpt}}',
+    `If the ITEM title is non-empty, base the ENTIRE card on that specific real item (${c.unit}). If it is empty, produce ONE representative, clearly-illustrative example (${c.unit}) grounded in the WEEK CONTEXT above. Never fabricate a URL, a citation, a metric, or a quote you were not given; when a fact is missing, describe it in general terms and lower the confidence.`,
+    '',
+    `title: ${c.titleRule}`,
+    'summary: one sentence (under ~30 words) stating the single most important takeaway.',
+    '',
+    'body_html: this card type has a SPECIFIC, DISTINCT visual format — do NOT emit a generic list of headings. FIRST, copy this <style> block VERBATIM, character for character (do not rename a class or change a value):',
+    `<style>${f.style}</style>`,
+    'THEN emit the markup using ONLY those classes, in exactly this structure:',
+    f.structure,
+    'Rules: valid, fully-balanced HTML (every opening tag has a matching close); no <script>, no <img>, and no inline style attributes beyond the ones the structure already shows. Fill every slot from the ITEM (or the illustrative example) — tight, concrete, specific copy. The Source line must end with a confidence of High, Medium, or Low (Low for an illustrative example or when facts were missing).',
+    '',
+    `reflection: ${c.reflectionSeed}`,
+    `discussion_prompt: ${c.discussionSeed}`,
+    'questions: [].',
+    c.github ? `github_task: ${c.github}` : 'github_task: null.',
+    'evaluation_criteria: [].',
+    'completion: "Marked complete when the participant reads the card."',
+  ].join('\n');
+};
 
 const AI_NEWS_FLASH_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_news_flash',
   role: 'an AI News Flash — a concise executive briefing on one piece of AI news',
   unit: 'an AI news item',
   titleRule: 'the news headline itself, rewritten as a crisp Title-Case headline under ~12 words (keep acronyms like AI, API, MCP, LLM as-is). No "AI News Flash" prefix.',
@@ -316,6 +317,7 @@ const AI_NEWS_FLASH_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const AI_RESEARCH_DIGEST_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_research_digest',
   role: 'an AI Research Digest — a plain-English explainer of one AI research paper',
   unit: 'an AI research paper',
   titleRule: 'the paper\'s idea in plain Title-Case English under ~12 words (not the raw academic title). No prefix.',
@@ -327,6 +329,7 @@ const AI_RESEARCH_DIGEST_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const AI_TOOL_OF_THE_DAY_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_tool_of_the_day',
   role: 'an AI Tool of the Day — an enterprise-readiness profile of one AI tool',
   unit: 'an AI tool',
   titleRule: 'the tool\'s name, then " — ", then a three-to-six-word description of what it does.',
@@ -338,6 +341,7 @@ const AI_TOOL_OF_THE_DAY_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const AI_VIDEO_STREAM_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_video_stream',
   role: 'an AI Video Stream card — a briefing on one high-quality AI video, talk, keynote, or podcast',
   unit: 'an AI video or talk',
   titleRule: 'the video/talk title in Title Case under ~14 words. No prefix. The video itself plays in the card player; this text is the accompanying briefing.',
@@ -349,6 +353,7 @@ const AI_VIDEO_STREAM_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const AI_QUOTE_OF_THE_DAY_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_quote_of_the_day',
   role: 'an AI Quote of the Day — a short, thought-provoking quote from an AI leader with context',
   unit: 'a quote from an AI leader',
   titleRule: 'a 3-to-6-word Title-Case phrase capturing the quote\'s theme. No prefix, no quotation marks in the title.',
@@ -360,6 +365,7 @@ const AI_QUOTE_OF_THE_DAY_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const AI_ARCHITECTURE_BREAKDOWN_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'ai_architecture_breakdown',
   role: 'an AI Architecture Breakdown — an explanation of how one real AI system is built',
   unit: 'a real AI product or system',
   titleRule: 'the system\'s name, then " — ", then "Architecture Breakdown".',
@@ -371,6 +377,7 @@ const AI_ARCHITECTURE_BREAKDOWN_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const BUILD_BREAKDOWN_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'build_breakdown',
   role: 'a Build Breakdown — a dissection of one impressive AI build shared by a developer',
   unit: 'an impressive AI build',
   titleRule: 'the build\'s name or one-line description in Title Case under ~12 words. No prefix.',
@@ -383,6 +390,7 @@ const BUILD_BREAKDOWN_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const MCP_SERVER_SPOTLIGHT_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'mcp_server_spotlight',
   role: 'an MCP Server Spotlight — a profile of one Model Context Protocol server',
   unit: 'an MCP server',
   titleRule: 'the MCP server\'s name, then " — ", then "MCP Server".',
@@ -395,6 +403,7 @@ const MCP_SERVER_SPOTLIGHT_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const CLAUDE_CODE_TECHNIQUE_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'claude_code_technique',
   role: 'a Claude Code Technique — an advanced Claude Code workflow explained with a practical example',
   unit: 'a Claude Code technique',
   titleRule: 'the technique named as a Title-Case phrase under ~10 words. No prefix.',
@@ -407,6 +416,7 @@ const CLAUDE_CODE_TECHNIQUE_GENERATION_PROMPT = intelGenerationPrompt({
 });
 
 const MARKET_INTELLIGENCE_GENERATION_PROMPT = intelGenerationPrompt({
+  slug: 'market_intelligence',
   role: 'a Market Intelligence card — an enterprise-AI market or industry signal (the kind Opportunity Pulse surfaces)',
   unit: 'a market / industry AI signal',
   titleRule: 'the signal as a crisp Title-Case headline under ~12 words. No prefix.',

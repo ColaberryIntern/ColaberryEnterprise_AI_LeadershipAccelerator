@@ -51,21 +51,30 @@ describe('intelligence pipeline curriculum types', () => {
     }
   });
 
-  it('every generation prompt is DUAL-MODE (item vars + WEEK CONTEXT fallback) and emits the quality standard', () => {
+  it('every generation prompt is DUAL-MODE (item vars + WEEK CONTEXT fallback) with a distinct verbatim format', () => {
     for (const slug of INTEL_SLUGS) {
       const p = COMPONENT_AUTHORING[slug].generation_prompt as string;
       // dual-mode: references the ITEM variables and the week-context fallback
       expect(p).toContain('{{item_title}}');
       expect(p).toContain('WEEK CONTEXT');
-      // executive quality standard sections
-      expect(p).toContain('Why it matters');
-      expect(p).toContain('Why an AI Systems Architect should care');
-      expect(p).toContain('Implications');
-      expect(p).toContain('Recommended next action');
+      // distinct per-type format: the prompt carries a verbatim <style> block
+      expect(p).toContain('copy this <style> block VERBATIM');
+      expect(p).toContain('<style>');
       // fixed 9-key schema hygiene
       expect(p).toContain('reflection');
       expect(p).toContain('discussion_prompt');
     }
+  });
+
+  it('each type embeds its OWN distinct format (styles differ across types)', () => {
+    const styles = INTEL_SLUGS.map((slug) => {
+      const p = COMPONENT_AUTHORING[slug].generation_prompt as string;
+      const m = p.match(/<style>([\s\S]*?)<\/style>/);
+      return m ? m[1] : '';
+    });
+    expect(styles.every((s) => s.length > 200)).toBe(true);
+    // no two types share the same stylesheet — they are visually distinct
+    expect(new Set(styles).size).toBe(INTEL_SLUGS.length);
   });
 
   it('exposes the ingest item variables so a pipeline can drive them', () => {
