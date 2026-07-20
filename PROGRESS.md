@@ -9882,3 +9882,18 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali requested the Colaberry Commons spec (BC 10028907149) as a hands-off overnight build. Discovery: the session's starting branch was 995 commits behind main and missing the timeline engine; the Epic 4 community FEED layer already shipped to main, but the ROOMS layer was unbuilt across main + all 7 community branches — so this is the additive missing half (not a duplicate). Backend + schema scope (frontend deferred). Ships dark behind `COMMUNITY_ROOMS_ENABLED` so prod is unaffected until flipped. [[project_colaberry_commons_build]]
   - Verification: `cd backend && npx tsc --noEmit` exit 0 (whole backend); `npx jest community` = 6 suites / 128 tests passing (incl. new communityRooms.test.ts 17/17; existing community suites unbroken). Built + validated in worktree `workstream/community-rooms-commons` off origin/main.
   - Notes: Documented follow-ons — frontend Community shell; timeline-card publication for community_live_session (the outbox has the hook); Meet attendance/recording via Reports API. Existing `SessionChatMessage` (legacy per-session chat) intentionally left untouched this run to avoid frontend blast radius; unification bridge is via `community_rooms.linked_live_session_id`.
+
+### Prompt Lab — practice-prompt catalog (Claude Code type) + Deep Dive/deliverables context — 2026-07-20
+- [x] `prompt_lab` reworked into a practice-prompt catalog that draws from the Deep Dive + Anthropic course + blueprint deliverables
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `backend/src/services/timeline/sectionCurriculumContext.ts`: added `prompt_lab` to `SECTION_ROSTER_TYPES`, and enriched the roster context with the week's DELIVERABLES (github/portfolio/evidence — the documents built) + the Deep Dive card's content summary. So the Prompt Lab generator writes prompts that build the real week artifacts.
+    - `backend/src/services/timeline/typeRegistry.ts`: `prompt_lab` render_band `promptlab` → **`prompt_catalog`** (prompt_challenge keeps `promptlab`/evaluate). Test + frontend `BAND` + `SUPPORTED_RENDER_BANDS` updated.
+    - `frontend/src/components/timeline/PromptCatalogRender.tsx` (NEW): parses the catalog into React — categories, each prompt = visible explanation + hidden/revealable prompt + Copy; a progress line + `onAllCopied` so completion is gated on copying ALL prompts. Wired into the drawer + workspace.
+    - `frontend/src/components/timeline/TimelineCard.tsx`: the "Claude Code" corner strip now shows for ALL Claude Code types (`CLAUDE_CODE_TYPES`: setup_lab, prompt_lab, implementation_task, github_sync), not just setup_lab.
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: for `prompt_catalog`, the completion button is hidden until all prompts are copied, then revealed in the RIGHT rail (mirrors Setup Lab).
+    - `backend/src/seeds/seedComponentAuthoring.ts`: `prompt_lab` authored config (`PROMPT_LAB_GENERATION_PROMPT` + I/O) for prod.
+  - Why: Ali's spec — Prompt Lab should generate categorized practice prompts (copy into Claude Code, reveal-on-demand), grounded in the section's Deep Dive documents, Anthropic course, and blueprint. [[project_canonical_course_structure]]
+  - Verification: built + validated on the `:9999` dev instance (real catalogs, e.g. Week 3 includes "Create Your Workflow Assistant" = the week's deliverable). Frontend tsc via Docker build; typeRegistry jest.
+  - Notes: Branch `workstream/prompt-lab-catalog`. All 14 prompt_lab cards must be regenerated post-deploy (render band flipped). Same renderer pattern will serve Implementation Task.
