@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { fetchImpact, ImpactResponse } from '../../../services/roomsApi';
+import { levelFor } from '../../../services/onboardingApi';
 
 // Phase B #3 — "make recognition visible." Two things at once: the viewer's own
 // impact (badges they've earned + live level/points), and a cohort recognition
@@ -34,7 +35,7 @@ const ImpactPanel: React.FC = () => {
     <div className="te-card rm-impact" style={{ padding: 16, marginTop: 16 }}>
       <div className="rm-impact-head">
         <p className="rm-strip-title" style={{ margin: 0 }}>🏅 Your impact</p>
-        <span className="rm-lvlpill">Lv {impact.level} · {impact.points} pts</span>
+        <span className="rm-lvlpill">{levelFor(impact.points).name} · {impact.points} pts</span>
       </div>
 
       {earned ? (

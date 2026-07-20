@@ -266,8 +266,7 @@ export interface ImpactRecentItem {
   created_at: string;
 }
 export interface ImpactSummary {
-  points: number;
-  level: number;
+  points: number; // canonical total (same as the top-right HUD)
   total_contributions: number;
   badges: ImpactBadge[];
   recent: ImpactRecentItem[];
