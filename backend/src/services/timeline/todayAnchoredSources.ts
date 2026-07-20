@@ -17,6 +17,7 @@ import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
 import CommunityPost from '../../models/CommunityPost';
+import CommunityMember from '../../models/CommunityMember';
 import { resolveCohortId } from '../communityService';
 import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
@@ -85,10 +86,16 @@ function communityMedia(mediaUrls: unknown): { video: FeedVideo | null; image: s
   return { video: null, image: urls[0] };
 }
 
-function communityItem(p: { id: string; body: string; media_urls?: unknown }): TodayFeedItem {
+function communityItem(p: {
+  id: string; body: string; media_urls?: unknown;
+  member?: { display_name?: string | null; avatar_url?: string | null; level?: number | null } | null;
+}): TodayFeedItem {
   const body = (p.body || '').trim();
   const title = body.length > 80 ? `${body.slice(0, 77)}…` : body;
   const { video, image } = communityMedia(p.media_urls);
+  const author = p.member
+    ? { name: p.member.display_name || 'Member', avatar_url: p.member.avatar_url ?? null, level: p.member.level ?? 1 }
+    : null;
   return {
     position: 0,
     kind: 'anchored',
@@ -108,6 +115,7 @@ function communityItem(p: { id: string; body: string; media_urls?: unknown }): T
     estimated_time: null,
     status: null,
     interacted: false,
+    author,
   };
 }
 
@@ -152,6 +160,7 @@ async function communityCandidates(enrollmentId: string, placedRefs: Set<string>
     const cohortId = await resolveCohortId(enrollmentId);
     const posts = await CommunityPost.findAll({
       where: { cohort_id: cohortId, status: 'visible' },
+      include: [{ model: CommunityMember, as: 'member', attributes: ['display_name', 'avatar_url', 'level'] }],
       order: [['created_at', 'DESC']],
       limit: CANDIDATE_CAP,
     });

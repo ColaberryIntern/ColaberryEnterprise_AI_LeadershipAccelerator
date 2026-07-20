@@ -24,6 +24,7 @@ export interface TodayFeedItem {
   estimated_time: number | null;
   status: string | null;
   interacted: boolean;
+  author?: { name: string; avatar_url: string | null; level: number } | null;
 }
 
 export interface TodayPage {

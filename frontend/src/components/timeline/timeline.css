@@ -122,6 +122,12 @@
 .tl-de .fc-head .ttl{font-weight:700;font-size:16px;color:var(--text-strong);line-height:1.25}
 .tl-de .fc-head .sub{font-size:13px;color:var(--text-muted);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .tl-de .fc-head .st-ic{margin-left:auto;flex:none}
+/* Community post byline — avatar + name + level badge, so the card reads as a real post */
+.tl-de .fc-head .tc-avatar{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;letter-spacing:.02em;object-fit:cover;overflow:hidden}
+.tl-de .fc-head .tc-lvl-badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.01em;border-radius:999px;padding:2px 9px;background:#eef2f7;color:#334155}
+.tl-de .fc-head .tc-lvl-badge.lvl-2{background:#e0edff;color:#1d4ed8}
+.tl-de .fc-head .tc-lvl-badge.lvl-3{background:#ede9fe;color:#6d28d9}
+.tl-de .fc-head .tc-lvl-badge.lvl-4{background:#ffe4e6;color:#be123c}
 .tl-de .fc-body{padding:0 20px 14px}
 .tl-de .fc-body p{margin:0 0 14px;color:var(--text-body);font-size:14.5px}
 /* ── Locked card: big lock over a dimmed tile; every interaction is blocked ── */

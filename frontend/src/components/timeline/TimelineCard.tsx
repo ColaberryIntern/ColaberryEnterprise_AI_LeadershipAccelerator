@@ -4,6 +4,12 @@ import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
 import { toTitleCase } from '../../utils/titleCase';
 
+// Community byline helpers — a card carrying `author` renders as a post (avatar +
+// name + level badge) instead of the generic curriculum header.
+const LEVEL_NAMES: Record<number, string> = { 1: 'Apprentice', 2: 'Builder', 3: 'Architect', 4: 'Principal' };
+const authorInitials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?';
+const authorColor = (n: string) => { let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return `hsl(${h % 360} 48% 42%)`; };
+
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
  * Design E. One presentational component renders every curriculum type; the
@@ -42,6 +48,7 @@ export interface TimelineFeedCard {
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
   type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
   week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title (no week number)
+  author?: { name: string; avatar_url: string | null; level: number } | null;   // community posts: member byline (avatar + name + level) so the card reads as a real post
 }
 
 export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
@@ -342,12 +349,18 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   return (
     <div className={`tl-card fcard${locked ? ' locked' : ''}${compact ? ' compact' : ''}`}>
       <div className="fc-head">
-        <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>
+        {card.author
+          ? (card.author.avatar_url
+              ? <img className="tc-avatar" src={card.author.avatar_url} alt={card.author.name} />
+              : <span className="tc-avatar" style={{ background: authorColor(card.author.name) }}>{authorInitials(card.author.name)}</span>)
+          : <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>}
         <div style={{ minWidth: 0 }}>
-          <div className="ttl">{tc(card.week_title || card.content?.title || card.title)}</div>
+          <div className="ttl">{card.author ? card.author.name : tc(card.week_title || card.content?.title || card.title)}</div>
           <div className="sub">
-            <span className={`tl-chip ${v.kind === 'skilljar' || v.kind === 'survey' ? 'cert' : 'learning'}`} style={{ padding: '2px 9px' }}><span className="sw" />{card.student_label}</span>
-            {pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}
+            {card.author
+              ? <span className={`tc-lvl-badge lvl-${card.author.level}`}>Level {card.author.level} · {LEVEL_NAMES[card.author.level] || `Level ${card.author.level}`}</span>
+              : <span className={`tl-chip ${v.kind === 'skilljar' || v.kind === 'survey' ? 'cert' : 'learning'}`} style={{ padding: '2px 9px' }}><span className="sw" />{card.student_label}</span>}
+            {!card.author && pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}
           </div>
         </div>
         <span className="st-ic"><StatePip status={card.status} /></span>

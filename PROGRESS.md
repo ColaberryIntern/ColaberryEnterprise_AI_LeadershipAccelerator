@@ -10301,6 +10301,16 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: Confirmed the render path end-to-end — `TodayFeedV2.adapt()` passes `video`/`image` straight to `TimelineCard`; `TimelineCard` (`:194-201`) makes a YouTube url playable and derives its thumbnail via `videoThumbnail` (`utils/videoEmbed.ts:67-71`), even when poster is null. Backend `tsc` (Docker/CI authoritative). Gated by `TODAY_AGGREGATE_SOURCES` (on in prod).
   - Notes: Branch `workstream/community-timeline-media` off main. Backend-only → backend deploy with `--no-deps` (no nginx rebuild). Full post-parity (author byline/level) in the timeline card is a further option; this fixes the missing media. [[reference_timeline_engine_student_runtime]]
 
+### Today feed — community discussion card gets a real post byline (avatar + name + level) — 2026-07-20
+- [x] Make the Today timeline Community Discussion card read as an actual community post (author byline), not the generic curriculum header
+  - Date: 2026-07-20
+  - Session: CC-20260720-f7k3
+  - What changed:
+    - Backend: `TodayFeedItem` gains `author?: {name, avatar_url, level}` (`todayFeedComposer.ts`); `communityCandidates` now `include`s the `member` association (`display_name, avatar_url, level`) and `communityItem()` carries it as `author` (`todayAnchoredSources.ts`).
+    - Frontend: `TimelineFeedCard` + `todayFeedApi.TodayFeedItem` gain `author`; `TodayFeedV2.adapt()` passes it through; `TimelineCard` renders a **post byline for author cards** — member avatar (photo or deterministic initials chip) replaces the type icon, the member name replaces the title, and a `Level N · <tier>` badge replaces the type chip. Byline CSS added to `timeline.css` (`.tc-avatar`, `.tc-lvl-badge`), level tiers inlined (Apprentice/Builder/Architect/Principal).
+  - Why: Ali — the timeline community card should "show the same way it shows in community." The prior fix restored the media; this makes it read as a post (Ikenna · Level 1 · Apprentice + the video) rather than a curriculum card.
+  - Verification: Frontend `tsc` clean on TimelineCard/TodayFeedV2/todayFeedApi (only the pre-existing `@dnd-kit` local gap). No `eslint-disable` directives. Backend tsc (Docker/CI authoritative). Existing feeds backfilled (see below).
+  - Notes: Branch `workstream/community-card-byline` off main. Needs backend+nginx deploy. Existing `today_feed_impressions.item` snapshots backfilled with `author` (jsonb_set from community_members) — same append-only-snapshot rule as the media fix. [[reference_today_feed_append_only_snapshot]]
 - [x] Friends (connections) — Phase 1: friend graph + request/accept + rail wiring
   - Date: 2026-07-20
   - Session: CC-20260720-8xqz
