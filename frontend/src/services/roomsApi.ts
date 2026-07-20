@@ -117,6 +117,8 @@ export interface RoomMessage {
   content: string;
   kind: string;
   question_status: string | null;
+  thread_root_id?: string | null;
+  metadata?: { verified_answer_id?: string; verified_answer_by?: string; verified_at?: string; [k: string]: unknown } | null;
   created_at: string;
 }
 
@@ -208,9 +210,18 @@ export async function fetchRoomMessages(roomId: string, since?: string): Promise
   return data;
 }
 
-export async function postRoomMessage(roomId: string, content: string): Promise<RoomMessage> {
-  const { data } = await portalApi.post<{ message: RoomMessage }>(`/api/portal/community/rooms/${roomId}/messages`, { content });
+export async function postRoomMessage(roomId: string, content: string, kind?: 'message' | 'question'): Promise<RoomMessage> {
+  const { data } = await portalApi.post<{ message: RoomMessage }>(`/api/portal/community/rooms/${roomId}/messages`, kind ? { content, kind } : { content });
   return data.message;
+}
+
+// Verified-help loop: the asker/mod marks a reply as the answer to their question.
+export async function verifyAnswer(roomId: string, questionId: string, answerMessageId: string): Promise<{ question: RoomMessage; answer: RoomMessage }> {
+  const { data } = await portalApi.post<{ question: RoomMessage; answer: RoomMessage }>(
+    `/api/portal/community/rooms/${roomId}/messages/${questionId}/verify-answer`,
+    { answer_message_id: answerMessageId },
+  );
+  return data;
 }
 
 export async function fetchEvents(): Promise<BookingCard[]> {
@@ -235,4 +246,47 @@ export async function joinBooking(bookingId: string): Promise<{ join_url: string
 export async function fetchPeople(): Promise<RoomPerson[]> {
   const { data } = await portalApi.get<{ people: RoomPerson[] }>('/api/portal/community/people');
   return data.people;
+}
+
+// ─── Recognition (Phase B #3) ──────────────────────────────────────────────
+export interface ImpactBadge {
+  category: string;
+  label: string;
+  emoji: string;
+  blurb: string;
+  count: number;
+  points: number;
+}
+export interface ImpactRecentItem {
+  category: string;
+  label: string;
+  emoji: string;
+  action: string;
+  points: number;
+  created_at: string;
+}
+export interface ImpactSummary {
+  points: number; // canonical total (same as the top-right HUD)
+  total_contributions: number;
+  badges: ImpactBadge[];
+  recent: ImpactRecentItem[];
+}
+export interface RecognitionItem {
+  enrollment_id: string;
+  display_name: string;
+  category: string;
+  label: string;
+  emoji: string;
+  action: string;
+  points: number;
+  created_at: string;
+}
+export interface ImpactResponse {
+  impact: ImpactSummary;
+  recognition: RecognitionItem[];
+}
+
+export async function fetchImpact(): Promise<ImpactResponse> {
+  const { data } = await portalApi.get<ImpactResponse>('/api/portal/community/impact');
+  return data;
 }

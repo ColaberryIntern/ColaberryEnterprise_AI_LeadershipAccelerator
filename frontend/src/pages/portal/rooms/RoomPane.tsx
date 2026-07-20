@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchRoom, fetchRoomMessages, postRoomMessage, requestRoomAccess, joinVideoRoom,
-  touchRoomPresence, deleteRoom, inviteToRoom, fetchPeople, myEnrollmentId,
+  touchRoomPresence, deleteRoom, inviteToRoom, fetchPeople, verifyAnswer, myEnrollmentId,
   RoomView, RoomMessage, RoomPerson,
 } from '../../../services/roomsApi';
 
@@ -63,6 +63,7 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   const [messages, setMessages] = useState<RoomMessage[] | null>(null);
   const [activeCount, setActiveCount] = useState(0);
   const [draft, setDraft] = useState('');
+  const [asking, setAsking] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
   const sinceRef = useRef<string | undefined>(undefined);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -106,12 +107,34 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   const send = async () => {
     const text = draft.trim();
     if (!text) return;
-    setDraft('');
+    const wasAsking = asking;
+    setDraft(''); setAsking(false);
     try {
-      const msg = await postRoomMessage(roomId, text);
+      const msg = await postRoomMessage(roomId, text, wasAsking ? 'question' : undefined);
       sinceRef.current = msg.created_at;
       setMessages((prev) => [...(prev || []), msg]);
-    } catch { setDraft(text); }
+    } catch { setDraft(text); setAsking(wasAsking); }
+  };
+
+  // Full refetch (not the incremental poll) — used after verifying an answer so
+  // the question's new status + the answer badge show immediately.
+  const reloadMessages = useCallback(async () => {
+    sinceRef.current = undefined;
+    const res = await fetchRoomMessages(roomId);
+    setActiveCount(res.active_count);
+    sinceRef.current = res.messages.length ? res.messages[res.messages.length - 1].created_at : undefined;
+    setMessages(res.messages);
+  }, [roomId]);
+
+  const doVerify = async (answerMessageId: string) => {
+    const mine = myEnrollmentId();
+    // Resolve to the caller's most-recent still-open question in this room.
+    const q = [...(messages || [])].reverse().find(
+      (m) => m.kind === 'question' && m.question_status === 'open' && m.enrollment_id === mine,
+    );
+    if (!q) return;
+    try { await verifyAnswer(roomId, q.id, answerMessageId); await reloadMessages(); onChanged(); }
+    catch { window.alert('Could not mark that as the answer.'); }
   };
   const doRequest = async () => { try { await requestRoomAccess(roomId); window.alert('Access requested — a host will review it.'); } catch { /* no-op */ } };
   const doJoinVideo = async () => {
@@ -134,9 +157,18 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   if (view === 'error') return <div className="rm-pane"><div className="rm-empty">This room isn’t available.</div></div>;
 
   const { room, membership, visibility } = view;
-  const isOwner = !!room.owner_enrollment_id && room.owner_enrollment_id === myEnrollmentId();
+  const myId = myEnrollmentId();
+  const isOwner = !!room.owner_enrollment_id && room.owner_enrollment_id === myId;
   const canManage = isOwner || ['owner', 'host', 'cohost', 'moderator'].includes(membership?.role || '');
   const emoji = room.metadata?.emoji || CAT_EMOJI[room.category] || '💬';
+
+  // Verified-help view model: which messages are verified answers, and whether
+  // the viewer has an open question they could resolve by verifying a reply.
+  const msgs = messages || [];
+  const verifiedAnswerIds = new Set(
+    msgs.filter((m) => m.kind === 'question' && m.metadata?.verified_answer_id).map((m) => m.metadata!.verified_answer_id as string),
+  );
+  const iHaveOpenQuestion = msgs.some((m) => m.kind === 'question' && m.question_status === 'open' && m.enrollment_id === myId);
 
   if (visibility === 'shell') {
     return (
@@ -169,20 +201,35 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
         <div className="rm-msgs">
           {messages === null && <div className="rm-empty">Loading conversation…</div>}
           {messages !== null && messages.length === 0 && <div className="rm-empty">No messages yet — say hello 👋</div>}
-          {messages?.map((m) => (
-            <div key={m.id} className="rm-msg">
-              <span className="cm-avatar sm">{initials(m.sender_name)}</span>
-              <div className="rm-msg-body">
-                <div className="rm-msg-top"><span className="rm-msg-name">{m.sender_name}</span><span className="rm-msg-time">{timeAgo(m.created_at)}</span></div>
-                <div className="rm-msg-text">{m.content}</div>
+          {messages?.map((m) => {
+            if (m.kind === 'system') {
+              return <div key={m.id} className="rm-sysmsg">{m.content}</div>;
+            }
+            const isQuestion = m.kind === 'question';
+            const isVerifiedAnswer = verifiedAnswerIds.has(m.id);
+            const canMarkAnswer = iHaveOpenQuestion && !!m.enrollment_id && m.enrollment_id !== myId && !isQuestion && !isVerifiedAnswer;
+            return (
+              <div key={m.id} className={`rm-msg${isQuestion ? ' is-q' : ''}${isVerifiedAnswer ? ' is-ans' : ''}`}>
+                <span className="cm-avatar sm">{initials(m.sender_name)}</span>
+                <div className="rm-msg-body">
+                  <div className="rm-msg-top">
+                    <span className="rm-msg-name">{m.sender_name}</span>
+                    {isQuestion && <span className={`rm-qchip${m.question_status === 'verified' ? ' done' : ''}`}>{m.question_status === 'verified' ? '✓ Answered' : '❓ Question'}</span>}
+                    {isVerifiedAnswer && <span className="rm-ansbadge">✓ Verified answer</span>}
+                    <span className="rm-msg-time">{timeAgo(m.created_at)}</span>
+                    {canMarkAnswer && <button type="button" className="rm-markans" onClick={() => doVerify(m.id)}>✓ Mark as answer</button>}
+                  </div>
+                  <div className="rm-msg-text">{m.content}</div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <div ref={endRef} />
         </div>
         <div className="rm-chatbar">
-          <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder={`Message ${room.name}…`} maxLength={4000} />
-          <button type="button" className="te-btn cherry sm" onClick={send} disabled={!draft.trim()}>Send</button>
+          <button type="button" className={`rm-askbtn${asking ? ' on' : ''}`} onClick={() => setAsking((v) => !v)} title="Ask as a question so people can mark the answer" aria-pressed={asking}>❓</button>
+          <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder={asking ? 'Ask a question…' : `Message ${room.name}…`} maxLength={4000} />
+          <button type="button" className="te-btn cherry sm" onClick={send} disabled={!draft.trim()}>{asking ? 'Ask' : 'Send'}</button>
         </div>
       </div>
 
