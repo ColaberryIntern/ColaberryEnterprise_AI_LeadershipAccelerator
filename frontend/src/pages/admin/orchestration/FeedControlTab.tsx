@@ -25,13 +25,19 @@ interface Policy {
   defaultFrequencyCap: number; defaultCooldownDays: number;
   recencyHalfLifeDays: number; explorationPct: number; priorityWeight: number;
 }
-interface Board { lanes: Lane[]; policy: Policy; buckets: string[]; }
+interface Board { lanes: Lane[]; policy: Policy; buckets: string[]; feedControlEnabled: boolean; }
 interface SimItem { kind: string; type: string; student_label?: string; title: string | null; score?: number; reasons: string[]; render_band?: string; surface?: string; week?: number | null; thumbnail?: string | null; }
 interface SimContext { is_explorer: boolean; total_published: number; candidates: number; locked: number; completed: number; already_seen: number; max_week: number; }
 interface EnrollmentOption { id: string; label: string; cohort_id: string | null; type: string; status: string; }
 const SURF_COLOR: Record<string, string> = { today: '#6d28d9', class: '#2563eb', project: '#059669', community: '#db2777', group: '#d97706' };
 
 const AMBIENT = ['blog', 'podcast', 'testimonial'];
+
+/** LIVE = this control reaches real students now. PREVIEW = it only changes the
+ *  simulator below until Feed Control is switched on. */
+function Badge({ kind }: { kind: 'live' | 'preview' }) {
+  return <span className={`fc-badge ${kind}`} title={kind === 'live' ? 'Reaches real students now' : 'Changes the preview only — not the live feed yet'}>{kind === 'live' ? 'LIVE' : 'PREVIEW'}</span>;
+}
 
 export default function FeedControlTab() {
   const [board, setBoard] = useState<Board | null>(null);
@@ -47,6 +53,7 @@ export default function FeedControlTab() {
   const [sim, setSim] = useState<{ items: SimItem[]; context: SimContext } | null>(null);
   const [simBusy, setSimBusy] = useState(false);
   const [enrolls, setEnrolls] = useState<EnrollmentOption[]>([]);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -71,13 +78,14 @@ export default function FeedControlTab() {
       else await api.post('/api/admin/feed-control/bulk-route-types', { slugs, patch });
       flash(`Routed ${slugs.length} type${slugs.length > 1 ? 's' : ''}`);
       await load();
+      setRefreshTick((n) => n + 1);
     } catch (e: any) { flash(e?.response?.data?.error || 'Route failed'); }
     finally { setBusy(false); }
   }, [load]);
 
   const savePolicy = useCallback(async (patch: Partial<Policy>) => {
     setBusy(true);
-    try { const r = await api.put('/api/admin/feed-control/policy', patch); setBoard((b) => (b ? { ...b, policy: r.data.policy } : b)); flash('Policy saved'); }
+    try { const r = await api.put('/api/admin/feed-control/policy', patch); setBoard((b) => (b ? { ...b, policy: r.data.policy } : b)); setRefreshTick((n) => n + 1); flash('Policy saved'); }
     catch (e: any) { flash(e?.response?.data?.error || 'Save failed'); }
     finally { setBusy(false); }
   }, []);
@@ -89,6 +97,15 @@ export default function FeedControlTab() {
     catch (e: any) { flash(e?.response?.data?.error || 'Simulate failed'); }
     finally { setSimBusy(false); }
   }, [simEnroll]);
+
+  // Round-trip: after any routing/policy change, re-run the preview in place (if one
+  // is showing) so you SEE the item move, drop, or re-rank. Deps intentionally limited
+  // to refreshTick so this fires once per change, not on every sim update.
+  useEffect(() => {
+    if (!refreshTick) return;
+    if (simEnroll && sim) runSim();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
 
   const toggleSel = (slug: string) => setSelected((s) => { const n = new Set(s); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
 
@@ -116,6 +133,14 @@ export default function FeedControlTab() {
           <p className="fc-sub">Route curriculum types to surfaces and tune how often students see them. Drag a type between lanes, or select several and route them together.</p>
         </div>
         <button className="fc-btn ghost" onClick={() => setPolicyOpen(true)}>⚙ Global Policy</button>
+      </div>
+
+      <div className={`fc-mode ${board.feedControlEnabled ? 'live' : 'preview'}`}>
+        {board.feedControlEnabled ? (
+          <span><b className="fc-mode-b">● LIVE</b> Feed Control is ON — lane, In-Today, cadence, priority, caps and scheduling all govern the real student feed.</span>
+        ) : (
+          <span><b className="fc-mode-b">◐ PREVIEW MODE</b> Two levers reach students right now: a type's <b>lane</b> and its <b>In-Today</b> toggle (both badged <Badge kind="live" />). Cadence, priority, caps, rotation and the Global Policy are <Badge kind="preview" /> — they change the simulator below, not the live feed, until Feed Control is switched on.</span>
+        )}
       </div>
 
       {selArr.length > 0 && (
@@ -156,7 +181,17 @@ export default function FeedControlTab() {
                     <div className="fc-card-title">{t.student_label || t.label}</div>
                     <div className="fc-card-meta">
                       <span className={`fc-tag ${t.feed_mode === 'ambient' ? 'amb' : 'anc'}`}>{t.feed_mode}</span>
-                      {t.today_eligible && <span className="fc-tag today">today</span>}
+                      {t.feed_mode === 'ambient' ? (
+                        <button type="button" className="fc-today-tog amb"
+                          title="Ambient types rotate into Today via the Global Policy — preview-only until Feed Control is enabled"
+                          onClick={(e) => { e.stopPropagation(); setPolicyOpen(true); }}>⟳ rotates</button>
+                      ) : (
+                        <button type="button" className={`fc-today-tog ${t.today_eligible ? 'on' : 'off'}`}
+                          title={t.today_eligible ? 'In the Today feed (live) — click to take it out' : 'Not in the Today feed — click to put it in (live)'}
+                          onClick={(e) => { e.stopPropagation(); routeTypes([t.slug], { today_eligible: !t.today_eligible }); }}>
+                          {t.today_eligible ? '● In Today' : '○ Off'}
+                        </button>
+                      )}
                       <span className="fc-mut">{t.bucket}</span>
                       {t.cadence != null && <span className="fc-mut">cad {t.cadence}</span>}
                     </div>
@@ -217,11 +252,11 @@ export default function FeedControlTab() {
         )}
       </div>
 
-      {drawer && <TypeDrawer t={drawer} buckets={board.buckets} surfaces={board.lanes.map((l) => l.surface)} busy={busy}
+      {drawer && <TypeDrawer t={drawer} buckets={board.buckets} surfaces={board.lanes.map((l) => l.surface)} busy={busy} live={board.feedControlEnabled}
         onClose={() => setDrawer(null)}
         onSave={async (patch) => { await routeTypes([drawer.slug], patch); setDrawer(null); }} />}
 
-      {policyOpen && <PolicyPanel policy={board.policy} busy={busy} onClose={() => setPolicyOpen(false)}
+      {policyOpen && <PolicyPanel policy={board.policy} busy={busy} live={board.feedControlEnabled} onClose={() => setPolicyOpen(false)}
         onSave={async (patch) => { await savePolicy(patch); setPolicyOpen(false); }} />}
 
       {toast && <div className="fc-toast">{toast}</div>}
@@ -229,10 +264,11 @@ export default function FeedControlTab() {
   );
 }
 
-function TypeDrawer({ t, buckets, surfaces, busy, onClose, onSave }: {
-  t: FCType; buckets: string[]; surfaces: SurfaceDef[]; busy: boolean;
+function TypeDrawer({ t, buckets, surfaces, busy, live, onClose, onSave }: {
+  t: FCType; buckets: string[]; surfaces: SurfaceDef[]; busy: boolean; live: boolean;
   onClose: () => void; onSave: (patch: any) => void;
 }) {
+  const soft: 'live' | 'preview' = live ? 'live' : 'preview';
   const [surface, setSurface] = useState(t.home_surface);
   const [feedMode, setFeedMode] = useState(t.feed_mode);
   const [todayEligible, setTodayEligible] = useState(t.today_eligible);
@@ -245,19 +281,19 @@ function TypeDrawer({ t, buckets, surfaces, busy, onClose, onSave }: {
     <div className="fc-scrim" onClick={onClose}>
       <aside className="fc-drawer" onClick={(e) => e.stopPropagation()}>
         <div className="fc-drawer-h"><b>{t.student_label || t.label}</b><button className="fc-x" onClick={onClose}>✕</button></div>
-        <label className="fc-f">Surface
+        <label className="fc-f">Surface <Badge kind="live" />
           <select value={surface} onChange={(e) => setSurface(e.target.value)}>{surfaces.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
-        <label className="fc-f">Feed mode
+        <label className="fc-f">Feed mode <Badge kind={soft} />
           <select value={feedMode} onChange={(e) => setFeedMode(e.target.value)}><option value="anchored">anchored (homed, flows into Today)</option><option value="ambient">ambient (Today-only, rotated)</option></select></label>
-        <label className="fc-f row"><input type="checkbox" checked={todayEligible} onChange={(e) => setTodayEligible(e.target.checked)} /> Eligible for the Today feed</label>
-        <label className="fc-f">Default section (bucket)
+        <label className="fc-f row"><input type="checkbox" checked={todayEligible} onChange={(e) => setTodayEligible(e.target.checked)} /> Eligible for the Today feed <Badge kind="live" /></label>
+        <label className="fc-f">Default section (bucket) <Badge kind={soft} />
           <select value={bucket} onChange={(e) => setBucket(e.target.value)}>{buckets.map((b) => <option key={b} value={b}>{b}</option>)}</select></label>
         <div className="fc-f3">
-          <label className="fc-f">Cadence<input type="number" min={0} placeholder="policy" value={cadence} onChange={(e) => setCadence(e.target.value)} /></label>
-          <label className="fc-f">Freq cap<input type="number" min={0} placeholder="policy" value={cap} onChange={(e) => setCap(e.target.value)} /></label>
-          <label className="fc-f">Cooldown d<input type="number" min={0} placeholder="policy" value={cool} onChange={(e) => setCool(e.target.value)} /></label>
+          <label className="fc-f">Cadence <Badge kind={soft} /><input type="number" min={0} placeholder="policy" value={cadence} onChange={(e) => setCadence(e.target.value)} /></label>
+          <label className="fc-f">Freq cap <Badge kind={soft} /><input type="number" min={0} placeholder="policy" value={cap} onChange={(e) => setCap(e.target.value)} /></label>
+          <label className="fc-f">Cooldown d <Badge kind={soft} /><input type="number" min={0} placeholder="policy" value={cool} onChange={(e) => setCool(e.target.value)} /></label>
         </div>
-        <p className="fc-hint">Blank = inherit the Global Policy default. Cadence = curriculum items between this being injected; freq cap = max times a student sees it; cooldown = days before it can reappear.</p>
+        <p className="fc-hint">Blank = inherit the Global Policy default. Cadence = curriculum items between this being injected; freq cap = max times a student sees it; cooldown = days before it can reappear.{!live && ' Fields marked PREVIEW change the simulator only until Feed Control is switched on.'}</p>
         <div className="fc-drawer-foot">
           <button className="fc-btn ghost" onClick={onClose}>Cancel</button>
           <button className="fc-btn" disabled={busy} onClick={() => onSave({
@@ -270,14 +306,15 @@ function TypeDrawer({ t, buckets, surfaces, busy, onClose, onSave }: {
   );
 }
 
-function PolicyPanel({ policy, busy, onClose, onSave }: { policy: Policy; busy: boolean; onClose: () => void; onSave: (p: Partial<Policy>) => void; }) {
+function PolicyPanel({ policy, busy, live, onClose, onSave }: { policy: Policy; busy: boolean; live: boolean; onClose: () => void; onSave: (p: Partial<Policy>) => void; }) {
   const [p, setP] = useState<Policy>(policy);
   const set = (k: keyof Policy, v: any) => setP((x) => ({ ...x, [k]: v }));
   const toggleProv = (prov: string) => setP((x) => ({ ...x, ambientProviders: x.ambientProviders.includes(prov) ? x.ambientProviders.filter((a) => a !== prov) : [...x.ambientProviders, prov] }));
   return (
     <div className="fc-scrim" onClick={onClose}>
       <aside className="fc-drawer wide" onClick={(e) => e.stopPropagation()}>
-        <div className="fc-drawer-h"><b>Global Feed Policy</b><button className="fc-x" onClick={onClose}>✕</button></div>
+        <div className="fc-drawer-h"><b>Global Feed Policy</b> {live ? <Badge kind="live" /> : <Badge kind="preview" />}<button className="fc-x" onClick={onClose}>✕</button></div>
+        {!live && <div className="fc-policy-note">These settings shape the <b>preview</b> below, but the live student feed still uses the built-in defaults. They start governing real students the moment Feed Control is switched on.</div>}
         <label className="fc-f">Today cadence — curriculum items between each ambient injection
           <input type="number" min={1} max={20} value={p.todayCadence} onChange={(e) => set('todayCadence', parseInt(e.target.value, 10) || 1)} /></label>
         <div className="fc-f">Ambient providers (rotate into Today)
@@ -374,4 +411,21 @@ const CSS = `
 .fc-hint,.fc-drawer .fc-hint{font-size:11.5px;color:var(--fc-sub);line-height:1.5;font-weight:400}
 .fc-drawer-foot{margin-top:auto;display:flex;gap:10px;justify-content:flex-end;padding-top:8px}
 .fc-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:1300}
+.fc-mode{border:1px solid var(--fc-bd);border-radius:11px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;line-height:1.55;color:var(--fc-ink)}
+.fc-mode.preview{background:#fffbeb;border-color:#fde68a}
+.fc-mode.live{background:#ecfdf5;border-color:#a7f3d0}
+@media(prefers-color-scheme:dark){.fc-mode.preview{background:#78350f22;border-color:#78350f}.fc-mode.live{background:#064e3b33;border-color:#065f46}}
+.fc-mode-b{margin-right:6px;font-weight:800;letter-spacing:.02em;white-space:nowrap}
+.fc-mode.preview .fc-mode-b{color:#b45309} .fc-mode.live .fc-mode-b{color:#15803d}
+@media(prefers-color-scheme:dark){.fc-mode.preview .fc-mode-b{color:#fcd34d}.fc-mode.live .fc-mode-b{color:#86efac}}
+.fc-badge{display:inline-block;font-size:9px;font-weight:800;letter-spacing:.05em;border-radius:5px;padding:1px 5px;vertical-align:middle;text-transform:uppercase;white-space:nowrap}
+.fc-badge.live{background:#dcfce7;color:#15803d} .fc-badge.preview{background:#fef3c7;color:#b45309}
+@media(prefers-color-scheme:dark){.fc-badge.live{background:#14532d;color:#86efac}.fc-badge.preview{background:#78350f;color:#fcd34d}}
+.fc-today-tog{font-size:10.5px;font-weight:800;letter-spacing:.02em;border-radius:999px;padding:2px 9px;cursor:pointer;border:1px solid;line-height:1.4;text-transform:uppercase}
+.fc-today-tog.on{background:#dcfce7;color:#15803d;border-color:#86efac}
+.fc-today-tog.off{background:transparent;color:var(--fc-sub);border-color:var(--fc-bd)}
+.fc-today-tog.amb{background:transparent;color:#6d28d9;border-color:#c4b5fd}
+@media(prefers-color-scheme:dark){.fc-today-tog.on{background:#14532d55;color:#86efac;border-color:#065f46}.fc-today-tog.amb{color:#c4b5fd;border-color:#4c1d95}}
+.fc-policy-note{background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 11px;font-size:11.5px;line-height:1.5;color:#92400e}
+@media(prefers-color-scheme:dark){.fc-policy-note{background:#78350f22;border-color:#78350f;color:#fcd34d}}
 `;

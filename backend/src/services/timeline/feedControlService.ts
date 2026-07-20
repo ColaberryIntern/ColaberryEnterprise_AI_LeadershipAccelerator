@@ -23,6 +23,7 @@ import { SURFACE_ORDER } from './surfaces';
 import { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigService';
 import { rankCandidates, type RankCandidate } from './feedRanker';
 import { getFeed } from './timelineService';
+import { env } from '../../config/env';
 
 export { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigService';
 
@@ -153,7 +154,10 @@ export async function getBoard(): Promise<any> {
         cooldown_days: routing[t.slug]?.feed_cooldown_days ?? null,
       })),
   }));
-  return { lanes, policy, buckets: BUCKETS };
+  // feedControlEnabled tells the UI which knobs actually reach students right now.
+  // When false (default), routing + today-eligibility are live but cadence/priority/
+  // policy are preview-only (the live composer uses legacy constants); see todayFeedComposer.
+  return { lanes, policy, buckets: BUCKETS, feedControlEnabled: env.feedControlEnabled };
 }
 
 /**
