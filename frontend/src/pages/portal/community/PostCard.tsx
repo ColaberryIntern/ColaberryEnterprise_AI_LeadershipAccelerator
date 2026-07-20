@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Avatar from './Avatar';
 import LevelBadge from './LevelBadge';
-import { timeAgo, isVideoUrl } from './communityUtils';
+import { timeAgo, isVideoUrl, youtubeId, youtubeThumb } from './communityUtils';
 import {
   fetchComments, createComment, togglePin as apiTogglePin,
   togglePostLike, toggleCommentLike,
@@ -59,6 +59,11 @@ const MediaGrid: React.FC<{ urls: string[] }> = ({ urls }) => {
         <div className="cm-media-tile" key={url + i}>
           {isVideoUrl(url) ? (
             <video src={url} controls preload="metadata" />
+          ) : youtubeId(url) ? (
+            <a className="cm-yt" href={url} target="_blank" rel="noopener noreferrer">
+              <img src={youtubeThumb(youtubeId(url) as string)} alt="" loading="lazy" />
+              <span className="cm-yt-play" aria-hidden="true" />
+            </a>
           ) : (
             <img src={url} alt="" loading="lazy" />
           )}

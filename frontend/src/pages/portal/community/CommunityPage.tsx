@@ -132,6 +132,29 @@ const CommunityPage: React.FC = () => {
 
         <div className="cm-rail">
           <aside className="cm-side">
+            <div className="te-card cm-identity">
+              <div className="cm-identity-name">Colaberry · AI Systems Architect Accelerator</div>
+              <p className="cm-identity-about">Where your cohort builds AI that ships — share work, get unblocked, and climb from Apprentice to Principal Architect.</p>
+              <div className="cm-identity-links">
+                <a href="/portal/path">Start here · Week guide</a>
+                <a href="/portal/rooms">Live build rooms</a>
+                <a href="/portal/projects">Showcase your portfolio</a>
+              </div>
+              <div className="cm-identity-stats">
+                <div><b>{members?.length ?? 0}</b><span>Members</span></div>
+                <div><b>{onlineCount}</b><span>Online</span></div>
+                <div><b>{members?.filter((m) => m.level >= 3).length ?? 0}</b><span>Mentors</span></div>
+              </div>
+              {members && members.length > 0 && (
+                <div className="cm-identity-avatars">
+                  {members.slice(0, 6).map((m) => (
+                    <Avatar key={m.id} name={m.display_name} src={m.avatar_url} size="sm" />
+                  ))}
+                  {members.length > 6 && <span className="cm-identity-more">+{members.length - 6}</span>}
+                </div>
+              )}
+            </div>
+
             {myProfile && (
               <div className="te-card cm-profile-card">
                 <div className="cm-profile-top">

@@ -9,7 +9,8 @@ import {
   handleOrgRoster, handleOrgMemberDetail, handleOrgFeed,
 } from '../controllers/orgController';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
-import { strategyPrepUpload, certificateUpload, fieldGuideUpload } from '../config/upload';
+import path from 'path';
+import { strategyPrepUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
@@ -624,6 +625,24 @@ router.get('/api/portal/community/leaderboard', requireParticipant, async (req, 
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
+});
+
+// Local image upload from the student's computer (Ali feedback 2026-07-20).
+// Returns a relative media URL the composer adds to media_urls.
+router.post('/api/portal/community/upload', requireParticipant, (req, res) => {
+  communityMediaUpload.single('file')(req, res, (err: any) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
+    res.status(201).json({ url: `/api/portal/community/media/${req.file.filename}` });
+  });
+});
+
+// Public serve for uploaded community media — no auth so <img> tags load it.
+// Filename is an opaque UUID.ext; the strict regex blocks path traversal.
+router.get('/api/portal/community/media/:filename', (req, res) => {
+  const { filename } = req.params;
+  if (!/^[a-f0-9-]{36}\.(png|jpg|jpeg|webp|gif)$/i.test(filename)) { res.status(400).end(); return; }
+  res.sendFile(path.join(COMMUNITY_MEDIA_DIR, filename), (err) => { if (err) res.status(404).end(); });
 });
 
 router.get('/api/portal/community/calendar', requireParticipant, async (req, res) => {

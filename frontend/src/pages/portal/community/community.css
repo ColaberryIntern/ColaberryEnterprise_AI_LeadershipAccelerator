@@ -153,6 +153,31 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 .cm-composer-media{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .cm-composer-media-item{position:relative;width:84px;height:84px;border-radius:10px;overflow:hidden;border:1px solid var(--border,#D8D8D8)}
 .cm-composer-media-item img,.cm-composer-media-item video{width:100%;height:100%;object-fit:cover;background:#000}
+.cm-upload-btn{border:1px solid var(--berry,#367895);background:var(--surface,#fff);color:var(--berry,#367895);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;flex:none}
+.cm-upload-btn:hover{background:rgba(54,120,149,.08)}
+.cm-upload-btn:disabled{opacity:.6;cursor:default}
+
+/* ── Program identity card (sidebar, Design-E) ───────────────────────────── */
+.cm-identity{padding:16px}
+.cm-identity-name{font-weight:800;font-size:14.5px;color:var(--strong,#1A1A1A);line-height:1.3}
+.cm-identity-about{margin:8px 0 0;font-size:12.5px;line-height:1.5;color:var(--muted,#6B6B6B)}
+.cm-identity-links{display:flex;flex-direction:column;gap:7px;margin:12px 0;padding:12px 0;border-top:1px solid var(--border-subtle,#E4E4E3);border-bottom:1px solid var(--border-subtle,#E4E4E3)}
+.cm-identity-links a{font-size:12.5px;font-weight:600;color:var(--berry,#367895);text-decoration:none;display:flex;align-items:center;gap:8px}
+.cm-identity-links a::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--cherry,#FB2832);flex:none}
+.cm-identity-links a:hover{text-decoration:underline}
+.cm-identity-stats{display:flex;gap:8px}
+.cm-identity-stats > div{flex:1;text-align:center;background:var(--sunken,#F1F1F0);border-radius:10px;padding:8px 4px}
+.cm-identity-stats b{display:block;font-size:17px;font-weight:800;color:var(--strong,#1A1A1A);font-family:var(--mono,monospace)}
+.cm-identity-stats span{font-size:10px;color:var(--muted,#6B6B6B);text-transform:uppercase;letter-spacing:.03em}
+.cm-identity-avatars{display:flex;align-items:center;margin-top:12px}
+.cm-identity-avatars .cm-avatar{margin-right:-8px;border:2px solid var(--surface,#fff)}
+.cm-identity-more{margin-left:14px;font-size:12px;font-weight:700;color:var(--muted,#6B6B6B)}
+
+/* ── YouTube thumbnail tile with play overlay ────────────────────────────── */
+.cm-yt{position:relative;display:block;width:100%;height:100%}
+.cm-yt img{width:100%;height:100%;object-fit:cover;display:block}
+.cm-yt-play{position:absolute;inset:0;margin:auto;width:54px;height:38px;border-radius:9px;background:rgba(229,18,29,.92);display:flex;align-items:center;justify-content:center}
+.cm-yt-play::after{content:"";border-style:solid;border-width:8px 0 8px 14px;border-color:transparent transparent transparent #fff;margin-left:3px}
 .cm-composer-media-item button{position:absolute;top:2px;right:2px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .cm-composer-media-input{display:flex;gap:8px;margin-top:10px}
 .cm-composer-media-input input{flex:1;border:1px solid var(--border,#D8D8D8);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px;background:var(--surface,#fff);color:var(--strong,#1A1A1A)}

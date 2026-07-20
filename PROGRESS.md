@@ -10107,6 +10107,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: backend communityService jest 34/34 (new points-awarded test); frontend tsc --noEmit clean (TS 5.9.3).
   - Notes: Point values (post +5 / comment +2) are tunable constants; a post-spam anti-gaming cap is deferred. Reconciling the top-bar vs community points systems is a separate follow-up.
 
+- [x] Community media + sidebar: YouTube thumbnails, local image upload, program identity card
+  - Date: 2026-07-20
+  - Session: CC-20260719-c3v8
+  - What changed: Post-launch feedback from Ali (live). (1) YouTube: composer + post card show the real YouTube thumbnail (youtubeId/youtubeThumb) with a play overlay linking out, instead of a broken tile. (2) Local image upload from the student's computer: new communityMediaUpload multer (PNG/JPG/WEBP/GIF, 8MB) on the persistent /app/uploads volume; POST /api/portal/community/upload (auth) + public GET /api/portal/community/media/:filename (opaque UUID, traversal-guarded); composer "Upload image" button; media_urls schema relaxed to accept the uploaded relative path. (3) Program identity card in the sidebar (Design-E): name + tagline + useful links + Members/Online/Mentors stat tiles + member avatar stack. Files: backend/src/config/upload.ts, backend/src/routes/participantRoutes.ts, backend/src/schemas/communitySchemas.ts, frontend/src/services/communityApi.ts, frontend/src/pages/portal/community/{communityUtils.ts,Composer.tsx,PostCard.tsx,CommunityPage.tsx,community.css}.
+  - Verification: frontend tsc clean; backend communityService jest 34/34; backend tsc --skipLibCheck clean on changed files (full backend typecheck via CI).
+  - Notes: Post author role/level badge + recent-commenter avatars deferred to a fast-follow (needs a PostFeedItem contract change). Mentors count is a proxy (members at level>=3).
 ### Dev/prod schema parity — reusable sync tool + dev DB made faithful — 2026-07-20
 - [x] `scripts/syncDevSchemaFromProd.sh` — make the dev DB schema-faithful to prod; dev synced
   - Date: 2026-07-20
@@ -10123,3 +10129,15 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: New `frontend/src/utils/clipboard.ts` `copyText()` — prefers the async Clipboard API on secure (https) origins, falls back to a hidden-textarea `document.execCommand('copy')` on http. Wired into all three Claude Code lab renderers (`SetupLabRender.tsx`, `PromptCatalogRender.tsx`, `BuildArtifactsRender.tsx`), replacing the `navigator.clipboard ? writeText : else done()` pattern. On the http dev instance (`:9999`) `navigator.clipboard` is `undefined`, so the old code hit `else done()` — it flagged "Copied" but never wrote the clipboard, leaving the user's previous clipboard content (an image) to paste instead of the prompt. This also unblocks the copy-gated completion, which was being satisfied without a real copy.
   - Verification: dev nginx rebuilt (react-scripts build = authoritative frontend typecheck, passed); `execCommand` confirmed present in served bundle `static/js/main.b9b55eda.js`; `http://localhost:9999/portal/classroom` returns 200.
   - Notes: Branch `workstream/build-artifacts-lab`. Kept `.then(done, done)` (lenient) so a genuine copy failure still lets the student proceed. Benefits Setup Lab + Prompt Lab (already live on prod https, where the API path already worked) as a safety net, and fixes copy outright on the http dev instance.
+### Points model — Rooms + community feed feed the Community Skill-XP lane — 2026-07-20
+- [x] Rooms recognition + community posts/comments award Community Skill-XP
+  - Date: 2026-07-20
+  - Session: CC-20260720-cr9x
+  - What changed:
+    - `backend/src/services/progression/communityXpService.ts` (NEW): `awardCommunityXp(enrollmentId, amount, key, reason)` — appends a `stream='community'` `XpEvent` (card_id null), idempotent on the key. Feeds the Community lane of the Skill-XP lens (which was otherwise only fed by card completions, so it read 0).
+    - `roomRecognitionService.recordContribution()`: on a new contribution, also awards Community XP (`cxp:<idempotencyKey>`) alongside the existing engagement-points award. So hosting/helping/attending shows in **both** the HUD engagement total and the Community Skill-XP lane.
+    - `communityService.createPost()`/`createComment()`: also award Community XP (`cxp:post:<id>` / `cxp:comment:<id>`), keeping main's `CommunityMember.points` leaderboard economy intact.
+    - `__tests__/services/communityModeration.test.ts`: mock the new `communityXpService` (that test mocks the DB + every model in communityService's graph).
+  - Why: Ali — "HUD/Rooms should be adding Community points as part of the points system; both community and Rooms should mostly impact the Community section." Learning/Builder mapping was already correct (classroom lessons → learning, evidence/project cards → builder); only the Community lane was unwired. [[project_colaberry_commons_rooms_phase_b]]
+  - Verification: backend `tsc --noEmit` clean; 236 community+progression jest tests green. Live dev check (`accelerator_dev1`): after re-recording the 3 demo contributions, `getProgressionSummary().xp` went `{learning:25, builder:80, community:0}` → `{...community:45}` (25+15+5), with learning/builder unchanged. Community-feed post/comment path uses the same helper.
+  - Notes: Amount = the recognition/post/comment point value (host +25 / verified-answer +15 / attend +5 / post +5 / comment +2). Likes intentionally don't grant XP (reactions). The community-feed leaderboard still ranks on main's `CommunityMember.points`; a full collapse of that second economy + its 1–4 level ladder into the single HUD remains the documented follow-up.

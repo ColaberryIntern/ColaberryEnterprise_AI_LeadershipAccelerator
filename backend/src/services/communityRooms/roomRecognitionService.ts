@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import { resolveCohortId } from '../communityService';
 import { award, getPointsSummary } from '../pointsService';
+import { awardCommunityXp } from '../progression/communityXpService';
 import ContributionEvent, { ContributionCategory, CATEGORY_META } from '../../models/ContributionEvent';
 import Enrollment from '../../models/Enrollment';
 import { log } from './roomShared';
@@ -49,6 +50,9 @@ export async function recordContribution(enrollmentId: string, input: Contributi
       points: input.points,
       metadata: { category: input.category, action: input.action, room_id: input.roomId ?? null, booking_id: input.bookingId ?? null },
     });
+    // Also feed the Community lane of the Skill-XP lens (Rooms activity is
+    // community contribution). Best-effort — never breaks the recognition.
+    await awardCommunityXp(enrollmentId, input.points, `cxp:${input.idempotencyKey}`, `rooms:${input.category}`).catch(() => {});
     log('info', 'contribution_recorded', { enrollment_id: enrollmentId, category: input.category, points: input.points });
   }
 }
