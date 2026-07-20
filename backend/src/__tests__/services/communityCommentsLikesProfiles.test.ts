@@ -17,6 +17,15 @@ jest.mock('../../models/CommunityComment', () => ({ create: jest.fn(), findByPk:
 jest.mock('../../models/CommunityLike', () => ({ findOrCreate: jest.fn(), findAll: jest.fn(), count: jest.fn() }));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 jest.mock('../../models/CommunityNotification', () => ({ create: jest.fn() }));
+// communityService now folds into the canonical points system; mock those so
+// their real model methods don't hit the DB (points/level come from here).
+jest.mock('../../services/pointsService', () => ({
+  award: jest.fn(async () => ({ awarded: true, points: 0 })),
+  getPointsSummary: jest.fn(async () => ({ total: 0, events: [] })),
+  getTotalsForEnrollments: jest.fn(async () => new Map()),
+  levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
+}));
+jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => {}) }));
 
 import {
   createComment, listComments, toggleLike, levelFor,
@@ -459,14 +468,13 @@ describe('member profiles + directory', () => {
     expect(memberToUpdate.update).toHaveBeenCalledWith({ bio: 'Building AI systems.' });
   });
 
-  it('listMembers happy path: scopes the directory to the caller\'s cohort, ordered by points', async () => {
+  it('listMembers happy path: scopes the directory to the caller\'s cohort (sorted by canonical points in JS)', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findAllMembers.mockResolvedValue([]);
 
     await listMembers(enrollmentId);
 
     const callArgs = findAllMembers.mock.calls[0][0];
-    expect(callArgs.order).toEqual([['points', 'DESC']]);
     expect(callArgs.include[0].where).toEqual({ cohort_id: cohortId });
   });
 });

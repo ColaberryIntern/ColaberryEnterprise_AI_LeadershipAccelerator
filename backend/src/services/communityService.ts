@@ -6,6 +6,7 @@ import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
 import { awardCommunityXp } from './progression/communityXpService';
+import { award, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
@@ -284,7 +285,9 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   // Reward the author for contributing (Ali feedback 2026-07-20 — posting now
   // earns points, not just likes-received).
   await awardContributionPoints(member.id, POINTS_PER_POST);
-  // Community activity feeds the Community lane of the Skill-XP lens.
+  // Canonical points (the ONE ledger — HUD total + unified leaderboard) + the
+  // Community lane of the Skill-XP lens. Best-effort; never breaks the post.
+  await award(enrollmentId, { eventType: 'community_post', eventKey: `community_post:${post.id}`, points: POINTS_PER_POST }).catch(() => {});
   await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${post.id}`, 'community:post').catch(() => {});
 
   log('info', 'post_created', {
@@ -512,6 +515,7 @@ export async function createComment(
 
   // Reward the commenter for contributing (Ali feedback 2026-07-20).
   await awardContributionPoints(member.id, POINTS_PER_COMMENT);
+  await award(enrollmentId, { eventType: 'community_comment', eventKey: `community_comment:${comment.id}`, points: POINTS_PER_COMMENT }).catch(() => {});
   await awardCommunityXp(enrollmentId, POINTS_PER_COMMENT, `cxp:comment:${comment.id}`, 'community:comment').catch(() => {});
 
   // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
@@ -736,22 +740,25 @@ export interface MemberProfile {
   created_at: Date;
 }
 
-function toMemberProfile(member: CommunityMember): MemberProfile {
+// points/level come from the ONE canonical ledger (StudentPointsEvent + the
+// LEVELS ladder), NOT the legacy CommunityMember.points column — so a member's
+// score/level here matches the top-right HUD everywhere.
+function toMemberProfile(member: CommunityMember, canonicalPoints: number): MemberProfile {
   return {
     id: member.id,
     display_name: member.display_name,
     avatar_url: member.avatar_url,
     bio: member.bio,
-    level: member.level,
-    points: member.points,
+    level: levelForPoints(canonicalPoints).level,
+    points: canonicalPoints,
     presence: derivePresence(member.last_active_at),
     created_at: member.created_at,
   };
 }
 
 export async function getMyProfile(enrollmentId: string): Promise<MemberProfile> {
-  const member = await getOrCreateMember(enrollmentId);
-  return toMemberProfile(member);
+  const [member, summary] = await Promise.all([getOrCreateMember(enrollmentId), getPointsSummary(enrollmentId)]);
+  return toMemberProfile(member, summary.total);
 }
 
 // Cross-member lookups return NotFoundError uniformly whether the member
@@ -766,7 +773,8 @@ export async function getMemberProfileById(enrollmentId: string, targetMemberId:
   if (!target || (target as any).enrollment?.cohort_id !== cohortId) {
     throw notFoundError('Member not found');
   }
-  return toMemberProfile(target);
+  const total = (await getPointsSummary(target.enrollment_id)).total;
+  return toMemberProfile(target, total);
 }
 
 export async function updateMyProfile(enrollmentId: string, input: UpdateProfileInput): Promise<MemberProfile> {
@@ -779,20 +787,22 @@ export async function updateMyProfile(enrollmentId: string, input: UpdateProfile
 
   await member.update(updates);
   log('info', 'profile_updated', { member_id: member.id, fields: Object.keys(updates), outcome: 'success' });
-  return toMemberProfile(member);
+  const total = (await getPointsSummary(enrollmentId)).total;
+  return toMemberProfile(member, total);
 }
 
-// Cohort-scoped directory — ordered by points DESC, reusing the existing
-// idx_community_members_points index. This stays a flat, point-ordered list
-// for the directory surface; ranked/windowed leaderboards live in
-// communityLeaderboardService.ts::getLeaderboard.
+// Cohort-scoped directory — ordered by canonical points DESC. Points/level come
+// from the ONE ledger (batched), so this matches the leaderboard + HUD.
 export async function listMembers(enrollmentId: string): Promise<MemberProfile[]> {
   const cohortId = await resolveCohortId(enrollmentId);
 
   const members = await CommunityMember.findAll({
     include: [{ model: Enrollment, as: 'enrollment', attributes: [], where: { cohort_id: cohortId } }],
-    order: [['points', 'DESC']],
   });
 
-  return members.map(toMemberProfile);
+  const totals = await getTotalsForEnrollments(members.map((m: any) => m.enrollment_id));
+  return members
+    .map((m: any) => ({ profile: toMemberProfile(m, totals.get(m.enrollment_id) ?? 0), pts: totals.get(m.enrollment_id) ?? 0 }))
+    .sort((a, b) => b.pts - a.pts || a.profile.display_name.localeCompare(b.profile.display_name))
+    .map((x) => x.profile);
 }

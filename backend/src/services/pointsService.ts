@@ -1,4 +1,4 @@
-import { StudentPointsEvent } from '../models';
+import StudentPointsEvent from '../models/StudentPointsEvent';
 
 /**
  * Canonical earn events + their default point values. Guests start at 0 and earn
@@ -68,6 +68,34 @@ export async function award(enrollmentId: string, input: AwardInput): Promise<{ 
 export async function hasAwarded(enrollmentId: string, eventKey: string): Promise<boolean> {
   const row = await StudentPointsEvent.findOne({ where: { enrollment_id: enrollmentId, event_key: eventKey } });
   return !!row;
+}
+
+// ── Canonical level ladder (the ONE ladder; mirrors frontend onboardingApi.LEVELS).
+// Every "level" shown anywhere — HUD, community profile, leaderboard badge —
+// derives from a student's canonical points via this table.
+export const LEVELS = [
+  { level: 1, name: 'Apprentice', min: 0 },
+  { level: 2, name: 'Builder', min: 150 },
+  { level: 3, name: 'Architect', min: 400 },
+  { level: 4, name: 'Principal', min: 900 },
+] as const;
+
+/** Canonical level for a points total (deterministic, pure). */
+export function levelForPoints(points: number): { level: number; name: string } {
+  let cur: { level: number; name: string; min: number } = LEVELS[0];
+  for (const l of LEVELS) if (points >= l.min) cur = l;
+  return { level: cur.level, name: cur.name };
+}
+
+/** Batch canonical totals for many enrollments (one query) → Map<enrollmentId, total>. */
+export async function getTotalsForEnrollments(enrollmentIds: string[]): Promise<Map<string, number>> {
+  const totals = new Map<string, number>();
+  if (enrollmentIds.length === 0) return totals;
+  const rows = await StudentPointsEvent.findAll({ where: { enrollment_id: enrollmentIds } });
+  for (const r of rows as any[]) {
+    totals.set(r.enrollment_id, (totals.get(r.enrollment_id) ?? 0) + (r.points || 0));
+  }
+  return totals;
 }
 
 /** Total points + full event history for an enrollment (newest first). */
