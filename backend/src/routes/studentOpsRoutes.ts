@@ -12,6 +12,7 @@
  *   POST /api/portal/student-ops/decisions       — same as /decide (admin-mirrored path)
  *   GET  /api/portal/student-ops/decisions/today — today's decision counts
  *   GET  /api/portal/student-ops/metrics/today   — task completion metrics for today
+ *   GET  /api/portal/student-ops/github-activity — cached GitHub commit/PR snapshot for the Architect Dashboard widget
  */
 import { Router, Request, Response } from 'express';
 import { randomUUID } from 'crypto';
@@ -20,6 +21,7 @@ import { Op } from 'sequelize';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { getProjectByEnrollment } from '../services/projectService';
 import RequirementsMap from '../models/RequirementsMap';
+import { GitHubConnection, StudentGithubActivity } from '../models';
 import { generateStudentPrompt, type ReqCategory } from '../services/students/studentPromptService';
 
 const router = Router();
@@ -383,6 +385,59 @@ router.get('/api/portal/student-ops/metrics/today', requireParticipant, async (r
       context: { message: err.message },
     }));
     res.status(500).json({ error: 'Failed to load today\'s metrics' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// GET /api/portal/student-ops/github-activity
+//
+// Reads the cached snapshot written by githubIntegrationService.syncStudentActivity
+// (run daily by the Portfolio GitHub sync agent, schedulerService.ts). This
+// route does not call the GitHub API itself — no new rate-limit surface is
+// introduced; freshness is bounded by the existing daily sync cadence.
+// ---------------------------------------------------------------------------
+
+export interface StudentGithubActivityResponse {
+  connected: boolean;
+  repo_url: string | null;
+  commits_last_7d: number;
+  open_prs: number;
+  total_stars: number;
+  contribution_graph: Array<{ date: string; count: number }>;
+  synced_at: string | null;
+  generated_at: string;
+}
+
+router.get('/api/portal/student-ops/github-activity', requireParticipant, async (req: Request, res: Response) => {
+  const correlationId = (req.headers['x-correlation-id'] as string) || randomUUID();
+  try {
+    const enrollmentId = req.participant!.sub;
+    const [connection, activity] = await Promise.all([
+      GitHubConnection.findOne({ where: { enrollment_id: enrollmentId } }),
+      StudentGithubActivity.findOne({ where: { enrollment_id: enrollmentId } }),
+    ]);
+
+    const connected = !!(connection?.repo_owner && connection?.repo_name);
+
+    const response: StudentGithubActivityResponse = {
+      connected,
+      repo_url: connection?.repo_url ?? null,
+      commits_last_7d: activity?.commits_last_7d ?? 0,
+      open_prs: activity?.open_prs ?? 0,
+      total_stars: activity?.total_stars ?? 0,
+      contribution_graph: activity?.contribution_graph_json ?? [],
+      synced_at: activity?.synced_at ? new Date(activity.synced_at).toISOString() : null,
+      generated_at: new Date().toISOString(),
+    };
+    res.json(response);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'error', service: 'backend',
+      event: 'student_github_activity_fetch_failed', correlation_id: correlationId,
+      outcome: 'failure', error_class: err.constructor?.name ?? 'Error',
+      context: { message: err.message },
+    }));
+    res.status(500).json({ error: 'Failed to load GitHub activity' });
   }
 });
 
