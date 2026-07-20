@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { copyText } from '../../utils/clipboard';
 
 /**
  * SetupLabRender — the bespoke renderer for the `setup_lab` curriculum type (a
@@ -85,8 +86,7 @@ const SetupLabRender: React.FC<Props> = ({ bodyHtml, title, summary, estMin, poi
           onCopiedRef.current?.();
           window.setTimeout(() => { btn.textContent = '📋  Copy prompt'; btn.classList.remove('done'); }, 2200);
         };
-        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, done);
-        else done();
+        copyText(text).then(done, done);
       });
       pre.parentNode?.insertBefore(btn, pre.nextSibling);
       added.push(btn);

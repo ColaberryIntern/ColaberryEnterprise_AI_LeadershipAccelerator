@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import portalApi from '../../utils/portalApi';
+import { copyText } from '../../utils/clipboard';
 
 /**
  * BuildArtifactsRender — the bespoke renderer for the "Build Artifact(s) Lab"
@@ -112,7 +113,7 @@ const BuildArtifactsRender: React.FC<Props> = ({ bodyHtml, title, summary, varia
 
   const copy = () => {
     const done = () => { setCopied((s) => { const n = new Set(s); n.add(artIdx); return n; }); onCopied?.(); setFlash(true); window.setTimeout(() => setFlash(false), 1800); };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(promptText).then(done, done); else done();
+    copyText(promptText).then(done, done);
   };
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
