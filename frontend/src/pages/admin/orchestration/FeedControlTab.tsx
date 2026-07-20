@@ -54,6 +54,8 @@ export default function FeedControlTab() {
   const [simBusy, setSimBusy] = useState(false);
   const [enrolls, setEnrolls] = useState<EnrollmentOption[]>([]);
   const [refreshTick, setRefreshTick] = useState(0);
+  const [sandboxOn, setSandboxOn] = useState(false);
+  const [included, setIncluded] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -91,12 +93,17 @@ export default function FeedControlTab() {
   }, []);
 
   const runSim = useCallback(async () => {
-    if (!simEnroll.trim()) { flash('Enter an enrollment id'); return; }
+    if (!simEnroll.trim()) { flash('Pick a student first'); return; }
     setSimBusy(true); setSim(null);
-    try { const r = await api.get('/api/admin/feed-control/simulate', { params: { enrollment_id: simEnroll.trim(), limit: 14 } }); setSim({ items: r.data.items || [], context: r.data.context }); }
+    try {
+      const params: any = { enrollment_id: simEnroll.trim(), limit: 14 };
+      if (sandboxOn) { params.sandbox = 1; params.include = Array.from(included).join(','); } // empty = empty feed
+      const r = await api.get('/api/admin/feed-control/simulate', { params });
+      setSim({ items: r.data.items || [], context: r.data.context });
+    }
     catch (e: any) { flash(e?.response?.data?.error || 'Simulate failed'); }
     finally { setSimBusy(false); }
-  }, [simEnroll]);
+  }, [simEnroll, sandboxOn, included]);
 
   // Round-trip: after any routing/policy change, re-run the preview in place (if one
   // is showing) so you SEE the item move, drop, or re-rank. Deps intentionally limited
@@ -107,6 +114,33 @@ export default function FeedControlTab() {
     // Keyed only on refreshTick on purpose: adding sim/simEnroll/runSim would re-fire
     // on every preview update and loop. One re-run per board/policy change is intended.
   }, [refreshTick]);
+
+  // Sandbox: rebuild the preview live as the user checks/unchecks types, or toggles the mode.
+  useEffect(() => {
+    if (simEnroll) runSim();
+    // Fires when the sandbox selection set or mode changes (deps intentionally limited).
+  }, [included, sandboxOn]);
+
+  const allTypes = useMemo(() => (board?.lanes ?? []).flatMap((l) => l.types), [board]);
+  const toggleIncluded = (slug: string) => setIncluded((s) => { const n = new Set(s); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
+
+  const applySandboxToLive = useCallback(async () => {
+    const anchored = allTypes.filter((t) => t.feed_mode !== 'ambient');
+    const on = anchored.filter((t) => included.has(t.slug)).map((t) => t.slug);
+    const off = anchored.filter((t) => !included.has(t.slug)).map((t) => t.slug);
+    const amb = allTypes.filter((t) => t.feed_mode === 'ambient' && included.has(t.slug)).map((t) => t.slug);
+    if (!window.confirm(`Apply this to the LIVE feed for all students?\n\nIn Today: ${on.length} type(s) ON, ${off.length} turned OFF.\nAmbient rotation: ${amb.join(', ') || 'none'}.\n\nThis changes what real students see on their next load.`)) return;
+    setBusy(true);
+    try {
+      if (on.length) await api.post('/api/admin/feed-control/bulk-route-types', { slugs: on, patch: { today_eligible: true } });
+      if (off.length) await api.post('/api/admin/feed-control/bulk-route-types', { slugs: off, patch: { today_eligible: false } });
+      await api.put('/api/admin/feed-control/policy', { ambientProviders: amb });
+      flash(`Applied ${on.length + amb.length} type(s) to the live feed`);
+      setSandboxOn(false);
+      await load();
+    } catch (e: any) { flash(e?.response?.data?.error || 'Apply failed'); }
+    finally { setBusy(false); }
+  }, [allTypes, included, load]);
 
   const toggleSel = (slug: string) => setSelected((s) => { const n = new Set(s); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
 
@@ -215,7 +249,35 @@ export default function FeedControlTab() {
           </select>
           <button className="fc-btn sm" disabled={simBusy || !simEnroll} onClick={runSim}>{simBusy ? 'Simulating…' : 'Preview'}</button>
           <span className="fc-mut">Read-only · shows the real feed + why · writes nothing</span>
+          <button type="button" className={`fc-btn ghost sm ${sandboxOn ? 'on' : ''}`} style={{ marginLeft: 'auto' }}
+            onClick={() => setSandboxOn((v) => !v)}>{sandboxOn ? '🧪 Sandbox: ON' : '🧪 Try sandbox'}</button>
         </div>
+
+        {sandboxOn && (
+          <div className="fc-sandbox">
+            <div className="fc-sandbox-h">
+              <b>🧪 What-if sandbox</b>
+              <span className="fc-mut">Starts empty. Check a type to include it; the timeline below rebuilds live. Nothing here touches students until you Apply.</span>
+              <span className="fc-sb-actions">
+                <button className="fc-btn ghost sm" onClick={() => setIncluded(new Set())}>Clear all</button>
+                <button className="fc-btn ghost sm" onClick={() => setIncluded(new Set(allTypes.map((t) => t.slug)))}>Include all</button>
+              </span>
+            </div>
+            <div className="fc-sb-grid">
+              {allTypes.map((t) => (
+                <label key={t.slug} className={`fc-sb-item ${included.has(t.slug) ? 'on' : ''}`}>
+                  <input type="checkbox" checked={included.has(t.slug)} onChange={() => toggleIncluded(t.slug)} />
+                  <span className="fc-sb-name">{t.student_label || t.label}</span>
+                  {t.feed_mode === 'ambient' && <span className="fc-tag amb">amb</span>}
+                </label>
+              ))}
+            </div>
+            <div className="fc-sb-foot">
+              <span className="fc-mut"><b>{included.size}</b> of {allTypes.length} included{!simEnroll && ' · pick a student above to see the timeline'}</span>
+              <button className="fc-btn sm" disabled={busy || included.size === 0} onClick={applySandboxToLive}>Apply this to the live feed →</button>
+            </div>
+          </div>
+        )}
 
         <p className="fc-explain">Only <b>eligible</b> content is a candidate: published, unlocked for their week, not already completed. The order is then decided by <b>pin → priority → freshness → not-yet-seen → cadence</b>. The chips on each card show why it's there.</p>
 
@@ -235,7 +297,7 @@ export default function FeedControlTab() {
               <span className="fc-ctx-i"><b>{sim.context.locked}</b>locked ahead</span>
               <span className="fc-ctx-i"><b>{sim.context.already_seen}</b>already seen</span>
             </div>
-            {sim.items.length === 0 && <div className="fc-empty">This student has no eligible feed items right now (all locked/completed, or the Today feed is off for them).</div>}
+            {sim.items.length === 0 && <div className="fc-empty">{sandboxOn ? 'Nothing included yet — check a type above to add it to this student’s timeline.' : 'This student has no eligible feed items right now (all locked/completed, or the Today feed is off for them).'}</div>}
             <div className="fc-feed">
               {sim.items.map((it, i) => (
                 <div key={i} className={`fc-fcard ${it.kind}`} style={{ borderLeftColor: SURF_COLOR[it.surface || 'today'] || '#94a3b8' }}>
@@ -429,4 +491,16 @@ const CSS = `
 @media(prefers-color-scheme:dark){.fc-today-tog.on{background:#14532d55;color:#86efac;border-color:#065f46}.fc-today-tog.amb{color:#c4b5fd;border-color:#4c1d95}}
 .fc-policy-note{background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:9px 11px;font-size:11.5px;line-height:1.5;color:#92400e}
 @media(prefers-color-scheme:dark){.fc-policy-note{background:#78350f22;border-color:#78350f;color:#fcd34d}}
+.fc-btn.ghost.on{background:var(--fc-acc);color:#fff;border-color:var(--fc-acc)}
+.fc-sandbox{margin:10px 0;border:1px dashed var(--fc-acc);border-radius:12px;padding:12px;background:var(--fc-bg)}
+.fc-sandbox-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;margin-bottom:10px}
+.fc-sandbox-h .fc-mut{max-width:520px}
+.fc-sb-actions{margin-left:auto;display:flex;gap:6px}
+.fc-sb-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:6px}
+.fc-sb-item{display:flex;align-items:center;gap:7px;border:1px solid var(--fc-bd);border-radius:8px;padding:6px 9px;font-size:12.5px;cursor:pointer;background:var(--fc-soft)}
+.fc-sb-item.on{border-color:var(--fc-acc);background:#eff6ff}
+.fc-sb-item.on .fc-sb-name{font-weight:700}
+@media(prefers-color-scheme:dark){.fc-sb-item.on{background:#1e3a8a33}}
+.fc-sb-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fc-sb-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
 `;
