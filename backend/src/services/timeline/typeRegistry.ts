@@ -118,6 +118,12 @@ export const CARD_TYPES: CardTypeDef[] = [
   D({ slug: 'demo_tuesday', label: 'Demo Tuesday', student_label: 'Demo Tuesday', bucket: 'share', render_band: 'event', est_minutes: 60, event: true, home_surface: 'group' }),
   D({ slug: 'kes_wednesday', label: 'Kes Wednesday', student_label: 'Kes Wednesday', bucket: 'learn', render_band: 'event', est_minutes: 60, event: true, home_surface: 'group' }),
   D({ slug: 'marketing_friday', label: 'Marketing Friday', student_label: 'Marketing Friday', bucket: 'share', render_band: 'event', est_minutes: 60, event: true, home_surface: 'group' }),
+  // Colaberry Commons — the ONE canonical live-room curriculum type (spec §6).
+  // Its 8 variants (study/build_room/demo/office_hours/architecture_review/
+  // cert_prep/accountability/networking) are a per-card variable, NOT separate
+  // types. Reuses the existing 'event' renderer (delivers a card, awards no XP
+  // itself) on the community surface.
+  D({ slug: 'community_live_session', label: 'Community Live Session', student_label: 'Live Session', bucket: 'share', render_band: 'event', est_minutes: 60, community_xp: 10, event: true, competencies: ['communication'], home_surface: 'community' }),
   // System types — engine-emitted gamification. No home but Today; injected, not authored → ambient.
   D({ slug: 'milestone', label: 'Milestone', student_label: 'Milestone', bucket: 'advance', render_band: 'milestone', est_minutes: 0, system: true, home_surface: 'today', feed_mode: 'ambient' }),
   D({ slug: 'achievement', label: 'Achievement', student_label: 'Achievement', bucket: 'advance', render_band: 'achievement', est_minutes: 0, system: true, home_surface: 'today', feed_mode: 'ambient' }),
