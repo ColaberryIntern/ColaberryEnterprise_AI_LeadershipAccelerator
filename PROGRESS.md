@@ -10012,6 +10012,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: Frontend compiles clean via Docker `react-scripts build` (nginx builder stage, exit 0); jest unit test 11/11 pass in the clean container (`--testPathPattern=classroomSearch`); CI frontend-typecheck (authoritative).
   - Notes: Branch `workstream/classroom-search`. Client-side only — no backend, API, or DB change. Search is scoped to the currently-selected week's cards (the feed that's actually rendered), which is exactly the "Prompt Lab is halfway down the page" pain.
 
+### Feed Control simulator — explicit student selection (no silent default) — 2026-07-20
+- [x] Fix the "how can this be Martin's timeline when nothing is selected?" confusion in the Feed Control student-feed preview
+  - Date: 2026-07-20
+  - Session: CC-20260720-f7k3
+  - What changed: `frontend/src/pages/admin/orchestration/FeedControlTab.tsx` — the preview dropdown no longer auto-selects the first (most-recent) enrollment on load, so it never silently previews a feed nobody picked. Added an explicit "Select a student…" placeholder option (value=""); changing the selection now clears the prior preview (`setSim(null)`) so a shown feed always matches the chosen student; and an empty-state hint ("Pick a student above, then click Preview…") makes the panel read as intentional rather than blank.
+  - Why: Ali on prod — the dropdown defaulted to the first student (Martin Mango) and an HTML `<select>` always renders its first option, so the preview appeared to be "Martin's timeline" even though he never chose anyone. Compounded by a stale preview persisting after the selection changed.
+  - Verification: Frontend `tsc --noEmit -p frontend/tsconfig.json` — zero errors in FeedControlTab.tsx (the only 3 errors are pre-existing `@dnd-kit` module-not-found in TimelineEditorTab.tsx, a local node_modules install gap; `@dnd-kit` is declared in frontend/package.json so CI's clean install resolves them). CI frontend-typecheck authoritative.
+  - Notes: Branch `workstream/feed-control-selection-clarity` off origin/main. Follow-up to PR #472 (Feed Control simulator). UI-only; no backend/API/DB change. Not yet deployed (awaiting Ali's OK; prod deploys after hours).
 ### Projects backend-source flip — true cross-device builds — 2026-07-20
 - [x] Projects READ from the backend + per-task write-through (was localStorage-only render)
   - Date: 2026-07-20
