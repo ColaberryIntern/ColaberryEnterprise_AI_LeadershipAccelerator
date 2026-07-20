@@ -13,6 +13,7 @@ import { useReaderProgress } from '../../../components/timeline/useReaderProgres
 import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
 import SetupLabRender from '../../../components/timeline/SetupLabRender';
 import PromptCatalogRender from '../../../components/timeline/PromptCatalogRender';
+import BuildArtifactsRender from '../../../components/timeline/BuildArtifactsRender';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -121,13 +122,14 @@ const RuntimeWorkspace: React.FC = () => {
   // center as a single scroll (its own renderer, not the generic lessonDoc iframe).
   const isSetupLab = band === 'setup_lab' && !!card?.content?.body_html;
   const isPromptCatalog = band === 'prompt_catalog' && !!card?.content?.body_html;   // Prompt Lab: practice-prompt catalog
+  const isBuildArtifacts = band === 'build_artifacts' && !!card?.content?.body_html;   // Build Artifact(s) Lab: build station
   const [labCopied, setLabCopied] = useState(false);   // Setup Lab: reveal completion only after the prompt is copied
   const [allPromptsCopied, setAllPromptsCopied] = useState(false);   // Prompt Lab: reveal completion only after ALL prompts are copied
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
   // the right rail. This is the single-scroll workstation layout applied to every type.
-  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !!card?.content?.body_html;
+  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && !!card?.content?.body_html;
   const fill = isReader || isLesson || isDeepDive;
 
   const ask = useCallback(async (mode: string, message: string) => {
@@ -223,10 +225,10 @@ const RuntimeWorkspace: React.FC = () => {
 
       <div className="rt-body">
         {/* CENTER — activity */}
-        <main className={`rt-mid${fill || isSetupLab || isPromptCatalog ? ' rt-mid--reader' : ''}`}>
+        <main className={`rt-mid${fill || isSetupLab || isPromptCatalog || isBuildArtifacts ? ' rt-mid--reader' : ''}`}>
           {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
               their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
-          {!isVideo && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && card.type_thumbnail && (
+          {!isVideo && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && card.type_thumbnail && (
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
@@ -347,6 +349,16 @@ const RuntimeWorkspace: React.FC = () => {
               </div>
             </div>
           )}
+          {/* Build Artifact(s) Lab — the build station (pick artifact + project); fills
+              the center; completion (points on first build) reveals on the right after a copy. */}
+          {isBuildArtifacts && (
+            <div className="rt-readerwrap">
+              <BuildArtifactsRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} variant="workspace" onCopied={() => setLabCopied(true)} />
+              <div className="rt-readerfoot">
+                {!completed && !labCopied && <span className="rt-muted">Pick an artifact + project, copy the build prompt, build it in Claude Code, then submit on the right →</span>}
+              </div>
+            </div>
+          )}
           {/* Anthropic Skills Course — the external-course panel + certificate upload
               (same component as the drawer), so the workspace actually carries the course. */}
           {isSkillsJar && (
@@ -362,7 +374,7 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
           {/* Fallback for a non-media card with no body yet — just its description. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && (
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
@@ -373,7 +385,7 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* Surveys + assessments complete via their own flow; fill cards host the gate in
               their foot. Everything else gets the completion bar here in the center. */}
-          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && (
+          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && (
             <div className="rt-complete">{completeGate}</div>
           )}
         </main>
@@ -390,6 +402,12 @@ const RuntimeWorkspace: React.FC = () => {
           {isPromptCatalog && (allPromptsCopied || completed) && (
             <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
               {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Built one in Claude Code?</div>}
+              {completeGate}
+            </div>
+          )}
+          {isBuildArtifacts && (labCopied || completed) && (
+            <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--line)' }}>
+              {!completed && <div className="rt-lab" style={{ marginBottom: 8 }}>Built your artifact?</div>}
               {completeGate}
             </div>
           )}

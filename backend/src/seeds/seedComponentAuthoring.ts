@@ -297,6 +297,21 @@ Every <h4> is followed by exactly one <p> then exactly one <pre>. Every opening 
 
 Voice: warm, confident, encouraging, plain English; make a non-technical executive feel these are doable. Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", github_task = null, evaluation_criteria = []. completion: "Marked complete when the participant copies a prompt, builds it in Claude Code, and submits what they made."`;
 
+const BUILD_ARTIFACTS_GENERATION_PROMPT = `You author a "Build Artifact(s) Lab" for the AI Systems Architect Accelerator — a build station where a NON-TECHNICAL business executive picks ONE artifact and runs a paste-ready prompt in Claude Code to build it ON THEIR OWN PROJECT: a significant, portfolio-grade deliverable (~5+ minutes of work, Deep-Dive quality, something they would be proud of). Use ALL the context above — the WEEK CONTEXT (topic + objectives), THIS WEEK'S ACTIVITIES (the Deep Dive + the Anthropic course), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
+
+Produce EXACTLY 5 artifacts the student could build this section — grounded in the week's deliverables, Deep Dive, and topic. Each is a substantial, real deliverable (a document, module, package, framework, or diagram), never a toy.
+
+title: the word "Build", a space, an em dash, a space, then the week's topic exactly as named in the WEEK CONTEXT.
+summary: one vivid sentence on the real things they can build this section.
+
+body_html: clean, semantic, fully-balanced HTML — NO <style>, NO colors, NO inline styles, NO scripts, NO images (the workspace supplies the theme). Use ONLY these tags: h4, p, strong, em, ol, ul, li, pre, code. Emit EXACTLY 5 artifacts, each in this order:
+  <h4>Short artifact name</h4>
+  <p>One or two plain sentences: what this artifact is and why it is valuable. Always visible.</p>
+  <pre>A long, well-designed, first-person paste-ready prompt addressed to Claude Code that builds this artifact ON the student's project. Use the LITERAL token {PROJECT} wherever the project name goes (it is substituted at runtime). Have Claude Code produce a real, polished, portfolio-grade deliverable and explain each step for a non-technical person. This is a substantial build (~5+ minutes). 8 to 14 sentences.</pre>
+Every <h4> is followed by exactly one <p> then exactly one <pre>. Every opening tag has a matching closing tag. EXACTLY 5 artifacts.
+
+Voice: warm, confident, encouraging, plain English. Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", github_task = null, evaluation_criteria = []. completion: "Marked complete on the participant's FIRST submitted build; they can re-run on other artifacts or projects for practice without earning additional points."`;
+
 // ── Intelligence Pipeline types (news / research / tools / video / quote /
 //    architecture / build / MCP / technique / market) ─────────────────────────
 // These 10 types are reusable content GENERATORS: each turns one external item
@@ -560,6 +575,48 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     evaluation_type: 'none',
     generation_prompt: PROMPT_LAB_GENERATION_PROMPT,
     thumbnail_url: thumbnailUrlFor('prompt_lab'),
+    approved: true,
+    status: 'ready',
+  },
+  implementation_task: {
+    student_label: 'Build Artifact(s) Lab',
+    category: 'Build',
+    icon: 'bi-hammer',
+    badge_class: 'bg-danger',
+    estimated_time: 90,
+    capabilities: ['ai_chat', 'github', 'evidence', 'artifacts', 'portfolio', 'mentor_review', 'comments'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Build — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Build station: 5 artifacts, each h4 name + p what + pre build_prompt (uses {PROJECT})' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: BUILD_ARTIFACTS_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('implementation_task'),
+    approved: true,
+    status: 'ready',
+  },
+  artifact_submission: {
+    student_label: 'Build Artifact(s) Lab',
+    category: 'Build',
+    icon: 'bi-hammer',
+    badge_class: 'bg-danger',
+    estimated_time: 60,
+    capabilities: ['ai_chat', 'github', 'evidence', 'artifacts', 'portfolio', 'mentor_review', 'comments'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Build — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Build station: 5 artifacts, each h4 name + p what + pre build_prompt (uses {PROJECT})' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: BUILD_ARTIFACTS_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('artifact_submission'),
     approved: true,
     status: 'ready',
   },
