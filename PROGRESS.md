@@ -9897,3 +9897,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali's spec — Prompt Lab should generate categorized practice prompts (copy into Claude Code, reveal-on-demand), grounded in the section's Deep Dive documents, Anthropic course, and blueprint. [[project_canonical_course_structure]]
   - Verification: built + validated on the `:9999` dev instance (real catalogs, e.g. Week 3 includes "Create Your Workflow Assistant" = the week's deliverable). Frontend tsc via Docker build; typeRegistry jest.
   - Notes: Branch `workstream/prompt-lab-catalog`. All 14 prompt_lab cards must be regenerated post-deploy (render band flipped). Same renderer pattern will serve Implementation Task.
+
+### Claude Code labs UX — drawer completion + auto-return to curriculum — 2026-07-20
+- [x] Copy-gated completion works in the DRAWER (phone users), and completing any assignment auto-returns to the Classroom
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `frontend/src/components/timeline/CardDetailBody.tsx`: the drawer (right-side pop-up) now reveals "Complete & generate evidence" once the prompt(s) are copied (a shared `copyGateMet` fed by SetupLabRender `onCopied` / PromptCatalogRender `onAllCopied`), with a hint until then — so phone users can complete without the workspace. On completion, the drawer closes back to the curriculum (`onClose` after 1.2s).
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: `complete()` now `setTimeout(goBack, 1200)` for ALL completions (was Deep-Dive only) — completing any assignment returns to the Classroom where the student left off.
+  - Why: Ali on prod — the copy-gate only revealed completion in the workspace (computer users); phone users use the drawer. And completing should take you back to the curriculum automatically.
+  - Verification: frontend tsc via Docker build; deployed to prod nginx. Assessments/surveys keep their own completion flow (assessment uses setCompleted directly, so it stays on-page to show the score).
+  - Notes: Applies to setup_lab + prompt_catalog (drawer) and universally in the workspace.
