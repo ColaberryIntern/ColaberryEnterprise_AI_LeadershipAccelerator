@@ -37,8 +37,19 @@ export async function instrumentCronJob(agentName: string, fn: () => Promise<voi
     return;
   }
 
-  // Check enabled and paused status
-  if (!agent.enabled || agent.status === 'paused') return;
+  // Check enabled and paused status. This is a deliberate skip (an operator
+  // disabled/paused the job), not a failure — but it must never be silent:
+  // cronHealthAlertService's missed-run detector only evaluates enabled:true
+  // agents, so a disabled/mis-seeded row would otherwise produce zero signal
+  // anywhere. Logging here is the minimum bar; it's what makes an accidental
+  // disable (vs. a deliberate one) discoverable from logs.
+  if (!agent.enabled || agent.status === 'paused') {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'backend', event: 'cron_job_skipped_disabled',
+      outcome: 'partial', context: { agent_name: agentName, enabled: agent.enabled, status: agent.status },
+    }));
+    return;
+  }
 
   const start = Date.now();
   let result: 'success' | 'failed' = 'success';

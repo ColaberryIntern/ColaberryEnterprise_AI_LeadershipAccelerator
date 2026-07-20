@@ -44,15 +44,15 @@ export function classifyError(err: unknown): ErrorClass {
   // Zod validation errors
   if (name === 'ZodError') return 'ValidationError';
 
-  // Network / timeout markers
-  if (name === 'AbortError' || e.code === 'ETIMEDOUT' || e.code === 'ECONNABORTED' || message.includes('timeout') || message.includes('timed out')) {
-    return 'TimeoutError';
-  }
-  if (e.code === 'ECONNREFUSED' || e.code === 'ENOTFOUND' || e.code === 'ECONNRESET' || message.includes('econnrefused') || message.includes('fetch failed') || message.includes('network')) {
-    return 'UpstreamUnavailable';
-  }
+  // Structured system error codes / names — reliable, not prone to the
+  // false-positive risk of matching arbitrary substrings in a message.
+  if (name === 'AbortError' || e.code === 'ETIMEDOUT' || e.code === 'ECONNABORTED') return 'TimeoutError';
+  if (e.code === 'ECONNREFUSED' || e.code === 'ENOTFOUND' || e.code === 'ECONNRESET') return 'UpstreamUnavailable';
 
-  // HTTP status code buckets
+  // HTTP status code buckets — evaluated before any message-substring
+  // matching below, so a reliable numeric status (e.g. 401) is never
+  // overridden by unrelated wording in the message (e.g. "network" or
+  // "timeout" appearing in a 401 response body's text).
   if (typeof status === 'number') {
     if (status === 401 || status === 403) return 'AuthError';
     if (status === 429) return 'RateLimitError';
@@ -60,6 +60,10 @@ export function classifyError(err: unknown): ErrorClass {
     if (status >= 500) return 'UpstreamUnavailable';
   }
 
+  // Message-substring fallback — least reliable signal, only consulted once
+  // name/code/status have all failed to classify.
+  if (message.includes('timeout') || message.includes('timed out')) return 'TimeoutError';
+  if (message.includes('econnrefused') || message.includes('fetch failed') || message.includes('network')) return 'UpstreamUnavailable';
   if (message.includes('rate limit') || message.includes('too many requests')) return 'RateLimitError';
   if (message.includes('unauthorized') || message.includes('invalid token') || message.includes('invalid credentials')) return 'AuthError';
 

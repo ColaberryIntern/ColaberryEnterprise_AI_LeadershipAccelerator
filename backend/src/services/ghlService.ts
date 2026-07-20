@@ -6,8 +6,16 @@ import { classifyError } from '../utils/errorClassifier';
 // Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
 // the full Sequelize/model graph into every ghlService import.
 async function emitFailureEvent(params: Parameters<typeof import('./aiEventService').emitAiEvent>[0]): Promise<void> {
-  const { emitAiEvent } = await import('./aiEventService');
-  await emitAiEvent(params).catch(() => {});
+  try {
+    const { emitAiEvent } = await import('./aiEventService');
+    await emitAiEvent(params);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'backend', event: 'emit_failure_event_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { event_type: params.event_type, message: err?.message },
+    }));
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -61,6 +69,7 @@ async function ghlFetch(
         'Authorization': `Bearer ${apiKey}`,
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(15000),
     });
 
     const data: any = await response.json();
