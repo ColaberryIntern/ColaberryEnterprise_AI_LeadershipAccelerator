@@ -305,6 +305,16 @@ import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
 import CommunityPointsEvent from './CommunityPointsEvent';
 import CommunityEvent from './CommunityEvent';
 
+// Colaberry Commons — Community Rooms layer (rooms/bookings/rsvp/messages/outbox)
+import CommunityRoom from './CommunityRoom';
+import RoomMembership from './RoomMembership';
+import RoomBooking from './RoomBooking';
+import RoomBookingAttendee from './RoomBookingAttendee';
+import RoomMessage from './RoomMessage';
+import RoomResource from './RoomResource';
+import RoomOutboxEvent from './RoomOutboxEvent';
+import RoomReport from './RoomReport';
+
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
 import SponsorSeat from './SponsorSeat';
@@ -1227,6 +1237,15 @@ export {
   CommunityLeaderboardEntry,
   CommunityPointsEvent,
   CommunityEvent,
+  // Colaberry Commons — Community Rooms layer
+  CommunityRoom,
+  RoomMembership,
+  RoomBooking,
+  RoomBookingAttendee,
+  RoomMessage,
+  RoomResource,
+  RoomOutboxEvent,
+  RoomReport,
   StudentPointsEvent,
   OpenHouseEvent,
   OnboardingProfile,
@@ -1326,6 +1345,28 @@ CommunityPointsEvent.belongsTo(CommunityMember, { foreignKey: 'member_id', as: '
 
 Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
 CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+// --- Colaberry Commons — Community Rooms associations ---
+Cohort.hasMany(CommunityRoom, { foreignKey: 'linked_cohort_id', as: 'communityRooms' });
+CommunityRoom.belongsTo(Cohort, { foreignKey: 'linked_cohort_id', as: 'linkedCohort' });
+
+LiveSession.hasOne(CommunityRoom, { foreignKey: 'linked_live_session_id', as: 'communityRoom' });
+CommunityRoom.belongsTo(LiveSession, { foreignKey: 'linked_live_session_id', as: 'liveSession' });
+
+CommunityRoom.hasMany(RoomMembership, { foreignKey: 'room_id', as: 'memberships', onDelete: 'CASCADE' });
+RoomMembership.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+CommunityRoom.hasMany(RoomBooking, { foreignKey: 'room_id', as: 'bookings', onDelete: 'CASCADE' });
+RoomBooking.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+RoomBooking.hasMany(RoomBookingAttendee, { foreignKey: 'booking_id', as: 'attendees', onDelete: 'CASCADE' });
+RoomBookingAttendee.belongsTo(RoomBooking, { foreignKey: 'booking_id', as: 'booking' });
+
+CommunityRoom.hasMany(RoomMessage, { foreignKey: 'room_id', as: 'messages', onDelete: 'CASCADE' });
+RoomMessage.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+CommunityRoom.hasMany(RoomResource, { foreignKey: 'room_id', as: 'resources', onDelete: 'CASCADE' });
+RoomResource.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
 
 // --- Timeline Engine associations (Classroom rebuild) ---
 TimelineCard.hasMany(TimelineCardProgress, { foreignKey: 'card_id', as: 'progress', onDelete: 'CASCADE' });

@@ -16,6 +16,7 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
+import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import v1Routes from './routes/v1Routes';
@@ -71,6 +72,9 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+// Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
+// COMMUNITY_ROOMS_ENABLED is off).
+app.use(communityRoomsRoutes);
 app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
 app.use(publicPortfolioRoutes);
@@ -1726,6 +1730,206 @@ async function ensureMissedOpportunitiesSchema() {
   console.log('[DB] Missed Opportunities schema ensured');
 }
 
+// Colaberry Commons — Community Rooms layer. Explicit idempotent DDL (sync is
+// off on this graph). Additive & reversible: new room_* / community_rooms tables
+// only, no ALTERs to existing tables. NO cross-table FK constraints (plain UUID
+// columns, like student_tasks) so creation ordering never matters. The whole
+// feature stays dark behind env.communityRoomsEnabled regardless of these tables.
+async function ensureCommunityRoomsSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS community_rooms (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       slug VARCHAR(140) NOT NULL,
+       name VARCHAR(200) NOT NULL,
+       category VARCHAR(40) NOT NULL DEFAULT 'social',
+       room_type VARCHAR(30) NOT NULL DEFAULT 'persistent',
+       privacy VARCHAR(20) NOT NULL DEFAULT 'public',
+       status VARCHAR(20) NOT NULL DEFAULT 'active',
+       description TEXT,
+       topic VARCHAR(255),
+       capacity INTEGER,
+       owner_enrollment_id UUID,
+       linked_cohort_id UUID,
+       linked_project_id UUID,
+       linked_module_id UUID,
+       linked_live_session_id UUID,
+       is_system BOOLEAN NOT NULL DEFAULT false,
+       created_by VARCHAR(60) NOT NULL DEFAULT 'system',
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_rooms_slug_unique ON community_rooms (slug)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_rooms_linked_session_unique ON community_rooms (linked_live_session_id) WHERE linked_live_session_id IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_community_rooms_cohort ON community_rooms (linked_cohort_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_community_rooms_category ON community_rooms (category)`,
+    `CREATE INDEX IF NOT EXISTS idx_community_rooms_privacy_status ON community_rooms (privacy, status)`,
+
+    `CREATE TABLE IF NOT EXISTS room_memberships (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       role VARCHAR(20) NOT NULL DEFAULT 'member',
+       access_state VARCHAR(20) NOT NULL DEFAULT 'active',
+       notification_pref VARCHAR(20) NOT NULL DEFAULT 'mentions',
+       invited_by UUID,
+       joined_at TIMESTAMPTZ,
+       left_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_memberships_unique ON room_memberships (room_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_memberships_enrollment ON room_memberships (enrollment_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_bookings (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       variant VARCHAR(30) NOT NULL DEFAULT 'study',
+       title VARCHAR(255) NOT NULL,
+       description TEXT,
+       outcome TEXT,
+       agenda TEXT,
+       host_enrollment_id UUID,
+       co_hosts JSONB NOT NULL DEFAULT '[]'::jsonb,
+       start_at TIMESTAMPTZ,
+       end_at TIMESTAMPTZ,
+       timezone VARCHAR(60),
+       recurrence VARCHAR(40),
+       privacy VARCHAR(20) NOT NULL DEFAULT 'public',
+       audience_rules JSONB NOT NULL DEFAULT '{}'::jsonb,
+       capacity INTEGER,
+       approval_required BOOLEAN NOT NULL DEFAULT false,
+       meeting_provider VARCHAR(30) NOT NULL DEFAULT 'google_meet',
+       meeting_link VARCHAR(600),
+       google_event_id VARCHAR(255),
+       external_ids JSONB NOT NULL DEFAULT '{}'::jsonb,
+       related_module_id UUID,
+       related_live_session_id UUID,
+       related_project_id UUID,
+       skill_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+       rsvp_deadline TIMESTAMPTZ,
+       reminder_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+       recording_policy VARCHAR(30) NOT NULL DEFAULT 'ask',
+       artifact_prompt TEXT,
+       reflection_prompt TEXT,
+       moderation_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
+       state VARCHAR(20) NOT NULL DEFAULT 'draft',
+       timeline_published BOOLEAN NOT NULL DEFAULT false,
+       timeline_card_id UUID,
+       created_by_enrollment_id UUID,
+       idempotency_key VARCHAR(160),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_bookings_idem_unique ON room_bookings (idempotency_key) WHERE idempotency_key IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_room_bookings_room ON room_bookings (room_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_bookings_state_start ON room_bookings (state, start_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_bookings_related_session ON room_bookings (related_live_session_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_booking_attendees (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       booking_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       rsvp_state VARCHAR(20) NOT NULL DEFAULT 'none',
+       approval_state VARCHAR(20) NOT NULL DEFAULT 'auto',
+       attended BOOLEAN NOT NULL DEFAULT false,
+       attendance_source VARCHAR(20),
+       joined_at TIMESTAMPTZ,
+       waitlist_position INTEGER,
+       feedback_rating INTEGER,
+       feedback_text TEXT,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_booking_attendees_unique ON room_booking_attendees (booking_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_booking_attendees_enrollment ON room_booking_attendees (enrollment_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_messages (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       booking_id UUID,
+       enrollment_id UUID,
+       sender_name VARCHAR(120) NOT NULL,
+       content TEXT NOT NULL,
+       thread_root_id UUID,
+       kind VARCHAR(20) NOT NULL DEFAULT 'message',
+       question_status VARCHAR(20),
+       moderation_state VARCHAR(20) NOT NULL DEFAULT 'visible',
+       edited_at TIMESTAMPTZ,
+       deleted_at TIMESTAMPTZ,
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_room_messages_room_created ON room_messages (room_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_messages_thread ON room_messages (thread_root_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_resources (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       booking_id UUID,
+       resource_type VARCHAR(20) NOT NULL,
+       title VARCHAR(255),
+       url VARCHAR(1000),
+       body TEXT,
+       created_by_enrollment_id UUID,
+       is_pinned BOOLEAN NOT NULL DEFAULT false,
+       metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_room_resources_room ON room_resources (room_id, resource_type)`,
+
+    `CREATE TABLE IF NOT EXISTS room_outbox_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       event_type VARCHAR(50) NOT NULL,
+       aggregate_type VARCHAR(30) NOT NULL,
+       aggregate_id UUID NOT NULL,
+       payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+       idempotency_key VARCHAR(180) NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       attempts INTEGER NOT NULL DEFAULT 0,
+       max_attempts INTEGER NOT NULL DEFAULT 6,
+       next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       last_error TEXT,
+       correlation_id UUID,
+       processed_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_outbox_events_idem_unique ON room_outbox_events (idempotency_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_outbox_ready ON room_outbox_events (status, next_attempt_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_outbox_aggregate ON room_outbox_events (aggregate_type, aggregate_id)`,
+
+    `CREATE TABLE IF NOT EXISTS room_reports (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       reporter_enrollment_id UUID NOT NULL,
+       target_type VARCHAR(20) NOT NULL,
+       target_id UUID NOT NULL,
+       reason VARCHAR(60) NOT NULL,
+       detail TEXT,
+       status VARCHAR(20) NOT NULL DEFAULT 'open',
+       resolution TEXT,
+       resolved_by VARCHAR(60),
+       resolved_at TIMESTAMPTZ,
+       idempotency_key VARCHAR(180),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_reports_idem_unique ON room_reports (idempotency_key) WHERE idempotency_key IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_room_reports_status ON room_reports (status)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure Community Rooms schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Community Rooms schema ensured');
+}
+
 async function start(): Promise<void> {
   // Ensure uploads directory exists
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -1812,6 +2016,10 @@ async function start(): Promise<void> {
   await ensureOpsCenterSchema();
   await ensureWorkforceSchema();
   await ensureIntelligenceSchema();
+  // Colaberry Commons — Community Rooms tables (idempotent, additive). Created
+  // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
+  // env.communityRoomsEnabled at the route/worker/linkage layers.
+  await ensureCommunityRoomsSchema();
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any
   // missing column as NULLABLE; never drops/alters. Fixes the recurring
@@ -2037,6 +2245,18 @@ async function start(): Promise<void> {
       .then(({ pollArchitectBuilds }) => pollArchitectBuilds())
       .catch((err) => console.warn('[ArchitectPoller] scheduled run failed:', err?.message));
   });
+
+  // Colaberry Commons — drain the community-rooms outbox every minute (Meet-link
+  // provisioning, timeline publish, reminders). Flag-gated so it registers no cron
+  // at all when the feature is off; the drain itself is idempotent + retryable
+  // with dead-lettering (see roomOutboxService).
+  if (env.communityRoomsEnabled) {
+    cron.schedule('* * * * *', () => {
+      import('./services/communityRooms/roomOutboxService')
+        .then(({ drainOutbox }) => drainOutbox(25))
+        .catch((err) => console.warn('[CommunityRoomsOutbox] drain failed:', err?.message));
+    });
+  }
 
   // Start follow-up email scheduler if enabled
   if (env.enableFollowUpScheduler) {

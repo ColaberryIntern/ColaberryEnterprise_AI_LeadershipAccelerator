@@ -260,6 +260,11 @@
       "slug": "market_intelligence",
       "label": "Market Intelligence",
       "scene": "A rising 3D bar chart shaped like a small futuristic city skyline with a glowing coral upward arrow soaring over it, faint streams of data in the soft background."
+    },
+    {
+      "slug": "community_live_session",
+      "label": "Community Live Session",
+      "scene": "A warm inviting virtual meeting room with a ring of softly glowing floating seats around a central holographic round table, gentle light beams and a small live indicator dot, a sense of people gathering."
     }
   ]
 }
