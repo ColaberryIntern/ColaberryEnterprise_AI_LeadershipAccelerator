@@ -9811,3 +9811,16 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: verifying the aggregation on dev surfaced that the project backend (P1) shipped to prod could NOT actually persist — prod's `student_tasks` was the wrong table. This makes the base tables self-heal on every boot so it can never silently be missing/wrong again. [[project_student_project_backend]]
   - Verification: backend tsc + jest = CI gate; prod `student_tasks` columns verified post-repair. Idempotent.
   - Notes: Branch `workstream/student-task-base-ensure` off main. `seedStudentTasks.ts` still creates requirement_key NOT NULL; the ensure ALTER relaxes it on boot (full seed reconcile = tidy-up). Dev DB separately stale (missing requirements_maps etc.) — dev-hygiene follow-up.
+
+### Setup Lab curriculum type — bespoke dark "Claude Code" renderer (drawer + workspace + tile) — 2026-07-19
+- [x] `setup_lab` render_band: dark native lab panel with a real per-`<pre>` Copy-prompt button, across all three render surfaces
+  - Date: 2026-07-19
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `frontend/src/components/timeline/SetupLabRender.tsx` (NEW): shared dark renderer — 5 CSS-counter-numbered beat sections, `<pre>` prompt panels each with a working **Copy prompt** button (native DOM `navigator.clipboard`, injected via `useEffect` — a sandboxed iframe can't reach the clipboard), a `CLAUDE CODE · SETUP LAB` badge + title/meta header. Rendered natively (NOT the generic sandboxed `lessonDoc` iframe) so there is no double scrollbar.
+    - `frontend/src/components/timeline/CardDetailBody.tsx`: `isSetupLab` arm — the drawer body goes fully dark + single-scroll (`tld-body--setuplab`) and renders `SetupLabRender` instead of the light iframe.
+    - `frontend/src/pages/portal/runtime/RuntimeWorkspace.tsx`: `setup_lab` excluded from the generic `isLesson`/`fill` iframe path; renders `SetupLabRender` in a dark, wide, single-scroll `rt-mid--reader` center with the complete gate in the slim foot; AI Mentor + comments rail unchanged.
+    - `frontend/src/components/timeline/TimelineCard.tsx`: new `setuplab` Kind (terminal `>_` icon, dark gradient, `#D97757` Claude accent) in BAND/KIND_GRADIENT/Icon (satisfies `curriculumFormatContract.test.ts`) + a "Claude Code" corner stripe on the tile.
+  - Why: the placed `setup_lab` cards rendered in the generic light renderer (double scrollbar, no copy button, no Claude Code identity). This is the bespoke frontend slice that makes the live portal match the approved dark design. [[project_canonical_course_structure]]
+  - Verification: deployed to the `:9999` dev instance (accelerator-dev nginx image rebuild); frontend tsc runs inside that Docker build (react-scripts). User visual review pending.
+  - Notes: Branch `workstream/setup-lab-renderer` off main. Dev-only (not merged to main / prod). Type + 5 cards already authored on `accelerator_dev1`. No fake embedded Claude Code terminal — the copy-into-Claude-Code flow + mentor rail is the real UX. Same renderer will serve Prompt Lab / Implementation Task.
