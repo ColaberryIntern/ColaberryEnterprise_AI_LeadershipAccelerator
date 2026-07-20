@@ -487,8 +487,12 @@ router.get('/api/portal/community/posts', requireParticipant, async (req, res) =
   }
   try {
     const { listPosts } = await import('../services/communityService');
-    const posts = await listPosts(req.participant!.sub, parsed.data.category);
-    res.json({ posts });
+    const { posts, next_cursor } = await listPosts(req.participant!.sub, {
+      category: parsed.data.category,
+      cursor: parsed.data.cursor,
+      limit: parsed.data.limit,
+    });
+    res.json({ posts, next_cursor });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }

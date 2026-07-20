@@ -14,6 +14,10 @@ export const LeaderboardQuerySchema = z.object({
 
 export const ListPostsQuerySchema = z.object({
   category: z.string().min(1).max(100).optional(),
+  // Opaque keyset cursor from a prior page's next_cursor (Phase 4 pagination).
+  cursor: z.string().min(1).max(500).optional(),
+  // Page size — coerced from the query string; capped in the service too.
+  limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 export const TogglePinSchema = z.object({

@@ -39,7 +39,7 @@ const CommunityHomeWidget: React.FC = () => {
 
   useEffect(() => {
     fetchMyProfile().then(setProfile).catch(() => {});
-    fetchPosts().then((list) => setPosts(list.slice(0, HOME_POST_LIMIT))).catch(() => setPosts([]));
+    fetchPosts({ limit: HOME_POST_LIMIT }).then((page) => setPosts(page.posts.slice(0, HOME_POST_LIMIT))).catch(() => setPosts([]));
     fetchMembers().then(setMembers).catch(() => setMembers([]));
   }, []);
 
