@@ -1,6 +1,6 @@
 import { Op } from 'sequelize';
 import CommunityMember from '../models/CommunityMember';
-import { StudentPointsEvent } from '../models';
+import CommunityPointsEvent from '../models/CommunityPointsEvent';
 import CommunityLeaderboardEntry, { CommunityLeaderboardPeriod } from '../models/CommunityLeaderboardEntry';
 import Enrollment from '../models/Enrollment';
 import { resolveCohortId } from './communityService';
@@ -42,28 +42,31 @@ export function rankMembers(members: RawPoints[]): LeaderboardEntry[] {
   });
 }
 
-// Points come from the ONE canonical ledger (StudentPointsEvent / pointsService),
-// keyed by enrollment, mapped back to the community member for display — so this
-// leaderboard shows the SAME score as the top-right HUD, not a parallel one.
 async function pointsForWindow(cohortId: string, period: CommunityLeaderboardPeriod): Promise<RawPoints[]> {
   const members = await CommunityMember.findAll({
-    include: [{ model: Enrollment, as: 'enrollment', attributes: ['id'], where: { cohort_id: cohortId } }],
+    include: [{ model: Enrollment, as: 'enrollment', attributes: [], where: { cohort_id: cohortId } }],
   });
-  if (members.length === 0) return [];
 
-  const enrollmentIds = members.map((m: any) => m.enrollment_id);
-  const where: Record<string, unknown> = { enrollment_id: enrollmentIds };
-  if (period !== 'all_time') {
-    where.created_at = { [Op.gte]: new Date(Date.now() - WINDOW_MS[period]) };
+  if (period === 'all_time') {
+    return members.map((m: any) => ({ member_id: m.id, display_name: m.display_name, points: m.points }));
   }
 
-  const events = await StudentPointsEvent.findAll({ where });
+  const memberIds = members.map((m: any) => m.id);
+  if (memberIds.length === 0) {
+    return [];
+  }
+
+  const since = new Date(Date.now() - WINDOW_MS[period]);
+  const events = await CommunityPointsEvent.findAll({
+    where: { member_id: memberIds, created_at: { [Op.gte]: since } },
+  });
+
   const sums = new Map<string, number>();
   for (const event of events as any[]) {
-    sums.set(event.enrollment_id, (sums.get(event.enrollment_id) ?? 0) + (event.points || 0));
+    sums.set(event.member_id, (sums.get(event.member_id) ?? 0) + event.points);
   }
 
-  return members.map((m: any) => ({ member_id: m.id, display_name: m.display_name, points: sums.get(m.enrollment_id) ?? 0 }));
+  return members.map((m: any) => ({ member_id: m.id, display_name: m.display_name, points: sums.get(m.id) ?? 0 }));
 }
 
 // Idempotent recompute-and-upsert: re-running for the same (member, period)
