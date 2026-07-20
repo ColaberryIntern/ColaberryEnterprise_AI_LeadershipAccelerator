@@ -9,7 +9,9 @@ import {
   handleOrgRoster, handleOrgMemberDetail, handleOrgFeed,
 } from '../controllers/orgController';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
-import { strategyPrepUpload, certificateUpload, fieldGuideUpload } from '../config/upload';
+import path from 'path';
+import fs from 'fs';
+import { strategyPrepUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
@@ -52,6 +54,8 @@ import {
   handleWatchBeat, handleGetSurvey, handleSaveSurvey,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide,
+  handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
+  handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
 import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
 import projectRoutes from './projectRoutes';
@@ -97,6 +101,16 @@ router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, 
 // Deep Dive Field Guide — upload the .html built in Claude Code (+100 pts, once); GET = status.
 router.post('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, fieldGuideUpload.single('file'), handleUploadFieldGuide);
 router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, handleGetFieldGuide);
+
+// Build Artifact(s) Lab — upload the file the student built in Claude Code. Reuses
+// the strategy-prep multer config (PDF/Word/PPT/Excel/RTF/Text/Markdown/CSV), which
+// validates the file type server-side; a bad type returns a clear 400. The card is
+// then marked complete via the normal /complete endpoint (points on the first build).
+router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, strategyPrepUpload.single('file'), (req, res) => {
+  const file = (req as any).file;
+  if (!file) return res.status(400).json({ error: 'No file uploaded — pick the artifact file Claude Code built for you.' });
+  res.json({ ok: true, filename: file.originalname, size: file.size });
+});
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 // Weekly feedback Survey — read the questions + saved answers, and store answers.
@@ -104,6 +118,15 @@ router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handl
 router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
 router.get('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleGetAssessment);
 router.post('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleSubmitAssessment);
+// The Architect Time Machine (architect_mindset) — state/resume, validated stage
+// advance (autosave), interview answers, graceful evaluation, and the 14-gate
+// backend-authoritative completion, plus the derived Mindset Ledger.
+router.get('/api/portal/runtime/cards/:cardId/architect/state', requireParticipant, handleArchitectState);
+router.post('/api/portal/runtime/cards/:cardId/architect/advance', requireParticipant, handleArchitectAdvance);
+router.post('/api/portal/runtime/cards/:cardId/architect/interview', requireParticipant, handleArchitectInterview);
+router.post('/api/portal/runtime/cards/:cardId/architect/evaluate', requireParticipant, handleArchitectEvaluate);
+router.post('/api/portal/runtime/cards/:cardId/architect/complete', requireParticipant, handleArchitectComplete);
+router.get('/api/portal/runtime/cards/:cardId/architect/ledger', requireParticipant, handleArchitectLedger);
 // Watch-progress heartbeat (~1 per 15s of playback per player; limiter blunts floods).
 const watchBeatRateLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -616,6 +639,31 @@ router.get('/api/portal/community/leaderboard', requireParticipant, async (req, 
   }
 });
 
+// Local image upload from the student's computer (Ali feedback 2026-07-20).
+// Returns a relative media URL the composer adds to media_urls.
+router.post('/api/portal/community/upload', requireParticipant, (req, res) => {
+  communityMediaUpload.single('file')(req, res, (err: any) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
+    // Return the URL WITHOUT the file extension so nginx's `~* \.png$`
+    // static-asset location can't hijack it — it must proxy to the backend.
+    const id = req.file.filename.replace(/\.[^./]+$/, '');
+    res.status(201).json({ url: `/api/portal/community/media/${id}` });
+  });
+});
+
+// Public serve — extension-less path so nginx proxies it here (an image-ext URL
+// would be grabbed by the static-asset location). :id is the opaque UUID; the
+// real file (id.ext) is resolved on disk and sendFile sets the content-type.
+router.get('/api/portal/community/media/:id', (req, res) => {
+  const { id } = req.params;
+  if (!/^[a-f0-9-]{36}$/i.test(id)) { res.status(400).end(); return; }
+  let file: string | undefined;
+  try { file = fs.readdirSync(COMMUNITY_MEDIA_DIR).find((f) => f.startsWith(`${id}.`)); } catch { /* dir missing */ }
+  if (!file) { res.status(404).end(); return; }
+  res.sendFile(path.join(COMMUNITY_MEDIA_DIR, file));
+});
+
 router.get('/api/portal/community/calendar', requireParticipant, async (req, res) => {
   try {
     const { getUpcomingEvents } = await import('../services/communityCalendarService');
@@ -631,6 +679,24 @@ router.get('/api/portal/community/notifications', requireParticipant, async (req
     const { listNotifications } = await import('../services/communityNotificationService');
     const notifications = await listNotifications(req.participant!.sub);
     res.json({ notifications });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/notifications/unread-count', requireParticipant, async (req, res) => {
+  try {
+    const { unreadNotificationCount } = await import('../services/communityNotificationService');
+    res.json({ count: await unreadNotificationCount(req.participant!.sub) });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/notifications/read-all', requireParticipant, async (req, res) => {
+  try {
+    const { markAllNotificationsRead } = await import('../services/communityNotificationService');
+    res.json(await markAllNotificationsRead(req.participant!.sub));
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }

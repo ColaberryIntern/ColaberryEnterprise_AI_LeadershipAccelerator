@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architect Time Machine — Right-Side Panel (Design 2)</title>
+<style>
+  :root{
+    --berry:#367895; --berry-hover:#2E6A86; --berry-ink:#12303c;
+    --cherry:#FB2832; --cherry-deep:#c81e26; --leaf:#5BA63C; --amber:#E8920C;
+    --surface-page:#FFFFFF; --surface-subtle:#F8F8F7; --surface-sunken:#F1F1F0;
+    --text-strong:#1A1A1A; --text-body:#2B2B2B; --text-muted:#6B6B6B;
+    --border:#D8D8D8; --border-subtle:#E4E4E3;
+    --sans:'Roboto','Segoe UI',system-ui,sans-serif; --mono:'Roboto Mono',ui-monospace,monospace;
+    --r8:8px; --r12:12px; --r16:16px; --ease:cubic-bezier(.22,1,.36,1);
+    --shadow-lg:0 24px 60px rgba(18,48,60,.28);
+  }
+  html[data-theme="dark"]{
+    --surface-page:#15242c; --surface-subtle:#12202700; --surface-sunken:#0f1d24;
+    --text-strong:#f3f6f7; --text-body:#d7e0e3; --text-muted:#93a3a9;
+    --border:#26424e; --border-subtle:#1e343d;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--sans);color:var(--text-body);
+       background:
+         radial-gradient(1200px 600px at 80% -10%, rgba(54,120,149,.22), transparent 60%),
+         linear-gradient(160deg,#0e1a20,#12303c 60%,#0a1a22);
+       min-height:100vh}
+  .lab{max-width:1180px;margin:0 auto;padding:22px 20px 60px}
+  .labhead{display:flex;flex-wrap:wrap;gap:12px 18px;align-items:center;justify-content:space-between;color:#e7eef1;margin-bottom:18px}
+  .labhead h1{font-size:19px;margin:0;font-weight:800;color:#fff}
+  .labhead p{margin:3px 0 0;font-size:13px;color:#a9c4cf}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .seg{display:inline-flex;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.18);border-radius:999px;padding:3px}
+  .seg button{border:0;background:transparent;color:#cfe0e6;font:600 12.5px var(--sans);padding:6px 13px;border-radius:999px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:#fff;color:#12303c}
+  .seg button:focus-visible{outline:3px solid #8fc7db;outline-offset:2px}
+
+  /* ===== the drawer ===== */
+  .stage{display:flex;justify-content:center}
+  .scrim{width:100%;max-width:920px;min-height:660px;border-radius:20px;position:relative;overflow:hidden;
+    background:rgba(6,14,18,.55);border:1px solid rgba(255,255,255,.10);display:flex;justify-content:flex-end}
+  .drawer{width:440px;max-width:100%;background:var(--surface-page);height:100%;min-height:660px;
+    box-shadow:var(--shadow-lg);display:flex;flex-direction:column;position:relative}
+  .drawer.tablet{width:380px}
+  .drawer.mobile{width:100%}
+  .scrim.mobile{justify-content:center}
+
+  .d-head{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 10px}
+  .crumbs{font:600 11.5px var(--mono);letter-spacing:.04em;color:var(--text-muted);text-transform:uppercase}
+  .x{border:0;background:transparent;font-size:20px;color:var(--text-muted);cursor:pointer;line-height:1;padding:4px 8px;border-radius:8px}
+  .x:hover{background:var(--surface-sunken)} .x:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
+
+  /* cinematic hero */
+  .hero{margin:0 14px;border-radius:var(--r16);overflow:hidden;position:relative;height:150px;background:#0c1c24}
+  .hero svg{position:absolute;inset:0;width:100%;height:100%}
+  .hero .cap{position:absolute;left:16px;bottom:12px;right:16px}
+  .series{font:700 11px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:#8fc7db}
+  .htitle{font-size:19px;font-weight:800;color:#fff;margin:3px 0 0;line-height:1.2;text-shadow:0 2px 12px rgba(0,0,0,.5)}
+
+  .body{padding:16px 18px;overflow-y:auto;flex:1}
+  .principle{background:var(--surface-subtle);border:1px solid var(--border-subtle);border-left:3px solid var(--berry);
+    border-radius:10px;padding:11px 13px;font-size:13.5px;color:var(--text-body)}
+  html[data-theme="dark"] .principle{background:#12262f}
+  .principle b{color:var(--text-strong)}
+
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin:14px 0}
+  .pill{font:600 11.5px var(--sans);padding:4px 10px;border-radius:999px;border:1px solid var(--border);color:var(--text-body);background:var(--surface-page)}
+  .pill.req{background:#fdecec;color:#c81e26;border-color:#f6c9cb}
+  html[data-theme="dark"] .pill.req{background:#3a1416;color:#ff9ba0;border-color:#5e1f22}
+  .pill.xp{background:#eef5ef;color:#3f7a2b;border-color:#cfe6c4}
+  html[data-theme="dark"] .pill.xp{background:#16301a;color:#a6d98c;border-color:#26592a}
+
+  /* progress */
+  .prog{margin:16px 0 6px}
+  .prog .lab2{display:flex;justify-content:space-between;font:600 11.5px var(--mono);letter-spacing:.04em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px}
+  .track{height:8px;border-radius:99px;background:var(--surface-sunken);overflow:hidden}
+  .fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--berry),#5fb0cc);transition:width .5s var(--ease)}
+  .statusline{font-size:12.5px;color:var(--text-muted);margin-top:7px}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:99px;margin-right:6px;vertical-align:baseline}
+
+  h4.sec{font:700 11px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--berry);margin:18px 0 8px}
+  .flow{list-style:none;margin:0;padding:0}
+  .flow li{display:flex;gap:10px;align-items:flex-start;font-size:13px;padding:5px 0;color:var(--text-body)}
+  .flow .n{flex:none;width:20px;height:20px;border-radius:99px;background:var(--surface-sunken);color:var(--berry);font:700 11px var(--mono);display:grid;place-items:center;margin-top:1px}
+  .flow li.done .n{background:var(--leaf);color:#fff}
+  .flow li.now .n{background:var(--cherry);color:#fff}
+  .flow li.now{font-weight:600;color:var(--text-strong)}
+
+  /* receipt (completed) */
+  .receipt{border:1px dashed var(--berry);border-radius:12px;padding:14px;background:var(--surface-subtle);margin-top:6px}
+  html[data-theme="dark"] .receipt{background:#12262f}
+  .receipt h5{margin:0 0 4px;font-size:14px;color:var(--text-strong)}
+  .rgrid{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;margin:10px 0}
+  .rgrid div{font-size:12px;color:var(--text-muted)} .rgrid b{color:var(--text-strong);font-size:15px;display:block;font-family:var(--mono)}
+  .qual{font-size:11px;line-height:1.5;color:var(--text-muted);background:var(--surface-page);border:1px solid var(--border-subtle);border-radius:8px;padding:9px 11px;margin-top:8px}
+  .qual strong{color:var(--amber)}
+  .commit{margin-top:12px;font-size:13px;font-style:italic;color:var(--text-body);border-left:3px solid var(--leaf);padding-left:10px}
+
+  .foot{border-top:1px solid var(--border-subtle);padding:12px 18px;display:flex;flex-direction:column;gap:8px;background:var(--surface-page)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;border:0;border-radius:999px;font:700 14px var(--sans);
+    padding:12px 18px;cursor:pointer;width:100%}
+  .btn.primary{background:var(--cherry);color:#fff}
+  .btn.primary:hover{background:var(--cherry-deep)}
+  .btn.berry{background:var(--berry);color:#fff}.btn.berry:hover{background:var(--berry-hover)}
+  .btn.ghost{background:transparent;color:var(--berry);border:1px solid var(--border)}
+  .btn:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
+  .wslink{text-align:center;font-size:12.5px;color:var(--text-muted)}
+  .wslink a{color:var(--berry);font-weight:600;text-decoration:none} .wslink a:hover{text-decoration:underline}
+
+  .hide{display:none !important}
+  @media (max-width:520px){ .drawer{width:100% !important} .rgrid{grid-template-columns:1fr} }
+  @media (prefers-reduced-motion: reduce){ .drift{animation:none !important} .fill{transition:none} }
+</style>
+</head>
+<body>
+<div class="lab">
+  <div class="labhead">
+    <div>
+      <h1>Design 2 — Right-Side Pop-Up Panel</h1>
+      <p>The expanded card drawer (~440px). Its job: orient, enter, show progress, resume, and confirm completion. The full simulation opens in the Workspace.</p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Experience state">
+        <button data-state="empty" aria-pressed="true">Not started</button>
+        <button data-state="progress" aria-pressed="false">In progress</button>
+        <button data-state="done" aria-pressed="false">Completed</button>
+      </div>
+      <div class="seg" role="group" aria-label="Viewport">
+        <button data-size="desktop" aria-pressed="true">Desktop</button>
+        <button data-size="tablet" aria-pressed="false">Tablet</button>
+        <button data-size="mobile" aria-pressed="false">Mobile</button>
+      </div>
+      <div class="seg"><button id="themeBtn" aria-pressed="false">Dark</button></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="scrim" id="scrim">
+      <aside class="drawer" id="drawer" role="dialog" aria-label="Architect Time Machine — Week 0">
+        <div class="d-head">
+          <span class="crumbs">Classroom · Week 0</span>
+          <button class="x" aria-label="Close">&times;</button>
+        </div>
+
+        <div class="hero">
+          <svg viewBox="0 0 440 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <defs>
+              <radialGradient id="h" cx="22%" cy="50%" r="80%"><stop offset="0%" stop-color="#1c4658"/><stop offset="60%" stop-color="#0f2731"/><stop offset="100%" stop-color="#0a1a22"/></radialGradient>
+              <radialGradient id="c" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#ffd9b0"/><stop offset="40%" stop-color="#FB2832"/><stop offset="100%" stop-color="#FB2832" stop-opacity="0"/></radialGradient>
+            </defs>
+            <rect width="440" height="150" fill="url(#h)"/>
+            <g stroke="#5fb0cc" stroke-opacity=".10"><line x1="150" y1="0" x2="150" y2="150"/><line x1="250" y1="0" x2="250" y2="150"/><line x1="350" y1="0" x2="350" y2="150"/><line x1="0" y1="50" x2="440" y2="50"/><line x1="0" y1="100" x2="440" y2="100"/></g>
+            <g class="drift" transform="translate(95,75)">
+              <circle r="64" fill="none" stroke="#367895" stroke-opacity=".5" stroke-width="1.5"/>
+              <circle r="48" fill="none" stroke="#5fb0cc" stroke-opacity=".28"/><circle r="32" fill="none" stroke="#5fb0cc" stroke-opacity=".2"/>
+              <circle r="16" fill="url(#c)"/><circle r="4" fill="#ffe9d2"/>
+            </g>
+            <g fill="#8fc7db" fill-opacity=".8"><circle cx="300" cy="46" r="3"/><circle cx="360" cy="74" r="3.5"/><circle cx="316" cy="104" r="3"/></g>
+            <path d="M300 46 L360 74 L316 104" fill="none" stroke="#77BB4A" stroke-opacity=".3"/>
+          </svg>
+          <div class="cap">
+            <div class="series">Architect Mindset</div>
+            <div class="htitle" id="wkTitle">Welcome to the Architect Time Machine</div>
+          </div>
+        </div>
+
+        <div class="body">
+          <div class="principle"><b>This week's principle.</b> An architect sees the entire system surrounding the requested feature.</div>
+
+          <div class="meta">
+            <span class="pill req">● Required</span>
+            <span class="pill">~13 min</span>
+            <span class="pill">Stretch</span>
+            <span class="pill xp">100 Learning · 40 Builder · 20 Community XP</span>
+          </div>
+
+          <!-- progress -->
+          <div class="prog">
+            <div class="lab2"><span>Progress</span><span id="progCount">Not started</span></div>
+            <div class="track"><div class="fill" id="fill" style="width:0%"></div></div>
+            <div class="statusline" id="statusLine"><span class="dot" style="background:var(--text-muted)"></span>You have not entered the machine yet.</div>
+          </div>
+
+          <!-- EMPTY: what you'll do -->
+          <div id="blkEmpty">
+            <h4 class="sec">What happens inside</h4>
+            <ul class="flow">
+              <li><span class="n">1</span> Arrive, and meet your current Mindset Ledger</li>
+              <li><span class="n">2</span> Receive a deceptively simple request</li>
+              <li><span class="n">3</span> Make your first decision, before the lesson</li>
+              <li><span class="n">4</span> Watch the system zoom out to its real size</li>
+              <li><span class="n">5</span> Be interviewed by the Architect Interviewer</li>
+              <li><span class="n">6</span> See the consequences play out across time</li>
+              <li><span class="n">7</span> Re-architect, and receive your Decision Record</li>
+            </ul>
+            <p style="font-size:12.5px;color:var(--text-muted)">Week 0 is a baseline demonstration. It establishes your Mindset Ledger and your Architect Commitment. It is not scored as your first lesson.</p>
+          </div>
+
+          <!-- PROGRESS: resume -->
+          <div id="blkProgress" class="hide">
+            <h4 class="sec">Where you left off</h4>
+            <ul class="flow">
+              <li class="done"><span class="n">✓</span> Arrival &amp; first decision submitted</li>
+              <li class="done"><span class="n">✓</span> System Zoom-Out reviewed</li>
+              <li class="done"><span class="n">✓</span> Architect Interview, Part One</li>
+              <li class="now"><span class="n">▸</span> Consequence Reveal — in progress</li>
+              <li><span class="n">5</span> Architect Interview, Part Two</li>
+              <li><span class="n">6</span> Re-Architecture &amp; Decision Record</li>
+            </ul>
+            <p style="font-size:12.5px;color:var(--text-muted)">Your answers are saved. You can resume exactly where you paused, or return days later without losing anything.</p>
+          </div>
+
+          <!-- DONE: receipt + commitment -->
+          <div id="blkDone" class="hide">
+            <h4 class="sec">Experience Receipt</h4>
+            <div class="receipt">
+              <h5>Patterns represented this session</h5>
+              <div class="rgrid">
+                <div><b>8</b> user roles surfaced</div>
+                <div><b>10</b> information classes</div>
+                <div><b>12</b> hidden assumptions</div>
+                <div><b>6</b> decision categories</div>
+                <div><b>5</b> professional perspectives</div>
+                <div><b>~450 hrs</b> represented</div>
+              </div>
+              <div class="qual"><strong>Illustrative &amp; scenario-based.</strong> An estimate of patterns represented, not employment experience earned, and not a guarantee of competence or job readiness. This represents patterns studied, not hours worked.</div>
+              <div class="commit">"Before I build, I will always map the whole system, its owners, and its failure paths, before choosing a tool."<br><span style="font-style:normal;color:var(--text-muted);font-size:11.5px">— Your Architect Commitment</span></div>
+            </div>
+            <h4 class="sec">Baseline observation</h4>
+            <p style="font-size:13px;margin:0">You entered as a <b>Feature Thinker</b> and left describing systems, owners, and failure paths. Week 1 begins your scored growth.</p>
+          </div>
+        </div>
+
+        <div class="foot">
+          <button class="btn primary" id="cta">Enter the Time Machine</button>
+          <div class="wslink" id="wsLink"><a href="workspace.html">Open the full Workspace ↗</a></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<script>
+  var root=document.documentElement;
+  var drawer=document.getElementById('drawer'), scrim=document.getElementById('scrim');
+  var fill=document.getElementById('fill'), progCount=document.getElementById('progCount'), statusLine=document.getElementById('statusLine');
+  var cta=document.getElementById('cta');
+  var blk={empty:document.getElementById('blkEmpty'),progress:document.getElementById('blkProgress'),done:document.getElementById('blkDone')};
+
+  var STATE={
+    empty:{pct:0,count:'Not started',status:['var(--text-muted)','You have not entered the machine yet.'],cta:['Enter the Time Machine','primary']},
+    progress:{pct:44,count:'Stage 4 of 9 · 44%',status:['var(--cherry)','Paused at the Consequence Reveal.'],cta:['Resume the experience','berry']},
+    done:{pct:100,count:'Complete · 16/16 gates',status:['var(--leaf)','Completed on 20 Jul 2026 · evaluated.'],cta:['Review your Decision Record','ghost']}
+  };
+  function setState(s){
+    var d=STATE[s];
+    fill.style.width=d.pct+'%'; progCount.textContent=d.count;
+    statusLine.innerHTML='<span class="dot" style="background:'+d.status[0]+'"></span>'+d.status[1];
+    for(var k in blk){ blk[k].classList.toggle('hide',k!==s); }
+    cta.textContent=d.cta[0]; cta.className='btn '+d.cta[1];
+    document.querySelectorAll('[data-state]').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.state===s));});
+  }
+  function setSize(sz){
+    drawer.classList.toggle('tablet',sz==='tablet');
+    drawer.classList.toggle('mobile',sz==='mobile');
+    scrim.classList.toggle('mobile',sz==='mobile');
+    document.querySelectorAll('[data-size]').forEach(function(b){b.setAttribute('aria-pressed',String(b.dataset.size===sz));});
+  }
+  document.querySelectorAll('[data-state]').forEach(function(b){b.addEventListener('click',function(){setState(b.dataset.state);});});
+  document.querySelectorAll('[data-size]').forEach(function(b){b.addEventListener('click',function(){setSize(b.dataset.size);});});
+  var tb=document.getElementById('themeBtn');
+  tb.addEventListener('click',function(){var d=root.getAttribute('data-theme')==='dark';root.setAttribute('data-theme',d?'light':'dark');tb.textContent=d?'Dark':'Light';tb.setAttribute('aria-pressed',String(!d));});
+  setState('empty'); setSize('desktop');
+</script>
+</body>
+</html>

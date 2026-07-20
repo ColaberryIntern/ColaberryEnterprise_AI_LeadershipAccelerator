@@ -6,6 +6,13 @@ export interface CommunityPostMember {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  level: number;
+}
+
+export interface CommunityCommenter {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
 }
 
 export interface CommunityPost {
@@ -25,6 +32,7 @@ export interface CommunityPost {
   locked: boolean;
   created_at: string;
   member: CommunityPostMember;
+  recent_commenters: CommunityCommenter[];
 }
 
 export interface CommunityComment {
@@ -162,6 +170,42 @@ export async function fetchMembers(): Promise<CommunityMemberProfile[]> {
 export async function pingPresence(): Promise<{ presence: CommunityPresenceStatus }> {
   const { data } = await portalApi.post('/api/portal/community/presence/ping');
   return data;
+}
+
+export interface CommunityNotification {
+  id: string;
+  notification_type: 'mention' | 'reply';
+  source_type: 'post' | 'comment';
+  source_id: string;
+  read: boolean;
+  created_at: string;
+  actor: { id: string; display_name: string; avatar_url: string | null } | null;
+}
+
+export async function fetchNotifications(): Promise<CommunityNotification[]> {
+  const { data } = await portalApi.get<{ notifications: CommunityNotification[] }>('/api/portal/community/notifications');
+  return data.notifications;
+}
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const { data } = await portalApi.get<{ count: number }>('/api/portal/community/notifications/unread-count');
+  return data.count;
+}
+export async function markNotificationRead(id: string): Promise<void> {
+  await portalApi.post(`/api/portal/community/notifications/${id}/read`);
+}
+export async function markAllNotificationsRead(): Promise<void> {
+  await portalApi.post('/api/portal/community/notifications/read-all');
+}
+
+// Upload a small image from the student's computer; returns a relative media
+// URL to add to a post's media_urls. The backend validates type + size (8MB).
+export async function uploadCommunityMedia(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await portalApi.post<{ url: string }>('/api/portal/community/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data.url;
 }
 
 // Cohort-scoped member profile lookup for the profile drawer. The backend

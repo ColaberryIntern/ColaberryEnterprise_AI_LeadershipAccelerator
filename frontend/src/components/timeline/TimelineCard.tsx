@@ -44,7 +44,7 @@ export interface TimelineFeedCard {
   week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title (no week number)
 }
 
-export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab';
+export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
 
 export interface Visual { kind: Kind; color: string; }
 
@@ -76,6 +76,7 @@ export const BAND: Record<string, Visual> = {
   evaluation: { kind: 'test', color: '#5BA63C' },
   promptlab: { kind: 'lab', color: '#FB2832' },
   prompt_catalog: { kind: 'lab', color: '#D97757' },   // Prompt Lab — Claude Code practice-prompt catalog
+  build_artifacts: { kind: 'lab', color: '#D97757' },   // Build Artifact(s) Lab — Claude Code build station
   task: { kind: 'lab', color: '#FB2832' },
   artifact: { kind: 'lab', color: '#FB2832' },
   presentation: { kind: 'lab', color: '#FB2832' },
@@ -89,12 +90,13 @@ export const BAND: Record<string, Visual> = {
   badge: { kind: 'milestone', color: '#5BA63C' },
   streak: { kind: 'milestone', color: '#E8920C' },
   setup_lab: { kind: 'setuplab', color: '#D97757' },   // Claude Code enablement lab (dark, get-unblocked)
+  architect_mindset: { kind: 'timemachine', color: '#367895' },   // The Architect Time Machine (cinematic decision simulation)
 };
 export const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
 
 // Curriculum types that run IN Claude Code — the tile shows a "Claude Code" corner
 // strip so a student knows they'll need Claude Code open to complete the activity.
-export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'github_sync']);
+export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'artifact_submission']);
 
 const KIND_GRADIENT: Record<Kind, string> = {
   video: 'linear-gradient(135deg,#367895,#2E6A86)',
@@ -106,6 +108,7 @@ const KIND_GRADIENT: Record<Kind, string> = {
   event: 'linear-gradient(135deg,#FB2832,#C20E1E)',
   milestone: 'linear-gradient(135deg,#5BA63C,#3C7A26)',
   setuplab: 'linear-gradient(135deg,#22334f,#0c1322)',
+  timemachine: 'linear-gradient(135deg,#12303c,#0a1a22)',
 };
 
 // small header-tile icon per kind
@@ -120,6 +123,7 @@ const Icon: React.FC<{ kind: Kind }> = ({ kind }) => {
     case 'event': return <><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></>;
     case 'milestone': return <path d="M6 21V4M6 5h11l-2 3 2 3H6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />;
     case 'setuplab': return <><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M7 9l3 3-3 3M13 15h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></>;
+    case 'timemachine': return <><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" /><path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></>;
     default: return <path d="M4 5h7v15H4z" stroke="currentColor" strokeWidth="2" />;
   }
 };

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { copyText } from '../../utils/clipboard';
 
 /**
  * PromptCatalogRender — the bespoke renderer for the `prompt_lab` (render_band
@@ -72,8 +73,7 @@ const PromptRow: React.FC<{ p: PromptItem; onCopied?: () => void }> = ({ p, onCo
   const [copied, setCopied] = useState(false);
   const copy = () => {
     const done = () => { setCopied(true); onCopied?.(); window.setTimeout(() => setCopied(false), 1500); };
-    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(p.prompt).then(done, done);
-    else done();
+    copyText(p.prompt).then(done, done);
   };
   return (
     <div className="plc-prompt">

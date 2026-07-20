@@ -151,7 +151,7 @@ const OperationsCenterPage: React.FC = () => {
             <p className="oc-muted" style={{ margin: '0 0 10px' }}>Predict the impact of a curriculum change before you make it.</p>
             <div className="oc-twinrow">
               <span>Remove</span>
-              <select value={twinType} onChange={(e) => setTwinType(e.target.value)}>{['prompt_lab', 'video', 'implementation_task', 'github_sync', 'evaluation', 'reflection', 'overview'].map((t) => <option key={t}>{t}</option>)}</select>
+              <select value={twinType} onChange={(e) => setTwinType(e.target.value)}>{['prompt_lab', 'video', 'implementation_task', 'evaluation', 'reflection', 'overview'].map((t) => <option key={t}>{t}</option>)}</select>
               <span>from a week</span>
               <button className="oc-btn xs" onClick={runTwin}>Simulate</button>
             </div>

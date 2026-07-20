@@ -33,11 +33,12 @@ const THUMBNAIL_SLUGS = [
   'deep_dive', 'prompt_challenge', 'implementation_task', 'artifact_submission',
   'ai_video_feedback', 'mock_interview', 'anthropic_skills_jar',
   'certification_exercise', 'evaluation', 'question', 'discussion',
-  'project_task', 'build_story', 'github_sync', 'reflection',
+  'project_task', 'build_story', 'reflection',
   'community_discussion', 'presentation', 'study_session', 'demo',
   'internship_activity', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',
   'setup_lab',   // Claude Code "get unblocked" enablement lab
+  'architect_mindset',   // The Architect Time Machine — cinematic decision simulation
   'community_live_session',
   // Intelligence Pipeline types
   'ai_news_flash', 'ai_research_digest', 'ai_tool_of_the_day', 'ai_video_stream',
@@ -297,6 +298,21 @@ Every <h4> is followed by exactly one <p> then exactly one <pre>. Every opening 
 
 Voice: warm, confident, encouraging, plain English; make a non-technical executive feel these are doable. Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", github_task = null, evaluation_criteria = []. completion: "Marked complete when the participant copies a prompt, builds it in Claude Code, and submits what they made."`;
 
+const BUILD_ARTIFACTS_GENERATION_PROMPT = `You author a "Build Artifact(s) Lab" for the AI Systems Architect Accelerator — a build station where a NON-TECHNICAL business executive picks ONE artifact and runs a paste-ready prompt in Claude Code to build it ON THEIR OWN PROJECT: a significant, portfolio-grade deliverable (~5+ minutes of work, Deep-Dive quality, something they would be proud of). Use ALL the context above — the WEEK CONTEXT (topic + objectives), THIS WEEK'S ACTIVITIES (the Deep Dive + the Anthropic course), and WHAT STUDENTS BUILD THIS WEEK (the concrete documents/deliverables). Refer to the week by its section TITLE, never its number. Invent no technical claim the context does not support.
+
+Produce EXACTLY 5 artifacts the student could build this section — grounded in the week's deliverables, Deep Dive, and topic. Each is a substantial, real deliverable (a document, module, package, framework, or diagram), never a toy.
+
+title: the word "Build", a space, an em dash, a space, then the week's topic exactly as named in the WEEK CONTEXT.
+summary: one vivid sentence on the real things they can build this section.
+
+body_html: clean, semantic, fully-balanced HTML — NO <style>, NO colors, NO inline styles, NO scripts, NO images (the workspace supplies the theme). Use ONLY these tags: h4, p, strong, em, ol, ul, li, pre, code. Emit EXACTLY 5 artifacts, each in this order:
+  <h4>Short artifact name</h4>
+  <p>One or two plain sentences: what this artifact is and why it is valuable. Always visible.</p>
+  <pre>A long, well-designed, first-person paste-ready prompt addressed to Claude Code that builds this artifact ON the student's project. Use the LITERAL token {PROJECT} wherever the project name goes (it is substituted at runtime). Have Claude Code produce a real, polished, portfolio-grade deliverable and explain each step for a non-technical person. The prompt MUST state up front what file it will produce (pick the fitting type and name it: a Markdown .md document, or a PDF / Word / PowerPoint / Excel file), and MUST end by telling Claude Code to SAVE the finished artifact as that single file into the user's Downloads folder with a clear kebab-case filename, then TELL THE USER the exact filename and full path in plain words (for example: "I've saved it to your Downloads folder as governance-framework.md") so they know precisely which file to upload afterward. This is a substantial build (~5+ minutes). 8 to 14 sentences.</pre>
+Every <h4> is followed by exactly one <p> then exactly one <pre>. Every opening tag has a matching closing tag. EXACTLY 5 artifacts.
+
+Voice: warm, confident, encouraging, plain English. Set the rest explicitly: questions = [], reflection = "", discussion_prompt = "", github_task = null, evaluation_criteria = []. completion: "Marked complete on the participant's FIRST submitted build; they can re-run on other artifacts or projects for practice without earning additional points."`;
+
 // ── Intelligence Pipeline types (news / research / tools / video / quote /
 //    architecture / build / MCP / technique / market) ─────────────────────────
 // These 10 types are reusable content GENERATORS: each turns one external item
@@ -513,8 +529,60 @@ const intelAuthoring = (o: {
   status: 'published',
 });
 
+// The Architect Time Machine. Week 0 ships a hand-authored scenario in code
+// (data/architectMindsetScenario.ts — the null-blueprint free-preview tier); this
+// prompt is for the Weeks 1-12 generator, which produces the same structured
+// scenario JSON against the injected WEEK CONTEXT and caches it on the card.
+const ARCHITECT_MINDSET_GENERATION_PROMPT = `You author one weekly scenario for "The Architect Time Machine", a cinematic decision simulation in the AI Systems Architect Accelerator. Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by number. Assume architecture has no single correct answer; reward evidence, assumptions, tradeoffs, failure anticipation, governance, and clear communication, never jargon.
+
+Return STRICT json matching this shape (an AmScenario): {
+  "version": string, "week": number, "baseline": false,
+  "title": string (the week's LOCKED title from WEEK CONTEXT), "series": "Architect Mindset", "experience": "The Architect Time Machine",
+  "principle": string (the week's LOCKED principle), "tagline": "Gain the lessons experience usually teaches too late.",
+  "request": { "from": string, "text": string (a deceptively simple business/system request) },
+  "initial_system": string[] (the 2-4 boxes the request appears to be),
+  "first_decision": { "prompt": string, "options": [{ "id": string, "label": string }, ..., { "id": "custom", "label": "I would do something else", "custom": true }] },
+  "zoom_out": { "people": string[], "information": string[], "decisions": string[], "operations": string[] },
+  "signature_reveals": string[] (2-3 memorable one-line statistics/statements),
+  "interview_part_1": [{ "id": string, "text": string, "mode": "single", "dimension": one of system_scope|assumption_discovery|stakeholder_awareness|tradeoff_quality|failure_anticipation|evidence_observability|governance_ownership|decision_communication, "options": [3-4 plausible professional instincts, then { "id":"custom", "label":"I see it differently, let me write my own answer.", "custom": true }] }],
+  "interview_part_2": [ same shape, asks what changed after the consequences ],
+  "consequence": { "horizon": [{ "point": string, "risk": 0-100, "note": string }], "reveal": string, "lesson": string (ties the principle to the consequences) },
+  "rearchitecture": { "prompt": string },
+  "receipt": { "counts": [{ "label": string, "value": string }], "represented_hours": number, "minutes": number, "qualification": "Illustrative and scenario-based. This represents patterns studied, not employment experience earned, and is not a guarantee of competence or job readiness." },
+  "adr": { "fields": ["context","decision","assumption","consequence","tradeoff","owner"] },
+  "project_transfer": { "prompt": string, "questions": string[] },
+  "commitment_prompt": string
+}
+Multiple-choice options must be plausible professional instincts, never one-obviously-correct plus absurd distractors, and never a memorization test. Do not invent a technical claim the WEEK CONTEXT does not support.`;
+
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
+  architect_mindset: {
+    label: 'Architect Mindset',
+    student_label: 'Architect Time Machine',
+    description: 'A weekly interactive architectural simulation that exposes students to difficult system lessons traditionally learned through years of project experience. The student enters the Architect Time Machine, makes a decision, sees its consequences unfold across time, and is interviewed about what they saw and missed.',
+    category: 'Architect Development',
+    icon: 'bi-hourglass-split',
+    badge_class: 'bg-dark',
+    estimated_time: 28,
+    capabilities: ['evidence', 'artifacts', 'reflection', 'evaluation', 'scoring', 'retry', 'comments', 'portfolio', 'mentor_review'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'interview_responses', type: 'json', description: 'Architect Interview answers (initial + revised, per question)' },
+      { key: 'architect_decision_record', type: 'json', description: 'A structured, student-owned Architect Decision Record (ADR)' },
+      { key: 'mindset_score', type: 'json', description: 'Transparent dimension breakdown + stage (Week 0 = baseline, unscored)' },
+      { key: 'mindset_ledger', type: 'json', description: 'Cumulative Mindset Ledger update (derived)' },
+      { key: 'project_transfer', type: 'json', description: 'The lesson applied to the student personalized project' },
+      { key: 'experience_receipt', type: 'json', description: 'Patterns represented + illustrative estimate + mandatory qualification' },
+    ],
+    completion_rules: { on: 'evaluate' },
+    evaluation_type: 'ai',
+    generation_prompt: ARCHITECT_MINDSET_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('architect_mindset'),
+    approved: true,
+    status: 'ready',
+  },
   setup_lab: {
     label: 'Setup Lab',
     student_label: 'Setup Lab',
@@ -560,6 +628,48 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
     evaluation_type: 'none',
     generation_prompt: PROMPT_LAB_GENERATION_PROMPT,
     thumbnail_url: thumbnailUrlFor('prompt_lab'),
+    approved: true,
+    status: 'ready',
+  },
+  implementation_task: {
+    student_label: 'Build Artifact(s) Lab',
+    category: 'Build',
+    icon: 'bi-hammer',
+    badge_class: 'bg-danger',
+    estimated_time: 90,
+    capabilities: ['ai_chat', 'github', 'evidence', 'artifacts', 'portfolio', 'mentor_review', 'comments'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Build — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Build station: 5 artifacts, each h4 name + p what + pre build_prompt (uses {PROJECT})' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: BUILD_ARTIFACTS_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('implementation_task'),
+    approved: true,
+    status: 'ready',
+  },
+  artifact_submission: {
+    student_label: 'Build Artifact(s) Lab',
+    category: 'Build',
+    icon: 'bi-hammer',
+    badge_class: 'bg-danger',
+    estimated_time: 60,
+    capabilities: ['ai_chat', 'github', 'evidence', 'artifacts', 'portfolio', 'mentor_review', 'comments'],
+    inputs: [],
+    variable_keys: [],
+    outputs: [
+      { key: 'title', type: 'string', description: 'Build — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Build station: 5 artifacts, each h4 name + p what + pre build_prompt (uses {PROJECT})' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: BUILD_ARTIFACTS_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('artifact_submission'),
     approved: true,
     status: 'ready',
   },

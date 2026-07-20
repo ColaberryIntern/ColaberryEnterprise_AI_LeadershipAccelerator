@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import Avatar from './Avatar';
 import LevelBadge from './LevelBadge';
-import { timeAgo, isVideoUrl } from './communityUtils';
+import { timeAgo, isVideoUrl, youtubeId, youtubeThumb } from './communityUtils';
 import {
   fetchComments, createComment, togglePin as apiTogglePin,
   togglePostLike, toggleCommentLike,
@@ -59,6 +59,11 @@ const MediaGrid: React.FC<{ urls: string[] }> = ({ urls }) => {
         <div className="cm-media-tile" key={url + i}>
           {isVideoUrl(url) ? (
             <video src={url} controls preload="metadata" />
+          ) : youtubeId(url) ? (
+            <a className="cm-yt" href={url} target="_blank" rel="noopener noreferrer">
+              <img src={youtubeThumb(youtubeId(url) as string)} alt="" loading="lazy" />
+              <span className="cm-yt-play" aria-hidden="true" />
+            </a>
           ) : (
             <img src={url} alt="" loading="lazy" />
           )}
@@ -150,8 +155,9 @@ const PostCard: React.FC<{
       <div className="fc-head">
         <Avatar name={post.member.display_name} src={post.member.avatar_url} onClick={openAuthor} />
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div className="ttl">
+          <div className="ttl" style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
             <button type="button" className="cm-author-link" onClick={openAuthor}>{post.member.display_name}</button>
+            <LevelBadge level={post.member.level} size="sm" />
           </div>
           <div className="sub">
             {post.category && <span className="src" style={{ color: 'var(--berry)' }}>{post.category}</span>}
@@ -185,6 +191,14 @@ const PostCard: React.FC<{
             <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
             <span>{post.comment_count > 0 ? `${post.comment_count} comment${post.comment_count === 1 ? '' : 's'}` : 'Comment'}</span>
           </button>
+          {post.recent_commenters.length > 0 && (
+            <span className="cm-commenters" title={`${post.comment_count} comment${post.comment_count === 1 ? '' : 's'}`}>
+              {post.recent_commenters.map((c) => (
+                <Avatar key={c.id} name={c.display_name} src={c.avatar_url} size="sm"
+                  onClick={onOpenProfile ? () => onOpenProfile(c.id) : undefined} />
+              ))}
+            </span>
+          )}
         </div>
       )}
 
