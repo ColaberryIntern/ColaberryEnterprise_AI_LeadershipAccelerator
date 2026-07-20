@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { runtimeApi, AmScenario, AmProgress, AmReceipt, AmLedger, AmInterviewQuestion, AmInterviewAnswer } from '../../pages/portal/runtime/runtimeApi';
 import { emitPointsEarned } from '../../services/pointsFx';
 
@@ -96,8 +96,6 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
     }).catch(() => { if (alive) { setLoading(false); setError('Could not load the Architect Time Machine.'); } });
     return () => { alive = false; };
   }, [cardId, preview]);
-
-  const pct = useMemo(() => Math.round(((cur + 1) / (STAGES.length + 1)) * 100), [cur]);
 
   // ── stage advance with validation + autosave ────────────────────────────────
   const save = async (to: string, patch?: Partial<AmProgress>) => { try { await runtimeApi.architectAdvance(cardId, to, patch); } catch { /* autosave is best-effort; backend re-validates on complete */ } };
@@ -210,7 +208,7 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
   }
 
   // ── WORKSPACE: the full experience ──────────────────────────────────────────
-  if (completed) return <div className="am am-ws"><Style /><Completed scenario={scenario} receipt={receipt} ledger={ledger} progress={progress} /></div>;
+  if (completed) return <div className="am am-ws"><Style /><Completed receipt={receipt} ledger={ledger} progress={progress} /></div>;
 
   const stage = STAGES[cur].key as StageKey;
   return (
@@ -241,7 +239,7 @@ const ArchitectTimeMachine: React.FC<Props> = ({ cardId, variant, preview, compl
           <span className="am-foot-l">{STAGES[cur].label}</span>
           <div className="am-foot-btns">
             {cur > 0 && <button type="button" className="am-btn ghost" onClick={() => { setReqError(''); setCur((c) => Math.max(0, c - 1)); }}>Back</button>}
-            <button type="button" className="am-btn pri" disabled={busy} onClick={goNext}>{nextLabel(stage, reveal, busy, cur)}</button>
+            <button type="button" className="am-btn pri" disabled={busy} onClick={goNext}>{nextLabel(stage, reveal, busy)}</button>
           </div>
         </div>
       </div>
@@ -265,7 +263,7 @@ function dialPhase(stage: StageKey): 0 | 1 | 2 {
   if (['interview1', 'rearchitecture'].includes(stage)) return 1;
   return 2;
 }
-function nextLabel(stage: StageKey, reveal: boolean, busy: boolean, cur: number): string {
+function nextLabel(stage: StageKey, reveal: boolean, busy: boolean): string {
   if (busy) return 'Saving…';
   if (stage === 'arrival') return 'Enter the machine →';
   if (stage === 'consequence' && !reveal) return 'Advance time →';
@@ -416,7 +414,7 @@ const ConsequenceHorizon: React.FC<{ horizon: { point: string; risk: number; not
   );
 };
 
-const Completed: React.FC<{ scenario: AmScenario | null; receipt: AmReceipt | null; ledger: AmLedger | null; progress: AmProgress | null }> = ({ scenario, receipt, ledger, progress }) => {
+const Completed: React.FC<{ receipt: AmReceipt | null; ledger: AmLedger | null; progress: AmProgress | null }> = ({ receipt, ledger, progress }) => {
   const gates = ['Initial decision submitted', 'All stages traversed', 'Consequence reveal viewed', 'Every required interview question answered', 'Custom answers are meaningful', 'Revised decision submitted', 'At least one tradeoff explained', 'At least one assumption identified', 'At least one failure risk identified', 'Final reflection submitted', 'Architect Decision Record generated', 'Experience evaluated', 'All progress saved', 'Backend confirmed eligibility'];
   return (
     <div className="am-stage"><div className="am-fx" aria-hidden="true"><span className="am-tunnel" /><span className="am-grid" /></div>

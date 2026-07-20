@@ -74,7 +74,7 @@ export async function getState(enrollmentId: string, cardId: string) {
 // ── advance a stage (validated, idempotent autosave) ─────────────────────────
 export interface AdvanceBody { to: string; patch?: Partial<AmProgress> }
 export async function advance(enrollmentId: string, cardId: string, body: AdvanceBody) {
-  const { scenario, row, progress } = await load(enrollmentId, cardId);
+  const { row, progress } = await load(enrollmentId, cardId);
   if (progress.state === 'completed') return { state: progress.state, saved: true }; // immutable, no-op
   const t = isValidTransition(progress.state, body.to);
   if (!t.ok) throw httpErr('Invalid transition', 422, { code: t.reason, from: progress.state, to: body.to });
