@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import portalApi from '../../utils/portalApi';
 import { useMentorContext } from '../../contexts/MentorContext';
 import { buildFinalPrompt } from '../../services/promptBuilder';
+import { CorySpark, CoryAvatar } from './CoryMark';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -9,25 +10,8 @@ interface Message {
   timestamp?: string;
 }
 
-/* AI Mentor avatar — circular photo used for FAB and message avatars */
-const MentorFace = ({ size = 40 }: { size?: number }) => (
-  <img
-    src="/ai-mentor-avatar.png"
-    alt="AI Mentor"
-    width={size}
-    height={size}
-    style={{ borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-  />
-);
-
-const MentorAvatar = ({ size = 28 }: { size?: number }) => (
-  <div
-    className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-    style={{ width: size, height: size, overflow: 'hidden' }}
-  >
-    <MentorFace size={size} />
-  </div>
-);
+/* Cory's spark mark + avatar live in ./CoryMark — faceless and genderless per
+   the locked persona. No photo, no depicted person. */
 
 /* Simple markdown renderer for mentor responses */
 function renderMarkdown(text: string): React.ReactNode[] {
@@ -297,14 +281,9 @@ function PortalMentorChat() {
           >
             <div className="d-flex align-items-center justify-content-between mb-2">
               <div className="d-flex align-items-center gap-2">
-                <div
-                  className="d-flex align-items-center justify-content-center rounded-circle"
-                  style={{ width: 32, height: 32, background: isFullscreen ? 'rgba(251,40,50,0.08)' : 'rgba(255,255,255,0.25)', overflow: 'hidden' }}
-                >
-                  <MentorFace size={32} />
-                </div>
+                <CoryAvatar size={32} />
                 <div>
-                  <div className="fw-semibold" style={{ fontSize: 13 }}>AI Mentor</div>
+                  <div className="fw-semibold" style={{ fontSize: 13 }}>Cory</div>
                   {!isFullscreen && (
                     <div style={{ fontSize: 10, opacity: 0.8 }}>
                       {lessonContext.lessonTitle || 'General guidance'}
@@ -379,10 +358,10 @@ function PortalMentorChat() {
             {messages.length === 0 && (
               <div className={isFullscreen ? 'd-flex flex-column align-items-center justify-content-center' : 'text-center py-3'} style={isFullscreen ? { minHeight: '50vh' } : {}}>
                 <div className="d-inline-block mb-3">
-                  <MentorFace size={isFullscreen ? 72 : 48} />
+                  <CoryAvatar size={isFullscreen ? 72 : 48} />
                 </div>
                 <h4 className={`fw-semibold ${isFullscreen ? 'mb-2' : 'small mb-1'}`} style={{ color: '#1e293b', fontSize: isFullscreen ? 22 : undefined }}>
-                  {isFullscreen ? 'What can I help you with?' : 'Hi! I\'m your AI Mentor.'}
+                  {isFullscreen ? 'What can I help you with?' : 'Hi! I\'m Cory, your mentor.'}
                 </h4>
                 <p className="text-muted mb-4" style={{ fontSize: isFullscreen ? 14 : 12, maxWidth: isFullscreen ? 480 : undefined }}>
                   {isFullscreen
@@ -429,7 +408,7 @@ function PortalMentorChat() {
               >
                 {msg.role === 'assistant' && (
                   <div className="me-2" style={{ marginTop: 2 }}>
-                    <MentorAvatar size={isFullscreen ? 32 : 24} />
+                    <CoryAvatar size={isFullscreen ? 32 : 24} />
                   </div>
                 )}
                 <div
@@ -455,7 +434,7 @@ function PortalMentorChat() {
 
             {sending && (
               <div className="d-flex align-items-center gap-2 mb-3">
-                <MentorAvatar size={24} />
+                <CoryAvatar size={24} />
                 <div
                   style={{
                     padding: '8px 12px',
@@ -576,7 +555,7 @@ function PortalMentorChat() {
                 ref={inputRef}
                 className="form-control"
                 rows={isFullscreen ? 2 : 1}
-                placeholder="Ask your mentor..."
+                placeholder="Ask Cory..."
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -616,10 +595,10 @@ function PortalMentorChat() {
         </div>
       )}
 
-      {/* Floating Button — Mentor face */}
+      {/* Floating Button — Cory */}
       <button
         onClick={toggleOpen}
-        aria-label={isMentorOpen ? 'Close mentor chat' : 'Open AI Mentor'}
+        aria-label={isMentorOpen ? 'Close mentor chat' : 'Open Cory'}
         style={{
           position: 'fixed',
           bottom: 20,
@@ -647,7 +626,7 @@ function PortalMentorChat() {
           <i className="bi bi-x-lg" style={{ fontSize: 22 }}></i>
         ) : (
           <>
-            <MentorFace size={54} />
+            <CorySpark size={30} color="#fff" />
             {hasNewMessage && (
               <span
                 style={{
