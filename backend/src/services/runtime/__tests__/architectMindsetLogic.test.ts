@@ -3,7 +3,8 @@
  * the 14 completion gates, interview-answer validation, baseline, receipt/ratio, and
  * the derived Mindset Ledger. Modeled on assessmentScoring.test.ts.
  */
-import { WEEK0_SCENARIO, WEEK1_SCENARIO, scenarioForWeek } from '../../../data/architectMindsetScenario';
+import { WEEK0_SCENARIO, WEEK1_SCENARIO, scenarioForWeek, AM_SCENARIOS } from '../../../data/architectMindsetScenario';
+import type { AmScenario } from '../../../data/architectMindsetScenario';
 import {
   isValidTransition, isAnswerValid, invalidAnswers, completionGaps, isCompletionEligible,
   deriveEvidence, assessBaseline, scoreMindset, AM_DIMENSIONS, computeReceipt, ledgerEntryFor, projectLedger, isMeaningful,
@@ -184,5 +185,101 @@ describe('Week 1 scenario (reusability) + formal score', () => {
   it('Week 1 completes through the same 14 gates', () => {
     const p = { ...w1Full(), ...deriveEvidence(w1Full(), W1), evaluation: { baseline: false, total: 60 } } as AmProgress;
     expect(isCompletionEligible(p, W1)).toBe(true);
+  });
+});
+
+// ── Weeks 0-12 — full 13-part curriculum coverage on one framework ────────────
+const REQUIRED_TAGS = ['assumption_discovery', 'tradeoff_quality', 'failure_anticipation'] as const;
+
+/** A generic "fully worked" progress for ANY scenario (no per-week hardcoding). */
+function genericFull(sc: AmScenario): AmProgress {
+  const iv: Record<string, AmInterviewAnswer> = {};
+  for (const q of [...sc.interview_part_1, ...sc.interview_part_2]) iv[q.id] = { choice: q.options[0].id, custom: null };
+  const r1 = sc.interview_part_2.find((q) => q.id === 'r1');
+  return {
+    state: 'evaluation_complete',
+    first_decision: { choice: sc.first_decision.options[0].id, reasoning: 'My instinct, before the lesson.' },
+    revised_decision: { choice: (r1 && r1.options[0].id) || 'revised' },
+    interview: iv,
+    reflection: 'The request named a solution; the real requirement was broader than it looked.',
+    commitment: 'map the whole system, its owners, and its failure paths before building',
+    flags: { zoom_out_viewed: true, consequence_viewed: true },
+    assumptions: [], tradeoffs: [], failure_modes: [],
+    evaluation: { baseline: sc.baseline, total: 60 },
+  };
+}
+
+describe('Weeks 0-12 full curriculum coverage (one reusable framework)', () => {
+  it('all 13 weeks (0-12) resolve to a distinct scenario', () => {
+    for (let w = 0; w <= 12; w++) expect(scenarioForWeek(w)).toBeTruthy();
+    expect(Object.keys(AM_SCENARIOS).length).toBe(13);
+    const titles = new Set<string>();
+    for (let w = 0; w <= 12; w++) titles.add(scenarioForWeek(w)!.title);
+    expect(titles.size).toBe(13); // no two weeks share a title (the "same content" bug guard)
+  });
+
+  it('week 0 is the baseline; weeks 1-12 are scored lessons', () => {
+    expect(scenarioForWeek(0)!.baseline).toBe(true);
+    for (let w = 1; w <= 12; w++) expect(scenarioForWeek(w)!.baseline).toBe(false);
+  });
+
+  it('every week carries the interview tags the completion gates derive evidence from', () => {
+    const missing: string[] = [];
+    for (let w = 0; w <= 12; w++) {
+      const sc = scenarioForWeek(w)!;
+      const tags = new Set([...sc.interview_part_1, ...sc.interview_part_2].map((q) => q.dimension));
+      for (const t of REQUIRED_TAGS) if (!tags.has(t)) missing.push(`week ${w}:${t}`);
+    }
+    expect(missing).toEqual([]);
+  });
+
+  it('every scored week uses r1=tradeoff and r2=failure-anticipation (the re-architecture contract)', () => {
+    for (let w = 1; w <= 12; w++) {
+      const sc = scenarioForWeek(w)!;
+      expect(sc.interview_part_2.find((q) => q.id === 'r1')?.dimension).toBe('tradeoff_quality');
+      expect(sc.interview_part_2.find((q) => q.id === 'r2')?.dimension).toBe('failure_anticipation');
+    }
+  });
+
+  it('every week derives assumption/tradeoff/failure evidence and completes through the 14 gates', () => {
+    const notEligible: string[] = [];
+    for (let w = 0; w <= 12; w++) {
+      const sc = scenarioForWeek(w)!;
+      const ev = deriveEvidence(genericFull(sc), sc);
+      expect(ev.assumptions.length).toBeGreaterThanOrEqual(1);
+      expect(ev.tradeoffs.length).toBeGreaterThanOrEqual(1);
+      expect(ev.failure_modes.length).toBeGreaterThanOrEqual(1);
+      const p = { ...genericFull(sc), ...ev } as AmProgress;
+      if (!isCompletionEligible(p, sc)) notEligible.push(`week ${w}: [${completionGaps(p, sc).map((g) => g.code).join(', ')}]`);
+    }
+    expect(notEligible).toEqual([]);
+  });
+
+  it('every scored week produces an in-range 8-dimension formal score', () => {
+    for (let w = 1; w <= 12; w++) {
+      const sc = scenarioForWeek(w)!;
+      const sci = scoreMindset({ ...genericFull(sc), ...deriveEvidence(genericFull(sc), sc) }, sc);
+      expect(sci.dimensions.length).toBe(AM_DIMENSIONS.length);
+      expect(sci.total).toBeGreaterThanOrEqual(0);
+      expect(sci.total).toBeLessThanOrEqual(100);
+      expect(sci.stage.label).toBeTruthy();
+    }
+  });
+
+  it('represented experience compounds: weeks 1-12 are strictly increasing', () => {
+    const hrs: number[] = [];
+    for (let w = 1; w <= 12; w++) hrs.push(computeReceipt(scenarioForWeek(w)!).represented_hours);
+    for (let i = 1; i < hrs.length; i++) expect(hrs[i]).toBeGreaterThan(hrs[i - 1]);
+    expect(hrs[hrs.length - 1]).toBe(6800); // the capstone is the richest
+  });
+
+  it('each scored week records a unique ADR (ADR-001..ADR-012)', () => {
+    const titles: string[] = [];
+    for (let w = 1; w <= 12; w++) {
+      const t = scenarioForWeek(w)!.adr.title || '';
+      titles.push(t);
+      expect(t).toContain(`ADR-${String(w).padStart(3, '0')}`);
+    }
+    expect(new Set(titles).size).toBe(12);
   });
 });
