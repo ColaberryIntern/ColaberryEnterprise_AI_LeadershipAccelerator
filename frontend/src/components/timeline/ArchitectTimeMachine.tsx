@@ -363,7 +363,7 @@ const StageBody: React.FC<any> = (p) => {
     case 'zoom_out':
       return (<><p className="am-kicker">System Zoom-Out</p><h2 className="am-h">The system was never {s.initial_system.length} boxes.</h2>
         <div className="am-layers">
-          {([['People', s.zoom_out.people], ['Information', s.zoom_out.information], ['Decisions', s.zoom_out.decisions], ['Operations', s.zoom_out.operations]] as [string, string[]][]).map(([t, items]) => (
+          {([[s.zoom_out.titles?.people || 'People', s.zoom_out.people], [s.zoom_out.titles?.information || 'Information', s.zoom_out.information], [s.zoom_out.titles?.decisions || 'Decisions', s.zoom_out.decisions], [s.zoom_out.titles?.operations || 'Operations', s.zoom_out.operations]] as [string, string[]][]).filter(([, items]) => items && items.length).map(([t, items]) => (
             <div key={t} className="am-layer"><h5>{t} · {items.length}</h5><div className="am-tags">{items.map((x, i) => <span key={i} className="am-tag">{x}</span>)}</div></div>
           ))}
         </div>
@@ -373,8 +373,13 @@ const StageBody: React.FC<any> = (p) => {
         <Interview questions={s.interview_part_1} answers={p.iv1} set={p.setIv1} invalidIds={p.reqError ? requiredUnanswered(s.interview_part_1, p.iv1) : []} /></>);
     case 'consequence':
       return (<><p className="am-kicker">Consequence Simulation · the machine advances time</p><h2 className="am-h">Watch what your first instinct caused.</h2>
-        {!p.reveal ? <p className="am-lead">The machine will now carry this decision forward through the life of the system: first build, first users, first failure, first audit, and beyond. Advance time to see what happens.</p>
-          : (<><ConsequenceHorizon horizon={s.consequence.horizon} /><div className="am-reveal cherry">&ldquo;{s.consequence.reveal}&rdquo;</div><p className="am-lead">{s.consequence.lesson}</p></>)}</>);
+        {!p.reveal ? <p className="am-lead">The machine will now carry this decision forward through the life of the system: launch, growth, the first failure, the first audit, and beyond. Advance time to see what happens.</p>
+          : (<>
+              {s.consequence.dashboard && s.consequence.dashboard.length ? <OutcomeDashboard metrics={s.consequence.dashboard} /> : null}
+              <ConsequenceHorizon horizon={s.consequence.horizon} />
+              <div className="am-reveal cherry">&ldquo;{s.consequence.reveal}&rdquo;</div>
+              <p className="am-lead">{s.consequence.lesson}</p>
+            </>)}</>);
     case 'rearchitecture':
       return (<><p className="am-kicker">Re-Architecture · Interview, Part Two</p><h2 className="am-h">Now, what would you change?</h2>
         <div className="am-interviewer"><span className="am-orb" /><div className="am-bubble"><span className="am-who">Architect Interviewer</span>{s.rearchitecture.prompt}</div></div>{banner}
@@ -399,6 +404,28 @@ const StageBody: React.FC<any> = (p) => {
   }
 };
 
+const OutcomeDashboard: React.FC<{ metrics: { label: string; value: string; trend?: 'up' | 'down' | 'flat' }[] }> = ({ metrics }) => (
+  <div className="am-chartcard"><h5>30-Day Outcome Dashboard</h5><div className="am-cap">What actually happened after the demo shipped.</div>
+    <div className="am-dash">{metrics.map((m, i) => (
+      <div key={i} className={`am-metric${m.trend === 'down' ? ' down' : m.trend === 'up' ? ' up' : ''}`}><b>{m.value}</b><span>{m.label}</span></div>
+    ))}</div>
+  </div>
+);
+
+const ScoreCard: React.FC<{ ev: NonNullable<AmProgress['evaluation']> }> = ({ ev }) => (
+  <div className="am-scorecard">
+    <div className="am-scorehead"><div className="am-scoretotal"><b>{ev.total}</b><span>/100</span></div><div className="am-scorestage">{ev.stage?.label}</div></div>
+    <div className="am-cap" style={{ color: '#9fbcc7', marginTop: 6 }}>A transparent, weighted score across eight architect dimensions. Architecture has no single correct answer, so this rewards evidence, depth, and reasoning, not a "right" choice.</div>
+    <div className="am-dims">{(ev.dimensions || []).map((d) => (
+      <div key={d.key} className="am-dim">
+        <div className="am-dimhead"><span>{d.label}</span><span className="am-dimval">{d.score}<em> · {d.weight}%</em></span></div>
+        <div className="am-dimbar"><i style={{ width: `${d.score}%` }} /></div>
+        <div className="am-dimnote"><b>Strength.</b> {d.strength} <b>Next.</b> {d.gap}</div>
+      </div>
+    ))}</div>
+  </div>
+);
+
 const ConsequenceHorizon: React.FC<{ horizon: { point: string; risk: number; note?: string }[] }> = ({ horizon }) => {
   const w = 640, n = horizon.length, step = (w - 80) / Math.max(1, n - 1);
   const col = (r: number) => (r > 60 ? '#FB2832' : r > 36 ? '#E8920C' : '#77BB4A');
@@ -416,19 +443,24 @@ const ConsequenceHorizon: React.FC<{ horizon: { point: string; risk: number; not
 
 const Completed: React.FC<{ receipt: AmReceipt | null; ledger: AmLedger | null; progress: AmProgress | null }> = ({ receipt, ledger, progress }) => {
   const gates = ['Initial decision submitted', 'All stages traversed', 'Consequence reveal viewed', 'Every required interview question answered', 'Custom answers are meaningful', 'Revised decision submitted', 'At least one tradeoff explained', 'At least one assumption identified', 'At least one failure risk identified', 'Final reflection submitted', 'Architect Decision Record generated', 'Experience evaluated', 'All progress saved', 'Backend confirmed eligibility'];
+  const ev = progress?.evaluation;
+  const scored = !!ev && ev.baseline === false && Array.isArray(ev.dimensions) && ev.dimensions.length > 0;
   return (
     <div className="am-stage"><div className="am-fx" aria-hidden="true"><span className="am-tunnel" /><span className="am-grid" /></div>
       <div className="am-stage-body">
         <TimeDial phase={2} reveal />
         <p className="am-kicker">Completion · verified on the backend</p>
-        <h2 className="am-h">Baseline set. You are ready for Week 1.</h2>
+        <h2 className="am-h">{scored ? 'Lesson complete. Here is your Architect Mindset Score.' : 'Baseline set. You are ready for Week 1.'}</h2>
         <p className="am-lead">All fourteen completion gates passed server-side. Draft progress never counts as completion, and reopening this card will not re-award anything.</p>
         <div className="am-gates">{gates.map((g, i) => <div key={i} className="am-gate"><span className="am-c">✓</span>{g}</div>)}</div>
-        {progress?.evaluation?.observation && (<div className="am-baseline"><b>Baseline observation{progress.evaluation.stage ? ` · ${progress.evaluation.stage.label}` : ''}</b><p>{progress.evaluation.observation}</p></div>)}
+        {scored && ev
+          ? <ScoreCard ev={ev} />
+          : (ev?.observation && <div className="am-baseline"><b>Baseline observation{ev.stage ? ` · ${ev.stage.label}` : ''}</b><p>{ev.observation}</p></div>)}
+        {scored && ev?.observation && <div className="am-baseline"><b>Your debrief</b><p>{ev.observation}</p></div>}
         {progress?.commitment && <div className="am-commit">&ldquo;{progress.commitment}&rdquo;<span>Your Architect Commitment</span></div>}
         {receipt && <Receipt receipt={receipt} />}
-        {ledger && (<div className="am-ledger"><div className="am-sec light">Mindset Ledger</div><div className="am-lrow"><span>Lessons completed</span><b>{ledger.lessons_completed} (baseline)</b></div><div className="am-lrow"><span>Decisions recorded</span><b>{ledger.decisions_recorded}</b></div><div className="am-lrow"><span>Assumptions discovered</span><b>{ledger.assumptions_discovered}</b></div><div className="am-lrow"><span>Failure modes examined</span><b>{ledger.failure_modes_examined}</b></div><div className="am-lrow"><span>Perspectives encountered</span><b>{ledger.perspectives_encountered}</b></div><div className="am-lrow"><span>Represented exposure</span><b>~{ledger.represented_hours.toLocaleString()} hrs</b></div></div>)}
-        <p className="am-hint">Week 0 is a baseline (you entered describing systems, not tools). It is not scored as your first lesson. Week 1 begins your scored growth.</p>
+        {ledger && (<div className="am-ledger"><div className="am-sec light">Mindset Ledger</div><div className="am-lrow"><span>Lessons completed</span><b>{ledger.lessons_completed}{scored ? '' : ' (baseline)'}</b></div><div className="am-lrow"><span>Decisions recorded</span><b>{ledger.decisions_recorded}</b></div><div className="am-lrow"><span>Assumptions discovered</span><b>{ledger.assumptions_discovered}</b></div><div className="am-lrow"><span>Failure modes examined</span><b>{ledger.failure_modes_examined}</b></div><div className="am-lrow"><span>Perspectives encountered</span><b>{ledger.perspectives_encountered}</b></div><div className="am-lrow"><span>Represented exposure</span><b>~{ledger.represented_hours.toLocaleString()} hrs</b></div></div>)}
+        <p className="am-hint">{scored ? 'This is your first scored lesson. Your growth is measured from here across the rest of the series.' : 'Week 0 is a baseline (you entered describing systems, not tools). It is not scored as your first lesson. Week 1 begins your scored growth.'}</p>
       </div>
     </div>
   );
@@ -525,6 +557,17 @@ const AM_CSS = `
 .am-gates{columns:2;column-gap:24px;max-width:66ch;margin:12px 0}.am-gate{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:#dce9ee;break-inside:avoid;margin-bottom:7px}
 .am-c{flex:none;width:18px;height:18px;border-radius:99px;background:var(--am-leaf);color:#fff;font-size:11px;display:grid;place-items:center}
 .am-baseline{background:#ffffff0d;border:1px solid #ffffff20;border-radius:12px;padding:13px 15px;margin:12px 0;max-width:64ch}.am-baseline b{color:#fff;font-size:13.5px}.am-baseline p{margin:5px 0 0;font-size:14px;color:#cfe0e6}
+.am-dash{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.am-metric{background:#0e1a2099;border:1px solid #ffffff20;border-radius:10px;padding:11px 12px;text-align:center}
+.am-metric b{display:block;font:700 20px var(--am-mono);color:#8fc7db}.am-metric.down b{color:#ff8a90}.am-metric.up b{color:#8fd28a}.am-metric span{display:block;font-size:11px;color:#9fbcc7;margin-top:3px;line-height:1.3}
+@media (max-width:560px){.am-dash{grid-template-columns:1fr 1fr}}
+.am-scorecard{background:#ffffff0d;border:1px dashed #8fc7db;border-radius:14px;padding:16px 18px;max-width:64ch;margin:12px 0}
+.am-scorehead{display:flex;align-items:baseline;gap:14px}.am-scoretotal b{font:800 40px var(--am-mono);color:#fff}.am-scoretotal span{font:600 14px var(--am-mono);color:#9fbcc7}
+.am-scorestage{font:800 16px var(--am-sans);color:#8fc7db;padding:4px 12px;border:1px solid #8fc7db55;border-radius:999px}
+.am-dims{margin-top:12px;display:flex;flex-direction:column;gap:10px}
+.am-dim{border-top:1px solid #ffffff14;padding-top:9px}.am-dim:first-child{border-top:0;padding-top:0}
+.am-dimhead{display:flex;justify-content:space-between;font-size:13px;color:#eef6f9;font-weight:600}.am-dimval{font-family:var(--am-mono);color:#8fc7db}.am-dimval em{color:#9fbcc7;font-style:normal;font-size:11px}
+.am-dimbar{height:7px;border-radius:99px;background:#0e1a2099;overflow:hidden;margin:5px 0}.am-dimbar i{display:block;height:100%;background:linear-gradient(90deg,var(--am-berry),#8fc7db);border-radius:99px}
+.am-dimnote{font-size:11.5px;color:#9fbcc7;line-height:1.5}.am-dimnote b{color:#cfe0e6;font-weight:700}
 .am-ledger{max-width:64ch;margin:12px 0}.am-sec.light{color:#8fc7db}
 .am-lrow{display:flex;justify-content:space-between;font-size:13px;padding:7px 0;border-bottom:1px solid #ffffff14;color:#cfe0e6}.am-lrow b{font-family:var(--am-mono);color:#fff}
 .am-btn{border:0;border-radius:999px;font:700 14px var(--am-sans);padding:11px 20px;cursor:pointer}

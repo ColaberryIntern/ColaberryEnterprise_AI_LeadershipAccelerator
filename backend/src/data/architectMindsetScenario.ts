@@ -38,12 +38,18 @@ export interface AmScenario {
   request: { from: string; text: string };
   initial_system: string[];
   first_decision: { prompt: string; options: AmOption[] };
-  zoom_out: { people: string[]; information: string[]; decisions: string[]; operations: string[] };
+  zoom_out: {
+    people: string[]; information: string[]; decisions: string[]; operations: string[];
+    /** optional display titles per layer (Week 1 uses Stakeholders / Root causes / …); defaults to People/Information/Decisions/Operations */
+    titles?: { people?: string; information?: string; decisions?: string; operations?: string };
+  };
   signature_reveals: string[];
   interview_part_1: AmInterviewQuestion[];
   interview_part_2: AmInterviewQuestion[];
   consequence: {
     horizon: Array<{ point: string; risk: number; note?: string }>;
+    /** optional outcome dashboard (Week 1: the 30-day metrics) shown before the horizon */
+    dashboard?: Array<{ label: string; value: string; trend?: 'up' | 'down' | 'flat' }>;
     reveal: string;
     lesson: string;
   };
@@ -54,7 +60,7 @@ export interface AmScenario {
     minutes: number;
     qualification: string;
   };
-  adr: { fields: string[] };
+  adr: { fields: string[]; title?: string };
   project_transfer: { prompt: string; questions: string[] };
   commitment_prompt: string;
 }
@@ -254,9 +260,169 @@ export const WEEK0_SCENARIO: AmScenario = {
   commitment_prompt: 'Before I build, I will always',
 };
 
-/** Scenario registry by week. Week 0 is authored; later weeks are generated. */
+// ─────────────────────────────────────────────────────────────────────────────
+// WEEK 1 — "The Request Is Not the Requirement"
+// The first SCORED lesson (baseline: false). A new scenario instance on the same
+// framework as Week 0 — the reusability proof: only DATA changes here.
+// ─────────────────────────────────────────────────────────────────────────────
+export const WEEK1_SCENARIO: AmScenario = {
+  version: 'wk1.v1',
+  week: 1,
+  baseline: false,
+  title: 'The Request Is Not the Requirement',
+  series: 'Architect Mindset',
+  experience: 'The Architect Time Machine',
+  principle: 'Stakeholders request an imagined solution; the architect discovers the underlying outcome, root causes, constraints, and evidence.',
+  tagline: 'Gain the lessons experience usually teaches too late.',
+  request: {
+    from: 'the program client',
+    text: 'Our students ask the same questions repeatedly. Build us an AI chatbot so they stop contacting the staff.',
+  },
+  initial_system: ['A student', 'An AI chatbot', 'The repeated questions'],
+  first_decision: {
+    prompt: 'Capture your instinct before the investigation. What would you do first, and what would you measure as success?',
+    options: [
+      { id: 'build', label: 'Build the chatbot on the existing FAQ and documents.' },
+      { id: 'stack', label: 'Choose the model, vector database, and chat interface.' },
+      { id: 'collect', label: 'Collect the most common questions and train on them.' },
+      { id: 'outcome', label: 'Ask what outcome the staff and students actually need.' },
+      { id: 'measure', label: 'Measure why students contact staff today, before building anything.' },
+      { id: 'custom', label: 'I would do something else.', custom: true },
+    ],
+  },
+  zoom_out: {
+    titles: { people: 'Stakeholders you interview', information: 'Root causes the interviews reveal', decisions: 'What a chatbot alone can address', operations: 'What a chatbot cannot fix' },
+    people: ['Program director', 'Admissions representative', 'Instructor', 'Student support specialist', 'Current student', 'Former student', 'Data analyst', 'Compliance representative', 'Technology administrator'],
+    information: ['Efficiency', 'Confidence and qualification', 'Conflicting information', 'Trust and reassurance', 'Navigation', 'Missing next-step guidance', 'Broken workflow', 'Governance', 'Source-of-truth ownership'],
+    decisions: ['Answer a low-risk factual question', 'Deflect a simple repeated question'],
+    operations: ['Trust and reassurance', 'A broken enrollment workflow', 'Conflicting sources of truth', 'Missing next-step guidance', 'Who owns the answer'],
+  },
+  signature_reveals: [
+    'The client requested one solution. Investigation revealed seven different problems. A chatbot directly addressed only two.',
+    'The chatbot answered 82% of questions, yet staff workload fell only 9%.',
+  ],
+  interview_part_1: [
+    {
+      id: 'q1', text: 'The chatbot answered 82% of questions, yet staff workload fell only 9%. Why?', mode: 'single', dimension: 'system_scope',
+      options: [
+        { id: 'hard', label: 'The students who contact staff have the hard questions the bot cannot answer.' },
+        { id: 'trust', label: 'Students did not trust the bot and re-asked staff anyway.' },
+        { id: 'unasked', label: 'The bot answered questions no one was actually bringing to staff.' },
+        { id: 'human', label: 'Staff time went to problems a chatbot was never going to solve.' },
+        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
+      ],
+    },
+    {
+      id: 'q2', text: 'What did the request assume that the evidence did not support?', mode: 'single', dimension: 'assumption_discovery',
+      options: [
+        { id: 'repeats', label: 'That repeated questions were the actual problem.' },
+        { id: 'shape', label: 'That a chatbot was the right shape of solution.' },
+        { id: 'single_answer', label: 'That each question had a single, correct, current answer.' },
+        { id: 'deflect', label: 'That deflecting contact would improve the student experience.' },
+        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
+      ],
+    },
+    {
+      id: 'q3', text: 'Which stakeholder perspective changed your understanding the most?', mode: 'single', dimension: 'stakeholder_awareness',
+      options: [
+        { id: 'support', label: 'The student support specialist: why students really reach out.' },
+        { id: 'compliance', label: 'The compliance representative: what must never be auto-answered.' },
+        { id: 'analyst', label: 'The data analyst: what the numbers actually show.' },
+        { id: 'former', label: 'The former student: what they needed and did not get.' },
+        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
+      ],
+    },
+    {
+      id: 'q4', text: 'What outcome should this system actually create, named without any technology?', mode: 'single', dimension: 'decision_communication',
+      options: [
+        { id: 'trust', label: 'Students get trustworthy answers and know their next step.' },
+        { id: 'staff', label: 'Staff spend their time on the problems only humans can solve.' },
+        { id: 'truth', label: 'The organization has one source of truth it can stand behind.' },
+        { id: 'complete', label: 'Students complete enrollment with less friction and more confidence.' },
+        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
+      ],
+    },
+  ],
+  interview_part_2: [
+    {
+      id: 'r1', text: 'Given the seven problems behind the one request, which architecture do you recommend?', mode: 'single', dimension: 'tradeoff_quality',
+      options: [
+        { id: 'improve', label: 'Improve the chatbot.' },
+        { id: 'redesign', label: 'Redesign the knowledge and workflow foundation.' },
+        { id: 'triage', label: 'Use AI triage with human support.' },
+        { id: 'phased', label: 'Use a phased, combined architecture.' },
+        { id: 'custom', label: 'I propose my own architecture, let me describe it.', custom: true },
+      ],
+    },
+    {
+      id: 'r2', text: 'The client asked for a chatbot in six weeks. Your recommendation changes processes, ownership, and technology. What can you responsibly deliver in six weeks without creating a system the organization will regret?', mode: 'single', dimension: 'failure_anticipation',
+      options: [
+        { id: 'kb', label: 'A source-of-truth knowledge base plus a narrow, well-governed assistant.' },
+        { id: 'route', label: 'AI triage that routes each student to the right human with context.' },
+        { id: 'pilot', label: 'A measured pilot on only the two problems a bot can actually solve.' },
+        { id: 'agree', label: 'Nothing to build until the outcome and the owners are agreed.' },
+        { id: 'custom', label: 'I see it differently, let me write my own answer.', custom: true },
+      ],
+    },
+  ],
+  consequence: {
+    dashboard: [
+      { label: 'Questions answered', value: '82%' },
+      { label: 'Staff contacts reduced', value: '9%', trend: 'flat' },
+      { label: 'Repeated questions reduced', value: '4%', trend: 'flat' },
+      { label: 'Student satisfaction', value: '-11%', trend: 'down' },
+      { label: 'Enrollment completion', value: 'no change', trend: 'flat' },
+      { label: 'Confident wrong answers', value: '7%', trend: 'down' },
+      { label: 'Human escalations completed', value: '38%', trend: 'down' },
+      { label: 'Students abandoning chat', value: '31%', trend: 'down' },
+    ],
+    horizon: [
+      { point: 'Launch', risk: 12, note: 'The demo answers the easy questions.' },
+      { point: 'First 1,000 students', risk: 30, note: 'The hard 18% still reach staff, now less trusting.' },
+      { point: 'First failure', risk: 68, note: 'A confident, wrong answer on a compliance question.' },
+      { point: 'First audit', risk: 84, note: 'No one owns the source of truth the bot answered from.' },
+      { point: 'Satisfaction review', risk: 72, note: 'Satisfaction is down 11%; abandonment is up.' },
+      { point: 'Long-term operation', risk: 50 },
+    ],
+    reveal: 'The bot answered the easy 82%. The students who contacted staff were the ones with the hard 18% the bot could not touch, and now they trusted the whole system less.',
+    lesson: 'The request named a solution (a chatbot). The requirement was an outcome: trustworthy answers, a clear next step, and staff freed for the problems only humans can solve. Architecting begins by discovering the requirement behind the request.',
+  },
+  rearchitecture: {
+    prompt: 'You have seen the 30-day outcome. Choose the architecture you would recommend and defend it, answer the client\'s six-week challenge, and name the single most important thing the original request missed.',
+  },
+  receipt: {
+    counts: [
+      { label: 'discovery & requirements hours', value: '700' },
+      { label: 'stakeholder collaboration hours', value: '480' },
+      { label: 'failed-solution exposure hours', value: '900' },
+      { label: 'workflow redesign hours', value: '600' },
+      { label: 'operational measurement hours', value: '520' },
+      { label: 'problems behind one request', value: '7' },
+      { label: 'stakeholders interviewed', value: '9' },
+      { label: 'root causes surfaced', value: '9' },
+    ],
+    represented_hours: 3200,
+    minutes: 25,
+    qualification: AM_QUALIFICATION,
+  },
+  adr: {
+    title: 'ADR-001 — Define the Outcome Before Selecting the Solution',
+    fields: ['requested_feature', 'observable_outcome', 'user_outcomes', 'root_causes', 'system_response', 'non_goals', 'success_measures', 'assumptions', 'constraints', 'alternatives', 'accepted_tradeoffs', 'evidence_that_would_change_the_decision', 'ownership'],
+  },
+  project_transfer: {
+    prompt: 'Apply the lesson to your own project.',
+    questions: [
+      'What solution have you already assumed for your own project, and who owns the problem it addresses?',
+      'What outcome should it actually create (named without any technology), and what evidence would support a different solution?',
+    ],
+  },
+  commitment_prompt: 'Before I build, I will always',
+};
+
+/** Scenario registry by week. Weeks 0 and 1 are authored; later weeks generate. */
 export const AM_SCENARIOS: Record<number, AmScenario> = {
   0: WEEK0_SCENARIO,
+  1: WEEK1_SCENARIO,
 };
 
 export function scenarioForWeek(week: number | null | undefined): AmScenario | null {
