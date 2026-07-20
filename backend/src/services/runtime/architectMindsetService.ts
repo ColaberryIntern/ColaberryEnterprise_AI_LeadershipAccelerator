@@ -19,7 +19,7 @@ import {
 } from '../../data/architectMindsetScenario';
 import {
   AmProgress, AmState, emptyProgress, isValidTransition, invalidAnswers, isMeaningful,
-  completionGaps, deriveEvidence, assessBaseline, computeReceipt, ledgerEntryFor, projectLedger,
+  completionGaps, deriveEvidence, assessBaseline, scoreMindset, computeReceipt, ledgerEntryFor, projectLedger,
 } from './architectMindsetLogic';
 
 const TYPE_SLUG = 'architect_mindset';
@@ -53,10 +53,14 @@ async function load(enrollmentId: string, cardId: string) {
 
 async function save(row: TimelineCardProgress, progress: AmProgress, status?: 'in_progress' | 'completed') {
   progress.last_saved_at = new Date().toISOString();
-  const patch: any = { student_progress: progress };
-  if (status) patch.status = status;
-  if (!row.started_at && progress.started_at) patch.started_at = new Date(progress.started_at);
-  await row.update(patch);
+  // Sequelize does NOT detect in-place mutations of a JSONB field, and complete()
+  // saves the same row twice in one request (completion_eligible -> completed). Take
+  // a decoupled snapshot and force the field dirty so every state change persists.
+  row.set('student_progress', JSON.parse(JSON.stringify(progress)));
+  row.changed('student_progress', true);
+  if (status) row.set('status', status);
+  if (!row.started_at && progress.started_at) row.set('started_at', new Date(progress.started_at));
+  await row.save();
 }
 
 // ── GET state (resume) ───────────────────────────────────────────────────────
@@ -115,17 +119,24 @@ export async function evaluate(enrollmentId: string, cardId: string) {
   const { scenario, row, progress } = await load(enrollmentId, cardId);
   const enriched: AmProgress = { ...progress, ...deriveEvidence(progress, scenario), state: 'evaluation_pending' };
   await save(row, enriched, 'in_progress');
+  // Week 0 = baseline observation (unscored); Week 1+ = formal 8-dimension score.
   const baseline = assessBaseline(enriched, scenario);
-  let observation = baseline.observation;
+  const score = scenario.baseline ? null : scoreMindset(enriched, scenario);
+  const stage = score ? score.stage : baseline.stage;
+  let observation = scenario.baseline
+    ? baseline.observation
+    : `You reached ${stage.label} (${score!.total}/100). This is your first scored lesson: your growth is measured from here.`;
   let source: 'ai' | 'deterministic' = 'deterministic';
   try {
     const answers = Object.entries(enriched.interview || {}).map(([id, a]: any) => `${id}: ${a.choice || ''}${isMeaningful(a.custom) ? ' — ' + a.custom : ''}`).join('\n');
-    const system = 'You are an experienced software architect debriefing a student after a decision simulation. Assume there is no single correct architecture. Reward evidence, assumptions, tradeoffs, failure anticipation, governance, and clear communication, never jargon. Two sentences, warm and specific, no score. Return STRICT json.';
-    const user = `Week ${scenario.week} baseline. Principle: ${scenario.principle}\nThe student's answers:\n${answers}\nTheir commitment: "${enriched.commitment || ''}"\nReturn json { "observation": string }.`;
+    const system = 'You are an experienced software architect debriefing a student after a decision simulation. Assume there is no single correct architecture. Reward evidence, assumptions, tradeoffs, failure anticipation, governance, and clear communication, never jargon. Two sentences, warm and specific, no number. Return STRICT json.';
+    const user = `Week ${scenario.week}${scenario.baseline ? ' (baseline)' : ` (stage: ${stage.label})`}. Principle: ${scenario.principle}\nThe student's answers:\n${answers}\nTheir commitment: "${enriched.commitment || ''}"\nReturn json { "observation": string }.`;
     const r = await chatJson('architect_mindset_eval', system, user, undefined, 400);
     if (r?.parsed?.observation && isMeaningful(r.parsed.observation)) { observation = String(r.parsed.observation).trim(); source = 'ai'; }
   } catch { /* keep the deterministic observation — completion is never blocked by an AI outage */ }
-  const evaluation = { baseline: scenario.baseline, signal: baseline.signal, stage: baseline.stage, observation, source, at: new Date().toISOString() };
+  const evaluation = scenario.baseline
+    ? { baseline: true, signal: baseline.signal, stage, observation, source, at: new Date().toISOString() }
+    : { baseline: false, total: score!.total, stage, dimensions: score!.dimensions, observation, source, at: new Date().toISOString() };
   const done: AmProgress = { ...enriched, evaluation, state: 'evaluation_complete' };
   await save(row, done, 'in_progress');
   return { evaluation, gaps: completionGaps(done, scenario) };
@@ -174,7 +185,7 @@ export async function complete(enrollmentId: string, cardId: string) {
     const adr = buildAdr(progress, scenario);
     await PortfolioArtifact.create({
       enrollment_id: enrollmentId, card_id: cardId, kind: 'architecture_decision',
-      title: `ADR — ${scenario.title}`,
+      title: scenario.adr?.title || `ADR — ${scenario.title}`,
       summary: `Architect Decision Record from ${scenario.experience}, Week ${scenario.week}: ${String(adr.decision).slice(0, 180)}`,
       content: { adr, week: scenario.week, scenario_version: scenario.version, receipt: computeReceipt(scenario) },
       competencies: (card as any).competencies || [],
