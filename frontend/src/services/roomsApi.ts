@@ -49,6 +49,7 @@ export interface Room {
   topic?: string | null;
   capacity?: number | null;
   linked_live_session_id?: string | null;
+  owner_enrollment_id?: string | null;
   is_system?: boolean;
   is_video?: boolean;
   always_open?: boolean;
@@ -60,6 +61,15 @@ export interface Room {
 export interface RoomListItem {
   visibility: 'full' | 'shell';
   room: Room;
+  here_count?: number;
+}
+
+// The viewer's enrollment id, decoded from the participant JWT (for owner checks).
+export function myEnrollmentId(): string {
+  try {
+    const t = localStorage.getItem('participant_token') || '';
+    return JSON.parse(atob(t.split('.')[1] || '')).sub || '';
+  } catch { return ''; }
 }
 
 export interface RoomView {
@@ -90,6 +100,7 @@ export interface BookingCard {
   capacity: number | null;
   outcome: string | null;
   host_enrollment_id: string | null;
+  emoji?: string;
 }
 
 export interface RoomsHome {
@@ -136,6 +147,7 @@ export interface CreateRoomInput {
   description?: string;
   topic?: string;
   is_video?: boolean;
+  emoji?: string;
 }
 
 export async function fetchRoomsHome(): Promise<RoomsHome> {
@@ -168,6 +180,19 @@ export async function joinRoom(roomId: string): Promise<RoomMembership> {
 export async function joinVideoRoom(roomId: string): Promise<{ join_url: string | null }> {
   const { data } = await portalApi.post<{ join_url: string | null }>(`/api/portal/community/rooms/${roomId}/join-video`);
   return data;
+}
+
+export async function touchRoomPresence(roomId: string, inVideo = false): Promise<void> {
+  await portalApi.post(`/api/portal/community/rooms/${roomId}/presence`, { in_video: inVideo });
+}
+
+export async function deleteRoom(roomId: string): Promise<void> {
+  await portalApi.delete(`/api/portal/community/rooms/${roomId}`);
+}
+
+export async function inviteToRoom(roomId: string, enrollmentIds: string[]): Promise<number> {
+  const { data } = await portalApi.post<{ granted: number }>(`/api/portal/community/rooms/${roomId}/invite`, { enrollment_ids: enrollmentIds });
+  return data.granted;
 }
 
 export async function requestRoomAccess(roomId: string): Promise<RoomMembership> {

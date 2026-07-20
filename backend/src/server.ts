@@ -1892,6 +1892,18 @@ async function ensureCommunityRoomsSchema() {
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS room_reports_idem_unique ON room_reports (idempotency_key) WHERE idempotency_key IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_room_reports_status ON room_reports (status)`,
+
+    `CREATE TABLE IF NOT EXISTS room_presence (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       in_video BOOLEAN NOT NULL DEFAULT false,
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_presence_unique ON room_presence (room_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_presence_room_seen ON room_presence (room_id, last_seen_at)`,
   ];
   for (const sql of statements) {
     try {

@@ -30,6 +30,7 @@ export const CreateRoomSchema = z.object({
   linked_project_id: z.string().uuid().optional(),
   linked_module_id: z.string().uuid().optional(),
   is_video: z.boolean().optional(),
+  emoji: z.string().max(16).optional(),
 });
 export type CreateRoomBody = z.infer<typeof CreateRoomSchema>;
 
@@ -104,3 +105,6 @@ export const ResolveReportSchema = z.object({
   status: z.enum(['reviewing', 'resolved', 'dismissed']),
   resolution: z.string().max(2000).optional(),
 });
+
+export const InviteSchema = z.object({ enrollment_ids: z.array(z.string().uuid()).min(1).max(50) });
+export const PresenceSchema = z.object({ in_video: z.boolean().optional() });
