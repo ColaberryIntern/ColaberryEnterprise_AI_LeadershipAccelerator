@@ -16,6 +16,10 @@ export interface CommunityPost {
   pinned: boolean;
   like_count: number;
   comment_count: number;
+  // Server-authenticated per-viewer like state (Phase 4). Render the like
+  // button from this, not from a client-side default — the previous code reset
+  // every post to "not liked" on load, silently losing the viewer's likes.
+  viewer_has_liked: boolean;
   mentioned_member_ids: string[];
   min_level: number;
   locked: boolean;
@@ -85,14 +89,34 @@ export async function fetchLeaderboard(period: LeaderboardPeriod): Promise<Leade
   return data.entries;
 }
 
-export async function fetchPosts(category?: string): Promise<CommunityPost[]> {
-  const { data } = await portalApi.get<{ posts: CommunityPost[] }>('/api/portal/community/posts', {
-    params: category ? { category } : undefined,
-  });
-  return data.posts;
+export interface CommunityFeedPage {
+  posts: CommunityPost[];
+  next_cursor: string | null;
 }
 
-export async function createPost(input: { body: string; category?: string; mentioned_member_ids?: string[] }): Promise<CommunityPost> {
+// Cursor-paginated feed (Phase 4). Pass the previous page's next_cursor to page
+// forward; omit it for the first page. `next_cursor` is null when the feed is
+// exhausted.
+export async function fetchPosts(
+  params: { category?: string; cursor?: string | null; limit?: number } = {}
+): Promise<CommunityFeedPage> {
+  const query: Record<string, string | number> = {};
+  if (params.category) query.category = params.category;
+  if (params.cursor) query.cursor = params.cursor;
+  if (params.limit) query.limit = params.limit;
+  const { data } = await portalApi.get<{ posts: CommunityPost[]; next_cursor?: string | null }>(
+    '/api/portal/community/posts',
+    { params: Object.keys(query).length ? query : undefined }
+  );
+  return { posts: data.posts, next_cursor: data.next_cursor ?? null };
+}
+
+export async function createPost(input: {
+  body: string;
+  category?: string;
+  media_urls?: string[];
+  mentioned_member_ids?: string[];
+}): Promise<CommunityPost> {
   const { data } = await portalApi.post<{ post: CommunityPost }>('/api/portal/community/posts', input);
   return data.post;
 }
@@ -138,4 +162,33 @@ export async function fetchMembers(): Promise<CommunityMemberProfile[]> {
 export async function pingPresence(): Promise<{ presence: CommunityPresenceStatus }> {
   const { data } = await portalApi.post('/api/portal/community/presence/ping');
   return data;
+}
+
+// Cohort-scoped member profile lookup for the profile drawer. The backend
+// returns 404 (not 403) for a member in another cohort, preserving the
+// anti-enumeration behavior — the drawer surfaces that as "member not found".
+export async function fetchMemberProfile(memberId: string): Promise<CommunityMemberProfile> {
+  const { data } = await portalApi.get<{ profile: CommunityMemberProfile }>(
+    `/api/portal/community/members/${memberId}`
+  );
+  return data.profile;
+}
+
+export type CommunityEventSource = 'live_session' | 'open_house' | 'community_event';
+
+export interface CommunityEvent {
+  id: string;
+  source: CommunityEventSource;
+  title: string;
+  event_type: string;
+  starts_at: string;
+  ends_at: string | null;
+  meeting_link: string | null;
+}
+
+// Upcoming cohort events (live sessions + open houses + ad-hoc community
+// events), already merged and sorted soonest-first by the backend.
+export async function fetchCalendar(): Promise<CommunityEvent[]> {
+  const { data } = await portalApi.get<{ events: CommunityEvent[] }>('/api/portal/community/calendar');
+  return data.events;
 }
