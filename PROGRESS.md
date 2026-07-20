@@ -10066,6 +10066,18 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: Frontend compiles clean via Docker `react-scripts build` (nginx builder stage, exit 0); jest unit test 11/11 pass in the clean container (`--testPathPattern=classroomSearch`); CI frontend-typecheck (authoritative).
   - Notes: Branch `workstream/classroom-search`. Client-side only — no backend, API, or DB change. Search is scoped to the currently-selected week's cards (the feed that's actually rendered), which is exactly the "Prompt Lab is halfway down the page" pain.
 
+### Build Artifact(s) Lab — merged implementation_task + artifact_submission build station — 2026-07-20
+- [x] New `build_artifacts` type: pick an artifact (5/section) + a project (their repos + samples), get a Deep-Dive-grade build prompt, build in Claude Code
+  - Date: 2026-07-20
+  - Session: CC-20260719-sl9x
+  - What changed:
+    - `typeRegistry.ts`: `implementation_task` AND `artifact_submission` → student_label **"Build Artifact(s) Lab"**, render_band **`build_artifacts`** (merges the two — "one in the same"). Test `SUPPORTED_RENDER_BANDS` += `build_artifacts`.
+    - `seedComponentAuthoring.ts`: `BUILD_ARTIFACTS_GENERATION_PROMPT` (5 artifacts, each `<h4>` name / `<p>` what / `<pre>` build_prompt using the literal `{PROJECT}` token) + authored entries for both slugs. Uses the enriched section context (deliverables + Deep Dive).
+    - `frontend/.../BuildArtifactsRender.tsx` (NEW): parses the 5 artifacts, two dropdowns — **artifact** + **project** (fetches `/api/portal/projects` for the student's repos, adds sample/test projects) — live-substitutes `{PROJECT}` into the prompt, Copy, a "Built X of 5" tracker, points-once note. Wired into drawer + workspace; Claude Code strip via `CLAUDE_CODE_TYPES` (+ artifact_submission).
+    - Completion is copy-gated (reveals after a build prompt is copied) in BOTH surfaces; points-once is the standard complete-once (re-runs are practice).
+  - Why: Ali's spec — Implementation Task + Artifact Submission are one type: a build station that turns the section's deliverables into pick-and-build artifacts on the student's own project (or a sample), points on the first build only. [[project_claude_code_type_spine]]
+  - Verification: pending dev deploy on `:9999` + user review; frontend tsc via Docker build; typeRegistry jest.
+  - Notes: Branch `workstream/build-artifacts-lab`. All implementation_task + artifact_submission cards need regeneration post-deploy (render band flipped). Project substitution is client-side (no per-project AI call).
 ### Feed Control simulator — explicit student selection (no silent default) — 2026-07-20
 - [x] Fix the "how can this be Martin's timeline when nothing is selected?" confusion in the Feed Control student-feed preview
   - Date: 2026-07-20
@@ -10109,6 +10121,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: reassessment flagged "we're shipping without a faithful rehearsal environment" as the root cause of the silent prod bug. This turns a one-off SSH incantation into a repeatable, intern-safe, dry-run-default tool. [[project_student_project_backend]]
   - Verification: ran it against prod→dev — created 2 missing enums (`cora_priority`, `cora_automation_level`) + 13 missing tables (`architect_evaluations, artifacts, community_digest_logs, community_notifications, community_post_reports, cora_cohorts, cora_courses, cora_kb_entries, interview_rubrics, interview_sessions, responsible_persons, showcase_artifacts, week_item_visibility`); dev went 304→317 tables; a fresh dry-run now reports "already schema-faithful." The student_task tables were already present on dev (last session's boot self-heal propagated).
   - Notes: Branch `workstream/dev-schema-sync`. The sync itself is an ops op (no app-code change); only the script ships. Prod-only `student_tasks_legacy_storydriven` intentionally excluded; 2 dev-only leftovers (`community_contributions`, `payments`) left as-is (extra tables don't hurt rehearsal fidelity; dropping is destructive). A deeper durable fix (per-table ensure hooks or a CI schema-drift check) remains a larger follow-up.
+
+### Claude Code labs: http-safe clipboard copy — 2026-07-20
+- [x] Copy buttons fall back to execCommand on non-secure (http) origins
+  - Date: 2026-07-20
+  - Session: CC-20260720-h3k9
+  - What changed: New `frontend/src/utils/clipboard.ts` `copyText()` — prefers the async Clipboard API on secure (https) origins, falls back to a hidden-textarea `document.execCommand('copy')` on http. Wired into all three Claude Code lab renderers (`SetupLabRender.tsx`, `PromptCatalogRender.tsx`, `BuildArtifactsRender.tsx`), replacing the `navigator.clipboard ? writeText : else done()` pattern. On the http dev instance (`:9999`) `navigator.clipboard` is `undefined`, so the old code hit `else done()` — it flagged "Copied" but never wrote the clipboard, leaving the user's previous clipboard content (an image) to paste instead of the prompt. This also unblocks the copy-gated completion, which was being satisfied without a real copy.
+  - Verification: dev nginx rebuilt (react-scripts build = authoritative frontend typecheck, passed); `execCommand` confirmed present in served bundle `static/js/main.b9b55eda.js`; `http://localhost:9999/portal/classroom` returns 200.
+  - Notes: Branch `workstream/build-artifacts-lab`. Kept `.then(done, done)` (lenient) so a genuine copy failure still lets the student proceed. Benefits Setup Lab + Prompt Lab (already live on prod https, where the API path already worked) as a safety net, and fixes copy outright on the http dev instance.
 ### Points model — Rooms + community feed feed the Community Skill-XP lane — 2026-07-20
 - [x] Rooms recognition + community posts/comments award Community Skill-XP
   - Date: 2026-07-20

@@ -12,6 +12,7 @@ import { useReaderProgress } from './useReaderProgress';
 import { useDeepDiveHost } from './useDeepDiveHost';
 import SetupLabRender from './SetupLabRender';
 import PromptCatalogRender from './PromptCatalogRender';
+import BuildArtifactsRender from './BuildArtifactsRender';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -192,6 +193,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isDeepDive = card.render_band === 'deepdive' && card.type === 'deep_dive';
   const isSetupLab = card.render_band === 'setup_lab';   // Claude Code enablement lab: dark native panel + Copy button
   const isPromptCatalog = card.render_band === 'prompt_catalog';   // Prompt Lab: practice-prompt catalog (categories + reveal + copy)
+  const isBuildArtifacts = card.render_band === 'build_artifacts';   // Build Artifact(s) Lab: pick artifact + project, build station
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
@@ -242,7 +244,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         )}
       </div>
 
-      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}`}>
+      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}${isBuildArtifacts ? ' tld-body--buildartifacts' : ''}`}>
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
@@ -265,6 +267,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This prompt catalog has not been generated yet.</div>
+        ) : isBuildArtifacts ? (
+          content && content.body_html
+            ? <BuildArtifactsRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" cardId={card.id} completed={done} onComplete={completeSafely} />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This build station has not been generated yet.</div>
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>
