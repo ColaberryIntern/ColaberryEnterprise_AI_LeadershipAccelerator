@@ -66,6 +66,47 @@ The render bands that already have a bespoke renderer are listed in
 
 ---
 
+## The visual quality bar — a DISTINCT format + a REAL thumbnail (every type)
+
+Proven on the 10 intelligence-pipeline types (2026-07-20). Two rules that make types
+look intentional instead of interchangeable. Apply them to every type.
+
+**1. Ship a DISTINCT, self-contained styled `body_html` — never a generic `<h3>` list.**
+The generic/`intel` render band renders through `lessonDoc()`, which **preserves `<style>`**
+(only the reader/deepdive path strips it via `stripUnsafe`). So a type can carry its own
+complete look — a news brief, a spec sheet, a pull-quote, a system map — not the same
+seven headings every other type uses. If all your types read alike, this is why.
+- Author each type's **CSS + structure once** in a shared module and reuse it for BOTH the
+  sample content AND the generation prompt. Reference: `backend/src/seeds/intelCardFormats.ts`
+  (`{ style, render(data), sample, structure }` per type) → `sampleBodyFor(slug)` feeds
+  `seedIntelSampleCards.ts`; the same `style` + `structure` feed the generation prompt.
+- The generation prompt says: **"FIRST copy this `<style>` block VERBATIM, then emit the
+  markup using ONLY those classes in exactly this structure: …"** (the Announcement type and
+  all 10 intelligence types do this — the model reliably reproduces a pinned `<style>`).
+- Do **not** repeat the card's plain title as an `<h1>` inside the body — the drawer/workspace
+  chrome already shows `title`. Lead with the format's distinctive element.
+
+**2. Give it a REAL image thumbnail via the gpt-image-2 pipeline — the image IS the branded
+background (like the videos), not a vector/text placeholder.** Pipeline in
+`scripts/curriculum-type-thumbnails/`:
+1. Add `{ "slug", "label", "scene" }` to `prompts.json` — a text-free conceptual scene
+   metaphor (e.g. reflection → "a figure gazing at their reflection in a mirror"). The
+   `style_suffix` supplies the enterprise art direction (navy/teal, coral accent, no text/logos).
+2. Generate on the VPS host where `OPENAI_API_KEY` lives (~$0.06/img):
+   `ssh root@95.216.199.47 'cd /root/thumb-gen && node generateOnHost.js --only <slug>'`
+   (idempotent by output file; capped retries). `scp` the raw PNG back from `/root/thumb-gen/raw/`.
+3. `node scripts/curriculum-type-thumbnails/compositeAndInstall.js --raw <dir>` → center-crops
+   to 3:1, resizes 900×300, stamps the Colaberry wordmark, writes
+   `frontend/public/thumbnails/curriculum-types/<slug>.jpg`.
+
+**Thumbnail gotcha (cost a real bug):** an explicit `COMPONENT_AUTHORING[slug]` entry
+**overrides the `...AI_THUMBNAILS` spread**. So an authored type MUST set
+`thumbnail_url: thumbnailUrlFor(slug)` on its own entry AND have its slug in `THUMBNAIL_SLUGS`,
+or it ships with **no thumbnail** (this is exactly how `community_live_session` shipped blank).
+`seedComponentAuthoring.test.ts` catches it locally — but that test is **not in CI**, so run it.
+
+---
+
 ## Inputs
 
 **Tier 1 (required):** `name` (→ `label`; `slug` = slugify(name) = idempotency key) and
@@ -240,8 +281,9 @@ CI ≠ validated. Validate locally or via the dev-exec pattern. Prod deploys aft
 ## Definition of Done
 - [ ] Component created/updated by slug; all JSONB contracts explicit (`[]`/`{}`).
 - [ ] `generation_prompt` grounded in WEEK CONTEXT, uses the section title (never the number), unused keys set explicitly.
+- [ ] Emits a **distinct, self-contained styled `body_html`** (its own `<style>`+structure, not a generic `<h3>` list) — see "The visual quality bar".
 - [ ] Previewed against a real week across **ALL perspectives** (tile + pop-up drawer + workspace), each render verdict good — a type can look right in the drawer but broken in the workspace (unstyled panel / missing runtime field). See "Preview across ALL perspectives".
-- [ ] Thumbnail set (asset path preferred) and showing on all surfaces it should.
+- [ ] **Real image thumbnail** generated via the gpt-image-2 pipeline (not a placeholder), `thumbnail_url` set **explicitly** on the authored entry (the spread-override gotcha) + slug in `THUMBNAIL_SLUGS`, showing on all surfaces.
 - [ ] Approved (if Ali signed off) — remember it gates the Composer.
 - [ ] **Promoted:** `seedComponentAuthoring.ts` entry committed **and** `typeRegistry.ts` updated if the chip/metadata changed.
 - [ ] `tsc --noEmit` clean if any code changed; PROGRESS.md entry with Session ID + verification.
