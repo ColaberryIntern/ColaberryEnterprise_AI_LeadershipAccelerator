@@ -47,6 +47,7 @@ function adapt(item: TodayFeedItem): TimelineFeedCard {
     blog: item.blog,
     type_thumbnail: null,
     capabilities: [],
+    author: item.author ?? null,
   };
 }
 
