@@ -1761,6 +1761,36 @@ async function ensureMissedOpportunitiesSchema() {
 // only, no ALTERs to existing tables. NO cross-table FK constraints (plain UUID
 // columns, like student_tasks) so creation ordering never matters. The whole
 // feature stays dark behind env.communityRoomsEnabled regardless of these tables.
+// Friendships — the friend graph behind the portal Contacts rail. Idempotent,
+// additive; status is VARCHAR + CHECK (not a Postgres ENUM) so new states are a
+// one-line CHECK change, never a type migration. No feature flag.
+async function ensureFriendshipSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS friendships (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       requester_id UUID NOT NULL,
+       addressee_id UUID NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       CONSTRAINT ck_friendships_status CHECK (status IN ('pending','accepted','declined'))
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS friendships_pair_unique ON friendships (requester_id, addressee_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships (addressee_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships (requester_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure Friendship schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Friendship schema ensured');
+}
+
 async function ensureCommunityRoomsSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS community_rooms (
@@ -2077,6 +2107,8 @@ async function start(): Promise<void> {
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
   // env.communityRoomsEnabled at the route/worker/linkage layers.
   await ensureCommunityRoomsSchema();
+  // Friendships (portal Contacts rail friend graph) — idempotent, additive, no flag.
+  await ensureFriendshipSchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {
