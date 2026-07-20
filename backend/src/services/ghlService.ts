@@ -1,6 +1,22 @@
 import { getSetting, getTestOverrides } from './settingsService';
 import { logActivity } from './activityService';
 import Lead from '../models/Lead';
+import { classifyError } from '../utils/errorClassifier';
+
+// Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
+// the full Sequelize/model graph into every ghlService import.
+async function emitFailureEvent(params: Parameters<typeof import('./aiEventService').emitAiEvent>[0]): Promise<void> {
+  try {
+    const { emitAiEvent } = await import('./aiEventService');
+    await emitAiEvent(params);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'backend', event: 'emit_failure_event_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { event_type: params.event_type, message: err?.message },
+    }));
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -53,18 +69,33 @@ async function ghlFetch(
         'Authorization': `Bearer ${apiKey}`,
       },
       body: body ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(15000),
     });
 
     const data: any = await response.json();
 
     if (!response.ok) {
       console.error(`[GHL] API error ${response.status}:`, data);
+      emitFailureEvent({
+        event_type: 'ghl_request_failed',
+        outcome: 'failure',
+        external_system: 'ghl',
+        error_class: classifyError({ status: response.status, message: data?.message }),
+        metadata: { path, method, message: String(data?.message || JSON.stringify(data)).slice(0, 200) },
+      });
       return { success: false, error: data?.message || JSON.stringify(data) };
     }
 
     return { success: true, data };
   } catch (error: any) {
     console.error('[GHL] Request failed:', error.message);
+    emitFailureEvent({
+      event_type: 'ghl_request_failed',
+      outcome: 'failure',
+      external_system: 'ghl',
+      error_class: classifyError(error),
+      metadata: { path, method, message: String(error?.message || '').slice(0, 200) },
+    });
     return { success: false, error: error.message };
   }
 }

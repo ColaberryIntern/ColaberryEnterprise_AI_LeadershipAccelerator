@@ -73,3 +73,36 @@ export async function ingestStatusCounts(windowHours: number): Promise<Record<st
   for (const r of rows) out[r.status] = Number(r.count);
   return out;
 }
+
+/**
+ * Same window as ingestStatusCounts() but grouped by source_slug too — lets
+ * dashboardThresholdWatcherService.ts name *which* source is failing in an
+ * ingest-error-spike alert, not just the aggregate rate (BC #10099862873).
+ */
+export interface SourceStatusCountRow {
+  source_slug: string;
+  accepted: number;
+  rejected: number;
+  error: number;
+  pending: number;
+}
+
+export async function ingestStatusCountsBySource(windowHours: number): Promise<SourceStatusCountRow[]> {
+  const rows = await sequelize.query<{ source_slug: string; status: string; count: string }>(
+    `SELECT COALESCE(source_slug, 'unknown') AS source_slug, status, COUNT(*)::text AS count
+     FROM raw_lead_payloads
+     WHERE received_at >= NOW() - INTERVAL '${Number(windowHours)} hours'
+     GROUP BY source_slug, status`,
+    { type: QueryTypes.SELECT }
+  );
+
+  const bySource = new Map<string, SourceStatusCountRow>();
+  for (const r of rows) {
+    const entry = bySource.get(r.source_slug) || { source_slug: r.source_slug, accepted: 0, rejected: 0, error: 0, pending: 0 };
+    if (r.status === 'accepted' || r.status === 'rejected' || r.status === 'error' || r.status === 'pending') {
+      entry[r.status] = Number(r.count);
+    }
+    bySource.set(r.source_slug, entry);
+  }
+  return Array.from(bySource.values());
+}
