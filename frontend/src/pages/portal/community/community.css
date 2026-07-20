@@ -69,12 +69,15 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 
 /* Level badge (gamification, BC #9985689739) — colors reuse existing Design-E
    tokens rather than new hex values: gray/blue/green/cherry for L1..L4. */
-.cm-lvl-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 10px;border-radius:999px;color:#fff;white-space:nowrap;flex:none}
+.cm-lvl-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap;flex:none;border:1px solid transparent}
 .cm-lvl-badge.sm{font-size:10px;padding:2px 8px}
-.cm-lvl-1{background:var(--muted,#6B6B6B)}
-.cm-lvl-2{background:var(--berry,#367895)}
-.cm-lvl-3{background:var(--leaf-deep,#3C7A26)}
-.cm-lvl-4{background:var(--cherry,#FB2832)}
+/* Subtle tinted chips (Colaberry design-system status-badge pattern: tinted bg +
+   colored text) rather than heavy solid fills — lighter/cleaner, and legible in
+   light + dark mode via rgba tints. L1 neutral / L2 blue / L3 green / L4 cherry. */
+.cm-lvl-1{background:rgba(107,107,107,.14);color:var(--muted,#6B6B6B);border-color:rgba(107,107,107,.22)}
+.cm-lvl-2{background:rgba(54,120,149,.14);color:var(--berry,#367895);border-color:rgba(54,120,149,.24)}
+.cm-lvl-3{background:rgba(60,122,38,.15);color:var(--leaf-text,#468A2E);border-color:rgba(60,122,38,.26)}
+.cm-lvl-4{background:rgba(229,18,29,.12);color:var(--cherry-text,#E5121D);border-color:rgba(229,18,29,.24)}
 
 /* Level progress bar (on the "my profile" card) */
 .cm-lvl-progress{margin-top:10px}
@@ -149,7 +152,7 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 .cm-composer textarea:focus{outline:none;border-color:var(--berry,#367895)}
 .cm-composer-media{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
 .cm-composer-media-item{position:relative;width:84px;height:84px;border-radius:10px;overflow:hidden;border:1px solid var(--border,#D8D8D8)}
-.cm-composer-media-item img{width:100%;height:100%;object-fit:cover}
+.cm-composer-media-item img,.cm-composer-media-item video{width:100%;height:100%;object-fit:cover;background:#000}
 .cm-composer-media-item button{position:absolute;top:2px;right:2px;width:20px;height:20px;border:none;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .cm-composer-media-input{display:flex;gap:8px;margin-top:10px}
 .cm-composer-media-input input{flex:1;border:1px solid var(--border,#D8D8D8);border-radius:8px;padding:8px 12px;font-family:inherit;font-size:13px;background:var(--surface,#fff);color:var(--strong,#1A1A1A)}

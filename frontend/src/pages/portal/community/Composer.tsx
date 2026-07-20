@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import Avatar from './Avatar';
+import { isVideoUrl } from './communityUtils';
 import { CommunityMemberProfile } from '../../../services/communityApi';
 
 export interface ComposerSubmit {
@@ -100,8 +101,10 @@ const Composer: React.FC<{
         <div className="cm-composer-media">
           {media.map((url) => (
             <div className="cm-composer-media-item" key={url}>
-              <img src={url} alt="" />
-              <button type="button" aria-label="Remove image" onClick={() => setMedia((m) => m.filter((u) => u !== url))}>×</button>
+              {isVideoUrl(url)
+                ? <video src={url} muted playsInline preload="metadata" />
+                : <img src={url} alt="" />}
+              <button type="button" aria-label="Remove media" onClick={() => setMedia((m) => m.filter((u) => u !== url))}>×</button>
             </div>
           ))}
         </div>

@@ -4,10 +4,11 @@
  */
 
 jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
-jest.mock('../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), findAll: jest.fn() }));
+jest.mock('../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), findAll: jest.fn(), increment: jest.fn(), findByPk: jest.fn() }));
 jest.mock('../../models/CommunityPost', () => ({ create: jest.fn(), findAll: jest.fn(), findByPk: jest.fn() }));
 jest.mock('../../models/CommunityNotification', () => ({ bulkCreate: jest.fn() }));
 jest.mock('../../models/CommunityLike', () => ({ findAll: jest.fn() }));
+jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 
 import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
 import Enrollment from '../../models/Enrollment';
@@ -15,6 +16,7 @@ import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityNotification from '../../models/CommunityNotification';
 import CommunityLike from '../../models/CommunityLike';
+import CommunityPointsEvent from '../../models/CommunityPointsEvent';
 
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
@@ -24,12 +26,20 @@ const findAllPosts = CommunityPost.findAll as jest.Mock;
 const findByPkPost = CommunityPost.findByPk as jest.Mock;
 const bulkCreateNotifications = CommunityNotification.bulkCreate as jest.Mock;
 const findAllLikes = CommunityLike.findAll as jest.Mock;
+const incrementMember = CommunityMember.increment as jest.Mock;
+const findByPkMember = CommunityMember.findByPk as jest.Mock;
+const createPointsEvent = CommunityPointsEvent.create as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
   // Default: viewer has liked nothing. Individual tests override to assert
   // the per-viewer viewer_has_liked contract (Phase 4).
   findAllLikes.mockResolvedValue([]);
+  // Contribution-points path (createPost/createComment award points) — default
+  // to a clean no-op so it never interferes with unrelated assertions.
+  incrementMember.mockResolvedValue(undefined);
+  createPointsEvent.mockResolvedValue(undefined);
+  findByPkMember.mockResolvedValue(null);
 });
 
 const enrollmentId = '11111111-1111-1111-1111-111111111111';
@@ -99,6 +109,20 @@ describe('createPost', () => {
       expect.objectContaining({ member_id: memberId, cohort_id: cohortId, body: 'Shipped my requirements today!' })
     );
     expect(bulkCreateNotifications).not.toHaveBeenCalled();
+  });
+
+  it('awards contribution points to the author on post (Ali feedback 2026-07-20)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-pts', body: 'earning points', media_urls: [], category: null, pinned: false,
+      like_count: 0, comment_count: 0, mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-07-20'),
+    });
+
+    await createPost(enrollmentId, { body: 'earning points' });
+
+    expect(incrementMember).toHaveBeenCalledWith('points', { by: 5, where: { id: memberId } });
+    expect(createPointsEvent).toHaveBeenCalledWith({ member_id: memberId, points: 5 });
   });
 
   it('failure path: rejects a mention outside the author\'s cohort', async () => {
