@@ -13,7 +13,7 @@
 import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
-  getBoard, getFeedPolicy, setFeedPolicy, routeType, bulkRouteTypes, routeCard, simulate,
+  getBoard, getFeedPolicy, setFeedPolicy, routeType, bulkRouteTypes, routeCard, simulate, listEnrollments,
 } from '../../services/timeline/feedControlService';
 
 const router = Router();
@@ -54,6 +54,10 @@ router.post('/api/admin/feed-control/route-card', requireAdmin, async (req, res)
     if (!card_id) return res.status(400).json({ ok: false, error: 'card_id required' });
     res.json({ ok: true, ...(await routeCard(card_id, patch || {}, adminId(req))) });
   } catch (e) { fail(res, e); }
+});
+
+router.get('/api/admin/feed-control/enrollments', requireAdmin, async (_req, res) => {
+  try { res.json({ ok: true, enrollments: await listEnrollments(60) }); } catch (e) { fail(res, e); }
 });
 
 router.get('/api/admin/feed-control/simulate', requireAdmin, async (req, res) => {

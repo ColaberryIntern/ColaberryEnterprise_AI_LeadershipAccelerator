@@ -219,9 +219,13 @@ async function syncGmailAccount(
 }
 
 async function fetchRecentMessageIds(gmail: gmail_v1.Gmail): Promise<string[]> {
+  // `-in:sent` is load-bearing (2026-07-14 mail-loop incident, BC #10095332194):
+  // without it, this sync also ingests Cora's own outgoing replies as "new"
+  // inbound emails on the very next cycle, which — combined with a since-fixed
+  // header-matching bug in hardRuleEngine — let her reply to herself forever.
   const listRes = await gmail.users.messages.list({
     userId: 'me',
-    q: 'newer_than:1d',
+    q: 'newer_than:1d -in:sent',
     maxResults: 100,
   });
 

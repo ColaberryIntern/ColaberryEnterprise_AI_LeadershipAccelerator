@@ -4,13 +4,19 @@
  */
 
 jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
-jest.mock('../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), findAll: jest.fn() }));
+jest.mock('../../models/CommunityMember', () => ({ findOrCreate: jest.fn(), findAll: jest.fn(), increment: jest.fn(), findByPk: jest.fn() }));
 jest.mock('../../models/CommunityPost', () => ({ create: jest.fn(), findAll: jest.fn(), findByPk: jest.fn() }));
+jest.mock('../../models/CommunityNotification', () => ({ bulkCreate: jest.fn() }));
+jest.mock('../../models/CommunityLike', () => ({ findAll: jest.fn() }));
+jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 
 import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
+import CommunityNotification from '../../models/CommunityNotification';
+import CommunityLike from '../../models/CommunityLike';
+import CommunityPointsEvent from '../../models/CommunityPointsEvent';
 
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
@@ -18,9 +24,22 @@ const findAllMembers = CommunityMember.findAll as jest.Mock;
 const createPostMock = CommunityPost.create as jest.Mock;
 const findAllPosts = CommunityPost.findAll as jest.Mock;
 const findByPkPost = CommunityPost.findByPk as jest.Mock;
+const bulkCreateNotifications = CommunityNotification.bulkCreate as jest.Mock;
+const findAllLikes = CommunityLike.findAll as jest.Mock;
+const incrementMember = CommunityMember.increment as jest.Mock;
+const findByPkMember = CommunityMember.findByPk as jest.Mock;
+const createPointsEvent = CommunityPointsEvent.create as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // Default: viewer has liked nothing. Individual tests override to assert
+  // the per-viewer viewer_has_liked contract (Phase 4).
+  findAllLikes.mockResolvedValue([]);
+  // Contribution-points path (createPost/createComment award points) — default
+  // to a clean no-op so it never interferes with unrelated assertions.
+  incrementMember.mockResolvedValue(undefined);
+  createPointsEvent.mockResolvedValue(undefined);
+  findByPkMember.mockResolvedValue(null);
 });
 
 const enrollmentId = '11111111-1111-1111-1111-111111111111';
@@ -89,6 +108,21 @@ describe('createPost', () => {
     expect(createPostMock).toHaveBeenCalledWith(
       expect.objectContaining({ member_id: memberId, cohort_id: cohortId, body: 'Shipped my requirements today!' })
     );
+    expect(bulkCreateNotifications).not.toHaveBeenCalled();
+  });
+
+  it('awards contribution points to the author on post (Ali feedback 2026-07-20)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-pts', body: 'earning points', media_urls: [], category: null, pinned: false,
+      like_count: 0, comment_count: 0, mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-07-20'),
+    });
+
+    await createPost(enrollmentId, { body: 'earning points' });
+
+    expect(incrementMember).toHaveBeenCalledWith('points', { by: 5, where: { id: memberId } });
+    expect(createPointsEvent).toHaveBeenCalledWith({ member_id: memberId, points: 5 });
   });
 
   it('failure path: rejects a mention outside the author\'s cohort', async () => {
@@ -123,6 +157,9 @@ describe('createPost', () => {
     const result = await createPost(enrollmentId, { body: 'cc @peer', mentioned_member_ids: ['peer-member'] });
 
     expect(result.mentioned_member_ids).toEqual(['peer-member']);
+    expect(bulkCreateNotifications).toHaveBeenCalledWith([
+      { member_id: 'peer-member', actor_member_id: memberId, notification_type: 'mention', source_type: 'post', source_id: 'post-2' },
+    ]);
   });
 
   it('happy path (REQ-C4): passes min_level through to the created post, defaulting to 0 when omitted', async () => {
@@ -173,14 +210,14 @@ describe('listPosts', () => {
   it('boundary path: applies the category filter when provided', async () => {
     findAllPosts.mockResolvedValue([]);
 
-    await listPosts(enrollmentId, 'announcements');
+    await listPosts(enrollmentId, { category: 'announcements' });
 
     expect(findAllPosts).toHaveBeenCalledWith(
       expect.objectContaining({ where: { cohort_id: cohortId, status: 'visible', category: 'announcements' } })
     );
   });
 
-  it('happy path: orders pinned posts first', async () => {
+  it('happy path: orders pinned posts first, then newest, with an id tiebreak for stable keyset paging', async () => {
     findAllPosts.mockResolvedValue([]);
 
     await listPosts(enrollmentId);
@@ -189,6 +226,7 @@ describe('listPosts', () => {
     expect(callArgs.order).toEqual([
       ['pinned', 'DESC'],
       ['created_at', 'DESC'],
+      ['id', 'DESC'],
     ]);
   });
 
@@ -202,7 +240,7 @@ describe('listPosts', () => {
       },
     ]);
 
-    const [item] = await listPosts(enrollmentId);
+    const { posts: [item] } = await listPosts(enrollmentId);
 
     expect(item.locked).toBe(true);
     expect(item.body).toBeNull();
@@ -221,7 +259,7 @@ describe('listPosts', () => {
       },
     ]);
 
-    const [item] = await listPosts(enrollmentId);
+    const { posts: [item] } = await listPosts(enrollmentId);
 
     expect(item.locked).toBe(false);
     expect(item.body).toBe('my bonus content');
@@ -238,10 +276,78 @@ describe('listPosts', () => {
       },
     ]);
 
-    const [item] = await listPosts(enrollmentId);
+    const { posts: [item] } = await listPosts(enrollmentId);
 
     expect(item.locked).toBe(false);
     expect(item.body).toBe('week 4 bonus');
+  });
+
+  it('happy path (Phase 4): viewer_has_liked reflects the viewer\'s own like row, not a client default', async () => {
+    findAllPosts.mockResolvedValue([
+      {
+        id: 'post-liked', member_id: 'other-member', cohort_id: cohortId, body: 'nice work',
+        media_urls: [], category: null, pinned: false, like_count: 5, comment_count: 0,
+        mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-07-13'),
+        member: { id: 'other-member', display_name: 'Peer', avatar_url: null },
+      },
+      {
+        id: 'post-unliked', member_id: 'other-member', cohort_id: cohortId, body: 'wip',
+        media_urls: [], category: null, pinned: false, like_count: 0, comment_count: 0,
+        mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-07-12'),
+        member: { id: 'other-member', display_name: 'Peer', avatar_url: null },
+      },
+    ]);
+    // Viewer has liked only 'post-liked'.
+    findAllLikes.mockResolvedValue([{ likeable_id: 'post-liked' }]);
+
+    const { posts } = await listPosts(enrollmentId);
+
+    expect(posts.find((p) => p.id === 'post-liked')!.viewer_has_liked).toBe(true);
+    expect(posts.find((p) => p.id === 'post-unliked')!.viewer_has_liked).toBe(false);
+    // One batched like lookup for the whole page, scoped to this viewer + posts.
+    expect(findAllLikes).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ likeable_type: 'post', member_id: memberId }),
+      })
+    );
+  });
+
+  it('happy path (Phase 4): a full page returns a next_cursor; a partial page returns null', async () => {
+    // limit 2, service fetches limit+1 (3). Three rows back => there is a next page.
+    const rows = [1, 2, 3].map((n) => ({
+      id: `post-${n}`, member_id: 'other-member', cohort_id: cohortId, body: `p${n}`,
+      media_urls: [], category: null, pinned: false, like_count: 0, comment_count: 0,
+      mentioned_member_ids: [], min_level: 0, created_at: new Date(`2026-07-1${n}`),
+      member: { id: 'other-member', display_name: 'Peer', avatar_url: null },
+    }));
+    findAllPosts.mockResolvedValue(rows);
+
+    const page = await listPosts(enrollmentId, { limit: 2 });
+
+    // Only `limit` items are returned; the extra probe row is dropped.
+    expect(page.posts).toHaveLength(2);
+    expect(page.next_cursor).toBeTruthy();
+    // limit+1 requested.
+    expect(findAllPosts.mock.calls[0][0].limit).toBe(3);
+
+    // Now the last page: fewer rows than limit+1 => no further cursor.
+    findAllPosts.mockResolvedValue(rows.slice(0, 2));
+    const lastPage = await listPosts(enrollmentId, { limit: 2 });
+    expect(lastPage.posts).toHaveLength(2);
+    expect(lastPage.next_cursor).toBeNull();
+  });
+
+  it('boundary path (Phase 4): a malformed cursor degrades to the first page rather than throwing', async () => {
+    findAllPosts.mockResolvedValue([]);
+
+    await expect(listPosts(enrollmentId, { cursor: 'not-a-real-cursor' })).resolves.toEqual({
+      posts: [],
+      next_cursor: null,
+    });
+    // No keyset filter added for a bad cursor — where stays the plain cohort scope.
+    expect(findAllPosts).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { cohort_id: cohortId, status: 'visible' } })
+    );
   });
 });
 

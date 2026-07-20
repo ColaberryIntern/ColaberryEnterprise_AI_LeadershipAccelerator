@@ -2714,6 +2714,20 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] System health monitor: every 15 min (weekdays 7AM-6PM CT, Cory voice + email alerts)');
 
+  // ── Build-log -> social drafter (BC #9985689786, weekly, Mon 6AM CT = 11:00 UTC) ──
+  // Scans completed Tier-A build weeks and AI-drafts a #Colaberry post per
+  // project/week. Draft-only — never auto-posts (see buildLogDraftService.ts).
+  cron.schedule('0 11 * * 1', () => {
+    instrumentCronJob('BuildLogDraftGenerator', async () => {
+      const { generateBuildLogDraftsForCompletedWeeks } = require('./buildLogDraftService');
+      const result = await generateBuildLogDraftsForCompletedWeeks();
+      console.log(`[BuildLogDraft] scanned=${result.scanned} drafted=${result.drafted} skipped=${result.skipped} failed=${result.failed}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Build-log draft generator error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Build-log social drafter: weekly Mon 6AM CT (11:00 UTC)');
+
   // ── Cold Outbound startup reactivation ──────────────────────────────
   // Cold Outbound reverts to draft on container restart — fix on startup
   (async () => {
@@ -2863,6 +2877,26 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Architect evaluation agent: weekly Saturday at 06:00 UTC');
+
+  // ── Community Digest (daily, 08:00 UTC) ──────────────────────────────────────
+  // Deduped per (member, date) via CommunityDigestLog — safe to re-run; a
+  // second fire the same day is a no-op for every member already sent.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('CommunityDigest', async () => {
+      const { runDailyDigest } = await import('./communityDigestService');
+      const result = await runDailyDigest();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'community_digest_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Community digest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Community digest: daily at 08:00 UTC');
 }
 
 // ---------------------------------------------------------------------------
