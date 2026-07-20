@@ -22,6 +22,23 @@ proceeds. None of them block PR 1 (PR 1 changes nothing that depends on them).
 4. **Block/report semantics for members and messages** — retention + moderation
    expectations.
 
+## Confirm before PR 2 — Community ↔ Group Chat conflict (see ledger D11)
+
+10. **Taxonomy de-confliction.** Group Chat channels (`#wins`, `#project-help`,
+    `#internship`) duplicate Community categories (Wins, Support, Introductions).
+    Decide the split: are these Community categories (async posts), Group Chat
+    channels (sync), or both with a clear distinction (e.g. Community = durable
+    reflection/showcase, Group Chat = live help)? This decision blocks the initial
+    channel seed set.
+11. **Unify the messaging backend.** Recommendation: Group Chat channels, group
+    conversations, and 1:1 DMs all share one `CommunityConversation` /
+    `CommunityMessage` model with `conversation_type: direct | group | channel`
+    (not two separate messaging systems). Confirm this is acceptable.
+12. **Group Chat scope for PR 2.** Channels-only first, or channels **plus**
+    voice/video rooms (Build Day Room / Study Hall / Office Hours)? Rooms imply a
+    real-time A/V provider (Zoom/LiveKit/Daily) — an external dependency and a
+    governed decision. Default assumption: **text channels first, rooms deferred**.
+
 ## Confirm before extending existing behavior
 
 5. **Category display labels** — reconcile stored values (General / Wins / Support /

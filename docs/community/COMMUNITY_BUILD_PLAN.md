@@ -30,24 +30,42 @@ saved posts, source-tagged system posts, category relabeling, inline comment
 previews. No change to points, level thresholds, self-like rules, moderation, or
 cohort authz.
 
-## PR 2 — People Discovery + Direct Messaging Foundations  (planned)
+## PR 2 — People Discovery + Unified Messaging (DMs, groups, AND Group Chat channels)  (planned)
 
 Gated: `COMMUNITY_PEOPLE_DISCOVERY_ENABLED=false`,
 `COMMUNITY_DIRECT_MESSAGES_ENABLED=false`. **Blocked on Basecamp confirmation**
-(see `BASECAMP_CONFIRMATION_NEEDED.md` items 1–4).
+(see `BASECAMP_CONFIRMATION_NEEDED.md` items 1–4 and 10–12).
+
+**Scope change (ledger D11):** Group Chat is unbuilt (a `soon:true` nav stub) and
+its channels are the **same primitive** as DMs/group conversations. PR 2 therefore
+builds **one** messaging backend that powers both the Group Chat surface and DMs —
+not a DM-only system that a later Group Chat build would duplicate.
 
 - **People directory** — server-side searchable/paginated directory (name, skill,
   level, online, open-to-collaborate); current-cohort by default, cross-cohort
   behind the flag once rules are confirmed.
-- **DM data model** — `CommunityConversation`, `CommunityConversationMember`,
-  `CommunityMessage`, `CommunityMessageRead` (+ indexes, direct-conversation
-  uniqueness). Boot schema hook per repo convention (no global sequelize.sync).
-- **DM API** — create-or-return direct conversation, list conversations, cursor
-  message pagination, send/edit/remove, mark-read, unread counts, mute, report.
-  Server-side membership checks on every read; rate-limited sends; cross-cohort
-  disabled until authorized.
-- **Chat dock + conversation UI** — lower-right dock, unread badges, presence,
-  polling refresh (WebSockets remain a later, separately-flagged decision).
+- **Unified conversation data model** — `CommunityConversation` with
+  `conversation_type: direct | group | channel`
+  (`channel` = persistent cohort-scoped named channel = the Group Chat surface;
+  `direct` = 1:1 DM; `group` = ad-hoc), plus `CommunityConversationMember`,
+  `CommunityMessage`, `CommunityMessageRead` (+ indexes; direct-conversation
+  uniqueness; channels are cohort-scoped and auto-membered). Boot schema hook per
+  repo convention (no global sequelize.sync). **Voice/video rooms are a later
+  layer** on top of this model (external A/V provider — separate governed decision,
+  BASECAMP item 12), not part of PR 2.
+- **Messaging API** — create-or-return direct conversation, create group, list
+  conversations + channels, cursor message pagination, send/edit/remove, mark-read,
+  unread counts, mute, add/remove members, report. Server-side membership checks on
+  every read; rate-limited sends; cross-cohort disabled until authorized.
+- **Two surfaces on one backend:**
+  - **Group Chat page** (`/portal/community/chat` or similar) — channel list +
+    message pane + composer, matching the Design-E "Group Chat & Rooms" mockup;
+    flips the `Group Chat` nav item from `soon:true` to routed.
+  - **Chat dock** — lower-right dock for DMs/group threads, unread badges, presence,
+    polling refresh (WebSockets remain a later, separately-flagged decision).
+- **Taxonomy de-confliction (BASECAMP item 10)** — resolve wins/support/intros
+  appearing as both Community categories and Group Chat channels before seeding the
+  channel set. Blocks the channel seed, not the model.
 
 ## PR 3 — Notifications, saved content, source-tagged posts  (planned)
 

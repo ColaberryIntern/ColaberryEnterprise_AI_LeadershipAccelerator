@@ -106,3 +106,35 @@ Items needing Basecamp confirmation are in `BASECAMP_CONFIRMATION_NEEDED.md`.
   new points/notification/moderation systems.
 - **Status:** Active. DMs + People discovery are PR 2 (see BUILD_PLAN), gated behind
   `COMMUNITY_DIRECT_MESSAGES_ENABLED` / `COMMUNITY_PEOPLE_DISCOVERY_ENABLED`.
+
+## D11 — Community vs Group Chat are overlapping "Belong" surfaces (conflict recorded)
+
+- **Observed:** 2026-07-20, from the Design-E "Group Chat & Rooms" page (Ali's
+  screenshot). The "Belong" nav group (`PortalShell.tsx`) has **Community** (built,
+  routed), **Group Chat** (`soon: true` stub — **no route, no page, no backend**),
+  and **Portfolio** (`soon: true`). No conversation/channel/message/room model
+  exists in any of the 10 community models — Group Chat is entirely unbuilt; only
+  the Design-E mockup defines it (channels `#cohort-1-general` / `#wins` /
+  `#project-help` / `#internship` / `#mcp-week-5` + voice/video rooms Build Day
+  Room / Study Hall / Office Hours).
+- **They are not redundant surfaces.** Community = **async broadcast** (feed,
+  permanent, gamified — points/leaderboard; Facebook/LinkedIn-style). Group Chat =
+  **synchronous conversation** (channels + Zoom-style rooms; Discord/Slack-style).
+  Different modes — keeping both is defensible.
+- **The conflict is real on two axes:**
+  1. **Taxonomy overlap.** Group Chat channels `#wins` / `#project-help` /
+     `#internship` map 1:1 onto Community categories Wins / Support / Introductions.
+     A student with a win has two "correct" homes → ambiguity.
+  2. **Messaging data model.** A Group Chat channel *is* a persistent group
+     conversation — the **same primitive** as PR 2's proposed
+     `CommunityConversation`. Building them separately would create **two messaging
+     backends**. Both surfaces already share the same contacts/presence rail,
+     reinforcing that this is one subsystem.
+- **Resolution (recommended, pending Ali/Basecamp):** Keep both surfaces;
+  de-conflict the taxonomy (product decision — see
+  `BASECAMP_CONFIRMATION_NEEDED.md`); and **unify the messaging backend** — PR 2's
+  `CommunityConversation.conversation_type` becomes `direct | group | channel`
+  (channel = persistent cohort channel), with voice/video rooms as a later layer on
+  top. Group Chat's nav item flips from `soon: true` to routed when that ships.
+- **Status:** Open. **PR 1 is unaffected** (Group Chat is unbuilt; PR 1 never
+  touched it). This reshapes PR 2 (see BUILD_PLAN).
