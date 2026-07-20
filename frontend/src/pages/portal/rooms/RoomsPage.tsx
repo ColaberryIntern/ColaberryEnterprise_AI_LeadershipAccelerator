@@ -6,6 +6,7 @@ import '../feed/feed.css';
 import '../community/community.css';
 import './rooms.css';
 import RoomPane from './RoomPane';
+import ImpactPanel from './ImpactPanel';
 import { fmtCentralDateTime } from '../today/shellUtils';
 import {
   fetchRoomsHome, fetchRooms, joinBooking, createBooking, createRoom,
@@ -19,19 +20,54 @@ const CAT_EMOJI: Record<string, string> = {
   demos_events: '🎤', social: '🎉', live_now: '🔴', private_rooms: '🔒',
 };
 
-const SessionRow: React.FC<{ booking: BookingCard; live?: boolean; onJoin: (id: string) => void }> = ({ booking, live, onJoin }) => (
-  <div className="rm-sess">
-    <span className="rm-sess-emoji">{booking.emoji || '📅'}</span>
-    <div className="rm-sess-main">
-      <div className="rm-sess-title">{booking.title}</div>
-      <div className="rm-sess-meta">
-        <span className="rm-variant">{booking.variant.replace(/_/g, ' ')}</span><span>·</span>
-        <span>{booking.start_at ? fmtCentralDateTime(booking.start_at) : 'Now'}</span>
+// Time-until-start label (a lightweight countdown; re-renders on the page's 15s
+// room refresh so it stays current without its own ticker).
+function untilLabel(iso: string | null, live?: boolean): string {
+  if (live) return 'live now';
+  if (!iso) return '';
+  const ms = new Date(iso).getTime() - Date.now();
+  if (isNaN(ms)) return '';
+  if (ms <= 0) return 'starting now';
+  const mins = Math.round(ms / 60000);
+  if (mins < 60) return `in ${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `in ${hrs}h ${mins % 60}m`;
+  return `in ${Math.round(hrs / 24)}d`;
+}
+
+// One-click "add to calendar" via a Google Calendar template URL (opens prefilled;
+// works for anyone on Google Workspace/Gmail — the platform's common case).
+function gcalHref(b: BookingCard): string | null {
+  if (!b.start_at) return null;
+  const start = new Date(b.start_at);
+  const end = b.end_at ? new Date(b.end_at) : new Date(start.getTime() + 60 * 60000);
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: b.title,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    details: `Colaberry Commons — ${b.variant.replace(/_/g, ' ')} session. Join from your Rooms.`,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+const SessionRow: React.FC<{ booking: BookingCard; live?: boolean; onJoin: (id: string) => void }> = ({ booking, live, onJoin }) => {
+  const cal = gcalHref(booking);
+  return (
+    <div className="rm-sess">
+      <span className="rm-sess-emoji">{booking.emoji || '📅'}</span>
+      <div className="rm-sess-main">
+        <div className="rm-sess-title">{booking.title}</div>
+        <div className="rm-sess-meta">
+          <span className={`rm-sess-until${live ? ' live' : ''}`}>{untilLabel(booking.start_at, live)}</span>
+          {booking.start_at && <><span>·</span><span>{fmtCentralDateTime(booking.start_at)}</span></>}
+          {cal && <a className="rm-sess-cal" href={cal} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>📅 Add to calendar</a>}
+        </div>
       </div>
+      <button type="button" className={`te-btn ${live ? 'cherry' : 'berry'} sm`} onClick={() => onJoin(booking.id)}>{live ? 'Join now' : 'RSVP'}</button>
     </div>
-    <button type="button" className={`te-btn ${live ? 'cherry' : 'berry'} sm`} onClick={() => onJoin(booking.id)}>{live ? 'Join now' : 'RSVP'}</button>
-  </div>
-);
+  );
+};
 
 const RailRow: React.FC<{ item: RoomListItem; active: boolean; onOpen: (id: string) => void }> = ({ item, active, onOpen }) => {
   const { room } = item;
@@ -225,6 +261,7 @@ const RoomsPage: React.FC = () => {
                   {home.up_next.map((b) => <SessionRow key={b.id} booking={b} onJoin={joinSession} />)}
                 </div>
               )}
+              <ImpactPanel />
             </div>
           )}
         </div>

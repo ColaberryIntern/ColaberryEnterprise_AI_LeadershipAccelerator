@@ -10,11 +10,12 @@ import * as members from '../services/communityRooms/roomMembershipService';
 import * as bookings from '../services/communityRooms/roomBookingService';
 import * as messages from '../services/communityRooms/roomMessageService';
 import * as moderation from '../services/communityRooms/roomModerationService';
+import * as recognition from '../services/communityRooms/roomRecognitionService';
 import { derivePresence } from '../services/communityService';
 import { hereCounts, touchRoomPresence } from '../services/communityRooms/roomPresenceService';
 import {
   CreateRoomSchema, UpdateRoomSchema, ListRoomsQuerySchema, NotificationPrefSchema,
-  PostMessageSchema, ListMessagesQuerySchema, QuestionStatusSchema,
+  PostMessageSchema, ListMessagesQuerySchema, QuestionStatusSchema, VerifyAnswerSchema,
   CreateBookingSchema, RsvpSchema, ReportSchema, InviteSchema, PresenceSchema,
 } from '../schemas/communityRoomsSchemas';
 
@@ -85,6 +86,19 @@ export async function listRooms(req: Request, res: Response): Promise<void> {
     const result = await rooms.listRoomsForViewer(ctxOf(req), parsed.data);
     const counts = await hereCounts(result.map((r) => r.room.id));
     res.json({ rooms: result.map((r) => ({ ...r, here_count: counts[r.room.id] || 0 })) });
+  } catch (err) { fail(res, err); }
+}
+
+// Recognition read surface (Phase B #3). Returns the viewer's own impact
+// (badges + points + recent wins) and a cohort-scoped recognition wall.
+export async function impact(req: Request, res: Response): Promise<void> {
+  try {
+    const enrollmentId = req.participant!.sub;
+    const [mine, wall] = await Promise.all([
+      recognition.getImpact(enrollmentId),
+      recognition.recentRecognition(enrollmentId),
+    ]);
+    res.json({ impact: mine, recognition: wall });
   } catch (err) { fail(res, err); }
 }
 
@@ -185,6 +199,15 @@ export async function setQuestionStatus(req: Request, res: Response): Promise<vo
   try {
     const message = await messages.setQuestionStatus(ctxOf(req), String(req.params.id), String(req.params.messageId), parsed.data.question_status);
     res.json({ message });
+  } catch (err) { fail(res, err); }
+}
+
+export async function verifyAnswer(req: Request, res: Response): Promise<void> {
+  const parsed = VerifyAnswerSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid answer', issues: parsed.error.issues }); return; }
+  try {
+    const result = await messages.verifyAnswer(ctxOf(req), String(req.params.id), String(req.params.messageId), parsed.data.answer_message_id);
+    res.json(result);
   } catch (err) { fail(res, err); }
 }
 

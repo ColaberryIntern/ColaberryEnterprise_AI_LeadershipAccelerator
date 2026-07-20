@@ -17,11 +17,13 @@ import { sequelize } from '../../config/database';
 import { getSetting, setSetting } from '../settingsService';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import TimelineCard from '../../models/TimelineCard';
+import Enrollment from '../../models/Enrollment';
 import { resolve as resolveType, register, allTypes, type SurfaceId, type FeedMode } from './typeRegistry';
 import { SURFACE_ORDER } from './surfaces';
 import { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigService';
 import { rankCandidates, type RankCandidate } from './feedRanker';
 import { getFeed } from './timelineService';
+import { env } from '../../config/env';
 
 export { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigService';
 
@@ -152,7 +154,10 @@ export async function getBoard(): Promise<any> {
         cooldown_days: routing[t.slug]?.feed_cooldown_days ?? null,
       })),
   }));
-  return { lanes, policy, buckets: BUCKETS };
+  // feedControlEnabled tells the UI which knobs actually reach students right now.
+  // When false (default), routing + today-eligibility are live but cadence/priority/
+  // policy are preview-only (the live composer uses legacy constants); see todayFeedComposer.
+  return { lanes, policy, buckets: BUCKETS, feedControlEnabled: env.feedControlEnabled };
 }
 
 /**
@@ -161,7 +166,7 @@ export async function getBoard(): Promise<any> {
  * and interleaves ambient placeholders per the policy cadence. No side effects
  * (never persists impressions) — it mirrors the live composer's inputs.
  */
-export async function simulate(enrollmentId: string, limit = 12): Promise<{ items: any[]; policy: FeedPolicy }> {
+export async function simulate(enrollmentId: string, limit = 12): Promise<{ items: any[]; policy: FeedPolicy; context?: any }> {
   const now = new Date();
   const policy = await getFeedPolicy();
 
@@ -180,7 +185,7 @@ export async function simulate(enrollmentId: string, limit = 12): Promise<{ item
     resolveType(c.type)?.today_eligible && resolveType(c.type)?.feed_mode !== 'ambient'
     && c.status !== 'locked' && c.status !== 'completed');
 
-  const cands: (RankCandidate & { title: string | null; render_band: string; card_id: string })[] = anchored.map((c: any) => {
+  const cands: (RankCandidate & { title: string | null; render_band: string; card_id: string; student_label: string; week: number | null; thumbnail: string | null })[] = anchored.map((c: any) => {
     const s = seenByRef.get(`card:${c.id}`);
     const def = resolveType(c.type);
     return {
@@ -191,6 +196,7 @@ export async function simulate(enrollmentId: string, limit = 12): Promise<{ item
       cooldown_days: c.feed_cooldown_days ?? null, // null → ranker uses policy.defaultCooldownDays
       seen_count: s?.n ?? 0, last_seen_at: s?.last ? new Date(s.last) : null, dismissed: !!s?.dismissed,
       title: c.title, render_band: c.render_band,
+      student_label: c.student_label || c.type, week: c.week ?? null, thumbnail: c.type_thumbnail ?? null,
     };
   });
 
@@ -202,16 +208,47 @@ export async function simulate(enrollmentId: string, limit = 12): Promise<{ item
   let sinceAmbient = 0;
   let ai = 0;
   for (const r of ranked) {
-    items.push({ kind: 'anchored', type: r.type, title: r.title, card_id: r.card_id, render_band: r.render_band, score: Number(r.score.toFixed(3)), reasons: r.reasons });
+    items.push({ kind: 'anchored', type: r.type, student_label: r.student_label, title: r.title, card_id: r.card_id, render_band: r.render_band, surface: r.surface, week: r.week, thumbnail: r.thumbnail, score: Number(r.score.toFixed(3)), reasons: r.reasons });
     sinceAmbient++;
     if (policy.ambientProviders.length && sinceAmbient >= cad) {
       const provider = policy.ambientProviders[ai % policy.ambientProviders.length];
-      items.push({ kind: 'ambient', type: provider, title: `(${provider} rotation)`, reasons: ['rotation · least-recently-seen'] });
+      const pdef = resolveType(provider);
+      items.push({ kind: 'ambient', type: provider, student_label: pdef?.student_label || provider, title: `${pdef?.student_label || provider} (rotating)`, surface: 'today', thumbnail: null, reasons: ['rotation · least-recently-seen'] });
       ai++; sinceAmbient = 0;
     }
     if (items.length >= limit) break;
   }
-  return { items: items.slice(0, limit), policy };
+
+  // Student context — the state that decides WHAT is a candidate in the first place.
+  const cards: any[] = feed.cards || [];
+  const context = {
+    is_explorer: feed.is_explorer === true,
+    total_published: cards.length,
+    candidates: anchored.length,
+    locked: cards.filter((c) => c.status === 'locked').length,
+    completed: cards.filter((c) => c.status === 'completed').length,
+    already_seen: seen.length,
+    max_week: cards.filter((c) => c.status !== 'locked' && c.week != null).reduce((m, c) => Math.max(m, c.week), 0),
+  };
+  return { items: items.slice(0, limit), policy, context };
+}
+
+export interface EnrollmentOption { id: string; label: string; cohort_id: string | null; type: string; status: string }
+
+/** Recent enrollments for the simulator dropdown — most recent first, labeled. */
+export async function listEnrollments(limit = 60): Promise<EnrollmentOption[]> {
+  const rows = await Enrollment.findAll({
+    order: [['created_at', 'DESC']],
+    limit: Math.max(1, Math.min(200, limit)),
+    attributes: ['id', 'full_name', 'email', 'cohort_id', 'enrollment_type', 'status', 'created_at'],
+  });
+  return rows.map((e: any) => ({
+    id: e.id,
+    label: `${e.full_name || e.email || e.id.slice(0, 8)}${e.enrollment_type === 'explorer' ? ' · Free' : ''}${e.status && e.status !== 'active' ? ` · ${e.status}` : ''}`,
+    cohort_id: e.cohort_id ?? null,
+    type: e.enrollment_type || 'standard',
+    status: e.status || 'active',
+  }));
 }
 
 /** Cron worker: publish scheduled cards whose release_date has arrived. Idempotent. */

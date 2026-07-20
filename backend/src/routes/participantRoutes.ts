@@ -9,7 +9,9 @@ import {
   handleOrgRoster, handleOrgMemberDetail, handleOrgFeed,
 } from '../controllers/orgController';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
-import { strategyPrepUpload, certificateUpload, fieldGuideUpload } from '../config/upload';
+import path from 'path';
+import fs from 'fs';
+import { strategyPrepUpload, certificateUpload, fieldGuideUpload, communityMediaUpload, COMMUNITY_MEDIA_DIR } from '../config/upload';
 import { saveProjectDna, getProjectDna } from '../services/projectDnaService';
 import { startRequirementsGeneration } from '../services/requirementsGenerationService';
 import {
@@ -99,6 +101,16 @@ router.get('/api/portal/runtime/cards/:cardId/certificate', requireParticipant, 
 // Deep Dive Field Guide — upload the .html built in Claude Code (+100 pts, once); GET = status.
 router.post('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, fieldGuideUpload.single('file'), handleUploadFieldGuide);
 router.get('/api/portal/runtime/cards/:cardId/field-guide', requireParticipant, handleGetFieldGuide);
+
+// Build Artifact(s) Lab — upload the file the student built in Claude Code. Reuses
+// the strategy-prep multer config (PDF/Word/PPT/Excel/RTF/Text/Markdown/CSV), which
+// validates the file type server-side; a bad type returns a clear 400. The card is
+// then marked complete via the normal /complete endpoint (points on the first build).
+router.post('/api/portal/runtime/cards/:cardId/build-artifact', requireParticipant, strategyPrepUpload.single('file'), (req, res) => {
+  const file = (req as any).file;
+  if (!file) return res.status(400).json({ error: 'No file uploaded — pick the artifact file Claude Code built for you.' });
+  res.json({ ok: true, filename: file.originalname, size: file.size });
+});
 router.post('/api/portal/runtime/cards/:cardId/prompt-lab', requireParticipant, handlePromptLab);
 router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, handleComplete);
 // Weekly feedback Survey — read the questions + saved answers, and store answers.
@@ -453,7 +465,7 @@ import { GetWeekSchema, RevealActivitySchema, StartInterviewSchema, SubmitInterv
 import {
   CreatePostSchema, ListPostsQuerySchema, TogglePinSchema, PostIdParamSchema,
   CreateCommentSchema, CommentIdParamSchema, MemberIdParamSchema, UpdateProfileSchema,
-  ReportPostSchema, LeaderboardQuerySchema,
+  ReportPostSchema, LeaderboardQuerySchema, NotificationIdParamSchema,
 } from '../schemas/communitySchemas';
 
 router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
@@ -586,8 +598,12 @@ router.get('/api/portal/community/posts', requireParticipant, async (req, res) =
   }
   try {
     const { listPosts } = await import('../services/communityService');
-    const posts = await listPosts(req.participant!.sub, parsed.data.category);
-    res.json({ posts });
+    const { posts, next_cursor } = await listPosts(req.participant!.sub, {
+      category: parsed.data.category,
+      cursor: parsed.data.cursor,
+      limit: parsed.data.limit,
+    });
+    res.json({ posts, next_cursor });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
@@ -618,6 +634,66 @@ router.get('/api/portal/community/leaderboard', requireParticipant, async (req, 
     const { getLeaderboard } = await import('../services/communityLeaderboardService');
     const entries = await getLeaderboard(req.participant!.sub, parsed.data.period);
     res.json({ period: parsed.data.period, entries });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Local image upload from the student's computer (Ali feedback 2026-07-20).
+// Returns a relative media URL the composer adds to media_urls.
+router.post('/api/portal/community/upload', requireParticipant, (req, res) => {
+  communityMediaUpload.single('file')(req, res, (err: any) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
+    // Return the URL WITHOUT the file extension so nginx's `~* \.png$`
+    // static-asset location can't hijack it — it must proxy to the backend.
+    const id = req.file.filename.replace(/\.[^./]+$/, '');
+    res.status(201).json({ url: `/api/portal/community/media/${id}` });
+  });
+});
+
+// Public serve — extension-less path so nginx proxies it here (an image-ext URL
+// would be grabbed by the static-asset location). :id is the opaque UUID; the
+// real file (id.ext) is resolved on disk and sendFile sets the content-type.
+router.get('/api/portal/community/media/:id', (req, res) => {
+  const { id } = req.params;
+  if (!/^[a-f0-9-]{36}$/i.test(id)) { res.status(400).end(); return; }
+  let file: string | undefined;
+  try { file = fs.readdirSync(COMMUNITY_MEDIA_DIR).find((f) => f.startsWith(`${id}.`)); } catch { /* dir missing */ }
+  if (!file) { res.status(404).end(); return; }
+  res.sendFile(path.join(COMMUNITY_MEDIA_DIR, file));
+});
+
+router.get('/api/portal/community/calendar', requireParticipant, async (req, res) => {
+  try {
+    const { getUpcomingEvents } = await import('../services/communityCalendarService');
+    const events = await getUpcomingEvents(req.participant!.sub);
+    res.json({ events });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/community/notifications', requireParticipant, async (req, res) => {
+  try {
+    const { listNotifications } = await import('../services/communityNotificationService');
+    const notifications = await listNotifications(req.participant!.sub);
+    res.json({ notifications });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/community/notifications/:notificationId/read', requireParticipant, async (req, res) => {
+  const paramsParsed = NotificationIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid notification id' });
+    return;
+  }
+  try {
+    const { markNotificationRead } = await import('../services/communityNotificationService');
+    const notification = await markNotificationRead(req.participant!.sub, paramsParsed.data.notificationId);
+    res.json({ notification });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }

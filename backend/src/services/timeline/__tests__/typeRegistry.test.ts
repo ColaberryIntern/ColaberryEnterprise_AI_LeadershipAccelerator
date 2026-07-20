@@ -19,7 +19,7 @@ const SUPPORTED_RENDER_BANDS = new Set<string>([
   'question', 'announcement', 'discussion', 'community', 'study', 'warmup', 'survey',
   'reflection', 'quiz', 'exam', 'evaluation', 'promptlab', 'task', 'artifact',
   'presentation', 'demo', 'interview', 'build_story', 'github', 'skills_jar',
-  'milestone', 'achievement', 'badge', 'streak', 'setup_lab', 'prompt_catalog',
+  'milestone', 'achievement', 'badge', 'streak', 'setup_lab', 'prompt_catalog', 'build_artifacts',
   'architect_mindset',
 ]);
 

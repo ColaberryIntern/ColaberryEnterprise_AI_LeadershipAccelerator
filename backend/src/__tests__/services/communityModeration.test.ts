@@ -19,6 +19,10 @@ jest.mock('../../models/CommunityPostReport', () => ({ findOrCreate: jest.fn(), 
 jest.mock('../../models/CommunityComment', () => ({}));
 jest.mock('../../models/CommunityLike', () => ({}));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
+jest.mock('../../models/CommunityNotification', () => ({}));
+// communityService also imports this (posts/comments award Community XP); mock it
+// so its real XpEvent model.init() doesn't run against the mocked sequelize.
+jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn() }));
 
 import { reportPost } from '../../services/communityService';
 import { listReportedPosts, removePost } from '../../services/communityModerationService';

@@ -76,6 +76,7 @@ export const BAND: Record<string, Visual> = {
   evaluation: { kind: 'test', color: '#5BA63C' },
   promptlab: { kind: 'lab', color: '#FB2832' },
   prompt_catalog: { kind: 'lab', color: '#D97757' },   // Prompt Lab — Claude Code practice-prompt catalog
+  build_artifacts: { kind: 'lab', color: '#D97757' },   // Build Artifact(s) Lab — Claude Code build station
   task: { kind: 'lab', color: '#FB2832' },
   artifact: { kind: 'lab', color: '#FB2832' },
   presentation: { kind: 'lab', color: '#FB2832' },
@@ -95,7 +96,7 @@ export const visualFor = (band: string): Visual => BAND[band] || { kind: 'readin
 
 // Curriculum types that run IN Claude Code — the tile shows a "Claude Code" corner
 // strip so a student knows they'll need Claude Code open to complete the activity.
-export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'github_sync']);
+export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'artifact_submission', 'github_sync']);
 
 const KIND_GRADIENT: Record<Kind, string> = {
   video: 'linear-gradient(135deg,#367895,#2E6A86)',

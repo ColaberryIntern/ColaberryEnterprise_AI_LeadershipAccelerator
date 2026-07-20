@@ -14,6 +14,7 @@ import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
 import SetupLabRender from '../../../components/timeline/SetupLabRender';
 import PromptCatalogRender from '../../../components/timeline/PromptCatalogRender';
 import ArchitectTimeMachine from '../../../components/timeline/ArchitectTimeMachine';
+import BuildArtifactsRender from '../../../components/timeline/BuildArtifactsRender';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -123,13 +124,14 @@ const RuntimeWorkspace: React.FC = () => {
   const isSetupLab = band === 'setup_lab' && !!card?.content?.body_html;
   const isPromptCatalog = band === 'prompt_catalog' && !!card?.content?.body_html;   // Prompt Lab: practice-prompt catalog
   const isArchitectMindset = band === 'architect_mindset';   // The Architect Time Machine: full cinematic experience (self-contained, completes internally)
+  const isBuildArtifacts = band === 'build_artifacts' && !!card?.content?.body_html;   // Build Artifact(s) Lab: build station
   const [labCopied, setLabCopied] = useState(false);   // Setup Lab: reveal completion only after the prompt is copied
   const [allPromptsCopied, setAllPromptsCopied] = useState(false);   // Prompt Lab: reveal completion only after ALL prompts are copied
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
   // the right rail. This is the single-scroll workstation layout applied to every type.
-  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !!card?.content?.body_html;
+  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && !!card?.content?.body_html;
   const fill = isReader || isLesson || isDeepDive;
 
   const ask = useCallback(async (mode: string, message: string) => {
@@ -171,7 +173,9 @@ const RuntimeWorkspace: React.FC = () => {
       setMsgs((m) => [...m, { role: 'assistant', content: r.artifact ? `Nice — I turned your work into a portfolio artifact: "${r.artifact.title}". Your readiness just updated below.` : 'Completed — your progress and readiness updated below.', kind: 'complete' }]);
       // Deep Dive: on completion, return the student to the Classroom right where they
       // left off (it restores their week + scroll) — now with this card marked complete.
-      if (isDeepDive) setTimeout(goBack, 900);
+      // Completing any assignment returns the student to the curriculum (Classroom),
+      // right where they left off — the Deep Dive already did this; now it's universal.
+      setTimeout(goBack, 1200);
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
 
@@ -223,10 +227,10 @@ const RuntimeWorkspace: React.FC = () => {
 
       <div className="rt-body">
         {/* CENTER — activity */}
-        <main className={`rt-mid${fill || isSetupLab || isPromptCatalog || isArchitectMindset ? ' rt-mid--reader' : ''}`}>
+        <main className={`rt-mid${fill || isSetupLab || isPromptCatalog || isArchitectMindset || isBuildArtifacts ? ' rt-mid--reader' : ''}`}>
           {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
               their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
-          {!isVideo && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && card.type_thumbnail && (
+          {!isVideo && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && card.type_thumbnail && (
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
@@ -359,6 +363,13 @@ const RuntimeWorkspace: React.FC = () => {
               onCompleted={(rd) => { if (rd) setReadiness(rd); setCompleted(true); }}
             />
           )}
+          {/* Build Artifact(s) Lab — the build station (pick artifact + project); fills
+              the center; completion (points on first build) reveals on the right after a copy. */}
+          {isBuildArtifacts && (
+            <div className="rt-readerwrap">
+              <BuildArtifactsRender bodyHtml={card.content?.body_html || ''} title={displayTitle} summary={card.content?.summary} variant="workspace" cardId={cardId} completed={completed} onComplete={complete} />
+            </div>
+          )}
           {/* Anthropic Skills Course — the external-course panel + certificate upload
               (same component as the drawer), so the workspace actually carries the course. */}
           {isSkillsJar && (
@@ -374,7 +385,7 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
           {/* Fallback for a non-media card with no body yet — just its description. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && (
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}
@@ -385,7 +396,7 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* Surveys + assessments complete via their own flow; fill cards host the gate in
               their foot. Everything else gets the completion bar here in the center. */}
-          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && (
+          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && (
             <div className="rt-complete">{completeGate}</div>
           )}
         </main>

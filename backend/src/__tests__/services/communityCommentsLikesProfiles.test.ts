@@ -16,6 +16,7 @@ jest.mock('../../models/CommunityPost', () => ({ findByPk: jest.fn() }));
 jest.mock('../../models/CommunityComment', () => ({ create: jest.fn(), findByPk: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../models/CommunityLike', () => ({ findOrCreate: jest.fn(), findAll: jest.fn(), count: jest.fn() }));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
+jest.mock('../../models/CommunityNotification', () => ({ create: jest.fn() }));
 
 import {
   createComment, listComments, toggleLike, levelFor,
@@ -27,6 +28,7 @@ import CommunityPost from '../../models/CommunityPost';
 import CommunityComment from '../../models/CommunityComment';
 import CommunityLike from '../../models/CommunityLike';
 import CommunityPointsEvent from '../../models/CommunityPointsEvent';
+import CommunityNotification from '../../models/CommunityNotification';
 
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
@@ -42,6 +44,7 @@ const findOrCreateLike = CommunityLike.findOrCreate as jest.Mock;
 const findAllLikes = CommunityLike.findAll as jest.Mock;
 const countLikes = CommunityLike.count as jest.Mock;
 const createPointsEvent = CommunityPointsEvent.create as jest.Mock;
+const createNotification = CommunityNotification.create as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -130,6 +133,56 @@ describe('createComment', () => {
     const result = await createComment(enrollmentId, postId, { body: 'Reply', parent_comment_id: 'parent-1' });
 
     expect(result.parent_comment_id).toBe('parent-1');
+  });
+
+  it('happy path (REQ-C6): a top-level comment notifies the post author', async () => {
+    const otherAuthorPost = { ...mockPost, member_id: otherMemberId };
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(otherAuthorPost);
+    createComment_.mockResolvedValue({
+      id: 'comment-3', post_id: postId, member_id: memberId, parent_comment_id: null,
+      body: 'Great post!', created_at: new Date('2026-07-14'),
+    });
+
+    await createComment(enrollmentId, postId, { body: 'Great post!' });
+
+    expect(createNotification).toHaveBeenCalledWith({
+      member_id: otherMemberId, actor_member_id: memberId, notification_type: 'reply', source_type: 'comment', source_id: 'comment-3',
+    });
+  });
+
+  it('happy path (REQ-C6): a reply notifies the parent comment\'s author, not the post author', async () => {
+    const otherAuthorPost = { ...mockPost, member_id: 'post-author-member' };
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(otherAuthorPost);
+    findByPkComment.mockResolvedValue({ id: 'parent-1', post_id: postId, parent_comment_id: null, member_id: otherMemberId });
+    createComment_.mockResolvedValue({
+      id: 'comment-4', post_id: postId, member_id: memberId, parent_comment_id: 'parent-1',
+      body: 'Agreed', created_at: new Date('2026-07-14'),
+    });
+
+    await createComment(enrollmentId, postId, { body: 'Agreed', parent_comment_id: 'parent-1' });
+
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({ member_id: otherMemberId, source_type: 'comment', source_id: 'comment-4' })
+    );
+  });
+
+  it('boundary path (REQ-C6): commenting on your own post does not notify yourself', async () => {
+    const ownPost = { ...mockPost, member_id: memberId };
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(ownPost);
+    createComment_.mockResolvedValue({
+      id: 'comment-5', post_id: postId, member_id: memberId, parent_comment_id: null,
+      body: 'Following up on my own post', created_at: new Date('2026-07-14'),
+    });
+
+    await createComment(enrollmentId, postId, { body: 'Following up on my own post' });
+
+    expect(createNotification).not.toHaveBeenCalled();
   });
 
   it('boundary path: rejects a reply-to-a-reply (one level deep only)', async () => {
