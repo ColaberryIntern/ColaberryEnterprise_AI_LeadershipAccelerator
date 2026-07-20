@@ -48,6 +48,31 @@ export function levelFor(points: number): number {
   return LEVEL_TIERS.reduce((acc, tier) => (points >= tier.min ? tier.level : acc), 1);
 }
 
+// Contribution points — awarded to the author for creating content, so posting
+// and commenting move the needle (previously only likes-received earned points,
+// which made the leaderboard feel static). Tunable; adjust here to reweight.
+const POINTS_PER_POST = 5;
+const POINTS_PER_COMMENT = 2;
+
+// Best-effort points award, mirroring the like→points path (bump points, log a
+// points event so period leaderboards see it, recompute level). Wrapped so a
+// points failure can NEVER fail the post/comment itself (failure-first).
+async function awardContributionPoints(memberId: string, points: number): Promise<void> {
+  try {
+    await CommunityMember.increment('points', { by: points, where: { id: memberId } });
+    await CommunityPointsEvent.create({ member_id: memberId, points });
+    const member = await CommunityMember.findByPk(memberId);
+    if (member) {
+      const newLevel = levelFor(member.points);
+      if (newLevel !== member.level) await member.update({ level: newLevel });
+    }
+  } catch (err) {
+    log('warn', 'award_points_failed', {
+      member_id: memberId, points, outcome: 'failure', error_class: (err as any)?.error_class ?? 'Error',
+    });
+  }
+}
+
 function log(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string, unknown>): void {
   console[level](JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'community', event, ...ctx }));
 }
@@ -254,6 +279,10 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
       }))
     );
   }
+
+  // Reward the author for contributing (Ali feedback 2026-07-20 — posting now
+  // earns points, not just likes-received).
+  await awardContributionPoints(member.id, POINTS_PER_POST);
 
   log('info', 'post_created', {
     post_id: post.id, member_id: member.id, cohort_id: cohortId, min_level: post.min_level, outcome: 'success',
@@ -477,6 +506,9 @@ export async function createComment(
   });
 
   await post.increment('comment_count', { by: 1 });
+
+  // Reward the commenter for contributing (Ali feedback 2026-07-20).
+  await awardContributionPoints(member.id, POINTS_PER_COMMENT);
 
   // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
   // comments on their own post/comment.
