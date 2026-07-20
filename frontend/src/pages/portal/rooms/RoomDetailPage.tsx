@@ -6,7 +6,7 @@ import '../feed/feed.css';
 import '../community/community.css';
 import './rooms.css';
 import {
-  fetchRoom, fetchRoomMessages, postRoomMessage, joinRoom, requestRoomAccess,
+  fetchRoom, fetchRoomMessages, postRoomMessage, joinRoom, requestRoomAccess, joinVideoRoom,
   RoomView, RoomMessage,
 } from '../../../services/roomsApi';
 
@@ -14,6 +14,11 @@ function initials(name: string): string {
   const parts = (name || '').trim().split(/\s+/);
   return ((parts[0]?.[0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
 }
+
+const CAT_EMOJI: Record<string, string> = {
+  start_here: '👋', your_cohort: '🎓', build_together: '🛠️', career_cert: '💼',
+  demos_events: '🎤', social: '🎉', live_now: '🔴', private_rooms: '🔒',
+};
 function timeAgo(iso: string): string {
   const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 1) return 'just now';
@@ -77,6 +82,13 @@ const RoomDetailPage: React.FC = () => {
   const doRequest = async () => {
     try { await requestRoomAccess(roomId); window.alert('Access requested — a host will review it.'); } catch { /* no-op */ }
   };
+  const doJoinVideo = async () => {
+    try {
+      const { join_url } = await joinVideoRoom(roomId);
+      if (join_url) window.open(join_url, '_blank', 'noopener');
+      else window.alert('Spinning up the video room… try again in a second.');
+    } catch { window.alert('Could not join the video room.'); }
+  };
 
   if (view === null) {
     return <PortalShell><div className="fc-empty">Loading room…</div></PortalShell>;
@@ -111,11 +123,14 @@ const RoomDetailPage: React.FC = () => {
   return (
     <PortalShell>
       <Link to="/portal/rooms" className="rm-back">← Rooms</Link>
-      <div className="rm-detail-h">
+      <div className={`rm-detail-h cat-${room.category}`}>
+        <div className="rm-detail-emoji">{room.metadata?.emoji || CAT_EMOJI[room.category] || '💬'}</div>
         <h1>{room.name}</h1>
+        {room.is_video && <span className="rm-vbadge">▶ Video</span>}
         {room.privacy !== 'public' && <span className={`rm-privacy ${room.privacy}`}>{room.privacy.replace('_', ' ')}</span>}
         {activeCount > 0 && <span className="rm-presence">{activeCount} active now</span>}
         <span style={{ flex: 1 }} />
+        {room.is_video && <button type="button" className="te-btn cherry sm" onClick={doJoinVideo}>📹 Join video call</button>}
         {!isMember && <button type="button" className="te-btn berry sm" onClick={doJoin}>Join room</button>}
       </div>
 
@@ -153,6 +168,13 @@ const RoomDetailPage: React.FC = () => {
         </div>
 
         <aside className="te-side">
+          {room.is_video && (
+            <div className="te-card rm-videocard">
+              <h3>📹 Video room</h3>
+              <p>An always-open Google Meet. Jump in — others can join you live.</p>
+              <button type="button" className="te-btn cherry sm" onClick={doJoinVideo}>Join video call</button>
+            </div>
+          )}
           <div className="te-card te-scard">
             <h3>About this room</h3>
             {room.description && <p style={{ fontSize: 13.5, color: 'var(--body)', margin: '0 0 10px', lineHeight: 1.5 }}>{room.description}</p>}

@@ -29,6 +29,7 @@ export const CreateRoomSchema = z.object({
   capacity: z.number().int().positive().optional(),
   linked_project_id: z.string().uuid().optional(),
   linked_module_id: z.string().uuid().optional(),
+  is_video: z.boolean().optional(),
 });
 export type CreateRoomBody = z.infer<typeof CreateRoomSchema>;
 

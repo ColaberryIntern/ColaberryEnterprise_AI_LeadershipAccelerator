@@ -34,6 +34,7 @@ router.post(`${P}/rooms`, flagGate, requireParticipant, c.createRoom);
 router.get(`${P}/rooms/:id`, flagGate, requireParticipant, c.getRoom);
 router.patch(`${P}/rooms/:id`, flagGate, requireParticipant, c.updateRoom);
 router.post(`${P}/rooms/:id/join`, flagGate, requireParticipant, c.joinRoom);
+router.post(`${P}/rooms/:id/join-video`, flagGate, requireParticipant, c.joinVideoRoom);
 router.post(`${P}/rooms/:id/request-access`, flagGate, requireParticipant, c.requestAccess);
 router.post(`${P}/rooms/:id/leave`, flagGate, requireParticipant, c.leaveRoom);
 router.patch(`${P}/rooms/:id/notification`, flagGate, requireParticipant, c.setNotificationPref);

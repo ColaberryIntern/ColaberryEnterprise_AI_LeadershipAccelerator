@@ -1,22 +1,28 @@
-/* Rooms tab — Design E card language (.te-card / .te-grid / .te-side) plus the
-   pieces unique to Rooms: live/session cards, room grid, chat channel, and the
-   book-a-session modal. Scoped with an rm- prefix so nothing leaks. Tokens only
-   (var(--…)); no inline hex. */
+/* Rooms tab — Design E, dialed up: colorful emoji room cards, a stat hero, live
+   pulses, video badges, and a lively People-online rail. rm- scoped; tokens only. */
 
-/* Live badge — cherry pill with a pulsing dot. */
-.rm-live{
-  display:inline-flex;align-items:center;gap:5px;font-family:var(--mono,monospace);font-size:11px;font-weight:700;
-  text-transform:uppercase;letter-spacing:.04em;padding:2px 9px;border-radius:var(--r-pill,999px);
-  background:var(--cherry,#FB2832);color:#fff;
-}
+/* ── Hero stats + actions ───────────────────────────────────────────────── */
+.rm-hero{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:2px 0 18px}
+.rm-hero-stats{display:flex;gap:10px;flex-wrap:wrap}
+.rm-stat{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--body,#2B2B2B);background:var(--surface,#fff);border:1px solid var(--border-subtle,#E4E4E3);border-radius:var(--r-pill,999px);padding:6px 13px}
+.rm-stat b{font-size:15px;font-weight:800;color:var(--strong,#1A1A1A)}
+.rm-stat.online b{color:var(--leaf-text,#468A2E)}
+.rm-stat.live{border-color:var(--cherry,#FB2832)}
+.rm-stat.live b{color:var(--cherry-text,#E5121D)}
+.rm-stat .rm-dotlive{width:7px;height:7px;border-radius:50%;background:var(--cherry,#FB2832);animation:rm-pulse 1.4s ease-in-out infinite}
+.rm-hero-actions{display:flex;gap:10px;margin-left:auto}
+
+/* ── Live badge ─────────────────────────────────────────────────────────── */
+.rm-live{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono,monospace);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:2px 9px;border-radius:var(--r-pill,999px);background:var(--cherry,#FB2832);color:#fff}
 .rm-live::before{content:"";width:6px;height:6px;border-radius:50%;background:#fff;animation:rm-pulse 1.4s ease-in-out infinite}
-@keyframes rm-pulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes rm-pulse{0%,100%{opacity:1}50%{opacity:.3}}
 
 .rm-privacy{font-size:11px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill,999px);background:var(--sunken,#F1F1F0);color:var(--muted,#6B6B6B)}
 .rm-privacy.cohort{background:var(--berry-bg,#EAF2F6);color:var(--berry,#367895)}
 .rm-privacy.invite_only,.rm-privacy.private{background:rgba(232,146,12,.16);color:var(--amber-text,#B5710A)}
 
-/* Session strip cards (Happening now / Up next). */
+/* ── Session strips (Happening now / Up next) ───────────────────────────── */
+.rm-strip-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted,#6B6B6B);margin:0 0 6px;display:flex;align-items:center;gap:8px}
 .rm-sess{display:flex;align-items:center;gap:12px;padding:11px 0}
 .rm-sess + .rm-sess{border-top:1px solid var(--border-subtle,#E4E4E3)}
 .rm-sess-main{flex:1;min-width:0}
@@ -24,27 +30,40 @@
 .rm-sess-meta{font-size:12px;color:var(--muted,#6B6B6B);margin-top:2px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .rm-variant{font-size:11px;font-weight:700;color:var(--berry,#367895);text-transform:capitalize}
 
-/* Room grid. */
-.rm-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-@media (max-width:640px){.rm-grid{grid-template-columns:1fr}}
-.rm-card{padding:16px;display:flex;flex-direction:column;gap:8px;cursor:pointer;transition:border-color .12s,box-shadow .12s;text-decoration:none;color:inherit}
-.rm-card:hover{border-color:var(--berry,#367895)}
-.rm-card.locked{cursor:default;opacity:.85}
-.rm-head{display:flex;align-items:center;gap:8px}
-.rm-title{font-size:15px;font-weight:700;color:var(--strong,#1A1A1A);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rm-lock{width:16px;height:16px;color:var(--muted,#6B6B6B);flex:none}
-.rm-desc{font-size:13px;color:var(--body,#2B2B2B);line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.rm-foot{display:flex;align-items:center;gap:8px;margin-top:auto;font-size:12px;color:var(--muted,#6B6B6B)}
-.rm-cat{font-size:11px;font-weight:700;color:var(--muted,#6B6B6B);text-transform:capitalize}
+/* ── Category accents (drive the emoji tile + card edge) ────────────────── */
+.cat-social{--rm-accent:var(--cherry,#FB2832);--rm-accent-bg:var(--cherry-bg,#FFF0F1)}
+.cat-build_together{--rm-accent:var(--leaf-action,#5BA63C);--rm-accent-bg:rgba(119,187,74,.15)}
+.cat-career_cert{--rm-accent:var(--amber,#E8920C);--rm-accent-bg:rgba(232,146,12,.15)}
+.cat-demos_events{--rm-accent:var(--berry,#367895);--rm-accent-bg:var(--berry-bg,#EAF2F6)}
+.cat-start_here{--rm-accent:var(--leaf-action,#5BA63C);--rm-accent-bg:rgba(119,187,74,.15)}
+.cat-your_cohort{--rm-accent:var(--berry,#367895);--rm-accent-bg:var(--berry-bg,#EAF2F6)}
+.cat-live_now,.cat-private_rooms{--rm-accent:var(--muted,#6B6B6B);--rm-accent-bg:var(--sunken,#F1F1F0)}
 
-/* Room detail — header + two-pane (chat + side). */
-.rm-detail-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
-.rm-detail-h h1{font-size:22px;font-weight:800;color:var(--strong,#1A1A1A);margin:0}
+/* ── Room grid + colorful emoji cards ───────────────────────────────────── */
+.rm-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media (max-width:720px){.rm-grid{grid-template-columns:1fr}}
+.rm-roomcard{display:flex;align-items:center;gap:13px;padding:14px 15px;text-decoration:none;color:inherit;border-left:4px solid var(--rm-accent,#ccc);transition:transform .12s ease,box-shadow .12s ease}
+.rm-roomcard:hover{transform:translateY(-2px);box-shadow:var(--shadow-md,0 10px 26px rgba(0,0,0,.10))}
+.rm-roomcard.locked{cursor:default;opacity:.9}
+.rm-emoji{width:46px;height:46px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--rm-accent-bg,#f2f2f2)}
+.rm-roomcard-main{flex:1;min-width:0}
+.rm-roomcard-top{display:flex;align-items:center;gap:7px}
+.rm-roomname{font-size:15px;font-weight:800;color:var(--strong,#1A1A1A);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm-roomcard-tag{font-size:12.5px;color:var(--muted,#6B6B6B);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm-vbadge{display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;padding:2px 7px;border-radius:var(--r-pill,999px);background:var(--rm-accent-bg,#eee);color:var(--rm-accent,#555);flex:none}
+.rm-joinvid{flex:none}
+.rm-lock{width:16px;height:16px;color:var(--muted,#6B6B6B);flex:none}
+
+/* ── Room detail: header + chat ─────────────────────────────────────────── */
 .rm-back{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted,#6B6B6B);text-decoration:none;margin-bottom:10px}
 .rm-back:hover{color:var(--berry,#367895)}
+.rm-detail-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+.rm-detail-emoji{width:44px;height:44px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;font-size:24px;background:var(--rm-accent-bg,var(--berry-bg,#EAF2F6))}
+.rm-detail-h h1{font-size:22px;font-weight:800;color:var(--strong,#1A1A1A);margin:0}
+.rm-presence{font-size:12px;color:var(--leaf-text,#468A2E);font-weight:700;display:inline-flex;align-items:center;gap:5px}
+.rm-presence::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--leaf,#5BA63C)}
 
-/* Chat channel. */
-.rm-chat{display:flex;flex-direction:column;height:min(62vh,560px)}
+.rm-chat{display:flex;flex-direction:column;height:min(60vh,540px)}
 .rm-msgs{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding:4px 2px}
 .rm-msg{display:flex;gap:9px}
 .rm-msg-body{flex:1;min-width:0}
@@ -55,9 +74,21 @@
 .rm-chatbar{display:flex;gap:8px;margin-top:12px;border-top:1px solid var(--border-subtle,#E4E4E3);padding-top:12px}
 .rm-chatbar input{flex:1;border:1px solid var(--border,#D8D8D8);border-radius:var(--r-pill,999px);padding:9px 15px;font-size:14px;font-family:inherit;background:var(--surface,#fff);color:var(--strong,#1A1A1A)}
 .rm-chatbar input:focus{outline:none;border-color:var(--berry,#367895)}
-.rm-presence{font-size:12px;color:var(--leaf-text,#468A2E);font-weight:600;margin-left:auto}
 
-/* Modal. */
+/* ── Video CTA card in room detail ──────────────────────────────────────── */
+.rm-videocard{padding:18px;text-align:center;background:linear-gradient(135deg,var(--cherry-bg,#FFF0F1),var(--berry-bg,#EAF2F6))}
+.rm-videocard h3{margin:0 0 4px;font-size:15px}
+.rm-videocard p{margin:0 0 12px;font-size:13px;color:var(--muted,#6B6B6B)}
+
+/* ── People online rail ─────────────────────────────────────────────────── */
+.rm-person{display:flex;align-items:center;gap:10px;padding:7px 0}
+.rm-person + .rm-person{border-top:1px solid var(--border-subtle,#E4E4E3)}
+.rm-ava-ring{position:relative;flex:none}
+.rm-ava-ring .cm-dot{position:absolute;right:-1px;bottom:-1px;border:2px solid var(--surface,#fff)}
+.rm-person-name{font-size:13.5px;font-weight:600;color:var(--strong,#1A1A1A);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rm-you-tag{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--berry,#367895);background:var(--berry-bg,#EAF2F6);padding:1px 6px;border-radius:var(--r-pill,999px)}
+
+/* ── Modal ──────────────────────────────────────────────────────────────── */
 .rm-overlay{position:fixed;inset:0;background:rgba(20,24,28,.42);display:flex;align-items:center;justify-content:center;z-index:1000;padding:16px}
 .rm-modal{background:var(--surface,#fff);border-radius:var(--r-16,16px);width:100%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.28)}
 .rm-modal-h{display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid var(--border-subtle,#E4E4E3)}
@@ -66,16 +97,18 @@
 .rm-modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:14px}
 .rm-field{display:flex;flex-direction:column;gap:6px}
 .rm-field label{font-size:12.5px;font-weight:700;color:var(--strong,#1A1A1A)}
-.rm-field input,.rm-field select,.rm-field textarea{
-  border:1px solid var(--border,#D8D8D8);border-radius:var(--r-12,12px);padding:9px 12px;font-size:14px;font-family:inherit;
-  background:var(--surface,#fff);color:var(--strong,#1A1A1A);
-}
+.rm-field input,.rm-field select,.rm-field textarea{border:1px solid var(--border,#D8D8D8);border-radius:var(--r-12,12px);padding:9px 12px;font-size:14px;font-family:inherit;background:var(--surface,#fff);color:var(--strong,#1A1A1A)}
 .rm-field input:focus,.rm-field select:focus,.rm-field textarea:focus{outline:none;border-color:var(--berry,#367895)}
 .rm-field textarea{min-height:60px;resize:vertical}
 .rm-row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rm-toggle{display:flex;align-items:center;gap:10px;padding:11px 13px;border:1px solid var(--border,#D8D8D8);border-radius:var(--r-12,12px);cursor:pointer;background:var(--surface,#fff)}
+.rm-toggle.on{border-color:var(--cherry,#FB2832);background:var(--cherry-bg,#FFF0F1)}
+.rm-toggle input{width:18px;height:18px;accent-color:var(--cherry,#FB2832)}
+.rm-toggle-txt b{display:block;font-size:13.5px;color:var(--strong,#1A1A1A)}
+.rm-toggle-txt span{font-size:12px;color:var(--muted,#6B6B6B)}
 .rm-modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 20px;border-top:1px solid var(--border-subtle,#E4E4E3)}
 
-.rm-strip-title{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--muted,#6B6B6B);margin:0 0 4px}
 .rm-empty{padding:20px;text-align:center;color:var(--muted,#6B6B6B);font-size:13.5px}
-.rm-actions-row{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.rm-actions-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .rm-actions-row .spacer{flex:1}
+.rm-cat{font-size:11px;font-weight:700;color:var(--muted,#6B6B6B);text-transform:capitalize}

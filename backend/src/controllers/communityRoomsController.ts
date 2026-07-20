@@ -83,6 +83,11 @@ export async function joinRoom(req: Request, res: Response): Promise<void> {
   catch (err) { fail(res, err); }
 }
 
+export async function joinVideoRoom(req: Request, res: Response): Promise<void> {
+  try { res.json(await rooms.joinVideoRoom(ctxOf(req), String(req.params.id))); }
+  catch (err) { fail(res, err); }
+}
+
 export async function requestAccess(req: Request, res: Response): Promise<void> {
   try { res.json({ membership: await members.requestAccess(ctxOf(req), String(req.params.id)) }); }
   catch (err) { fail(res, err); }

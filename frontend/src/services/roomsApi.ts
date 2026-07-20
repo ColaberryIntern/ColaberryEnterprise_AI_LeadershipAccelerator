@@ -50,8 +50,11 @@ export interface Room {
   capacity?: number | null;
   linked_live_session_id?: string | null;
   is_system?: boolean;
+  is_video?: boolean;
+  always_open?: boolean;
   created_at: string;
   locked?: boolean;
+  metadata?: { emoji?: string; tagline?: string; default_room?: boolean };
 }
 
 export interface RoomListItem {
@@ -132,6 +135,7 @@ export interface CreateRoomInput {
   privacy?: RoomPrivacy;
   description?: string;
   topic?: string;
+  is_video?: boolean;
 }
 
 export async function fetchRoomsHome(): Promise<RoomsHome> {
@@ -159,6 +163,11 @@ export async function createRoom(input: CreateRoomInput): Promise<Room> {
 export async function joinRoom(roomId: string): Promise<RoomMembership> {
   const { data } = await portalApi.post<{ membership: RoomMembership }>(`/api/portal/community/rooms/${roomId}/join`);
   return data.membership;
+}
+
+export async function joinVideoRoom(roomId: string): Promise<{ join_url: string | null }> {
+  const { data } = await portalApi.post<{ join_url: string | null }>(`/api/portal/community/rooms/${roomId}/join-video`);
+  return data;
 }
 
 export async function requestRoomAccess(roomId: string): Promise<RoomMembership> {

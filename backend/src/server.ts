@@ -1736,6 +1736,9 @@ async function ensureCommunityRoomsSchema() {
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_cohort ON community_rooms (linked_cohort_id)`,
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_category ON community_rooms (category)`,
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_privacy_status ON community_rooms (privacy, status)`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS is_video BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS always_open BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS meeting_link VARCHAR(600)`,
 
     `CREATE TABLE IF NOT EXISTS room_memberships (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1986,6 +1989,17 @@ async function start(): Promise<void> {
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
   // env.communityRoomsEnabled at the route/worker/linkage layers.
   await ensureCommunityRoomsSchema();
+  // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
+  // Gated on the feature flag so it only populates envs where Rooms is enabled.
+  if (env.communityRoomsEnabled) {
+    try {
+      const { seedDefaultCommunityRooms } = await import('./seeds/seedDefaultCommunityRooms');
+      const r = await seedDefaultCommunityRooms();
+      console.log(`[CommunityRooms] default rooms: ${r.created} created, ${r.existing} existing`);
+    } catch (err: any) {
+      console.warn('[CommunityRooms] default room seed failed:', err?.message);
+    }
+  }
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any
   // missing column as NULLABLE; never drops/alters. Fixes the recurring

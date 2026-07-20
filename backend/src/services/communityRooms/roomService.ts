@@ -10,8 +10,10 @@ import {
   toRoomShell,
   RoomShell,
   canModerate,
+  canJoinMeeting,
 } from './roomEntitlementService';
-import { log, slugify, shortToken, notFoundError, forbiddenError } from './roomShared';
+import { getMeetingProvider } from './meetingProvider';
+import { log, slugify, shortToken, notFoundError, forbiddenError, validationError } from './roomShared';
 
 // Rooms CRUD + discovery + the official-session linkage. Entitlement decisions
 // are delegated to roomEntitlementService; this module never returns a room a
@@ -58,6 +60,7 @@ export interface CreateRoomInput {
   capacity?: number;
   linked_project_id?: string;
   linked_module_id?: string;
+  is_video?: boolean;
 }
 
 export async function createRoom(ctx: RoomAccessContext, input: CreateRoomInput): Promise<CommunityRoom> {
@@ -75,6 +78,10 @@ export async function createRoom(ctx: RoomAccessContext, input: CreateRoomInput)
     linked_cohort_id: ctx.cohortId ?? null,
     linked_project_id: input.linked_project_id ?? null,
     linked_module_id: input.linked_module_id ?? null,
+    // Video rooms are always-open: anyone eligible can jump into the same Meet
+    // anytime. The Meet link is minted lazily on first join (see joinVideoRoom).
+    is_video: input.is_video ?? false,
+    always_open: input.is_video ?? false,
     is_system: false,
     created_by: ctx.enrollmentId,
   });
@@ -175,4 +182,37 @@ export async function updateRoom(
     await emitRoomEvent({ eventType: ROOM_EVENTS.RoomAccessChanged, aggregateType: 'room', aggregateId: room.id });
   }
   return room;
+}
+
+// Join an always-open video room. Entitlement is re-checked server-side EVERY
+// time; the Google Meet link is minted lazily on first join and then shared by
+// everyone who jumps in (that's what makes it a persistent "room").
+export async function joinVideoRoom(
+  ctx: RoomAccessContext,
+  roomId: string,
+): Promise<{ join_url: string | null }> {
+  const room = await CommunityRoom.findByPk(roomId);
+  if (!room) throw notFoundError('Room not found');
+  if (!room.is_video) throw validationError('This room is not a video room');
+  const membership = await getMembership(roomId, ctx.enrollmentId);
+  if (!canJoinMeeting(room, ctx, membership)) throw forbiddenError('You are not authorized to join this room');
+
+  if (room.meeting_link) return { join_url: room.meeting_link };
+
+  // First join provisions a persistent Meet link (1-year window; the link stays
+  // joinable). Best-effort — surface no link rather than error if Google is down.
+  const provider = getMeetingProvider('google_meet');
+  const now = new Date();
+  const end = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+  const result = await provider.createMeeting({
+    title: `Colaberry Rooms — ${room.name}`,
+    description: room.description || 'Always-open community video room',
+    startAt: now,
+    endAt: end,
+    timezone: 'America/Chicago',
+    requestId: `room-${room.id}`,
+  });
+  if (result.joinUrl) await room.update({ meeting_link: result.joinUrl });
+  log('info', 'video_room_join', { room_id: roomId, has_link: !!result.joinUrl });
+  return { join_url: result.joinUrl };
 }
