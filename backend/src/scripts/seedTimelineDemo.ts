@@ -30,7 +30,6 @@ const CARDS: CardSpec[] = [
   { type: 'prompt_challenge', title: 'Prompt Challenge: constrain the model', week: 2 },
   { type: 'implementation_task', title: 'Implementation Task: ship a working endpoint', subtitle: 'GitHub-tracked, AI + instructor reviewed', week: 2 },
   { type: 'artifact_submission', title: 'Artifact: architecture decision record', week: 2 },
-  { type: 'github_sync', title: 'GitHub Sync: connect your repo', week: 2 },
   { type: 'reflection', title: 'Reflection: what surprised you this week?', week: 2 },
   { type: 'demo', title: 'Demo Tuesday: present your build', week: 3 },
   { type: 'community_discussion', title: 'Community: share a win', week: 3 },

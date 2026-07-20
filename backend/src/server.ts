@@ -837,7 +837,7 @@ async function ensureExperienceBuilderSchema() {
     // once anything is approved/unapproved by hand, this guard is false and never fights the author.
     `UPDATE curriculum_type_definitions SET approved = TRUE, approved_at = NOW(), approved_by = 'system:baseline'
        WHERE slug IN ('announcement','overview','warmup','video','knowledge_check','deep_dive','prompt_lab',
-                      'implementation_task','github_sync','artifact_submission','reflection','community_discussion',
+                      'implementation_task','artifact_submission','reflection','community_discussion',
                       'mock_interview','survey','evaluation','live_class')
        AND NOT EXISTS (SELECT 1 FROM curriculum_type_definitions WHERE approved = TRUE)`,
     `CREATE TABLE IF NOT EXISTS component_analytics (
