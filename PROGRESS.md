@@ -10165,6 +10165,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: Frontend `tsc --noEmit -p frontend/tsconfig.json` — FeedControlTab.tsx clean (only the pre-existing `@dnd-kit` local-install gap in TimelineEditorTab.tsx). Backend `feedControlService.ts` clean (local root-compiler reports only node_modules `@types`/`zod` version-mismatch noise; Docker/CI tsc authoritative). CI frontend + backend typecheck authoritative.
   - Notes: Branch `workstream/feed-control-tangible` off main. Phase 1 of the "Both, sequenced" plan — tangible/honest UI now; flipping `FEED_CONTROL_ENABLED` on (Phase 2) is a separate, deliberate go. Needs a backend+nginx deploy (getBoard payload changed).
 
+- [x] Community post details: author level badge + recent-commenter avatars
+  - Date: 2026-07-20
+  - Session: CC-20260719-c3v8
+  - What changed: Final Design-E post-card detail (Ali feedback). PostFeedItem.member now carries `level` (added to the member include + every projection), and posts carry `recent_commenters` (up to 3 most-recent distinct commenters via a batched recentCommentersByPost query in listPosts). PostCard shows a LevelBadge next to the author name and a recent-commenter avatar stack on the engagement row (clickable -> profile). Files: backend/src/services/communityService.ts, backend/src/__tests__/services/communityService.test.ts, frontend/src/services/communityApi.ts, frontend/src/pages/portal/community/{PostCard.tsx,community.css}.
+  - Verification: backend communityService jest 34/34 (CommunityComment mock added); frontend tsc --noEmit clean.
+  - Notes: recent_commenters populated by the feed (listPosts); createPost/togglePin return []. Mentors count still a level>=3 proxy.
 ### Feed Control Phase 1 — fix react-scripts build break (eslint disable of an unregistered rule) — 2026-07-20
 - [x] Unblock the nginx frontend build that failed on deploy of #492
   - Date: 2026-07-20
