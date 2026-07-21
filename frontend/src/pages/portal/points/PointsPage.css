@@ -17,6 +17,30 @@
 .points-root .pts-mut { color: var(--pr-mut); font-size: 13px; }
 .points-root .pts-empty { padding: 40px 0; text-align: center; }
 
+/* Locked-door upgrade card — free AI Enabled ceiling → "Become an AI Builder".
+   Calm and executive: a quiet surface with one authority-toned accent edge and a
+   single CTA. Deliberately not gamey (no glow, no burst). */
+.points-root .pts-upgrade {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(180deg, #FFFFFF, #FBFAF8);
+  border: 1px solid var(--pr-line);
+  border-left: 3px solid #367895;   /* berry — authority, not alarm */
+  border-radius: 14px; padding: 16px 20px; margin-bottom: 16px;
+}
+.points-root .pts-upgrade-lock { width: 34px; height: 34px; flex: none; color: #367895; display: inline-flex; }
+.points-root .pts-upgrade-lock svg { width: 34px; height: 34px; }
+.points-root .pts-upgrade-body { flex: 1; min-width: 0; }
+.points-root .pts-upgrade-k {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--pr-mut); margin-bottom: 2px;
+}
+.points-root .pts-upgrade-h { font-size: 17px; font-weight: 800; color: var(--pr-ink); margin: 0 0 3px; }
+.points-root .pts-upgrade-p { font-size: 13px; color: var(--pr-mut); margin: 0; line-height: 1.5; }
+.points-root .pts-upgrade .te-btn { flex: none; text-decoration: none; }
+@media (max-width: 640px) {
+  .points-root .pts-upgrade { flex-direction: column; align-items: flex-start; }
+}
+
 /* Hero: where you are → where you're headed */
 .points-root .pts-hero {
   display: flex;

@@ -7,9 +7,12 @@ import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
 import { awardCommunityXp } from './progression/communityXpService';
-import { award, revoke, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
+import { award, revoke, hasAwarded, sumPointsTodayByEventTypes, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
+import { centralDateKey } from './centralDate';
+import { applyDailyCap, COMMUNITY_CAP, COMMUNITY_EVENT_TYPES } from './progression/dailyCap';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
+import { env } from '../config/env';
 import { activeCompEnrollmentIds } from './subscriptionService';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
@@ -49,6 +52,14 @@ const LEVEL_TIERS = [
 ] as const;
 
 export function levelFor(points: number): number {
+  // Reconcile (flag-gated, default OFF via COMMUNITY_LEVEL_USE_CANONICAL): defer
+  // to the ONE canonical points ladder so the community level uses the same
+  // 0/150/400/900 thresholds as the HUD/leaderboard, instead of the legacy
+  // 0/1500/2700/4200 tiers below. Fully reversible — flag OFF is byte-identical
+  // to the historical behavior.
+  if (env.communityLevelUseCanonical) {
+    return levelForPoints(points).level;
+  }
   return LEVEL_TIERS.reduce((acc, tier) => (points >= tier.min ? tier.level : acc), 1);
 }
 
@@ -75,6 +86,36 @@ async function awardContributionPoints(memberId: string, points: number): Promis
       member_id: memberId, points, outcome: 'failure', error_class: (err as any)?.error_class ?? 'Error',
     });
   }
+}
+
+// Anti-cheat community daily cap (POINTS_DAILY_CAPS_ENABLED, default OFF). Clamp
+// a canonical community points award (post/comment/like) so an enrollment's
+// community-category total can never exceed COMMUNITY_CAP in one Central day.
+// Governs the CANONICAL StudentPointsEvent ledger only — the one the HUD +
+// leaderboard read; the legacy CommunityMember.points column is intentionally
+// left alone. Flag OFF ⇒ returns the proposed amount unchanged (no query).
+async function clampCommunityAward(enrollmentId: string, proposed: number): Promise<number> {
+  if (!env.pointsDailyCapsEnabled) return proposed;
+  const already = await sumPointsTodayByEventTypes(
+    enrollmentId, [...COMMUNITY_EVENT_TYPES], centralDateKey(Date.now()),
+  );
+  return applyDailyCap({ alreadyAwardedToday: already, proposedAward: proposed, cap: COMMUNITY_CAP });
+}
+
+// The full "+5 for a post" reward bundle: legacy CommunityMember.points, the
+// canonical StudentPointsEvent (HUD + leaderboard, community-cap-clamped), and
+// the Community XP lane. Idempotent on the post's own event key
+// (`community_post:<postId>`), so granting it twice is a no-op — that key also
+// doubles as the post-quality gate's "already rewarded" marker, so the canonical
+// event is written even when the daily cap clamps the grant to 0. Used at BOTH
+// creation (gate OFF) and on the first peer like (gate ON), so whichever path
+// grants the reward, it is identical. Best-effort throughout (never fails the
+// post/like).
+async function awardPostReward(enrollmentId: string, memberId: string, postId: string): Promise<void> {
+  await awardContributionPoints(memberId, POINTS_PER_POST);
+  const points = await clampCommunityAward(enrollmentId, POINTS_PER_POST);
+  await award(enrollmentId, { eventType: 'community_post', eventKey: `community_post:${postId}`, points }).catch(() => {});
+  await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${postId}`, 'community:post').catch(() => {});
 }
 
 function log(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string, unknown>): void {
@@ -289,12 +330,17 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   }
 
   // Reward the author for contributing (Ali feedback 2026-07-20 — posting now
-  // earns points, not just likes-received).
-  await awardContributionPoints(member.id, POINTS_PER_POST);
-  // Canonical points (the ONE ledger — HUD total + unified leaderboard) + the
-  // Community lane of the Skill-XP lens. Best-effort; never breaks the post.
-  await award(enrollmentId, { eventType: 'community_post', eventKey: `community_post:${post.id}`, points: POINTS_PER_POST }).catch(() => {});
-  await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${post.id}`, 'community:post').catch(() => {});
+  // earns points, not just likes-received): legacy points + the canonical ONE
+  // ledger (HUD + leaderboard) + the Community XP lane. Best-effort; never
+  // breaks the post.
+  //
+  // Post-quality gate (COMMUNITY_POST_QUALITY_GATE_ENABLED, default OFF): when
+  // ON, the +5 is WITHHELD at creation — a spam post that no peer engages with
+  // earns nothing — and released on the first peer like instead (see
+  // toggleLike). Flag OFF ⇒ the reward fires on creation exactly as before.
+  if (!env.communityPostQualityGateEnabled) {
+    await awardPostReward(enrollmentId, member.id, post.id);
+  }
 
   log('info', 'post_created', {
     post_id: post.id, member_id: member.id, cohort_id: cohortId, min_level: post.min_level, outcome: 'success',
@@ -576,9 +622,12 @@ export async function createComment(
 
   await post.increment('comment_count', { by: 1 });
 
-  // Reward the commenter for contributing (Ali feedback 2026-07-20).
+  // Reward the commenter for contributing (Ali feedback 2026-07-20). The
+  // canonical award is community-cap-clamped (POINTS_DAILY_CAPS_ENABLED); flag
+  // OFF ⇒ full POINTS_PER_COMMENT, byte-identical to today.
   await awardContributionPoints(member.id, POINTS_PER_COMMENT);
-  await award(enrollmentId, { eventType: 'community_comment', eventKey: `community_comment:${comment.id}`, points: POINTS_PER_COMMENT }).catch(() => {});
+  const commentPoints = await clampCommunityAward(enrollmentId, POINTS_PER_COMMENT);
+  await award(enrollmentId, { eventType: 'community_comment', eventKey: `community_comment:${comment.id}`, points: commentPoints }).catch(() => {});
   await awardCommunityXp(enrollmentId, POINTS_PER_COMMENT, `cxp:comment:${comment.id}`, 'community:comment').catch(() => {});
 
   // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
@@ -744,13 +793,34 @@ export async function toggleLike(
     // the legacy +1, capped at 1 by the unique like row). Best-effort, matching
     // the createPost/createComment canonical-award pattern in this file.
     if (authorEnrollmentId) {
+      // Community-cap-clamped (POINTS_DAILY_CAPS_ENABLED); flag OFF ⇒ +1, byte-identical.
+      const likePoints = await clampCommunityAward(authorEnrollmentId, 1);
       await award(authorEnrollmentId, {
         eventType: 'community_like',
         eventKey: likeEventKey,
-        points: 1,
+        points: likePoints,
         metadata: { likeable_type: likeableType, likeable_id: likeableId, liker_member_id: member.id },
       }).catch(() => {});
     }
+
+    // Post-quality gate (COMMUNITY_POST_QUALITY_GATE_ENABLED, default OFF): a
+    // post's withheld +5 creation reward is released on the FIRST PEER like — a
+    // like from someone other than the author (authorMemberId !== member.id, so a
+    // self-like never triggers it). Idempotent: hasAwarded on the post's own
+    // event key means a second peer like or a re-like after unlike never
+    // double-releases. Only for post likes, never comment likes. Flag OFF ⇒ inert.
+    if (
+      env.communityPostQualityGateEnabled &&
+      likeableType === 'post' &&
+      authorMemberId !== member.id &&
+      authorEnrollmentId
+    ) {
+      const alreadyRewarded = await hasAwarded(authorEnrollmentId, `community_post:${likeableId}`);
+      if (!alreadyRewarded) {
+        await awardPostReward(authorEnrollmentId, authorMemberId, likeableId);
+      }
+    }
+
     if (post) await post.increment('like_count', { by: 1 });
     // Notify the author that someone liked their content (Ali feedback 2026-07-20).
     // Only on a real new like (created) and never for a self-like. The notify is a

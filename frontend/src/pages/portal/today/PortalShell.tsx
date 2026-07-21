@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './TodayShell.css';
-import { fetchPoints, fetchSchedule, levelFor, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
+import { fetchPoints, fetchSchedule, levelFor, bandHudNext, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
@@ -259,6 +259,14 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
 
   const total = points?.total ?? 0;
   const lvl = levelFor(total);
+  // 5-band re-skin (runtime flag on the points payload). When ON, the HUD shows
+  // the canonical band rung (e.g. "AI Enabled II") as the level identity; when OFF
+  // band is null and the legacy "Apprentice/…/Principal" identity is byte-identical.
+  const band = points?.fiveBandUiEnabled ? points.band ?? null : null;
+  const idName = band ? band.rungName : lvl.name;
+  const nextLine = band
+    ? bandHudNext(band, total)
+    : (lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level');
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
@@ -318,12 +326,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
             to="/portal/settings?tab=points"
             className={`te-hud${fx ? ' bump' : ''}${active.startsWith('/portal/settings') ? ' active' : ''}`}
             title="View your points breakdown"
-            aria-label={`${total} points, level ${lvl.name} — view your points breakdown`}
+            aria-label={`${total} points, level ${idName} — view your points breakdown`}
           >
             {fx && <span key={fx.key} className="te-hud-burst" aria-hidden="true">+{fx.delta}</span>}
-            <div className="row"><span className="lvl"><svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>{lvl.name}</span><span className="pts">{displayTotal.toLocaleString()} pts</span></div>
+            <div className="row"><span className="lvl"><svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>{idName}</span><span className="pts">{displayTotal.toLocaleString()} pts</span></div>
             <div className="bar"><i style={{ width: `${lvl.pct}%` }} /></div>
-            <div className="next">{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level'}</div>
+            <div className="next">{nextLine}</div>
           </Link>
           <Link to="/portal/settings" className={`te-iconbtn${active.startsWith('/portal/settings') ? ' active' : ''}`} title="Settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" /><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.5 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 13a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 6.5a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 2.6h.09A1.65 1.65 0 0 0 11 1.09V1a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16.5 4.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21.4 11H21a2 2 0 0 1 0 4z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
