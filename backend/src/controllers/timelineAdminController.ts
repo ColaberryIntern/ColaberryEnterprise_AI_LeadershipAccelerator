@@ -13,6 +13,7 @@ import { generateCardContent } from '../services/timeline/cardContentService';
 import { generateVideoDraft } from '../services/timeline/videoDraftService';
 import { generateCourseDraft } from '../services/timeline/courseDraftService';
 import { getBlueprintContext } from '../services/timeline/blueprintContext';
+import { buildWorkspacePreviewUrl } from '../services/timeline/workspacePreviewService';
 
 const bucketEnum = z.enum(['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance']);
 const visibilityEnum = z.enum(['draft', 'scheduled', 'published', 'archived']);
@@ -250,5 +251,16 @@ export async function handleSetSectionRule(req: Request, res: Response, next: Ne
   try {
     const b = sectionRuleSchema.parse(req.body);
     res.json(await setSectionRule(b.program_id, b.bucket, b.rules));
+  } catch (err) { fail(res, err, next); }
+}
+
+// Read-only "open the workspace" — mints a read_only test-student session and
+// returns a /portal/view-as deep-link into the live runtime for this card.
+export async function handleGetWorkspacePreviewUrl(req: Request, res: Response, next: NextFunction) {
+  try {
+    const admin: any = (req as any).admin;
+    const impersonatedBy = admin?.email || admin?.sub || 'admin';
+    const url = await buildWorkspacePreviewUrl(String(req.params.cardId), String(impersonatedBy));
+    res.json({ url });
   } catch (err) { fail(res, err, next); }
 }
