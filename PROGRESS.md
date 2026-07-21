@@ -10509,3 +10509,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: activates Fix 3 (the AI News flowing stream) sensibly — a steady daily trickle instead of dumping ~1,989 cards + a big LLM bill; and generalizes to all LLM content. [[project_intelligence_pipeline_curriculum_types]]
   - Verification: (pending) backend Docker tsc/jest = CI; on prod, enable `AI_NEWS_INGEST_ENABLED=true`, trigger one supervised materialization (1 card), confirm it feeds + the prune query spares samples. Frequency map: AI News 1/day, Blog weekly (already), Announcements on-demand+cached.
   - Notes: Branch `workstream/content-lifecycle`. Backend change → backend deploy + set `AI_NEWS_INGEST_ENABLED=true` in prod env to turn the stream on. Retention window overridable via `GENERATED_CONTENT_RETENTION_DAYS`.
+
+### Harden: boot reconciler enforces one build station per week — 2026-07-21
+- [x] buildStationReconciler self-heals the build-station dedup on every boot
+  - Date: 2026-07-21
+  - Session: CC-20260720-h3k9
+  - What changed: New `backend/src/services/timeline/buildStationReconciler.ts` — pure `duplicateBuildStationIds()` (keep implementation_task, archive paired artifact_submission; never orphan a lone station) + `reconcileBuildStationLayout()` (per program+week+cohort, idempotent). Wired into the boot seed sequence in `server.ts` (after applyFeedRoutingToRegistry, gated by TIMELINE_ENGINE_ENABLED, non-fatal). Prevents the recurrence where a re-scaffold/backfill re-published the archived artifact_submission dup (Week 1's "Submit Your Project Artifact" came back). Unit test `__tests__/buildStationReconciler.test.ts`.
+  - Verification: backend tsc clean (dev+prod Docker build); CI 4/4 green (PR #573); functional on dev — run 1 archived 14 dupes, run 2 archived 0 (idempotent); prod post-deploy — reconciler archives 0 (already deduped) + independent query confirms no week has both impl+artifact published; backend healthy.
+  - Notes: Branch `workstream/build-artifacts-lab`, merged main 1c8b2646, prod backend deployed. Setup-first ordering is protected structurally (Setup Lab lives in pre_class, a different lane than Build) rather than as a boot invariant — per-week ordering pedagogy would be fragile to encode. [[project_claude_code_type_spine]] [[reference_prod_backend_exec_batch_gen_oom]]
