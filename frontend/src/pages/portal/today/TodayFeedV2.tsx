@@ -62,6 +62,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace }) =>
   const [rows, setRows] = useState<Array<{ item: TodayFeedItem; card: TimelineFeedCard }>>([]);
   const [cursor, setCursor] = useState(0);
   const [done, setDone] = useState(false);
+  const [error, setError] = useState(false);
   const [visible, setVisible] = useState(PAGE); // fallback reveal count
   const loadingRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
@@ -85,13 +86,24 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace }) =>
   const loadMore = useCallback(async () => {
     if (done || loadingRef.current) return;
     loadingRef.current = true;
+    setError(false);
     try {
       const page = await todayFeedApi.list(cursor, PAGE);
-      setRows((prev) => [...prev, ...page.items.map((item) => ({ item, card: adapt(item) }))]);
-      setCursor(page.nextCursor);
-      if (page.exhausted || page.items.length === 0) setDone(true);
+      // Dedup by ref — a repeated page (e.g. a stalled cursor) must not stack
+      // duplicate cards.
+      setRows((prev) => {
+        const seen = new Set(prev.map((r) => r.item.ref));
+        const fresh = page.items.filter((it) => !seen.has(it.ref)).map((item) => ({ item, card: adapt(item) }));
+        return fresh.length ? [...prev, ...fresh] : prev;
+      });
+      // Stop only on a REAL end: exhausted, empty, or a cursor that fails to
+      // advance (which would otherwise re-request the same window forever).
+      if (page.exhausted || page.items.length === 0 || page.nextCursor <= cursor) setDone(true);
+      else setCursor(page.nextCursor);
     } catch {
-      setDone(true);
+      // Recoverable — a transient error must NOT permanently end the feed. Surface
+      // a retry; the next scroll (or the button) re-attempts from the same cursor.
+      setError(true);
     } finally {
       loadingRef.current = false;
     }
@@ -134,6 +146,18 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace }) =>
       ))}
       {mode === 'v2' && rows.length === 0 && <div className="fc-empty">Your feed is warming up — check back soon.</div>}
       {mode === 'v2' && done && rows.length > 0 && <div className="fc-empty">You're all caught up for now.</div>}
+      {mode === 'v2' && error && !done && (
+        <div className="fc-empty">
+          Couldn’t load more.{' '}
+          <button
+            type="button"
+            onClick={() => void loadMore()}
+            style={{ background: 'none', border: 'none', color: 'inherit', font: 'inherit', textDecoration: 'underline', cursor: 'pointer', padding: 0 }}
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {mode === 'fallback' && (looped.length
         ? looped.map((c, i) => (
