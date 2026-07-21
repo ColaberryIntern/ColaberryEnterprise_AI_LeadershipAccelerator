@@ -87,6 +87,8 @@ const CommunityPage: React.FC = () => {
   };
 
   const onlineCount = members?.filter((m) => m.presence === 'online').length ?? 0;
+  // Join roster onto the leaderboard so each ranked row can show avatar/presence/level.
+  const memberById = new Map((members ?? []).map((m) => [m.id, m]));
 
   return (
     <PortalShell>
@@ -194,36 +196,27 @@ const CommunityPage: React.FC = () => {
                   ))}
                 </div>
               </div>
+              {members !== null && (
+                <div className="cm-lb-sub">{onlineCount} online · {members.length} in your cohort</div>
+              )}
               {leaderboard === null && <div className="cm-empty">Loading…</div>}
               {leaderboard !== null && leaderboard.length === 0 && <div className="cm-empty">No activity yet</div>}
-              {leaderboard?.map((m) => (
-                <div key={m.member_id} className={`cm-leader-row${myProfile?.id === m.member_id ? ' me' : ''}`}>
-                  <span className="cm-leader-rank">{m.rank}</span>
-                  <Avatar name={m.display_name} size="sm" onClick={() => setProfileMemberId(m.member_id)} />
-                  <span className="cm-leader-name">{m.display_name}</span>
-                  <span className="cm-leader-pts">{m.points} pts</span>
-                </div>
-              ))}
+              {leaderboard?.map((m) => {
+                const mem = memberById.get(m.member_id);
+                return (
+                  <div key={m.member_id} className={`cm-leader-row${myProfile?.id === m.member_id ? ' me' : ''}`}>
+                    <span className="cm-leader-rank">{m.rank}</span>
+                    <span className="cm-contact-av">
+                      <Avatar name={m.display_name} src={mem?.avatar_url} size="sm" onClick={() => setProfileMemberId(m.member_id)} />
+                      {mem && <span className={`cm-dot ${mem.presence}`} title={mem.presence} />}
+                    </span>
+                    <span className="cm-leader-name">{m.display_name}</span>
+                    {mem && <LevelBadge level={mem.level} size="sm" />}
+                    <span className="cm-leader-pts">{m.points} pts</span>
+                  </div>
+                );
+              })}
             </div>
-          </aside>
-
-          <aside className="cm-contacts te-card te-scard">
-            <div className="cm-contacts-head">
-              <h3><svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="2" /><path d="M3 19c0-3 3-5 6-5s6 2 6 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M16 7a3 3 0 0 1 0 6M18 19c0-2-1-3.5-2.5-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Your cohort</h3>
-              {members !== null && <span className="cm-contacts-count">{onlineCount} online · {members.length}</span>}
-            </div>
-            {members === null && <div className="cm-empty">Loading…</div>}
-            {members !== null && members.length === 0 && <div className="cm-empty">No members yet</div>}
-            {members?.map((m) => (
-              <button type="button" key={m.id} className="cm-contact-row" onClick={() => setProfileMemberId(m.id)}>
-                <span className="cm-contact-av">
-                  <Avatar name={m.display_name} src={m.avatar_url} size="sm" />
-                  <span className={`cm-dot ${m.presence}`} title={m.presence} />
-                </span>
-                <span className="cm-contact-name">{m.display_name}</span>
-                <LevelBadge level={m.level} size="sm" />
-              </button>
-            ))}
           </aside>
         </div>
       </div>

@@ -57,9 +57,9 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 .cm-dot.away{background:var(--amber,#E8920C)}
 .cm-dot.offline{background:var(--border,#B8B8B8)}
 
-.cm-contact-row,.cm-leader-row{display:flex;align-items:center;gap:10px;padding:7px 0}
-.cm-contact-row + .cm-contact-row,.cm-leader-row + .cm-leader-row{border-top:1px solid var(--border-subtle,#E4E4E3)}
-.cm-contact-name,.cm-leader-name{font-size:13.5px;font-weight:600;color:var(--strong,#1A1A1A);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cm-leader-row{display:flex;align-items:center;gap:10px;padding:7px 0}
+.cm-leader-row + .cm-leader-row{border-top:1px solid var(--border-subtle,#E4E4E3)}
+.cm-leader-name{font-size:13.5px;font-weight:600;color:var(--strong,#1A1A1A);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cm-contact-status{font-size:11.5px;color:var(--muted,#6B6B6B)}
 .cm-leader-rank{font-family:var(--mono,monospace);font-size:12px;font-weight:700;color:var(--muted,#6B6B6B);width:18px;flex:none}
 .cm-leader-pts{font-family:var(--mono,monospace);font-size:12.5px;font-weight:700;color:var(--leaf-text,#468A2E);flex:none}
@@ -91,6 +91,7 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 .cm-lb-tabs button{border:none;background:none;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700;color:var(--muted,#6B6B6B);padding:5px 10px;border-radius:999px}
 .cm-lb-tabs button.active{background:var(--surface,#fff);color:var(--strong,#1A1A1A)}
 .cm-leader-head{display:flex;align-items:center;gap:8px}
+.cm-lb-sub{font-size:11.5px;color:var(--muted,#6B6B6B);margin:2px 0 8px}
 
 /* My-profile card */
 .cm-profile-card{padding:16px}
@@ -119,13 +120,7 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 
 @media (min-width:1024px){
   .cm-layout{grid-template-columns:minmax(0,1fr) 320px}
-  .cm-side,.cm-contacts{position:sticky;top:16px}
-}
-@media (min-width:1320px){
-  .cm-layout{grid-template-columns:minmax(0,1fr) 300px 258px}
-  .cm-rail{display:contents}
-  .cm-side{position:sticky;top:16px;display:flex;flex-direction:column;gap:16px}
-  .cm-contacts{position:sticky;top:16px}
+  .cm-side{position:sticky;top:16px}
 }
 
 /* Pinned post — subtle amber rail so it reads as elevated without shouting. */
@@ -238,13 +233,7 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 .cm-event-join{flex:none;border:none;background:var(--berry,#367895);color:#fff;border-radius:var(--r-pill,999px);padding:8px 18px;font-size:13px;font-weight:700;text-decoration:none}
 .cm-event-join:hover{filter:brightness(1.05)}
 
-/* ── Contacts rail ────────────────────────────────────────────────────── */
-.cm-contacts-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.cm-contacts-head h3{margin:0}
-.cm-contacts-count{font-size:11px;color:var(--muted,#6B6B6B);font-family:var(--mono,monospace);white-space:nowrap}
-.cm-contact-row{width:100%;display:flex;align-items:center;gap:10px;padding:7px 4px;border:none;background:none;font-family:inherit;text-align:left;cursor:pointer;border-radius:8px}
-.cm-contact-row:hover{background:var(--sunken,#F1F1F0)}
-.cm-contact-row + .cm-contact-row{border-top:1px solid var(--border-subtle,#E4E4E3)}
+/* ── Presence dot on leaderboard avatar ──────────────────────────────────── */
 .cm-contact-av{position:relative;flex:none;display:inline-flex}
 .cm-contact-av .cm-dot{position:absolute;right:-1px;bottom:-1px;border:2px solid var(--surface,#fff)}
 
