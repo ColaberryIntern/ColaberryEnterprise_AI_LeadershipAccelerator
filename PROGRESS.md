@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Points Economy build — Phase 2: paid/entitlement gate on build routes (2026-07-21)
+- [x] **Flag-gated `requireBuildEntitlement` so build/evidence routes are paid-only (free Explorer accounts get 402); the Option-A anti-cheat that makes "no Architect without paid build work" hold**
+  - Date: 2026-07-21
+  - Session: CC-20260721-g8k4
+  - What changed: New `backend/src/middlewares/requireBuildEntitlement.ts` — pure `isBuildEntitled(enrollment, cohort, roleInfo)` + Express middleware. Entitled = paid (`Enrollment.payment_status==='paid'`) OR admin-comped (active `plan:'comp'` Subscription via `activeCompEnrollmentIds`) OR staff (`community_members.role==='staff'` via `isStaffEnrollment`) OR sponsor seat (`Cohort.cohort_type==='sponsor'`). Flag `BUILD_PAID_GATE_ENABLED` added to `config/env.ts` (`buildPaidGateEnabled`, default OFF) + `.env.example`. Mounted at `participantRoutes.ts` as `router.use('/api/portal/project', requireParticipant, requireBuildEntitlement)` before `router.use(projectRoutes)` — scoped to `/api/portal/project/*` only; plural project-nav, `project-dna`, admin-governance, learning + community routes stay open. Failure-first: fail-OPEN on infra/DB error or missing enrollment, deny only on a confirmed non-entitled enrollment. Read-only. Tests: `backend/src/middlewares/__tests__/requireBuildEntitlement.test.ts`.
+  - Why: Option A (Ali, 2026-07-21) — make build EVIDENCE paid-only so the existing competency/evidence promotion to Architect cannot be reached on a free account. Design: `docs/training-program-2026-q3/POINTS_ECONOMY_AND_ARCHITECT_LADDER.md`; build ledger `POINTS_ECONOMY_BUILD_LEDGER.md`.
+  - Verification: Loop Architect maker → SEPARATE verifier; independent verifier scored 10/10 PASS (flag default OFF, fail-open, fields cross-checked vs models, Express mount regex empirically confirmed to match only `/api/portal/project/*`, 402 payload + fail-open/flag-off asserted in tests). Local tsc/jest N/A on this Windows host (no backend node_modules); CI is the build/test gate — pending on push. NOT deployed; flag OFF so merge is inert.
+  - Notes: Follow-up (non-blocking): `GET /api/portal/project/evaluation` is registered BEFORE the gate mount so it bypasses when the flag is ON (read-only, returns null for non-builders — not a hole). Telemetry `/project/telemetry` IS gated (BuildManifest = build evidence); legit emission runs under the paid student's token. Branch `workstream/points-economy` (from main @403b79f9); iteration 1 of the 8-phase points-economy loop.
+
 ### Fix runaway boot sync creating duplicate unique indexes ("out of shared memory") (2026-07-21)
 - [x] **Gated `ensureIntelligenceTables()`'s `sync({ alter: true })` behind `DB_BOOT_SYNC` (create-only by default) — stops the every-boot duplicate-unique-index accumulation**
   - Date: 2026-07-21

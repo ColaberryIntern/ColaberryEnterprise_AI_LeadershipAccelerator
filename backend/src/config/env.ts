@@ -139,6 +139,11 @@ export const env = {
   // feed the top-right HUD total. ON by default; set PORTAL_POINTS_AWARD_ENABLED=false
   // to dark-disable coursework awards (streak + RSVP awards are unaffected).
   portalPointsAwardEnabled: process.env.PORTAL_POINTS_AWARD_ENABLED !== 'false',
+  // Paid/entitlement gate on the build + evidence subsystem (/api/portal/project*).
+  // Free "Explorer" accounts get HTTP 402 with an upgrade payload; paid / comped /
+  // staff / sponsor-seat enrollments pass. Default OFF (inverted vs the points flag
+  // above) so merging/deploying changes NOTHING until BUILD_PAID_GATE_ENABLED=true.
+  buildPaidGateEnabled: process.env.BUILD_PAID_GATE_ENABLED === 'true',
   // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
   // links). Master switch OFF by default: the community-room routes return 404,
   // the outbox drain cron no-ops, and createSession skips linked-room creation
