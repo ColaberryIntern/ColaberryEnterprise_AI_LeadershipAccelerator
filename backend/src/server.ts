@@ -35,6 +35,7 @@ import { seedCurriculumCourseLinks } from './seeds/seedCurriculumCourseLinks';
 import { seedAllCampaigns } from './seeds/seedAllCampaigns';
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
+import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -2094,6 +2095,8 @@ async function start(): Promise<void> {
   await ensureEnrollmentColumns();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
+  // Live Sessions build-out: 5 live-session tables (idempotent DDL, sync is disabled).
+  await ensureLiveSessionSchema();
 
   await ensureCommunityMemberRoleSchema();
   // Free-trial Organization / Manager layer — org + roster tables (idempotent).
