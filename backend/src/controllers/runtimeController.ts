@@ -31,7 +31,9 @@ function fail(res: Response, err: any, next: NextFunction) {
 const eid = (req: Request) => req.participant!.sub;
 
 export async function handleOpenCard(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await openCard(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+  // Read-only "view as": open the card for viewing but never create a progress
+  // row (which would mark the member as having started it).
+  try { res.json(await openCard(eid(req), String(req.params.cardId), { readOnly: !!req.participant?.read_only })); } catch (e) { fail(res, e, next); }
 }
 
 const mentorSchema = z.object({ mode: z.enum(['ask', 'hint', 'explain', 'review']).default('ask'), message: z.string().default(''), history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).optional() });

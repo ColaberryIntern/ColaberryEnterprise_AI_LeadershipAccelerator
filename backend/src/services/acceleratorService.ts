@@ -518,6 +518,25 @@ export async function getPortalLoginUrl(enrollmentId: string): Promise<string | 
   return `${base}/portal/verify?token=${token}`;
 }
 
+/**
+ * Read-only "View as member" portal URL. Mints a `read_only` participant JWT
+ * (server blocks every write) and returns a `/portal/view-as` link carrying it
+ * in the URL HASH (kept out of query strings / server logs / referrers). Unlike
+ * getPortalLoginUrl this does NOT mint a real login session — it's a scoped,
+ * observe-only token. Returns null if the enrollment is missing.
+ */
+export async function getReadOnlyViewAsUrl(enrollmentId: string, impersonatedBy: string): Promise<string | null> {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) return null;
+  const { signReadOnlyParticipantJwt } = await import('./participantService');
+  const token = signReadOnlyParticipantJwt(
+    { id: enrollment.id, email: enrollment.email, cohort_id: enrollment.cohort_id },
+    impersonatedBy,
+  );
+  const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
+  return `${base}/portal/view-as#t=${token}`;
+}
+
 export async function setPortalAccess(enrollmentId: string, enabled: boolean) {
   const enrollment = await Enrollment.findByPk(enrollmentId);
   if (!enrollment) return null;

@@ -22,7 +22,8 @@ export async function handleGetToday(req: Request, res: Response, next: NextFunc
     const cursor = Math.max(0, parseInt(String(req.query.cursor ?? '0'), 10) || 0);
     const limit = Math.max(1, Math.min(30, parseInt(String(req.query.limit ?? '10'), 10) || 10));
     res.set('Cache-Control', 'no-store');
-    res.json(await getTodayPage(eid(req), cursor, limit));
+    // Read-only "view as": render the feed but never log impressions for them.
+    res.json(await getTodayPage(eid(req), cursor, limit, { readOnly: !!req.participant?.read_only }));
   } catch (e) { fail(res, e, next); }
 }
 

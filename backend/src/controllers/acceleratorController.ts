@@ -4,7 +4,7 @@ import {
   getSessionAttendance, markAttendance, bulkMarkAttendance, updateAttendanceRecord,
   listSubmissionsByEnrollment, listSubmissionsBySession, createSubmission, updateSubmission,
   computeReadinessScore, computeAllReadinessScores, getCohortDashboard,
-  listCohortEnrollments, setPortalAccess, getPortalLoginUrl,
+  listCohortEnrollments, setPortalAccess, getPortalLoginUrl, getReadOnlyViewAsUrl,
 } from '../services/acceleratorService';
 import { generateMeetLink } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
@@ -217,6 +217,19 @@ export async function handleSetPortalAccess(req: Request, res: Response, next: N
 export async function handleGetPortalLink(req: Request, res: Response, next: NextFunction) {
   try {
     const url = await getPortalLoginUrl(req.params.id as string);
+    if (!url) return res.status(404).json({ error: 'Enrollment not found' });
+    res.json({ url });
+  } catch (err) { next(err); }
+}
+
+// Returns a READ-ONLY "View as member" URL — mints a read_only participant token
+// (server blocks every write) so an admin can see exactly the member's portal
+// without being able to change anything about their data/progress/recordings.
+export async function handleGetViewAsToken(req: Request, res: Response, next: NextFunction) {
+  try {
+    const admin: any = req.admin;
+    const impersonatedBy = admin?.email || admin?.sub || 'admin';
+    const url = await getReadOnlyViewAsUrl(req.params.id as string, String(impersonatedBy));
     if (!url) return res.status(404).json({ error: 'Enrollment not found' });
     res.json({ url });
   } catch (err) { next(err); }
