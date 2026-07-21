@@ -336,6 +336,22 @@ const EditDrawer: React.FC<{
   // view from the same place. Reset to the form when a different card opens.
   const [view, setView] = useState<'edit' | 'student'>('edit');
   useEffect(() => { setView('edit'); }, [draft.id, isNew]);
+  // "Open the workspace" — asks the server for a read-only, test-student deep-link
+  // into the REAL runtime for this card, and opens it in a new tab. Read-only, so
+  // the admin sees the live gated controls / safeguards without touching real data.
+  const [wsBusy, setWsBusy] = useState(false);
+  const [wsErr, setWsErr] = useState('');
+  const openWorkspace = async () => {
+    if (!draft.id) return;
+    setWsBusy(true); setWsErr('');
+    try {
+      const r = await api.get(`/api/admin/orchestration/timeline/cards/${draft.id}/workspace-preview-url`);
+      if (r.data?.url) window.open(r.data.url, '_blank', 'noopener');
+      else setWsErr('No workspace link was returned.');
+    } catch (e: any) {
+      setWsErr(e?.response?.data?.error || 'Could not open the workspace.');
+    } finally { setWsBusy(false); }
+  };
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
@@ -403,9 +419,26 @@ const EditDrawer: React.FC<{
           {/* Student view — the REAL student card (live preview of the current draft),
               inline in the drawer. Flip back with the toggle above. */}
           {view === 'student' && draft.type && (
-            <div className="tl-de te-inlinestudent">
-              <CardDetailBody card={previewCard} preview autoplayVideo />
-            </div>
+            <>
+              {!isNew && draft.id && draft.visibility === 'published' ? (
+                <div className="te-wsrow">
+                  <span className="te-wsnote">▶ Open the REAL workspace — buttons, watch-gates, mentor &amp; anti-cheat safeguards <b>(read-only)</b></span>
+                  <button type="button" className="te-act pri" style={{ whiteSpace: 'nowrap' }} disabled={wsBusy} onClick={openWorkspace}>
+                    {wsBusy ? 'Opening…' : 'Open the workspace ↗'}
+                  </button>
+                </div>
+              ) : (
+                <div className="te-wsrow te-wsrow--muted">
+                  {isNew || !draft.id
+                    ? 'Save the card first to open its live workspace.'
+                    : 'Publish this card to open its live workspace — drafts don’t open in the runtime.'}
+                </div>
+              )}
+              {wsErr && <div className="te-wserr">{wsErr}</div>}
+              <div className="tl-de te-inlinestudent">
+                <CardDetailBody card={previewCard} preview autoplayVideo />
+              </div>
+            </>
           )}
 
           {view === 'edit' && (<>
@@ -1156,6 +1189,11 @@ const TimelineEditorTab: React.FC = () => {
         .te-segbtn.on{background:#fff;color:#1A1A1A;box-shadow:0 1px 3px rgba(0,0,0,.12)}
         /* Inline student view rendered by <CardDetailBody> inside the drawer */
         .te-inlinestudent{min-height:0;border:1px solid #E4E4E4;border-radius:12px;overflow:hidden;margin-bottom:4px}
+        /* "Open the workspace" row above the inline student view */
+        .te-wsrow{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;border:1px solid #D4E3E8;border-radius:10px;background:#F5FAFB}
+        .te-wsnote{font-size:12px;color:#1F5266;font-weight:600;line-height:1.4;flex:1;min-width:180px}
+        .te-wsrow--muted{color:#8A8A8A;font-weight:600;background:#FAFAFA;border-color:#EEE;justify-content:flex-start;font-size:12px}
+        .te-wserr{font-size:12px;color:#C20E1E;background:#FDECEC;border-radius:8px;padding:8px 10px;margin-bottom:10px}
         .te-pubrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;margin-bottom:16px;border:1px solid #E4E4E4;border-radius:10px;background:#FAFBFC}
         .te-vbadge{font-size:11px;font-weight:800;letter-spacing:.04em;padding:4px 10px;border-radius:999px;flex:none}
         .te-vbadge.live{background:#E7F5E9;color:#3C7A26} .te-vbadge.draft{background:#F0F0F0;color:#8A8A8A}
