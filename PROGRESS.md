@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Points Economy build — Phase 1: curriculum-type value alignment (2026-07-21)
+- [x] **Zeroed `deep_dive` builder_xp (25/10/0 → 25/0/0) so a free consumption card no longer awards build currency; the rest of the 50 types already match the design table, remaining tweaks live-tunable via points_config**
+  - Date: 2026-07-21
+  - Session: CC-20260721-g8k4
+  - What changed: `backend/src/services/timeline/typeRegistry.ts` — removed `builder_xp: 10` from `deep_dive` (a Deep Dive is consumption, not build work; under Option A the ledger sums L/B/C so this is a currency-semantics fix, not a gating change). No other type edited: the registry already matches the design §4 table (podcast stays 0 per the recent #594 decision; architect_mindset 100/40/20 kept; ambient/community values already aligned). Full target table = `docs/training-program-2026-q3/POINTS_ECONOMY_AND_ARCHITECT_LADDER.md` §4; the LIVE economy is editable in `points_config` (scope type_default) without a redeploy.
+  - Why: honor "renumber the curriculum types to follow the rules" with a minimal, rule-driven change rather than churning the collision-hot registry for cosmetic ±2-5pt deltas that don't affect gating under Option A.
+  - Verification: grep of *.test.ts confirmed no test pins `deep_dive` builder_xp (composer fixture already uses builder:0; dailyCap asserts deep_dive is NOT ambient; timelineAdmin just resolves the type). CI typecheck + registry unit tests are the gate — pending on push. Data-only, no logic.
+  - Notes: Branch `workstream/points-economy`; iteration 5 of the loop. Intentionally minimal under Option A.
+
 ### Points Economy build — Phase 5: frontend 5-band UI + locked-door card (2026-07-21)
 - [x] **Portal HUD + LevelBadge display the 5-band identity and a "Become an AI Builder" upgrade card renders at the free ceiling — flag `FIVE_BAND_UI_ENABLED` (default OFF), UI byte-identical when off**
   - Date: 2026-07-21
