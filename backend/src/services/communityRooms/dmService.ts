@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import CommunityRoom from '../../models/CommunityRoom';
 import RoomMembership from '../../models/RoomMembership';
 import Enrollment from '../../models/Enrollment';
@@ -90,4 +91,58 @@ export async function sendDmMessage(ctx: RoomAccessContext, roomId: string, cont
 export async function listDmMessages(ctx: RoomAccessContext, roomId: string, since?: string) {
   await assertDmRoom(roomId);
   return listMessages(ctx, roomId, { since });
+}
+
+export interface DmConversation {
+  roomId: string;
+  peerId: string;
+  peerName: string;
+  peerAvatar: string | null;
+  lastMessage: string;
+  lastAt: Date;
+  unread: boolean;
+}
+
+/**
+ * My DM conversations (rooms with a message), newest-activity first, each with
+ * an `unread` flag — the last message is from the other person and newer than my
+ * read cursor. Powers the Messages inbox + its unread badge.
+ */
+export async function listConversations(me: string): Promise<DmConversation[]> {
+  const myMemberships = await RoomMembership.findAll({ where: { enrollment_id: me, access_state: 'active' } });
+  if (myMemberships.length === 0) return [];
+  const roomIds = myMemberships.map((m) => m.room_id);
+  const dmRooms = await CommunityRoom.findAll({ where: { id: { [Op.in]: roomIds }, room_type: 'dm' } });
+  const lastReadByRoom = new Map(myMemberships.map((m) => [m.room_id, m.last_read_at ?? null]));
+
+  const convos: DmConversation[] = [];
+  for (const room of dmRooms) {
+    const others = await RoomMembership.findAll({ where: { room_id: room.id, enrollment_id: { [Op.ne]: me } } });
+    const otherId = others[0]?.enrollment_id;
+    if (!otherId) continue;
+    const [other, last] = await Promise.all([
+      Enrollment.findByPk(otherId, { attributes: ['id', 'full_name', 'avatar_data_url'] }),
+      RoomMessage.findOne({ where: { room_id: room.id, deleted_at: null }, order: [['created_at', 'DESC']] }),
+    ]);
+    if (!last) continue; // no messages yet — nothing to list
+    const lastRead = lastReadByRoom.get(room.id) ?? null;
+    const unread = last.enrollment_id !== me && (!lastRead || last.created_at > lastRead);
+    convos.push({
+      roomId: room.id,
+      peerId: otherId,
+      peerName: (other as any)?.full_name || 'Member',
+      peerAvatar: (other as any)?.avatar_data_url ?? null,
+      lastMessage: last.content,
+      lastAt: last.created_at,
+      unread,
+    });
+  }
+  convos.sort((a, b) => b.lastAt.getTime() - a.lastAt.getTime());
+  return convos;
+}
+
+/** Mark a DM read up to now (clears its unread state for me). */
+export async function markDmRead(me: string, roomId: string): Promise<void> {
+  await assertDmRoom(roomId);
+  await RoomMembership.update({ last_read_at: new Date() }, { where: { room_id: roomId, enrollment_id: me } });
 }

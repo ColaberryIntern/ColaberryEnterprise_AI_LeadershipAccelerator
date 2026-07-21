@@ -1761,6 +1761,28 @@ async function ensureMissedOpportunitiesSchema() {
 // only, no ALTERs to existing tables. NO cross-table FK constraints (plain UUID
 // columns, like student_tasks) so creation ordering never matters. The whole
 // feature stays dark behind env.communityRoomsEnabled regardless of these tables.
+// Messaging extras (additive, idempotent): a per-member DM read cursor for
+// unread state, and a widened community_notifications type CHECK so friend /
+// message notifications can be inserted (the column is VARCHAR; only the CHECK
+// restricts values). Both safe to run every boot.
+async function ensureMessagingSchema() {
+  const statements = [
+    `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`,
+    `ALTER TABLE community_notifications DROP CONSTRAINT IF EXISTS ck_community_notifications_type`,
+    `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message'))`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure messaging schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Messaging schema ensured');
+}
+
 // Friendships — the friend graph behind the portal Contacts rail. Idempotent,
 // additive; status is VARCHAR + CHECK (not a Postgres ENUM) so new states are a
 // one-line CHECK change, never a type migration. No feature flag.
@@ -2109,6 +2131,8 @@ async function start(): Promise<void> {
   await ensureCommunityRoomsSchema();
   // Friendships (portal Contacts rail friend graph) — idempotent, additive, no flag.
   await ensureFriendshipSchema();
+  // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
+  await ensureMessagingSchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

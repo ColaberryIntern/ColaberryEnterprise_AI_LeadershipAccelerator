@@ -11,6 +11,7 @@ import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendR
 import { pingPresence } from '../../../services/communityApi';
 import { openDm } from '../../../services/dmApi';
 import ChatDock, { DmTarget } from './ChatDock';
+import MessagesButton from './MessagesButton';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
 
@@ -165,11 +166,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   }, [refreshContacts]);
   // Open (or focus) a 1:1 chat dock when a contact face is clicked.
   const [chats, setChats] = useState<DmTarget[]>([]);
-  const openChat = useCallback((c: CohortContact) => {
-    openDm(c.id).then((roomId) => {
-      setChats((prev) => (prev.some((x) => x.roomId === roomId) ? prev : [...prev, { roomId, name: c.name, color: c.color }]));
-    }).catch(() => { /* non-fatal */ });
+  const openChatTarget = useCallback((t: DmTarget) => {
+    setChats((prev) => (prev.some((x) => x.roomId === t.roomId) ? prev : [...prev, t]));
   }, []);
+  const openChat = useCallback((c: CohortContact) => {
+    openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(() => { /* non-fatal */ });
+  }, [openChatTarget]);
 
   const load = useCallback(async () => {
     const [p, s] = await Promise.allSettled([fetchPoints(), fetchSchedule()]);
@@ -278,6 +280,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
               <span className="tx"><span className="lbl">Next event</span><span className="when mono">{ohCd ? `${ohCd.d}d ${ohCd.h}h` : '—'}</span></span>
             </span>
           </div>
+          <MessagesButton onOpen={openChatTarget} />
           <NotificationBell />
           <button type="button" className="te-iconbtn" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle dark mode">
             {theme === 'dark'

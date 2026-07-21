@@ -20,6 +20,14 @@ async function sameCohort(a: string, b: string): Promise<boolean> {
   return !!ea.cohort_id && ea.cohort_id === eb.cohort_id;
 }
 
+// Best-effort in-app notification — never fails the friendship action.
+async function notify(recipient: string, actor: string, type: 'friend_request' | 'friend_accepted', friendshipId: string): Promise<void> {
+  try {
+    const { createNotification } = await import('./communityNotificationService');
+    await createNotification(recipient, actor, type, 'friendship', friendshipId);
+  } catch { /* notifications are best-effort */ }
+}
+
 /**
  * Send a friend request (or auto-accept the reverse if they already asked me).
  * Idempotent: re-sending an existing request is a no-op that returns the
@@ -37,6 +45,7 @@ export async function sendFriendRequest(me: string, targetId: string): Promise<{
     if (reverse.status === 'accepted') return { status: 'friend' };
     if (reverse.status === 'pending') {
       await reverse.update({ status: 'accepted' });
+      await notify(targetId, me, 'friend_accepted', reverse.id);
       return { status: 'friend' };
     }
     // reverse was declined → fall through and let me send my own fresh request
@@ -47,10 +56,12 @@ export async function sendFriendRequest(me: string, targetId: string): Promise<{
     if (existing.status === 'accepted') return { status: 'friend' };
     if (existing.status === 'pending') return { status: 'requested' };
     await existing.update({ status: 'pending' }); // re-request after a prior decline
+    await notify(targetId, me, 'friend_request', existing.id);
     return { status: 'requested' };
   }
 
-  await Friendship.create({ requester_id: me, addressee_id: targetId, status: 'pending' });
+  const created = await Friendship.create({ requester_id: me, addressee_id: targetId, status: 'pending' });
+  await notify(targetId, me, 'friend_request', created.id);
   return { status: 'requested' };
 }
 
@@ -59,6 +70,7 @@ export async function respondToRequest(me: string, requesterId: string, accept: 
   const row = await Friendship.findOne({ where: { requester_id: requesterId, addressee_id: me, status: 'pending' } });
   if (!row) throw new FriendRequestError('No pending request from that person');
   await row.update({ status: accept ? 'accepted' : 'declined' });
+  if (accept) await notify(requesterId, me, 'friend_accepted', row.id);
   return { status: row.status };
 }
 

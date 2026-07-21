@@ -1,17 +1,41 @@
-import CommunityNotification, { CommunityNotificationType } from '../models/CommunityNotification';
+import CommunityNotification, { CommunityNotificationType, CommunityNotificationSourceType } from '../models/CommunityNotification';
 import CommunityMember from '../models/CommunityMember';
 import { getOrCreateMember } from './communityService';
 
 export interface NotificationItem {
   id: string;
-  // Mirrors the model's union (mention | reply | like) — kept as the model type
-  // so widening the notification kinds can't drift this DTO out of sync again.
+  // Mirrors the model's union — kept as the model type so widening the
+  // notification kinds can't drift this DTO out of sync again.
   notification_type: CommunityNotificationType;
-  source_type: 'post' | 'comment';
+  source_type: CommunityNotificationSourceType;
   source_id: string;
   read: boolean;
   created_at: Date;
   actor: { id: string; display_name: string; avatar_url: string | null } | null;
+}
+
+/**
+ * Emit an in-app notification. Translates enrollment ids -> member ids. Never
+ * notifies you of your own action. Callers wrap this in try/catch — a
+ * notification must never fail the underlying action (friend request, message).
+ */
+export async function createNotification(
+  recipientEnrollmentId: string,
+  actorEnrollmentId: string | null,
+  type: CommunityNotificationType,
+  sourceType: CommunityNotificationSourceType,
+  sourceId: string,
+): Promise<void> {
+  const recipient = await getOrCreateMember(recipientEnrollmentId);
+  const actor = actorEnrollmentId ? await getOrCreateMember(actorEnrollmentId) : null;
+  if (actor && recipient.id === actor.id) return;
+  await CommunityNotification.create({
+    member_id: recipient.id,
+    actor_member_id: actor?.id ?? null,
+    notification_type: type,
+    source_type: sourceType,
+    source_id: sourceId,
+  });
 }
 
 function notFoundError(message: string): Error {

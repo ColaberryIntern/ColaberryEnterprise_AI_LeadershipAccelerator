@@ -944,6 +944,30 @@ router.post('/api/portal/dm/:roomId/send', requireParticipant, async (req, res) 
   }
 });
 
+// Messages inbox — my DM conversations (+ unread) and a read receipt.
+router.get('/api/portal/dm/conversations', requireParticipant, async (req, res) => {
+  try {
+    const { listConversations } = await import('../services/communityRooms/dmService');
+    const conversations = await listConversations(req.participant!.sub);
+    res.json({ conversations });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/dm/:roomId/read', requireParticipant, async (req, res) => {
+  const parsed = z.object({ roomId: z.string().uuid() }).safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid conversation' }); return; }
+  try {
+    const { markDmRead } = await import('../services/communityRooms/dmService');
+    await markDmRead(req.participant!.sub, parsed.data.roomId);
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.name === 'DmError') { res.status(400).json({ error: err.message }); return; }
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
 router.get('/api/portal/community/members/:memberId', requireParticipant, async (req, res) => {
   const paramsParsed = MemberIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) {

@@ -33,6 +33,27 @@ export async function sendDmMessage(roomId: string, content: string): Promise<Dm
   return data.message;
 }
 
+export interface DmConversation {
+  roomId: string;
+  peerId: string;
+  peerName: string;
+  peerAvatar: string | null;
+  lastMessage: string;
+  lastAt: string;
+  unread: boolean;
+}
+
+/** My DM conversations (newest first) for the Messages inbox. */
+export async function fetchConversations(): Promise<DmConversation[]> {
+  const { data } = await portalApi.get<{ conversations: DmConversation[] }>('/api/portal/dm/conversations');
+  return data.conversations || [];
+}
+
+/** Mark a conversation read (clears its unread state). */
+export async function markDmRead(roomId: string): Promise<void> {
+  await portalApi.post(`/api/portal/dm/${roomId}/read`);
+}
+
 /** My enrollment id (from the participant JWT) — to render my own bubbles. */
 export function myEnrollmentId(): string | null {
   try {
