@@ -7,10 +7,15 @@ function getAuthClient() {
   if (!env.googleServiceAccountEmail || !env.googlePrivateKey) {
     throw new Error('Google Calendar not configured');
   }
+  // Impersonate the calendar owner via domain-wide delegation. Without `subject`
+  // the service account acts as itself, and a bare service-account calendar
+  // cannot create Google Meet conferences — Calendar returns "Invalid conference
+  // type value", which is why Meet-link generation had silently never worked.
   return new google.auth.JWT({
     email: env.googleServiceAccountEmail,
     key: env.googlePrivateKey,
     scopes: ['https://www.googleapis.com/auth/calendar'],
+    subject: env.googleCalendarOwnerEmail || undefined,
   });
 }
 
