@@ -67,12 +67,15 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
   const [visible, setVisible] = useState(PAGE); // fallback reveal count
   const loadingRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // Per-visit seed: fresh each mount so every visit is a different lineup, but held
+  // stable for the whole session so pagination never repeats or skips.
+  const seedRef = useRef<number>((Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0);
 
   // Initial load: prefer the real cursor feed; fall back to the looped classroom
   // when the flag is off (endpoint 404s) or on any error.
   useEffect(() => {
     let alive = true;
-    todayFeedApi.list(0, PAGE)
+    todayFeedApi.list(0, PAGE, seedRef.current)
       .then((page) => {
         if (!alive) return;
         setRows(page.items.map((item) => ({ item, card: adapt(item) })));
@@ -89,7 +92,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
     loadingRef.current = true;
     setError(false);
     try {
-      const page = await todayFeedApi.list(cursor, PAGE);
+      const page = await todayFeedApi.list(cursor, PAGE, seedRef.current);
       // Dedup by ref — a repeated page (e.g. a stalled cursor) must not stack
       // duplicate cards.
       setRows((prev) => {
@@ -128,6 +131,15 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
     onOpen(card);
   }, [onOpen]);
 
+  // Collect → let the celebration (HUD burst + chime) play, then drop the finished
+  // card off the feed. If the collect is gated (server 422/423), onComplete throws
+  // and we neither remove nor swallow — the card surfaces the gate message.
+  const handleComplete = useCallback(async (card: TimelineFeedCard) => {
+    await onComplete?.(card);
+    window.setTimeout(() => setRows((prev) => prev.filter((r) => r.card.id !== card.id)), 1400);
+  }, [onComplete]);
+  const collectHandler = onComplete ? handleComplete : undefined;
+
   const looped: TimelineFeedCard[] = fallbackCards.length
     ? Array.from({ length: Math.min(visible, fallbackCards.length * 12) }, (_, i) => fallbackCards[i % fallbackCards.length])
     : [];
@@ -142,7 +154,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
           card={card}
           onOpen={(c) => handleOpen(c, item.ref)}
           onWorkspace={onWorkspace}
-          onComplete={onComplete}
+          onComplete={collectHandler}
           likes={6 + ((i * 7) % 13)}
         />
       ))}
@@ -163,7 +175,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
 
       {mode === 'fallback' && (looped.length
         ? looped.map((c, i) => (
-            <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={onOpen} onWorkspace={onWorkspace} onComplete={onComplete} likes={6 + ((i * 7) % 13)} />
+            <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={onOpen} onWorkspace={onWorkspace} onComplete={collectHandler} likes={6 + ((i * 7) % 13)} />
           ))
         : <div className="fc-empty">Loading your feed…</div>)}
 

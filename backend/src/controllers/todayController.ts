@@ -21,9 +21,13 @@ export async function handleGetToday(req: Request, res: Response, next: NextFunc
     if (!env.todayFeedV2Enabled) return res.status(404).json({ error: 'Today feed not enabled' });
     const cursor = Math.max(0, parseInt(String(req.query.cursor ?? '0'), 10) || 0);
     const limit = Math.max(1, Math.min(30, parseInt(String(req.query.limit ?? '10'), 10) || 10));
+    // Per-visit seed reshuffles the lineup (client sends a fresh one each mount);
+    // stable within a visit so pagination never repeats. Absent → natural order.
+    const seedRaw = parseInt(String(req.query.seed ?? ''), 10);
+    const seed = Number.isFinite(seedRaw) ? (seedRaw >>> 0) : undefined;
     res.set('Cache-Control', 'no-store');
     // Read-only "view as": render the feed but never log impressions for them.
-    res.json(await getTodayPage(eid(req), cursor, limit, { readOnly: !!req.participant?.read_only }));
+    res.json(await getTodayPage(eid(req), cursor, limit, { readOnly: !!req.participant?.read_only, seed }));
   } catch (e) { fail(res, e, next); }
 }
 
