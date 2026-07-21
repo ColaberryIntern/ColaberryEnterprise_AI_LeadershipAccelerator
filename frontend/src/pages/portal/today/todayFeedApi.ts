@@ -37,7 +37,7 @@ export type TodayInteraction = 'open' | 'click' | 'complete' | 'dismiss';
 
 export const todayFeedApi = {
   list: (cursor = 0, limit = 10): Promise<TodayPage> =>
-    portalApi.get('/api/portal/runtime/today', { params: { cursor, limit } }).then((r) => r.data as TodayPage),
+    portalApi.get('/api/portal/runtime/today', { params: { cursor, limit }, timeout: 15000 }).then((r) => r.data as TodayPage),
   interact: (cardRef: string, action: TodayInteraction): Promise<{ ok: true }> =>
     portalApi
       .post(`/api/portal/runtime/today/${encodeURIComponent(cardRef)}/interact`, { action })
