@@ -1,5 +1,6 @@
 import { Op } from 'sequelize';
-import CommunityMember, { CommunityPresenceStatus } from '../models/CommunityMember';
+import CommunityMember, { CommunityPresenceStatus, CommunityMemberRole } from '../models/CommunityMember';
+import ContributionEvent, { CATEGORY_META, ContributionCategory } from '../models/ContributionEvent';
 import CommunityPost from '../models/CommunityPost';
 import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
@@ -843,28 +844,70 @@ export async function reportPost(enrollmentId: string, postId: string, reason?: 
 
 // ─── Member profiles + directory ────────────────────────────────────────
 
+// A member's earned recognition badges, surfaced on the directory + profile
+// drawer. Reuses the Rooms recognition ledger (ContributionEvent) — these are
+// the same badges getImpact() shows, not a parallel system.
+export interface MemberBadge {
+  category: ContributionCategory;
+  label: string;
+  emoji: string;
+  count: number;
+}
+
 export interface MemberProfile {
   id: string;
+  // Enrollment id — the DM + friend flows are enrollment-keyed (openDm,
+  // sendFriendRequest), and the profile drawer wires those buttons. Already
+  // client-exposed via the cohort presence API, so this is not a new leak.
+  enrollment_id: string;
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
   level: number;
   points: number;
+  role: CommunityMemberRole;
+  badges: MemberBadge[];
   presence: CommunityPresenceStatus;
   created_at: Date;
+}
+
+// Batch a set of enrollments -> their earned badges (grouped ContributionEvent
+// categories, count DESC). One query for the whole directory page rather than
+// getImpact() per member. Enrollments with no recognition get an empty array.
+async function badgesByEnrollment(enrollmentIds: string[]): Promise<Map<string, MemberBadge[]>> {
+  const out = new Map<string, MemberBadge[]>();
+  if (enrollmentIds.length === 0) return out;
+
+  const rows = await ContributionEvent.findAll({ where: { enrollment_id: enrollmentIds } });
+  const byEnr = new Map<string, Map<ContributionCategory, number>>();
+  for (const r of rows as any[]) {
+    const cats = byEnr.get(r.enrollment_id) ?? new Map<ContributionCategory, number>();
+    cats.set(r.category, (cats.get(r.category) ?? 0) + 1);
+    byEnr.set(r.enrollment_id, cats);
+  }
+  for (const [enr, cats] of byEnr) {
+    const badges = Array.from(cats.entries())
+      .map(([category, count]) => ({ category, label: CATEGORY_META[category].label, emoji: CATEGORY_META[category].emoji, count }))
+      .sort((a, b) => b.count - a.count);
+    out.set(enr, badges);
+  }
+  return out;
 }
 
 // points/level come from the ONE canonical ledger (StudentPointsEvent + the
 // LEVELS ladder), NOT the legacy CommunityMember.points column — so a member's
 // score/level here matches the top-right HUD everywhere.
-function toMemberProfile(member: CommunityMember, canonicalPoints: number): MemberProfile {
+function toMemberProfile(member: CommunityMember, canonicalPoints: number, badges: MemberBadge[] = []): MemberProfile {
   return {
     id: member.id,
+    enrollment_id: member.enrollment_id,
     display_name: member.display_name,
     avatar_url: member.avatar_url,
     bio: member.bio,
     level: levelForPoints(canonicalPoints).level,
     points: canonicalPoints,
+    role: member.role ?? 'student',
+    badges,
     presence: derivePresence(member.last_active_at),
     created_at: member.created_at,
   };
@@ -872,7 +915,8 @@ function toMemberProfile(member: CommunityMember, canonicalPoints: number): Memb
 
 export async function getMyProfile(enrollmentId: string): Promise<MemberProfile> {
   const [member, summary] = await Promise.all([getOrCreateMember(enrollmentId), getPointsSummary(enrollmentId)]);
-  return toMemberProfile(member, summary.total);
+  const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
+  return toMemberProfile(member, summary.total, badges);
 }
 
 // Cross-member lookups return NotFoundError uniformly whether the member
@@ -888,7 +932,8 @@ export async function getMemberProfileById(enrollmentId: string, targetMemberId:
     throw notFoundError('Member not found');
   }
   const total = (await getPointsSummary(target.enrollment_id)).total;
-  return toMemberProfile(target, total);
+  const badges = (await badgesByEnrollment([target.enrollment_id])).get(target.enrollment_id) ?? [];
+  return toMemberProfile(target, total, badges);
 }
 
 export async function updateMyProfile(enrollmentId: string, input: UpdateProfileInput): Promise<MemberProfile> {
@@ -902,21 +947,124 @@ export async function updateMyProfile(enrollmentId: string, input: UpdateProfile
   await member.update(updates);
   log('info', 'profile_updated', { member_id: member.id, fields: Object.keys(updates), outcome: 'success' });
   const total = (await getPointsSummary(enrollmentId)).total;
-  return toMemberProfile(member, total);
+  const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
+  return toMemberProfile(member, total, badges);
 }
 
-// Cohort-scoped directory — ordered by canonical points DESC. Points/level come
-// from the ONE ledger (batched), so this matches the leaderboard + HUD.
-export async function listMembers(enrollmentId: string): Promise<MemberProfile[]> {
+// Directory search/filter/pagination (People directory). search = name substring
+// (case-insensitive); role = exact role; minLevel filters on the CANONICAL level
+// (derived from points, so applied in JS after totals resolve). Pagination is
+// offset/limit over the points-sorted set — cohort-scale, so fetch-all-then-slice
+// is fine and keeps the canonical sort authoritative.
+export interface DirectoryQuery {
+  search?: string;
+  role?: CommunityMemberRole;
+  minLevel?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface DirectoryPage {
+  members: MemberProfile[];
+  total: number;
+  has_more: boolean;
+}
+
+const DIRECTORY_DEFAULT_LIMIT = 24;
+const DIRECTORY_MAX_LIMIT = 100;
+
+// Cohort-scoped directory — ordered by canonical points DESC. Points/level/badges
+// come from the ONE ledger + recognition (batched), so this matches the
+// leaderboard + HUD. `members` is always present; new callers read total/has_more.
+export async function listMembers(enrollmentId: string, query: DirectoryQuery = {}): Promise<DirectoryPage> {
   const cohortId = await resolveCohortId(enrollmentId);
 
+  const where: Record<string, unknown> = {};
+  if (query.role) where.role = query.role;
+  const search = query.search?.trim();
+  if (search) where.display_name = { [Op.iLike]: `%${search}%` };
+
   const members = await CommunityMember.findAll({
+    where,
     include: [{ model: Enrollment, as: 'enrollment', attributes: [], where: { cohort_id: cohortId } }],
   });
 
-  const totals = await getTotalsForEnrollments(members.map((m: any) => m.enrollment_id));
-  return members
-    .map((m: any) => ({ profile: toMemberProfile(m, totals.get(m.enrollment_id) ?? 0), pts: totals.get(m.enrollment_id) ?? 0 }))
-    .sort((a, b) => b.pts - a.pts || a.profile.display_name.localeCompare(b.profile.display_name))
-    .map((x) => x.profile);
+  const enrollmentIds = members.map((m: any) => m.enrollment_id);
+  const [totals, badges] = await Promise.all([
+    getTotalsForEnrollments(enrollmentIds),
+    badgesByEnrollment(enrollmentIds),
+  ]);
+
+  let ranked = members
+    .map((m: any) => {
+      const pts = totals.get(m.enrollment_id) ?? 0;
+      return { profile: toMemberProfile(m, pts, badges.get(m.enrollment_id) ?? []), pts };
+    })
+    .sort((a, b) => b.pts - a.pts || a.profile.display_name.localeCompare(b.profile.display_name));
+
+  if (typeof query.minLevel === 'number') {
+    ranked = ranked.filter((x) => x.profile.level >= (query.minLevel as number));
+  }
+
+  const total = ranked.length;
+  const offset = Math.max(0, query.offset ?? 0);
+  const limit = Math.min(DIRECTORY_MAX_LIMIT, Math.max(1, query.limit ?? DIRECTORY_DEFAULT_LIMIT));
+  const page = ranked.slice(offset, offset + limit).map((x) => x.profile);
+
+  return { members: page, total, has_more: offset + page.length < total };
+}
+
+// Admin-only: set a member's directory role. Idempotent — setting the same role
+// again is a no-op write. Validates the role against the allowed set so a bad
+// value never reaches the CHECK constraint. Returns the updated profile.
+const MEMBER_ROLES: readonly CommunityMemberRole[] = ['student', 'mentor', 'staff'];
+
+export function isMemberRole(value: string): value is CommunityMemberRole {
+  return (MEMBER_ROLES as readonly string[]).includes(value);
+}
+
+// Admin roster for the role-assignment screen: every community member (across
+// cohorts), name + email + current role, so an admin can find someone and
+// promote them. Name search (ILIKE), capped. Not cohort-scoped — this is an
+// admin-only surface (requireAdmin at the route).
+export interface AdminMemberRow {
+  id: string;
+  display_name: string;
+  email: string | null;
+  role: CommunityMemberRole;
+}
+
+export async function listMembersForAdmin(search?: string): Promise<AdminMemberRow[]> {
+  const where: Record<string, unknown> = {};
+  const q = search?.trim();
+  if (q) where.display_name = { [Op.iLike]: `%${q}%` };
+
+  const members = await CommunityMember.findAll({
+    where,
+    include: [{ model: Enrollment, as: 'enrollment', attributes: ['email'] }],
+    order: [['display_name', 'ASC']],
+    limit: 200,
+  });
+
+  return members.map((m: any) => ({
+    id: m.id,
+    display_name: m.display_name,
+    email: m.enrollment?.email ?? null,
+    role: (m.role as CommunityMemberRole) ?? 'student',
+  }));
+}
+
+export async function setMemberRole(targetMemberId: string, role: CommunityMemberRole): Promise<MemberProfile> {
+  if (!isMemberRole(role)) {
+    throw Object.assign(new Error(`Invalid role: ${role}`), { error_class: 'ValidationError' });
+  }
+  const member = await CommunityMember.findByPk(targetMemberId);
+  if (!member) {
+    throw notFoundError('Member not found');
+  }
+  await member.update({ role });
+  log('info', 'member_role_set', { member_id: member.id, role, outcome: 'success' });
+  const total = (await getPointsSummary(member.enrollment_id)).total;
+  const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
+  return toMemberProfile(member, total, badges);
 }

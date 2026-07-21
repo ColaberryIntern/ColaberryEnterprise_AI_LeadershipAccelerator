@@ -524,6 +524,24 @@ async function ensurePointsSchema() {
   }
 }
 
+async function ensureCommunityMemberRoleSchema() {
+  // People directory role (student|mentor|staff), admin-assigned, default student.
+  // Idempotent DDL (sequelize.sync is disabled on this graph) so a deploy adds the
+  // column without a manual migration step. Mirrors 20260721_add_community_member_role.sql.
+  const statements = [
+    `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'student'`,
+    `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_role`,
+    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_role CHECK (role IN ('student', 'mentor', 'staff'))`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] community member role schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureOrgSchema() {
   // Free-trial Organization / Manager layer. A manager registers free → gets a
   // management org + their own free enrollment; teammates join as free members.
@@ -836,7 +854,7 @@ async function ensureExperienceBuilderSchema() {
     // Seed an initial approved baseline (the core week activities) ONLY on first run —
     // once anything is approved/unapproved by hand, this guard is false and never fights the author.
     `UPDATE curriculum_type_definitions SET approved = TRUE, approved_at = NOW(), approved_by = 'system:baseline'
-       WHERE slug IN ('announcement','overview','warmup','video','knowledge_check','deep_dive','prompt_lab',
+       WHERE slug IN ('announcement','warmup','video','knowledge_check','deep_dive','prompt_lab',
                       'implementation_task','artifact_submission','reflection','community_discussion',
                       'mock_interview','survey','evaluation','live_class')
        AND NOT EXISTS (SELECT 1 FROM curriculum_type_definitions WHERE approved = TRUE)`,
@@ -2076,6 +2094,8 @@ async function start(): Promise<void> {
   await ensureEnrollmentColumns();
   // Student points ledger (idempotent).
   await ensurePointsSchema();
+
+  await ensureCommunityMemberRoleSchema();
   // Free-trial Organization / Manager layer — org + roster tables (idempotent).
   await ensureOrgSchema();
   // Student self-serve subscriptions (idempotent).
@@ -2143,6 +2163,16 @@ async function start(): Promise<void> {
     } catch (err: any) {
       console.warn('[CommunityRooms] default room seed failed:', err?.message);
     }
+  }
+  // Intelligence-pipeline sample cards — one evergreen card per intel type so the
+  // Today feed carries this content before the ingestion pipelines run. Idempotent
+  // (upserts by type); fail-soft so a fresh DB without the types can't break boot.
+  try {
+    const { seedIntelSampleCards } = await import('./seeds/seedIntelSampleCards');
+    const r = await seedIntelSampleCards();
+    console.log(`[IntelSamples] ${r.created.length} created, ${r.updated.length} updated`);
+  } catch (err: any) {
+    console.warn('[IntelSamples] sample-card seed failed:', err?.message);
   }
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any

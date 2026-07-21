@@ -4,8 +4,8 @@
  * Where blueprintContext tells a generator what the week is ABOUT (topics,
  * objectives), this tells it what the student will actually DO — the published
  * TimelineCards placed in that (program, week). Injected ONLY for types that
- * summarize the week (SECTION_ROSTER_TYPES — today just `overview`) so a lab or
- * video generation never starts narrating its sibling cards.
+ * summarize the week (SECTION_ROSTER_TYPES — the week-opener `announcement`) so
+ * a lab or video generation never starts narrating its sibling cards.
  *
  * Failure mode: any lookup problem returns null and the generation proceeds on
  * blueprint context alone (same graceful-degrade contract as blueprintContext).
@@ -17,11 +17,11 @@ import { resolve } from './typeRegistry';
 /** Types whose generation receives the week's activity roster. Extend as other
  *  week-summary types (wrap-ups, weekly reflections) need it. `announcement` is
  *  the friendly week-opener that scans the section and reports what's ahead. */
-export const SECTION_ROSTER_TYPES = new Set(['overview', 'announcement', 'prompt_lab']);
+export const SECTION_ROSTER_TYPES = new Set(['announcement', 'prompt_lab']);
 
 /** Meta/system cards excluded from the roster — they are not "things you'll do". */
 const EXCLUDED_TYPES = new Set([
-  'overview', 'announcement', 'event',
+  'announcement', 'event',
   'milestone', 'achievement', 'daily_streak', 'completion_badge',
 ]);
 
@@ -63,7 +63,8 @@ function fmtDuration(mins: number): string {
  *  Leads with the TOTAL count + total time, tags each item with its phase AND minutes,
  *  and lists per-phase time subtotals — so a week-summary card (announcement/overview)
  *  can show a real, curriculum-derived time budget (total at the top, per phase, per
- *  activity) and cover the WHOLE week grouped by phase instead of cherry-picking. */
+ *  activity) and cover the WHOLE week grouped by phase instead of cherry-picking.
+ *  (Consumed by the week-opener `announcement` type.) */
 export function buildSectionCurriculumText(week: number, items: SectionCurriculumItem[]): string {
   const total = items.reduce((s, it) => s + (it.est_minutes || 0), 0);
   const byPhase = new Map<string, number>();

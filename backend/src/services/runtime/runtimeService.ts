@@ -21,7 +21,6 @@ import { selectTestimonialForEnrollment } from '../timeline/networkVideoService'
 import { selectPodcastForEnrollment } from '../timeline/podcastMediaService';
 import { selectBlogForEnrollment } from '../timeline/blogMediaService';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
-import { getBlueprintContext } from '../timeline/blueprintContext';
 
 /** Build the student's signal vector from progression + completed evidence + portfolio. */
 export async function studentSignals(enrollmentId: string): Promise<StudentSignals> {
@@ -43,7 +42,7 @@ export async function studentSignals(enrollmentId: string): Promise<StudentSigna
 export async function readinessSummary(enrollmentId: string) {
   const signals = await studentSignals(enrollmentId);
   const progression = await getProgressionSummary(enrollmentId);
-  const journeyCards = signals.competencies.filter((c) => c.confidence >= 0.25).map((c) => ({ type: 'overview', competencies: [c.domain_id] }));
+  const journeyCards = signals.competencies.filter((c) => c.confidence >= 0.25).map((c) => ({ type: 'announcement', competencies: [c.domain_id] }));
   return {
     progression,
     employment: computeEmploymentReadiness(signals),
@@ -75,8 +74,6 @@ export async function openCard(enrollmentId: string, cardId: string) {
   const def = resolveType(card.type);
   // The type's Studio thumbnail lives on the DB definition (not the code registry).
   const dbDef = await CurriculumTypeDefinition.findOne({ where: { slug: card.type }, attributes: ['thumbnail_url'] });
-  // Overview's display title = the week's SECTION title from the Blueprint.
-  const bp = card.type === 'overview' ? await getBlueprintContext((card as any).program_id, card.week) : null;
   const [progress] = await TimelineCardProgress.findOrCreate({
     where: { card_id: cardId, enrollment_id: enrollmentId },
     defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'available' },
@@ -120,7 +117,7 @@ export async function openCard(enrollmentId: string, cardId: string) {
       points: card.points,
       content: contentFromMetadata(card.metadata),
       type_thumbnail: ((dbDef?.thumbnail_url || '') as string).trim() || null,
-      week_title: bp?.title || null,
+      week_title: null,
     },
     progress: { status: progress.status, completed_at: progress.completed_at },
   };

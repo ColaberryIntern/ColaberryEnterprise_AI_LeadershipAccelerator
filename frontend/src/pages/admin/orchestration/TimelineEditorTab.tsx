@@ -341,7 +341,7 @@ const EditDrawer: React.FC<{
   const isSkillsJar = band === 'skills_jar';
   // Zero-author-input types that write themselves from the week's blueprint —
   // "Generate content" runs the type's own prompt (no title required).
-  const isBlueprintGen = ['survey', 'overview'].includes(draft.type || '');
+  const isBlueprintGen = ['survey'].includes(draft.type || '');
   const published = draft.visibility === 'published';
   const setVideo = (patch: Partial<CardVideo>) => onChange({ video: { ...(draft.video || {}), ...patch } });
   const setCourse = (patch: Partial<CardCourse>) => onChange({ course: { ...(draft.course || {}), ...patch } });
