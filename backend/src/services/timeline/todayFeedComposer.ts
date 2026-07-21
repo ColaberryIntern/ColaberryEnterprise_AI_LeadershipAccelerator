@@ -247,6 +247,35 @@ async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed
 }
 
 /**
+ * Read-only "view as" page: compose a FRESH, non-persisted feed each visit so an
+ * admin viewing a member sees a fluent, different-each-refresh timeline (like the
+ * member's own reshuffling feed) instead of their frozen materialised set — WITHOUT
+ * writing to the member's impression log or the ambient seen-ledgers. Seed-stable
+ * per visit (different seed → different content + order).
+ */
+async function composeReadOnlyPage(enrollmentId: string, from: number, size: number, seed?: number): Promise<TodayFeedItem[]> {
+  const targetEnd = from + size;
+  const anchored = await gatherAnchored(enrollmentId, new Set<string>());
+  const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
+  const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
+  const perProvider = Math.max(6, Math.ceil((targetEnd + 8) / Math.max(1, providers.length)));
+  const ambientBatches = await Promise.all(
+    providers.map((p) => pickAmbientBatch(enrollmentId, p, perProvider, [], { readOnly: true, seed })),
+  );
+  const ambient = ambientBatches.flat().map((a) => ambientItemFrom(a, 0));
+  const combined = [...anchored, ...ambient];
+  const ordered = (seed != null ? orderForVisit(combined, seed) : combined)
+    .map((it, i): TodayFeedItem => ({ ...it, position: i, interacted: false }));
+  const [completed, collectedBlogs] = await Promise.all([
+    completedCardIds(enrollmentId, ordered.map((i) => i.card_id).filter((x): x is string => !!x)),
+    collectedBlogRefs(enrollmentId, ordered.map((i) => i.ref)),
+  ]);
+  const survivors = ordered.filter((i) =>
+    !(i.card_id && completed.has(i.card_id)) && !collectedBlogs.has(i.ref) && i.status !== 'completed');
+  return survivors.slice(from, targetEnd);
+}
+
+/**
  * Return the page of the Today feed starting at `cursor` (0-based item offset),
  * generating more of the feed if the cursor runs past what's been materialised.
  * `seed` (per-visit, client-supplied) reshuffles the lineup; completed cards are
@@ -258,27 +287,30 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   const from = Math.max(0, Math.floor(cursor));
   const targetEnd = from + size;
 
+  // Read-only "view as": ephemeral fresh feed (no writes), so the viewer sees a
+  // live, different-each-refresh timeline rather than the member's frozen set.
+  if (opts.readOnly) {
+    const items = await composeReadOnlyPage(enrollmentId, from, size, opts.seed);
+    await rehydrateCommunityItems(items);
+    await rehydrateSessionItems(items);
+    return { items, nextCursor: from + items.length, exhausted: items.length < size };
+  }
+
   let existing = await loadImpressions(enrollmentId);
   let served = await buildServed(enrollmentId, existing, opts.seed);
   let exhausted = false;
 
-  if (opts.readOnly) {
-    // Read-only "view as": show the member's already-materialised feed but never
-    // append new impressions (that's an append-only write to their data).
-    exhausted = served.length < targetEnd;
-  } else {
-    // Materialise until enough SURVIVING items fill the page (completed cards were
-    // dropped above), or the pools run dry. Bounded so a persistently short pool
-    // can never spin.
-    let guard = 0;
-    while (served.length < targetEnd && guard++ < 6) {
-      const before = existing.length;
-      const added = await extendFeed(enrollmentId, existing, targetEnd - served.length + 4);
-      if (!added.length) { exhausted = true; break; }
-      existing = await loadImpressions(enrollmentId);
-      if (existing.length === before) { exhausted = true; break; }
-      served = await buildServed(enrollmentId, existing, opts.seed);
-    }
+  // Materialise until enough SURVIVING items fill the page (completed cards were
+  // dropped above), or the pools run dry. Bounded so a persistently short pool
+  // can never spin.
+  let guard = 0;
+  while (served.length < targetEnd && guard++ < 6) {
+    const before = existing.length;
+    const added = await extendFeed(enrollmentId, existing, targetEnd - served.length + 4);
+    if (!added.length) { exhausted = true; break; }
+    existing = await loadImpressions(enrollmentId);
+    if (existing.length === before) { exhausted = true; break; }
+    served = await buildServed(enrollmentId, existing, opts.seed);
   }
 
   const items = served.slice(from, targetEnd);
