@@ -56,6 +56,9 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     `ALTER TABLE live_sessions DROP CONSTRAINT IF EXISTS ck_live_sessions_status`,
     `ALTER TABLE live_sessions ADD CONSTRAINT ck_live_sessions_status CHECK (status IN ('scheduled', 'live', 'completed', 'cancelled'))`,
     `CREATE INDEX IF NOT EXISTS idx_live_sessions_cohort ON live_sessions (cohort_id)`,
+    // Phase 4: AI recap ({ summary, takeaways[], generated_at, model }). Idempotent
+    // column-add for tables that predate this column.
+    `ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS recap_json JSONB`,
 
     // ---- attendance_records ----
     `CREATE TABLE IF NOT EXISTS attendance_records (

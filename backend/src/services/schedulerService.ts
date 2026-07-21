@@ -30,6 +30,7 @@ import {
   detectAbsentParticipants, computeAllReadinessScores,
 } from './acceleratorService';
 import { finalizeSessionAttendance } from './liveSessionAttendanceService';
+import { generateSessionRecap } from './sessionRecapService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 
 /**
@@ -2264,6 +2265,12 @@ export function startScheduler(): void {
       for (const session of toComplete) {
         await session.update({ status: 'completed' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as completed`);
+
+        // Generate the AI recap (best-effort) — surfaced to absentees in the Today
+        // "you missed it" replay card. (Wiring it into the recap email is a follow-up.)
+        await generateSessionRecap(session).catch((err: any) =>
+          console.error(`[Scheduler] Recap generation failed for session ${session.id}:`, err.message)
+        );
 
         // Fill leave_time/duration for anyone who self-joined but never left.
         await finalizeSessionAttendance(session.id).catch((err: any) =>

@@ -123,6 +123,10 @@ export const env = {
   // Today aggregation — blend Project + Community cards into the Today feed
   // (Phase 2). Default OFF; the feed stays Class-only until enabled.
   todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',
+  // Live Sessions Phase 4 — "you missed it" replay cards (a completed session +
+  // AI recap) into the Today feed for absentees. Default OFF; matches the
+  // per-source gating convention of the other aggregated Today sources.
+  todaySessionReplays: process.env.TODAY_SESSION_REPLAYS === 'true',
   // Feed Control plane — config-driven cadence/providers + rule-based ranker +
   // per-card/type routing. Default OFF; flag-off keeps the legacy hardcoded
   // CADENCE=2 + fixed provider list + week→bucket→order behavior byte-identical.
