@@ -41,7 +41,7 @@ Status: TODO · MAKING · CHECKING · PASS · DEV · PROD · DONE(already on mai
 | 3 | Reconcile 3 level tables → one 5-band ladder + rename | 2 | **PASS → committed** | **10/10** | New pure `bandLadder.ts` (`computeBand`): free bands from points, build bands from competency promotion; invariant "points alone never exceed AI Enabled" test-locked. Additive `band` field; ladder-B reconcile behind `COMMUNITY_LEVEL_USE_CANONICAL` (OFF). Display rename deferred to Phase 5 |
 | 4 | Anti-cheat: daily caps + post-quality gate | 3 | **PASS → committed** | **10/10** | `dailyCap.ts` (ambient 100/day, community 75/day) + post-quality gate (post +5 on first peer like), flags `POINTS_DAILY_CAPS_ENABLED` / `COMMUNITY_POST_QUALITY_GATE_ENABLED` (OFF). 3 caps-ON follow-ups noted. Shared `centralDate.ts` breaks streak↔points cycle |
 | 1 | Curriculum-type L/B/C value re-tune | 4 | TODO | — | Low priority under Option A (ledger sums to one total); align to design table |
-| 5 | Frontend re-skin to 5 bands + locked-door/upgrade card | 5 | TODO | — | HUD/leaderboard/level badge already built; rename + add gate UI |
+| 5 | Frontend re-skin to 5 bands + locked-door/upgrade card | 5 | **PASS → committed** | **10/10** | `GET /api/portal/points` returns band+flag; HUD/LevelBadge show band; "Become an AI Builder" card at the AI Enabled ceiling; flag `FIVE_BAND_UI_ENABLED` (OFF). eslint-clean, OFF-path byte-identical, anti-cheat invariant kept client-side |
 | 7 | Emit BuildManifest telemetry | 6 | TODO | — | ingest pipeline already built; emit on our changes |
 | 6 | Rooms/community award wiring | — | **DONE** | n/a | Already live on main (posts/comments/likes/recognition/attendance award) |
 

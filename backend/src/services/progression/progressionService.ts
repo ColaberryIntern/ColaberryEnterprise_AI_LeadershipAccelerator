@@ -133,6 +133,25 @@ export interface ProgressionSummary {
   band: BandResult;
 }
 
+/**
+ * Lightweight canonical band for an enrollment — the HUD path. Reuses the points
+ * total the caller already fetched (getPointsSummary) so it needs only the
+ * StudentLevel row, then runs the SAME pure computeBand the full summary uses
+ * (single source of truth, no drift). Additive: read-only apart from the
+ * idempotent StudentLevel.findOrCreate that every learner already gets.
+ */
+export async function getBandForEnrollment(enrollmentId: string, pointsTotal: number): Promise<BandResult> {
+  const [level] = await StudentLevel.findOrCreate({
+    where: { enrollment_id: enrollmentId },
+    defaults: { enrollment_id: enrollmentId, level_slug: 'builder', rank: 0 },
+  });
+  return computeBand({
+    pointsTotal,
+    builderLevelSlug: level.level_slug,
+    builderRank: level.rank,
+  });
+}
+
 export async function getProgressionSummary(enrollmentId: string): Promise<ProgressionSummary> {
   const events = await XpEvent.findAll({ where: { enrollment_id: enrollmentId } });
   const xp = aggregateXp(events.map((e) => ({ stream: e.stream, amount: e.amount })));

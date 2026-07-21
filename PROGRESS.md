@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Points Economy build — Phase 5: frontend 5-band UI + locked-door card (2026-07-21)
+- [x] **Portal HUD + LevelBadge display the 5-band identity and a "Become an AI Builder" upgrade card renders at the free ceiling — flag `FIVE_BAND_UI_ENABLED` (default OFF), UI byte-identical when off**
+  - Date: 2026-07-21
+  - Session: CC-20260721-g8k4
+  - What changed: Backend — `getBandForEnrollment()` in progressionService (points total + StudentLevel + pure `computeBand`); `handleGetPoints` (`GET /api/portal/points`) now returns `{...summary, band, fiveBandUiEnabled}` (additive; total/events untouched); flag `FIVE_BAND_UI_ENABLED` in env.ts + .env.example (default OFF). Frontend — new pure `frontend/src/services/bandLadder.ts` (`Band` type + `BAND_RUNGS` mirror 0/150/400/900 → AI Aware I/II, AI Enabled I/II + formatters; build bands NEVER derived client-side, only rendered from the server `band`, preserving the anti-cheat invariant) + its test; `onboardingApi.ts` carries band + a localStorage-cached flag (flash-free); `PortalShell.tsx` HUD shows band rungName + `bandHudNext` when on / legacy `lvl.name` when off; `LevelBadge.tsx` shows band rung when on / "Level N · name" when off; `PointsDrilldown.tsx` + `PointsPage.css` render the locked-door card only when `fiveBandUiEnabled && band.cappedByPointsOnly && band.bandSlug==='enabled'`, CTA → `/portal/settings?tab=subscription`.
+  - Why: make the 5-band ladder visible + create the conversion moment at the AI Enabled ceiling (design §5-6). Enterprise-calm styling, not consumer-gamey.
+  - Verification: Loop Architect maker → SEPARATE verifier scored 10/10 PASS (OFF-path rendered DOM byte-identical for HUD/LevelBadge/card; additive endpoint; anti-cheat invariant preserved client-side — build bands only from server; CTA route confirmed real; eslint landmine clean — no unused imports/vars, `isolatedModules`-safe type re-exports, `useEffect` deps ok; localStorage guarded; pure helpers tested). Flag default OFF → merge/deploy inert. Local build N/A (Windows); CI + dev Docker build are the gates — CI pending on push.
+  - Notes: Non-blocking efficiency notes (verifier): PointsDrilldown fires an extra `fetchPoints` on mount even when flag off (idempotent); `getBandForEnrollment` repeats the `StudentLevel.findOrCreate` boilerplate `getProgressionSummary` has (both delegate to the same pure `computeBand`; low drift risk). Branch `workstream/points-economy`; iteration 4 of the loop.
+
 ### Points Economy build — Phase 4: anti-cheat daily caps + post-quality gate (2026-07-21)
 - [x] **Added flag-gated daily point caps (ambient feed 100/day, community 75/day) and a community post-quality gate (post +5 released only on first peer like) — both default OFF, merge-inert**
   - Date: 2026-07-21

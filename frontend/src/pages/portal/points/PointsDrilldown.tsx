@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPointsDrilldown, DrilldownView, levelFor } from '../../../services/onboardingApi';
+import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor } from '../../../services/onboardingApi';
 import { fmtCentralDate } from '../today/shellUtils';
 import './PointsPage.css';
 
@@ -50,6 +50,11 @@ const XpBar: React.FC<{ label: string; value: number; max: number; color: string
 const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryLink = true }) => {
   const [data, setData] = useState<DrilldownView | null>(null);
   const [loading, setLoading] = useState(true);
+  // 5-band re-skin: the canonical band + runtime flag ride the points payload.
+  // Used only for the free-ceiling "Become an AI Builder" card below; the rest of
+  // the drill-down is unchanged whether the flag is on or off.
+  const [band, setBand] = useState<Band | null>(null);
+  const [fiveBand, setFiveBand] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -57,8 +62,16 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
       .then((d) => { if (alive) setData(d); })
       .catch(() => { /* keep null → empty state */ })
       .finally(() => { if (alive) setLoading(false); });
+    fetchPoints()
+      .then((p) => { if (alive) { setBand(p.band ?? null); setFiveBand(!!p.fiveBandUiEnabled); } })
+      .catch(() => { /* card stays hidden on error */ });
     return () => { alive = false; };
   }, []);
+
+  // Locked-door conversion card: shown only to a free account that has reached the
+  // AI Enabled band on points alone (its ceiling). Advancing past it needs paid
+  // build evidence, so this is the one honest place to invite the upgrade.
+  const showUpgrade = fiveBand && !!band && band.cappedByPointsOnly && band.bandSlug === 'enabled';
 
   const total = data?.engagement.total ?? 0;
   const lvl = levelFor(total);
@@ -70,6 +83,23 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
 
   return (
     <div className="points-root">
+      {/* Locked-door upgrade card — free AI Enabled ceiling → "Become an AI Builder".
+          Calm, executive tone: one accent edge, a padlock, and a single CTA to the
+          in-portal upgrade path (Settings → Subscription). */}
+      {showUpgrade && (
+        <div className="pts-upgrade" role="note" aria-label="Become an AI Builder">
+          <span className="pts-upgrade-lock" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="2.2" stroke="currentColor" strokeWidth="2" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="15.5" r="1.4" fill="currentColor" /></svg>
+          </span>
+          <div className="pts-upgrade-body">
+            <span className="pts-upgrade-k">Next step</span>
+            <h3 className="pts-upgrade-h">Become an AI Builder</h3>
+            <p className="pts-upgrade-p">Building starts inside the program. Join to unlock AI Builder and the path to AI Architect.</p>
+          </div>
+          <Link className="te-btn cherry" to="/portal/settings?tab=subscription">Unlock AI Builder</Link>
+        </div>
+      )}
+
       {/* Where you are → where you're headed */}
       <div className="pts-hero">
         <div className="pts-hero-now">

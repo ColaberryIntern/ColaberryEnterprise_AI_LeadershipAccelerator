@@ -164,6 +164,13 @@ export const env = {
   // on the first peer like (see communityService.toggleLike). Default OFF:
   // posts reward +5 on creation exactly as today.
   communityPostQualityGateEnabled: process.env.COMMUNITY_POST_QUALITY_GATE_ENABLED === 'true',
+  // Five-band UI — the frontend re-skin to the canonical 5-band ladder (AI Aware →
+  // AI Enabled → AI Builder → AI Architect) as the primary level identity, plus the
+  // free-ceiling "Become an AI Builder" upgrade card. Surfaced to the client in the
+  // GET /api/portal/points response (additive) so the SPA switches at runtime without
+  // a rebuild. Default OFF: flag-off keeps the legacy "Level N · Apprentice/…/Principal"
+  // HUD byte-identical.
+  fiveBandUiEnabled: process.env.FIVE_BAND_UI_ENABLED === 'true',
   // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
   // links). Master switch OFF by default: the community-room routes return 404,
   // the outbox drain cron no-ops, and createSession skips linked-room creation

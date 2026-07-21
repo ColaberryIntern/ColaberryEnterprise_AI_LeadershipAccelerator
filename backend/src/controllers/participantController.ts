@@ -8,6 +8,8 @@ import {
 import { joinLiveSession } from '../services/liveSessionAttendanceService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
+import { getBandForEnrollment } from '../services/progression/progressionService';
+import { env } from '../config/env';
 import { getStreak, claimStreak } from '../services/streakService';
 import { getPointsDrilldown } from '../services/pointsDrilldownService';
 import { getSubscription, startCheckout, cancelSubscription, confirmCheckout } from '../services/subscriptionService';
@@ -40,8 +42,14 @@ export async function handleGetOnboardingProfile(req: Request, res: Response, ne
 
 export async function handleGetPoints(req: Request, res: Response, next: NextFunction) {
   try {
-    const summary = await getPointsSummary(req.participant!.sub);
-    res.json(summary);
+    const enrollmentId = req.participant!.sub;
+    const summary = await getPointsSummary(enrollmentId);
+    // Additive: attach the canonical 5-band identity + the runtime UI flag so the
+    // HUD can switch to the band ladder without a rebuild. Existing fields (total,
+    // events) are untouched; unknown fields are ignored by legacy clients, and the
+    // frontend only reads `band` when `fiveBandUiEnabled` is true.
+    const band = await getBandForEnrollment(enrollmentId, summary.total);
+    res.json({ ...summary, band, fiveBandUiEnabled: env.fiveBandUiEnabled });
   } catch (err) { next(err); }
 }
 
