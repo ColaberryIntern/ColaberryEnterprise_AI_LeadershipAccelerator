@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, July 21, 2026 at 2:29 PM</div>
-    <div><span class="sid">CC-20260721-t8k4</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Tuesday, July 21, 2026 at 4:06 PM</div>
+    <div><span class="sid">CC-20260721-t8k4</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -72,6 +72,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit -p tsconfig.json` → 0 errors across the whole frontend (real `npm ci` in the worktree — root node_modules was incomplete, so a full install was used, not the junction).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Student-view target confirmed with Ali = the card-detail preview (matches the drawer&#39;s existing &quot;Open the student view — full details →&quot; link), not the runtime workspace. The new-tab student view shows the LAST-SAVED version (a fresh tab can&#39;t carry unsaved draft edits); the in-drawer link still reflects live draft edits. New-tab buttons use window.open(..., &#39;_blank&#39;, &#39;noopener&#39;). Not yet deployed; branch workstream/timeline-card-open-in-studio off main.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Edit-card drawer: Edit ⟷ Student view toggle; retired the standalone card-preview page</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Follow-up to the new-tab student view (PR #593) — per Ali, the standalone full-page preview &quot;looked like this&quot; (a small card on an empty page). Replaced it with a segmented **view toggle** at the top of the Edit-card drawer (EditDrawer in TimelineEditorTab): `✎ Edit` ⟷ `👁 Student view`. Selecting Student view renders the REAL `&lt;CardDetailBody&gt;` (preview mode, no live student calls) inline in the drawer, built from the current draft — so it reflects **unsaved** edits live (the removed new-tab page only showed the last-saved version). The Save/Cancel footer stays in both views. Removed: the new-tab &quot;Student view ↗&quot; button, the `StudentCardPreviewPage` page + its `/admin/orchestration/card-preview` route, and the drawer&#39;s `courseId`/`onPreview` props (the finished-product tile + &quot;See the full student view →&quot; button now flip the toggle instead of opening a popup). Kept the &quot;🎛 Experience Studio ↗&quot; new-tab button. Frontend-only, 3 files: pages/admin/orchestration/TimelineEditorTab.tsx, routes/adminRoutes.tsx, and deleted pages/admin/orchestration/StudentCardPreviewPage.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit -p tsconfig.json` → 0 errors across the whole frontend (real npm ci in the worktree).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/student-view-toggle` off origin/main. The feed-tile student popup (SortableCard `onPreview` → CardDetailDrawer) is unchanged — only the editor drawer moved to the inline toggle. Supersedes the card-preview route from PR #593; any open card-preview tab will 404 after deploy (expected).</span></div>
           
         </div>
       </article>
