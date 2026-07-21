@@ -95,8 +95,11 @@ export async function getEnrollmentHistory(enrollmentId: string): Promise<Person
     safe(Subscription.findAll({ where: { enrollment_id: { [Op.in]: siblingIds } } }), []),
   ]);
   const credits = toJSON(creditsR);
+  const subsJson: any[] = toJSON(sibSubsR);
   const planByEnr = new Map<string, string>();
-  for (const su of toJSON(sibSubsR)) if (su.plan) planByEnr.set(su.enrollment_id, su.plan);
+  for (const su of subsJson) if (su.plan) planByEnr.set(su.enrollment_id, su.plan);
+  // Comped "Free Access" seat = an active 'comp' subscription on THIS enrollment.
+  const freeAccess = subsJson.some((su) => su.enrollment_id === e.id && su.plan === 'comp' && su.status === 'active');
   const totalPaid = siblings.reduce((sum, s) => sum + (s.payment_status === 'paid' ? Number(s.amount_paid || 0) : 0), 0)
     + credits.filter((c) => c.status !== 'void').reduce((sum, c) => sum + Number(c.amount_cents || 0) / 100, 0);
 
@@ -151,6 +154,7 @@ export async function getEnrollmentHistory(enrollmentId: string): Promise<Person
       id: e.id, full_name: e.full_name, email: e.email, company: e.company, title: e.title, phone: e.phone,
       cohort: e.cohort?.name || null, enrollment_type: e.enrollment_type, payment_status: e.payment_status,
       portal_enabled: e.portal_enabled, status: e.status, created_at: e.created_at, notes: e.notes,
+      free_access: freeAccess, // active comped ('Free Access') seat on this enrollment
       total_paid: totalPaid, // membership + deposits across all of this email's enrollment rows
       enrollment_records: siblings.length, // >1 means the same person spans multiple enrollment rows
     },
