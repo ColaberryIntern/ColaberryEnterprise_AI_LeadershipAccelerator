@@ -27,11 +27,27 @@ jest.mock('../../services/pointsService', () => ({
   levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
 }));
 jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => {}) }));
+// Recognition badges surfaced on the directory/profile come from ContributionEvent.
+jest.mock('../../models/ContributionEvent', () => ({
+  __esModule: true,
+  default: { findAll: jest.fn(async () => []) },
+  CATEGORY_META: {
+    helpful_guide: { label: 'Helpful Guide', emoji: '🧭', blurb: '' },
+    community_host: { label: 'Community Host', emoji: '🏠', blurb: '' },
+  },
+}));
 
 import {
   createComment, listComments, toggleLike, levelFor,
   getMyProfile, getMemberProfileById, updateMyProfile, listMembers,
+  setMemberRole, isMemberRole,
 } from '../../services/communityService';
+import ContributionEvent from '../../models/ContributionEvent';
+import { getTotalsForEnrollments } from '../../services/pointsService';
+import { Op } from 'sequelize';
+
+const findAllContributions = (ContributionEvent as unknown as { findAll: jest.Mock }).findAll;
+const totalsForEnrollments = getTotalsForEnrollments as jest.Mock;
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
@@ -595,9 +611,103 @@ describe('member profiles + directory', () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findAllMembers.mockResolvedValue([]);
 
-    await listMembers(enrollmentId);
+    const page = await listMembers(enrollmentId);
 
     const callArgs = findAllMembers.mock.calls[0][0];
     expect(callArgs.include[0].where).toEqual({ cohort_id: cohortId });
+    expect(page).toEqual({ members: [], total: 0, has_more: false });
+  });
+
+  const dirMember = (id: string, enr: string, name: string, role = 'student') => ({
+    id, enrollment_id: enr, display_name: name, avatar_url: null, bio: null,
+    last_active_at: null, created_at: new Date('2026-07-01'), role,
+  });
+
+  it('listMembers role filter: passes the role to the DB where clause', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findAllMembers.mockResolvedValue([]);
+
+    await listMembers(enrollmentId, { role: 'mentor' });
+
+    expect(findAllMembers.mock.calls[0][0].where.role).toBe('mentor');
+  });
+
+  it('listMembers search: filters display_name case-insensitively (ILIKE)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findAllMembers.mockResolvedValue([]);
+
+    await listMembers(enrollmentId, { search: 'ada' });
+
+    const where = findAllMembers.mock.calls[0][0].where;
+    expect(where.display_name[Op.iLike]).toBe('%ada%');
+  });
+
+  it('listMembers directory: sorts by canonical points DESC and paginates (page 1 of 2)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findAllMembers.mockResolvedValue([dirMember('m1', 'e1', 'Ada'), dirMember('m2', 'e2', 'Bab'), dirMember('m3', 'e3', 'Cyd')]);
+    totalsForEnrollments.mockResolvedValueOnce(new Map([['e1', 10], ['e2', 30], ['e3', 20]]));
+
+    const page = await listMembers(enrollmentId, { limit: 2, offset: 0 });
+
+    expect(page.total).toBe(3);
+    expect(page.has_more).toBe(true);
+    expect(page.members.map((m) => m.id)).toEqual(['m2', 'm3']); // 30 then 20
+    expect(page.members[0].points).toBe(30);
+  });
+
+  it('listMembers directory: last page reports has_more=false', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findAllMembers.mockResolvedValue([dirMember('m1', 'e1', 'Ada'), dirMember('m2', 'e2', 'Bab'), dirMember('m3', 'e3', 'Cyd')]);
+    totalsForEnrollments.mockResolvedValueOnce(new Map([['e1', 10], ['e2', 30], ['e3', 20]]));
+
+    const page = await listMembers(enrollmentId, { limit: 2, offset: 2 });
+
+    expect(page.members.map((m) => m.id)).toEqual(['m1']); // the remaining 10-pt member
+    expect(page.has_more).toBe(false);
+  });
+
+  it('listMembers badges: attaches each member\'s recognition badges (count DESC)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findAllMembers.mockResolvedValue([dirMember('m1', 'e1', 'Ada')]);
+    totalsForEnrollments.mockResolvedValueOnce(new Map([['e1', 5]]));
+    findAllContributions.mockResolvedValueOnce([
+      { enrollment_id: 'e1', category: 'helpful_guide' },
+      { enrollment_id: 'e1', category: 'helpful_guide' },
+      { enrollment_id: 'e1', category: 'community_host' },
+    ]);
+
+    const page = await listMembers(enrollmentId, {});
+
+    expect(page.members[0].badges).toEqual([
+      { category: 'helpful_guide', label: 'Helpful Guide', emoji: '🧭', count: 2 },
+      { category: 'community_host', label: 'Community Host', emoji: '🏠', count: 1 },
+    ]);
+  });
+
+  it('setMemberRole happy path: updates the member\'s role and returns the profile', async () => {
+    const member = { ...dirMember(otherMemberId, 'e-other', 'Grace'), update: jest.fn() };
+    findByPkMember.mockResolvedValue(member);
+
+    const profile = await setMemberRole(otherMemberId, 'mentor');
+
+    expect(member.update).toHaveBeenCalledWith({ role: 'mentor' });
+    expect(profile.id).toBe(otherMemberId);
+  });
+
+  it('setMemberRole failure path: NotFoundError for a missing member', async () => {
+    findByPkMember.mockResolvedValue(null);
+    await expect(setMemberRole('nope', 'staff')).rejects.toMatchObject({ error_class: 'NotFoundError' });
+  });
+
+  it('setMemberRole failure path: ValidationError for an invalid role (never reaches the DB)', async () => {
+    await expect(setMemberRole(otherMemberId, 'wizard' as any)).rejects.toMatchObject({ error_class: 'ValidationError' });
+    expect(findByPkMember).not.toHaveBeenCalled();
+  });
+
+  it('isMemberRole guards the allowed set', () => {
+    expect(isMemberRole('student')).toBe(true);
+    expect(isMemberRole('mentor')).toBe(true);
+    expect(isMemberRole('staff')).toBe(true);
+    expect(isMemberRole('wizard')).toBe(false);
   });
 });
