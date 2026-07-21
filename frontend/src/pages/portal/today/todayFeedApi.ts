@@ -23,6 +23,7 @@ export interface TodayFeedItem {
   week: number | null;
   estimated_time: number | null;
   status: string | null;
+  points?: { learning?: number; builder?: number; community?: number } | null;
   interacted: boolean;
   author?: { name: string; avatar_url: string | null; level: number } | null;
 }
