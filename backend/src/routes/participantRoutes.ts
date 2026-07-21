@@ -841,9 +841,24 @@ router.patch('/api/portal/community/members/me', requireParticipant, async (req,
 
 router.get('/api/portal/community/members', requireParticipant, async (req, res) => {
   try {
-    const { listMembers } = await import('../services/communityService');
-    const members = await listMembers(req.participant!.sub);
-    res.json({ members });
+    const { listMembers, isMemberRole } = await import('../services/communityService');
+    // Safe integer parse — reject NaN/blank so a bad ?minLevel= never filters
+    // everyone out (typeof NaN === 'number' would slip past the service guard).
+    const num = (v: unknown): number | undefined => {
+      if (typeof v !== 'string' || v.trim() === '') return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    const { search, role, minLevel, limit, offset } = req.query;
+    const page = await listMembers(req.participant!.sub, {
+      search: typeof search === 'string' ? search : undefined,
+      role: typeof role === 'string' && isMemberRole(role) ? role : undefined,
+      minLevel: num(minLevel),
+      limit: num(limit),
+      offset: num(offset),
+    });
+    // `members` preserved for existing callers; `total`/`has_more` are new.
+    res.json(page);
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
