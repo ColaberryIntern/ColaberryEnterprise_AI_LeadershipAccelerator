@@ -10518,3 +10518,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali on the live /portal/today: "when I click on any item the screen freezes… the right panel should open" + "videos should start playing when I scroll to a certain part." [[project_today_timeline_v2]] [[reference_timeline_engine_student_runtime]]
   - Verification: Frontend `tsc --noEmit` clean for both changed files (only pre-existing `@dnd-kit`); freeze root-cause confirmed by CSS-scope analysis + verified fix post-deploy.
   - Notes: Branch `workstream/timeline-drawer-video`. Frontend-only → nginx `--no-deps`. The earlier timeline-ux PR made the whole card clickable → drawer, which is what exposed this pre-existing drawer-scoping bug prominently.
+
+### Timeline — podcasts autoplay on scroll + middle feed keeps its width — 2026-07-21
+- [x] Podcasts play on scroll-into-view (like video); the middle timeline no longer goes skinny (right→left shrink priority)
+  - Date: 2026-07-21
+  - Session: CC-20260720-x9r4
+  - What changed: (1) Scroll-into-view autoplay (`TimelineCard` IntersectionObserver) now covers **podcast audio** too, not just video — condition `(playable || !!podcastAudio)` — so a podcast starts its episode when it scrolls into view and stops when scrolled away (only the in-view media plays). Video stays a muted click-through preview. (2) Layout priority: the middle timeline is the focus and must not shrink. The inner 340px aside (`.te-grid` `te-side`) now drops at ≤1300px (was ≤1080) so the feed keeps its width sooner. The overall shell shrink order is unchanged and matches Ali's rule — right rail (`contacts`) collapses first (≤1200), then the left nav (≤1000); the middle (`main`/feed) is always `1fr` and never fully collapses until the ≤820 single-column breakpoint.
+  - Why: Ali on the live feed — "start playing the podcast on scroll as well" + "the timeline is most important… People (right) shrink 1st, then left nav 2nd, the middle never shrinks." [[project_today_timeline_v2]]
+  - Verification: Frontend `tsc`/CI (podcast change is a boolean-condition tweak; CSS breakpoint has no tsc). Layout is a responsive-priority tweak — asked Ali to eyeball the shrink behavior live and will fine-tune breakpoints if any width feels off. Note: podcast (audio, unmuted) autoplay is subject to the browser's autoplay policy — reliable once the page has user activation (a scroll/click), else the episode is ready to play on tap.
+  - Notes: Branch `workstream/timeline-podcast-shrink`. Frontend-only → nginx `--no-deps`.
