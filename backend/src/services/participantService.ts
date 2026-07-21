@@ -180,6 +180,56 @@ export async function getParticipantDashboard(enrollmentId: string) {
   };
 }
 
+/**
+ * Pure selection: the next live class a student should be pointed at — the
+ * lowest-numbered session that is still 'scheduled' or already 'live'. Returns
+ * null when every session is completed/cancelled. Exported for unit testing.
+ * (Live Sessions build-out Phase 2 — Session CC-20260721-s7h4.)
+ */
+export function selectNextLiveSession<T extends { status: string; session_number: number }>(
+  sessions: T[]
+): T | null {
+  return (
+    [...sessions]
+      .sort((a, b) => a.session_number - b.session_number)
+      .find((s) => s.status === 'scheduled' || s.status === 'live') || null
+  );
+}
+
+/**
+ * Lean payload for the "Next live class" card on the Today surface. Backed by
+ * live_sessions (NOT the CCPP EventBrite event feed, which is a separate,
+ * prospect-facing "Next event" countdown). Returns { next_session: null } when
+ * there is nothing upcoming so the caller can fall back to the cohort
+ * first-class countdown instead of double-rendering.
+ */
+export async function getNextLiveSession(cohortId: string) {
+  const sessions = await LiveSession.findAll({
+    where: { cohort_id: cohortId, status: { [Op.ne]: 'cancelled' } },
+    order: [['session_number', 'ASC']],
+  });
+  const next = selectNextLiveSession(sessions as any[]);
+  if (!next) return { next_session: null };
+  // Cohort timezone drives the time-zone label on the card. start_time/end_time
+  // are stored as that zone's wall-clock, so the label must reflect it (not a
+  // hardcoded "ET"). Default to Central, the program's home zone.
+  const cohort = await Cohort.findByPk(cohortId, { attributes: ['timezone'] });
+  return {
+    next_session: {
+      id: next.id,
+      session_number: next.session_number,
+      title: next.title,
+      session_date: next.session_date,
+      start_time: next.start_time,
+      end_time: next.end_time,
+      status: next.status, // 'scheduled' | 'live'
+      meeting_link: next.meeting_link,
+      meeting_provider: (next as any).meeting_provider,
+      timezone: (cohort as any)?.timezone || 'America/Chicago',
+    },
+  };
+}
+
 export async function getParticipantSessions(enrollmentId: string, cohortId: string) {
   const sessions = await LiveSession.findAll({
     where: { cohort_id: cohortId, status: { [Op.ne]: 'cancelled' } },

@@ -28,7 +28,7 @@ import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineServi
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, type TodayItemKind } from './todayFeedPlan';
-import { gatherAnchored, rehydrateCommunityItems } from './todayAnchoredSources';
+import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
 import { env } from '../../config/env';
 import { getFeedPolicy } from './feedConfigService';
@@ -256,9 +256,11 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   }
 
   const items = served.slice(from, targetEnd);
-  // Community cards are dynamic — refresh their media/author/text from the live
-  // post so the append-only snapshot never shows stale content (fail-soft).
+  // Community + session cards are dynamic — refresh community media/author/text
+  // and session recording/recap from the live rows so the append-only snapshot
+  // never shows stale content (both fail-soft).
   await rehydrateCommunityItems(items);
+  await rehydrateSessionItems(items);
   return { items, nextCursor: from + items.length, exhausted: exhausted && items.length < size };
 }
 

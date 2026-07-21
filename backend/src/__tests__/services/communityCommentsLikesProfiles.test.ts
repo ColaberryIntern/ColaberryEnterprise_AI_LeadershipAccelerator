@@ -718,9 +718,9 @@ describe('member profiles + directory', () => {
     // Deliberately unsorted input incl. a null-enrollment row, to prove the
     // service orders by sign-up DESC and pushes the null-enrollment row last.
     findAllMembers.mockResolvedValue([
-      { id: 'm1', display_name: 'Ada', role: 'mentor', enrollment: { email: 'ada@x.com', created_at: '2026-07-01T00:00:00Z' } },
-      { id: 'm2', display_name: 'Bob', role: 'student', enrollment: null },
-      { id: 'm3', display_name: 'Cid', role: 'staff', enrollment: { email: 'cid@x.com', created_at: '2026-07-10T00:00:00Z' } },
+      { id: 'm1', enrollment_id: 'enr-1', display_name: 'Ada', role: 'mentor', enrollment: { email: 'ada@x.com', created_at: '2026-07-01T00:00:00Z' } },
+      { id: 'm2', enrollment_id: null, display_name: 'Bob', role: 'student', enrollment: null },
+      { id: 'm3', enrollment_id: 'enr-3', display_name: 'Cid', role: 'staff', enrollment: { email: 'cid@x.com', created_at: '2026-07-10T00:00:00Z' } },
     ]);
 
     const rows = await listMembersForAdmin('ad');
@@ -734,9 +734,9 @@ describe('member profiles + directory', () => {
     // Final rows: newest sign-up first, null-enrollment last. free_access defaults
     // false here (mock members carry no enrollment_id → empty comp set).
     expect(rows).toEqual([
-      { id: 'm3', display_name: 'Cid', email: 'cid@x.com', role: 'staff', signed_up_at: '2026-07-10T00:00:00.000Z', free_access: false },
-      { id: 'm1', display_name: 'Ada', email: 'ada@x.com', role: 'mentor', signed_up_at: '2026-07-01T00:00:00.000Z', free_access: false },
-      { id: 'm2', display_name: 'Bob', email: null, role: 'student', signed_up_at: null, free_access: false },
+      { id: 'm3', enrollment_id: 'enr-3', display_name: 'Cid', email: 'cid@x.com', role: 'staff', signed_up_at: '2026-07-10T00:00:00.000Z', free_access: false },
+      { id: 'm1', enrollment_id: 'enr-1', display_name: 'Ada', email: 'ada@x.com', role: 'mentor', signed_up_at: '2026-07-01T00:00:00.000Z', free_access: false },
+      { id: 'm2', enrollment_id: null, display_name: 'Bob', email: null, role: 'student', signed_up_at: null, free_access: false },
     ]);
   });
 });
