@@ -99,6 +99,10 @@ function ambientItemFrom(a: AmbientItem, position: number): TodayFeedItem {
     week: null,
     estimated_time: def?.est_minutes ?? null,
     status: null,
+    // Blogs are the one collectible ambient type: they award points via the read
+    // gate (podcasts/testimonials stay ambient with no points). The badge + the
+    // drawer read-gate key off this.
+    points: a.provider === 'blog' ? { learning: def?.learning_xp || 10 } : null,
     interacted: false,
   };
 }
@@ -205,6 +209,24 @@ async function completedCardIds(enrollmentId: string, cardIds: string[]): Promis
   }
 }
 
+/** Blog refs the student has already collected points for — dropped from the feed
+ *  so a read blog disappears (award is keyed on the same `blog:<id>` ref). */
+async function collectedBlogRefs(enrollmentId: string, refs: string[]): Promise<Set<string>> {
+  const blogRefs = Array.from(new Set(refs.filter((r) => r.startsWith('blog:'))));
+  if (!blogRefs.length) return new Set();
+  try {
+    const rows = await sequelize.query<{ event_key: string }>(
+      `SELECT event_key FROM student_points_events
+         WHERE enrollment_id = :eid AND event_key IN (:keys)`,
+      { replacements: { eid: enrollmentId, keys: blogRefs }, type: QueryTypes.SELECT },
+    );
+    return new Set(rows.map((r) => r.event_key));   // 'blog:<id>' — same string as the impression ref
+  } catch (err: any) {
+    console.warn('[todayFeedComposer] collected-blog lookup failed:', err?.message?.split('\n')[0]);
+    return new Set();
+  }
+}
+
 /**
  * The list actually served for a page: the materialised impressions minus cards
  * the student has completed ("finished tasks disappear"), reordered per visit when
@@ -212,12 +234,45 @@ async function completedCardIds(enrollmentId: string, cardIds: string[]): Promis
  * seed so pagination within one visit never repeats or skips.
  */
 async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed?: number): Promise<TodayFeedItem[]> {
-  const completed = await completedCardIds(enrollmentId, existing.map((r) => r.card_id).filter((x): x is string => !!x));
+  const [completed, collectedBlogs] = await Promise.all([
+    completedCardIds(enrollmentId, existing.map((r) => r.card_id).filter((x): x is string => !!x)),
+    collectedBlogRefs(enrollmentId, existing.map((r) => r.ref)),
+  ]);
   const items = existing
     .filter((r) => !(r.card_id && completed.has(r.card_id)))                        // completed via progress
+    .filter((r) => !collectedBlogs.has(r.ref))                                      // blog points already collected
     .filter((r) => (r.item as TodayFeedItem | null)?.status !== 'completed')        // snapshot already completed (project/etc.)
     .map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
   return seed != null ? orderForVisit(items, seed) : items;
+}
+
+/**
+ * Read-only "view as" page: compose a FRESH, non-persisted feed each visit so an
+ * admin viewing a member sees a fluent, different-each-refresh timeline (like the
+ * member's own reshuffling feed) instead of their frozen materialised set — WITHOUT
+ * writing to the member's impression log or the ambient seen-ledgers. Seed-stable
+ * per visit (different seed → different content + order).
+ */
+async function composeReadOnlyPage(enrollmentId: string, from: number, size: number, seed?: number): Promise<TodayFeedItem[]> {
+  const targetEnd = from + size;
+  const anchored = await gatherAnchored(enrollmentId, new Set<string>());
+  const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
+  const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
+  const perProvider = Math.max(6, Math.ceil((targetEnd + 8) / Math.max(1, providers.length)));
+  const ambientBatches = await Promise.all(
+    providers.map((p) => pickAmbientBatch(enrollmentId, p, perProvider, [], { readOnly: true, seed })),
+  );
+  const ambient = ambientBatches.flat().map((a) => ambientItemFrom(a, 0));
+  const combined = [...anchored, ...ambient];
+  const ordered = (seed != null ? orderForVisit(combined, seed) : combined)
+    .map((it, i): TodayFeedItem => ({ ...it, position: i, interacted: false }));
+  const [completed, collectedBlogs] = await Promise.all([
+    completedCardIds(enrollmentId, ordered.map((i) => i.card_id).filter((x): x is string => !!x)),
+    collectedBlogRefs(enrollmentId, ordered.map((i) => i.ref)),
+  ]);
+  const survivors = ordered.filter((i) =>
+    !(i.card_id && completed.has(i.card_id)) && !collectedBlogs.has(i.ref) && i.status !== 'completed');
+  return survivors.slice(from, targetEnd);
 }
 
 /**
@@ -232,27 +287,30 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   const from = Math.max(0, Math.floor(cursor));
   const targetEnd = from + size;
 
+  // Read-only "view as": ephemeral fresh feed (no writes), so the viewer sees a
+  // live, different-each-refresh timeline rather than the member's frozen set.
+  if (opts.readOnly) {
+    const items = await composeReadOnlyPage(enrollmentId, from, size, opts.seed);
+    await rehydrateCommunityItems(items);
+    await rehydrateSessionItems(items);
+    return { items, nextCursor: from + items.length, exhausted: items.length < size };
+  }
+
   let existing = await loadImpressions(enrollmentId);
   let served = await buildServed(enrollmentId, existing, opts.seed);
   let exhausted = false;
 
-  if (opts.readOnly) {
-    // Read-only "view as": show the member's already-materialised feed but never
-    // append new impressions (that's an append-only write to their data).
-    exhausted = served.length < targetEnd;
-  } else {
-    // Materialise until enough SURVIVING items fill the page (completed cards were
-    // dropped above), or the pools run dry. Bounded so a persistently short pool
-    // can never spin.
-    let guard = 0;
-    while (served.length < targetEnd && guard++ < 6) {
-      const before = existing.length;
-      const added = await extendFeed(enrollmentId, existing, targetEnd - served.length + 4);
-      if (!added.length) { exhausted = true; break; }
-      existing = await loadImpressions(enrollmentId);
-      if (existing.length === before) { exhausted = true; break; }
-      served = await buildServed(enrollmentId, existing, opts.seed);
-    }
+  // Materialise until enough SURVIVING items fill the page (completed cards were
+  // dropped above), or the pools run dry. Bounded so a persistently short pool
+  // can never spin.
+  let guard = 0;
+  while (served.length < targetEnd && guard++ < 6) {
+    const before = existing.length;
+    const added = await extendFeed(enrollmentId, existing, targetEnd - served.length + 4);
+    if (!added.length) { exhausted = true; break; }
+    existing = await loadImpressions(enrollmentId);
+    if (existing.length === before) { exhausted = true; break; }
+    served = await buildServed(enrollmentId, existing, opts.seed);
   }
 
   const items = served.slice(from, targetEnd);

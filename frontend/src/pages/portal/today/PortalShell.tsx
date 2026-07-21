@@ -14,6 +14,7 @@ import ChatDock, { DmTarget } from './ChatDock';
 import MessagesButton from './MessagesButton';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
+import ConfettiCelebration from '../../../components/ConfettiCelebration';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
 // icon per item. Today / Path / Schedule / Projects / Classroom / Community /
@@ -290,6 +291,9 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
 
   return (
     <div className={`te-shell${navCollapsed ? ' collapsed' : ''}${contactsCollapsed ? ' contacts-collapsed' : ''}`}>
+      {/* Points celebration — confetti splash scaled by the award, fires on the timeline
+          (and anywhere in the shell) when points land. */}
+      <ConfettiCelebration />
       {/* ── topbar ── */}
       <header className="te-top">
         <button type="button" className="te-navtoggle" onClick={() => setNavCollapsed((c) => !c)}

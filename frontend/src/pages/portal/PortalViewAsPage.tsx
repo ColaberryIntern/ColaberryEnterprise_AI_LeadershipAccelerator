@@ -22,10 +22,15 @@ export default function PortalViewAsPage() {
       setError('No view-as token provided.');
       return;
     }
+    // Optional deep-link target (e.g. admin "open the workspace" → a card runtime).
+    // Only allow internal portal paths — never an external/protocol-relative URL.
+    const nextMatch = hash.match(/(?:^#|&)next=([^&]+)/);
+    const nextRaw = nextMatch ? decodeURIComponent(nextMatch[1]) : '';
+    const dest = /^\/portal\/[^/]/.test(nextRaw) ? nextRaw : '/portal/today';
     login(token);
-    // Scrub the token from the URL/history, then land on the member's Today.
-    try { window.history.replaceState(null, '', '/portal/today'); } catch { /* non-fatal */ }
-    navigate('/portal/today', { replace: true });
+    // Scrub the token from the URL/history, then land on the destination.
+    try { window.history.replaceState(null, '', dest); } catch { /* non-fatal */ }
+    navigate(dest, { replace: true });
   }, [login, navigate]);
 
   return (

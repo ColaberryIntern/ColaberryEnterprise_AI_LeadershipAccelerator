@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { TimelineFeedCard } from './TimelineCard';
 import CardDetailBody from './CardDetailBody';
 
@@ -22,6 +22,7 @@ interface Props {
 
 const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview }) => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     if (!card) return;
@@ -55,7 +56,7 @@ const CardDetailDrawer: React.FC<Props> = ({ card, onClose, onComplete, preview 
             autoplayVideo
             onClose={onClose}
             onComplete={preview || !onComplete ? undefined : () => onComplete(card)}
-            onEnterWorkspace={preview ? undefined : () => navigate(`/portal/runtime/${card.id}`)}
+            onEnterWorkspace={preview ? undefined : () => navigate(`/portal/runtime/${card.id}`, { state: { from: location.pathname } })}
           />
         </aside>
       </div>

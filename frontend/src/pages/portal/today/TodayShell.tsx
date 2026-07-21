@@ -14,7 +14,9 @@ import {
   fmtCentralDateTime,
 } from './shellUtils';
 import portalApi from '../../../utils/portalApi';
-import { emitPointsEarned, onPointsEarned } from '../../../services/pointsFx';
+import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../../services/pointsFx';
+import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi';
+import { runtimeApi } from '../runtime/runtimeApi';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayFeedV2 from './TodayFeedV2';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
@@ -101,13 +103,29 @@ const TodayShell: React.FC = () => {
     if (!file || busy) return;
     setBusy(true);
     setUploadName(file.name);
+    const prevTotal = points?.total ?? 0;
     try {
       const isText = /\.(txt|md)$/i.test(file.name) || file.type.startsWith('text/');
-      const text = isText ? await file.text() : `[Uploaded file: ${file.name}]`;
-      const r = await ingestBackground({ resume_text: text });
+      if (isText) {
+        await ingestBackground({ resume_text: await file.text() });
+      } else {
+        // Binary (PDF/DOCX/etc — incl. LinkedIn "Save to PDF"): send the REAL
+        // file bytes to the extracting endpoint, NOT a placeholder, so the
+        // resume/LinkedIn actually parses server-side and fills the profile.
+        const data_base64 = await fileToBase64(file);
+        await uploadResume({ file_name: file.name, mime: file.type || 'application/octet-stream', data_base64 });
+      }
       await loadAll();
+      // Refresh the HUD total and celebrate any newly-awarded points (+25 the
+      // first time a resume/LinkedIn is uploaded).
+      try {
+        const fresh = await fetchPoints();
+        setPoints(fresh);
+        const gained = (fresh?.total ?? 0) - prevTotal;
+        if (gained > 0) emitPointsEarned(gained);
+      } catch { /* keep prior total */ }
       setShowUpload(false);
-      flash(r.parsed ? 'Got it — personalizing your experience in the background' : 'Uploaded — we will personalize as you go');
+      flash('Got it — personalizing your experience in the background');
     } catch { flash('Could not upload that right now'); } finally { setBusy(false); }
   };
 
@@ -310,10 +328,15 @@ const TodayShell: React.FC = () => {
               onWorkspace={setSelectedCard}
               onComplete={async (card) => {
                 // Collect points straight from the timeline card. Throws on the
-                // server watch/lock gate (422) so the card surfaces "watch it first".
-                const res = await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+                // server watch/read/lock gate (422) so the card surfaces the reason.
+                // Ambient blogs (ref `blog:<id>`) collect via the blog read gate.
+                const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
+                const res = blogId
+                  ? await runtimeApi.blogCollect(blogId)
+                  : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
                 await loadAll();
-                emitPointsEarned(res.data?.points_awarded ?? 0); // HUD burst + chime
+                emitPointsEarned(res?.points_awarded ?? 0); // HUD burst + chime
+                emitCardCollected(card.id);                 // drop it off the feed
               }}
             />
           </div>
@@ -398,12 +421,17 @@ const TodayShell: React.FC = () => {
         card={selectedCard}
         onClose={() => setSelectedCard(null)}
         onComplete={async (card) => {
-          // Persist the completion (the 75% watch gate is enforced server-side; a
-          // rejection propagates so the drawer surfaces "keep watching").
-          const res = await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+          // Persist the completion (watch/read/lock gates are enforced server-side; a
+          // rejection propagates so the drawer surfaces the reason). Ambient blogs
+          // (ref `blog:<id>`) collect via the blog read gate.
+          const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
+          const res = blogId
+            ? await runtimeApi.blogCollect(blogId)
+            : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
           setSelectedCard(null);
           await loadAll();
-          emitPointsEarned(res.data?.points_awarded ?? 0);   // HUD burst + chime
+          emitPointsEarned(res?.points_awarded ?? 0);   // HUD burst + chime
+          emitCardCollected(card.id);                   // drop it off the feed
         }}
       />
     </PortalShell>

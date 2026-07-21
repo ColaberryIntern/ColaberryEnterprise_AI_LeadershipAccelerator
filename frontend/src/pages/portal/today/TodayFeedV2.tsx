@@ -9,6 +9,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import { todayFeedApi, type TodayFeedItem } from './todayFeedApi';
+import { onCardCollected } from '../../../services/pointsFx';
 
 const PAGE = 10;
 const STATUSES: readonly string[] = ['locked', 'available', 'in_progress', 'completed'];
@@ -131,14 +132,13 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
     onOpen(card);
   }, [onOpen]);
 
-  // Collect → let the celebration (HUD burst + chime) play, then drop the finished
-  // card off the feed. If the collect is gated (server 422/423), onComplete throws
-  // and we neither remove nor swallow — the card surfaces the gate message.
-  const handleComplete = useCallback(async (card: TimelineFeedCard) => {
-    await onComplete?.(card);
-    window.setTimeout(() => setRows((prev) => prev.filter((r) => r.card.id !== card.id)), 1400);
-  }, [onComplete]);
-  const collectHandler = onComplete ? handleComplete : undefined;
+  // A collected card (from the tile OR the drawer) fires te-card-collected on
+  // success; drop its row from the feed after a beat so the celebration plays
+  // first. A gated collect throws before the signal, so the card stays put.
+  useEffect(() => onCardCollected((id) => {
+    window.setTimeout(() => setRows((prev) => prev.filter((r) => r.card.id !== id)), 1400);
+  }), []);
+  const collectHandler = onComplete;
 
   const looped: TimelineFeedCard[] = fallbackCards.length
     ? Array.from({ length: Math.min(visible, fallbackCards.length * 12) }, (_, i) => fallbackCards[i % fallbackCards.length])
