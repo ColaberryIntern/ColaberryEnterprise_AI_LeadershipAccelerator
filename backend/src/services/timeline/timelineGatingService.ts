@@ -23,6 +23,7 @@ import TimelineCard, { TimelineBucket } from '../../models/TimelineCard';
 import TimelineCardProgress from '../../models/TimelineCardProgress';
 import TimelineSectionRule from '../../models/TimelineSectionRule';
 import { resolve as resolveType } from './typeRegistry';
+import { isStaffEnrollment } from '../access/staffAccess';
 
 // ── predicate model ──────────────────────────────────────────────────────────
 export type UnlockScope = 'week' | 'all';
@@ -174,6 +175,11 @@ async function loadGlobalCards(): Promise<TimelineCard[]> {
  */
 export async function assertCardUnlocked(enrollmentId: string, card: TimelineCard): Promise<void> {
   try {
+    // Staff have unrestricted curriculum access — every card is unlocked for them,
+    // regardless of prerequisites. (Fail-safe: a lookup error reads as non-staff,
+    // so normal gating below still applies.)
+    if (await isStaffEnrollment(enrollmentId)) return;
+
     const progress = await TimelineCardProgress.findOne({ where: { card_id: card.id, enrollment_id: enrollmentId } });
     if (progress && (progress.status === 'completed' || progress.status === 'in_progress')) return;
 
