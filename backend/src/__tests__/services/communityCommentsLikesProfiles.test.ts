@@ -40,7 +40,7 @@ jest.mock('../../models/ContributionEvent', () => ({
 import {
   createComment, listComments, toggleLike, levelFor,
   getMyProfile, getMemberProfileById, updateMyProfile, listMembers,
-  setMemberRole, isMemberRole,
+  setMemberRole, isMemberRole, listMembersForAdmin,
 } from '../../services/communityService';
 import ContributionEvent from '../../models/ContributionEvent';
 import { getTotalsForEnrollments } from '../../services/pointsService';
@@ -709,5 +709,20 @@ describe('member profiles + directory', () => {
     expect(isMemberRole('mentor')).toBe(true);
     expect(isMemberRole('staff')).toBe(true);
     expect(isMemberRole('wizard')).toBe(false);
+  });
+
+  it('listMembersForAdmin: returns name+email+role rows, name-searchable (ILIKE)', async () => {
+    findAllMembers.mockResolvedValue([
+      { id: 'm1', display_name: 'Ada', role: 'mentor', enrollment: { email: 'ada@x.com' } },
+      { id: 'm2', display_name: 'Bob', role: 'student', enrollment: null },
+    ]);
+
+    const rows = await listMembersForAdmin('ad');
+
+    expect(findAllMembers.mock.calls[0][0].where.display_name[Op.iLike]).toBe('%ad%');
+    expect(rows).toEqual([
+      { id: 'm1', display_name: 'Ada', email: 'ada@x.com', role: 'mentor' },
+      { id: 'm2', display_name: 'Bob', email: null, role: 'student' },
+    ]);
   });
 });
