@@ -6,7 +6,7 @@ import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
 import { awardCommunityXp } from './progression/communityXpService';
-import { award, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
+import { award, revoke, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
@@ -722,10 +722,33 @@ export async function toggleLike(
     where: { member_id: member.id, likeable_type: likeableType, likeable_id: likeableId },
   });
 
+  // Resolve the author's canonical (enrollment-scoped) identity + a stable,
+  // presence-based key so a like awards +1 into the canonical StudentPointsEvent
+  // ledger and an unlike revokes it. The community leaderboard reads only that
+  // ledger, so without this likes-received would not count toward standings
+  // (posts/comments/recognition already award canonically; this restores likes to
+  // parity). Separate from the line-764 refetch, which reads post-increment points
+  // for the legacy level column.
+  const authorMember = await CommunityMember.findByPk(authorMemberId);
+  const authorEnrollmentId = authorMember?.enrollment_id ?? null;
+  const likeEventKey = `community_like:${likeableType}:${likeableId}:${member.id}`;
+
   let liked: boolean;
   if (created) {
     await CommunityMember.increment('points', { by: 1, where: { id: authorMemberId } });
     await CommunityPointsEvent.create({ member_id: authorMemberId, points: 1 });
+    // Canonical: likes-received count on the leaderboard. Presence-based +
+    // idempotent on (author, likeable, liker); self-likes award too (parity with
+    // the legacy +1, capped at 1 by the unique like row). Best-effort, matching
+    // the createPost/createComment canonical-award pattern in this file.
+    if (authorEnrollmentId) {
+      await award(authorEnrollmentId, {
+        eventType: 'community_like',
+        eventKey: likeEventKey,
+        points: 1,
+        metadata: { likeable_type: likeableType, likeable_id: likeableId, liker_member_id: member.id },
+      }).catch(() => {});
+    }
     if (post) await post.increment('like_count', { by: 1 });
     // Notify the author that someone liked their content (Ali feedback 2026-07-20).
     // Only on a real new like (created) and never for a self-like. The notify is a
@@ -757,6 +780,11 @@ export async function toggleLike(
     await likeRow.destroy();
     await CommunityMember.decrement('points', { by: 1, where: { id: authorMemberId } });
     await CommunityPointsEvent.create({ member_id: authorMemberId, points: -1 });
+    // Canonical: reverse the like-point so an unlike removes it from the
+    // leaderboard. Idempotent — revoking an absent event is a no-op.
+    if (authorEnrollmentId) {
+      await revoke(authorEnrollmentId, likeEventKey).catch(() => {});
+    }
     if (post) await post.decrement('like_count', { by: 1 });
     liked = false;
   }
