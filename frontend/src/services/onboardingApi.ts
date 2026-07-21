@@ -134,6 +134,15 @@ export async function getNextSession(): Promise<NextLiveSession | null> {
   return data.next_session ?? null;
 }
 
+// ── Join a live session (records attendance + awards session_attended once) ───
+export interface JoinSessionResult { ok: true; status: 'present' | 'late'; awarded: boolean; points: number; }
+/** Record attendance for a live session. Idempotent — safe to call on every join
+ *  click; awards the session_attended points only the first time. */
+export async function joinSession(sessionId: string): Promise<JoinSessionResult> {
+  const { data } = await portalApi.post<JoinSessionResult>(`/api/portal/sessions/${sessionId}/join`);
+  return data;
+}
+
 /** Upcoming public events (Open Houses) from CCPP, for the portal calendar. */
 export async function fetchPublicEvents(days = 30): Promise<OpenHouseView[]> {
   const { data } = await portalApi.get<{ events: OpenHouseView[] }>(`/api/portal/events?days=${days}`);

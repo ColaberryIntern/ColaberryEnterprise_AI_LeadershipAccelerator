@@ -4,6 +4,8 @@ import portalApi from '../../utils/portalApi';
 import AnthropicCoursesBento from '../../components/portal/anthropic-bento/AnthropicCoursesBento';
 import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
 import { useCountdown } from '../../hooks/useCountdown';
+import { joinSession } from '../../services/onboardingApi';
+import { emitPointsEarned } from '../../services/pointsFx';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -321,6 +323,20 @@ function PortalSessionDetailPage() {
   const countdown = useCountdown(countdownTarget);
   const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;
 
+  // Open the meeting synchronously (popup-blocker safe), then record attendance
+  // best-effort. The credit call must never block or break joining the class;
+  // the HUD "+N" burst (emitPointsEarned) is the on-success confirmation.
+  const handleJoinMeeting = () => {
+    const link = s?.meeting_link;
+    if (!link) return;
+    window.open(link, '_blank', 'noopener,noreferrer');
+    if (id) {
+      joinSession(id)
+        .then((r) => { if (r.awarded) emitPointsEarned(r.points); })
+        .catch(() => { /* attendance credit is best-effort */ });
+    }
+  };
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -471,7 +487,7 @@ function PortalSessionDetailPage() {
                     </div>
                     <button
                       className="btn btn-sm px-5 py-2"
-                      onClick={() => window.open(s.meeting_link, '_blank', 'noopener,noreferrer')}
+                      onClick={handleJoinMeeting}
                       style={{
                         background: '#ef4444', color: '#fff',
                         borderRadius: 10, border: 'none',

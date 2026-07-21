@@ -436,7 +436,7 @@ export async function getSessionsToMarkCompleted() {
   });
 }
 
-function convertTo24h(timeStr: string): string {
+export function convertTo24h(timeStr: string): string {
   const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
   if (!match) return '10:00';
   let hours = parseInt(match[1], 10);

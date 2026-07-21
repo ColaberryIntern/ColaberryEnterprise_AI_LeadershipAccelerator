@@ -29,6 +29,7 @@ import {
   getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
   detectAbsentParticipants, computeAllReadinessScores,
 } from './acceleratorService';
+import { finalizeSessionAttendance } from './liveSessionAttendanceService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 
 /**
@@ -2263,6 +2264,11 @@ export function startScheduler(): void {
       for (const session of toComplete) {
         await session.update({ status: 'completed' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as completed`);
+
+        // Fill leave_time/duration for anyone who self-joined but never left.
+        await finalizeSessionAttendance(session.id).catch((err: any) =>
+          console.error(`[Scheduler] Attendance finalize failed for session ${session.id}:`, err.message)
+        );
 
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);

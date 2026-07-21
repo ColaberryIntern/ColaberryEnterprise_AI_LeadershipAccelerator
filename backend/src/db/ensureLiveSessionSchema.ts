@@ -76,6 +76,9 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     `ALTER TABLE attendance_records ADD CONSTRAINT ck_attendance_records_marked_by CHECK (marked_by IN ('system', 'admin', 'self'))`,
     `CREATE INDEX IF NOT EXISTS idx_attendance_records_session ON attendance_records (session_id)`,
     `CREATE INDEX IF NOT EXISTS idx_attendance_records_enrollment ON attendance_records (enrollment_id)`,
+    // One attendance row per (enrollment, session) — makes self-join capture
+    // race-safe under a double-click, mirroring student_points_events_unique.
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_attendance_records_enrollment_session ON attendance_records (enrollment_id, session_id)`,
 
     // ---- session_chat_messages ----
     `CREATE TABLE IF NOT EXISTS session_chat_messages (

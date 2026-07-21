@@ -21,7 +21,7 @@ import {
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
-  handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession,
+  handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
   handleGetProgress,
 } from '../controllers/participantController';
@@ -136,6 +136,7 @@ router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, req
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/next-session', requireParticipant, handleGetNextSession);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
+router.post('/api/portal/sessions/:id/join', requireParticipant, handleJoinSession);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
 router.post('/api/portal/sessions/:id/chat', requireParticipant, handlePostSessionChat);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);

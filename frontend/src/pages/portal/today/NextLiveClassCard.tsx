@@ -2,7 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCountdown } from '../../../hooks/useCountdown';
 import { parseSessionTimeToHHMM, tzAbbrev } from '../../../utils/sessionTime';
-import { NextLiveSession } from '../../../services/onboardingApi';
+import { NextLiveSession, joinSession } from '../../../services/onboardingApi';
+import { emitPointsEarned } from '../../../services/pointsFx';
 
 // The "Next live class" side-card on Today — cherry-accent, backed by the
 // live_sessions-driven /api/portal/next-session payload. TodayShell gates on a
@@ -21,6 +22,17 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
     return hhmm ? `${session.session_date}T${hhmm}:00` : null;
   })();
   const cd = useCountdown(target);
+
+  // Open the meeting synchronously (popup-blocker safe), then record attendance
+  // best-effort. The credit call must never block or break joining the class.
+  const handleJoin = () => {
+    const link = session.meeting_link;
+    if (!link) return;
+    window.open(link, '_blank', 'noopener,noreferrer');
+    joinSession(session.id)
+      .then((r) => { if (r.awarded) emitPointsEarned(r.points); })
+      .catch(() => { /* attendance credit is best-effort */ });
+  };
 
   return (
     <div className="te-card te-scard accent-cherry">
@@ -49,7 +61,7 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
             type="button"
             className="te-btn cherry"
             style={{ width: '100%', justifyContent: 'center' }}
-            onClick={() => { if (session.meeting_link) window.open(session.meeting_link, '_blank', 'noopener,noreferrer'); }}
+            onClick={handleJoin}
           >
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
               <path d="M15 10l4.5-2.5v9L15 14M4 7h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
