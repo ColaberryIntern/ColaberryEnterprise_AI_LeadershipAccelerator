@@ -1023,6 +1023,37 @@ export function isMemberRole(value: string): value is CommunityMemberRole {
   return (MEMBER_ROLES as readonly string[]).includes(value);
 }
 
+// Admin roster for the role-assignment screen: every community member (across
+// cohorts), name + email + current role, so an admin can find someone and
+// promote them. Name search (ILIKE), capped. Not cohort-scoped — this is an
+// admin-only surface (requireAdmin at the route).
+export interface AdminMemberRow {
+  id: string;
+  display_name: string;
+  email: string | null;
+  role: CommunityMemberRole;
+}
+
+export async function listMembersForAdmin(search?: string): Promise<AdminMemberRow[]> {
+  const where: Record<string, unknown> = {};
+  const q = search?.trim();
+  if (q) where.display_name = { [Op.iLike]: `%${q}%` };
+
+  const members = await CommunityMember.findAll({
+    where,
+    include: [{ model: Enrollment, as: 'enrollment', attributes: ['email'] }],
+    order: [['display_name', 'ASC']],
+    limit: 200,
+  });
+
+  return members.map((m: any) => ({
+    id: m.id,
+    display_name: m.display_name,
+    email: m.enrollment?.email ?? null,
+    role: (m.role as CommunityMemberRole) ?? 'student',
+  }));
+}
+
 export async function setMemberRole(targetMemberId: string, role: CommunityMemberRole): Promise<MemberProfile> {
   if (!isMemberRole(role)) {
     throw Object.assign(new Error(`Invalid role: ${role}`), { error_class: 'ValidationError' });
