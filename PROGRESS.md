@@ -10354,3 +10354,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: The Today feed serves frozen `today_feed_impressions.item` snapshots ([[reference_today_feed_append_only_snapshot]]), so the media fix (#520) and byline fix (#527) each needed a manual jsonb_set backfill for existing rows. Re-hydrating community cards on serve makes them self-healing — a new post appears correct, an edited post updates, and no future generator fix needs a backfill.
   - Verification: Backend `tsc` (Docker/CI authoritative; local root-compiler noise is node_modules only). Only community items trigger the extra query (batched, indexed by id); fail-soft preserves the existing "one surface can't break the feed" guarantee. No frontend change; no backfill needed.
   - Notes: Branch `workstream/community-card-selfheal` off main. Backend-only → deploy with `--no-deps`. The append-only snapshot is kept as the fallback when a post is deleted/unavailable.
+
+### Cory persona — admin mentor-preview rebranded (last cartoon faces removed) — 2026-07-20
+- [x] Admin builder's mentor PREVIEW now shows Cory + the spark (was "AI Mentor" + an eyes-and-smile cartoon face)
+  - Date: 2026-07-20
+  - Session: CC-20260720-x9r4
+  - What changed: Finishes the Cory rebrand ([[project_cory_persona_locked]]) — the operator-facing builder preview still misrepresented the student mentor (its own cartoon-face SVGs + "AI Mentor Preview" labels). `PreviewMentorChat.tsx` + `ObjectConfigEngine.tsx`: aliased the local `MentorFace`/`PreviewMentorFace`/`MentorAvatar` to the shared `CorySpark`/`CoryAvatar` (faceless spark; launcher spark white on the gradient), relabeled "AI Mentor Preview" → "Cory Preview", "Test how the AI Mentor responds" → "…how Cory responds", config tooltips → Cory. `CoryMentorIcon.tsx`: aria fallback `'AI Mentor'` → `'Cory'`.
+  - Why: user said "move fwd" — completing the rebrand so no cartoon face/"AI Mentor" remains anywhere (student or admin preview). Preview now accurately mirrors what students see.
+  - Verification: Frontend `tsc --noEmit` clean for all 3 changed files (only the pre-existing `@dnd-kit` errors remain); grep confirms zero cartoon-face SVGs (`cx="22" cy="30"` eyes) and zero user-facing "AI Mentor" left in the builder files.
+  - Notes: Branch `workstream/cory-admin-preview`. Admin/operator-facing only — no student surface or backend change. Dormant until next frontend deploy.

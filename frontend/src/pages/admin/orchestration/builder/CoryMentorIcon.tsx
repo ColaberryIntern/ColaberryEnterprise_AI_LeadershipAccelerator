@@ -13,7 +13,7 @@ export default function CoryMentorIcon({ size = 40, glowing = true, label }: Pro
 
   return (
     <div className="d-inline-flex align-items-center gap-2" title={label || 'Cory — AI Leadership Mentor'}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label || 'AI Mentor'}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={label || 'Cory'}>
         <defs>
           <radialGradient id="cory-orb-grad" cx="40%" cy="35%" r="60%">
             <stop offset="0%" stopColor="var(--chart-5)" stopOpacity="0.9" />
