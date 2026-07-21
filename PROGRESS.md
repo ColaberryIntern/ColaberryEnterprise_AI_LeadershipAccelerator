@@ -10404,3 +10404,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: closes Step 2 of the reassessment ("a CI schema-drift gate"). Chosen over a CI-boot gate because CI can't reach the prod/dev DBs, and making a boot-in-CI gate green would require adding ensure-hooks for ~12 gap tables (a cross-subsystem initiative). Ali approved the prod-cron approach ("go A"). [[reference_dev_schema_sync_tool]]
   - Verification: dry-run on prod = "already schema-faithful" (clean baseline); alert path self-tested end-to-end (one labeled test email delivered to ali via Mandrill); cron entry installed + confirmed in `crontab -l`.
   - Notes: Branch `workstream/schema-drift-cron`. Prod-infra change (host crontab) — approved. Detects dev-behind-prod (the rehearsal env falling behind); dev-ahead-of-prod is normal dev activity and intentionally not alarmed. The deeper CI-boot gate + adding ensure-hooks for all gap tables remains a larger future option.
+
+### Feed Control — the card checkbox IS the in/out-of-timeline switch — 2026-07-20
+- [x] Make each type card's checkbox directly control whether that type is in the student's Today timeline (checked = in, unchecked = out)
+  - Date: 2026-07-20
+  - Session: CC-20260720-f7k3
+  - What changed: `frontend/src/pages/admin/orchestration/FeedControlTab.tsx` — the per-card checkbox now reflects + toggles "in the Today timeline": anchored types via `today_eligible` (routeType), ambient types via the Global Policy `ambientProviders` rotation (savePolicy). Removed the now-redundant green "● In Today" pill and the multi-select "bulk route" bar (+ the `selected` state); moving a type between areas stays as drag-between-lanes. Cards show an `in timeline`/`out` label, a left-accent when in, and dim when out.
+  - Why: Ali kept reaching for the checkbox as the in/out control (asked ~4×). The checkbox was only a bulk-select affordance while the pill was the real switch — confusing. Now there's ONE obvious control: check = in, uncheck = out, live.
+  - Verification: Frontend `tsc --noEmit` clean on FeedControlTab (only the pre-existing `@dnd-kit` local gap); no `eslint-disable` directives; grep confirms zero leftover `selected/toggleSel/selArr` references. Uses existing live levers (routeType `today_eligible` + policy `ambientProviders`) — no backend/API change.
+  - Notes: Branch `workstream/feed-control-checkbox` off main. Frontend-only → nginx `--no-deps` deploy (no backend bounce). Ambient checkbox = membership in the ambient rotation; anchored checkbox = today_eligible.
