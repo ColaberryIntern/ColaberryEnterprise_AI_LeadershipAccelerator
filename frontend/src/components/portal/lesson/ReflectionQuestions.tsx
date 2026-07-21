@@ -103,7 +103,7 @@ Do NOT give a direct answer \u2014 guide thinking with the Socratic method.`;
                           onClick={() => askMentor(i, r.question, deeperPrompt)}
                         >
                           <i className="bi bi-robot"></i>
-                          Ask AI Mentor
+                          Ask Cory
                         </button>
                       </div>
                       <span style={{ fontSize: 12, color: '#78350f' }}>{deeperPrompt}</span>
@@ -125,7 +125,7 @@ Do NOT give a direct answer \u2014 guide thinking with the Socratic method.`;
                       onClick={() => askMentor(i, r.question, '')}
                     >
                       <i className="bi bi-robot"></i>
-                      Ask AI Mentor
+                      Ask Cory
                     </button>
                   )}
                 </div>

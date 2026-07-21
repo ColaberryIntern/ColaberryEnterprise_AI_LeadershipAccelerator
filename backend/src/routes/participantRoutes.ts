@@ -870,6 +870,104 @@ router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) =
   }
 });
 
+// Friends — send a request / respond to one. Idempotent, cohort-scoped. The
+// caller's friendship status toward each cohort-mate rides on /cohort/presence
+// (friendshipStatus), so the rail needs no separate list endpoint.
+router.post('/api/portal/friends/request', requireParticipant, async (req, res) => {
+  const parsed = z.object({ targetId: z.string().uuid() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid targetId' }); return; }
+  try {
+    const { sendFriendRequest } = await import('../services/friendshipService');
+    const result = await sendFriendRequest(req.participant!.sub, parsed.data.targetId);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'FriendRequestError') { res.status(400).json({ error: err.message }); return; }
+    res.status(500).json({ error: 'Could not send friend request' });
+  }
+});
+
+router.post('/api/portal/friends/respond', requireParticipant, async (req, res) => {
+  const parsed = z.object({ requesterId: z.string().uuid(), accept: z.boolean() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid request body' }); return; }
+  try {
+    const { respondToRequest } = await import('../services/friendshipService');
+    const result = await respondToRequest(req.participant!.sub, parsed.data.requesterId, parsed.data.accept);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'FriendRequestError') { res.status(400).json({ error: err.message }); return; }
+    res.status(500).json({ error: 'Could not respond to friend request' });
+  }
+});
+
+// Direct messages — 1:1 chat modelled as a 2-person private room (room_type
+// 'dm'), reusing the persisted RoomMessage layer. Not flag-gated. Cohort-scoped.
+router.post('/api/portal/dm/open', requireParticipant, async (req, res) => {
+  const parsed = z.object({ otherId: z.string().uuid() }).safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid recipient' }); return; }
+  try {
+    const { openDm } = await import('../services/communityRooms/dmService');
+    const result = await openDm(req.participant!.sub, parsed.data.otherId, req.participant!.cohort_id);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'DmError') { res.status(400).json({ error: err.message }); return; }
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.get('/api/portal/dm/:roomId/messages', requireParticipant, async (req, res) => {
+  const parsed = z.object({ roomId: z.string().uuid() }).safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid conversation' }); return; }
+  try {
+    const { listDmMessages } = await import('../services/communityRooms/dmService');
+    const ctx = { enrollmentId: req.participant!.sub, cohortId: req.participant!.cohort_id, isAdmin: false };
+    const since = typeof req.query.since === 'string' ? req.query.since : undefined;
+    const result = await listDmMessages(ctx, parsed.data.roomId, since);
+    res.json(result);
+  } catch (err: any) {
+    if (err?.name === 'DmError') { res.status(400).json({ error: err.message }); return; }
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/dm/:roomId/send', requireParticipant, async (req, res) => {
+  const params = z.object({ roomId: z.string().uuid() }).safeParse(req.params);
+  const body = z.object({ content: z.string().min(1).max(4000) }).safeParse(req.body);
+  if (!params.success || !body.success) { res.status(400).json({ error: 'Invalid message' }); return; }
+  try {
+    const { sendDmMessage } = await import('../services/communityRooms/dmService');
+    const ctx = { enrollmentId: req.participant!.sub, cohortId: req.participant!.cohort_id, isAdmin: false };
+    const message = await sendDmMessage(ctx, params.data.roomId, body.data.content);
+    res.status(201).json({ message });
+  } catch (err: any) {
+    if (err?.name === 'DmError') { res.status(400).json({ error: err.message }); return; }
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Messages inbox — my DM conversations (+ unread) and a read receipt.
+router.get('/api/portal/dm/conversations', requireParticipant, async (req, res) => {
+  try {
+    const { listConversations } = await import('../services/communityRooms/dmService');
+    const conversations = await listConversations(req.participant!.sub);
+    res.json({ conversations });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.post('/api/portal/dm/:roomId/read', requireParticipant, async (req, res) => {
+  const parsed = z.object({ roomId: z.string().uuid() }).safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid conversation' }); return; }
+  try {
+    const { markDmRead } = await import('../services/communityRooms/dmService');
+    await markDmRead(req.participant!.sub, parsed.data.roomId);
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.name === 'DmError') { res.status(400).json({ error: err.message }); return; }
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
 router.get('/api/portal/community/members/:memberId', requireParticipant, async (req, res) => {
   const paramsParsed = MemberIdParamSchema.safeParse(req.params);
   if (!paramsParsed.success) {

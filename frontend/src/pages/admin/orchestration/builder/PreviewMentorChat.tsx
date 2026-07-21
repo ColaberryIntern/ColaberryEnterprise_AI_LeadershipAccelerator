@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useMentorContext } from '../../../../contexts/MentorContext';
+import { CorySpark, CoryAvatar } from '../../../../components/portal/CoryMark';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -25,31 +26,9 @@ interface PreviewMentorChatProps {
   onClose?: () => void;
 }
 
-/* Mentor face SVG — matches PortalMentorChat */
-const MentorFace = ({ size = 40 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="32" cy="32" r="30" fill="var(--surface-blue-subtle)" stroke="var(--blue-200)" strokeWidth="2" />
-    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="var(--chart-1)" strokeWidth="3" strokeLinecap="round" fill="none" />
-    <circle cx="22" cy="30" r="3.5" fill="var(--chart-1)" />
-    <circle cx="42" cy="30" r="3.5" fill="var(--chart-1)" />
-    <circle cx="23.2" cy="28.8" r="1.2" fill="var(--neutral-0)" />
-    <circle cx="43.2" cy="28.8" r="1.2" fill="var(--neutral-0)" />
-    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="var(--chart-1)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-    <rect x="7" y="24" width="6" height="10" rx="3" fill="var(--chart-5)" />
-    <rect x="51" y="24" width="6" height="10" rx="3" fill="var(--chart-5)" />
-    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="var(--chart-5)" strokeWidth="2" strokeLinecap="round" fill="none" />
-    <circle cx="19" cy="45" r="2" fill="var(--chart-5)" />
-  </svg>
-);
-
-const MentorAvatar = ({ size = 28 }: { size?: number }) => (
-  <div
-    className="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0"
-    style={{ width: size, height: size, background: 'var(--surface-blue-subtle)', overflow: 'hidden' }}
-  >
-    <MentorFace size={size} />
-  </div>
-);
+/* Cory's mark — the faceless spark students actually see; the admin preview mirrors it. */
+const MentorFace = ({ size = 40 }: { size?: number }) => <CorySpark size={size} />;
+const MentorAvatar = ({ size = 28 }: { size?: number }) => <CoryAvatar size={size} />;
 
 /* Inline markdown: **bold** and `code` */
 function renderInline(text: string): React.ReactNode {
@@ -239,7 +218,7 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
           >
             <MentorFace size={fs ? 32 : 28} />
           </div>
-          <span className="fw-semibold" style={{ fontSize: fs ? 14 : 12, color: 'var(--text-strong)' }}>AI Mentor Preview</span>
+          <span className="fw-semibold" style={{ fontSize: fs ? 14 : 12, color: 'var(--text-strong)' }}>Cory Preview</span>
           {!fs && <span className="badge bg-secondary ms-auto" style={{ fontSize: 9 }}>Preview</span>}
         </div>
         <div className="d-flex align-items-center gap-1">
@@ -298,9 +277,9 @@ export default function PreviewMentorChat({ token, apiUrl, lessonId, lessonTitle
           {messages.length === 0 && (
             <div className="text-center py-4">
               <MentorFace size={48} />
-              <p className="fw-semibold small mt-2 mb-1" style={{ color: 'var(--text-strong)' }}>AI Mentor Preview</p>
+              <p className="fw-semibold small mt-2 mb-1" style={{ color: 'var(--text-strong)' }}>Cory Preview</p>
               <p className="small mb-0" style={{ color: 'var(--text-muted)' }}>
-                Test how the AI Mentor responds to student questions for this lesson.
+                Test how Cory responds to student questions for this lesson.
               </p>
             </div>
           )}

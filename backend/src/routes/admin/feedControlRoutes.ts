@@ -15,6 +15,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   getBoard, getFeedPolicy, setFeedPolicy, routeType, bulkRouteTypes, routeCard, simulate, listEnrollments,
 } from '../../services/timeline/feedControlService';
+import { listPresets, savePreset, deletePreset } from '../../services/timeline/feedPresetsService';
 
 const router = Router();
 const adminId = (req: Request): string | undefined => (req as any).admin?.id || (req as any).user?.id;
@@ -73,6 +74,21 @@ router.get('/api/admin/feed-control/simulate', requireAdmin, async (req, res) =>
       : undefined;
     res.json({ ok: true, ...(await simulate(enrollmentId, limit, includeTypes)) });
   } catch (e) { fail(res, e); }
+});
+
+// Named, reusable feed configurations (the sandbox selection saved by name).
+router.get('/api/admin/feed-control/presets', requireAdmin, async (_req, res) => {
+  try { res.json({ ok: true, presets: await listPresets() }); } catch (e) { fail(res, e); }
+});
+router.post('/api/admin/feed-control/presets', requireAdmin, async (req, res) => {
+  try {
+    const { name, includes } = req.body || {};
+    const preset = await savePreset(String(name || ''), Array.isArray(includes) ? includes : [], adminId(req));
+    res.json({ ok: true, preset });
+  } catch (e) { fail(res, e); }
+});
+router.delete('/api/admin/feed-control/presets/:id', requireAdmin, async (req, res) => {
+  try { await deletePreset(String(req.params.id), adminId(req)); res.json({ ok: true }); } catch (e) { fail(res, e); }
 });
 
 export default router;

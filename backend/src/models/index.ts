@@ -312,6 +312,7 @@ import CommunityEvent from './CommunityEvent';
 // Colaberry Commons — Community Rooms layer (rooms/bookings/rsvp/messages/outbox)
 import CommunityRoom from './CommunityRoom';
 import RoomMembership from './RoomMembership';
+import Friendship from './Friendship'; // portal Contacts rail friend graph
 import RoomBooking from './RoomBooking';
 import RoomBookingAttendee from './RoomBookingAttendee';
 import RoomMessage from './RoomMessage';
@@ -1328,6 +1329,12 @@ CoraKbEntry.belongsTo(ResponsiblePerson, { foreignKey: 'primary_person_id', as: 
 
 // --- Community + Gamification associations (Epic 4) ---
 Enrollment.hasOne(CommunityMember, { foreignKey: 'enrollment_id', as: 'communityMember' });
+// Friendships — two FKs to Enrollment (requester + addressee), aliased both ways.
+// The service queries Friendship directly (no includes); these register the graph.
+Enrollment.hasMany(Friendship, { foreignKey: 'requester_id', as: 'sentFriendRequests' });
+Enrollment.hasMany(Friendship, { foreignKey: 'addressee_id', as: 'receivedFriendRequests' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'requester_id', as: 'requester' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'addressee_id', as: 'addressee' });
 CommunityMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 Cohort.hasMany(CommunityPost, { foreignKey: 'cohort_id', as: 'communityPosts' });

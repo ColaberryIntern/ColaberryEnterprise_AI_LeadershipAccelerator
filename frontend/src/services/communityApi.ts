@@ -68,14 +68,14 @@ export interface LeaderboardEntry {
   rank: number;
 }
 
-// Level thresholds mirror communityService.ts's LEVEL_TIERS (backend source of
-// truth). Tier names are a frontend-only display layer over the 4 numeric
-// levels the API actually exposes (approved by Ali, BC #9985689739, 2026-07-16).
+// ONE canonical level ladder (mirrors backend pointsService.LEVELS / frontend
+// onboardingApi.LEVELS). The community profile/leaderboard now report the same
+// canonical points + level as the top-right HUD — a single system everywhere.
 export const LEVEL_TIERS = [
   { level: 1, min: 0, name: 'Apprentice' },
-  { level: 2, min: 1500, name: 'Builder' },
-  { level: 3, min: 2700, name: 'Architect' },
-  { level: 4, min: 4200, name: 'Principal Architect' },
+  { level: 2, min: 150, name: 'Builder' },
+  { level: 3, min: 400, name: 'Architect' },
+  { level: 4, min: 900, name: 'Principal' },
 ] as const;
 
 export function levelName(level: number): string {
@@ -174,8 +174,8 @@ export async function pingPresence(): Promise<{ presence: CommunityPresenceStatu
 
 export interface CommunityNotification {
   id: string;
-  notification_type: 'mention' | 'reply';
-  source_type: 'post' | 'comment';
+  notification_type: 'mention' | 'reply' | 'like' | 'friend_request' | 'friend_accepted' | 'new_message';
+  source_type: 'post' | 'comment' | 'friendship' | 'dm';
   source_id: string;
   read: boolean;
   created_at: string;

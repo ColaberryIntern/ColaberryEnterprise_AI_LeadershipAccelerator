@@ -10,13 +10,14 @@
  * feed stays Class-only until enabled. Each source is fail-soft (errors → []),
  * so one surface can never break the feed.
  */
-import { getFeed, type FeedCard } from './timelineService';
+import { getFeed, type FeedCard, type FeedVideo } from './timelineService';
 import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
 import { anchoredWeekAllowed } from './todayFeedPlan';
 import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
 import CommunityPost from '../../models/CommunityPost';
+import CommunityMember from '../../models/CommunityMember';
 import { resolveCohortId } from '../communityService';
 import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
@@ -70,9 +71,41 @@ function projectItem(t: { id: string; title: string | null; description: string 
   };
 }
 
-function communityItem(p: { id: string; body: string }): TodayFeedItem {
+// A community post's media lives in media_urls (JSONB). Carry it into the Today card
+// the same way the Community feed renders it: a YouTube/video link becomes a playable
+// video (TimelineCard derives the thumbnail + play from the url), otherwise the first
+// image is the poster. Without this the timeline card falls back to the blank band tile.
+const YT_RE = /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)[\w-]{11}/i;
+const VIDEO_EXT_RE = /\.(mp4|webm|ogg|mov|m4v)(\?|#|$)/i;
+
+function communityMedia(mediaUrls: unknown): { video: FeedVideo | null; image: string | null } {
+  const urls = Array.isArray(mediaUrls) ? (mediaUrls.filter((u) => typeof u === 'string' && u.trim()) as string[]) : [];
+  if (!urls.length) return { video: null, image: null };
+  const vid = urls.find((u) => YT_RE.test(u) || VIDEO_EXT_RE.test(u));
+  if (vid) return { video: { url: vid, presenter: null, poster: null }, image: null };
+  return { video: null, image: urls[0] };
+}
+
+type CommunityPostFields = {
+  id?: string; body: string; media_urls?: unknown;
+  member?: { display_name?: string | null; avatar_url?: string | null; level?: number | null } | null;
+};
+
+// The DYNAMIC fields of a community card — derived from the LIVE post. Shared by
+// compose-time (communityItem) and serve-time (rehydrateCommunityItems) so media,
+// author, and text always reflect the current post, never a stale snapshot.
+export function communityFieldsFromPost(p: CommunityPostFields): Pick<TodayFeedItem, 'title' | 'description' | 'image' | 'video' | 'author'> {
   const body = (p.body || '').trim();
   const title = body.length > 80 ? `${body.slice(0, 77)}…` : body;
+  const { video, image } = communityMedia(p.media_urls);
+  const author = p.member
+    ? { name: p.member.display_name || 'Member', avatar_url: p.member.avatar_url ?? null, level: p.member.level ?? 1 }
+    : null;
+  return { title: title || 'Community post', description: body || null, image, video, author };
+}
+
+function communityItem(p: CommunityPostFields & { id: string }): TodayFeedItem {
+  const f = communityFieldsFromPost(p);
   return {
     position: 0,
     kind: 'anchored',
@@ -81,18 +114,47 @@ function communityItem(p: { id: string; body: string }): TodayFeedItem {
     type: 'community_discussion',
     render_band: resolveType('community_discussion')?.render_band ?? 'community',
     card_id: null,
-    title: title || 'Community post',
+    title: f.title,
     subtitle: null,
-    description: body || null,
-    image: null,
-    video: null,
+    description: f.description,
+    image: f.image,
+    video: f.video,
     blog: null,
     content: null,
     week: null,
     estimated_time: null,
     status: null,
     interacted: false,
+    author: f.author,
   };
+}
+
+/**
+ * Serve-time re-hydration: refresh placed community cards from the LIVE post so a
+ * new or edited post's media/author/text never shows stale from the frozen
+ * impression snapshot (see reference_today_feed_append_only_snapshot). One batched
+ * query, only when community items are present. Fail-soft — on error the snapshot
+ * is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateCommunityItems(items: TodayFeedItem[]): Promise<void> {
+  const community = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('community:'));
+  if (!community.length) return;
+  try {
+    const ids = Array.from(new Set(community.map((i) => i.ref.slice('community:'.length))));
+    const posts = await CommunityPost.findAll({
+      where: { id: ids },
+      include: [{ model: CommunityMember, as: 'member', attributes: ['display_name', 'avatar_url', 'level'] }],
+    });
+    const byId = new Map(posts.map((p) => { const plain = p.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    for (const it of community) {
+      const post = byId.get(it.ref.slice('community:'.length));
+      if (!post) continue;
+      const f = communityFieldsFromPost(post);
+      it.title = f.title; it.description = f.description; it.image = f.image; it.video = f.video; it.author = f.author;
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] community rehydrate failed:', err?.message?.split('\n')[0]);
+  }
 }
 
 async function classCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
@@ -136,6 +198,7 @@ async function communityCandidates(enrollmentId: string, placedRefs: Set<string>
     const cohortId = await resolveCohortId(enrollmentId);
     const posts = await CommunityPost.findAll({
       where: { cohort_id: cohortId, status: 'visible' },
+      include: [{ model: CommunityMember, as: 'member', attributes: ['display_name', 'avatar_url', 'level'] }],
       order: [['created_at', 'DESC']],
       limit: CANDIDATE_CAP,
     });

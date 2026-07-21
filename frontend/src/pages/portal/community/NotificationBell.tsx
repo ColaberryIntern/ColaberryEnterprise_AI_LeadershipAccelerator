@@ -9,6 +9,10 @@ import {
 
 function notifText(n: CommunityNotification): string {
   const who = n.actor?.display_name ?? 'Someone';
+  if (n.notification_type === 'friend_request') return `${who} sent you a friend request`;
+  if (n.notification_type === 'friend_accepted') return `${who} accepted your friend request`;
+  if (n.notification_type === 'new_message') return `${who} sent you a message`;
+  if (n.notification_type === 'like') return `${who} liked your ${n.source_type}`;
   if (n.notification_type === 'mention') return `${who} mentioned you in a ${n.source_type}`;
   return n.source_type === 'comment' ? `${who} replied to you` : `${who} commented on your post`;
 }
@@ -48,6 +52,8 @@ const NotificationBell: React.FC = () => {
   const onItem = (n: CommunityNotification) => {
     if (!n.read) { markNotificationRead(n.id).catch(() => {}); setCount((c) => Math.max(0, c - 1)); }
     setOpen(false);
+    // Friend / DM notifications point at the rail (present on every page) — no jump.
+    if (n.source_type === 'friendship' || n.source_type === 'dm') return;
     window.location.assign('/portal/community');
   };
 

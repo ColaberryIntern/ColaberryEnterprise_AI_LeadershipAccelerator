@@ -6,6 +6,8 @@ import portalApi from '../utils/portalApi';
 // colour are derived deterministically on the client so the API stays lean.
 
 export type Presence = 'online' | 'idle' | 'offline';
+// The caller's friendship status toward this person.
+export type FriendshipStatus = 'friend' | 'requested' | 'incoming' | 'none';
 
 export interface CohortContact {
   id: string;
@@ -14,6 +16,7 @@ export interface CohortContact {
   color: string;
   avatarUrl: string | null;
   presence: Presence;
+  friendshipStatus: FriendshipStatus;
 }
 
 interface ServerContact {
@@ -21,6 +24,7 @@ interface ServerContact {
   name: string;
   avatarUrl: string | null;
   presence: Presence;
+  friendshipStatus?: FriendshipStatus;
 }
 
 // Design-E accent hues — a stable colour per member (hash of id/name), so the
@@ -53,5 +57,16 @@ export async function fetchCohortPresence(): Promise<CohortContact[]> {
     color: colorFor(c.id || c.name),
     avatarUrl: c.avatarUrl ?? null,
     presence: c.presence,
+    friendshipStatus: c.friendshipStatus ?? 'none',
   }));
+}
+
+// Friend actions. Fire-and-forget from the caller's POV; the rail refetches
+// presence afterward to reflect the new friendshipStatus.
+export async function sendFriendRequest(targetId: string): Promise<void> {
+  await portalApi.post('/api/portal/friends/request', { targetId });
+}
+
+export async function respondToFriendRequest(requesterId: string, accept: boolean): Promise<void> {
+  await portalApi.post('/api/portal/friends/respond', { requesterId, accept });
 }

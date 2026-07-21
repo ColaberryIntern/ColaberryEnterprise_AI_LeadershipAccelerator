@@ -1,4 +1,4 @@
-import { StudentPointsEvent } from '../models';
+import StudentPointsEvent from '../models/StudentPointsEvent';
 import { award, hasAwarded } from './pointsService';
 
 /**

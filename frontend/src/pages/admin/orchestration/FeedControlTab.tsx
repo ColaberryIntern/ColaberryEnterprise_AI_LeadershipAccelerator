@@ -29,6 +29,7 @@ interface Board { lanes: Lane[]; policy: Policy; buckets: string[]; feedControlE
 interface SimItem { kind: string; type: string; student_label?: string; title: string | null; score?: number; reasons: string[]; render_band?: string; surface?: string; week?: number | null; thumbnail?: string | null; }
 interface SimContext { is_explorer: boolean; total_published: number; candidates: number; locked: number; completed: number; already_seen: number; max_week: number; }
 interface EnrollmentOption { id: string; label: string; cohort_id: string | null; type: string; status: string; }
+interface FeedPreset { id: string; name: string; includes: string[]; created_at: string; }
 const SURF_COLOR: Record<string, string> = { today: '#6d28d9', class: '#2563eb', project: '#059669', community: '#db2777', group: '#d97706' };
 
 const AMBIENT = ['blog', 'podcast', 'testimonial'];
@@ -43,7 +44,6 @@ export default function FeedControlTab() {
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawer, setDrawer] = useState<FCType | null>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -56,6 +56,7 @@ export default function FeedControlTab() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [sandboxOn, setSandboxOn] = useState(false);
   const [included, setIncluded] = useState<Set<string>>(new Set());
+  const [presets, setPresets] = useState<FeedPreset[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -142,18 +143,47 @@ export default function FeedControlTab() {
     finally { setBusy(false); }
   }, [allTypes, included, load]);
 
-  const toggleSel = (slug: string) => setSelected((s) => { const n = new Set(s); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
+  const loadPresets = useCallback(async () => {
+    try { const r = await api.get('/api/admin/feed-control/presets'); setPresets(r.data.presets || []); } catch { /* non-fatal */ }
+  }, []);
+  useEffect(() => { loadPresets(); }, [loadPresets]);
+
+  const savePresetFromSandbox = useCallback(async () => {
+    const name = window.prompt('Name this feed preset (e.g. "Onboarding week"):')?.trim();
+    if (!name) return;
+    try {
+      await api.post('/api/admin/feed-control/presets', { name, includes: Array.from(included) });
+      flash(`Saved preset "${name}"`);
+      await loadPresets();
+    } catch (e: any) { flash(e?.response?.data?.error || 'Save preset failed'); }
+  }, [included, loadPresets]);
+
+  const deletePresetById = useCallback(async (id: string, name: string) => {
+    if (!window.confirm(`Delete preset "${name}"?`)) return;
+    try { await api.delete(`/api/admin/feed-control/presets/${id}`); await loadPresets(); }
+    catch (e: any) { flash(e?.response?.data?.error || 'Delete failed'); }
+  }, [loadPresets]);
+
+  // The checkbox on each card IS the in/out switch for the Today timeline:
+  // anchored types via today_eligible; ambient types via the policy rotation.
+  const inTimeline = (t: FCType) => t.feed_mode === 'ambient'
+    ? (board?.policy.ambientProviders || []).includes(t.slug)
+    : !!t.today_eligible;
+  const toggleInTimeline = (t: FCType) => {
+    if (t.feed_mode === 'ambient') {
+      const cur = board?.policy.ambientProviders || [];
+      savePolicy({ ambientProviders: cur.includes(t.slug) ? cur.filter((s) => s !== t.slug) : [...cur, t.slug] });
+    } else {
+      routeTypes([t.slug], { today_eligible: !t.today_eligible });
+    }
+  };
 
   const onDropLane = (surfaceId: string) => (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(null);
     const slug = e.dataTransfer.getData('text/plain');
     if (!slug) return;
-    const slugs = selected.size && selected.has(slug) ? Array.from(selected) : [slug];
-    routeTypes(slugs, { home_surface: surfaceId, today_eligible: surfaceId === 'today' ? true : undefined });
-    setSelected(new Set());
+    routeTypes([slug], { home_surface: surfaceId, today_eligible: surfaceId === 'today' ? true : undefined });
   };
-
-  const selArr = useMemo(() => Array.from(selected), [selected]);
 
   if (loading) return <div className="fc-wrap"><div className="fc-note">Loading Feed Control…</div><style>{CSS}</style></div>;
   if (err) return <div className="fc-wrap"><div className="fc-note err">{err}</div><button className="fc-btn" onClick={load}>Retry</button><style>{CSS}</style></div>;
@@ -165,32 +195,18 @@ export default function FeedControlTab() {
       <div className="fc-head">
         <div>
           <h2 className="fc-h">Feed Control</h2>
-          <p className="fc-sub">Route curriculum types to surfaces and tune how often students see them. Drag a type between lanes, or select several and route them together.</p>
+          <p className="fc-sub"><b>Check a type to put it in the student's Today timeline; uncheck to take it out.</b> Drag a type between lanes to change which area it belongs to; use the ⚙ gear for cadence and frequency.</p>
         </div>
         <button className="fc-btn ghost" onClick={() => setPolicyOpen(true)}>⚙ Global Policy</button>
       </div>
 
       <div className={`fc-mode ${board.feedControlEnabled ? 'live' : 'preview'}`}>
         {board.feedControlEnabled ? (
-          <span><b className="fc-mode-b">● LIVE</b> Feed Control is ON — lane, In-Today, cadence, priority, caps and scheduling all govern the real student feed.</span>
+          <span><b className="fc-mode-b">● LIVE</b> Feed Control is ON — the <b>checkbox</b> (in/out of the timeline), lane, cadence, priority, caps and scheduling all govern the real student feed.</span>
         ) : (
-          <span><b className="fc-mode-b">◐ PREVIEW MODE</b> Two levers reach students right now: a type's <b>lane</b> and its <b>In-Today</b> toggle (both badged <Badge kind="live" />). Cadence, priority, caps, rotation and the Global Policy are <Badge kind="preview" /> — they change the simulator below, not the live feed, until Feed Control is switched on.</span>
+          <span><b className="fc-mode-b">◐ PREVIEW MODE</b> Two levers reach students right now: a type's <b>lane</b> and its <b>checkbox</b> (in/out of the timeline) (both badged <Badge kind="live" />). Cadence, priority, caps, rotation and the Global Policy are <Badge kind="preview" /> — they change the simulator below, not the live feed, until Feed Control is switched on.</span>
         )}
       </div>
-
-      {selArr.length > 0 && (
-        <div className="fc-bulk">
-          <b>{selArr.length} selected</b>
-          <span>Route to</span>
-          {board.lanes.map((l) => (
-            <button key={l.surface.id} className="fc-chip-btn" style={{ borderColor: l.surface.color, color: l.surface.color }}
-              onClick={() => { routeTypes(selArr, { home_surface: l.surface.id, today_eligible: l.surface.id === 'today' ? true : undefined }); setSelected(new Set()); }}>
-              {l.surface.label}
-            </button>
-          ))}
-          <button className="fc-btn ghost sm" onClick={() => setSelected(new Set())}>Clear</button>
-        </div>
-      )}
 
       <div className="fc-lanes">
         {board.lanes.map((lane) => (
@@ -210,23 +226,14 @@ export default function FeedControlTab() {
               {lane.types.map((t) => (
                 <div key={t.slug} draggable
                   onDragStart={(e) => e.dataTransfer.setData('text/plain', t.slug)}
-                  className={`fc-card ${selected.has(t.slug) ? 'sel' : ''}`}>
-                  <input type="checkbox" checked={selected.has(t.slug)} onChange={() => toggleSel(t.slug)} onClick={(e) => e.stopPropagation()} />
+                  className={`fc-card ${inTimeline(t) ? 'in' : 'out'}`}>
+                  <input type="checkbox" checked={inTimeline(t)} onChange={() => toggleInTimeline(t)} onClick={(e) => e.stopPropagation()}
+                    title={inTimeline(t) ? 'In the Today timeline — uncheck to take it out' : 'Not in the Today timeline — check to put it in'} />
                   <div className="fc-card-body" onClick={() => setDrawer(t)}>
                     <div className="fc-card-title">{t.student_label || t.label}</div>
                     <div className="fc-card-meta">
-                      <span className={`fc-tag ${t.feed_mode === 'ambient' ? 'amb' : 'anc'}`}>{t.feed_mode}</span>
-                      {t.feed_mode === 'ambient' ? (
-                        <button type="button" className="fc-today-tog amb"
-                          title="Ambient types rotate into Today via the Global Policy — preview-only until Feed Control is enabled"
-                          onClick={(e) => { e.stopPropagation(); setPolicyOpen(true); }}>⟳ rotates</button>
-                      ) : (
-                        <button type="button" className={`fc-today-tog ${t.today_eligible ? 'on' : 'off'}`}
-                          title={t.today_eligible ? 'In the Today feed (live) — click to take it out' : 'Not in the Today feed — click to put it in (live)'}
-                          onClick={(e) => { e.stopPropagation(); routeTypes([t.slug], { today_eligible: !t.today_eligible }); }}>
-                          {t.today_eligible ? '● In Today' : '○ Off'}
-                        </button>
-                      )}
+                      <span className={`fc-in-lbl ${inTimeline(t) ? 'on' : 'off'}`}>{inTimeline(t) ? 'in timeline' : 'out'}</span>
+                      <span className={`fc-tag ${t.feed_mode === 'ambient' ? 'amb' : 'anc'}`}>{t.feed_mode === 'ambient' ? 'rotates' : 'anchored'}</span>
                       <span className="fc-mut">{t.bucket}</span>
                       {t.cadence != null && <span className="fc-mut">cad {t.cadence}</span>}
                     </div>
@@ -271,6 +278,18 @@ export default function FeedControlTab() {
                   {t.feed_mode === 'ambient' && <span className="fc-tag amb">amb</span>}
                 </label>
               ))}
+            </div>
+            <div className="fc-sb-presets">
+              <span className="fc-mut">Presets:</span>
+              {presets.length === 0 && <span className="fc-mut">none saved yet</span>}
+              {presets.map((p) => (
+                <span key={p.id} className="fc-preset-chip">
+                  <button type="button" className="fc-preset-load" title={`Load "${p.name}" — ${p.includes.length} type${p.includes.length === 1 ? '' : 's'}`}
+                    onClick={() => setIncluded(new Set(p.includes))}>{p.name} <span className="fc-mut">· {p.includes.length}</span></button>
+                  <button type="button" className="fc-preset-del" title="Delete preset" onClick={() => deletePresetById(p.id, p.name)}>×</button>
+                </span>
+              ))}
+              <button type="button" className="fc-btn ghost sm" disabled={included.size === 0} onClick={savePresetFromSandbox}>💾 Save current as preset</button>
             </div>
             <div className="fc-sb-foot">
               <span className="fc-mut"><b>{included.size}</b> of {allTypes.length} included{!simEnroll && ' · pick a student above to see the timeline'}</span>
@@ -424,6 +443,12 @@ const CSS = `
 .fc-empty{border:1px dashed var(--fc-bd);border-radius:9px;padding:14px;text-align:center;color:var(--fc-sub);font-size:12px}
 .fc-card{display:flex;align-items:flex-start;gap:8px;background:var(--fc-bg);border:1px solid var(--fc-bd);border-radius:10px;padding:9px 10px;cursor:grab}
 .fc-card.sel{border-color:var(--fc-acc);box-shadow:0 0 0 1px var(--fc-acc)}
+.fc-card.in{border-left:3px solid #15803d}
+.fc-card.out{opacity:.62}
+.fc-card input[type=checkbox]{width:16px;height:16px;margin-top:2px;cursor:pointer;flex:none;accent-color:#15803d}
+.fc-in-lbl{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:1px 6px}
+.fc-in-lbl.on{background:#dcfce7;color:#15803d} .fc-in-lbl.off{background:#f1f5f9;color:#94a3b8}
+@media(prefers-color-scheme:dark){.fc-in-lbl.on{background:#14532d55;color:#86efac}.fc-in-lbl.off{background:#1e293b;color:#64748b}}
 .fc-card-body{flex:1;min-width:0}
 .fc-card-title{font-size:13.5px;font-weight:600;line-height:1.25}
 .fc-card-meta{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}
@@ -503,4 +528,9 @@ const CSS = `
 @media(prefers-color-scheme:dark){.fc-sb-item.on{background:#1e3a8a33}}
 .fc-sb-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fc-sb-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
+.fc-sb-presets{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--fc-bd)}
+.fc-preset-chip{display:inline-flex;align-items:center;border:1px solid var(--fc-bd);border-radius:999px;overflow:hidden;background:var(--fc-soft)}
+.fc-preset-load{background:transparent;border:0;cursor:pointer;color:var(--fc-ink);font-size:12px;font-weight:700;padding:4px 4px 4px 11px}
+.fc-preset-del{background:transparent;border:0;cursor:pointer;color:var(--fc-sub);font-size:14px;line-height:1;padding:4px 9px 4px 4px}
+.fc-preset-del:hover{color:#dc2626}
 `;
