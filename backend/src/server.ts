@@ -2232,6 +2232,12 @@ async function start(): Promise<void> {
       // (typeSeeder re-asserts surface columns from code, so routing must win last).
       const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');
       await applyFeedRoutingToRegistry();
+      // Invariant: at most one published build station per week — archive any
+      // artifact_submission duplicate of an implementation_task so a re-scaffold that
+      // re-published it self-heals (idempotent). See buildStationReconciler.
+      const { reconcileBuildStationLayout } = await import('./services/timeline/buildStationReconciler');
+      const bs = await reconcileBuildStationLayout();
+      if (bs.archived) console.log(`[TimelineEngine] build-station dedup: archived ${bs.archived} duplicate artifact_submission card(s)`);
     } catch (err: any) {
       console.warn('[TimelineEngine] seed failed:', err?.message);
     }
