@@ -173,6 +173,21 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const inlineAudioRef = useRef<HTMLAudioElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
+  const [collecting, setCollecting] = useState(false);
+  const [collected, setCollected] = useState(false); // optimistic: card flips to done on collect
+  const [gateMsg, setGateMsg] = useState<string | null>(null);
+  // Collect points straight from the timeline card. On success the celebration
+  // (HUD burst + chime) fires via the parent's onComplete; the server enforces the
+  // watch/lock gate and its 422 message is surfaced inline ("watch it first").
+  const handleCollect = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (collecting || !onComplete) return;
+    setGateMsg(null);
+    setCollecting(true);
+    try { await onComplete(card); setCollected(true); }
+    catch (err: any) { setGateMsg(err?.response?.data?.error || 'Open it and finish first to collect your points.'); }
+    finally { setCollecting(false); }
+  };
   const toggleInline = () => {
     if (locked) return;
     if (!playingInline) { setPlayingInline(true); return; }
@@ -204,11 +219,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const playable = !!source;
   const [showComments, setShowComments] = useState(false);
 
-  // Viewport autoplay: a video card plays a muted, click-through PREVIEW while it
-  // is in view and stops when scrolled away — so only what you're looking at
-  // plays. Clicking opens the drawer (full video + sound).
+  // Viewport autoplay: a media card (video OR podcast audio) starts playing while
+  // it is in view and stops when scrolled away — so only what you're looking at
+  // plays. Video is a muted, click-through preview; a podcast starts its episode.
   useEffect(() => {
-    if (!(playable && !podcastAudio && !locked)) return;
+    if (!((playable || !!podcastAudio) && !locked)) return;
     const el = cardRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.55 });
@@ -216,7 +231,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
     return () => obs.disconnect();
   }, [playable, podcastAudio, locked]);
   useEffect(() => {
-    if (playable && !podcastAudio && !locked) setPlayingInline(inView);
+    if ((playable || !!podcastAudio) && !locked) setPlayingInline(inView);
   }, [inView, playable, podcastAudio, locked]);
   const ownPoster =
     (card.image && card.image.trim()) ||
@@ -427,14 +442,26 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           </button>
         )}
         <span className="spacer" />
-        {done
+        {(done || collected)
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }} title={card.lock_reason || undefined}>{card.lock_reason || 'Unlocks later'}</span>
-            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
-                <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
-              </button>}
+            : (pts > 0 && onComplete)
+              ? <button type="button" className="fc-cta cherry" disabled={collecting} onClick={handleCollect} title={`Collect +${pts} pts`}>
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> {collecting ? 'Collecting…' : `Collect +${pts} pts`}
+                </button>
+              : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
+                  <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
+                </button>}
       </div>
+      {gateMsg && !collected && (
+        <div style={{ padding: '0 18px 12px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--text-muted, #6B6B6B)' }}>
+          <span style={{ minWidth: 0 }}>{gateMsg}</span>
+          <button type="button" className="fc-cta berry" style={{ marginLeft: 'auto', flex: 'none' }} onClick={(e) => { e.stopPropagation(); setGateMsg(null); onOpen?.(card); }}>
+            <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Open
+          </button>
+        </div>
+      )}
       {/* The class thread — toggled by the Comment button, shared with the workspace. Never for locked cards. */}
       {showComments && !locked && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
     </div>
