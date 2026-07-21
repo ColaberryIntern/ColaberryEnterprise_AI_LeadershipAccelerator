@@ -57,6 +57,7 @@ export interface TodayFeedItem {
   week: number | null;
   estimated_time: number | null;
   status: string | null;       // anchored progress status
+  points?: { learning?: number; builder?: number; community?: number } | null;  // engagement points the card awards (anchored curriculum cards)
   interacted: boolean;
   author?: { name: string; avatar_url: string | null; level: number } | null;  // community posts: the member byline
 }
