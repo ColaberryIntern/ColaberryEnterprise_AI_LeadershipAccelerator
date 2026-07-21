@@ -29,6 +29,7 @@ interface Board { lanes: Lane[]; policy: Policy; buckets: string[]; feedControlE
 interface SimItem { kind: string; type: string; student_label?: string; title: string | null; score?: number; reasons: string[]; render_band?: string; surface?: string; week?: number | null; thumbnail?: string | null; }
 interface SimContext { is_explorer: boolean; total_published: number; candidates: number; locked: number; completed: number; already_seen: number; max_week: number; }
 interface EnrollmentOption { id: string; label: string; cohort_id: string | null; type: string; status: string; }
+interface FeedPreset { id: string; name: string; includes: string[]; created_at: string; }
 const SURF_COLOR: Record<string, string> = { today: '#6d28d9', class: '#2563eb', project: '#059669', community: '#db2777', group: '#d97706' };
 
 const AMBIENT = ['blog', 'podcast', 'testimonial'];
@@ -56,6 +57,7 @@ export default function FeedControlTab() {
   const [refreshTick, setRefreshTick] = useState(0);
   const [sandboxOn, setSandboxOn] = useState(false);
   const [included, setIncluded] = useState<Set<string>>(new Set());
+  const [presets, setPresets] = useState<FeedPreset[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -141,6 +143,27 @@ export default function FeedControlTab() {
     } catch (e: any) { flash(e?.response?.data?.error || 'Apply failed'); }
     finally { setBusy(false); }
   }, [allTypes, included, load]);
+
+  const loadPresets = useCallback(async () => {
+    try { const r = await api.get('/api/admin/feed-control/presets'); setPresets(r.data.presets || []); } catch { /* non-fatal */ }
+  }, []);
+  useEffect(() => { loadPresets(); }, [loadPresets]);
+
+  const savePresetFromSandbox = useCallback(async () => {
+    const name = window.prompt('Name this feed preset (e.g. "Onboarding week"):')?.trim();
+    if (!name) return;
+    try {
+      await api.post('/api/admin/feed-control/presets', { name, includes: Array.from(included) });
+      flash(`Saved preset "${name}"`);
+      await loadPresets();
+    } catch (e: any) { flash(e?.response?.data?.error || 'Save preset failed'); }
+  }, [included, loadPresets]);
+
+  const deletePresetById = useCallback(async (id: string, name: string) => {
+    if (!window.confirm(`Delete preset "${name}"?`)) return;
+    try { await api.delete(`/api/admin/feed-control/presets/${id}`); await loadPresets(); }
+    catch (e: any) { flash(e?.response?.data?.error || 'Delete failed'); }
+  }, [loadPresets]);
 
   const toggleSel = (slug: string) => setSelected((s) => { const n = new Set(s); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
 
@@ -271,6 +294,18 @@ export default function FeedControlTab() {
                   {t.feed_mode === 'ambient' && <span className="fc-tag amb">amb</span>}
                 </label>
               ))}
+            </div>
+            <div className="fc-sb-presets">
+              <span className="fc-mut">Presets:</span>
+              {presets.length === 0 && <span className="fc-mut">none saved yet</span>}
+              {presets.map((p) => (
+                <span key={p.id} className="fc-preset-chip">
+                  <button type="button" className="fc-preset-load" title={`Load "${p.name}" — ${p.includes.length} type${p.includes.length === 1 ? '' : 's'}`}
+                    onClick={() => setIncluded(new Set(p.includes))}>{p.name} <span className="fc-mut">· {p.includes.length}</span></button>
+                  <button type="button" className="fc-preset-del" title="Delete preset" onClick={() => deletePresetById(p.id, p.name)}>×</button>
+                </span>
+              ))}
+              <button type="button" className="fc-btn ghost sm" disabled={included.size === 0} onClick={savePresetFromSandbox}>💾 Save current as preset</button>
             </div>
             <div className="fc-sb-foot">
               <span className="fc-mut"><b>{included.size}</b> of {allTypes.length} included{!simEnroll && ' · pick a student above to see the timeline'}</span>
@@ -503,4 +538,9 @@ const CSS = `
 @media(prefers-color-scheme:dark){.fc-sb-item.on{background:#1e3a8a33}}
 .fc-sb-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .fc-sb-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px;flex-wrap:wrap}
+.fc-sb-presets{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px;padding-top:10px;border-top:1px solid var(--fc-bd)}
+.fc-preset-chip{display:inline-flex;align-items:center;border:1px solid var(--fc-bd);border-radius:999px;overflow:hidden;background:var(--fc-soft)}
+.fc-preset-load{background:transparent;border:0;cursor:pointer;color:var(--fc-ink);font-size:12px;font-weight:700;padding:4px 4px 4px 11px}
+.fc-preset-del{background:transparent;border:0;cursor:pointer;color:var(--fc-sub);font-size:14px;line-height:1;padding:4px 9px 4px 4px}
+.fc-preset-del:hover{color:#dc2626}
 `;
