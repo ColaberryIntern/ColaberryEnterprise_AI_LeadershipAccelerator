@@ -10518,3 +10518,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali on the live /portal/today: "when I click on any item the screen freezes… the right panel should open" + "videos should start playing when I scroll to a certain part." [[project_today_timeline_v2]] [[reference_timeline_engine_student_runtime]]
   - Verification: Frontend `tsc --noEmit` clean for both changed files (only pre-existing `@dnd-kit`); freeze root-cause confirmed by CSS-scope analysis + verified fix post-deploy.
   - Notes: Branch `workstream/timeline-drawer-video`. Frontend-only → nginx `--no-deps`. The earlier timeline-ux PR made the whole card clickable → drawer, which is what exposed this pre-existing drawer-scoping bug prominently.
+
+### Staff role — unrestricted curriculum access (bypass timeline gating) — 2026-07-21
+- [x] Community members with role='staff' see all curriculum unlocked; timeline gating bypassed
+  - Date: 2026-07-21
+  - Session: CC-20260721-r7k4
+  - What changed: New `backend/src/services/access/staffAccess.ts` → `isStaffEnrollment(enrollmentId)` — one lookup on `community_members.role` by `enrollment_id`, fail-SAFE to false. Wired as an early-return bypass at the two timeline gating choke points: `assertCardUnlocked` (timelineGatingService.ts — the open/complete guard that throws 423 for students) and the `getFeed` lock overlay (timelineService.ts — staff cards read 'available' instead of 'locked'). The pure evaluator (`evaluateCardLock`) is untouched. Staff label already renders (People directory chip + admin page); curriculum routes have no paywall, so staff (who all have enrollments) are already free to take the class.
+  - Why: Ali — "Any of the staff should be able to see any and all curriculum, no restrictions... labelled as staff... free to take the class." [[project_canonical_course_structure]]
+  - Verification: backend jest — new `staffAccess.test.ts` 5/5 (happy / non-staff / no-row / empty-id / DB-error-fails-safe) + `timelineGatingService` pure tests still green (15/15 combined); backend `tsc --noEmit` clean on all changed files.
+  - Notes: Branch `workstream/staff-unrestricted-curriculum`. First role-based in-service gate bypass in the repo; the timeline→community coupling is isolated in staffAccess.ts (one extra query per gate check). Social-feed `min_level` gate NOT bypassed here (separate surface, not curriculum) — optional follow-up. Deploy = backend + nginx.
