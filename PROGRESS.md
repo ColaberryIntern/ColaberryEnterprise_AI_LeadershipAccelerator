@@ -10413,3 +10413,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali kept reaching for the checkbox as the in/out control (asked ~4×). The checkbox was only a bulk-select affordance while the pill was the real switch — confusing. Now there's ONE obvious control: check = in, uncheck = out, live.
   - Verification: Frontend `tsc --noEmit` clean on FeedControlTab (only the pre-existing `@dnd-kit` local gap); no `eslint-disable` directives; grep confirms zero leftover `selected/toggleSel/selArr` references. Uses existing live levers (routeType `today_eligible` + policy `ambientProviders`) — no backend/API change.
   - Notes: Branch `workstream/feed-control-checkbox` off main. Frontend-only → nginx `--no-deps` deploy (no backend bounce). Ambient checkbox = membership in the ambient rotation; anchored checkbox = today_eligible.
+
+### Announcement title names the week's TOPIC, not its role — 2026-07-21
+- [x] Weekly kickoff Announcement title switched from week role to week subject
+  - Date: 2026-07-21
+  - Session: CC-20260720-h3k9
+  - What changed: `cardContentService.ts` — new `weekTopicLabel(bp)` derives a deterministic topic from the blueprint's primary competency (`competencies[0]`), acronym-aware (AI/API/MCP stay uppercase), fallback to the role when absent. The announcement title override now uses it: `This Week — {topic}` instead of `This Week — {bp.title}` (bp.title is the week ROLE — Business Analyst, Software Engineer, ... — which disagreed with the topic-focused body). Overview keeps the role theme (its tile shows week_title). Unit test `__tests__/cardContentService.test.ts` (title-case, acronyms, first-competency-only, fallback, null-safety).
+  - Verification: backend tsc clean (dev+prod Docker build); CI 4/4 green (PR #554); prod preview confirmed all 12 weeks map to clean topics (wk4 Software Engineer -> Prompt Engineering); post-deploy updated 12 existing announcement cards' cached titles directly (no LLM), wk0 skipped (locked/hand-authored); verified at most one published announcement per week.
+  - Notes: Branch `workstream/build-artifacts-lab`, merged main 2dfb7a7a, prod backend deployed + healthy. Dev blueprint data drifted from prod (dev titles were already topic-ish) — separate dev-drift issue, does not affect prod. [[project_announcement_curriculum_type]]
