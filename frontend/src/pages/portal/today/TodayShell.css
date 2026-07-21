@@ -378,15 +378,23 @@
 /* ════════════════════════════════════════════════════════════════════════
    REDESIGN — command band (desktop), bottom tab bar (mobile), QR modal.
    ════════════════════════════════════════════════════════════════════════ */
-.te-band{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:26px;align-items:center;
+/* Flex + wrap (NOT a viewport media query) so the band responds to its OWN
+   width — the middle grid column, which the left nav + right contacts rail can
+   squeeze well below the viewport width. When the greeting can't sit beside the
+   ring cluster at its natural min-content width, the cluster drops to its own
+   full-width row instead of the heading collapsing and shattering mid-word. */
+.te-band{display:flex;flex-wrap:wrap;gap:18px 26px;align-items:center;
   background:var(--surface);border:1px solid var(--border);border-top:4px solid var(--cherry);
   border-radius:var(--r-24);box-shadow:var(--shadow-md);padding:22px 26px;margin-bottom:18px}
+/* greeting column grows to fill; keep default min-width:auto (do NOT set 0) so
+   its min-content is the wrap trigger and the <h2> never breaks within a word. */
+.te-band > div:first-child{flex:1 1 340px}
 .te-band .crumb{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--cherry-text);display:flex;align-items:center;gap:8px}
 .te-band h2{font-family:var(--logo);font-size:26px;line-height:1.12;color:var(--strong);margin:8px 0 4px;font-weight:700;letter-spacing:-.01em}
 .te-band .statline{color:var(--muted);font-size:14px;margin:0 0 14px}
 .te-band .statline b{color:var(--leaf-text)}
 .te-band .ctas{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.te-cluster{display:flex;gap:20px;align-items:center;padding-left:26px;border-left:1px solid var(--border-sub)}
+.te-cluster{display:flex;flex-wrap:wrap;gap:16px 20px;align-items:center;flex:0 1 auto}
 .te-ring{--p:0;--c:var(--berry);width:74px;height:74px;border-radius:50%;flex:none;display:grid;place-items:center;
   background:conic-gradient(var(--c) calc(var(--p)*1%),var(--sunken) 0);position:relative}
 .te-ring::before{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--surface)}
@@ -481,9 +489,10 @@
   /* app bar: keep brand + theme + settings + avatar; drop the desktop rail + HUD */
   .te-rail,.te-hud{display:none}
   .te-top{padding:10px 14px;gap:10px}
-  /* command band stacks; the ring cluster wraps under the greeting */
-  .te-band{grid-template-columns:1fr;padding:18px;border-radius:var(--r-16)}
+  /* mobile polish — the band already wraps via flex at any width; here we just
+     tighten padding/type and give the stacked ring cluster a top divider. */
+  .te-band{padding:18px;border-radius:var(--r-16)}
   .te-band h2{font-size:22px}
-  .te-cluster{padding-left:0;border-left:none;border-top:1px solid var(--border-sub);padding-top:16px;flex-wrap:wrap;gap:16px}
+  .te-cluster{border-top:1px solid var(--border-sub);padding-top:16px;gap:16px}
   .te-tabbar{display:flex}
 }
