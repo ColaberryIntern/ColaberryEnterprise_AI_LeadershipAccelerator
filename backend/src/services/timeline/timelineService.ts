@@ -10,7 +10,6 @@ import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineCardProgress';
 import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
-import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { resolve as resolveType } from './typeRegistry';
 import { selectTestimonialForEnrollment } from './networkVideoService';
 import { selectPodcastForEnrollment } from './podcastMediaService';
@@ -239,21 +238,8 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   // The type's Studio thumbnail (AI banner) — every card's default image.
   const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t.thumbnail_url || '').trim() || null]));
 
-  // The week's SECTION title from the Blueprint — the Overview card's display
-  // title, sourced straight from the blueprint (no week number, no generation
-  // step). Looked up once per program present among overview cards.
-  const sectionTitleByKey = new Map<string, string>();
-  const overviewPrograms = Array.from(new Set(
-    cards.filter((c) => c.type === 'overview' && (c as any).program_id).map((c) => (c as any).program_id as string),
-  ));
-  if (overviewPrograms.length) {
-    const bps = await CurriculumBlueprint.findAll({
-      where: { program_id: { [Op.in]: overviewPrograms } },
-      attributes: ['program_id', 'week', 'title'],
-      order: [['updated_at', 'ASC']],   // latest update wins on overwrite
-    });
-    for (const b of bps) sectionTitleByKey.set(`${(b as any).program_id}|${b.week}`, b.title);
-  }
+  // NOTE: the 'overview' card type (which surfaced the week's SECTION title as
+  // its week_title) was retired 2026-07-21, so week_title is always null now.
 
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
@@ -302,7 +288,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       blog: blogFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
       type_thumbnail: thumbBySlug.get(card.type) || null,
-      week_title: card.type === 'overview' ? (sectionTitleByKey.get(`${(card as any).program_id}|${card.week}`) || null) : null,
+      week_title: null,
     };
   });
 

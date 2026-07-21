@@ -97,7 +97,7 @@ describe('curriculum format contract (Experience Studio demo === Classroom timel
   it('adaptToFeedCard carries the type banner through as type_thumbnail (default card image)', () => {
     // The type's AI banner is the card's DEFAULT image on the timeline; a media
     // card's own art (video poster / blog thumbnail) overrides it at render.
-    const url = '/thumbnails/curriculum-types/overview.jpg';
+    const url = '/thumbnails/curriculum-types/announcement.jpg';
     expect(adaptToFeedCard({ label: 'x', type_thumbnail: url }).type_thumbnail).toBe(url);
     expect(adaptToFeedCard({ label: 'x' }).type_thumbnail).toBeNull();
   });

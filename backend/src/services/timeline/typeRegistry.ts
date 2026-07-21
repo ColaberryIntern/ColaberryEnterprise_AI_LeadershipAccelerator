@@ -80,10 +80,11 @@ const D = (o: Partial<CardTypeDef> & Pick<CardTypeDef, 'slug' | 'label' | 'stude
   ...o,
 });
 
-/** The 36 canonical curriculum types (TYPE_REGISTRY.md). */
+/** The 35 canonical curriculum types (TYPE_REGISTRY.md). */
 export const CARD_TYPES: CardTypeDef[] = [
   D({ slug: 'announcement', label: 'Announcement', student_label: 'Announcement', bucket: 'pre_class', render_band: 'announcement', est_minutes: 2, home_surface: 'today' }), // ⚑ broadcast — homed to Today, still anchored (one-shot, not rotated)
-  D({ slug: 'overview', label: 'Overview', student_label: 'Overview', bucket: 'learn', render_band: 'overview', est_minutes: 8, learning_xp: 10, prompt_pairs: ['concept'] }),
+  // NOTE: the 'overview' card TYPE was retired 2026-07-21 (announcement is the section-opener now).
+  // The render_band named 'overview' is a SEPARATE thing — the universal fallback band — and is kept.
   D({ slug: 'live_class', label: 'Live Class', student_label: 'Live Class', bucket: 'learn', render_band: 'live_class', est_minutes: 120, learning_xp: 20, difficulty: 'core', competencies: ['communication'], prompt_pairs: ['concept'], home_surface: 'group' }), // live event → group
   D({ slug: 'event', label: 'Event', student_label: 'Event', bucket: 'pre_class', render_band: 'event', est_minutes: 60, event: true, home_surface: 'group' }),
   D({ slug: 'video', label: 'Video', student_label: 'Video', bucket: 'learn', render_band: 'media', est_minutes: 12, learning_xp: 15 }), // ⚑ rotates via networkVideoService — candidate for feed_mode:'ambient'; kept anchored/class in Phase 0
@@ -179,22 +180,24 @@ export function allTypes(): CardTypeDef[] {
 /**
  * LEGACY_TYPE_MAP — maps legacy mini_section_type / lesson_type onto the new
  * taxonomy so backfill never orphans a card (MIGRATION_PLAN.md §2). Unknown
- * legacy types map to 'overview' with a logged breadcrumb.
+ * legacy types map to 'announcement' with a logged breadcrumb.
+ * (Was 'overview' until the overview type was retired 2026-07-21; announcement
+ * is the surviving section-opener and the safe catch-all.)
  */
 export const LEGACY_TYPE_MAP: Record<string, string> = {
-  executive_reality_check: 'overview',
+  executive_reality_check: 'announcement',
   ai_strategy: 'deep_dive',
   prompt_template: 'prompt_lab',
   implementation_task: 'implementation_task',
   knowledge_check: 'knowledge_check',
-  concept: 'overview',
+  concept: 'announcement',
   lab: 'prompt_lab',
   assessment: 'evaluation',
   reflection: 'reflection',
-  section: 'overview',
+  section: 'announcement',
 };
 
 export function mapLegacyType(legacy: string | null | undefined): { slug: string; fallback: boolean } {
   if (legacy && LEGACY_TYPE_MAP[legacy]) return { slug: LEGACY_TYPE_MAP[legacy], fallback: false };
-  return { slug: 'overview', fallback: true };
+  return { slug: 'announcement', fallback: true };
 }

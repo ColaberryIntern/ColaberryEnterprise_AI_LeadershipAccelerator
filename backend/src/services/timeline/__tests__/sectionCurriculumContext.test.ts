@@ -34,10 +34,10 @@ describe('buildSectionCurriculumText', () => {
 });
 
 describe('SECTION_ROSTER_TYPES', () => {
-  it('includes overview (the week-summary type) and stays a small opt-in set', () => {
-    expect(SECTION_ROSTER_TYPES.has('overview')).toBe(true);
+  it('includes the announcement week-opener + prompt_lab and stays a small opt-in set', () => {
     expect(SECTION_ROSTER_TYPES.has('announcement')).toBe(true);
+    expect(SECTION_ROSTER_TYPES.has('prompt_lab')).toBe(true);
     expect(SECTION_ROSTER_TYPES.has('video')).toBe(false);
-    expect(SECTION_ROSTER_TYPES.has('prompt_lab')).toBe(false);
+    expect(SECTION_ROSTER_TYPES.has('overview')).toBe(false);   // 'overview' type retired 2026-07-21
   });
 });

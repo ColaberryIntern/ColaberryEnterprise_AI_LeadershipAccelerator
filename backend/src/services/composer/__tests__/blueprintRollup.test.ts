@@ -31,7 +31,7 @@ describe('blueprintRollup pure helpers', () => {
     });
 
     it('rolls a realistic week up to hours (incl. a live session)', () => {
-      // announcement 2 + overview 8 + skilljar course 90 + video 12 + quiz 10 + live 120
+      // announcement 2 + warmup 8 + skilljar course 90 + video 12 + quiz 10 + live 120
       const minutes = planMinutes(plan([2, 8, 90, 12, 10, 120]));
       expect(minutes).toBe(242);
       expect(minutesToHours(minutes)).toBe(4);

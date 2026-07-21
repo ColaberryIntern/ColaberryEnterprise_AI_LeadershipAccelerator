@@ -17,10 +17,10 @@ import {
 function makeCard(overrides: Partial<TimelineFeedCard> = {}): TimelineFeedCard {
   return {
     id: 'c1',
-    type: 'overview',
-    student_label: 'Overview',
-    render_band: 'overview',
-    title: 'Overview — Week 3',
+    type: 'deep_dive',
+    student_label: 'Deep Dive',
+    render_band: 'deepdive',
+    title: 'Deep Dive — Week 3',
     subtitle: null,
     description: null,
     week: 3,
