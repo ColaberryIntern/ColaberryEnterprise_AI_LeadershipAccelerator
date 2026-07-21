@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment } from './runtimeApi';
 import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
 import AssessmentPanel from './AssessmentPanel';
@@ -31,11 +31,14 @@ const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 const RuntimeWorkspace: React.FC = () => {
   const { cardId = '' } = useParams();
   const navigate = useNavigate();
-  // Always return to the Classroom — this button is literally "Back to Classroom",
-  // and the Classroom restores the student's week + scroll from a session snapshot
-  // and loads reliably. (navigate(-1) landed on the slower Today feed when the
-  // student entered the workspace from there, which never restored its position.)
-  const goBack = useCallback(() => navigate('/portal/classroom'), [navigate]);
+  const location = useLocation();
+  // Return to WHERE THE STUDENT CAME FROM. The opener (CardDetailDrawer) stamps
+  // `state.from` with its pathname, so entering the workspace from the Timeline
+  // sends you back to the Timeline and from the Classroom back to the Classroom.
+  // Falls back to the Classroom on a deep link / direct load (no origin state).
+  const backTo = ((location.state as { from?: string } | null)?.from) || '/portal/classroom';
+  const backLabel = backTo.includes('/today') ? 'Back to Timeline' : 'Back to Classroom';
+  const goBack = useCallback(() => navigate(backTo), [navigate, backTo]);
   // Carry over the portal's light/dark setting: the workspace renders its own
   // chrome (not PortalShell), so read 'te-theme' and stamp data-theme on the .rt
   // root (drives runtimeCss) and on <html> (drives :root-scoped child components
@@ -179,7 +182,7 @@ const RuntimeWorkspace: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
 
-  if (error) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← Classroom</button></div></div>;
+  if (error) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← {backTo.includes('/today') ? 'Timeline' : 'Classroom'}</button></div></div>;
   if (!card) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
 
   const emp = readiness?.employment; const cert = readiness?.certification; const jr = readiness?.journey; const evd = readiness?.evidence;
@@ -220,7 +223,7 @@ const RuntimeWorkspace: React.FC = () => {
     <div className="rt" data-theme={theme}>
       <style>{runtimeCss}</style>
       <header className="rt-top">
-        <button className="rt-back" onClick={goBack} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+        <button className="rt-back" onClick={goBack} aria-label={backLabel} title={backLabel}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
         <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
         <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>
       </header>
