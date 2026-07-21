@@ -51,7 +51,7 @@ import {
 import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleWatchBeat, handleGetSurvey, handleSaveSurvey,
+  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleGetSurvey, handleSaveSurvey,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
@@ -133,6 +133,9 @@ const watchBeatRateLimiter = rateLimit({
   message: { error: 'Too many watch beats — please slow down' },
 });
 router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
+// Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).
+router.post('/api/portal/runtime/today/blog/:blogId/read', watchBeatRateLimiter, requireParticipant, handleBlogReadBeat);
+router.post('/api/portal/runtime/today/blog/:blogId/collect', requireParticipant, handleBlogCollect);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/next-session', requireParticipant, handleGetNextSession);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
