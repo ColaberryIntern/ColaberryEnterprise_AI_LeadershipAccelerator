@@ -232,7 +232,9 @@ export async function refreshAiNews(opts: { dryRun?: boolean; maxCards?: number;
 
   const materializeOn = opts.force || process.env.AI_NEWS_INGEST_ENABLED === 'true';
   if (!opts.dryRun && materializeOn) {
-    const maxCards = opts.maxCards ?? 12;
+    // Grab ONE fresh card per run by default (the daily cron → ~1 LLM call/day).
+    // Override per-run with opts.maxCards or globally with AI_NEWS_MAX_PER_RUN.
+    const maxCards = opts.maxCards ?? Number(process.env.AI_NEWS_MAX_PER_RUN || 1);
     const pending = await AiNewsItem.findAll({
       where: { card_id: null as any },
       order: [['importance', 'DESC'], ['published_at', 'DESC']],
@@ -261,7 +263,7 @@ export async function refreshAiNewsIfEmpty(): Promise<void> {
     const n = Array.isArray(rows) && rows[0] ? Number(rows[0].n) : NaN;
     if (n === 0) {
       console.log('[aiNews] ai_news_items is empty — running the initial ingest');
-      await refreshAiNews({ maxCards: 6 });
+      await refreshAiNews({ maxCards: 1 });
     }
   } catch (err: any) {
     console.warn('[aiNews] boot ingest skipped:', err?.message?.split('\n')[0]);
