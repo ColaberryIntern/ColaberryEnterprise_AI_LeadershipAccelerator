@@ -11,6 +11,7 @@ import { CSS } from '@dnd-kit/utilities';
 import api from '../../../utils/api';
 import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
+import CardDetailBody from '../../../components/timeline/CardDetailBody';
 import { adaptToFeedCard } from '../../../utils/cardAdapter';
 import AutofillButton from '../../../components/common/AutofillButton';
 import { composerApi, Course, BlueprintContextDTO } from './composer/composerKit';
@@ -327,10 +328,14 @@ const BucketSection: React.FC<{
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }; types: TypeDef[]; allCards: Card[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course' | 'content'; onGenerate: (anchor: 'title' | 'video' | 'course' | 'content') => void;
-  bpContext: BlueprintContextDTO | null; courseId: string;
+  bpContext: BlueprintContextDTO | null;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => void; onSave: () => void; onClose: () => void;
-  onPreview: (c: TimelineFeedCard) => void;
-}> = ({ draft, types, allCards, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, courseId, onChange, onSave, onClose, onPreview }) => {
+}> = ({ draft, types, allCards, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose }) => {
+  // Which face of the drawer is showing — the editable form or the live student
+  // view. A toggle at the top flips between them, so authors see Edit and Student
+  // view from the same place. Reset to the form when a different card opens.
+  const [view, setView] = useState<'edit' | 'student'>('edit');
+  useEffect(() => { setView('edit'); }, [draft.id, isNew]);
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
@@ -381,10 +386,31 @@ const EditDrawer: React.FC<{
         </div>
 
         <div className="te-dbody">
-          {/* Quick links — jump to the related surfaces in a NEW TAB so this editor
-              stays open. "Experience Studio" opens (and selects) this card's
-              curriculum type to edit its component; "Student view" opens the exact
-              student card (last-saved version) full-page. */}
+          {/* View switch — Edit ⟷ Student view in the SAME drawer, so authors can flip
+              between the form and exactly what the student sees (reflecting the current,
+              unsaved edits) without leaving. */}
+          {draft.type && (
+            <div className="te-viewseg" role="tablist" aria-label="Drawer view">
+              {(['edit', 'student'] as const).map((v) => (
+                <button key={v} type="button" role="tab" aria-selected={view === v}
+                  className={`te-segbtn ${view === v ? 'on' : ''}`} onClick={() => setView(v)}>
+                  {v === 'edit' ? '✎ Edit' : '👁 Student view'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Student view — the REAL student card (live preview of the current draft),
+              inline in the drawer. Flip back with the toggle above. */}
+          {view === 'student' && draft.type && (
+            <div className="tl-de te-inlinestudent">
+              <CardDetailBody card={previewCard} preview autoplayVideo />
+            </div>
+          )}
+
+          {view === 'edit' && (<>
+          {/* Quick links — jump to this card's Experience Studio type in a NEW TAB
+              (so this editor stays open). Student view now lives in the toggle above. */}
           {draft.type && (
             <div className="te-openrow">
               <button type="button" className="te-act"
@@ -392,14 +418,7 @@ const EditDrawer: React.FC<{
                 onClick={() => window.open(`/admin/orchestration?tab=types&type=${encodeURIComponent(draft.type!)}`, '_blank', 'noopener')}>
                 🎛 Experience Studio ↗
               </button>
-              {!isNew && draft.id && (
-                <button type="button" className="te-act"
-                  title="Open what the student sees for this card in a new tab (last-saved version)"
-                  onClick={() => window.open(`/admin/orchestration/card-preview?card=${encodeURIComponent(draft.id!)}${courseId ? `&program=${encodeURIComponent(courseId)}` : ''}`, '_blank', 'noopener')}>
-                  👁 Student view ↗
-                </button>
-              )}
-              <span className="te-openhint">open in a new tab</span>
+              <span className="te-openhint">opens in a new tab</span>
             </div>
           )}
           {/* Publish state — a visible switch (default ON for new cards) + badge,
@@ -432,11 +451,11 @@ const EditDrawer: React.FC<{
             <div style={{ marginBottom: 18 }}>
               <div className="te-plabel">Finished product · what the student sees</div>
               <div className="tl-de">
-                <TimelineCard card={previewCard} onOpen={() => onPreview(previewCard)} />
+                <TimelineCard card={previewCard} onOpen={() => setView('student')} />
               </div>
               <button type="button" className="te-act" style={{ width: '100%', justifyContent: 'center', padding: '9px 12px', marginBottom: 8 }}
-                onClick={() => onPreview(previewCard)}>
-                Open the student view — full details →
+                onClick={() => setView('student')}>
+                See the full student view →
               </button>
               <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                 <button type="button" className="te-act" style={{ flex: 1, justifyContent: 'center', padding: '9px 12px' }}
@@ -617,6 +636,7 @@ const EditDrawer: React.FC<{
           <div style={{ fontSize: 11, color: '#8A8A8A', marginTop: 6 }}>
             The student sees this card as “locked” (with the reason) until every prerequisite is completed. To lock the whole section at once, use the section’s 🔒 Gating button.
           </div>
+          </>)}
         </div>
 
         <div className="te-dfoot">
@@ -1129,6 +1149,13 @@ const TimelineEditorTab: React.FC = () => {
         .te-dbody{flex:1;overflow:auto;padding:18px 20px}
         .te-openrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #F2F2F2}
         .te-openhint{font-size:11px;color:#A0A0A0;font-weight:600}
+        /* Edit ⟷ Student view segmented switch at the top of the drawer */
+        .te-viewseg{display:flex;gap:4px;padding:4px;background:#F0F0F0;border-radius:10px;margin-bottom:16px}
+        .te-segbtn{flex:1;border:none;background:transparent;font-size:13px;font-weight:700;color:#6A6A6A;padding:8px 10px;border-radius:8px;cursor:pointer;transition:.15s ease}
+        .te-segbtn:hover:not(.on){color:#1A1A1A}
+        .te-segbtn.on{background:#fff;color:#1A1A1A;box-shadow:0 1px 3px rgba(0,0,0,.12)}
+        /* Inline student view rendered by <CardDetailBody> inside the drawer */
+        .te-inlinestudent{min-height:0;border:1px solid #E4E4E4;border-radius:12px;overflow:hidden;margin-bottom:4px}
         .te-pubrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;margin-bottom:16px;border:1px solid #E4E4E4;border-radius:10px;background:#FAFBFC}
         .te-vbadge{font-size:11px;font-weight:800;letter-spacing:.04em;padding:4px 10px;border-radius:999px;flex:none}
         .te-vbadge.live{background:#E7F5E9;color:#3C7A26} .te-vbadge.draft{background:#F0F0F0;color:#8A8A8A}
@@ -1239,8 +1266,8 @@ const TimelineEditorTab: React.FC = () => {
 
       {draft && (
         <EditDrawer draft={draft} types={board?.types || []} allCards={board?.cards || []} isNew={isNew} saving={saving}
-          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext} courseId={courseId}
-          onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} onPreview={setStudentView} />
+          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext}
+          onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} />
       )}
 
       {/* Section gating modal — lock a whole lane until its prerequisites are met. */}
