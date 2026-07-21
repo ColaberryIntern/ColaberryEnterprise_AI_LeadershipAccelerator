@@ -9,6 +9,8 @@ import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
 import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest } from '../../../services/cohortPresenceApi';
 import { pingPresence } from '../../../services/communityApi';
+import { openDm } from '../../../services/dmApi';
+import ChatDock, { DmTarget } from './ChatDock';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
 
@@ -161,6 +163,13 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const onRespondFriend = useCallback((requesterId: string, accept: boolean) => {
     respondToFriendRequest(requesterId, accept).then(refreshContacts).catch(() => { /* keep request */ });
   }, [refreshContacts]);
+  // Open (or focus) a 1:1 chat dock when a contact face is clicked.
+  const [chats, setChats] = useState<DmTarget[]>([]);
+  const openChat = useCallback((c: CohortContact) => {
+    openDm(c.id).then((roomId) => {
+      setChats((prev) => (prev.some((x) => x.roomId === roomId) ? prev : [...prev, { roomId, name: c.name, color: c.color }]));
+    }).catch(() => { /* non-fatal */ });
+  }, []);
 
   const load = useCallback(async () => {
     const [p, s] = await Promise.allSettled([fetchPoints(), fetchSchedule()]);
@@ -406,7 +415,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
             <div className="te-ct-list">
               {people.length > 0 && <div className="te-ct-grp">{cohortName} · {onlineNow} online</div>}
               {people.map((c) => (
-                <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={c.name}>
+                <button key={c.id} type="button" className="te-ctrow" data-name={c.name} title={`Message ${c.name}`} onClick={() => openChat(c)}>
                   <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
                   <span className="te-ctname">{c.name}</span>
                   <span className={`te-ctpres ${c.presence}`} />
@@ -419,6 +428,15 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
           </>
         )}
       </aside>
+
+      {/* ── 1:1 chat docks (Facebook-style, bottom-right) ── */}
+      {chats.length > 0 && (
+        <div className="te-dmdock">
+          {chats.map((t) => (
+            <ChatDock key={t.roomId} target={t} onClose={() => setChats((prev) => prev.filter((x) => x.roomId !== t.roomId))} />
+          ))}
+        </div>
+      )}
 
       {/* ── bottom tab bar (mobile only via CSS) — nav reachable on phones ── */}
       <nav className="te-tabbar">

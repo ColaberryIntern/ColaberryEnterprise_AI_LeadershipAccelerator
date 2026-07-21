@@ -9,7 +9,7 @@ import { sequelize } from '../config/database';
 export type RoomCategory =
   | 'start_here' | 'your_cohort' | 'build_together' | 'career_cert'
   | 'live_now' | 'demos_events' | 'social' | 'private_rooms';
-export type RoomType = 'persistent' | 'scheduled' | 'private_shell';
+export type RoomType = 'persistent' | 'scheduled' | 'private_shell' | 'dm';
 export type RoomPrivacy = 'public' | 'cohort' | 'invite_only' | 'private';
 export type RoomStatus = 'active' | 'archived' | 'locked' | 'removed';
 
