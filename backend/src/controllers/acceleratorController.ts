@@ -6,7 +6,7 @@ import {
   computeReadinessScore, computeAllReadinessScores, getCohortDashboard,
   listCohortEnrollments, setPortalAccess, getPortalLoginUrl, getReadOnlyViewAsUrl,
 } from '../services/acceleratorService';
-import { generateMeetLink } from '../services/meetingService';
+import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { LiveSession } from '../models';
 
@@ -60,6 +60,15 @@ export async function handleGenerateMeetLink(req: Request, res: Response, next: 
     const link = await generateMeetLink(session);
     if (!link) return res.status(500).json({ error: 'Failed to generate Meet link' });
     res.json({ meeting_link: link });
+  } catch (err) { next(err); }
+}
+
+// Batch: generate teaching Meet links for every upcoming session in a cohort
+// that lacks one (backfill + on-demand). Idempotent; best-effort per session.
+export async function handleGenerateCohortMeetLinks(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await generateCohortMeetLinks(req.params.cohortId as string);
+    res.json(result);
   } catch (err) { next(err); }
 }
 

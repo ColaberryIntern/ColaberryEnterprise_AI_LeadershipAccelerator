@@ -1099,6 +1099,8 @@ async function ensureBlogSchema() {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_bpv_enrollment ON blog_post_views (enrollment_id)`,
     `CREATE INDEX IF NOT EXISTS idx_bpv_enrollment_card ON blog_post_views (enrollment_id, last_timeline_card_id)`,
+    // read_state drives the blog 2-minute read gate (continuous dwell → collect points)
+    `ALTER TABLE blog_post_views ADD COLUMN IF NOT EXISTS read_state JSONB NOT NULL DEFAULT '{}'::jsonb`,
   ];
   for (const sql of statements) {
     try { await sequelize.query(sql); }

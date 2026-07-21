@@ -10,6 +10,15 @@ import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
 import { useDeepDiveHost } from './useDeepDiveHost';
+import { useBlogReadGate } from './useBlogReadGate';
+import { useDwellGate, isDwellGatedCard } from './useDwellGate';
+
+/** Tiny stable string hash — varies the dwell Collect button placement per card. */
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return h;
+}
 import SetupLabRender from './SetupLabRender';
 import PromptCatalogRender from './PromptCatalogRender';
 import ArchitectTimeMachine from './ArchitectTimeMachine';
@@ -229,6 +238,22 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // live reader cards (not admin preview).
   const readerProg = useReaderProgress(card.id, isReader && !preview);
 
+  // Blog 2-minute read gate: ambient blogs (ref `blog:<id>`) award points once the
+  // student has spent ~2 continuous minutes with the post open. Armed by clicking
+  // "Read the post"; a heartbeat accrues dwell and the server enforces the bar.
+  const blogId = card.type === 'blog' && card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
+  const blogGate = useBlogReadGate(live ? blogId : null);
+  const blogReadPct = Math.min(100, Math.round(((blogGate.state?.read_s ?? 0) / (blogGate.state?.required_s || 120)) * 100));
+
+  // Generic dwell gate: passive-content types (intel / reflection / discussion /
+  // study / Q&A) award points but have no other criteria, so the Collect button
+  // only appears after N continuous seconds with the card open (resets if you
+  // leave). The button placement is varied per card so it can't be muscle-memory'd.
+  const dwellGated = live && isDwellGatedCard(card);
+  const dwell = useDwellGate(dwellGated ? card.id : null, dwellGated);
+  const dwellPct = Math.min(100, Math.round(((dwell?.dwell_s ?? 0) / (dwell?.required_s || 120)) * 100));
+  const dwellAlign = (['flex-start', 'center', 'flex-end'] as const)[Math.abs(hashStr(card.id)) % 3];
+
   // Deep Dive host bridge: the Field Guide iframe (opaque-origin) can't persist or
   // reach the API, so the host owns read/copy persistence (restored across reopens),
   // the +100-point upload, and the Mark-complete gate (dd.complete folds read+copy+upload).
@@ -432,15 +457,44 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
         {blog && (
           <div className="tld-note" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <a className="tl-btn primary sm" href={blog.url} target="_blank" rel="noopener noreferrer">
+            <a className="tl-btn primary sm" href={blog.url} target="_blank" rel="noopener noreferrer" onClick={() => { if (blogId) blogGate.start(); }}>
               Read the post
               <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </a>
-            <span>Read it on the Colaberry blog, then mark this complete to earn your points.</span>
+            {blogId
+              ? (blogGate.started
+                  ? (blogGate.state?.met
+                      ? <span style={{ color: '#5BA63C', fontWeight: 600 }}>✓ Read — collect your points below</span>
+                      : <span>Keep the post open — {blogGate.state?.read_s ?? 0}s of {blogGate.state?.required_s ?? 120}s read to unlock your points</span>)
+                  : <span>Open the post and read for ~2 minutes, then collect your points below.</span>)
+              : <span>Read it on the Colaberry blog, then mark this complete to earn your points.</span>}
+            {blogId && blogGate.started && !blogGate.state?.met && (
+              <div style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
+                <i style={{ display: 'block', height: '100%', width: `${blogReadPct}%`, background: '#367895', transition: 'width .5s ease' }} />
+              </div>
+            )}
           </div>
         )}
         {card.type === 'blog' && !blog && (
           <div className="tld-note">No blog post is attached to this card yet. It will auto-match once the blog library is loaded.</div>
+        )}
+        {/* Generic dwell gate: passive-content types must be read for N continuous
+            seconds before Collect appears. The button's horizontal placement is
+            varied per card (left/center/right) so it can't be muscle-memory'd —
+            you have to look for it. */}
+        {dwellGated && (
+          <div style={{ display: 'flex', justifyContent: dwell?.met ? dwellAlign : 'stretch', marginTop: 6 }}>
+            {dwell?.met && completeSafely ? (
+              <button type="button" className="tl-btn primary" onClick={completeSafely}>Collect +{pts} pts</button>
+            ) : (
+              <div className="tld-note" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span>Read through it — {dwell?.dwell_s ?? 0}s of {dwell?.required_s ?? 120}s before you can collect your points.</span>
+                <div style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
+                  <i style={{ display: 'block', height: '100%', width: `${dwellPct}%`, background: '#367895', transition: 'width .5s ease' }} />
+                </div>
+              </div>
+            )}
+          </div>
         )}
         </>)}
       </div>
@@ -479,10 +533,22 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                     {gateActive && !watch?.met ? `Collect points · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%` : 'Collect points'}
                   </button>
                 )}
+                {/* Blog: collect after the 2-minute read gate is met (server enforces). */}
+                {blog && blogId && completeSafely && (
+                  <button
+                    type="button"
+                    className="tl-btn primary"
+                    onClick={completeSafely}
+                    disabled={!blogGate.state?.met}
+                    title={!blogGate.state?.met ? 'Read the post for ~2 minutes to collect your points' : undefined}
+                  >
+                    {blogGate.state?.met ? `Collect +${pts} pts` : `Read to collect · ${blogGate.state?.read_s ?? 0}/${blogGate.state?.required_s ?? 120}s`}
+                  </button>
+                )}
                 {/* Survey completes in-body via its own Submit; the workspace link
                     stays as a quiet secondary, not the primary CTA. */}
                 {/* Architect Time Machine renders its own "Enter the Time Machine" CTA in-panel (drawer variant). */}
-                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive || !!blog || dwellGated ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
                 {/* Self Study: the Mark Complete button only appears once every section
                     has been read (>=10s each), matching the workstation's gate + style. */}
                 {isReader && readerProg.complete && completeSafely && (

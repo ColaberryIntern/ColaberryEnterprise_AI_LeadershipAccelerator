@@ -86,6 +86,13 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
   const { assertFieldGuideRequirement } = await import('../runtime/fieldGuideService');
   await assertFieldGuideRequirement(enrollmentId, card);
 
+  // Dwell gate: passive-content types (intel breakdowns, reflection, discussion,
+  // study, Q&A) award points but have no other criteria, so they require N
+  // continuous seconds with the content open (≥2 min, per type) before completion.
+  // No-op for every other type. Throws { status: 422, code: 'dwell_requirement' }.
+  const { assertDwellRequirement } = await import('../runtime/cardDwellService');
+  await assertDwellRequirement(enrollmentId, card);
+
   // Mark progress complete (idempotent).
   const [progress] = await TimelineCardProgress.findOrCreate({
     where: { card_id: cardId, enrollment_id: enrollmentId },
