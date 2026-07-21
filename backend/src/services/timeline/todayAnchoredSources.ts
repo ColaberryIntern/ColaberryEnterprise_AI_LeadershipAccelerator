@@ -162,15 +162,17 @@ async function classCandidates(enrollmentId: string, placedRefs: Set<string>): P
     const feed = await getFeed(enrollmentId);
     const isExplorer = feed.is_explorer === true; // free tier — Week 0 curriculum only
     return feed.cards
-      .filter(
-        (c) =>
-          isTodayEligible(c.type) &&
-          !isAmbient(c.type) &&
-          c.status !== 'locked' &&
-          c.status !== 'completed' &&
-          anchoredWeekAllowed(c.week, isExplorer) &&
-          !placedRefs.has(`card:${c.id}`),
-      )
+      .filter((c) => {
+        if (!isTodayEligible(c.type) || isAmbient(c.type)) return false;
+        if (c.status === 'locked' || c.status === 'completed') return false;
+        if (placedRefs.has(`card:${c.id}`)) return false;
+        // The week gate governs CLASS curriculum progression only. Today-homed
+        // evergreen content (news / tools / quotes — week:null) is the free
+        // engagement layer and must never be week-gated, or free users see none
+        // of it (null !== 0). Paid users pass either way.
+        if ((surfaceOf(c.type) ?? 'class') === 'class' && !anchoredWeekAllowed(c.week, isExplorer)) return false;
+        return true;
+      })
       .map(anchoredItemFromCard);
   } catch (err: any) {
     console.warn('[todayAnchoredSources] class failed:', err?.message?.split('\n')[0]);

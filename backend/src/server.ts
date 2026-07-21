@@ -2164,6 +2164,16 @@ async function start(): Promise<void> {
       console.warn('[CommunityRooms] default room seed failed:', err?.message);
     }
   }
+  // Intelligence-pipeline sample cards — one evergreen card per intel type so the
+  // Today feed carries this content before the ingestion pipelines run. Idempotent
+  // (upserts by type); fail-soft so a fresh DB without the types can't break boot.
+  try {
+    const { seedIntelSampleCards } = await import('./seeds/seedIntelSampleCards');
+    const r = await seedIntelSampleCards();
+    console.log(`[IntelSamples] ${r.created.length} created, ${r.updated.length} updated`);
+  } catch (err: any) {
+    console.warn('[IntelSamples] sample-card seed failed:', err?.message);
+  }
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any
   // missing column as NULLABLE; never drops/alters. Fixes the recurring
