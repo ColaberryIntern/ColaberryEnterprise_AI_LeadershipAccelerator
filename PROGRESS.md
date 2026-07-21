@@ -10569,3 +10569,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali on the live feed — the points system + collection should be ON the timeline (not just the drawer), and "made a big deal when achieved." Start of an iterative pass ("I will have a bunch of changes as I troubleshoot"). [[project_today_timeline_v2]]
   - Verification: Frontend `tsc` clean (0 errors); backend Docker tsc/jest = CI. Reused the existing completion endpoint, server watch-gate, points ledger, and `emitPointsEarned` HUD celebration.
   - Notes: Branch `workstream/timeline-points-collect`. Backend + frontend → both deploy. **Known v1 nuances to iterate:** blog has no server read-gate (collect completes without enforced read); live watch-% is shown in the drawer, not yet on the card (the muted card preview doesn't emit watch beats). Ambient (blog/podcast, `card_id` null) can't collect via the endpoint.
+
+### "View as" button on the Community Roles page — 2026-07-21
+- [x] Add a per-row read-only "View" button to the Community Roles admin page
+  - Date: 2026-07-21
+  - Session: CC-20260721-r7k4
+  - What changed: Ali was on `/admin/community-roles` and had no way to view-as from there — the read-only View-as button (shipped in #586) only lived on the Accelerator person drawer. Added `enrollment_id` to the `AdminMemberRow` roster DTO (`listMembersForAdmin`) + `communityAdminApi.AdminCommunityMember`; new `fetchViewAsUrl(enrollmentId)` reuses the existing `/api/admin/accelerator/enrollments/:id/view-as-token` mint route; `AdminCommunityRolesPage` gains a "View as" column with a per-row button that opens the member's portal read-only in a new tab.
+  - Why: Ali (on the live page): "I don't see how I can view as them." The button belongs where the roster is managed.
+  - Verification: backend jest 50/50 (`listMembersForAdmin` test updated for `enrollment_id`); backend + frontend `tsc --noEmit` clean on changed files. Reuses the already-live read-only mint endpoint + `/portal/view-as` landing — no new backend route. Deploy = backend + nginx.
+  - Notes: Branch `workstream/view-as-on-community-roles` (off main, which now has all 4 prior features).

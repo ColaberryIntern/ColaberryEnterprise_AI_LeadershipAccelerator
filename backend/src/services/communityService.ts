@@ -1030,6 +1030,8 @@ export function isMemberRole(value: string): value is CommunityMemberRole {
 // admin-only surface (requireAdmin at the route).
 export interface AdminMemberRow {
   id: string;
+  // The member's enrollment id — used to mint the read-only "View as" token.
+  enrollment_id: string | null;
   display_name: string;
   email: string | null;
   role: CommunityMemberRole;
@@ -1064,6 +1066,7 @@ export async function listMembersForAdmin(search?: string): Promise<AdminMemberR
 
   const rows: AdminMemberRow[] = members.map((m: any) => ({
     id: m.id,
+    enrollment_id: m.enrollment_id ?? null,
     display_name: m.display_name,
     email: m.enrollment?.email ?? null,
     role: (m.role as CommunityMemberRole) ?? 'student',
