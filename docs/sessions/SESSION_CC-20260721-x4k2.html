@@ -56,14 +56,29 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, July 21, 2026 at 6:19 AM</div>
-    <div><span class="sid">CC-20260721-x4k2</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Tuesday, July 21, 2026 at 10:17 AM</div>
+    <div><span class="sid">CC-20260721-x4k2</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
       <article class="card">
         <div class="card-head">
           <span class="num">01</span>
+          <h2>**Gated `ensureIntelligenceTables()`&#39;s `sync({ alter: true })` behind `DB_BOOT_SYNC` (create-only by default) — stops the every-boot duplicate-unique-index accumulation**</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/intelligence/index.ts` — the boot-time loop over the 8 intelligence models (DatasetRegistry, SystemProcess, IntelligenceConfig, QAHistory, AiSystemEvent, IntelligenceDecision, IntelligenceMemory, AgentPerformanceMetric) called `.sync({ alter: true })` UNGATED on every boot. Sequelize&#39;s alter can&#39;t detect an existing unique index on a `unique:true` column, so it created a fresh duplicate (`&lt;tbl&gt;_&lt;col&gt;_key`, `_key1`, `_key2` …) each boot. Now uses `{ alter: true }` only when `DB_BOOT_SYNC===&#39;true&#39;`, else create-only `{}` — same flag/rationale as the already-gated global sync in `server.ts`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">PR #569 — all 4 CI checks green; admin-squash-merged to main (c6ad36c5); prod backend rebuilt/deployed. Growth STOPPED: after the deploy boot the intel index counts held (dataset_registry 4247, intelligence_config 4225 — no +1). Then the one-time prod cleanup: dropped all 50,713 numbered duplicate UNIQUE constraints across 23 tables (safety-verified `groups_with_no_survivor=0` first; `ALTER TABLE … DROP CONSTRAINT IF EXISTS` with `lock_timeout=4s`, autocommit), 0 remaining; total indexes 52,362→1,649; departments 5,554→4 (kept `departments_name_key`+`departments_slug_key`, uniqueness intact); index disk 3.9 GB→2.0 GB; 0 new &quot;out of shared memory&quot;; PG locks healthy (~1,575 / 25,600 cap); VACUUM ANALYZE&#39;d the catalogs.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">server.ts&#39;s global `sequelize.sync({ alter: true })` was already gated behind DB_BOOT_SYNC (unset in prod) so non-intelligence tables were already frozen; this fix closes the last ungated boot alter-sync. The one-time cleanup of the 50,713 existing duplicate indexes is a separate prod DB operation (not committed code).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
           <h2>**Removed the `overview` card TYPE end to end — announcement is the sole section-opener now; the `overview` *render_band* fallback is kept**</h2>
           <span class="badge">2026-07-21</span>
         </div>
