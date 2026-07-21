@@ -156,7 +156,7 @@ export interface TimelineFeed {
   cohort_id: string | null;
   buckets: string[];
   cards: FeedCard[];
-  is_explorer?: boolean;   // true = free Explorer tier — drives the enroll upsell (content gate is EXPLORER_WEEK0_ONLY, off by default)
+  is_explorer?: boolean;   // true = free Explorer tier — drives the enroll upsell (Week-0-only content gate is ON by default; EXPLORER_WEEK0_ONLY=false lifts it)
 }
 
 /**
@@ -206,13 +206,13 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return { cohort_id: null, buckets: [...BUCKET_ORDER], cards: [] };
   }
 
-  // Free lead-magnet gate: Explorers (unenrolled prospects) normally get ONLY the
-  // Week 0 "AI Preview" tier; paid enrollments see the full curriculum.
-  // LAUNCH POLICY (2026-07, temporary): anyone who signs up gets FULL free access,
-  // so Explorers see the same curriculum as paid. Re-enable the free-preview gate
-  // by setting EXPLORER_WEEK0_ONLY=true (then Explorers see Week 0 only again).
+  // Free lead-magnet gate (DEFAULT ON): Explorers (unenrolled free-trial prospects)
+  // see ONLY the Week 0 "AI Preview" tier; paid enrollments see the full 12-week
+  // curriculum. Set EXPLORER_WEEK0_ONLY=false to lift the gate (e.g. a launch promo
+  // that opens the whole program to free signups); any other value keeps it on.
+  // (The 2026-07 launch briefly ran with it off; gating is the permanent default.)
   const isExplorer = (enrollment as any).enrollment_type === 'explorer';
-  const gateExplorersToWeek0 = process.env.EXPLORER_WEEK0_ONLY === 'true';
+  const gateExplorersToWeek0 = process.env.EXPLORER_WEEK0_ONLY !== 'false';
   const allCards = await getGlobalCards();
   const cards = (isExplorer && gateExplorersToWeek0) ? allCards.filter((c) => c.week === 0) : allCards;
 

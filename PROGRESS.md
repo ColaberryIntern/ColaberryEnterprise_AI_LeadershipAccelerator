@@ -10662,6 +10662,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: frontend `tsc --noEmit -p tsconfig.json` → 0 errors across the whole frontend (real npm ci in the worktree).
   - Notes: Branch `workstream/student-view-toggle` off origin/main. The feed-tile student popup (SortableCard `onPreview` → CardDetailDrawer) is unchanged — only the editor drawer moved to the inline toggle. Supersedes the card-preview route from PR #593; any open card-preview tab will 404 after deploy (expected).
 
+### Free-trial gate: Explorers see Week 0 only, by DEFAULT — 2026-07-21
+- [x] Explorers (free trial) are capped to the Free Preview (Week 0); gating is the permanent code default
+  - Date: 2026-07-21
+  - Session: CC-20260721-r7k4
+  - What changed: `timelineService.getFeed` — flipped the Explorer free-preview gate from opt-IN to the DEFAULT: `EXPLORER_WEEK0_ONLY` now defaults ON (`!== 'false'`), so Explorer accounts see only Week 0 unless the flag is explicitly `false` (a promo escape hatch). The 2026-07 "launch policy" that gave free signups the full curriculum is ended. Documented the flag in `backend/.env.example`. (Ahead of this code change, I set `EXPLORER_WEEK0_ONLY=true` in the prod `.env` + recreated backend, so prod already gates now.)
+  - Why: Ali, watching a free-trial account via read-only View-as: "If you are on the free trial, you should be stuck on Free Preview and not able to click > and go through all 12 weeks." The classroom's week navigator is built from the feed's cards, so gating the feed to Week 0 also removes the `>` navigation past Free Preview.
+  - Verification: backend `tsc --noEmit` clean; behavior already confirmed live on prod (flag set + backend recreated, `EXPLORER_WEEK0_ONLY=true` present in the running container). No new getFeed test (no existing harness; I/O-heavy).
+  - Notes: Branch `workstream/explorer-week0-default` off main. Deploy = backend. Prod behavior is ALREADY correct via the prod `.env` flag; this makes it the committed default so it can't be lost. Gate is on the FEED (what Explorers see); direct-URL deep-linking of a specific paid card isn't separately blocked (Explorers have no such links in the UI).
 ### Timeline — collectible blogs with a 2-minute read gate (catch-up entry) — 2026-07-21
 - [x] Blogs become point-earning: open the post, read ~2 continuous minutes (reset if you leave), then collect
   - Date: 2026-07-21
