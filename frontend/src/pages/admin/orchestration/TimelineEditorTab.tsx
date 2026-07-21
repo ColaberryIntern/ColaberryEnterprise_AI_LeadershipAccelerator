@@ -331,10 +331,10 @@ const BucketSection: React.FC<{
 const EditDrawer: React.FC<{
   draft: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }; types: TypeDef[]; allCards: Card[]; isNew: boolean; saving: boolean;
   aiBusy: boolean; onAiFill: () => void; genBusy: '' | 'title' | 'video' | 'course' | 'content'; onGenerate: (anchor: 'title' | 'video' | 'course' | 'content') => void;
-  bpContext: BlueprintContextDTO | null;
+  bpContext: BlueprintContextDTO | null; courseId: string;
   onChange: (patch: Partial<Card> & { type?: string; video?: CardVideo; course?: CardCourse; image?: string | null }) => void; onSave: () => void; onClose: () => void;
   onPreview: (c: TimelineFeedCard) => void;
-}> = ({ draft, types, allCards, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, onChange, onSave, onClose, onPreview }) => {
+}> = ({ draft, types, allCards, isNew, saving, aiBusy, onAiFill, genBusy, onGenerate, bpContext, courseId, onChange, onSave, onClose, onPreview }) => {
   const typeDef = types.find((t) => t.slug === draft.type);
   const band = typeDef?.render_band || guessBand(draft.type || '');
   const isVideo = VIDEO_BANDS.includes(band);
@@ -385,6 +385,27 @@ const EditDrawer: React.FC<{
         </div>
 
         <div className="te-dbody">
+          {/* Quick links — jump to the related surfaces in a NEW TAB so this editor
+              stays open. "Experience Studio" opens (and selects) this card's
+              curriculum type to edit its component; "Student view" opens the exact
+              student card (last-saved version) full-page. */}
+          {draft.type && (
+            <div className="te-openrow">
+              <button type="button" className="te-act"
+                title="Edit this curriculum type in the Experience Studio — opens a new tab"
+                onClick={() => window.open(`/admin/orchestration?tab=types&type=${encodeURIComponent(draft.type!)}`, '_blank', 'noopener')}>
+                🎛 Experience Studio ↗
+              </button>
+              {!isNew && draft.id && (
+                <button type="button" className="te-act"
+                  title="Open what the student sees for this card in a new tab (last-saved version)"
+                  onClick={() => window.open(`/admin/orchestration/card-preview?card=${encodeURIComponent(draft.id!)}${courseId ? `&program=${encodeURIComponent(courseId)}` : ''}`, '_blank', 'noopener')}>
+                  👁 Student view ↗
+                </button>
+              )}
+              <span className="te-openhint">open in a new tab</span>
+            </div>
+          )}
           {/* Publish state — a visible switch (default ON for new cards) + badge,
               so a card never silently saves as a draft the student can't see. */}
           <div className="te-pubrow">
@@ -1003,6 +1024,8 @@ const TimelineEditorTab: React.FC = () => {
         @keyframes te-slide{from{transform:translateX(40px);opacity:.5}to{transform:none;opacity:1}}
         .te-dhead{display:flex;align-items:center;gap:10px;padding:15px 20px;border-bottom:1px solid #EEE;flex:none}
         .te-dbody{flex:1;overflow:auto;padding:18px 20px}
+        .te-openrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid #F2F2F2}
+        .te-openhint{font-size:11px;color:#A0A0A0;font-weight:600}
         .te-pubrow{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;margin-bottom:16px;border:1px solid #E4E4E4;border-radius:10px;background:#FAFBFC}
         .te-vbadge{font-size:11px;font-weight:800;letter-spacing:.04em;padding:4px 10px;border-radius:999px;flex:none}
         .te-vbadge.live{background:#E7F5E9;color:#3C7A26} .te-vbadge.draft{background:#F0F0F0;color:#8A8A8A}
@@ -1094,7 +1117,7 @@ const TimelineEditorTab: React.FC = () => {
 
       {draft && (
         <EditDrawer draft={draft} types={board?.types || []} allCards={board?.cards || []} isNew={isNew} saving={saving}
-          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext}
+          aiBusy={aiBusy} onAiFill={aiFill} genBusy={genBusy} onGenerate={genContent} bpContext={bpContext} courseId={courseId}
           onChange={onDraftChange} onSave={save} onClose={() => setDraft(null)} onPreview={setStudentView} />
       )}
 
