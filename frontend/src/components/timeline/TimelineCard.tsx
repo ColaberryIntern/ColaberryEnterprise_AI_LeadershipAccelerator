@@ -204,11 +204,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const playable = !!source;
   const [showComments, setShowComments] = useState(false);
 
-  // Viewport autoplay: a video card plays a muted, click-through PREVIEW while it
-  // is in view and stops when scrolled away — so only what you're looking at
-  // plays. Clicking opens the drawer (full video + sound).
+  // Viewport autoplay: a media card (video OR podcast audio) starts playing while
+  // it is in view and stops when scrolled away — so only what you're looking at
+  // plays. Video is a muted, click-through preview; a podcast starts its episode.
   useEffect(() => {
-    if (!(playable && !podcastAudio && !locked)) return;
+    if (!((playable || !!podcastAudio) && !locked)) return;
     const el = cardRef.current;
     if (!el) return;
     const obs = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.55 });
@@ -216,7 +216,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
     return () => obs.disconnect();
   }, [playable, podcastAudio, locked]);
   useEffect(() => {
-    if (playable && !podcastAudio && !locked) setPlayingInline(inView);
+    if ((playable || !!podcastAudio) && !locked) setPlayingInline(inView);
   }, [inView, playable, podcastAudio, locked]);
   const ownPoster =
     (card.image && card.image.trim()) ||
