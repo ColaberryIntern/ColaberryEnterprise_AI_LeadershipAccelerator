@@ -12,6 +12,7 @@ import {
   handleListCohortEnrollments,
   handleSetPortalAccess,
   handleGetPortalLink,
+  handleGetViewAsToken,
   handleGetPersonHistory,
 } from '../../controllers/acceleratorController';
 import {
@@ -64,10 +65,34 @@ router.post('/api/admin/accelerator/quick-add-student', requireAdmin, async (req
   }
 });
 
+// Free Access (comped seat): grant/revoke a 100% discount on an enrollment —
+// full program access at $0, no staff role, normal student experience.
+router.post('/api/admin/accelerator/enrollments/:id/free-access', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { grantFreeAccess } = await import('../../services/subscriptionService');
+    await grantFreeAccess(req.params.id as string);
+    res.json({ success: true, free_access: true });
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+router.delete('/api/admin/accelerator/enrollments/:id/free-access', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { revokeFreeAccess } = await import('../../services/subscriptionService');
+    const revoked = await revokeFreeAccess(req.params.id as string);
+    res.json({ success: true, free_access: false, revoked });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleCreateEnrollment);
 router.get('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleListCohortEnrollments);
 router.patch('/api/admin/accelerator/enrollments/:id/portal-access', requireAdmin, handleSetPortalAccess);
 router.get('/api/admin/accelerator/enrollments/:id/portal-link', requireAdmin, handleGetPortalLink);
+// Read-only "View as member" — mints a read_only participant token (server blocks all writes).
+router.get('/api/admin/accelerator/enrollments/:id/view-as-token', requireAdmin, handleGetViewAsToken);
 router.get('/api/admin/accelerator/enrollments/:id/history', requireAdmin, handleGetPersonHistory);
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);

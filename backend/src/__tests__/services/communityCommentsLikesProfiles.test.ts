@@ -17,6 +17,9 @@ jest.mock('../../models/CommunityComment', () => ({ create: jest.fn(), findByPk:
 jest.mock('../../models/CommunityLike', () => ({ findOrCreate: jest.fn(), findAll: jest.fn(), count: jest.fn() }));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 jest.mock('../../models/CommunityNotification', () => ({ create: jest.fn() }));
+// listMembersForAdmin flags comped seats via subscriptionService — mock it so
+// this unit test stays isolated from the billing layer (no comp by default).
+jest.mock('../../services/subscriptionService', () => ({ activeCompEnrollmentIds: jest.fn(async () => new Set()) }));
 // communityService now folds into the canonical points system; mock those so
 // their real model methods don't hit the DB (points/level come from here).
 jest.mock('../../services/pointsService', () => ({
@@ -711,18 +714,29 @@ describe('member profiles + directory', () => {
     expect(isMemberRole('wizard')).toBe(false);
   });
 
-  it('listMembersForAdmin: returns name+email+role rows, name-searchable (ILIKE)', async () => {
+  it('listMembersForAdmin: name+email+role+signed_up_at rows, ILIKE search, newest-first (nulls last)', async () => {
+    // Deliberately unsorted input incl. a null-enrollment row, to prove the
+    // service orders by sign-up DESC and pushes the null-enrollment row last.
     findAllMembers.mockResolvedValue([
-      { id: 'm1', display_name: 'Ada', role: 'mentor', enrollment: { email: 'ada@x.com' } },
+      { id: 'm1', display_name: 'Ada', role: 'mentor', enrollment: { email: 'ada@x.com', created_at: '2026-07-01T00:00:00Z' } },
       { id: 'm2', display_name: 'Bob', role: 'student', enrollment: null },
+      { id: 'm3', display_name: 'Cid', role: 'staff', enrollment: { email: 'cid@x.com', created_at: '2026-07-10T00:00:00Z' } },
     ]);
 
     const rows = await listMembersForAdmin('ad');
 
+    // Name search still builds the ILIKE where clause.
     expect(findAllMembers.mock.calls[0][0].where.display_name[Op.iLike]).toBe('%ad%');
+    // DB-side ordering is by enrollment.created_at DESC (so the 200-cap keeps newest).
+    const order = findAllMembers.mock.calls[0][0].order;
+    expect(order[0][1]).toBe('created_at');
+    expect(order[0][2]).toBe('DESC');
+    // Final rows: newest sign-up first, null-enrollment last. free_access defaults
+    // false here (mock members carry no enrollment_id → empty comp set).
     expect(rows).toEqual([
-      { id: 'm1', display_name: 'Ada', email: 'ada@x.com', role: 'mentor' },
-      { id: 'm2', display_name: 'Bob', email: null, role: 'student' },
+      { id: 'm3', display_name: 'Cid', email: 'cid@x.com', role: 'staff', signed_up_at: '2026-07-10T00:00:00.000Z', free_access: false },
+      { id: 'm1', display_name: 'Ada', email: 'ada@x.com', role: 'mentor', signed_up_at: '2026-07-01T00:00:00.000Z', free_access: false },
+      { id: 'm2', display_name: 'Bob', email: null, role: 'student', signed_up_at: null, free_access: false },
     ]);
   });
 });

@@ -64,7 +64,7 @@ export async function cardContext(cardId: string) {
 /** Open a published card for the runtime (card + the student's progress + video +
  *  the saved lesson content + the type's picture, so the workspace opens WITH the
  *  lesson the student saw on the card and its hero image). */
-export async function openCard(enrollmentId: string, cardId: string) {
+export async function openCard(enrollmentId: string, cardId: string, opts: { readOnly?: boolean } = {}) {
   const card = await TimelineCard.findByPk(cardId);
   if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
   // Gating: a locked card (unmet prerequisites) can't be opened by direct URL.
@@ -74,10 +74,14 @@ export async function openCard(enrollmentId: string, cardId: string) {
   const def = resolveType(card.type);
   // The type's Studio thumbnail lives on the DB definition (not the code registry).
   const dbDef = await CurriculumTypeDefinition.findOne({ where: { slug: card.type }, attributes: ['thumbnail_url'] });
-  const [progress] = await TimelineCardProgress.findOrCreate({
-    where: { card_id: cardId, enrollment_id: enrollmentId },
-    defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'available' },
-  });
+  // Read-only "view as": read the existing progress row but never create one
+  // (creating would mark the member as having started this card).
+  const progress = opts.readOnly
+    ? await TimelineCardProgress.findOne({ where: { card_id: cardId, enrollment_id: enrollmentId } })
+    : (await TimelineCardProgress.findOrCreate({
+        where: { card_id: cardId, enrollment_id: enrollmentId },
+        defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'available' },
+      }))[0];
 
   // Per-student media resolution — the SAME picks the feed shows (stable per
   // (enrollment, card) assignments make these idempotent). Without this a
@@ -119,7 +123,7 @@ export async function openCard(enrollmentId: string, cardId: string) {
       type_thumbnail: ((dbDef?.thumbnail_url || '') as string).trim() || null,
       week_title: null,
     },
-    progress: { status: progress.status, completed_at: progress.completed_at },
+    progress: { status: progress?.status ?? 'available', completed_at: progress?.completed_at ?? null },
   };
 }
 

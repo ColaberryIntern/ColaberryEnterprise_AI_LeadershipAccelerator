@@ -24,6 +24,31 @@ export function signParticipantJwt(enrollment: { id: string; email: string; coho
   );
 }
 
+/**
+ * Sign a READ-ONLY participant JWT for admin "View as member" impersonation.
+ * Same identity/session length (7d) as a normal token, but carries `read_only`
+ * (which requireParticipant enforces by blocking all writes) and `impersonated_by`
+ * for audit. The viewer sees exactly what the member sees; the server guarantees
+ * they can change nothing.
+ */
+export function signReadOnlyParticipantJwt(
+  enrollment: { id: string; email: string; cohort_id: string | null },
+  impersonatedBy: string,
+): string {
+  return jwt.sign(
+    {
+      sub: enrollment.id,
+      email: enrollment.email,
+      cohort_id: enrollment.cohort_id,
+      role: 'participant' as const,
+      read_only: true,
+      impersonated_by: impersonatedBy,
+    },
+    env.jwtSecret,
+    { expiresIn: '7d' }
+  );
+}
+
 export async function requestMagicLink(email: string): Promise<{ success: boolean; message: string }> {
   // Deterministic: a person may hold several enrollments (e.g. a prior Explorer
   // plus a paid seat). Always target the MOST RECENT active, portal-enabled one so

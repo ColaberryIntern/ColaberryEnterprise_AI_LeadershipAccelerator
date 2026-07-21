@@ -43,4 +43,45 @@ router.patch('/api/admin/community/members/:memberId/role', requireAdmin, async 
   }
 });
 
+/**
+ * POST/DELETE /api/admin/community/members/:memberId/free-access
+ * Admin grants (POST) or revokes (DELETE) a comped "Free Access" seat for the
+ * member — full program access at $0, no employee/staff role, normal student
+ * experience. Resolves the member → enrollment, then delegates to the
+ * subscription service. Idempotent (grant reuses an active comp; revoke no-ops
+ * when none exists).
+ */
+async function resolveMemberEnrollment(memberId: string): Promise<{ id: string; enrollment_id: string } | null> {
+  const { default: CommunityMember } = await import('../../models/CommunityMember');
+  const member = await CommunityMember.findByPk(memberId, { attributes: ['id', 'enrollment_id'] });
+  return member ? { id: member.id, enrollment_id: member.enrollment_id } : null;
+}
+
+router.post('/api/admin/community/members/:memberId/free-access', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const member = await resolveMemberEnrollment(req.params.memberId as string);
+    if (!member) { res.status(404).json({ error: 'Member not found' }); return; }
+    const { grantFreeAccess } = await import('../../services/subscriptionService');
+    await grantFreeAccess(member.enrollment_id);
+    res.json({ member: { id: member.id, free_access: true } });
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404 : 500;
+    console.error('[CommunityMemberRoutes] POST /community/members/:memberId/free-access error:', err.message);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+router.delete('/api/admin/community/members/:memberId/free-access', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const member = await resolveMemberEnrollment(req.params.memberId as string);
+    if (!member) { res.status(404).json({ error: 'Member not found' }); return; }
+    const { revokeFreeAccess } = await import('../../services/subscriptionService');
+    await revokeFreeAccess(member.enrollment_id);
+    res.json({ member: { id: member.id, free_access: false } });
+  } catch (err: any) {
+    console.error('[CommunityMemberRoutes] DELETE /community/members/:memberId/free-access error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

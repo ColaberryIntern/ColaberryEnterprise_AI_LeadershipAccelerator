@@ -57,6 +57,7 @@ export interface TodayFeedItem {
   week: number | null;
   estimated_time: number | null;
   status: string | null;       // anchored progress status
+  points?: { learning?: number; builder?: number; community?: number } | null;  // engagement points the card awards (anchored curriculum cards)
   interacted: boolean;
   author?: { name: string; avatar_url: string | null; level: number } | null;  // community posts: the member byline
 }
@@ -188,7 +189,7 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
  * Return the page of the Today feed starting at `cursor` (0-based item offset),
  * generating more of the feed if the cursor runs past what's been materialised.
  */
-export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = DEFAULT_PAGE_SIZE): Promise<TodayPage> {
+export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = DEFAULT_PAGE_SIZE, opts: { readOnly?: boolean } = {}): Promise<TodayPage> {
   const size = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(pageSize)));
   const from = Math.max(0, Math.floor(cursor));
   const targetEnd = from + size;
@@ -196,10 +197,16 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   let existing = await loadImpressions(enrollmentId);
   let exhausted = false;
   if (existing.length < targetEnd) {
-    const before = existing.length;
-    const added = await extendFeed(enrollmentId, existing, targetEnd - existing.length);
-    exhausted = added.length < targetEnd - before; // couldn't fill the page → pools are dry
-    if (added.length) existing = await loadImpressions(enrollmentId);
+    if (opts.readOnly) {
+      // Read-only "view as": show the member's already-materialised feed but
+      // never append new impressions (that's an append-only write to their data).
+      exhausted = true;
+    } else {
+      const before = existing.length;
+      const added = await extendFeed(enrollmentId, existing, targetEnd - existing.length);
+      exhausted = added.length < targetEnd - before; // couldn't fill the page → pools are dry
+      if (added.length) existing = await loadImpressions(enrollmentId);
+    }
   }
 
   const slice = existing.slice(from, targetEnd);

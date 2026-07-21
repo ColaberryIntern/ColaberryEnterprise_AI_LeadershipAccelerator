@@ -15,6 +15,7 @@ import { selectTestimonialForEnrollment } from './networkVideoService';
 import { selectPodcastForEnrollment } from './podcastMediaService';
 import { selectBlogForEnrollment } from './blogMediaService';
 import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingService';
+import { isStaffEnrollment } from '../access/staffAccess';
 import { env } from '../../config/env';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
@@ -231,6 +232,10 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   const gateCtx = await buildGateContext(allCards, completedCardIds);
   const gateCardById = new Map<string, GateCard>(gateCtx.allCards.map((c) => [c.id, c]));
 
+  // Staff have unrestricted curriculum access: skip the lock overlay entirely so
+  // every not-yet-engaged card reads as 'available' (mirrors assertCardUnlocked).
+  const staffUnrestricted = await isStaffEnrollment(enrollmentId);
+
   // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
   // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
   const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
@@ -251,6 +256,8 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     let lock_reason: string | null = null;
     if (stored === 'completed' || stored === 'in_progress') {
       status = stored;
+    } else if (staffUnrestricted) {
+      status = 'available';
     } else {
       try {
         const gc = gateCardById.get(card.id)

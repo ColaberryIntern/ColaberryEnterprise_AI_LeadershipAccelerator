@@ -10,6 +10,7 @@ import { awardCommunityXp } from './progression/communityXpService';
 import { award, revoke, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
+import { activeCompEnrollmentIds } from './subscriptionService';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
 // Lite poll-presence (P0 per the approved design mockup — real-time websocket
@@ -1032,6 +1033,12 @@ export interface AdminMemberRow {
   display_name: string;
   email: string | null;
   role: CommunityMemberRole;
+  // Enrollment (sign-up) timestamp, ISO-8601, or null if the member has no
+  // linked enrollment. The admin roster is ordered newest-first by this.
+  signed_up_at: string | null;
+  // True when this member's enrollment holds an active comped ('Free Access')
+  // seat — full program access at $0, granted by an admin (not a paid plan).
+  free_access: boolean;
 }
 
 export async function listMembersForAdmin(search?: string): Promise<AdminMemberRow[]> {
@@ -1039,19 +1046,33 @@ export async function listMembersForAdmin(search?: string): Promise<AdminMemberR
   const q = search?.trim();
   if (q) where.display_name = { [Op.iLike]: `%${q}%` };
 
+  // Order newest-first by sign-up (enrollment.created_at) DB-side so the 200-row
+  // cap keeps the most recent members, then re-sort in JS to make the final
+  // order deterministic and push null-enrollment rows last (Postgres would sort
+  // NULLs first under DESC).
   const members = await CommunityMember.findAll({
     where,
-    include: [{ model: Enrollment, as: 'enrollment', attributes: ['email'] }],
-    order: [['display_name', 'ASC']],
+    include: [{ model: Enrollment, as: 'enrollment', attributes: ['email', 'created_at'] }],
+    order: [[{ model: Enrollment, as: 'enrollment' }, 'created_at', 'DESC']],
     limit: 200,
   });
 
-  return members.map((m: any) => ({
+  // Flag who currently holds a comped ('Free Access') seat — one batched query.
+  const compSet = await activeCompEnrollmentIds(
+    members.map((m: any) => m.enrollment_id).filter(Boolean),
+  );
+
+  const rows: AdminMemberRow[] = members.map((m: any) => ({
     id: m.id,
     display_name: m.display_name,
     email: m.enrollment?.email ?? null,
     role: (m.role as CommunityMemberRole) ?? 'student',
+    signed_up_at: m.enrollment?.created_at ? new Date(m.enrollment.created_at).toISOString() : null,
+    free_access: m.enrollment_id ? compSet.has(m.enrollment_id) : false,
   }));
+
+  rows.sort((a, b) => (b.signed_up_at ?? '').localeCompare(a.signed_up_at ?? ''));
+  return rows;
 }
 
 export async function setMemberRole(targetMemberId: string, role: CommunityMemberRole): Promise<MemberProfile> {

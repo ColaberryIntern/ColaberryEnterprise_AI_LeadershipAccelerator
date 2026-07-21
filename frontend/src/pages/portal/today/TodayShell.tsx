@@ -308,6 +308,13 @@ const TodayShell: React.FC = () => {
               fallbackCards={curriculum}
               onOpen={setSelectedCard}
               onWorkspace={setSelectedCard}
+              onComplete={async (card) => {
+                // Collect points straight from the timeline card. Throws on the
+                // server watch/lock gate (422) so the card surfaces "watch it first".
+                const res = await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+                await loadAll();
+                emitPointsEarned(res.data?.points_awarded ?? 0); // HUD burst + chime
+              }}
             />
           </div>
         </div>

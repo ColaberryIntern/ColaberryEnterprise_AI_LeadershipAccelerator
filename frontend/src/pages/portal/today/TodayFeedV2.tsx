@@ -36,7 +36,7 @@ function adapt(item: TodayFeedItem): TimelineFeedCard {
     order: item.position,
     difficulty: 'core',
     estimated_time: item.estimated_time ?? null,
-    points: {},
+    points: item.points ?? {},
     competencies: [],
     status: toStatus(item.status),
     quiz_score: null,
@@ -55,9 +55,10 @@ interface Props {
   fallbackCards: TimelineFeedCard[];
   onOpen: (card: TimelineFeedCard) => void;
   onWorkspace: (card: TimelineFeedCard) => void;
+  onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
 }
 
-const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace }) => {
+const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onComplete }) => {
   const [mode, setMode] = useState<'loading' | 'v2' | 'fallback'>('loading');
   const [rows, setRows] = useState<Array<{ item: TodayFeedItem; card: TimelineFeedCard }>>([]);
   const [cursor, setCursor] = useState(0);
@@ -141,6 +142,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace }) =>
           card={card}
           onOpen={(c) => handleOpen(c, item.ref)}
           onWorkspace={onWorkspace}
+          onComplete={onComplete}
           likes={6 + ((i * 7) % 13)}
         />
       ))}
@@ -161,7 +163,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace }) =>
 
       {mode === 'fallback' && (looped.length
         ? looped.map((c, i) => (
-            <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={onOpen} onWorkspace={onWorkspace} likes={6 + ((i * 7) % 13)} />
+            <TimelineCard key={`${c.id}-${i}`} card={c} onOpen={onOpen} onWorkspace={onWorkspace} onComplete={onComplete} likes={6 + ((i * 7) % 13)} />
           ))
         : <div className="fc-empty">Loading your feed…</div>)}
 

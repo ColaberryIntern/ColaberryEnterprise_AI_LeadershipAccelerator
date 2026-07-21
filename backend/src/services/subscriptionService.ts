@@ -50,10 +50,18 @@ function makePlan(id: SubscriptionPlan, label: string, per_month: number, cadenc
   return { id, label, per_month, cadence, period_days, blurb, price, amount_cents: Math.round(price * 100) };
 }
 
+// A comped seat's billing period — ~10 years, so an admin grant never lapses on
+// its own (revoked explicitly via revokeFreeAccess).
+const COMP_PERIOD_DAYS = 3650;
+
 // Real prices: annual $149/mo → $1,788/yr (per_month × 12), monthly $199/mo.
 export const PLANS: Record<SubscriptionPlan, PlanConfig> = {
   annual: makePlan('annual', 'Annual', 149, 'year', 365, 'Best value — pay once a year for full access to the program.'),
   monthly: makePlan('monthly', 'Monthly', 199, 'month', 30, 'Month-to-month. Cancel anytime.'),
+  // Admin-only comped seat (Free Access). $0, ~10-year period so it never lapses
+  // on its own. Never listed for self-serve checkout (see getSubscription /
+  // startCheckout) — granted only via grantFreeAccess().
+  comp: makePlan('comp', 'Free Access', 0, 'year', COMP_PERIOD_DAYS, 'Comped seat — full program access at no charge.'),
 };
 
 const DAY_MS = 24 * 3600 * 1000;
@@ -224,6 +232,9 @@ export type CheckoutResult =
 /** Start a hosted checkout for a plan. Creates a pending subscription keyed on
  *  the PaySimple external_id and returns the payment link to redirect to. */
 export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan, nowMs: number = Date.now()): Promise<CheckoutResult> {
+  // Only the two self-serve paid plans are checkout-able. 'comp' (Free Access) is
+  // admin-granted, never chargeable, so it must never reach a hosted checkout.
+  if (plan !== 'annual' && plan !== 'monthly') return { ok: false, reason: 'unknown_plan' };
   const cfg = PLANS[plan];
   if (!cfg) return { ok: false, reason: 'unknown_plan' };
   if (!env.paysimpleApiUser || !env.paysimpleApiKey) return { ok: false, reason: 'billing_unconfigured' };
@@ -328,16 +339,10 @@ export async function activateByRef(
   // Convert Explorer → paying member. Flipping enrollment_type off 'explorer'
   // drops the Week-0 timeline gate and the Projects demo lock automatically.
   if (enrollment) {
-    await enrollment.update({
-      enrollment_type: 'standard',
-      tier: 'member',
-      payment_status: 'paid',
-      status: 'active',
-      portal_enabled: true,
-      cohort_id: cohort ? cohort.id : enrollment.cohort_id,
-      amount_paid: typeof opts.amount === 'number' && opts.amount > 0 ? opts.amount : cfg.price,
-      payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
-      enrolled_at: enrollment.enrolled_at || now, // actual payment date, not the anchor
+    await grantMembership(enrollment, {
+      cohortId: cohort ? cohort.id : enrollment.cohort_id,
+      amountPaid: typeof opts.amount === 'number' && opts.amount > 0 ? opts.amount : cfg.price,
+      now, // enrolled_at falls back to this only if the enrollment has none yet
     });
   }
 
@@ -354,6 +359,91 @@ export async function activateByRef(
     }
   }
   return sub;
+}
+
+/**
+ * The single definition of "this enrollment has a paid seat" — shared by paid
+ * activation (activateByRef) and comped grants (grantFreeAccess). Flipping
+ * enrollment_type off 'explorer' is what drops the Week-0 timeline gate and the
+ * Projects demo lock; the rest marks it paid/active/portal-enabled. Kept in one
+ * place so the two callers can never drift apart.
+ */
+async function grantMembership(
+  enrollment: Enrollment,
+  opts: { cohortId: string | null; amountPaid: number; now: Date },
+): Promise<void> {
+  await enrollment.update({
+    enrollment_type: 'standard',
+    tier: 'member',
+    payment_status: 'paid',
+    status: 'active',
+    portal_enabled: true,
+    cohort_id: opts.cohortId ?? enrollment.cohort_id,
+    amount_paid: opts.amountPaid,
+    payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
+    enrolled_at: enrollment.enrolled_at || opts.now,
+  });
+}
+
+const COMP_PREFIX = 'COMP-';
+
+/**
+ * Admin grant — "Free Access": comp a seat (100% discount) for anyone, with NO
+ * employee/staff role. The person gets the NORMAL student experience (normal
+ * curriculum gating), just never billed — distinct from staff, who bypass
+ * gating. Creates (idempotently) an active 'comp' subscription so the paywall
+ * clears + the seat is labelled, then flips the enrollment to a paid member.
+ * Idempotent: a second call reuses the existing active comp row (no stacking).
+ */
+export async function grantFreeAccess(enrollmentId: string, nowMs: number = Date.now()): Promise<Subscription> {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) {
+    throw Object.assign(new Error('Enrollment not found'), { error_class: 'NotFoundError' });
+  }
+  const now = new Date(nowMs);
+
+  let sub = await Subscription.findOne({ where: { enrollment_id: enrollmentId, plan: 'comp', status: 'active' } });
+  if (!sub) {
+    sub = await Subscription.create({
+      enrollment_id: enrollmentId,
+      plan: 'comp',
+      status: 'active',
+      amount_cents: 0,
+      applied_credit_cents: 0,
+      payment_ref: `${COMP_PREFIX}${enrollmentId}-${nowMs}`,
+      started_at: now,
+      current_period_end: new Date(nowMs + COMP_PERIOD_DAYS * DAY_MS),
+    });
+  }
+
+  await grantMembership(enrollment, { cohortId: enrollment.cohort_id, amountPaid: 0, now });
+  return sub;
+}
+
+/**
+ * Admin revoke — remove the Free-Access label by canceling the active comp
+ * subscription (and the future no-bill expectation). It deliberately does NOT
+ * downgrade the enrollment's current access; forcibly locking someone out is a
+ * separate, explicit admin action, so revoking a comp can never fight a real
+ * payment or strand a student mid-course. Returns whether a comp row was found.
+ */
+export async function revokeFreeAccess(enrollmentId: string, nowMs: number = Date.now()): Promise<boolean> {
+  const sub = await Subscription.findOne({ where: { enrollment_id: enrollmentId, plan: 'comp', status: 'active' } });
+  if (!sub) return false;
+  const now = new Date(nowMs);
+  await sub.update({ status: 'canceled', canceled_at: now, cancel_reason: 'comp_revoked', updated_at: now });
+  return true;
+}
+
+/** Which of these enrollments currently hold an active comped seat — for admin
+ *  rosters that flag "Free Access". One query; returns a Set for O(1) lookup. */
+export async function activeCompEnrollmentIds(enrollmentIds: string[]): Promise<Set<string>> {
+  if (!enrollmentIds.length) return new Set();
+  const rows = await Subscription.findAll({
+    where: { enrollment_id: enrollmentIds, plan: 'comp', status: 'active' },
+    attributes: ['enrollment_id'],
+  });
+  return new Set(rows.map((r) => r.enrollment_id));
 }
 
 export type CancelResult =

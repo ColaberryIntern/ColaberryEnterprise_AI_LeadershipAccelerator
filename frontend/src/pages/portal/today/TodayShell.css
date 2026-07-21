@@ -269,7 +269,11 @@
 .te-page-h h1{font-size:30px;line-height:1.12;color:var(--strong);margin:0;font-weight:700;letter-spacing:-.01em}
 .te-page-h .sub{color:var(--muted);font-size:16px;margin-top:6px;max-width:720px}
 .te-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;align-items:start}
-@media(max-width:1080px){.te-grid{grid-template-columns:1fr}}
+/* The timeline (middle) is the priority and must not go skinny: drop the inner
+   340px aside early so the feed keeps its width. Shrink order overall: the right
+   rail (contacts) collapses first (≤1200), then the left nav (≤1000); the middle
+   feed never shrinks (always 1fr). */
+@media(max-width:1300px){.te-grid{grid-template-columns:1fr}}
 
 .te-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-16);box-shadow:var(--shadow-md)}
 .te-side .te-card{margin-bottom:16px}
