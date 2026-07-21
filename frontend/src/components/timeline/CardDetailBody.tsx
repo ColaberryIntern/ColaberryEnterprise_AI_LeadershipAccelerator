@@ -11,6 +11,14 @@ import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
 import { useDeepDiveHost } from './useDeepDiveHost';
 import { useBlogReadGate } from './useBlogReadGate';
+import { useDwellGate, isDwellGatedCard } from './useDwellGate';
+
+/** Tiny stable string hash — varies the dwell Collect button placement per card. */
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return h;
+}
 import SetupLabRender from './SetupLabRender';
 import PromptCatalogRender from './PromptCatalogRender';
 import ArchitectTimeMachine from './ArchitectTimeMachine';
@@ -237,6 +245,15 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const blogGate = useBlogReadGate(live ? blogId : null);
   const blogReadPct = Math.min(100, Math.round(((blogGate.state?.read_s ?? 0) / (blogGate.state?.required_s || 120)) * 100));
 
+  // Generic dwell gate: passive-content types (intel / reflection / discussion /
+  // study / Q&A) award points but have no other criteria, so the Collect button
+  // only appears after N continuous seconds with the card open (resets if you
+  // leave). The button placement is varied per card so it can't be muscle-memory'd.
+  const dwellGated = live && isDwellGatedCard(card);
+  const dwell = useDwellGate(dwellGated ? card.id : null, dwellGated);
+  const dwellPct = Math.min(100, Math.round(((dwell?.dwell_s ?? 0) / (dwell?.required_s || 120)) * 100));
+  const dwellAlign = (['flex-start', 'center', 'flex-end'] as const)[Math.abs(hashStr(card.id)) % 3];
+
   // Deep Dive host bridge: the Field Guide iframe (opaque-origin) can't persist or
   // reach the API, so the host owns read/copy persistence (restored across reopens),
   // the +100-point upload, and the Mark-complete gate (dd.complete folds read+copy+upload).
@@ -461,6 +478,24 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {card.type === 'blog' && !blog && (
           <div className="tld-note">No blog post is attached to this card yet. It will auto-match once the blog library is loaded.</div>
         )}
+        {/* Generic dwell gate: passive-content types must be read for N continuous
+            seconds before Collect appears. The button's horizontal placement is
+            varied per card (left/center/right) so it can't be muscle-memory'd —
+            you have to look for it. */}
+        {dwellGated && (
+          <div style={{ display: 'flex', justifyContent: dwell?.met ? dwellAlign : 'stretch', marginTop: 6 }}>
+            {dwell?.met && completeSafely ? (
+              <button type="button" className="tl-btn primary" onClick={completeSafely}>Collect +{pts} pts</button>
+            ) : (
+              <div className="tld-note" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span>Read through it — {dwell?.dwell_s ?? 0}s of {dwell?.required_s ?? 120}s before you can collect your points.</span>
+                <div style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
+                  <i style={{ display: 'block', height: '100%', width: `${dwellPct}%`, background: '#367895', transition: 'width .5s ease' }} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         </>)}
       </div>
 
@@ -513,7 +548,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {/* Survey completes in-body via its own Submit; the workspace link
                     stays as a quiet secondary, not the primary CTA. */}
                 {/* Architect Time Machine renders its own "Enter the Time Machine" CTA in-panel (drawer variant). */}
-                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive || !!blog ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive || !!blog || dwellGated ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
                 {/* Self Study: the Mark Complete button only appears once every section
                     has been read (>=10s each), matching the workstation's gate + style. */}
                 {isReader && readerProg.complete && completeSafely && (
