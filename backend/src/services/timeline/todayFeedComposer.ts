@@ -28,7 +28,7 @@ import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineServi
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, type TodayItemKind } from './todayFeedPlan';
-import { gatherAnchored } from './todayAnchoredSources';
+import { gatherAnchored, rehydrateCommunityItems } from './todayAnchoredSources';
 import { env } from '../../config/env';
 import { getFeedPolicy } from './feedConfigService';
 
@@ -204,6 +204,9 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
 
   const slice = existing.slice(from, targetEnd);
   const items = slice.map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
+  // Community cards are dynamic — refresh their media/author/text from the live
+  // post so the append-only snapshot never shows stale content (fail-soft).
+  await rehydrateCommunityItems(items);
   return { items, nextCursor: from + items.length, exhausted: exhausted && items.length < size };
 }
 
