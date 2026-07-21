@@ -122,11 +122,9 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
   // Roster-summary titles are DETERMINISTIC — no model paraphrase, so the name never
   // drifts (this also kills the "random title" bug, e.g. "Build Your AI Foundation").
   // The weekly ANNOUNCEMENT names the week's SUBJECT ("This Week — Prompt Engineering")
-  // so the title matches the body; the OVERVIEW keeps the week's ROLE theme (bp.title,
-  // e.g. "Business Analyst") which the tile also shows as its week_title.
+  // so the title matches the body. (The 'overview' type was retired 2026-07-21.)
   if (bp?.title) {
     if (card.type === 'announcement') content.title = `This Week — ${weekTopicLabel(bp)}`;
-    else if (card.type === 'overview') content.title = `Overview — ${bp.title}`;
   }
 
   // Persist onto the shared card so every student sees EXACTLY this. Stamp

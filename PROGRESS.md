@@ -10,6 +10,28 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Retire the `overview` curriculum type (full removal: code + prod DB) (2026-07-21)
+- [x] **Removed the `overview` card TYPE end to end — announcement is the sole section-opener now; the `overview` *render_band* fallback is kept**
+  - Date: 2026-07-21
+  - Session: CC-20260721-x4k2
+  - What changed:
+    - `backend/src/services/timeline/typeRegistry.ts`: dropped the `slug:'overview'` `CARD_TYPES` entry (36→35 canonical); re-pointed `LEGACY_TYPE_MAP` (`executive_reality_check`/`concept`/`section`) and the `mapLegacyType` universal fallback from `overview` → `announcement`. Kept the `render_band` named `'overview'` (separate concept — the universal fallback band).
+    - `backend/src/services/composer/composerAi.ts`: removed `'overview'` from all 7 `SEQ` scaffolds (lesson/session/week/sprint/month/certification_module/program) so `scaffoldPlan`'s `resolve(slug)!` never hits it.
+    - `backend/src/services/composer/dependencyEngine.ts`: dropped `overview` from the prereqs of `prompt_lab`/`deep_dive`/`implementation_task`/`project_task` (else those plans become unpublishable).
+    - `backend/src/services/timeline/sectionCurriculumContext.ts`: removed `overview` from `SECTION_ROSTER_TYPES` (now `announcement`+`prompt_lab`) and `EXCLUDED_TYPES`.
+    - `backend/src/services/runtime/runtimeService.ts`: synthetic journeyCard type `overview`→`announcement` (no competency-math change — both have `competencies:[]`); dropped the dead `card.type==='overview'` blueprint-title gate + now-unused `getBlueprintContext` import; `week_title` is always null (kept the `render_band||'overview'` fallback).
+    - `backend/src/services/timeline/cardContentService.ts`: removed the `overview` deterministic-title branch (announcement branch kept).
+    - `backend/src/services/timeline/timelineService.ts`: removed the `overviewPrograms`/`sectionTitleByKey` block + `week_title` overview branch (now null) + unused `CurriculumBlueprint` import (kept the band fallback).
+    - `backend/src/seeds/seedComponentAuthoring.ts`: removed `overview` from `THUMBNAIL_SLUGS`, the three `OVERVIEW_*` consts, and the `overview:` authoring block.
+    - `backend/src/server.ts`: removed `overview` from the boot baseline-approval `WHERE slug IN (...)` list.
+    - `backend/src/scripts/seedTimelineDemo.ts`: removed the demo `overview` card.
+    - `frontend/src/pages/admin/ops/OperationsCenterPage.tsx`: removed `overview` from the digital-twin type dropdown.
+    - `frontend/src/pages/admin/orchestration/TimelineEditorTab.tsx`: removed `overview` from the `isBlueprintGen` zero-author-input list (announcement's pre-existing treatment left unchanged — out of scope).
+    - Tests updated to match: composerEngines (week 14→13 cards, lesson 3→2, prompt_lab prereq now `['video']`), typeRegistry (52→51 types, legacy map → announcement), sectionCurriculumContext (also fixed a pre-existing wrong `prompt_lab=false` assertion), timelineAdminService, seedComponentAuthoring (removed the overview-authoring test), componentPlatform, blueprintRollup comment, and the two frontend fixtures (classroomSearch, curriculumFormatContract — kept the `'overview' in BAND` render_band assertion).
+  - Why: Ali directed a full retirement of the `overview` curriculum type (scope + timing confirmed 2026-07-21). Durable removal requires the code change because the boot seeder recreates `overview` as an `is_system` type from `CARD_TYPES` on every deploy. Mirrors the github_sync type removal.
+  - Verification: <PENDING — GitHub Actions (frontend typecheck authoritative) on the PR, then prod backend rebuild + DB deletion counts; finalized at session end>
+  - Notes: The `overview` *render_band* (the universal fallback band, `def.render_band||'overview'`, `BAND['overview']`) is deliberately KEPT — only the card TYPE slug is removed. Prod DB cleanup (cards + `timeline_card_progress` + `curriculum_type_definitions` row + `component_analytics`) runs after the code deploy; `xp_events`/nullable-FK refs to overview cards are detached (card_id→NULL) to preserve earned XP rather than deleted.
+
 ### Roster-card titles are deterministic from the blueprint theme (SDLC re-theme) (2026-07-19)
 - [x] **Announcement/Overview titles are now always "This Week — {blueprint theme}" / "Overview — {theme}", taken from the blueprint (synced from the Deep Dive), not the model — so the week theme name never drifts**
   - Date: 2026-07-19

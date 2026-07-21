@@ -24,10 +24,10 @@ const SUPPORTED_RENDER_BANDS = new Set<string>([
 ]);
 
 describe('typeRegistry', () => {
-  it('registers the 52 canonical curriculum types', () => {
-    // 39 base (36 + testimonial/podcast/blog) + setup_lab (Claude Code enablement) + 11 intelligence-pipeline types (community_live_session + 10 generators) + architect_mindset (The Architect Time Machine).
-    expect(CARD_TYPES.length).toBe(52);
-    expect(allTypes().length).toBeGreaterThanOrEqual(52);
+  it('registers the 51 canonical curriculum types', () => {
+    // 38 base (35 + testimonial/podcast/blog; 'overview' retired 2026-07-21) + setup_lab (Claude Code enablement) + 11 intelligence-pipeline types (community_live_session + 10 generators) + architect_mindset (The Architect Time Machine).
+    expect(CARD_TYPES.length).toBe(51);
+    expect(allTypes().length).toBeGreaterThanOrEqual(51);
   });
 
   it('resolves a known type with its metadata', () => {
@@ -49,13 +49,13 @@ describe('typeRegistry', () => {
 
   it('maps legacy curriculum types onto the new taxonomy', () => {
     expect(mapLegacyType('prompt_template')).toEqual({ slug: 'prompt_lab', fallback: false });
-    expect(mapLegacyType('executive_reality_check').slug).toBe('overview');
+    expect(mapLegacyType('executive_reality_check').slug).toBe('announcement');
     expect(mapLegacyType('knowledge_check')).toEqual({ slug: 'knowledge_check', fallback: false });
   });
 
-  it('maps unknown legacy types to overview with a fallback flag', () => {
+  it('maps unknown legacy types to announcement with a fallback flag', () => {
     const r = mapLegacyType('some_weird_legacy_type');
-    expect(r.slug).toBe('overview');
+    expect(r.slug).toBe('announcement');
     expect(r.fallback).toBe(true);
     expect(mapLegacyType(null).fallback).toBe(true);
   });
