@@ -51,6 +51,7 @@ import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
 import AdminFunnelPage from '../pages/admin/AdminFunnelPage';
 import CbSystemCommand from '../pages/admin/CbSystemCommand';
 import AdminTrustCenterPage from '../pages/admin/AdminTrustCenterPage';
+import StudentCardPreviewPage from '../pages/admin/orchestration/StudentCardPreviewPage';
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
@@ -112,6 +113,10 @@ const adminRoutes = (
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
       </Route>
+      {/* Full-page student-view preview of a single Timeline card, opened in a new
+          tab from the orchestration Timeline editor. Auth-gated (admin token) but
+          rendered WITHOUT the admin chrome so it reads as the student's card. */}
+      <Route path="/admin/orchestration/card-preview" element={<StudentCardPreviewPage />} />
     </Route>
   </>
 );
