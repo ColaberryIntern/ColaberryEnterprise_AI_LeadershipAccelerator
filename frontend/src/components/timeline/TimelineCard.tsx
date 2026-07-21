@@ -477,7 +477,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }} title={card.lock_reason || undefined}>{card.lock_reason || 'Unlocks later'}</span>
-            : (pts > 0 && onComplete)
+            : (pts > 0 && onComplete && card.type !== 'blog')
               ? watchGated
                 ? <button type="button" className="fc-cta" disabled title={`Watch to ${watch?.required_pct}% to collect your points`} style={{ opacity: 0.6, cursor: 'not-allowed' }}>
                     <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg> Watch {watch?.watched_pct ?? 0}% / {watch?.required_pct}%

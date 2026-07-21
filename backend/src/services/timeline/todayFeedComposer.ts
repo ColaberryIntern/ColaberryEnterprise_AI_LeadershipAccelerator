@@ -99,6 +99,10 @@ function ambientItemFrom(a: AmbientItem, position: number): TodayFeedItem {
     week: null,
     estimated_time: def?.est_minutes ?? null,
     status: null,
+    // Blogs are the one collectible ambient type: they award points via the read
+    // gate (podcasts/testimonials stay ambient with no points). The badge + the
+    // drawer read-gate key off this.
+    points: a.provider === 'blog' ? { learning: def?.learning_xp || 10 } : null,
     interacted: false,
   };
 }
@@ -205,6 +209,24 @@ async function completedCardIds(enrollmentId: string, cardIds: string[]): Promis
   }
 }
 
+/** Blog refs the student has already collected points for — dropped from the feed
+ *  so a read blog disappears (award is keyed on the same `blog:<id>` ref). */
+async function collectedBlogRefs(enrollmentId: string, refs: string[]): Promise<Set<string>> {
+  const blogRefs = Array.from(new Set(refs.filter((r) => r.startsWith('blog:'))));
+  if (!blogRefs.length) return new Set();
+  try {
+    const rows = await sequelize.query<{ event_key: string }>(
+      `SELECT event_key FROM student_points_events
+         WHERE enrollment_id = :eid AND event_key IN (:keys)`,
+      { replacements: { eid: enrollmentId, keys: blogRefs }, type: QueryTypes.SELECT },
+    );
+    return new Set(rows.map((r) => r.event_key));   // 'blog:<id>' — same string as the impression ref
+  } catch (err: any) {
+    console.warn('[todayFeedComposer] collected-blog lookup failed:', err?.message?.split('\n')[0]);
+    return new Set();
+  }
+}
+
 /**
  * The list actually served for a page: the materialised impressions minus cards
  * the student has completed ("finished tasks disappear"), reordered per visit when
@@ -212,9 +234,13 @@ async function completedCardIds(enrollmentId: string, cardIds: string[]): Promis
  * seed so pagination within one visit never repeats or skips.
  */
 async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed?: number): Promise<TodayFeedItem[]> {
-  const completed = await completedCardIds(enrollmentId, existing.map((r) => r.card_id).filter((x): x is string => !!x));
+  const [completed, collectedBlogs] = await Promise.all([
+    completedCardIds(enrollmentId, existing.map((r) => r.card_id).filter((x): x is string => !!x)),
+    collectedBlogRefs(enrollmentId, existing.map((r) => r.ref)),
+  ]);
   const items = existing
     .filter((r) => !(r.card_id && completed.has(r.card_id)))                        // completed via progress
+    .filter((r) => !collectedBlogs.has(r.ref))                                      // blog points already collected
     .filter((r) => (r.item as TodayFeedItem | null)?.status !== 'completed')        // snapshot already completed (project/etc.)
     .map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
   return seed != null ? orderForVisit(items, seed) : items;
