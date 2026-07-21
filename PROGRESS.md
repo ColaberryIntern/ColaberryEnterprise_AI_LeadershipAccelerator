@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Fix runaway boot sync creating duplicate unique indexes ("out of shared memory") (2026-07-21)
+- [x] **Gated `ensureIntelligenceTables()`'s `sync({ alter: true })` behind `DB_BOOT_SYNC` (create-only by default) — stops the every-boot duplicate-unique-index accumulation**
+  - Date: 2026-07-21
+  - Session: CC-20260721-x4k2
+  - What changed: `backend/src/intelligence/index.ts` — the boot-time loop over the 8 intelligence models (DatasetRegistry, SystemProcess, IntelligenceConfig, QAHistory, AiSystemEvent, IntelligenceDecision, IntelligenceMemory, AgentPerformanceMetric) called `.sync({ alter: true })` UNGATED on every boot. Sequelize's alter can't detect an existing unique index on a `unique:true` column, so it created a fresh duplicate (`<tbl>_<col>_key`, `_key1`, `_key2` …) each boot. Now uses `{ alter: true }` only when `DB_BOOT_SYNC==='true'`, else create-only `{}` — same flag/rationale as the already-gated global sync in `server.ts`.
+  - Why: prod Postgres was throwing "out of shared memory" across Scheduler / AI Ops / CampaignLinkService / PreviewReaper. Root cause: 50,713 duplicate unique indexes (~3.9 GB) accumulated by repeated boot alter-syncs (e.g. dataset_registry 4247, intelligence_config 4225; historical non-intel dupes like departments 5554 came from the global sync before it was gated 2026-06-16). A read/write on a bloated table locks the table + all its indexes, exhausting the lock table (max_locks_per_transaction 256 × max_connections 100 = 25,600 slots). This stops the growth; the existing 50,713 dupes are dropped separately on prod.
+  - Verification: <PENDING — CI on the PR, then prod deploy + confirm "[Intelligence] Intelligence tables synced" no longer increments the intel index counts>
+  - Notes: server.ts's global `sequelize.sync({ alter: true })` was already gated behind DB_BOOT_SYNC (unset in prod) so non-intelligence tables were already frozen; this fix closes the last ungated boot alter-sync. The one-time cleanup of the 50,713 existing duplicate indexes is a separate prod DB operation (not committed code).
+
 ### Retire the `overview` curriculum type (full removal: code + prod DB) (2026-07-21)
 - [x] **Removed the `overview` card TYPE end to end — announcement is the sole section-opener now; the `overview` *render_band* fallback is kept**
   - Date: 2026-07-21
