@@ -10376,3 +10376,15 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: user said "move fwd" — completing the rebrand so no cartoon face/"AI Mentor" remains anywhere (student or admin preview). Preview now accurately mirrors what students see.
   - Verification: Frontend `tsc --noEmit` clean for all 3 changed files (only the pre-existing `@dnd-kit` errors remain); grep confirms zero cartoon-face SVGs (`cx="22" cy="30"` eyes) and zero user-facing "AI Mentor" left in the builder files.
   - Notes: Branch `workstream/cory-admin-preview`. Admin/operator-facing only — no student surface or backend change. Dormant until next frontend deploy.
+
+### Feed Control — save/reuse named feed presets in the sandbox — 2026-07-20
+- [x] Let the operator save a sandbox feed configuration by name and re-load/apply it in one click
+  - Date: 2026-07-20
+  - Session: CC-20260720-f7k3
+  - What changed:
+    - Backend NEW `backend/src/services/timeline/feedPresetsService.ts` — `listPresets/savePreset/deletePreset` over a single `system_settings` row (`feed_control_presets`); a preset = `{id, name, includes[], created_at}`. Upserts by name (case-insensitive), validates + de-dupes slugs, fail-soft read.
+    - `backend/src/routes/admin/feedControlRoutes.ts` — `GET/POST/DELETE /api/admin/feed-control/presets`.
+    - `frontend/src/pages/admin/orchestration/FeedControlTab.tsx` — the sandbox gains a Presets row: "💾 Save current as preset" (names via prompt), clickable preset chips that load a saved selection into the checklist (preview auto-updates), and a × to delete. Presets load on mount.
+  - Why: Ali "keep going" after the sandbox + self-heal. Turns the what-if sandbox from a one-off explorer into an operational control — build a feed once (e.g. "Onboarding week" / "Exam week"), save it, and re-apply or switch in one click.
+  - Verification: Frontend `tsc` clean on FeedControlTab (only pre-existing `@dnd-kit` local gap); no `eslint-disable` directives. Backend tsc (Docker/CI authoritative). Preset apply reuses the existing sandbox "Apply to live" path (today_eligible + ambientProviders) behind its confirm.
+  - Notes: Branch `workstream/feed-control-presets` off main. Backend+nginx deploy. Presets store only the included-type selection (not policy) for v1.
