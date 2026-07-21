@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
 import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
@@ -171,6 +171,8 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const podcastAudio = card.type === 'podcast' && card.video?.url && isAudioUrl(card.video.url) ? card.video.url : null;
   const [playingInline, setPlayingInline] = useState(false);
   const inlineAudioRef = useRef<HTMLAudioElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(false);
   const toggleInline = () => {
     if (locked) return;
     if (!playingInline) { setPlayingInline(true); return; }
@@ -201,6 +203,21 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const source = parseVideoUrl(card.video?.url);
   const playable = !!source;
   const [showComments, setShowComments] = useState(false);
+
+  // Viewport autoplay: a video card plays a muted, click-through PREVIEW while it
+  // is in view and stops when scrolled away — so only what you're looking at
+  // plays. Clicking opens the drawer (full video + sound).
+  useEffect(() => {
+    if (!(playable && !podcastAudio && !locked)) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.55 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [playable, podcastAudio, locked]);
+  useEffect(() => {
+    if (playable && !podcastAudio && !locked) setPlayingInline(inView);
+  }, [inView, playable, podcastAudio, locked]);
   const ownPoster =
     (card.image && card.image.trim()) ||
     card.video?.poster ||
@@ -266,18 +283,25 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       </div>
     </div>
   ) : playable && !podcastAudio && playingInline ? (
-    // The tile IS the player now (in-feed playback, no panel) — video embeds
-    // (YouTube/Vimeo/…) and direct files. Ending playback auto-completes.
-    // Direct audio episodes use the dedicated podcast tile below instead.
-    <div className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}>
-      <VideoEmbed
-        source={source}
-        title={card.video?.title || shortTitle}
-        poster={ownPoster || posterUrl}
-        autoplay
-        badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
-        onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
-      />
+    // Viewport autoplay PREVIEW: muted (autoplay ⇒ muted in VideoEmbed) and
+    // click-through to the drawer (full video + sound). A muted scroll-by preview
+    // never marks the card complete — completion happens in the drawer.
+    <div
+      className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}
+      role="button" tabIndex={0} style={{ cursor: 'pointer' }}
+      onClick={() => !locked && onOpen?.(card)}
+      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); onOpen?.(card); } }}
+    >
+      <div style={{ pointerEvents: 'none' }}>
+        <VideoEmbed
+          source={source}
+          title={card.video?.title || shortTitle}
+          poster={ownPoster || posterUrl}
+          autoplay
+          badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+          onEnded={() => setPlayingInline(false)}
+        />
+      </div>
     </div>
   ) : podcastAudio ? (
     // Podcast tile with a direct audio episode: clicking the artwork starts the
@@ -347,7 +371,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   );
 
   return (
-    <div className={`tl-card fcard${locked ? ' locked' : ''}${compact ? ' compact' : ''}`}>
+    <div ref={cardRef} className={`tl-card fcard${locked ? ' locked' : ''}${compact ? ' compact' : ''}`}>
       <div className="fc-head">
         {card.author
           ? (card.author.avatar_url
