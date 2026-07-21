@@ -6,6 +6,8 @@ import PortalLayout from '../components/Layout/PortalLayout';
 import PortalLoginPage from '../pages/portal/PortalLoginPage';
 import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
+import PortalViewAsPage from '../pages/portal/PortalViewAsPage';
+import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 import PortalHandoffPage from '../pages/portal/PortalHandoffPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
@@ -22,6 +24,9 @@ import SchedulePage from '../pages/portal/schedule/SchedulePage';
 import PointsPage from '../pages/portal/points/PointsPage';
 import ProjectsPage from '../pages/portal/projects/ProjectsPage';
 import CommunityPage from '../pages/portal/community/CommunityPage';
+import PeopleDirectoryPage from '../pages/portal/community/PeopleDirectoryPage';
+import RoomsPage from '../pages/portal/rooms/RoomsPage';
+import CompanyPage from '../pages/portal/company/CompanyPage';
 import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
 
 // The old AI Project Builder ("Cory") portal surfaces — CoryHome, Blueprint,
@@ -32,10 +37,12 @@ import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
 // (Today); every other retired builder URL simply 404s.
 
 const portalRoutes = (
-  <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
+  <Route element={<ParticipantAuthProvider><ReadOnlyBanner /><Outlet /></ParticipantAuthProvider>}>
     <Route path="/portal/login" element={<PortalLoginPage />} />
     <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
+    {/* Admin "View as member" — read-only impersonation landing (token in the URL hash). */}
+    <Route path="/portal/view-as" element={<PortalViewAsPage />} />
     {/* Phone handoff — public: exchanges a one-time QR code for a session, then lands on Today. */}
     <Route path="/portal/handoff" element={<PortalHandoffPage />} />
     <Route element={<PortalProtectedRoute />}>
@@ -48,6 +55,13 @@ const portalRoutes = (
       <Route path="/portal/points" element={<PointsPage />} />
       <Route path="/portal/projects" element={<ProjectsPage />} />
       <Route path="/portal/community" element={<CommunityPage />} />
+      <Route path="/portal/community/people" element={<PeopleDirectoryPage />} />
+      <Route path="/portal/rooms" element={<RoomsPage />} />
+      <Route path="/portal/rooms/:roomId" element={<RoomsPage />} />
+      {/* Manager surface — renders its own PortalShell chrome; the shell adds the
+          "Your company" nav group only for org managers, and the page itself
+          shows a friendly error if a non-manager reaches it. */}
+      <Route path="/portal/company" element={<CompanyPage />} />
       <Route path="/portal/classroom" element={<ClassroomPage />} />
       {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
       <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />

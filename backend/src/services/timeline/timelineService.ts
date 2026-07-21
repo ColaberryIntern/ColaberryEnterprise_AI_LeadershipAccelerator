@@ -10,12 +10,13 @@ import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineCardProgress';
 import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
-import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { resolve as resolveType } from './typeRegistry';
 import { selectTestimonialForEnrollment } from './networkVideoService';
 import { selectPodcastForEnrollment } from './podcastMediaService';
 import { selectBlogForEnrollment } from './blogMediaService';
 import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingService';
+import { isStaffEnrollment } from '../access/staffAccess';
+import { env } from '../../config/env';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -231,6 +232,10 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   const gateCtx = await buildGateContext(allCards, completedCardIds);
   const gateCardById = new Map<string, GateCard>(gateCtx.allCards.map((c) => [c.id, c]));
 
+  // Staff have unrestricted curriculum access: skip the lock overlay entirely so
+  // every not-yet-engaged card reads as 'available' (mirrors assertCardUnlocked).
+  const staffUnrestricted = await isStaffEnrollment(enrollmentId);
+
   // The type's Parts (capabilities) live on CurriculumTypeDefinition (what the
   // Studio "Parts" panel edits), keyed by slug (= card.type). One query, mapped.
   const typeDefs = await CurriculumTypeDefinition.findAll({ attributes: ['slug', 'capabilities', 'thumbnail_url'] });
@@ -238,21 +243,8 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   // The type's Studio thumbnail (AI banner) — every card's default image.
   const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t.thumbnail_url || '').trim() || null]));
 
-  // The week's SECTION title from the Blueprint — the Overview card's display
-  // title, sourced straight from the blueprint (no week number, no generation
-  // step). Looked up once per program present among overview cards.
-  const sectionTitleByKey = new Map<string, string>();
-  const overviewPrograms = Array.from(new Set(
-    cards.filter((c) => c.type === 'overview' && (c as any).program_id).map((c) => (c as any).program_id as string),
-  ));
-  if (overviewPrograms.length) {
-    const bps = await CurriculumBlueprint.findAll({
-      where: { program_id: { [Op.in]: overviewPrograms } },
-      attributes: ['program_id', 'week', 'title'],
-      order: [['updated_at', 'ASC']],   // latest update wins on overwrite
-    });
-    for (const b of bps) sectionTitleByKey.set(`${(b as any).program_id}|${b.week}`, b.title);
-  }
+  // NOTE: the 'overview' card type (which surfaced the week's SECTION title as
+  // its week_title) was retired 2026-07-21, so week_title is always null now.
 
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
@@ -264,6 +256,8 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     let lock_reason: string | null = null;
     if (stored === 'completed' || stored === 'in_progress') {
       status = stored;
+    } else if (staffUnrestricted) {
+      status = 'available';
     } else {
       try {
         const gc = gateCardById.get(card.id)
@@ -301,7 +295,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       blog: blogFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
       type_thumbnail: thumbBySlug.get(card.type) || null,
-      week_title: card.type === 'overview' ? (sectionTitleByKey.get(`${(card as any).program_id}|${card.week}`) || null) : null,
+      week_title: null,
     };
   });
 
@@ -358,7 +352,22 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   // per-(week,bucket) so sorting by it alone interleaves sections (a reflect
   // card could surface above a learn card) — bucket-first keeps reflect last.
   const bIdx = (b: string) => { const i = BUCKET_ORDER.indexOf(b as any); return i < 0 ? BUCKET_ORDER.length : i; };
-  feedCards.sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order);
+  if (env.feedControlEnabled) {
+    // Feed Control: a live pin floats to the top of the feed; within each lane,
+    // higher `priority` rises. The week→bucket structure is otherwise preserved.
+    const now = Date.now();
+    const ctrl = new Map(cards.map((c) => [c.id, { priority: c.priority ?? 0, pinned: c.pinned_until ? new Date(c.pinned_until).getTime() > now : false }]));
+    const pin = (id: string) => (ctrl.get(id)?.pinned ? 1 : 0);
+    const pri = (id: string) => ctrl.get(id)?.priority ?? 0;
+    feedCards.sort((a, b) =>
+      pin(b.id) - pin(a.id)
+      || (a.week ?? 0) - (b.week ?? 0)
+      || bIdx(a.bucket) - bIdx(b.bucket)
+      || pri(b.id) - pri(a.id)
+      || a.order - b.order);
+  } else {
+    feedCards.sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order);
+  }
 
   return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
 }

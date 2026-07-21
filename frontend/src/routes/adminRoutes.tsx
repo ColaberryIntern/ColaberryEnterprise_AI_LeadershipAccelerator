@@ -23,6 +23,7 @@ import AdminICPInsightsPage from '../pages/admin/AdminICPInsightsPage';
 import AdminVisitorsPage from '../pages/admin/AdminVisitorsPage';
 import AdminOpportunitiesPage from '../pages/admin/AdminOpportunitiesPage';
 import AdminAcceleratorPage from '../pages/admin/AdminAcceleratorPage';
+import AdminCommunityRolesPage from '../pages/admin/AdminCommunityRolesPage';
 import AdminKnowledgeOpsPage from '../pages/admin/AdminKnowledgeOpsPage';
 import AdminOrchestrationPage from '../pages/admin/AdminOrchestrationPage';
 import WorkforceOSPage from '../pages/admin/workforce/WorkforceOSPage';
@@ -79,6 +80,7 @@ const adminRoutes = (
         <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
+        <Route path="/admin/community-roles" element={<AdminCommunityRolesPage />} />
         <Route path="/admin/knowledge-ops" element={<AdminKnowledgeOpsPage />} />
         <Route path="/admin/orchestration" element={<AdminOrchestrationPage />} />
         {/* Operations Center is merged into AI Organization (Mission Control is its home). */}

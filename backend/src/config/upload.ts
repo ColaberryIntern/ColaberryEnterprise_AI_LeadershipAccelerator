@@ -82,3 +82,55 @@ export const certificateUpload = multer({
 });
 
 export { CERT_DIR };
+
+// ── Deep Dive "Field Guide" uploads — a single self-contained .html artifact ──
+// The student builds it in their own Claude Code and uploads it. It is stored in
+// the DB (PortfolioArtifact), NOT on disk, so it survives container restarts and
+// can be rendered back — so we use MEMORY storage and read the buffer in the
+// service. Accept text/html by mime OR extension (some browsers send
+// application/octet-stream for a local .html).
+const MAX_FIELD_GUIDE_SIZE = 5 * 1024 * 1024; // 5MB
+function fieldGuideFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const name = (file.originalname || '').toLowerCase();
+  const ok = file.mimetype === 'text/html' || /\.html?$/.test(name);
+  if (ok) cb(null, true);
+  else cb(new Error('Upload the .html Field Guide that Claude Code built for you.'));
+}
+export const fieldGuideUpload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: fieldGuideFilter,
+  limits: { fileSize: MAX_FIELD_GUIDE_SIZE },
+});
+export { MAX_FIELD_GUIDE_SIZE };
+
+// ── Community media uploads — small images from a student's local computer ────
+// Disk storage on the persistent `uploads` volume (survives deploys); served
+// back by a public GET route keyed on the opaque UUID filename.
+const COMMUNITY_MEDIA_DIR = process.env.COMMUNITY_MEDIA_DIR || path.resolve('/app/uploads/community');
+try { fs.mkdirSync(COMMUNITY_MEDIA_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const COMMUNITY_MEDIA_MIMES: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const MAX_COMMUNITY_MEDIA_SIZE = 8 * 1024 * 1024; // 8MB — "not so big" images
+
+const communityMediaStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, COMMUNITY_MEDIA_DIR); },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || COMMUNITY_MEDIA_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+function communityMediaFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  if (COMMUNITY_MEDIA_MIMES[file.mimetype]) cb(null, true);
+  else cb(new Error('Upload an image — PNG, JPG, WEBP, or GIF.'));
+}
+export const communityMediaUpload = multer({
+  storage: communityMediaStorage,
+  fileFilter: communityMediaFilter,
+  limits: { fileSize: MAX_COMMUNITY_MEDIA_SIZE },
+});
+export { COMMUNITY_MEDIA_DIR, MAX_COMMUNITY_MEDIA_SIZE };

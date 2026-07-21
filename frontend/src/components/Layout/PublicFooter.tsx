@@ -73,18 +73,18 @@ function PublicFooter() {
             </ul>
           </div>
 
-          {/* Two doors into one program. */}
+          {/* One way in: try the whole platform yourself, free. */}
           <div className="col-lg-3 mb-4">
-            <h5 className="text-light">Pick your door</h5>
+            <h5 className="text-light">Start free</h5>
             <p className="text-secondary small">
-              One program, two ways in.
+              Try the whole platform yourself, free. No credit card.
             </p>
             <div className="d-grid gap-2">
-              {/* Door A — individuals self-serve the $149/mo membership. */}
+              {/* Primary — start a free account (learner + org view). */}
               <CtaLink to={PRIMARY_CTA.path} variant="primary">
                 {PRIMARY_CTA.label}
               </CtaLink>
-              {/* Door B — employers sponsor annual seats (talent discovery). */}
+              {/* Soft secondary — book a guided walkthrough. */}
               <CtaLink to={SECONDARY_CTA.path} variant="outline">
                 {SECONDARY_CTA.label}
               </CtaLink>

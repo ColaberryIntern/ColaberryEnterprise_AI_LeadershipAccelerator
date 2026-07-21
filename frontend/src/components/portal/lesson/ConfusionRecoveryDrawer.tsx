@@ -50,7 +50,7 @@ function buildGenericSections(isLessonMode: boolean, props: ConfusionRecoveryDra
       misconceptions: [
         'Feeling confused doesn\'t mean you\'re falling behind — it means you\'re engaging with challenging material.',
         'You don\'t need to understand everything perfectly before moving forward. Revisiting concepts later often deepens understanding.',
-        'The AI Mentor is available to explain any specific part that\'s unclear — don\'t hesitate to ask.',
+        'Cory, your mentor, is available to explain any specific part that\'s unclear — don\'t hesitate to ask.',
       ],
     };
   }
@@ -71,7 +71,7 @@ function buildGenericSections(isLessonMode: boolean, props: ConfusionRecoveryDra
     misconceptions: [
       'Getting a question wrong doesn\'t mean you don\'t understand the topic — it often means you understood part of it but missed a nuance.',
       'Multiple options may seem correct, but the question asks for the most accurate or complete answer.',
-      'Use the AI Mentor to explore the specific concept behind this question for a deeper explanation.',
+      'Ask Cory to explore the specific concept behind this question for a deeper explanation.',
     ],
   };
 }
@@ -259,7 +259,7 @@ export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerPr
             onClick={handleAskMentor}
           >
             <i className="bi bi-robot"></i>
-            Ask AI Mentor
+            Ask Cory
           </button>
 
           {sections && helpfulFeedback === null && (
@@ -285,7 +285,7 @@ export default function ConfusionRecoveryDrawer(props: ConfusionRecoveryDrawerPr
           {helpfulFeedback !== null && (
             <div className="text-center mt-2">
               <span className="small" style={{ color: '#64748b' }}>
-                {helpfulFeedback ? '✅ Glad it helped!' : '💬 Try asking the AI Mentor for a personalized explanation'}
+                {helpfulFeedback ? '✅ Glad it helped!' : '💬 Try asking Cory for a personalized explanation'}
               </span>
             </div>
           )}

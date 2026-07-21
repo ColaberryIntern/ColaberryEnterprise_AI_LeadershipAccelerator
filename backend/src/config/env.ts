@@ -114,6 +114,19 @@ export const env = {
   enableVisitorTracking: process.env.ENABLE_VISITOR_TRACKING === 'true',
   visitorSessionTimeoutMinutes: parseInt(process.env.VISITOR_SESSION_TIMEOUT || '30', 10),
   enableChat: process.env.ENABLE_CHAT === 'true',
+  // Today Timeline v2 — the never-ending engagement feed (Phase 1). Default OFF;
+  // set TODAY_FEED_V2_ENABLED=true to expose GET /api/portal/runtime/today.
+  todayFeedV2Enabled: process.env.TODAY_FEED_V2_ENABLED === 'true',
+  // Project backend v2 — persisted student-projects read API (P1). Default OFF;
+  // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
+  projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
+  // Today aggregation — blend Project + Community cards into the Today feed
+  // (Phase 2). Default OFF; the feed stays Class-only until enabled.
+  todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',
+  // Feed Control plane — config-driven cadence/providers + rule-based ranker +
+  // per-card/type routing. Default OFF; flag-off keeps the legacy hardcoded
+  // CADENCE=2 + fixed provider list + week→bucket→order behavior byte-identical.
+  feedControlEnabled: process.env.FEED_CONTROL_ENABLED === 'true',
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',
@@ -122,6 +135,11 @@ export const env = {
   // feed the top-right HUD total. ON by default; set PORTAL_POINTS_AWARD_ENABLED=false
   // to dark-disable coursework awards (streak + RSVP awards are unaffected).
   portalPointsAwardEnabled: process.env.PORTAL_POINTS_AWARD_ENABLED !== 'false',
+  // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
+  // links). Master switch OFF by default: the community-room routes return 404,
+  // the outbox drain cron no-ops, and createSession skips linked-room creation
+  // until COMMUNITY_ROOMS_ENABLED=true is set explicitly in an environment.
+  communityRoomsEnabled: process.env.COMMUNITY_ROOMS_ENABLED === 'true',
   chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
   chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 

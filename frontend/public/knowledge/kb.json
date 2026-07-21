@@ -270,8 +270,8 @@
       "status": "active"
     }
   ],
-  "generated_at": "2026-07-17T19:47:32.556Z",
-  "count": 214,
+  "generated_at": "2026-07-19T23:11:39.209Z",
+  "count": 217,
   "entries": [
     {
       "id": "sales-1",
@@ -3395,6 +3395,64 @@
     {
       "id": "curriculum-4",
       "domain": "curriculum",
+      "category": "Overview & philosophy",
+      "category_key": "overview",
+      "question": "What is Colaberry's architecture philosophy?",
+      "answer": "In an AI world the scarce skill is not building the system, it is architecting it. AI now does most of the doing, so the Accelerator trains the one skill that outlasts the tooling: the judgment to direct, evaluate, and approve AI-built work across every discipline of the software lifecycle. You learn enough of each discipline to judge it, not to do it, and by the end you can architect a complete AI solution the business can trust.",
+      "detail": "The through-line is that a real system must be traceable end to end, from requirement to design to build to test to run to govern, and the architect is the one who holds that thread. The one-page overview linked here explains the philosophy in full.",
+      "tags": [
+        "philosophy",
+        "architecture",
+        "direct evaluate approve",
+        "approach",
+        "judgment"
+      ],
+      "reference": "downloads/colaberry-architecture-philosophy.html",
+      "reference_label": "The architecture philosophy (one-pager)",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-5",
+      "domain": "curriculum",
+      "category": "Overview & philosophy",
+      "category_key": "overview",
+      "question": "What does it mean to direct, evaluate, and approve?",
+      "answer": "An engineer does the task. An architect directs it by setting the intent and the definition of done, evaluates it by judging the output against what good looks like, and approves it by owning the gate. As AI absorbs the doing, these three verbs become the entire job, and they are the loop you practice every week when you direct an AI to build a real deliverable and then review it.",
+      "detail": "",
+      "tags": [
+        "direct",
+        "evaluate",
+        "approve",
+        "architect role",
+        "three verbs"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-6",
+      "domain": "curriculum",
+      "category": "Overview & philosophy",
+      "category_key": "overview",
+      "question": "Why does the program cover so many disciplines?",
+      "answer": "A real system passes through many hands: business analysis, architecture, project management, engineering, UX, quality, integration, AI, data, DevOps, and governance. The architect is accountable for all of them at once. So each week is a deep dive into one discipline and the twenty percent of it you need to direct that role, evaluate their work, and approve it, building toward the final week where you synthesize them all into one buildable, governable solution.",
+      "detail": "",
+      "tags": [
+        "disciplines",
+        "twenty percent",
+        "arc",
+        "lifecycle",
+        "synthesis",
+        "deep dive"
+      ],
+      "reference": "",
+      "reference_label": "",
+      "needs_verification": false
+    },
+    {
+      "id": "curriculum-7",
+      "domain": "curriculum",
       "category": "The four intensives",
       "category_key": "intensives",
       "question": "What are the four intensives?",
@@ -3411,7 +3469,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-5",
+      "id": "curriculum-8",
       "domain": "curriculum",
       "category": "The four intensives",
       "category_key": "intensives",
@@ -3430,7 +3488,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-6",
+      "id": "curriculum-9",
       "domain": "curriculum",
       "category": "The four intensives",
       "category_key": "intensives",
@@ -3449,7 +3507,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-7",
+      "id": "curriculum-10",
       "domain": "curriculum",
       "category": "The four intensives",
       "category_key": "intensives",
@@ -3468,7 +3526,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-8",
+      "id": "curriculum-11",
       "domain": "curriculum",
       "category": "The four intensives",
       "category_key": "intensives",
@@ -3488,7 +3546,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-9",
+      "id": "curriculum-12",
       "domain": "curriculum",
       "category": "Tools & skills you build",
       "category_key": "skills",
@@ -3507,7 +3565,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-10",
+      "id": "curriculum-13",
       "domain": "curriculum",
       "category": "Tools & skills you build",
       "category_key": "skills",
@@ -3525,7 +3583,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-11",
+      "id": "curriculum-14",
       "domain": "curriculum",
       "category": "Tools & skills you build",
       "category_key": "skills",
@@ -3543,7 +3601,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-12",
+      "id": "curriculum-15",
       "domain": "curriculum",
       "category": "Project, internship & portfolio",
       "category_key": "experience",
@@ -3562,7 +3620,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-13",
+      "id": "curriculum-16",
       "domain": "curriculum",
       "category": "Project, internship & portfolio",
       "category_key": "experience",
@@ -3579,7 +3637,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-14",
+      "id": "curriculum-17",
       "domain": "curriculum",
       "category": "Project, internship & portfolio",
       "category_key": "experience",
@@ -3597,7 +3655,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-15",
+      "id": "curriculum-18",
       "domain": "curriculum",
       "category": "Levels & progression",
       "category_key": "levels",
@@ -3617,7 +3675,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-16",
+      "id": "curriculum-19",
       "domain": "curriculum",
       "category": "Certification",
       "category_key": "certification",
@@ -3635,7 +3693,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-17",
+      "id": "curriculum-20",
       "domain": "curriculum",
       "category": "Format, schedule & dates",
       "category_key": "logistics",
@@ -3653,7 +3711,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-18",
+      "id": "curriculum-21",
       "domain": "curriculum",
       "category": "Format, schedule & dates",
       "category_key": "logistics",
@@ -3672,7 +3730,7 @@
       "needs_verification": false
     },
     {
-      "id": "curriculum-19",
+      "id": "curriculum-22",
       "domain": "curriculum",
       "category": "Format, schedule & dates",
       "category_key": "logistics",

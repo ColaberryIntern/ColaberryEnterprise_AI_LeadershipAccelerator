@@ -365,7 +365,9 @@ function AdminAcceleratorPage() {
   // does NOT log the admin out of this tab.
   const handleViewAsStudent = async (enrollmentId: string) => {
     try {
-      const res = await api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/portal-link`);
+      // Read-only "View as": mints a read_only token so the admin observes the
+      // student's portal without being able to change anything (server-enforced).
+      const res = await api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/view-as-token`);
       const url = res.data?.url;
       if (!url) { showToast('No portal link available', 'error'); return; }
       window.open(url, '_blank', 'noopener,noreferrer');

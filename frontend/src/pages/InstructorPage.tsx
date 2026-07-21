@@ -22,15 +22,14 @@ import CohortUrgency from '../components/visuals/CohortUrgency';
  * components (StatCounter, SectionFigure, PartnerStrip, CohortUrgency), and
  * real self-hosted photos. styles.css loads once at the app root.
  *
- * Two doors out (Join the Challenge / Sponsor Your Team) plus a direct
- * "Book a call with Ali" path via the existing StrategyCallModal.
+ * A single primary CTA (Start free) plus a direct "Book a call with Ali"
+ * path via the existing StrategyCallModal.
  */
 
 /* ----------------------------------------------------------------------------
- * Two-door destinations (mirrors ProgramPage / publicRoutes.tsx)
+ * Single primary CTA destination (mirrors ProgramPage / publicRoutes.tsx)
  * ------------------------------------------------------------------------- */
-const DOOR_INDIVIDUAL = '/enroll'; // Join the Challenge
-const DOOR_EMPLOYER = '/sponsorship'; // Sponsor Your Team
+const TRY_PATH = '/try'; // Start free — the one primary CTA everywhere
 
 /* ----------------------------------------------------------------------------
  * Shared layout tokens (inline style objects reference semantic CSS variables
@@ -215,8 +214,8 @@ function InstructorPage() {
                 marginTop: 'var(--space-8)',
               }}
             >
-              <Button as="a" href={DOOR_INDIVIDUAL} variant="primary" size="lg">
-                Join the Challenge
+              <Button as="a" href={TRY_PATH} variant="primary" size="lg" data-track="instructor_hero_start_free">
+                Start free
               </Button>
               {/* data-theme="dark" re-points --text-strong/--border-strong so the
                   outline button reads correctly on the inverse hero surface. */}
@@ -390,7 +389,7 @@ function InstructorPage() {
               'The outcome credential is the Certified Anthropic AI Systems Architect (CCA-F prep). You put your people in Anthropic-partner hands, and they come out with the credential and a build to prove it.',
             ]}
             side="left"
-            cta={{ label: 'Join the Challenge', to: DOOR_INDIVIDUAL }}
+            cta={{ label: 'Start free', to: TRY_PATH }}
           />
         </div>
       </section>
@@ -442,8 +441,8 @@ function InstructorPage() {
               Book a call with Ali
             </Button>
             <span data-theme="dark" style={{ display: 'inline-flex' }}>
-              <Button as="a" href={DOOR_EMPLOYER} variant="outline" size="lg">
-                Sponsor Your Team
+              <Button as="a" href={TRY_PATH} variant="outline" size="lg" data-track="instructor_talk_start_free">
+                Start free
               </Button>
             </span>
           </div>

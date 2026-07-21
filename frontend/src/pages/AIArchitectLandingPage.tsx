@@ -13,8 +13,8 @@ const IntelligenceDemoSection = React.lazy(() => import('../components/intellige
 
 // AIArchitectLandingPage — /ai-architect
 // REFRAME: this is now a ROLE DOOR into the one class. Data professionals and
-// tech leaders enter the same Challenge as everyone else ("Join the Challenge"),
-// learn on their own time, ship a real AI build, and climb the leaderboard.
+// tech leaders enter the same Challenge as everyone else, start free, learn on
+// their own time, ship a real AI build, and climb the leaderboard.
 // DS-only, semantic tokens only. Default export + component name preserved.
 
 // CtaButton: the DS Button only forwards href + on* handlers to its host element
@@ -186,12 +186,12 @@ function AIArchitectLandingPage() {
   }, []);
 
   const goJoin = () => {
-    trackEvent('cta_click', { cta_name: 'join_the_challenge', page: '/ai-architect' });
-    navigate('/enroll');
+    trackEvent('cta_click', { cta_name: 'start_free', page: '/ai-architect' });
+    navigate('/try');
   };
 
   const openBooking = () => {
-    trackEvent('cta_click', { cta_name: 'sponsor_strategy_call', page: '/ai-architect' });
+    trackEvent('cta_click', { cta_name: 'book_walkthrough', page: '/ai-architect' });
     setShowBooking(true);
   };
 
@@ -199,8 +199,8 @@ function AIArchitectLandingPage() {
     <div className="cbaa-root">
       <style>{CSS}</style>
       <SEOHead
-        title="The AI Builder Door — Join the Challenge"
-        description="For data professionals and tech leaders: enter the one Colaberry AI Challenge through the builder door. Ship a real AI system, climb the leaderboard, and present at Demo Day — learning on your own time."
+        title="The AI Builder Door | Start free"
+        description="For data professionals and tech leaders: enter the one Colaberry AI Challenge through the builder door. Ship a real AI system, climb the leaderboard, and present at Demo Day, learning on your own time."
       />
 
       {/* HERO */}
@@ -209,19 +209,19 @@ function AIArchitectLandingPage() {
           <div className="cbaa-eyebrow">The Builder Door · For Data &amp; Tech Professionals</div>
           <h1 className="cb-balance cbaa-mt4">Stop using AI tools. Start shipping AI systems.</h1>
           <p className="cbaa-lead">
-            This is one class with many doors — and this is yours. Data professionals, engineers, and tech
+            This is one platform, and this door is yours. Data professionals, engineers, and tech
             leaders enter the same Challenge as everyone else, then go from idea to a real, deployed AI system
             inside their own work. You learn on your own time and climb a public leaderboard as you build.
           </p>
           <div className="cbaa-hero-cta">
-            <CtaButton to="/enroll" size="lg" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
-              Join the Challenge
+            <CtaButton to="/try" size="lg" onClick={goJoin} data-track="aiarchitect_hero_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
             <CtaButton to="/challenge" size="lg" variant="outline">
               How the Challenge Works
             </CtaButton>
           </div>
-          <p className="cbaa-hero-meta">Individuals join from $149/month (billed annually; $199/month month-to-month). Employers can sponsor a seat block instead.</p>
+          <p className="cbaa-hero-meta">Start free, then add your own seat from $149/month (billed annually; $199/month month-to-month), or bring your team on reassignable seats when you are ready.</p>
         </div>
       </header>
 
@@ -280,7 +280,7 @@ function AIArchitectLandingPage() {
           <div className="cbaa-wrap cbaa-narrow"><div className="cbaa-skel" /></div>
         </section>
       }>
-        <IntelligenceDemoSection onOpenBooking={goJoin} ctaLabel="JOIN THE CHALLENGE" />
+        <IntelligenceDemoSection onOpenBooking={goJoin} ctaLabel="START FREE" />
       </Suspense>
 
       {/* COHORT URGENCY */}
@@ -300,8 +300,8 @@ function AIArchitectLandingPage() {
                   your window.
                 </p>
                 <div className="cbaa-mt5">
-                  <CtaButton to="/enroll" size="lg" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
-                    Claim a Seat
+                  <CtaButton to="/try" size="lg" onClick={goJoin} data-track="aiarchitect_cohort_start_free" trailingIcon={<span aria-hidden>→</span>}>
+                    Start free
                   </CtaButton>
                 </div>
               </div>
@@ -317,16 +317,16 @@ function AIArchitectLandingPage() {
             <Badge tone="red" solid>Your Door Into The Challenge</Badge>
             <h2 className="cb-balance cbaa-mt4">If you already work with data, systems, or code — this door is built for you.</h2>
             <p>
-              You see AI changing how work gets done, and you’d rather lead that change than follow it. Join the
-              Challenge, build on your own time, and let the leaderboard show what you ship. Bringing a whole team?
-              Have your employer sponsor a seat block instead.
+              You see AI changing how work gets done, and you’d rather lead that change than follow it. Start free,
+              build on your own time, and let the leaderboard show what you ship. Bringing a whole team? Sponsor a
+              seat block when you are ready.
             </p>
             <div className="cbaa-cta-row">
-              <CtaButton to="/enroll" size="lg" tone="red" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
-                Join the Challenge
+              <CtaButton to="/try" size="lg" tone="red" onClick={goJoin} data-track="aiarchitect_cta_start_free" trailingIcon={<span aria-hidden>→</span>}>
+                Start free
               </CtaButton>
               <Button variant="outline" size="lg" onClick={openBooking}>
-                Talk to Us About Sponsoring
+                Book a walkthrough
               </Button>
             </div>
           </div>
@@ -347,18 +347,18 @@ function AIArchitectLandingPage() {
       {/* CLOSING */}
       <section className="cbaa-sec">
         <div className="cbaa-wrap cbaa-closing">
-          <div className="cbaa-eyebrow">Pick Your Door</div>
-          <h2 className="cb-balance cbaa-mt4">One class. Your door is open.</h2>
+          <div className="cbaa-eyebrow">Start Free</div>
+          <h2 className="cb-balance cbaa-mt4">One platform. Your door is open.</h2>
           <p className="cbaa-lead">
-            Join the Challenge as an individual builder, or have your employer sponsor your team. Either way, you
-            end up in the same room — building, ranking, and presenting what you shipped.
+            Start free and explore it yourself as a builder, then bring your team when you are ready. Either way,
+            you end up in the same room, building, ranking, and presenting what you shipped.
           </p>
           <div className="cbaa-closing-cta">
-            <CtaButton to="/enroll" size="lg" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
-              Join the Challenge
+            <CtaButton to="/try" size="lg" onClick={goJoin} data-track="aiarchitect_final_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
-            <CtaButton to="/sponsorship" size="lg" variant="outline">
-              Sponsor Your Team
+            <CtaButton to="/contact" size="lg" variant="outline" data-track="aiarchitect_final_book_walkthrough">
+              Book a walkthrough
             </CtaButton>
           </div>
         </div>
@@ -367,9 +367,9 @@ function AIArchitectLandingPage() {
       {/* STICKY CTA */}
       {showStickyCta && (
         <div className="cbaa-sticky">
-          <span>One class, many doors — yours is the builder door.</span>
-          <CtaButton to="/enroll" tone="red" onClick={goJoin} trailingIcon={<span aria-hidden>→</span>}>
-            Join the Challenge
+          <span>One platform, and the builder door is yours.</span>
+          <CtaButton to="/try" tone="red" onClick={goJoin} data-track="aiarchitect_sticky_start_free" trailingIcon={<span aria-hidden>→</span>}>
+            Start free
           </CtaButton>
         </div>
       )}

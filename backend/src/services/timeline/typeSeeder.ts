@@ -41,6 +41,9 @@ export async function seedCurriculumTypeDefinitions(): Promise<TypeSeedResult> {
         ai_evaluation: t.ai_evaluation,
         instructor_review: t.instructor_review,
         portfolio_eligible: t.portfolio_eligible,
+        home_surface: t.home_surface,
+        feed_mode: t.feed_mode,
+        today_eligible: t.today_eligible,
       },
     });
 
@@ -65,6 +68,9 @@ export async function seedCurriculumTypeDefinitions(): Promise<TypeSeedResult> {
           instructor_review: t.instructor_review,
           portfolio_eligible: t.portfolio_eligible,
           applicable_prompt_pairs: t.prompt_pairs,
+          home_surface: t.home_surface,
+          feed_mode: t.feed_mode,
+          today_eligible: t.today_eligible,
         },
         { where: { slug: t.slug } }
       );

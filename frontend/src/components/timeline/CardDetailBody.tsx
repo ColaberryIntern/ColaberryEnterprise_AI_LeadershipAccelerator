@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
 import VideoEmbed, { WatchBeatPayload } from './VideoEmbed';
@@ -9,6 +9,11 @@ import CardSurveyExperience from './CardSurveyExperience';
 import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
+import { useDeepDiveHost } from './useDeepDiveHost';
+import SetupLabRender from './SetupLabRender';
+import PromptCatalogRender from './PromptCatalogRender';
+import ArchitectTimeMachine from './ArchitectTimeMachine';
+import BuildArtifactsRender from './BuildArtifactsRender';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -184,10 +189,17 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isSurvey = card.render_band === 'survey';   // bespoke live survey experience
   const isAssessment = card.render_band === 'quiz' || card.render_band === 'evaluation';   // interactive Knowledge Check / Evaluation
   const isReader = card.render_band === 'warmup';   // Self Study: immersive reader (sticky nav + scrollspy + progress)
+  // Deep Dive Command Center: a self-contained HTML artifact rendered in a sandboxed
+  // iframe. `blog` shares the 'deepdive' band, so gate on type to not hijack it.
+  const isDeepDive = card.render_band === 'deepdive' && card.type === 'deep_dive';
+  const isSetupLab = card.render_band === 'setup_lab';   // Claude Code enablement lab: dark native panel + Copy button
+  const isPromptCatalog = card.render_band === 'prompt_catalog';   // Prompt Lab: practice-prompt catalog (categories + reveal + copy)
+  const isArchitectMindset = card.render_band === 'architect_mindset';   // The Architect Time Machine: cinematic decision simulation (bespoke renderer)
+  const isBuildArtifacts = card.render_band === 'build_artifacts';   // Build Artifact(s) Lab: pick artifact + project, build station
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
-  const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
+  const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
@@ -197,6 +209,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // updates the bar + Mark-complete enablement; the server enforces regardless.
   const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
   const [gateMsg, setGateMsg] = useState<string | null>(null);
+  const [copyGateMet, setCopyGateMet] = useState(false);   // Claude Code labs (drawer): reveal completion once the prompt(s) are copied — phone users complete here
   useEffect(() => { setWatch(null); setGateMsg(null); }, [card.id]);
   const live = !preview && !done;
   const handleWatchBeat = live
@@ -205,7 +218,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const completeSafely = onComplete
     ? async () => {
         setGateMsg(null);
-        try { await onComplete(); }
+        try { await onComplete(); if (onClose) window.setTimeout(onClose, 1200); }   // completing takes the student back to the curriculum
         catch (err: any) { setGateMsg(err?.response?.data?.error || 'Not quite yet — keep watching to unlock your points.'); }
       }
     : undefined;
@@ -215,6 +228,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // each); the Mark Complete button appears only once every section is read. Enabled for
   // live reader cards (not admin preview).
   const readerProg = useReaderProgress(card.id, isReader && !preview);
+
+  // Deep Dive host bridge: the Field Guide iframe (opaque-origin) can't persist or
+  // reach the API, so the host owns read/copy persistence (restored across reopens),
+  // the +100-point upload, and the Mark-complete gate (dd.complete folds read+copy+upload).
+  const ddIframeRef = useRef<HTMLIFrameElement>(null);
+  const dd = useDeepDiveHost(card.id, isDeepDive && !preview && !done, ddIframeRef);
 
   return (
     <>
@@ -227,13 +246,37 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         )}
       </div>
 
-      <div className={isReader ? 'tld-body tld-body--reader' : 'tld-body'}>
+      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}${isArchitectMindset ? ' tld-body--architect' : ''}${isBuildArtifacts ? ' tld-body--buildartifacts' : ''}`}>
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
+        ) : isDeepDive ? (
+          content?.body_html
+            ? <iframe ref={ddIframeRef} className="tld-lessonframe tld-readerframe" title="Field Guide" sandbox="allow-scripts allow-modals" srcDoc={content.body_html} />
+            : <div className="tld-note" style={{ margin: 20 }}>This Field Guide has not been added yet.</div>
+        ) : isSetupLab ? (
+          content && content.body_html
+            ? <SetupLabRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} estMin={card.estimated_time} points={pts} difficulty={card.difficulty} variant="drawer" onCopied={() => setCopyGateMet(true)} />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This lab has not been generated yet.</div>
+        ) : isPromptCatalog ? (
+          content && content.body_html
+            ? <PromptCatalogRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" onAllCopied={() => setCopyGateMet(true)} />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This prompt catalog has not been generated yet.</div>
+        ) : isArchitectMindset ? (
+          <ArchitectTimeMachine cardId={card.id} variant="drawer" preview={preview} completed={done} onEnterWorkspace={onEnterWorkspace} />
+        ) : isBuildArtifacts ? (
+          content && content.body_html
+            ? <BuildArtifactsRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" cardId={card.id} completed={done} onComplete={completeSafely} />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This build station has not been generated yet.</div>
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>
@@ -288,15 +331,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         )}
 
-        {/* The type's fixed picture (Studio thumbnail) as the card hero — every
-            card of the type shares the image; only the title varies. Video-ish
-            bands and Skills Course keep their own visual instead. An explicit
-            card image (blog cover) wins below. */}
-        {!isVideo && !isSkillsJar && !card.image && card.type_thumbnail && (
-          <div className="tld-player">
-            <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', borderRadius: 12 }} />
-          </div>
-        )}
+        {/* The type's Studio thumbnail is NOT repeated at the top of the drawer —
+            it already shows on the classroom tile, so a hero here is redundant
+            (Ali 2026-07-19). Video/blog keep their own visual below. */}
 
         {/* Non-video items with their OWN image (blog cover etc.) show it as a hero. */}
         {!isVideo && card.image && (
@@ -358,7 +395,22 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}
-            {content.body_html && <iframe className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'} title="Lesson content" sandbox={isReader ? 'allow-scripts' : ''} srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)} />}
+            {content.body_html && <iframe
+              className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'}
+              title="Lesson content"
+              // Generic content: allow-same-origin (no scripts) so we can size the
+              // frame to its content and avoid a second inner scroll — the drawer
+              // is the single scroll. The reader keeps its own scripted scroll.
+              sandbox={isReader ? 'allow-scripts' : 'allow-same-origin'}
+              srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)}
+              onLoad={isReader ? undefined : (e) => {
+                const f = e.currentTarget;
+                try {
+                  const h = f.contentWindow?.document.body?.scrollHeight;
+                  if (h) f.style.height = `${h + 4}px`;
+                } catch { /* cross-origin/measure failed — keep the CSS height fallback */ }
+              }}
+            />}
             {Array.isArray(content.questions) && content.questions.length > 0 && (
               <><div className="tld-sublab">Questions to consider</div>
                 <ul className="tld-alist">{content.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></>
@@ -404,6 +456,14 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {isReader && !readerProg.complete && readerProg.total > 0 && (
                   <span className="tld-gatemsg">{readerProg.done} of {readerProg.total} sections read</span>
                 )}
+                {isDeepDive && !dd.complete && dd.total > 0 && (
+                  <span className="tld-gatemsg">{dd.done} of {dd.total} sections read</span>
+                )}
+                {isDeepDive && dd.message && <span className="tld-gatemsg">{dd.message}</span>}
+                {(isSetupLab || isPromptCatalog) && !copyGateMet && completeSafely && <span className="tld-gatemsg">{isPromptCatalog ? 'Copy all the prompts to complete this lab' : 'Copy the prompt to complete this lab'}</span>}
+                {/* The guide's "Choose HTML file" button posts to the host; this hidden
+                    input is the real picker the host opens for the +100-point upload. */}
+                {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
                 {onClose && <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>}
                 {/* Media cards collect points here, gated by the server's watch check.
                     When the gate is active but unmet, the button is disabled with the
@@ -421,11 +481,18 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 )}
                 {/* Survey completes in-body via its own Submit; the workspace link
                     stays as a quiet secondary, not the primary CTA. */}
-                {onEnterWorkspace && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {/* Architect Time Machine renders its own "Enter the Time Machine" CTA in-panel (drawer variant). */}
+                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
                 {/* Self Study: the Mark Complete button only appears once every section
                     has been read (>=10s each), matching the workstation's gate + style. */}
                 {isReader && readerProg.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
+                )}
+                {isDeepDive && dd.complete && completeSafely && (
+                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
+                )}
+                {(isSetupLab || isPromptCatalog) && copyGateMet && completeSafely && (
+                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Complete &amp; generate evidence</button>
                 )}
               </>
             )}

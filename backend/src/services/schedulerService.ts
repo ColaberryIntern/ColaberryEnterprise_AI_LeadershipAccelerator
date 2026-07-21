@@ -1799,6 +1799,59 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
+  // Feed Control — publish scheduled timeline cards whose release_date has arrived
+  // (every 15 min). Idempotent; a no-op unless a card is scheduled with a date.
+  cron.schedule(
+    '*/15 * * * *',
+    () => {
+      instrumentCronJob('FeedReleaseTick', async () => {
+        const { publishDueCards } = await import('./timeline/feedControlService');
+        await publishDueCards();
+      }).catch((err) => {
+        console.error('[Scheduler] Feed release tick error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Daily content lifecycle (03:15 America/Chicago). AI News Flash: fetch free
+  // AI-lab RSS feeds, dedup-upsert the library, and (when AI_NEWS_INGEST_ENABLED
+  // =true) materialize ONE fresh news card (AI_NEWS_MAX_PER_RUN, default 1 → ~1
+  // LLM call/day). Then prune: archive any generated (*_pipeline) card older than
+  // 30 days out of the feed, so each generator holds a rolling ~30-card window and
+  // cost stays bounded. Idempotent + cost-gated; see aiNewsIngestionService +
+  // generatedContentRetention.
+  cron.schedule(
+    '15 3 * * *',
+    () => {
+      instrumentCronJob('AiNewsRefresh', async () => {
+        const { refreshAiNews } = await import('./intel/aiNewsIngestionService');
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await refreshAiNews(); // maxCards defaults to AI_NEWS_MAX_PER_RUN (1/day)
+        await pruneGeneratedContent(); // discard generated cards older than 30 days
+      }).catch((err) => {
+        console.error('[Scheduler] AI News refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Distill each active student's recent sessions into their evolving LearnerMemory
+  // once nightly (02:15 America/Chicago) — the AI Mentor's "gets to know you over
+  // weeks" engine. Idempotent per (enrollment, day); safe to re-run.
+  cron.schedule(
+    '15 2 * * *',
+    () => {
+      instrumentCronJob('LearnerMemoryDistill', async () => {
+        const { runLearnerMemoryBatch } = await import('./runtime/learnerMemoryWriter');
+        await runLearnerMemoryBatch();
+      }).catch((err) => {
+        console.error('[Scheduler] Learner memory distill error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
   // Reconcile enrollment payment state from PaySimple every 30 minutes: payments
   // that went through become revenue; failed/reversed ones are subtracted. Ships
   // dark — only scheduled when PAYSIMPLE_SYNC_ENABLED=true (needs live read creds).
@@ -2666,6 +2719,20 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] System health monitor: every 15 min (weekdays 7AM-6PM CT, Cory voice + email alerts)');
 
+  // ── Build-log -> social drafter (BC #9985689786, weekly, Mon 6AM CT = 11:00 UTC) ──
+  // Scans completed Tier-A build weeks and AI-drafts a #Colaberry post per
+  // project/week. Draft-only — never auto-posts (see buildLogDraftService.ts).
+  cron.schedule('0 11 * * 1', () => {
+    instrumentCronJob('BuildLogDraftGenerator', async () => {
+      const { generateBuildLogDraftsForCompletedWeeks } = require('./buildLogDraftService');
+      const result = await generateBuildLogDraftsForCompletedWeeks();
+      console.log(`[BuildLogDraft] scanned=${result.scanned} drafted=${result.drafted} skipped=${result.skipped} failed=${result.failed}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Build-log draft generator error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Build-log social drafter: weekly Mon 6AM CT (11:00 UTC)');
+
   // ── Cold Outbound startup reactivation ──────────────────────────────
   // Cold Outbound reverts to draft on container restart — fix on startup
   (async () => {
@@ -2815,6 +2882,26 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Architect evaluation agent: weekly Saturday at 06:00 UTC');
+
+  // ── Community Digest (daily, 08:00 UTC) ──────────────────────────────────────
+  // Deduped per (member, date) via CommunityDigestLog — safe to re-run; a
+  // second fire the same day is a no-op for every member already sent.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('CommunityDigest', async () => {
+      const { runDailyDigest } = await import('./communityDigestService');
+      const result = await runDailyDigest();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'community_digest_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Community digest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Community digest: daily at 08:00 UTC');
 }
 
 // ---------------------------------------------------------------------------

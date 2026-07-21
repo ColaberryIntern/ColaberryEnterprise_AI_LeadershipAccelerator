@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SDLC Field Guide — Week 0 Deep Dive</title>
+<!--
+  DEEP DIVE COMMAND CENTER · renders in the platform RIGHT-SIDE PANEL (max ~560px).
+  WEEK 0 is READ-ONLY — the SDLC map every later Deep Dive builds on. No Claude Code
+  prompt, nothing to build/upload here. Completion = reading all 15 sections.
+  (From Week 1 on, each Deep Dive adds a Workspace prompt + a Field Guide to build.)
+  Self-contained: inline CSS+JS, no external libraries. Nav works with no JS.
+-->
+<script type="application/json" id="deepdive-metadata">
+{
+  "guide_type": "SDLC Field Guide",
+  "curriculum_type": "deep_dive",
+  "week": 0,
+  "discipline": "Understanding Modern Software Development",
+  "read_only": true,
+  "student_id": "{{STUDENT_ID}}",
+  "generated_by": "Colaberry",
+  "version": "1.0.0"
+}
+</script>
+<style>
+  /* Roboto = Colaberry brand typeface; Roboto Mono for code/data figures. */
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&family=Roboto+Mono:wght@400;500&display=swap');
+  :root{
+    /* Colaberry brand — Cherry Red / Leaf Green / Berry Blue (design-system tokens).
+       Structure = berry blue (trust); the cherry accent is fixed; green = progress. */
+    --blue:#367895; --blue-2:#2E6A86; --red:#FB2832; --green:#468A2E; --teal:#2BA39A; --amber:#E8920C;
+    --bg:#ffffff; --bg-alt:#F8F8F7; --bg-soft:#F1F1F0; --panel:#ffffff;
+    --text:#2B2B2B; --muted:#6B6B6B; --border:#E4E4E3; --shadow:0 1px 2px rgba(16,24,40,.06);
+    --brand:var(--blue); --brand-soft:#EAF2F6; --brand-ink:#265A72;
+    --radius:11px; --rail:52px; --head:46px; --bar:60px; --panelw:560px;
+    --font:'Roboto',-apple-system,'Segoe UI',system-ui,Helvetica,Arial,sans-serif;
+    --mono:'Roboto Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0F0F0F; --bg-alt:#000000; --bg-soft:#1A1A1A; --panel:#161616;
+    --text:#F1F1F0; --muted:#B4B4B4; --border:rgba(255,255,255,.14); --shadow:0 1px 2px rgba(0,0,0,.4);
+    --brand:#5AA8C4; --brand-soft:rgba(54,120,149,.18); --brand-ink:#8FBBCF; --blue-2:#5AA8C4;
+    --red:#FF6B72; --green:#8AC759; --amber:#F0A93A;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);color:var(--text);line-height:1.55;font-size:14px;
+    background:radial-gradient(1200px 500px at 20% -10%, rgba(54,120,149,.10), transparent 60%),var(--bg-alt);
+    min-height:100vh}
+  /* The panel FILLS its container: ~560px in the drawer, full width in the workspace runtime. */
+  h1,h2,h3,h4{color:var(--brand-ink);line-height:1.25;font-weight:700;margin:0 0 .4rem}
+  h2{font-size:1.18rem;letter-spacing:-.01em} h3{font-size:.98rem;margin-top:.9rem} h4{font-size:.86rem}
+  p{margin:.4rem 0}
+  a{color:var(--blue-2);text-decoration:none} a:hover{text-decoration:underline}
+  code{background:var(--bg-soft);padding:.05rem .3rem;border-radius:5px;font-size:.85em;font-family:var(--mono)}
+  .muted{color:var(--muted)}
+  .logo{height:22px;width:auto;flex:0 0 auto}
+  :root[data-theme="dark"] .phead .logo{background:#fff;padding:2px 6px;border-radius:6px}
+
+  .panel{position:relative;width:100%;height:100vh;overflow-y:auto;background:var(--panel)}
+
+  .phead{position:sticky;top:0;z-index:6;height:var(--head);display:flex;align-items:center;gap:.5rem;padding:0 .7rem;
+    background:var(--panel);border-bottom:1px solid var(--border)}
+  .phead .tag{font-size:.72rem;color:var(--muted);font-weight:600;white-space:nowrap;border-left:1px solid var(--border);padding-left:.5rem}
+  .phead .search{position:relative;flex:1;min-width:60px}
+  .phead .search input{width:100%;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;
+    padding:.32rem .55rem .32rem 1.7rem;font-size:.8rem;font-family:inherit}
+  .phead .search svg{position:absolute;left:.5rem;top:50%;transform:translateY(-50%);color:var(--muted)}
+  .hbtn{flex:0 0 auto;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:7px;height:30px;
+    padding:0 .6rem;display:inline-flex;align-items:center;gap:.3rem;cursor:pointer;font-size:.76rem;font-weight:600}
+  .hbtn:hover{border-color:var(--blue-2);color:var(--blue-2)} .hbtn svg{width:14px;height:14px}
+
+  .pbody{display:flex;align-items:flex-start}
+  .rail{position:sticky;top:var(--head);flex:0 0 var(--rail);height:calc(100vh - var(--head) - var(--bar));overflow-y:auto;
+    background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;gap:.15rem;padding:.5rem 0}
+  .rail::-webkit-scrollbar{width:0}
+  .ri{position:relative;width:38px;height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--muted);cursor:pointer}
+  .ri svg{width:19px;height:19px} .ri:hover{background:var(--bg-soft);color:var(--blue-2);text-decoration:none}
+  .ri.active{background:var(--brand);color:#fff} :root[data-theme="dark"] .ri.active{color:#0f1622}
+  .ri .num{position:absolute;top:-1px;right:-1px;background:var(--panel);color:var(--muted);border:1px solid var(--border);
+    border-radius:999px;font-size:.52rem;font-weight:700;min-width:13px;height:13px;line-height:11px;text-align:center;padding:0 2px}
+  .ri.active .num{background:var(--blue-2);color:#fff;border-color:var(--blue-2)}
+  .ri.done .num{background:var(--green);color:#fff;border-color:var(--green)}
+  .rail .sep{width:22px;height:1px;background:var(--border);margin:.25rem 0}
+
+  .pcontent{flex:1;min-width:0;padding:.6rem .95rem 1.2rem}
+  .rlabel{display:none}
+  /* Workspace (wide) view — the panel fills a full page: switch the thin icon rail to a
+     LABELED sidebar and give the content a comfortable width, so it reads like an app, not a
+     stretched drawer. Media queries key off the iframe's OWN width (~560 drawer vs ~900 workspace). */
+  @media (min-width:600px){
+    .rail{flex:0 0 230px;align-items:stretch;gap:.12rem;padding:.7rem .5rem}
+    .ri{width:auto;height:auto;justify-content:flex-start;gap:.65rem;padding:.5rem .7rem;border-radius:8px}
+    .ri svg{flex:0 0 auto}
+    .rlabel{display:inline;font-size:.84rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .ri .num{position:static;order:3;margin-left:auto;min-width:auto;padding:0;background:transparent;border:none;color:var(--muted);font-size:.66rem}
+    .ri.done .num{background:transparent;border:none;color:var(--green)}
+    .ri.active .num{background:transparent;border:none;color:#fff}
+    .rail .sep{width:auto;margin:.4rem .55rem}
+    .pcontent{max-width:900px;padding:1.3rem 1.9rem 2rem}
+    section[data-sec]{padding:1.1rem 0 .5rem}
+    h2{font-size:1.34rem} .lead{font-size:1rem}
+  }
+  section[data-sec]{scroll-margin-top:calc(var(--head) + 8px);padding:.9rem 0 .3rem;border-top:1px solid var(--border)}
+  section[data-sec]:first-of-type{border-top:none;padding-top:.5rem}
+  .eyebrow{display:inline-flex;align-items:center;gap:.35rem;font-size:.64rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;
+    color:var(--blue-2);background:var(--brand-soft);padding:.18rem .5rem;border-radius:999px;margin-bottom:.4rem}
+  .lead{font-size:.94rem}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:var(--radius);padding:.75rem .85rem;box-shadow:var(--shadow);margin:.6rem 0}
+  .sub{font-size:.66rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:700;margin:.2rem 0 .35rem}
+
+  .kpis{display:flex;flex-wrap:wrap;gap:.5rem}
+  .kpi{flex:1 1 88px;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:.6rem .3rem;text-align:center;box-shadow:var(--shadow)}
+  .kpi .v{font-size:1.4rem;font-weight:800;line-height:1;color:var(--blue-2)}
+  .kpi.c1 .v{color:var(--amber)} .kpi.c2 .v{color:var(--teal)} .kpi.c3 .v{color:var(--red)} .kpi.c4 .v{color:var(--green)}
+  .kpi .l{font-size:.64rem;color:var(--muted);margin-top:.3rem;text-transform:uppercase;letter-spacing:.02em}
+
+  .kv{display:flex;justify-content:space-between;gap:1rem;padding:.32rem 0;border-bottom:1px solid var(--border);font-size:.86rem}
+  .kv:last-child{border-bottom:none} .kv .k{color:var(--muted)} .kv .val{font-weight:600;text-align:right}
+
+  .flow{display:flex;flex-wrap:wrap;gap:.35rem;align-items:stretch}
+  .flow .step{flex:1 1 84px;background:var(--bg-soft);border:1px solid var(--border);border-radius:9px;padding:.4rem .35rem;text-align:center}
+  .flow .step .k{font-size:.6rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+  .flow .step .t{font-size:.76rem;font-weight:600;margin-top:.08rem}
+
+  .stack{display:flex;flex-direction:column;gap:.4rem}
+  /* Mermaid-style diagrams — fixed colors so they read on light + dark */
+  .viz{background:#f8fafd;border:1px solid #e2e8f0;border-radius:12px;padding:12px 14px;margin:10px 0;color:#2d3748}
+  .viz .vt{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:#718096;font-weight:700;margin-bottom:8px;text-align:center}
+  .tier{border:1px solid var(--border);border-radius:9px;padding:.45rem .6rem;background:var(--bg-soft)}
+  .tier .lab{font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:700}
+  .tier .row{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.28rem}
+  .chip{background:var(--panel);border:1px solid var(--border);border-radius:999px;padding:.18rem .55rem;font-size:.74rem;font-weight:600}
+  .chip.pri{background:var(--brand);color:#fff;border-color:var(--brand)} :root[data-theme="dark"] .chip.pri{color:#0f1622}
+
+  .table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:9px;margin:.4rem 0}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;min-width:340px}
+  th,td{text-align:left;padding:.4rem .5rem;border-bottom:1px solid var(--border);vertical-align:top}
+  thead th{background:var(--bg-soft);color:var(--brand-ink);font-weight:700;font-size:.66rem;text-transform:uppercase;letter-spacing:.03em;white-space:nowrap}
+  tbody tr:last-child td{border-bottom:none}
+
+  .gb{display:flex;flex-direction:column;gap:.5rem}
+  .gb .col{border-radius:9px;padding:.6rem .75rem;border:1px solid var(--border)}
+  .gb .good{background:rgba(119,187,74,.09);border-color:rgba(119,187,74,.35)}
+  .gb .bad{background:rgba(251,40,50,.08);border-color:rgba(251,40,50,.3)}
+  .gb h4{margin-top:0} .gb .good h4{color:var(--green)} .gb .bad h4{color:var(--red)}
+  .gb ul{margin:.25rem 0 0;padding-left:1rem} .gb li{margin:.2rem 0;font-size:.83rem}
+
+  .terms{display:flex;flex-direction:column;gap:.4rem}
+  .term{border:1px solid var(--border);border-radius:9px;padding:.5rem .7rem;background:var(--panel)}
+  .term b{color:var(--brand-ink)} .term p{margin:.12rem 0 0;font-size:.82rem;color:var(--muted)}
+
+  .callout{border-left:3px solid var(--blue-2);background:var(--brand-soft);padding:.55rem .75rem;border-radius:0 9px 9px 0;margin:.6rem 0;font-size:.86rem}
+  .callout.warn{border-left-color:var(--amber);background:rgba(232,146,12,.09)}
+  ul.clean{list-style:none;padding-left:0;margin:.3rem 0} ul.clean li{padding-left:1.15rem;position:relative;margin:.24rem 0;font-size:.85rem}
+  ul.clean li::before{content:"▸";position:absolute;left:.15rem;color:var(--blue-2)}
+  .grid{display:grid;gap:.5rem} .g2{grid-template-columns:1fr 1fr}
+  @media (max-width:430px){.g2{grid-template-columns:1fr}}
+
+  .road{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:.45rem}
+  .wk{border:1px solid var(--border);border-radius:9px;padding:.45rem .55rem;background:var(--panel);box-shadow:var(--shadow)}
+  .wk .w{font-size:.6rem;font-weight:800;color:var(--blue-2);letter-spacing:.04em}
+  .wk .d{font-weight:700;font-size:.82rem;margin:.1rem 0} .wk .cc{font-size:.68rem;color:var(--muted)}
+  .wk.now{border-color:var(--blue-2);box-shadow:0 0 0 2px var(--brand-soft)}
+  .linked{display:inline-flex;align-items:center;gap:.2rem;color:var(--green);font-size:.66rem;font-weight:700;margin-top:.2rem}
+
+  .q{border:1px solid var(--border);border-radius:9px;padding:.55rem .7rem;margin:.45rem 0;background:var(--panel)}
+  .q .qt{font-weight:600;font-size:.86rem}
+  .q .ans{margin-top:.4rem;padding-top:.4rem;border-top:1px dashed var(--border);color:var(--green);font-size:.83rem}
+  .q.js .ans{display:none} .q.js.open .ans{display:block}
+  .revealbtn{margin-top:.4rem;font-size:.74rem;border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:6px;padding:.24rem .6rem;cursor:pointer;display:none}
+  .q.js .revealbtn{display:inline-block} .revealbtn:hover{border-color:var(--blue-2);color:var(--blue-2)}
+
+  svg .lbl{font:600 10px var(--font);fill:var(--text)} svg .lbl-m{font:600 9px var(--font);fill:var(--muted)}
+  mark{background:#fde68a;color:#1a202c;border-radius:3px}
+
+  .donebar{display:none;align-items:center;gap:.5rem;background:rgba(119,187,74,.12);border:1px solid rgba(70,138,46,.4);
+    border-radius:10px;padding:.6rem .8rem;margin:.6rem 0;font-size:.86rem} .donebar.show{display:flex} .donebar b{color:var(--green)}
+  .donebar .dcheck{color:var(--green);flex:0 0 auto;display:inline-flex} .donebar .dcheck svg{width:20px;height:20px}
+
+  .actionbar{position:sticky;bottom:0;z-index:6;height:var(--bar);display:flex;align-items:center;gap:.6rem;padding:0 .8rem;
+    background:var(--panel);border-top:1px solid var(--border)}
+  .prog{flex:1;min-width:0}
+  .prog .ptext{font-size:.68rem;color:var(--muted);font-weight:600;margin-bottom:.22rem;display:flex;justify-content:space-between}
+  .prog .ptext b{color:var(--brand-ink)}
+  .bar{height:6px;background:var(--bg-soft);border-radius:999px;overflow:hidden}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--blue-2),var(--green));transition:width .35s}
+  .btn{border:1px solid var(--border);background:var(--bg);color:var(--text);border-radius:8px;height:36px;padding:0 .9rem;
+    display:inline-flex;align-items:center;gap:.35rem;cursor:pointer;font-size:.8rem;font-weight:700;white-space:nowrap}
+  .btn svg{width:15px;height:15px}
+  .btn.done{background:var(--green);border-color:var(--green);color:#fff}
+  .btn.done:disabled{background:var(--bg-soft);border-color:var(--border);color:var(--muted);cursor:not-allowed}
+  :root[data-theme="dark"] .btn.done:not(:disabled){color:#0f1622}
+
+  .printcover{display:none}
+  @media (max-width:600px){ .panel{width:100vw;border-left:none} body::before{display:none} .phead .tag{display:none} }
+  @media print{
+    body{display:block;background:#fff;color:#111} body::before{display:none}
+    .panel{width:auto;height:auto;overflow:visible;box-shadow:none;border:none}
+    .phead,.rail,.actionbar,.revealbtn,.search{display:none!important} .pcontent{padding:0}
+    .printcover{display:block;text-align:center;border-bottom:2px solid var(--blue);padding-bottom:12px;margin-bottom:14px}
+    .printcover .logo{height:40px;margin-bottom:6px} .printcover h1{color:var(--blue);font-size:20px;margin:.2rem 0} .printcover .meta{color:#555;font-size:11px}
+    .q.js .ans{display:block!important} section[data-sec]{page-break-inside:avoid;border-top:1px solid #ccc}
+    .card,.table-wrap{box-shadow:none} a{color:#111;text-decoration:none}
+  }
+</style>
+</head>
+<body>
+<div class="panel" id="panel">
+
+  <div class="printcover">
+    <img class="logo" src="/colaberry-logo-transparent.png" alt="Colaberry">
+    <h1>SDLC Field Guide</h1>
+    <div class="meta">Week 0 · Deep Dive · Understanding Modern Software Development · Enterprise AI Leadership Accelerator</div>
+  </div>
+
+  <div class="phead">
+    <img class="logo" src="/colaberry-logo-transparent.png" alt="Colaberry">
+    <span class="tag">SDLC · Wk 0</span>
+    <span class="search">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="search" type="search" placeholder="Search…" aria-label="Search" />
+    </span>
+    <button class="hbtn" id="exportBtn" title="Export / print to PDF"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5h20v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></svg>Export</button>
+  </div>
+
+  <div class="pbody">
+    <nav class="rail" id="rail" aria-label="Sections">
+      <a class="ri" href="#dashboard" title="Dashboard"><span class="num">01</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></a>
+      <a class="ri" href="#overview" title="Overview &amp; Mission"><span class="num">02</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><circle cx="12" cy="12" r="2.5"/></svg></a>
+      <a class="ri" href="#role" title="Role in the SDLC"><span class="num">03</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="2" width="6" height="5" rx="1"/><rect x="3" y="17" width="6" height="5" rx="1"/><rect x="15" y="17" width="6" height="5" rx="1"/><path d="M12 7v5M6 17v-3h12v3"/></svg></a>
+      <a class="ri" href="#methodologies" title="Methodologies"><span class="num">04</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 4v5h-5"/></svg></a>
+      <a class="ri" href="#responsibilities" title="Responsibilities"><span class="num">05</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l2 2 4-4"/><rect x="3" y="4" width="18" height="16" rx="2"/></svg></a>
+      <a class="ri" href="#artifacts" title="Artifacts &amp; Flow"><span class="num">06</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></a>
+      <a class="ri" href="#lifecycles" title="Lifecycles"><span class="num">07</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 2l4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></a>
+      <a class="ri" href="#ai-native" title="AI-Native Development"><span class="num">08</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></a>
+      <span class="sep"></span>
+      <a class="ri" href="#goodbad" title="Good vs Bad"><span class="num">09</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M4 7h16M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0z"/></svg></a>
+      <a class="ri" href="#metrics" title="Metrics &amp; KPIs"><span class="num">10</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><rect x="7" y="12" width="3" height="6"/><rect x="12" y="8" width="3" height="10"/><rect x="17" y="5" width="3" height="13"/></svg></a>
+      <a class="ri" href="#tools" title="Industry Tools"><span class="num">11</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 1 5.4-5.4l-2.5 2.5-2-2z"/></svg></a>
+      <a class="ri" href="#review" title="Architect Review Lens"><span class="num">12</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3M8 11h6M11 8v6"/></svg></a>
+      <span class="sep"></span>
+      <a class="ri" href="#roadmap" title="Deep Dive Roadmap"><span class="num">13</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2z"/><path d="M9 4v14M15 6v14"/></svg></a>
+      <a class="ri" href="#kb" title="Knowledge Base"><span class="num">14</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 0-2 2z"/><path d="M4 5v14"/></svg></a>
+      <a class="ri" href="#self" title="Self-Assessment"><span class="num">15</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.5 2.5 5-5"/></svg></a>
+    </nav>
+
+    <div class="pcontent" id="content">
+
+      <section data-sec id="dashboard">
+        <span class="eyebrow">Executive Dashboard</span>
+        <h2>The map for the next twelve weeks</h2>
+        <p class="lead">This is your first Deep Dive and the only one about the <strong>whole picture</strong>. Every later Deep Dive drills into one discipline of the software development lifecycle. This one shows how they connect, so by Week 12 you can direct an entire delivery like an <strong>AI Solution Architect</strong> — not by doing every job, but by knowing enough of each to evaluate, improve, and approve AI-generated work.</p>
+        <div class="kpis">
+          <div class="kpi"><div class="v">12</div><div class="l">Weeks</div></div>
+          <div class="kpi c1"><div class="v">13</div><div class="l">Deep Dives</div></div>
+          <div class="kpi c2"><div class="v">10</div><div class="l">SDLC phases</div></div>
+          <div class="kpi c3"><div class="v">20%</div><div class="l">Of each</div></div>
+        </div>
+        <div class="callout"><strong>The 20% rule.</strong> You are not training to be a BA, PM, QA, UX, or DevOps engineer. You learn the ~20% of each that lets you <em>direct, evaluate, improve, and approve</em> AI-generated work in it.</div>
+        <div class="card">
+          <div class="sub">How this Deep Dive works</div>
+          <ul class="clean">
+            <li>Week 0 is your <strong>reference map</strong> — you read it, you don't build it.</li>
+            <li>Work through all 15 sections; the rail fills with green checks as you go.</li>
+            <li>When every section is read, <strong>Complete</strong> unlocks. From Week 1 on, each Deep Dive adds a Field Guide you build yourself in Claude Code.</li>
+          </ul>
+        </div>
+        <div class="sub">How every Deep Dive fits together</div>
+        <div class="flow">
+          <div class="step"><div class="k">Wk 0</div><div class="t">The whole SDLC</div></div>
+          <div class="step"><div class="k">Wk 1–2</div><div class="t">Understand &amp; design</div></div>
+          <div class="step"><div class="k">Wk 3–7</div><div class="t">Plan &amp; build</div></div>
+          <div class="step"><div class="k">Wk 8–11</div><div class="t">Reason &amp; operate</div></div>
+          <div class="step"><div class="k">Wk 12</div><div class="t">Full review</div></div>
+        </div>
+      </section>
+
+      <section data-sec id="overview">
+        <span class="eyebrow">Section 1 · Mission</span>
+        <h2>Why modern software development exists</h2>
+        <p>Software is how organizations deliver strategy — a bank's product <em>is</em> its app. "Software development" is the disciplined practice of turning business intent into a working, maintainable, trustworthy system, and keeping it healthy after launch. It exists because building software is a <strong>team sport with high failure cost</strong>: unmanaged, projects run late, drift from the need, and become unsafe to change.</p>
+        <div class="card"><div class="sub">Why organizations invest</div><ul class="clean"><li>Predictability — turn uncertainty into a plan with gates.</li><li>Quality &amp; safety — catch defects before customers do.</li><li>Speed that lasts — ship fast <em>and</em> stay able to change.</li><li>Alignment — keep the build tied to the real need.</li></ul></div>
+        <div class="card"><div class="sub">Common misconceptions</div><ul class="clean"><li>"Coding is software development." It's one phase of ten.</li><li>"More process = better software." Process serves outcomes.</li><li>"AI replaces the team." AI shifts humans from doing to directing.</li><li>"Done at launch." Most cost and risk live in operation.</li></ul></div>
+        <div class="sub">A short history, so the words make sense</div>
+        <div class="flow"><div class="step"><div class="k">1970s</div><div class="t">Waterfall</div></div><div class="step"><div class="k">2001</div><div class="t">Agile</div></div><div class="step"><div class="k">2010s</div><div class="t">DevOps</div></div><div class="step"><div class="k">Now</div><div class="t">AI-native</div></div></div>
+        <div class="callout warn"><strong>How AI changes the discipline.</strong> An architect describes intent, an AI agent generates the artifact, and a human <em>evaluates and approves</em> it. The skill that scales is no longer typing the work — it's <strong>judging the work</strong>.</div>
+      </section>
+
+      <section data-sec id="role">
+        <span class="eyebrow">Section 2 · Where it fits</span>
+        <h2>The lifecycle, end to end</h2>
+        <p>The SDLC is the path a system travels from idea to running product and back. Each phase has an owner discipline, hands off artifacts, and passes an approval gate. You sit above the phases: set intent, read outputs, sign the gates.</p>
+        <div class="viz"><div class="vt">The software development lifecycle</div>
+          <svg viewBox="0 0 300 230" width="100%" style="max-width:340px;display:block;margin:0 auto" role="img" aria-label="SDLC lifecycle cycle">
+            <defs><marker id="sdlcarr" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2E6A86"/></marker></defs>
+            <circle cx="150" cy="110" r="80" fill="none" stroke="#dbe4f0" stroke-width="2"/>
+            <path d="M150,30 A80,80 0 1 1 93,53" fill="none" stroke="#2E6A86" stroke-width="2" marker-end="url(#sdlcarr)"/>
+            <g font-family="Segoe UI,Arial" font-size="9.5" font-weight="600" fill="#2d3748">
+              <circle cx="150" cy="30" r="5" fill="#2E6A86"/><text x="150" y="20" text-anchor="middle">Discover</text>
+              <circle cx="207" cy="53" r="5" fill="#2E6A86"/><text x="215" y="49" text-anchor="start">Design</text>
+              <circle cx="230" cy="110" r="5" fill="#2E6A86"/><text x="238" y="113" text-anchor="start">Plan</text>
+              <circle cx="207" cy="167" r="5" fill="#2E6A86"/><text x="215" y="174" text-anchor="start">Build</text>
+              <circle cx="150" cy="190" r="5" fill="#2E6A86"/><text x="150" y="206" text-anchor="middle">Verify</text>
+              <circle cx="93" cy="167" r="5" fill="#2E6A86"/><text x="85" y="174" text-anchor="end">Deliver</text>
+              <circle cx="70" cy="110" r="5" fill="#2E6A86"/><text x="62" y="113" text-anchor="end">Operate</text>
+              <circle cx="93" cy="53" r="5" fill="#2E6A86"/><text x="85" y="49" text-anchor="end">Improve</text>
+            </g>
+            <text x="150" y="106" text-anchor="middle" font-family="Segoe UI,Arial" font-size="18" font-weight="800" fill="#367895">SDLC</text>
+            <text x="150" y="121" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10" fill="#718096">lifecycle</text>
+          </svg>
+        </div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Phase</th><th>Owner discipline</th><th>Deep Dive</th></tr></thead>
+          <tbody>
+            <tr><td>Discover</td><td>Business Analysis</td><td>Wk 1</td></tr>
+            <tr><td>Design (system)</td><td>Solution Architecture</td><td>Wk 2</td></tr>
+            <tr><td>Plan</td><td>Project Management</td><td>Wk 3</td></tr>
+            <tr><td>Build</td><td>Software Engineering</td><td>Wk 4</td></tr>
+            <tr><td>Design (experience)</td><td>UX</td><td>Wk 5</td></tr>
+            <tr><td>Verify</td><td>Quality Assurance</td><td>Wk 6</td></tr>
+            <tr><td>Connect</td><td>Integration</td><td>Wk 7</td></tr>
+            <tr><td>Reason</td><td>AI Systems</td><td>Wk 8</td></tr>
+            <tr><td>Store</td><td>Data Architecture</td><td>Wk 9</td></tr>
+            <tr><td>Deliver</td><td>DevOps</td><td>Wk 10</td></tr>
+            <tr><td>Operate</td><td>Operations &amp; Governance</td><td>Wk 11</td></tr>
+          </tbody>
+        </table></div>
+        <div class="sub">Role hierarchy — who directs whom</div>
+        <div class="viz"><div class="vt">Who directs whom</div>
+          <svg viewBox="0 0 520 212" width="100%" role="img" aria-label="Role hierarchy org chart">
+            <line x1="260" y1="40" x2="260" y2="66" stroke="#94a3b8" stroke-width="1.5"/>
+            <line x1="260" y1="102" x2="260" y2="124" stroke="#94a3b8" stroke-width="1.5"/>
+            <line x1="260" y1="158" x2="260" y2="172" stroke="#94a3b8" stroke-width="1.5"/>
+            <rect x="150" y="8" width="220" height="32" rx="8" fill="#fff" stroke="#2E6A86" stroke-width="1.5"/><text x="260" y="28" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11" font-weight="600" fill="#367895">Business · Sponsor + Product Owner (the why)</text>
+            <rect x="138" y="66" width="244" height="36" rx="8" fill="#367895"/><text x="260" y="89" text-anchor="middle" font-family="Segoe UI,Arial" font-size="11.5" font-weight="700" fill="#fff">AI Solution Architect — you (the how)</text>
+            <rect x="30" y="124" width="460" height="34" rx="8" fill="#fff" stroke="#2E6A86" stroke-width="1.5"/><text x="260" y="145" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#367895">Discipline leads · BA · PM · Eng · UX · QA · Data · DevOps · Security</text>
+            <rect x="110" y="172" width="300" height="32" rx="8" fill="#f0f5fb" stroke="#94a3b8" stroke-width="1.4"/><text x="260" y="192" text-anchor="middle" font-family="Segoe UI,Arial" font-size="10.5" font-weight="600" fill="#367895">AI agents · Claude Code · Practitioners (do the work)</text>
+          </svg>
+        </div>
+        <div class="callout"><strong>Three flows keep delivery moving:</strong> intent flows <em>down</em> from goals, artifacts flow <em>across</em> (each phase's output feeds the next), signals flow <em>back up</em> so you can steer. Break any one and delivery stalls.</div>
+      </section>
+
+      <section data-sec id="methodologies">
+        <span class="eyebrow">Ways of working</span>
+        <h2>Methodologies to recognize</h2>
+        <p>You don't run a Scrum team. You recognize which way of working a team uses — it changes how work is planned, when you review it, and where risk hides.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Method</th><th>Shape</th><th>Best for</th><th>Risk hides in</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Waterfall</strong></td><td>Linear, plan-first</td><td>Fixed scope, compliance</td><td>Late wrong-requirement</td></tr>
+            <tr><td><strong>Agile</strong></td><td>Iterative loops</td><td>Evolving needs</td><td>Scope creep, thin docs</td></tr>
+            <tr><td><strong>Scrum</strong></td><td>Fixed sprints + roles</td><td>Cross-functional teams</td><td>Ceremony overhead</td></tr>
+            <tr><td><strong>Kanban</strong></td><td>Continuous flow</td><td>Support / ops queues</td><td>No cadence to inspect</td></tr>
+            <tr><td><strong>Lean</strong></td><td>Cut waste</td><td>Startups, MVPs</td><td>Cutting the wrong corner</td></tr>
+            <tr><td><strong>Cont. Delivery</strong></td><td>Always shippable</td><td>Mature products</td><td>Weak automated gates</td></tr>
+          </tbody>
+        </table></div>
+        <div class="card"><div class="sub" style="text-align:center">The Agile sprint loop</div>
+          <svg viewBox="0 0 300 190" width="100%" height="180" role="img" aria-label="Agile sprint cycle">
+            <defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="var(--blue-2)"/></marker></defs>
+            <circle cx="150" cy="95" r="66" fill="none" stroke="var(--border)" stroke-width="2"/>
+            <path d="M150,29 A66,66 0 0 1 209,125" fill="none" stroke="var(--blue-2)" stroke-width="2" marker-end="url(#ar)"/>
+            <g text-anchor="middle">
+              <circle cx="150" cy="29" r="5" fill="var(--blue-2)"/><text class="lbl" x="150" y="18">Plan</text>
+              <circle cx="213" cy="72" r="5" fill="var(--blue-2)"/><text class="lbl" x="248" y="72">Build</text>
+              <circle cx="189" cy="150" r="5" fill="var(--blue-2)"/><text class="lbl" x="196" y="170">Test</text>
+              <circle cx="111" cy="150" r="5" fill="var(--blue-2)"/><text class="lbl" x="104" y="170">Review</text>
+              <circle cx="87" cy="72" r="5" fill="var(--blue-2)"/><text class="lbl" x="54" y="72">Retro</text>
+              <text class="lbl-m" x="150" y="92">1–2 week</text><text class="lbl-m" x="150" y="104">sprint</text>
+            </g>
+          </svg>
+        </div>
+      </section>
+
+      <section data-sec id="responsibilities">
+        <span class="eyebrow">Section 3 · Ownership</span>
+        <h2>What the architect actually does</h2>
+        <p>Across every methodology, the job is a rhythm: direct intent, read outputs, own the gates.</p>
+        <div class="grid g2">
+          <div class="card"><h4>Daily</h4><ul class="clean"><li>Set intent for AI work</li><li>Review generated artifacts</li><li>Unblock decisions</li><li>Spot-check quality</li></ul></div>
+          <div class="card"><h4>Weekly</h4><ul class="clean"><li>Approve the increment</li><li>Re-rank the backlog</li><li>Check risks &amp; deps</li><li>Communicate status</li></ul></div>
+          <div class="card"><h4>Monthly</h4><ul class="clean"><li>Architecture health</li><li>Tech-debt review</li><li>Roadmap alignment</li><li>Stakeholder review</li></ul></div>
+          <div class="card"><h4>Strategic</h4><ul class="clean"><li>Technology selection</li><li>Scale &amp; cost posture</li><li>Governance &amp; risk</li><li>Team capability</li></ul></div>
+        </div>
+        <div class="card"><div class="sub">You own vs you don't</div>
+          <div class="kv"><span class="k">Own</span><span class="val">Decisions · Quality · Risk · Alignment</span></div>
+          <div class="kv"><span class="k">Don't own</span><span class="val">Every line · Every ceremony · Pixel craft</span></div>
+        </div>
+      </section>
+
+      <section data-sec id="artifacts">
+        <span class="eyebrow">Section 4 · Artifacts</span>
+        <h2>What the lifecycle produces</h2>
+        <p>An <strong>artifact</strong> is any durable output a next phase depends on — a doc, diagram, dataset, or dashboard. Follow the artifacts and you can see the whole delivery.</p>
+        <div class="sub">Artifact flow</div>
+        <div class="flow"><div class="step"><div class="k">Discover</div><div class="t">Requirements</div></div><div class="step"><div class="k">Design</div><div class="t">Architecture</div></div><div class="step"><div class="k">Plan</div><div class="t">Backlog</div></div><div class="step"><div class="k">Build</div><div class="t">Code</div></div><div class="step"><div class="k">Verify</div><div class="t">Tests</div></div><div class="step"><div class="k">Operate</div><div class="t">Runbooks</div></div></div>
+        <div class="sub">The artifact library, by discipline</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Discipline</th><th>Signature artifacts</th></tr></thead>
+          <tbody>
+            <tr><td>Business Analysis</td><td>BRD, user stories, use cases, traceability matrix</td></tr>
+            <tr><td>Solution Architecture</td><td>Context/container diagrams, ADRs, tech matrix</td></tr>
+            <tr><td>Project Management</td><td>Roadmap, backlog, risk register, burndown</td></tr>
+            <tr><td>Software Engineering</td><td>Module map, code standards, tech-debt register</td></tr>
+            <tr><td>UX</td><td>Wireframes, site map, journeys, a11y review</td></tr>
+            <tr><td>Quality Assurance</td><td>Test plan, coverage, defect log, automation matrix</td></tr>
+            <tr><td>Integration</td><td>API catalog, sequence diagrams, auth flow</td></tr>
+            <tr><td>AI Systems</td><td>Agent catalog, prompt library, guardrails, evals</td></tr>
+            <tr><td>Data Architecture</td><td>ERD, data dictionary, schema docs, lineage</td></tr>
+            <tr><td>DevOps</td><td>Pipeline, environment matrix, observability</td></tr>
+            <tr><td>Ops &amp; Governance</td><td>Compliance matrix, runbooks, security dashboard</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section data-sec id="lifecycles">
+        <span class="eyebrow">The loops inside the lifecycle</span>
+        <h2>Smaller cycles you'll meet</h2>
+        <p>"Lifecycle" isn't one thing. The SDLC contains smaller cycles each Deep Dive revisits.</p>
+        <div class="grid g2">
+          <div class="card"><h4>Repository</h4><p class="muted">A project's memory: code, history, docs — all traceable to a commit.</p></div>
+          <div class="card"><h4>Branch strategy</h4><p class="muted"><code>main</code> stays shippable; work on feature branches; a PR is the review gate.</p></div>
+          <div class="card"><h4>Documentation</h4><p class="muted">Docs live beside code and update with it. Stale docs are a defect.</p></div>
+          <div class="card"><h4>Change mgmt</h4><p class="muted">Every change proposed, reviewed, approved, reversible.</p></div>
+          <div class="card"><h4>Release</h4><p class="muted">Build → release → run are separate. Always roll back to last good.</p></div>
+          <div class="card"><h4>Project</h4><p class="muted">Initiate → plan → execute → monitor → close, marked by gates.</p></div>
+        </div>
+        <div class="sub">The AI development loop</div>
+        <div class="flow"><div class="step"><div class="k">1</div><div class="t">Context</div></div><div class="step"><div class="k">2</div><div class="t">Prompt</div></div><div class="step"><div class="k">3</div><div class="t">Generate</div></div><div class="step"><div class="k">4</div><div class="t">Evaluate</div></div><div class="step"><div class="k">5</div><div class="t">Approve</div></div><div class="step"><div class="k">6</div><div class="t">Integrate</div></div></div>
+      </section>
+
+      <section data-sec id="ai-native">
+        <span class="eyebrow">Modern AI development</span>
+        <h2>Product, architecture, AI-native</h2>
+        <div class="grid g2">
+          <div class="card"><h4>Product thinking</h4><p class="muted">Start from the user's problem and the outcome, not the feature.</p></div>
+          <div class="card"><h4>Architecture thinking</h4><p class="muted">Design for what outlives the demo — scale, reliability, security — tradeoffs explicit.</p></div>
+        </div>
+        <div class="sub">How AI changes each phase</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Phase</th><th>AI does well</th><th>Human owns</th></tr></thead>
+          <tbody>
+            <tr><td>Discover</td><td>Draft requirements, edge cases</td><td>The real problem &amp; priorities</td></tr>
+            <tr><td>Design</td><td>Propose architectures, ADRs</td><td>Tradeoffs, accepting risk</td></tr>
+            <tr><td>Build</td><td>Generate code, tests</td><td>Correctness, security review</td></tr>
+            <tr><td>Verify</td><td>Author test cases</td><td>"Good enough to ship"</td></tr>
+            <tr><td>Operate</td><td>Summarize incidents</td><td>Judgment under uncertainty</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout"><strong>The human is the approver.</strong> An unreviewed generation is a liability, not a deliverable. The approval is the value.</div>
+      </section>
+
+      <section data-sec id="goodbad">
+        <span class="eyebrow">Section 5 · Good vs Bad</span>
+        <h2>Great vs poor delivery</h2>
+        <div class="gb">
+          <div class="col good"><h4>Great looks like</h4><ul><li>Requirements trace to a business outcome.</li><li>Architecture decisions written with tradeoffs.</li><li><code>main</code> always shippable; changes reviewed.</li><li>Tests cover failure paths, not just happy path.</li><li>Docs &amp; runbooks current; on-call isn't guesswork.</li><li>AI output reviewed before it counts as done.</li></ul></div>
+          <div class="col bad"><h4>Poor looks like</h4><ul><li>"We'll figure out requirements as we build."</li><li>Architecture lives in one person's head.</li><li>Direct commits to <code>main</code>; no trail.</li><li>Only happy path tested; edge cases hit prod.</li><li>Docs months stale; every incident is archaeology.</li><li>Generated code merged unread "because AI wrote it."</li></ul></div>
+        </div>
+        <div class="callout warn"><strong>Red flags that stop an approval:</strong> no traceability, no ADRs, no failure-path tests, no rollback, no risk owner, "works on my machine."</div>
+      </section>
+
+      <section data-sec id="metrics">
+        <span class="eyebrow">Section 6 · Measurement</span>
+        <h2>How the lifecycle measures health</h2>
+        <div class="grid g2">
+          <div class="card"><h4>Leading (predict)</h4><ul class="clean"><li>Requirements clarity &amp; churn</li><li>Review turnaround</li><li>Coverage on new code</li><li>Backlog readiness</li></ul></div>
+          <div class="card"><h4>Lagging (confirm)</h4><ul class="clean"><li>Defect escape rate</li><li>Incidents &amp; MTTR</li><li>Customer-reported issues</li><li>Delivered vs planned</li></ul></div>
+        </div>
+        <div class="sub">The four delivery signals (DORA)</div>
+        <div class="kpis">
+          <div class="kpi"><div class="v">↑</div><div class="l">Deploy freq.</div></div>
+          <div class="kpi c2"><div class="v">↓</div><div class="l">Lead time</div></div>
+          <div class="kpi c3"><div class="v">↓</div><div class="l">Change-fail</div></div>
+          <div class="kpi c4"><div class="v">↓</div><div class="l">Restore time</div></div>
+        </div>
+        <p class="muted" style="font-size:.82rem">Know what "healthy" looks like so you can tell when a dashboard — or an AI's summary of one — signals trouble.</p>
+      </section>
+
+      <section data-sec id="tools">
+        <span class="eyebrow">Section 7 · Industry Tools</span>
+        <h2>Tools to recognize, not master</h2>
+        <p>Recognition, not tool training. Know the category and where AI assists so you can read any team's stack.</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Category</th><th>Examples</th><th>Where AI assists</th></tr></thead>
+          <tbody>
+            <tr><td>Work tracking</td><td>Jira, Linear</td><td>Draft tickets, estimate</td></tr>
+            <tr><td>Source &amp; review</td><td>GitHub, GitLab</td><td>Generate code &amp; PR reviews</td></tr>
+            <tr><td>Design</td><td>Figma</td><td>Draft layouts, variants</td></tr>
+            <tr><td>API</td><td>Postman, OpenAPI</td><td>Specs &amp; test suites</td></tr>
+            <tr><td>CI/CD</td><td>GH Actions, Jenkins</td><td>Author pipeline config</td></tr>
+            <tr><td>Observability</td><td>Datadog, Grafana</td><td>Explain incidents</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section data-sec id="review">
+        <span class="eyebrow">Section 9 · Architect Review</span>
+        <h2>Questions before you approve</h2>
+        <p>This lens repeats in every Deep Dive. Run AI-generated work through it before approving.</p>
+        <div class="grid g2">
+          <div class="card"><h4>Business</h4><ul class="clean"><li>Solves the real problem?</li><li>Scope right?</li><li>Traces to a need?</li></ul></div>
+          <div class="card"><h4>Technical</h4><ul class="clean"><li>Scales &amp; integrates?</li><li>Tradeoffs written?</li><li>What breaks, then what?</li></ul></div>
+          <div class="card"><h4>Operational</h4><ul class="clean"><li>Deploy, monitor, roll back?</li><li>Who owns it after launch?</li><li>Security &amp; compliance?</li></ul></div>
+          <div class="card"><h4>Maintainability</h4><ul class="clean"><li>Can a newcomer follow it?</li><li>Tested &amp; documented?</li><li>Cheap to change?</li></ul></div>
+        </div>
+        <div class="callout"><strong>Approve only when:</strong> intent met, failure path handled, tested &amp; documented, tradeoffs explicit, owner + rollback exist. Less than that is "send back with feedback."</div>
+      </section>
+
+      <section data-sec id="roadmap">
+        <span class="eyebrow">Section 10 · The Library</span>
+        <h2>Your Deep Dive roadmap</h2>
+        <p>Each week adds one Field Guide to your Architect Library. By Week 12 you review your own project through all of them.</p>
+        <div class="road">
+          <div class="wk now"><div class="w">WK 0</div><div class="d">Modern SDLC</div><div class="cc">SDLC Guide</div><span class="linked">✓ You are here</span></div>
+          <div class="wk"><div class="w">WK 1</div><div class="d">Business Analysis</div><div class="cc">BA Guide</div></div>
+          <div class="wk"><div class="w">WK 2</div><div class="d">Solution Architecture</div><div class="cc">Architecture Guide</div></div>
+          <div class="wk"><div class="w">WK 3</div><div class="d">Project Management</div><div class="cc">PM Guide</div></div>
+          <div class="wk"><div class="w">WK 4</div><div class="d">Software Engineering</div><div class="cc">Engineering Guide</div></div>
+          <div class="wk"><div class="w">WK 5</div><div class="d">UX</div><div class="cc">UX Guide</div></div>
+          <div class="wk"><div class="w">WK 6</div><div class="d">Quality Assurance</div><div class="cc">QA Guide</div></div>
+          <div class="wk"><div class="w">WK 7</div><div class="d">Integration</div><div class="cc">Integration Guide</div></div>
+          <div class="wk"><div class="w">WK 8</div><div class="d">AI Systems</div><div class="cc">AI Systems Guide</div></div>
+          <div class="wk"><div class="w">WK 9</div><div class="d">Data Architecture</div><div class="cc">Data Guide</div></div>
+          <div class="wk"><div class="w">WK 10</div><div class="d">DevOps</div><div class="cc">DevOps Guide</div></div>
+          <div class="wk"><div class="w">WK 11</div><div class="d">Ops &amp; Governance</div><div class="cc">Governance Guide</div></div>
+          <div class="wk"><div class="w">WK 12</div><div class="d">AI Solution Architecture</div><div class="cc">Full Review</div></div>
+        </div>
+      </section>
+
+      <section data-sec id="kb">
+        <span class="eyebrow">Knowledge Base</span>
+        <h2>Glossary &amp; reference</h2>
+        <div class="terms">
+          <div class="term"><b>SDLC</b><p>The phases a system moves through from idea to operation.</p></div>
+          <div class="term"><b>Agile</b><p>Delivering in small, inspectable increments.</p></div>
+          <div class="term"><b>Scrum</b><p>Agile framework of fixed sprints with defined roles.</p></div>
+          <div class="term"><b>Kanban</b><p>Continuous flow limited by capacity, on a board.</p></div>
+          <div class="term"><b>Backlog</b><p>The ordered list of work still to do.</p></div>
+          <div class="term"><b>ADR</b><p>Architecture Decision Record — a decision + its tradeoffs.</p></div>
+          <div class="term"><b>MVP</b><p>Smallest thing that delivers real value and learning.</p></div>
+          <div class="term"><b>Technical debt</b><p>Shortcuts now that cost more to live with later.</p></div>
+          <div class="term"><b>Definition of Done</b><p>The checklist that makes work truly complete.</p></div>
+          <div class="term"><b>CI/CD</b><p>Automating build, test, and release.</p></div>
+        </div>
+        <div class="sub">Templates &amp; downloads</div>
+        <ul class="clean"><li>Architect Review checklist (Section 12) — reusable everywhere.</li><li>Approval-criteria card — the five conditions before you approve.</li><li>This Field Guide — export to PDF via the Export button.</li></ul>
+      </section>
+
+      <section data-sec id="self">
+        <span class="eyebrow">Self-Assessment</span>
+        <h2>Check your mental model</h2>
+        <p class="muted">Answer for yourself, then reveal. Not graded — just confirms Week 0 landed.</p>
+        <div class="q"><div class="qt">1. In one sentence, the architect's core job?</div><button class="revealbtn">Reveal</button><div class="ans">Direct, evaluate, improve, and approve AI-generated work across disciplines — not personally perform each one.</div></div>
+        <div class="q"><div class="qt">2. Why is "coding is software development" wrong?</div><button class="revealbtn">Reveal</button><div class="ans">Coding is one phase of ~ten. Discovery, architecture, testing, delivery, and operation carry most risk and cost.</div></div>
+        <div class="q"><div class="qt">3. Name the three flows that move delivery.</div><button class="revealbtn">Reveal</button><div class="ans">Intent flows down, artifacts flow across, signals flow back up.</div></div>
+        <div class="q"><div class="qt">4. What makes a generation a deliverable, not a liability?</div><button class="revealbtn">Reveal</button><div class="ans">Human evaluation and approval against intent.</div></div>
+        <div class="q"><div class="qt">5. Two red flags that stop an approval.</div><button class="revealbtn">Reveal</button><div class="ans">Any two of: no traceability, no ADRs, no failure-path tests, no rollback, no risk owner.</div></div>
+
+        <div class="donebar" id="donebar"><span class="dcheck"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg></span><div><b>All sections read.</b> You've built the mental model for the next twelve weeks — mark this Deep Dive complete.</div></div>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="actionbar">
+    <div class="prog">
+      <div class="ptext"><span>Progress</span><span><b id="pcount">0</b> / 15 sections read</span></div>
+      <div class="bar"><i id="pfill"></i></div>
+    </div>
+    <button class="btn done" id="completeBtn" type="button" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg> Complete Deep Dive</button>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  try{
+  var root=document.documentElement, panel=document.getElementById('panel');
+  try{ if(window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches) root.setAttribute('data-theme','dark'); }catch(e){}
+  // Panel fills its container via CSS; no iframe-detection needed.
+  document.getElementById('exportBtn').addEventListener('click',function(){window.print();});
+  document.querySelectorAll('.q').forEach(function(q){ q.classList.add('js'); var b=q.querySelector('.revealbtn');
+    if(b)b.addEventListener('click',function(){q.classList.toggle('open');b.textContent=q.classList.contains('open')?'Hide':'Reveal';}); });
+
+  var secs=Array.prototype.slice.call(document.querySelectorAll('section[data-sec]')), total=secs.length;
+  var railLinks={}; document.querySelectorAll('.rail a[href^="#"]').forEach(function(a){railLinks[a.getAttribute('href').slice(1)]=a;});
+  // Labeled sidebar (wide/workspace view): fill each rail item's label from its title attribute.
+  document.querySelectorAll('.rail a.ri').forEach(function(a){ var t=a.getAttribute('title'); if(t){ var s=document.createElement('span'); s.className='rlabel'; s.textContent=t; a.appendChild(s); } });
+  // Explicit click-to-scroll — bare #anchors don't reliably scroll the panel inside a sandboxed iframe.
+  Object.keys(railLinks).forEach(function(id){ railLinks[id].addEventListener('click',function(e){ e.preventDefault(); var el=document.getElementById(id); if(el) el.scrollIntoView({behavior:'smooth',block:'start'}); }); });
+  document.querySelectorAll('.rail .num').forEach(function(n){n.setAttribute('data-n',n.textContent);});
+  // The HOST persists progress + restores it (our localStorage is blocked in the sandbox).
+  var seen={};
+  function keys(){var a=[];for(var k in seen){if(seen[k])a.push(k);}return a;}
+  function count(){return keys().length;}
+  function render(){
+    var n=count(); document.getElementById('pcount').textContent=n; document.getElementById('pfill').style.width=Math.round(n/total*100)+'%';
+    secs.forEach(function(s){var a=railLinks[s.id];if(a){if(seen[s.id])a.classList.add('done');else a.classList.remove('done');
+      var num=a.querySelector('.num');if(num)num.textContent=seen[s.id]?'✓':(num.getAttribute('data-n')||num.textContent);}});
+    var done=n>=total, btn=document.getElementById('completeBtn');
+    btn.disabled=!done; btn.title=done?'Mark this Deep Dive complete':'Read all sections to complete';
+    if(done)document.getElementById('donebar').classList.add('show');
+    try{ if(window.parent && window.parent!==window) window.parent.postMessage({source:'deepdive',done:n,total:total,ids:keys(),complete:done},'*'); }catch(e){}
+  }
+  function markSeen(id){ if(id && !seen[id]){ seen[id]=true; render(); } }
+  // A section is marked read after you spend 5s ON it. "Active" = the section at the
+  // reading line (scroll-position based), so even the last/short section can be reached
+  // — a thin center-band observer could never mark a short final section.
+  var secT={}, DWELL_S=5;
+  function activeId(){
+    if(!secs.length) return null;
+    if(panel.scrollTop + panel.clientHeight >= panel.scrollHeight - 4) return secs[secs.length-1].id;
+    var pr=panel.getBoundingClientRect(), line=pr.top + pr.height*0.35, cur=secs[0];
+    for(var i=0;i<secs.length;i++){ if(secs[i].getBoundingClientRect().top <= line) cur=secs[i]; }
+    return cur.id;
+  }
+  setInterval(function(){
+    var id=activeId(); if(!id) return;
+    for(var k in railLinks) railLinks[k].classList.remove('active');
+    if(railLinks[id]) railLinks[id].classList.add('active');
+    if(!seen[id]){ secT[id]=(secT[id]||0)+1; if(secT[id]>=DWELL_S) markSeen(id); }
+  }, 1000);
+  window.addEventListener('message',function(e){ var d=e.data; if(!d||d.source!=='deepdive-host')return;
+    if(d.type==='restore' && Array.isArray(d.seenIds)){ d.seenIds.forEach(function(id){ if(id) seen[id]=true; }); render(); }
+  });
+  render();
+  try{ if(window.parent&&window.parent!==window) window.parent.postMessage({source:'deepdive',action:'ready'},'*'); }catch(e){}
+  document.getElementById('completeBtn').addEventListener('click',function(){
+    if(this.disabled)return; this.textContent='Completed ✓'; this.disabled=true; document.getElementById('donebar').classList.add('show');
+  });
+
+  var box=document.getElementById('search'), content=document.getElementById('content');
+  function clearMarks(){content.querySelectorAll('mark').forEach(function(m){var t=document.createTextNode(m.textContent);m.parentNode.replaceChild(t,m);});}
+  function walk(node,rx){
+    if(node.nodeType===3){var m=node.data.match(rx);
+      if(m){var s=document.createElement('mark');s.textContent=m[0];var after=node.splitText(m.index);after.data=after.data.slice(m[0].length);node.parentNode.insertBefore(s,after);return s;}}
+    else if(node.nodeType===1&&!/^(SCRIPT|STYLE|MARK|SVG)$/.test(node.tagName)){for(var i=0;i<node.childNodes.length;i++){var r=walk(node.childNodes[i],rx);if(r)return r;}}
+    return null;
+  }
+  var t; box.addEventListener('input',function(){clearTimeout(t);t=setTimeout(function(){
+    clearMarks(); var q=box.value.trim(); if(q.length<2)return;
+    var rx=new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'); var first=walk(content,rx); if(first)first.scrollIntoView({behavior:'smooth',block:'center'});
+  },220);});
+  }catch(_err){ if(window.console&&console.error)console.error('Field Guide script error:', _err); }
+})();
+</script>
+</body>
+</html>

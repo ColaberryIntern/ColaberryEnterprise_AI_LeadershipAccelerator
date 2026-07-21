@@ -7,6 +7,7 @@ import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import '../../components/timeline/timeline.css';
 import PortalShell from './today/PortalShell';
 import { emitPointsEarned, onPointsEarned } from '../../services/pointsFx';
+import { filterCardsByQuery, tokenizeQuery } from '../../utils/classroomSearch';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -50,6 +51,40 @@ const writeViewSnapshot = (snap: ViewSnapshot): void => {
   try { window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(snap)); } catch { /* private mode / quota — non-fatal */ }
 };
 
+// Restore window scroll to targetY, but only once the feed is tall enough to
+// actually reach it. The feed's card thumbnails (video/podcast posters) load
+// AFTER the cards render, so right after a remount the document is short and a
+// naive window.scrollTo(0, targetY) clamps near the top — which is the "back
+// sends me to the top" bug. So we poll per animation frame until the document
+// can reach targetY (images have grown it back to the height it had when we
+// saved), then scroll once. We bail the moment the student scrolls themselves,
+// so we never fight them, and give up after a cap so a genuinely-shorter feed
+// (e.g. a card was completed/removed) doesn't spin.
+function restoreScroll(targetY: number): void {
+  if (!targetY || targetY <= 0) return;
+  let done = false;
+  const cleanup = () => {
+    window.removeEventListener('wheel', onUser);
+    window.removeEventListener('touchstart', onUser);
+  };
+  function onUser() { done = true; cleanup(); }
+  window.addEventListener('wheel', onUser, { passive: true });
+  window.addEventListener('touchstart', onUser, { passive: true });
+  const start = performance.now();
+  const tick = () => {
+    if (done) return;
+    const maxY = document.documentElement.scrollHeight - window.innerHeight;
+    if (maxY >= targetY - 4 || performance.now() - start > 3000) {
+      window.scrollTo(0, targetY);
+      done = true;
+      cleanup();
+    } else {
+      requestAnimationFrame(tick);
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
 /** ms until the next Thursday 10:00 (client-side schedule anchor until live sessions are wired). */
 function nextThursday(now: number): number {
   const d = new Date(now);
@@ -67,6 +102,7 @@ const ClassroomPage: React.FC = () => {
   const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'error'>('loading');
   const [week, setWeek] = useState<number | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [query, setQuery] = useState<string>('');
   const [now, setNow] = useState<number>(() => (typeof performance !== 'undefined' ? Date.now() : 0));
 
   const load = useCallback(async () => {
@@ -110,11 +146,10 @@ const ClassroomPage: React.FC = () => {
       const snap = readViewSnapshot();
       if (snap && snap.week != null && weeks.includes(snap.week)) {
         setWeek(snap.week);
-        // Restore scroll after the feed has painted at full height. App-level
-        // ScrollToTop zeroes the window on every route change, so this must run
-        // after it — two rAFs lands us past layout + that reset.
-        const y = snap.scrollY || 0;
-        if (y > 0) requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)));
+        // Restore scroll once the feed is tall enough (its thumbnails have
+        // loaded). restoreScroll waits for that, so it runs after App-level
+        // ScrollToTop's reset AND after the images that give the page its height.
+        restoreScroll(snap.scrollY || 0);
         return;
       }
     }
@@ -124,16 +159,23 @@ const ClassroomPage: React.FC = () => {
     }
   }, [feed, weeks, week]);
 
-  // Snapshot the current view on unmount (i.e. when navigating to the workspace
-  // or anywhere else) so the restore above has something to return to. A ref
-  // holds the latest week so the cleanup captures the real position, not a stale
-  // closure. window.scrollY is read before App-level ScrollToTop resets it
-  // (unmount cleanups run before the new route's effects).
+  // Continuously remember the current scroll position (and week) so returning
+  // from the workspace can restore it. This MUST be done live, on scroll — NOT in
+  // an unmount cleanup: a useEffect cleanup is passive and runs AFTER React has
+  // already swapped the classroom DOM out for the workspace and ScrollToTop has
+  // zeroed the window, so window.scrollY reads ~0 there. (That was the "back
+  // always lands at the top" bug — every save recorded scrollY: 0.) A ref holds
+  // the latest week so each save tags the right one. Throttled to one write/frame.
   const viewRef = useRef<number | null>(week);
   viewRef.current = week;
-  useEffect(() => () => {
-    writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY });
-  }, []);
+  useEffect(() => {
+    if (uiState !== 'ready') return;
+    let raf = 0;
+    const persist = () => { raf = 0; writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY }); };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(persist); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
+  }, [uiState]);
 
   const weekCards = useMemo(() => {
     if (!feed) return [];
@@ -149,6 +191,13 @@ const ClassroomPage: React.FC = () => {
 
   const done = weekCards.filter((c) => c.status === 'completed').length;
   const pct = weekCards.length ? Math.round((done / weekCards.length) * 100) : 0;
+
+  // Live search filter. The banner + "This week" progress stay bound to the full
+  // weekCards (above) so the progress bar doesn't jump around as the student
+  // types — only the rendered feed narrows to the matches.
+  const searchTokens = useMemo(() => tokenizeQuery(query), [query]);
+  const visibleCards = useMemo(() => filterCardsByQuery(weekCards, query), [weekCards, query]);
+  const searching = searchTokens.length > 0;
 
   // Opening a card now shows its detail drawer (preview + in-app video player);
   // completion is an explicit action inside the drawer, not a side effect of opening.
@@ -222,9 +271,39 @@ const ClassroomPage: React.FC = () => {
             </div>
           </div>
 
+          {weekCards.length > 0 && (
+            <>
+              <div className="tl-search">
+                <svg className="tl-search-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                <input
+                  type="search"
+                  className="tl-search-input"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
+                  placeholder="Search this week — try “Prompt Lab”"
+                  aria-label="Search this week's cards"
+                  autoComplete="off"
+                />
+                {searching && (
+                  <button type="button" className="tl-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                  </button>
+                )}
+              </div>
+              {searching && (
+                <div className="tl-search-count tl-small" role="status" aria-live="polite">
+                  {visibleCards.length} of {weekCards.length} {weekCards.length === 1 ? 'card' : 'cards'} match “{query.trim()}”
+                </div>
+              )}
+            </>
+          )}
+
           {weekCards.length === 0
             ? <div className="tl-empty">No cards here yet.</div>
-            : <TimelineFeed cards={weekCards} groupCompleted onOpen={openCard} onComplete={completeCard} onComments={(c) => navigate(`/portal/runtime/${c.id}`)} onWorkspace={(c) => navigate(`/portal/runtime/${c.id}`)} />}
+            : visibleCards.length === 0
+              ? <div className="tl-empty">No cards match “{query.trim()}”. <button type="button" className="tl-btn sm primary" style={{ marginLeft: 8 }} onClick={() => setQuery('')}>Clear search</button></div>
+              : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
         </div>
 
         <aside className="tl-side">

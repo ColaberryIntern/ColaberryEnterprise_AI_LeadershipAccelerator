@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PortalShell from '../today/PortalShell';
 import ProjectWizard from './ProjectWizard';
 import { useIsExplorer } from '../useIsExplorer';
@@ -10,6 +10,7 @@ import {
   useProjectsList, createProjectFromAnswers, projectProgress, reqVerified, nextTask,
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
+import { syncProjectsWithBackend } from './projectSync';
 import './projects.css';
 import '../today/TodayShell.css';
 
@@ -53,6 +54,10 @@ function BuildCard({ p, onOpen }: { p: StudentProject; onOpen: () => void }) {
 
 const ProjectsPage: React.FC = () => {
   const projects = useProjectsList();
+  // Backend-source flip: pull the student's persisted build (completions from
+  // other devices, or a build this browser has never seen) then mirror back up.
+  // Once per page session, flag-gated + best-effort (see projectSync).
+  useEffect(() => { void syncProjectsWithBackend(); }, []);
   const demo = useIsExplorer();   // Explorer = demo mode: no real builds get created
   const [view, setView] = useState<View>({ kind: 'overview' });
 

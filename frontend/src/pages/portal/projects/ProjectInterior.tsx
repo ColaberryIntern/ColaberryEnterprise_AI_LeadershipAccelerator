@@ -5,6 +5,7 @@ import {
 } from './projectsStore';
 import NextSessionStrip from './NextSessionStrip';
 import ProjectWorkspaceDrawer from './ProjectWorkspaceDrawer';
+import { CorySpark } from '../../../components/portal/CoryMark';
 import { useIsExplorer } from '../useIsExplorer';
 import { buildProjectTaskPrompt } from './projectWorkspacePrompt';
 import { loadDeliveryMode } from '../../../services/deliveryModes';
@@ -156,7 +157,7 @@ const ActivityCard: React.FC<{ a: ProjectActivity }> = ({ a }) => (
   <div className="pja-card">
     <div className="pja-head">
       <span className="pja-ic" style={{ background: ACT_COLOR[a.kind] }}><svg viewBox="0 0 24 24" fill="none">{ACT_IC[a.kind]}</svg></span>
-      <div><div className="pja-title">{a.title}</div><div className="pja-when">{a.who} · {a.time}</div></div>
+      <div><div className="pja-title">{a.title}</div><div className="pja-when">{a.who === 'Cory' && <span style={{ display: 'inline-flex', verticalAlign: '-1px', marginRight: 4 }}><CorySpark size={11} /></span>}{a.who} · {a.time}</div></div>
     </div>
     <div className="pja-body">{a.body}</div>
   </div>

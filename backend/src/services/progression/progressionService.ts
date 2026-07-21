@@ -28,7 +28,6 @@ const EVIDENCE_SOURCE_BY_TYPE: Record<string, EvidenceSource> = {
   project_task: 'implementation',
   internship_activity: 'implementation',
   artifact_submission: 'artifact',
-  github_sync: 'github_commit',
   evaluation: 'instructor_review',
   certification_exercise: 'instructor_review',
   mock_interview: 'deliverable',
@@ -79,6 +78,13 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
   // Throws { status: 422, code: 'watch_requirement' } when below threshold.
   const { assertWatchRequirement } = await import('../runtime/watchProgressService');
   await assertWatchRequirement(enrollmentId, card);
+
+  // Field Guide gate: a Week-1+ Deep Dive requires the student to upload the HTML
+  // Field Guide they built in their own Claude Code before it can be completed.
+  // Single choke point — covers the classroom drawer + runtime workspace.
+  // Throws { status: 422, code: 'field_guide_required' } when not yet uploaded.
+  const { assertFieldGuideRequirement } = await import('../runtime/fieldGuideService');
+  await assertFieldGuideRequirement(enrollmentId, card);
 
   // Mark progress complete (idempotent).
   const [progress] = await TimelineCardProgress.findOrCreate({
