@@ -29,6 +29,7 @@ import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, type TodayItemKind } from './todayFeedPlan';
 import { gatherAnchored, rehydrateCommunityItems } from './todayAnchoredSources';
+import { orderForVisit } from './todayFeedShuffle';
 import { env } from '../../config/env';
 import { getFeedPolicy } from './feedConfigService';
 
@@ -185,32 +186,76 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   return out;
 }
 
+/** Card ids the student has already completed — dropped from the served feed so a
+ *  finished task disappears off the timeline. Batched, fail-soft (error → none
+ *  dropped, never breaks the feed). */
+async function completedCardIds(enrollmentId: string, cardIds: string[]): Promise<Set<string>> {
+  const ids = Array.from(new Set(cardIds.filter((x): x is string => !!x)));
+  if (!ids.length) return new Set();
+  try {
+    const rows = await sequelize.query<{ card_id: string }>(
+      `SELECT card_id FROM timeline_card_progress
+         WHERE enrollment_id = :eid AND status = 'completed' AND card_id IN (:ids)`,
+      { replacements: { eid: enrollmentId, ids }, type: QueryTypes.SELECT },
+    );
+    return new Set(rows.map((r) => r.card_id));
+  } catch (err: any) {
+    console.warn('[todayFeedComposer] completed lookup failed:', err?.message?.split('\n')[0]);
+    return new Set();
+  }
+}
+
+/**
+ * The list actually served for a page: the materialised impressions minus cards
+ * the student has completed ("finished tasks disappear"), reordered per visit when
+ * a seed is supplied ("a different lineup each time"). Order is stable for a given
+ * seed so pagination within one visit never repeats or skips.
+ */
+async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed?: number): Promise<TodayFeedItem[]> {
+  const completed = await completedCardIds(enrollmentId, existing.map((r) => r.card_id).filter((x): x is string => !!x));
+  const items = existing
+    .filter((r) => !(r.card_id && completed.has(r.card_id)))                        // completed via progress
+    .filter((r) => (r.item as TodayFeedItem | null)?.status !== 'completed')        // snapshot already completed (project/etc.)
+    .map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
+  return seed != null ? orderForVisit(items, seed) : items;
+}
+
 /**
  * Return the page of the Today feed starting at `cursor` (0-based item offset),
  * generating more of the feed if the cursor runs past what's been materialised.
+ * `seed` (per-visit, client-supplied) reshuffles the lineup; completed cards are
+ * filtered out at serve time. Because completed cards are dropped here, the feed
+ * may need to be generated past `targetEnd` to backfill the gap.
  */
-export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = DEFAULT_PAGE_SIZE, opts: { readOnly?: boolean } = {}): Promise<TodayPage> {
+export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = DEFAULT_PAGE_SIZE, opts: { readOnly?: boolean; seed?: number } = {}): Promise<TodayPage> {
   const size = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(pageSize)));
   const from = Math.max(0, Math.floor(cursor));
   const targetEnd = from + size;
 
   let existing = await loadImpressions(enrollmentId);
+  let served = await buildServed(enrollmentId, existing, opts.seed);
   let exhausted = false;
-  if (existing.length < targetEnd) {
-    if (opts.readOnly) {
-      // Read-only "view as": show the member's already-materialised feed but
-      // never append new impressions (that's an append-only write to their data).
-      exhausted = true;
-    } else {
+
+  if (opts.readOnly) {
+    // Read-only "view as": show the member's already-materialised feed but never
+    // append new impressions (that's an append-only write to their data).
+    exhausted = served.length < targetEnd;
+  } else {
+    // Materialise until enough SURVIVING items fill the page (completed cards were
+    // dropped above), or the pools run dry. Bounded so a persistently short pool
+    // can never spin.
+    let guard = 0;
+    while (served.length < targetEnd && guard++ < 6) {
       const before = existing.length;
-      const added = await extendFeed(enrollmentId, existing, targetEnd - existing.length);
-      exhausted = added.length < targetEnd - before; // couldn't fill the page → pools are dry
-      if (added.length) existing = await loadImpressions(enrollmentId);
+      const added = await extendFeed(enrollmentId, existing, targetEnd - served.length + 4);
+      if (!added.length) { exhausted = true; break; }
+      existing = await loadImpressions(enrollmentId);
+      if (existing.length === before) { exhausted = true; break; }
+      served = await buildServed(enrollmentId, existing, opts.seed);
     }
   }
 
-  const slice = existing.slice(from, targetEnd);
-  const items = slice.map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
+  const items = served.slice(from, targetEnd);
   // Community cards are dynamic — refresh their media/author/text from the live
   // post so the append-only snapshot never shows stale content (fail-soft).
   await rehydrateCommunityItems(items);
