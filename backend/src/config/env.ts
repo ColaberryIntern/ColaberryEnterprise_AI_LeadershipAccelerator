@@ -144,6 +144,14 @@ export const env = {
   // staff / sponsor-seat enrollments pass. Default OFF (inverted vs the points flag
   // above) so merging/deploying changes NOTHING until BUILD_PAID_GATE_ENABLED=true.
   buildPaidGateEnabled: process.env.BUILD_PAID_GATE_ENABLED === 'true',
+  // Community level reconcile — fold the legacy CommunityMember.level tiers
+  // (0/1500/2700/4200 in communityService.LEVEL_TIERS) onto the ONE canonical
+  // points ladder (pointsService.levelForPoints, 0/150/400/900). Default OFF:
+  // communityService.levelFor keeps its legacy tiers byte-identical. When ON,
+  // levelFor defers to the canonical ladder, eliminating the A/B threshold
+  // disagreement. Leaderboard ranking is unaffected — it reads the canonical
+  // StudentPointsEvent total, not levelFor.
+  communityLevelUseCanonical: process.env.COMMUNITY_LEVEL_USE_CANONICAL === 'true',
   // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
   // links). Master switch OFF by default: the community-room routes return 404,
   // the outbox drain cron no-ops, and createSession skips linked-room creation

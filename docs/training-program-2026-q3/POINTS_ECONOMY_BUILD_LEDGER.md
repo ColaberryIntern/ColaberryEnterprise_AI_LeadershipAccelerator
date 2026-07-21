@@ -38,7 +38,7 @@ Status: TODO · MAKING · CHECKING · PASS · DEV · PROD · DONE(already on mai
 |---|---|---|---|---|---|
 | 0 | Branch reconciliation | — | **PASS** | n/a | Worktree + branch `workstream/points-economy` @ main 403b79f9 |
 | 2 | Paid/entitlement gate on build routes (flag-gated) | **1** | **PASS → committed** | **10/10** | New `requireBuildEntitlement` mw, flag `BUILD_PAID_GATE_ENABLED` default OFF, fail-open, scoped to `/api/portal/project/*`. Follow-up: `GET /project/evaluation` registered before the gate (read-only, non-blocking) |
-| 3 | Reconcile 3 level tables → one 5-band ladder + rename | 2 | TODO | — | main has 3 disagreeing ladders; fix fragmentation |
+| 3 | Reconcile 3 level tables → one 5-band ladder + rename | 2 | **PASS → committed** | **10/10** | New pure `bandLadder.ts` (`computeBand`): free bands from points, build bands from competency promotion; invariant "points alone never exceed AI Enabled" test-locked. Additive `band` field; ladder-B reconcile behind `COMMUNITY_LEVEL_USE_CANONICAL` (OFF). Display rename deferred to Phase 5 |
 | 4 | Anti-cheat: daily caps + post-quality gate | 3 | TODO | — | idempotency + HTTP rate limits exist; daily caps ABSENT |
 | 1 | Curriculum-type L/B/C value re-tune | 4 | TODO | — | Low priority under Option A (ledger sums to one total); align to design table |
 | 5 | Frontend re-skin to 5 bands + locked-door/upgrade card | 5 | TODO | — | HUD/leaderboard/level badge already built; rename + add gate UI |

@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Points Economy build — Phase 3: one canonical 5-band ladder (2026-07-21)
+- [x] **Added the canonical AI Aware → AI Enabled → AI Builder → AI Architect band ladder — free bands from points, build bands only from the competency/evidence promotion, so points alone can never reach Builder/Architect (anti-cheat is structural)**
+  - Date: 2026-07-21
+  - Session: CC-20260721-g8k4
+  - What changed: New pure `backend/src/services/progression/bandLadder.ts` — `BANDS` (5-band defs), `POINTS_SUBLEVELS` (reuse ladder-A 0/150/400/900 → AI Aware I/II, AI Enabled I/II), `RANK_TO_BAND` (the 9 competency ranks → AI Builder I-VI for the builder/developer/engineer ranks, AI Architect / Senior AI Architect for the two architecture-track ranks `architect_candidate`/`architect`), `hasBuildPromotion()`, and pure `computeBand({pointsTotal, builderLevelSlug, builderRank})` → `{bandSlug, bandName, rungName, bandIndex, isBuildBand, cappedByPointsOnly, nextBand, nextRequirement}`. Rule: build promotion overrides points; else derive from points and NEVER exceed AI Enabled. Wired additively into `progressionService.getProgressionSummary()` as a new `band` field (canonical points total + StudentLevel rank/slug). Reconciled the legacy community level (0/1500/2700/4200 vs canonical 0/150/400/900) behind flag `COMMUNITY_LEVEL_USE_CANONICAL` (default OFF; ON = `communityService.levelFor` defers to `pointsService.levelForPoints`). Tests: new `bandLadder.test.ts` (boundaries + anti-cheat invariant + promoted→build-band + rank-0 exclusion) + flag ON/OFF coverage in `communityService.test.ts`.
+  - Why: Option A reconciliation — one 5-band vocabulary (matches enterprise.colaberry.ai "Aware→Architect"); build bands stay gated on the competency/evidence promotion (now paid via Phase 2), so "no Architect without paid build work" is structural, not a tunable cap.
+  - Verification: Loop Architect maker → SEPARATE verifier scored 10/10 PASS (invariant hand-traced: 10M points + rank 0 → AI Enabled II, never a build band; fields cross-checked vs StudentLevel/pointsService/seeders; additive `band` breaks no consumer — none constructs the literal or mocks the fn; flag OFF byte-identical; no circular import). Additive + flag-gated → merge inert. Local tsc/jest N/A (Windows host); CI is the gate — pending on push.
+  - Notes: Existing level display names (Apprentice/Builder/Architect/Principal) intentionally NOT renamed yet — the frontend switch to band names is Phase 5. No frontend touched. Branch `workstream/points-economy`; iteration 2 of the 8-phase loop.
+
 ### Points Economy build — Phase 2: paid/entitlement gate on build routes (2026-07-21)
 - [x] **Flag-gated `requireBuildEntitlement` so build/evidence routes are paid-only (free Explorer accounts get 402); the Option-A anti-cheat that makes "no Architect without paid build work" hold**
   - Date: 2026-07-21

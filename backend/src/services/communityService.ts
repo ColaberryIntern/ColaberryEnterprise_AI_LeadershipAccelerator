@@ -10,6 +10,7 @@ import { awardCommunityXp } from './progression/communityXpService';
 import { award, revoke, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
+import { env } from '../config/env';
 import { activeCompEnrollmentIds } from './subscriptionService';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
@@ -49,6 +50,14 @@ const LEVEL_TIERS = [
 ] as const;
 
 export function levelFor(points: number): number {
+  // Reconcile (flag-gated, default OFF via COMMUNITY_LEVEL_USE_CANONICAL): defer
+  // to the ONE canonical points ladder so the community level uses the same
+  // 0/150/400/900 thresholds as the HUD/leaderboard, instead of the legacy
+  // 0/1500/2700/4200 tiers below. Fully reversible — flag OFF is byte-identical
+  // to the historical behavior.
+  if (env.communityLevelUseCanonical) {
+    return levelForPoints(points).level;
+  }
   return LEVEL_TIERS.reduce((acc, tier) => (points >= tier.min ? tier.level : acc), 1);
 }
 

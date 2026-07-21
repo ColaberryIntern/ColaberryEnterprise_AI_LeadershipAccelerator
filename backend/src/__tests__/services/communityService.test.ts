@@ -20,7 +20,9 @@ jest.mock('../../services/pointsService', () => ({
 }));
 jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => {}) }));
 
-import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
+import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence, levelFor } from '../../services/communityService';
+import { env } from '../../config/env';
+import { levelForPoints } from '../../services/pointsService';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
@@ -509,5 +511,35 @@ describe('touchPresence', () => {
     findByPkEnrollment.mockResolvedValue(null);
 
     await expect(touchPresence(enrollmentId)).rejects.toMatchObject({ error_class: 'NotFoundError' });
+  });
+});
+
+// COMMUNITY_LEVEL_USE_CANONICAL reconcile (Phase 3): levelFor either uses the
+// legacy 0/1500/2700/4200 tiers (flag OFF, default) or defers to the ONE
+// canonical points ladder (flag ON).
+describe('levelFor — canonical reconcile flag', () => {
+  afterEach(() => {
+    (env as any).communityLevelUseCanonical = false;
+    // restore the top-level mock default so later suites are unaffected
+    (levelForPoints as jest.Mock).mockReturnValue({ level: 1, name: 'Apprentice' });
+  });
+
+  it('OFF (default): uses the legacy 0/1500/2700/4200 tiers and never consults the canonical ladder', () => {
+    (env as any).communityLevelUseCanonical = false;
+    (levelForPoints as jest.Mock).mockClear();
+    expect(levelFor(0)).toBe(1);
+    expect(levelFor(1499)).toBe(1);
+    expect(levelFor(1500)).toBe(2);
+    expect(levelFor(2700)).toBe(3);
+    expect(levelFor(4200)).toBe(4);
+    expect(levelForPoints).not.toHaveBeenCalled();
+  });
+
+  it('ON: defers to the canonical points ladder (levelForPoints) instead of legacy tiers', () => {
+    (env as any).communityLevelUseCanonical = true;
+    (levelForPoints as jest.Mock).mockReturnValue({ level: 42, name: 'Sentinel' });
+    // legacy tiers would map 1500 -> 2; canonical deferral returns levelForPoints().level
+    expect(levelFor(1500)).toBe(42);
+    expect(levelForPoints).toHaveBeenCalledWith(1500);
   });
 });

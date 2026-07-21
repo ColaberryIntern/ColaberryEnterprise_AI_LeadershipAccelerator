@@ -20,6 +20,8 @@ import { recordCardEvidence } from './evidenceEngine';
 import { recomputeForEnrollment, getStudentCompetency } from './competencyEngine';
 import { evaluateForEnrollment, PromotionOutcome } from './promotionService';
 import { aggregateXp, XpTotals } from './scoring';
+import { getPointsSummary } from '../pointsService';
+import { computeBand, BandResult } from './bandLadder';
 
 const EVIDENCE_SOURCE_BY_TYPE: Record<string, EvidenceSource> = {
   prompt_lab: 'prompt_lab',
@@ -124,6 +126,11 @@ export interface ProgressionSummary {
   xp: XpTotals;
   competencies: Array<{ domain_id: string; confidence: number; evidence_count: number }>;
   level: { slug: string; rank: number; readiness: number };
+  // Canonical 5-band identity (AI Aware → AI Enabled → AI Builder → AI Architect).
+  // Additive: combines the learner's canonical points total (the HUD source) with
+  // their build-competency rank. A build promotion overrides points; without one,
+  // points cap at AI Enabled. See bandLadder.computeBand.
+  band: BandResult;
 }
 
 export async function getProgressionSummary(enrollmentId: string): Promise<ProgressionSummary> {
@@ -136,9 +143,19 @@ export async function getProgressionSummary(enrollmentId: string): Promise<Progr
     defaults: { enrollment_id: enrollmentId, level_slug: 'builder', rank: 0 },
   });
 
+  // Canonical points total — the SAME source the HUD/leaderboard use
+  // (StudentPointsEvent via pointsService), not XP. Feeds the free bands.
+  const pointsSummary = await getPointsSummary(enrollmentId);
+  const band = computeBand({
+    pointsTotal: pointsSummary.total,
+    builderLevelSlug: level.level_slug,
+    builderRank: level.rank,
+  });
+
   return {
     xp,
     competencies: comps.map((c) => ({ domain_id: c.domain_id, confidence: c.confidence, evidence_count: c.evidence_count })),
     level: { slug: level.level_slug, rank: level.rank, readiness: level.architect_readiness },
+    band,
   };
 }
