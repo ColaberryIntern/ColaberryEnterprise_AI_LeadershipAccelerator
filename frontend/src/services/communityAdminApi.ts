@@ -9,6 +9,9 @@ export interface AdminCommunityMember {
   display_name: string;
   email: string | null;
   role: CommunityMemberRole;
+  // ISO-8601 sign-up (enrollment) timestamp, or null. The roster arrives already
+  // ordered newest-first by this from the backend.
+  signed_up_at: string | null;
 }
 
 export async function fetchCommunityMembers(search?: string): Promise<AdminCommunityMember[]> {

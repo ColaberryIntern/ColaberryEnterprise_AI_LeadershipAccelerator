@@ -10518,3 +10518,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali on the live /portal/today: "when I click on any item the screen freezes… the right panel should open" + "videos should start playing when I scroll to a certain part." [[project_today_timeline_v2]] [[reference_timeline_engine_student_runtime]]
   - Verification: Frontend `tsc --noEmit` clean for both changed files (only pre-existing `@dnd-kit`); freeze root-cause confirmed by CSS-scope analysis + verified fix post-deploy.
   - Notes: Branch `workstream/timeline-drawer-video`. Frontend-only → nginx `--no-deps`. The earlier timeline-ux PR made the whole card clickable → drawer, which is what exposed this pre-existing drawer-scoping bug prominently.
+
+### Community Roles admin — sort by sign-up (newest first) + relative-time column — 2026-07-21
+- [x] Community Roles page orders members newest-first by sign-up, with an "X ago" column
+  - Date: 2026-07-21
+  - Session: CC-20260721-r7k4
+  - What changed: `listMembersForAdmin` (backend/src/services/communityService.ts) now includes `enrollment.created_at`, orders by it DESC (so the 200-row cap keeps the newest), returns `signed_up_at` (ISO-8601) on each `AdminMemberRow`, and re-sorts in JS desc with null-enrollment rows last. Frontend `AdminCommunityRolesPage.tsx` adds a "Signed up" column with a floored `timeAgo()` label ("just now" → "N years ago") + exact local datetime on hover; `communityAdminApi.ts` DTO gains `signed_up_at`. Roster arrives pre-sorted from the backend; the client only labels.
+  - Why: Ali wanted the roster ordered by who signed up, showing how long ago, sorted desc. Real prod data spans ~1 hour ago → ~3.5 months (oldest = ali@colaberry.com staff, 2026-03-30); no multi-year accounts (platform started 2026).
+  - Verification: backend jest 50/50 (rewrote the `listMembersForAdmin` test — asserts `signed_up_at`, the enrollment.created_at DESC order clause, and newest-first + nulls-last); backend + frontend `tsc --noEmit` clean on all changed files.
+  - Notes: Branch `workstream/community-roles-signup-sort`. No schema change (`enrollments.created_at` already exists). Deploy = backend + nginx. Follow-on staff/free-access/view-as work tracked separately.
