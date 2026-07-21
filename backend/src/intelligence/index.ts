@@ -58,7 +58,16 @@ async function ensureVectorExtensions(): Promise<void> {
 
 /**
  * Ensure all intelligence-related tables exist.
- * Uses alter:true so that new columns are added automatically.
+ *
+ * CREATE-ONLY by default. `alter: true` is gated behind DB_BOOT_SYNC (same flag
+ * and reason as the global sync in server.ts): Sequelize's alter pass cannot
+ * detect an existing unique index on a `unique: true` column, so it re-creates
+ * one (`<table>_<col>_key`, `_key1`, `_key2` …) on EVERY boot. Left ungated,
+ * this loop accumulated thousands of duplicate unique indexes per intelligence
+ * table (dataset_registry, intelligence_config, …), exhausting the Postgres lock
+ * table ("out of shared memory") and bloating the DB. New columns are added via
+ * explicit schema hooks, not this sync — set DB_BOOT_SYNC=true only for a
+ * deliberate, supervised schema reconciliation.
  */
 export async function ensureIntelligenceTables(): Promise<void> {
   await ensureVectorExtensions();
@@ -68,9 +77,10 @@ export async function ensureIntelligenceTables(): Promise<void> {
     IntelligenceDecision, IntelligenceMemory, AgentPerformanceMetric,
   ];
 
+  const syncOpts = process.env.DB_BOOT_SYNC === 'true' ? { alter: true } : {};
   for (const model of models) {
     try {
-      await (model as any).sync({ alter: true });
+      await (model as any).sync(syncOpts);
     } catch (error: any) {
       console.warn(`[Intelligence] Failed to sync ${(model as any).tableName}:`, error?.message);
     }

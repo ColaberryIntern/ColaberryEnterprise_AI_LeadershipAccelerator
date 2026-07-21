@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import './TodayShell.css';
 import {
   fetchPoints, fetchSchedule, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
@@ -22,7 +22,6 @@ import CommunityPulse from './CommunityPulse';
 import '../../../components/timeline/timeline.css';
 
 const TodayShell: React.FC = () => {
-  const navigate = useNavigate();
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [profile, setProfile] = useState<OnboardingProfileView | null>(null);
@@ -303,7 +302,7 @@ const TodayShell: React.FC = () => {
             <TodayFeedV2
               fallbackCards={curriculum}
               onOpen={setSelectedCard}
-              onWorkspace={(x) => navigate(`/portal/runtime/${x.id}`)}
+              onWorkspace={setSelectedCard}
             />
           </div>
         </div>

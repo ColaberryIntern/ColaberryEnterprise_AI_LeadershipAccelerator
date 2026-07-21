@@ -227,6 +227,8 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
           src={source.embedUrl}
           controls
           autoPlay
+          muted={autoplay}
+          playsInline
           onTimeUpdate={mediaTimeUpdate('file')}
           onPause={() => flushRef.current('file')}
           onEnded={mediaEnded('file')}
@@ -240,8 +242,8 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   // iframe providers (youtube / vimeo / loom / wistia). YouTube gets the JS-API
   // origin param so its postMessage channel reports playback to this window.
   const iframeSrc = source.provider === 'youtube'
-    ? addParam(withAutoplay(source), `origin=${encodeURIComponent(window.location.origin)}`)
-    : withAutoplay(source);
+    ? addParam(withAutoplay(source, autoplay), `origin=${encodeURIComponent(window.location.origin)}`)
+    : withAutoplay(source, autoplay);
   return (
     <div className="tlv-frame">
       <iframe

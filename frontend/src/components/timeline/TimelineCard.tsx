@@ -325,8 +325,8 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       type="button"
       className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`}
       style={posterStyle}
-      onClick={() => !locked && (playable ? setPlayingInline(true) : onOpen?.(card))}
-      aria-label={playable ? `Play ${card.video?.title || card.title}` : `Open ${card.title}`}
+      onClick={() => !locked && onOpen?.(card)}
+      aria-label={`Open ${card.video?.title || card.title}`}
     >
       {watermark}
       {CLAUDE_CODE_TYPES.has(card.type) && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#D97757,#C4633A)' }}>Claude Code</span>}
