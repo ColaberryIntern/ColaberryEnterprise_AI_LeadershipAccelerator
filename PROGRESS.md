@@ -10395,3 +10395,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - What changed: The "Find people" pill looked like a search box but was a button that only flipped to the directory list — students who tried to type got nowhere. Added an auto-focused search input at the top of the Find-people view that filters the cohort by name as you type (case-insensitive), with a "No one matches" empty state; the query resets each time Find people is opened. Files: frontend/src/pages/portal/today/{PortalShell.tsx, TodayShell.css}.
   - Verification: no dangling refs; authoritative frontend build via the prod nginx Docker image; live on prod.
   - Notes: Branch workstream/find-people-search. Frontend-only -> nginx-only prod deploy (backend untouched).
+
+### Schema-drift gate — nightly prod-host alarm (Step 2) — 2026-07-21
+- [x] `scripts/schemaDriftCheck.sh` + prod cron: nightly alarm when the dev rehearsal DB drifts from prod
+  - Date: 2026-07-21
+  - Session: CC-20260720-x9r4
+  - What changed: New `scripts/schemaDriftCheck.sh` (executable) — the standing guard the manual sync tool couldn't be. Runs `syncDevSchemaFromProd.sh` in DRY-RUN (read-only), and if it reports missing tables/enums/columns on dev, emails an alert to the DRI via the backend's Mandrill (`emailService.sendAlertEmail`, type=warning/sev4). **QUIET when clean** (no notification fatigue). Runs on the VPS host from cron, all via `docker exec` (no host DB access needed). Installed on prod host crontab: `0 6 * * * /opt/colaberry-accelerator/scripts/schemaDriftCheck.sh >> /var/log/schema-drift.log 2>&1`.
+  - Why: closes Step 2 of the reassessment ("a CI schema-drift gate"). Chosen over a CI-boot gate because CI can't reach the prod/dev DBs, and making a boot-in-CI gate green would require adding ensure-hooks for ~12 gap tables (a cross-subsystem initiative). Ali approved the prod-cron approach ("go A"). [[reference_dev_schema_sync_tool]]
+  - Verification: dry-run on prod = "already schema-faithful" (clean baseline); alert path self-tested end-to-end (one labeled test email delivered to ali via Mandrill); cron entry installed + confirmed in `crontab -l`.
+  - Notes: Branch `workstream/schema-drift-cron`. Prod-infra change (host crontab) — approved. Detects dev-behind-prod (the rehearsal env falling behind); dev-ahead-of-prod is normal dev activity and intentionally not alarmed. The deeper CI-boot gate + adding ensure-hooks for all gap tables remains a larger future option.
