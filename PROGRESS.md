@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Points Economy build — Phase 4: anti-cheat daily caps + post-quality gate (2026-07-21)
+- [x] **Added flag-gated daily point caps (ambient feed 100/day, community 75/day) and a community post-quality gate (post +5 released only on first peer like) — both default OFF, merge-inert**
+  - Date: 2026-07-21
+  - Session: CC-20260721-g8k4
+  - What changed: New pure `backend/src/services/progression/dailyCap.ts` (`applyDailyCap` clamp + AMBIENT_LEARNING=100/day over the 6 grindable feed types, COMMUNITY=75/day over community_post/comment/like). New shared `backend/src/services/centralDate.ts` (extracted `centralDateKey`/`CENTRAL_TZ` from streakService so pointsService reuses the Central-day boundary without a streak↔points circular import; streakService re-exports it). Added `pointsService.sumPointsTodayByEventTypes()`. Caps applied at the two award sites (cardPointsService ambient completions; communityService post/comment/like) behind `POINTS_DAILY_CAPS_ENABLED` (default OFF). Post-quality gate behind `COMMUNITY_POST_QUALITY_GATE_ENABLED` (default OFF): ON = createPost withholds +5, released via `awardPostReward` on first PEER like in toggleLike (keyed `community_post:<postId>`, self-like excluded, no double); OFF = +5 on creation as today. Tests: new `dailyCap.test.ts` + cap-application tests (cardPointsService) + gate tests (communityService / communityCommentsLikesProfiles).
+  - Why: design §7 anti-cheat — stop feed/community grinding from inflating points; make community points quality-gated. The Architect gate itself is already evidence+paid gated (Phases 2-3).
+  - Verification: Loop Architect maker → SEPARATE verifier scored 10/10 PASS (both OFF paths traced byte-identical; clamp math + today-sum + real fields verified; post-gate self-like/no-double traced; centralDate extraction confirmed no circular import + streak tests intact; full test matrix asserted). Both flags default OFF → merge inert. Local tsc/jest N/A (Windows); CI is the gate — pending on push.
+  - Notes: THREE caps-ON rollout follow-ups (inert while flags OFF): (1) Caps ON + Gate ON together — an author already at the 75/day community cap writes a 0-point post marker that permanently consumes the gate (post can't later earn +5); resolve before enabling both. (2) `sumPointsTodayByEventTypes` JS-date-filters all rows of the types; add a `created_at >=` SQL floor before caps go to prod at scale. (3) Caps ON breaks the cardPointsService "badge == HUD" invariant for clamped ambient awards. Branch `workstream/points-economy`; iteration 3 of the loop.
+
 ### Points Economy build — Phase 3: one canonical 5-band ladder (2026-07-21)
 - [x] **Added the canonical AI Aware → AI Enabled → AI Builder → AI Architect band ladder — free bands from points, build bands only from the competency/evidence promotion, so points alone can never reach Builder/Architect (anti-cheat is structural)**
   - Date: 2026-07-21

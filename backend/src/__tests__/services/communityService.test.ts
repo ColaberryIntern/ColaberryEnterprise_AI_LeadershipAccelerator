@@ -14,6 +14,8 @@ jest.mock('../../models/CommunityComment', () => ({ findAll: jest.fn() }));
 // methods don't run (award/getPointsSummary/getTotalsForEnrollments/levelForPoints).
 jest.mock('../../services/pointsService', () => ({
   award: jest.fn(async () => ({ awarded: true, points: 0 })),
+  hasAwarded: jest.fn(async () => false),
+  sumPointsTodayByEventTypes: jest.fn(async () => 0),
   getPointsSummary: jest.fn(async () => ({ total: 0, events: [] })),
   getTotalsForEnrollments: jest.fn(async () => new Map()),
   levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
@@ -22,7 +24,7 @@ jest.mock('../../services/progression/communityXpService', () => ({ awardCommuni
 
 import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence, levelFor } from '../../services/communityService';
 import { env } from '../../config/env';
-import { levelForPoints } from '../../services/pointsService';
+import { levelForPoints, award } from '../../services/pointsService';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
@@ -139,6 +141,26 @@ describe('createPost', () => {
 
     expect(incrementMember).toHaveBeenCalledWith('points', { by: 5, where: { id: memberId } });
     expect(createPointsEvent).toHaveBeenCalledWith({ member_id: memberId, points: 5 });
+  });
+
+  it('post-quality gate ON: a new post is created but awards NO points (withheld until a peer likes it)', async () => {
+    (env as any).communityPostQualityGateEnabled = true;
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-gated', body: 'first post', media_urls: [], category: null, pinned: false,
+      like_count: 0, comment_count: 0, mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-07-21'),
+    });
+
+    const result = await createPost(enrollmentId, { body: 'first post' });
+
+    expect(result.id).toBe('post-gated');
+    // No reward bundle on creation: legacy points withheld AND canonical community_post withheld.
+    expect(incrementMember).not.toHaveBeenCalled();
+    expect(createPointsEvent).not.toHaveBeenCalled();
+    expect(award).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'community_post' }));
+
+    (env as any).communityPostQualityGateEnabled = false;
   });
 
   it('failure path: rejects a mention outside the author\'s cohort', async () => {

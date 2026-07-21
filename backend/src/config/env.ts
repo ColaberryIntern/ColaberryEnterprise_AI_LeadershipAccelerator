@@ -152,6 +152,18 @@ export const env = {
   // disagreement. Leaderboard ranking is unaffected — it reads the canonical
   // StudentPointsEvent total, not levelFor.
   communityLevelUseCanonical: process.env.COMMUNITY_LEVEL_USE_CANONICAL === 'true',
+  // Anti-cheat daily point caps (progression/dailyCap.ts): clamp low-value
+  // ambient-feed completions (AMBIENT_LEARNING_CAP/day) and community
+  // post/comment/like awards (COMMUNITY_CAP/day) so neither category can be
+  // farmed for unbounded points in a single Central day. Default OFF — flag off
+  // is byte-identical to today (no clamping; every award fires at full value).
+  pointsDailyCapsEnabled: process.env.POINTS_DAILY_CAPS_ENABLED === 'true',
+  // Community post-quality gate: withhold a post's +5 creation reward until a
+  // PEER (someone other than the author) likes it, so spam-posting earns
+  // nothing. The +5 is released — idempotently, on the post's own event key —
+  // on the first peer like (see communityService.toggleLike). Default OFF:
+  // posts reward +5 on creation exactly as today.
+  communityPostQualityGateEnabled: process.env.COMMUNITY_POST_QUALITY_GATE_ENABLED === 'true',
   // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
   // links). Master switch OFF by default: the community-room routes return 404,
   // the outbox drain cron no-ops, and createSession skips linked-room creation
