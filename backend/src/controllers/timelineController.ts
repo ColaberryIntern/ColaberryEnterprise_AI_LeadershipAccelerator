@@ -20,7 +20,9 @@ export async function handleGetClassroomFeed(req: Request, res: Response): Promi
       return;
     }
 
-    await initProgress(enrollmentId);
+    // Read-only "view as": never create the viewer's progress rows. getFeed reads
+    // fine without them (missing rows just render as their computed lock status).
+    if (!req.participant?.read_only) await initProgress(enrollmentId);
     const feed = await getFeed(enrollmentId);
     const progression = await getProgressionSummary(enrollmentId);
     // The feed is per-student, live curriculum data — never let the browser or a

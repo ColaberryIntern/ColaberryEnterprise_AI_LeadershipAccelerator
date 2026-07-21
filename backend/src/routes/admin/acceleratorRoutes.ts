@@ -12,6 +12,7 @@ import {
   handleListCohortEnrollments,
   handleSetPortalAccess,
   handleGetPortalLink,
+  handleGetViewAsToken,
   handleGetPersonHistory,
 } from '../../controllers/acceleratorController';
 import {
@@ -68,6 +69,8 @@ router.post('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin
 router.get('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleListCohortEnrollments);
 router.patch('/api/admin/accelerator/enrollments/:id/portal-access', requireAdmin, handleSetPortalAccess);
 router.get('/api/admin/accelerator/enrollments/:id/portal-link', requireAdmin, handleGetPortalLink);
+// Read-only "View as member" — mints a read_only participant token (server blocks all writes).
+router.get('/api/admin/accelerator/enrollments/:id/view-as-token', requireAdmin, handleGetViewAsToken);
 router.get('/api/admin/accelerator/enrollments/:id/history', requireAdmin, handleGetPersonHistory);
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);

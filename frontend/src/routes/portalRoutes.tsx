@@ -6,6 +6,8 @@ import PortalLayout from '../components/Layout/PortalLayout';
 import PortalLoginPage from '../pages/portal/PortalLoginPage';
 import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
+import PortalViewAsPage from '../pages/portal/PortalViewAsPage';
+import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 import PortalHandoffPage from '../pages/portal/PortalHandoffPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
@@ -35,10 +37,12 @@ import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
 // (Today); every other retired builder URL simply 404s.
 
 const portalRoutes = (
-  <Route element={<ParticipantAuthProvider><Outlet /></ParticipantAuthProvider>}>
+  <Route element={<ParticipantAuthProvider><ReadOnlyBanner /><Outlet /></ParticipantAuthProvider>}>
     <Route path="/portal/login" element={<PortalLoginPage />} />
     <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
+    {/* Admin "View as member" — read-only impersonation landing (token in the URL hash). */}
+    <Route path="/portal/view-as" element={<PortalViewAsPage />} />
     {/* Phone handoff — public: exchanges a one-time QR code for a session, then lands on Today. */}
     <Route path="/portal/handoff" element={<PortalHandoffPage />} />
     <Route element={<PortalProtectedRoute />}>
