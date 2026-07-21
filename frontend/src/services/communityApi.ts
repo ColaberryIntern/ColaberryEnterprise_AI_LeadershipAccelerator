@@ -46,16 +46,38 @@ export interface CommunityComment {
   replies: CommunityComment[];
 }
 
+export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
+
+// A member's earned recognition badge (mirrors the backend MemberBadge). Same
+// badges the Rooms recognition Impact panel shows.
+export interface MemberBadge {
+  category: string;
+  label: string;
+  emoji: string;
+  count: number;
+}
+
 export interface CommunityMemberProfile {
   id: string;
+  // Enrollment id — the DM + friend actions on the profile drawer are
+  // enrollment-keyed (openDm, sendFriendRequest).
+  enrollment_id: string;
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
   level: number;
   points: number;
+  role: CommunityMemberRole;
+  badges: MemberBadge[];
   presence: CommunityPresenceStatus;
   created_at: string;
 }
+
+export const MEMBER_ROLE_META: Record<CommunityMemberRole, { label: string; emoji: string }> = {
+  student: { label: 'Member', emoji: '' },
+  mentor: { label: 'Mentor', emoji: '🧭' },
+  staff: { label: 'Staff', emoji: '⭐' },
+};
 
 export const COMMUNITY_CATEGORIES = ['General', 'Wins', 'Support', 'Introductions'] as const;
 
@@ -165,6 +187,37 @@ export async function fetchMyProfile(): Promise<CommunityMemberProfile> {
 export async function fetchMembers(): Promise<CommunityMemberProfile[]> {
   const { data } = await portalApi.get<{ members: CommunityMemberProfile[] }>('/api/portal/community/members');
   return data.members;
+}
+
+export interface DirectoryQuery {
+  search?: string;
+  role?: CommunityMemberRole;
+  minLevel?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface DirectoryPage {
+  members: CommunityMemberProfile[];
+  total: number;
+  has_more: boolean;
+}
+
+// Paginated, searchable, filterable People directory. Same endpoint as
+// fetchMembers (which stays for the compact rail); this variant reads the
+// total/has_more the backend now returns.
+export async function fetchDirectory(query: DirectoryQuery = {}): Promise<DirectoryPage> {
+  const params: Record<string, string | number> = {};
+  if (query.search?.trim()) params.search = query.search.trim();
+  if (query.role) params.role = query.role;
+  if (typeof query.minLevel === 'number') params.minLevel = query.minLevel;
+  if (typeof query.limit === 'number') params.limit = query.limit;
+  if (typeof query.offset === 'number') params.offset = query.offset;
+  const { data } = await portalApi.get<{ members: CommunityMemberProfile[]; total?: number; has_more?: boolean }>(
+    '/api/portal/community/members',
+    Object.keys(params).length ? { params } : undefined,
+  );
+  return { members: data.members, total: data.total ?? data.members.length, has_more: data.has_more ?? false };
 }
 
 export async function pingPresence(): Promise<{ presence: CommunityPresenceStatus }> {

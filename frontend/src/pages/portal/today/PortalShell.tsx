@@ -7,7 +7,7 @@ import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
-import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest } from '../../../services/cohortPresenceApi';
+import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest, colorFor } from '../../../services/cohortPresenceApi';
 import { pingPresence } from '../../../services/communityApi';
 import { openDm } from '../../../services/dmApi';
 import ChatDock, { DmTarget } from './ChatDock';
@@ -57,6 +57,9 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { label: 'Community', to: '/portal/community', icon: (
         <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="2" /><path d="M3 19c0-3 3-5 6-5s6 2 6 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><path d="M16 7a3 3 0 0 1 0 6M18 19c0-2-1-3.5-2.5-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+      ) },
+      { label: 'People', to: '/portal/community/people', icon: (
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="8" cy="8" r="3" stroke="currentColor" strokeWidth="2" /><circle cx="17" cy="9" r="2.2" stroke="currentColor" strokeWidth="2" /><path d="M2.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M15.5 14.2c2.4.3 4 2.1 4 4.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },
       { label: 'Rooms', to: '/portal/rooms', icon: (
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M17 9l4-2v10l-4-2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
@@ -171,6 +174,22 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   }, []);
   const openChat = useCallback((c: CohortContact) => {
     openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(() => { /* non-fatal */ });
+  }, [openChatTarget]);
+
+  // Bridge: other surfaces (e.g. the community member profile drawer) open a DM
+  // by dispatching a `te-open-dm` CustomEvent { enrollmentId, name, color? } —
+  // the same dock mechanism the contacts rail uses, without prop-drilling the
+  // opener into every page.
+  useEffect(() => {
+    const onOpenDm = (e: Event) => {
+      const detail = (e as CustomEvent<{ enrollmentId?: string; name?: string; color?: string }>).detail;
+      if (!detail?.enrollmentId) return;
+      openDm(detail.enrollmentId)
+        .then((roomId) => openChatTarget({ roomId, name: detail.name ?? 'Direct message', color: detail.color ?? colorFor(detail.enrollmentId!) }))
+        .catch(() => { /* non-fatal */ });
+    };
+    window.addEventListener('te-open-dm', onOpenDm as EventListener);
+    return () => window.removeEventListener('te-open-dm', onOpenDm as EventListener);
   }, [openChatTarget]);
 
   const load = useCallback(async () => {

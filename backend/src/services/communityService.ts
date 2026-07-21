@@ -856,6 +856,10 @@ export interface MemberBadge {
 
 export interface MemberProfile {
   id: string;
+  // Enrollment id — the DM + friend flows are enrollment-keyed (openDm,
+  // sendFriendRequest), and the profile drawer wires those buttons. Already
+  // client-exposed via the cohort presence API, so this is not a new leak.
+  enrollment_id: string;
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
@@ -896,6 +900,7 @@ async function badgesByEnrollment(enrollmentIds: string[]): Promise<Map<string, 
 function toMemberProfile(member: CommunityMember, canonicalPoints: number, badges: MemberBadge[] = []): MemberProfile {
   return {
     id: member.id,
+    enrollment_id: member.enrollment_id,
     display_name: member.display_name,
     avatar_url: member.avatar_url,
     bio: member.bio,
