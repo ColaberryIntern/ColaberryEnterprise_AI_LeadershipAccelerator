@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import AnthropicCoursesBento from '../../components/portal/anthropic-bento/AnthropicCoursesBento';
 import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
+import { useCountdown } from '../../hooks/useCountdown';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -42,34 +43,6 @@ function relativeTime(iso: string): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return `${Math.floor(diff / 86_400_000)}d ago`;
-}
-
-/* ------------------------------------------------------------------ */
-/*  useCountdown hook                                                  */
-/* ------------------------------------------------------------------ */
-
-function useCountdown(targetDate: string | null): { days: number; hours: number; minutes: number; seconds: number; totalMs: number } | null {
-  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number; totalMs: number } | null>(null);
-
-  useEffect(() => {
-    if (!targetDate) return;
-    const update = () => {
-      const diff = new Date(targetDate).getTime() - Date.now();
-      if (diff <= 0) { setTimeLeft(null); return; }
-      setTimeLeft({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((diff / (1000 * 60)) % 60),
-        seconds: Math.floor((diff / 1000) % 60),
-        totalMs: diff,
-      });
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [targetDate]);
-
-  return timeLeft;
 }
 
 /* ------------------------------------------------------------------ */

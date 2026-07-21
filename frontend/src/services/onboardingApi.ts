@@ -115,6 +115,25 @@ export async function fetchSchedule(): Promise<OnboardingSchedule> {
   return data;
 }
 
+// ── Next live class session (server-picked from live_sessions) ───────────────
+export interface NextLiveSession {
+  id: string;
+  session_number: number;
+  title: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  status: 'scheduled' | 'live';
+  meeting_link: string | null;
+  meeting_provider: string | null;
+  timezone: string | null; // cohort IANA zone (e.g. America/Chicago) for the time label
+}
+/** The student's next scheduled/live class session, or null if none is upcoming. */
+export async function getNextSession(): Promise<NextLiveSession | null> {
+  const { data } = await portalApi.get<{ next_session: NextLiveSession | null }>('/api/portal/next-session');
+  return data.next_session ?? null;
+}
+
 /** Upcoming public events (Open Houses) from CCPP, for the portal calendar. */
 export async function fetchPublicEvents(days = 30): Promise<OpenHouseView[]> {
   const { data } = await portalApi.get<{ events: OpenHouseView[] }>(`/api/portal/events?days=${days}`);

@@ -3,7 +3,7 @@ import {
   requestMagicLink, verifyMagicLink, getParticipantProfile,
   getParticipantDashboard, getParticipantSessions, getParticipantSessionDetail,
   getParticipantSubmissions, createParticipantSubmission, uploadParticipantSubmission,
-  getParticipantProgress,
+  getParticipantProgress, getNextLiveSession,
 } from '../services/participantService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
@@ -216,6 +216,14 @@ export async function handleGetSessions(req: Request, res: Response, next: NextF
   try {
     const sessions = await getParticipantSessions(req.participant!.sub, req.participant!.cohort_id);
     res.json({ sessions });
+  } catch (err) { next(err); }
+}
+
+// Lean payload for the Today "Next live class" card (live_sessions-backed).
+export async function handleGetNextSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await getNextLiveSession(req.participant!.cohort_id);
+    res.json(result);
   } catch (err) { next(err); }
 }
 

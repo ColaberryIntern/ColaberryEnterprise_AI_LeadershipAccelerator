@@ -21,7 +21,7 @@ import {
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
-  handleGetDashboard, handleGetSessions, handleGetSessionDetail,
+  handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
   handleGetProgress,
 } from '../controllers/participantController';
@@ -134,6 +134,7 @@ const watchBeatRateLimiter = rateLimit({
 });
 router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
+router.get('/api/portal/next-session', requireParticipant, handleGetNextSession);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
 router.post('/api/portal/sessions/:id/chat', requireParticipant, handlePostSessionChat);
