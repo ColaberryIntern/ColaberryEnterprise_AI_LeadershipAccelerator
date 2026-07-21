@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import {
-  fetchCommunityMembers, setCommunityMemberRole, AdminCommunityMember, CommunityMemberRole,
+  fetchCommunityMembers, setCommunityMemberRole, setCommunityMemberFreeAccess,
+  AdminCommunityMember, CommunityMemberRole,
 } from '../../services/communityAdminApi';
 
 const ROLES: CommunityMemberRole[] = ['student', 'mentor', 'staff'];
@@ -83,6 +84,22 @@ export default function AdminCommunityRolesPage() {
     }
   };
 
+  // Grant/revoke a comped "Free Access" seat ($0, normal student — not staff).
+  const onFreeAccess = async (m: AdminCommunityMember, grant: boolean) => {
+    setSavingId(m.id);
+    setNotice(null);
+    setError(null);
+    try {
+      const free = await setCommunityMemberFreeAccess(m.id, grant);
+      setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, free_access: free } : x)));
+      setNotice(`${m.display_name} ${free ? 'now has Free Access' : 'no longer has Free Access'}.`);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? 'Failed to update Free Access');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <>
       <PageHeader title="Community Roles" subtitle="Assign the mentor / staff role shown on member cards in the People directory. Everyone starts as Member." />
@@ -113,7 +130,7 @@ export default function AdminCommunityRolesPage() {
           <div className="table-responsive">
             <table className="table table-sm align-middle mb-0">
               <thead>
-                <tr><th>Name</th><th>Email</th><th style={{ width: 140 }}>Signed up</th><th style={{ width: 200 }}>Role</th></tr>
+                <tr><th>Name</th><th>Email</th><th style={{ width: 140 }}>Signed up</th><th style={{ width: 120 }}>Free Access</th><th style={{ width: 200 }}>Role</th></tr>
               </thead>
               <tbody>
                 {members.map((m) => (
@@ -121,6 +138,19 @@ export default function AdminCommunityRolesPage() {
                     <td className="fw-semibold">{m.display_name}</td>
                     <td className="text-muted small">{m.email ?? '—'}</td>
                     <td className="text-muted small" title={exactSignup(m.signed_up_at)}>{timeAgo(m.signed_up_at)}</td>
+                    <td>
+                      <div className="form-check form-switch mb-0">
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          role="switch"
+                          checked={m.free_access}
+                          disabled={savingId === m.id}
+                          onChange={(e) => onFreeAccess(m, e.target.checked)}
+                          aria-label={`Free Access for ${m.display_name}`}
+                        />
+                      </div>
+                    </td>
                     <td>
                       <select
                         className="form-select form-select-sm"

@@ -10,6 +10,7 @@ import { awardCommunityXp } from './progression/communityXpService';
 import { award, revoke, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
+import { activeCompEnrollmentIds } from './subscriptionService';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
 // Lite poll-presence (P0 per the approved design mockup — real-time websocket
@@ -1035,6 +1036,9 @@ export interface AdminMemberRow {
   // Enrollment (sign-up) timestamp, ISO-8601, or null if the member has no
   // linked enrollment. The admin roster is ordered newest-first by this.
   signed_up_at: string | null;
+  // True when this member's enrollment holds an active comped ('Free Access')
+  // seat — full program access at $0, granted by an admin (not a paid plan).
+  free_access: boolean;
 }
 
 export async function listMembersForAdmin(search?: string): Promise<AdminMemberRow[]> {
@@ -1053,12 +1057,18 @@ export async function listMembersForAdmin(search?: string): Promise<AdminMemberR
     limit: 200,
   });
 
+  // Flag who currently holds a comped ('Free Access') seat — one batched query.
+  const compSet = await activeCompEnrollmentIds(
+    members.map((m: any) => m.enrollment_id).filter(Boolean),
+  );
+
   const rows: AdminMemberRow[] = members.map((m: any) => ({
     id: m.id,
     display_name: m.display_name,
     email: m.enrollment?.email ?? null,
     role: (m.role as CommunityMemberRole) ?? 'student',
     signed_up_at: m.enrollment?.created_at ? new Date(m.enrollment.created_at).toISOString() : null,
+    free_access: m.enrollment_id ? compSet.has(m.enrollment_id) : false,
   }));
 
   rows.sort((a, b) => (b.signed_up_at ?? '').localeCompare(a.signed_up_at ?? ''));

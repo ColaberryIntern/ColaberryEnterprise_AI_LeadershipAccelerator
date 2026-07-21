@@ -12,6 +12,8 @@ export interface AdminCommunityMember {
   // ISO-8601 sign-up (enrollment) timestamp, or null. The roster arrives already
   // ordered newest-first by this from the backend.
   signed_up_at: string | null;
+  // True when this member holds an active comped ("Free Access") seat.
+  free_access: boolean;
 }
 
 export async function fetchCommunityMembers(search?: string): Promise<AdminCommunityMember[]> {
@@ -30,4 +32,20 @@ export async function setCommunityMemberRole(memberId: string, role: CommunityMe
     { role },
   );
   return data.member.role;
+}
+
+// Grant (grant=true) or revoke (grant=false) a comped "Free Access" seat for a
+// member. Returns the resulting free_access state. Backend resolves the member
+// to its enrollment and creates/cancels the comp subscription.
+export async function setCommunityMemberFreeAccess(memberId: string, grant: boolean): Promise<boolean> {
+  if (grant) {
+    const { data } = await api.post<{ member: { free_access: boolean } }>(
+      `/api/admin/community/members/${memberId}/free-access`,
+    );
+    return data.member.free_access;
+  }
+  const { data } = await api.delete<{ member: { free_access: boolean } }>(
+    `/api/admin/community/members/${memberId}/free-access`,
+  );
+  return data.member.free_access;
 }
