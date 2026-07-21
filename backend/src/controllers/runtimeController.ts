@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
 import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { recordReadBeat, collectBlog } from '../services/runtime/blogReadGateService';
+import { recordDwellBeat } from '../services/runtime/cardDwellService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { getNudge } from '../services/runtime/mentorNudgeService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
@@ -154,6 +155,15 @@ export async function handleBlogCollect(req: Request, res: Response, next: NextF
   try {
     const blogId = blogIdSchema.parse(req.params.blogId);
     res.json(await collectBlog(eid(req), blogId));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** POST /api/portal/runtime/cards/:cardId/dwell — heartbeat for the generic dwell
+ *  gate (passive-content types). Returns { dwell_s, required_s, met }. */
+export async function handleDwellBeat(req: Request, res: Response, next: NextFunction) {
+  try {
+    const beat = readBeatSchema.parse(req.body);
+    res.json(await recordDwellBeat(eid(req), String(req.params.cardId), beat));
   } catch (err) { fail(res, err, next); }
 }
 

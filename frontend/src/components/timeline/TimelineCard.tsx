@@ -178,22 +178,10 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const inlineAudioRef = useRef<HTMLAudioElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
-  const [collecting, setCollecting] = useState(false);
-  const [collected, setCollected] = useState(false); // optimistic: card flips to done on collect
-  const [gateMsg, setGateMsg] = useState<string | null>(null);
-  const [watch, setWatch] = useState<WatchState | null>(null); // video watch progress (drives the on-card % + gate)
-  // Collect points straight from the timeline card. On success the celebration
-  // (HUD burst + chime) fires via the parent's onComplete; the server enforces the
-  // watch/lock gate and its 422 message is surfaced inline ("watch it first").
-  const handleCollect = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (collecting || !onComplete) return;
-    setGateMsg(null);
-    setCollecting(true);
-    try { await onComplete(card); setCollected(true); }
-    catch (err: any) { setGateMsg(err?.response?.data?.error || 'Open it and finish first to collect your points.'); }
-    finally { setCollecting(false); }
-  };
+  // Points are NEVER collected on the tile — every points card opens the drawer,
+  // where the type's completion gate lives. The tile only PREVIEWS progress (the
+  // video watch %); the drawer owns the Collect button.
+  const [watch, setWatch] = useState<WatchState | null>(null); // video watch progress (on-card % preview)
   const toggleInline = () => {
     if (locked) return;
     if (!playingInline) { setPlayingInline(true); return; }
@@ -232,7 +220,6 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // watch beats as it plays and the server returns the ratcheted total.
   const anchored = !card.id.includes(':');
   const watchable = playable && !podcastAudio && anchored && pts > 0 && !!onComplete;
-  const watchGated = watchable && !done && !collected && watch?.required_pct != null && !watch.met;
 
   // Viewport autoplay: a media card (video OR podcast audio) starts playing while
   // it is in view and stops when scrolled away — so only what you're looking at
@@ -330,7 +317,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           autoplay
           badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
           onEnded={() => setPlayingInline(false)}
-          onWatchBeat={watchable && !done && !collected
+          onWatchBeat={watchable && !done
             ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
             : undefined}
         />
@@ -368,7 +355,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           <audio
             ref={inlineAudioRef}
             style={{ width: '100%' }} src={podcastAudio} controls autoPlay
-            onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
+            onEnded={() => setPlayingInline(false)}
           />
         </span>
       ) : (
@@ -445,7 +432,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         {/* On-card watch progress — the video watch gate, shown right on the tile
             (was drawer-only). Fills as the inline preview plays; turns green +
             "points unlocked" at the required %. */}
-        {watchable && watch && watch.required_pct != null && !done && !collected && (
+        {watchable && watch && watch.required_pct != null && !done && (
           <div className="tc-watchrow" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
               <i style={{ display: 'block', height: '100%', width: `${Math.min(100, watch.watched_pct)}%`, background: watch.met ? '#5BA63C' : v.color, transition: 'width .4s ease' }} />
@@ -473,30 +460,25 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           </button>
         )}
         <span className="spacer" />
-        {(done || collected)
+        {done
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }} title={card.lock_reason || undefined}>{card.lock_reason || 'Unlocks later'}</span>
-            : (pts > 0 && onComplete && card.type !== 'blog')
-              ? watchGated
-                ? <button type="button" className="fc-cta" disabled title={`Watch to ${watch?.required_pct}% to collect your points`} style={{ opacity: 0.6, cursor: 'not-allowed' }}>
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7z" fill="currentColor" /></svg> Watch {watch?.watched_pct ?? 0}% / {watch?.required_pct}%
-                  </button>
-                : <button type="button" className="fc-cta cherry" disabled={collecting} onClick={handleCollect} title={`Collect +${pts} pts`}>
-                    <svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> {collecting ? 'Collecting…' : `Collect +${pts} pts`}
-                  </button>
-              : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
-                  <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
-                </button>}
+            : (
+              // Every card opens the drawer — points are only ever collected there,
+              // behind the type's completion gate. Points cards advertise the reward.
+              <button
+                type="button"
+                className={`fc-cta ${pts > 0 || v.kind === 'lab' ? 'cherry' : 'berry'}`}
+                onClick={() => { setPlayingInline(false); onOpen?.(card); }}
+                title={pts > 0 ? `Open to collect +${pts} pts` : undefined}
+              >
+                {pts > 0
+                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
+                  : <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}</>}
+              </button>
+            )}
       </div>
-      {gateMsg && !collected && (
-        <div style={{ padding: '0 18px 12px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--text-muted, #6B6B6B)' }}>
-          <span style={{ minWidth: 0 }}>{gateMsg}</span>
-          <button type="button" className="fc-cta berry" style={{ marginLeft: 'auto', flex: 'none' }} onClick={(e) => { e.stopPropagation(); setGateMsg(null); onOpen?.(card); }}>
-            <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Open
-          </button>
-        </div>
-      )}
       {/* The class thread — toggled by the Comment button, shared with the workspace. Never for locked cards. */}
       {showComments && !locked && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}
     </div>
