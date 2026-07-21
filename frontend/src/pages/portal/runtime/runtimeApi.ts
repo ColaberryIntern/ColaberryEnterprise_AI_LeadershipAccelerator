@@ -137,6 +137,9 @@ export const runtimeApi = {
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/read`, beat).then((r) => r.data as { read_s: number; required_s: number; met: boolean }),
   blogCollect: (blogId: string) =>
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/collect`, {}).then((r) => r.data as { points_awarded: number; already: boolean }),
+  // Generic dwell gate (passive-content types): heartbeat while the card is open.
+  cardDwell: (cardId: string, beat: { delta_s: number }) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/dwell`, beat).then((r) => r.data as { dwell_s: number; required_s: number; met: boolean }),
   readiness: () => portalApi.get('/api/portal/runtime/readiness').then((r) => r.data as Readiness),
   saveNote: (cardId: string, body: string, kind = 'note') => portalApi.post('/api/portal/runtime/notebook', { card_id: cardId, kind, body }).then((r) => r.data),
   comments: (cardId: string) => portalApi.get(`/api/portal/classroom/cards/${cardId}/comments`).then((r) => r.data as { comments: CardComment[] }),
