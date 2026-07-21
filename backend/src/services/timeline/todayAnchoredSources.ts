@@ -44,6 +44,7 @@ export function anchoredItemFromCard(fc: FeedCard): TodayFeedItem {
     week: fc.week ?? null,
     estimated_time: fc.estimated_time ?? null,
     status: fc.status ?? null,
+    points: (fc as any).points ?? null,
     interacted: false,
   };
 }
