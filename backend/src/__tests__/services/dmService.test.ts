@@ -3,20 +3,26 @@
  * message service mocked; no DB I/O.
  */
 
-jest.mock('../../models/CommunityRoom', () => ({ findOrCreate: jest.fn(), findByPk: jest.fn() }));
-jest.mock('../../models/RoomMembership', () => ({ findOrCreate: jest.fn() }));
+jest.mock('../../models/CommunityRoom', () => ({ findOrCreate: jest.fn(), findByPk: jest.fn(), findAll: jest.fn() }));
+jest.mock('../../models/RoomMembership', () => ({ findOrCreate: jest.fn(), findAll: jest.fn(), update: jest.fn() }));
+jest.mock('../../models/RoomMessage', () => ({ findOne: jest.fn() }));
 jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
 jest.mock('../../services/communityRooms/roomMessageService', () => ({ postMessage: jest.fn(), listMessages: jest.fn() }));
 
-import { openDm, sendDmMessage, listDmMessages } from '../../services/communityRooms/dmService';
+import { openDm, sendDmMessage, listDmMessages, listConversations, markDmRead } from '../../services/communityRooms/dmService';
 import CommunityRoom from '../../models/CommunityRoom';
 import RoomMembership from '../../models/RoomMembership';
+import RoomMessage from '../../models/RoomMessage';
 import Enrollment from '../../models/Enrollment';
 import { postMessage, listMessages } from '../../services/communityRooms/roomMessageService';
 
 const findOrCreateRoom = CommunityRoom.findOrCreate as jest.Mock;
 const findByPkRoom = CommunityRoom.findByPk as jest.Mock;
+const findAllRoom = CommunityRoom.findAll as jest.Mock;
 const findOrCreateMember = RoomMembership.findOrCreate as jest.Mock;
+const findAllMember = RoomMembership.findAll as jest.Mock;
+const updateMember = RoomMembership.update as jest.Mock;
+const findOneMsg = RoomMessage.findOne as jest.Mock;
 const findByPkEnroll = Enrollment.findByPk as jest.Mock;
 const postMock = postMessage as jest.Mock;
 const listMock = listMessages as jest.Mock;
@@ -88,5 +94,33 @@ describe('send / list guards', () => {
     const r = await listDmMessages(ctx, 'room-1', 'since-ts');
     expect(r).toEqual({ messages: [], active_count: 0 });
     expect(listMock).toHaveBeenCalledWith(ctx, 'room-1', { since: 'since-ts' });
+  });
+});
+
+describe('inbox', () => {
+  const at = (s: string) => new Date(s);
+
+  it('listConversations returns a dm convo with peer, last message, and unread=true', async () => {
+    findAllMember.mockImplementation((q: any) =>
+      q.where.enrollment_id === me
+        ? Promise.resolve([{ room_id: 'r1', last_read_at: at('2026-07-20T10:00:00Z') }]) // my membership
+        : Promise.resolve([{ enrollment_id: other }]), // the other member of r1
+    );
+    findAllRoom.mockResolvedValue([{ id: 'r1', room_type: 'dm' }]);
+    findByPkEnroll.mockResolvedValue({ id: other, full_name: 'Bob', avatar_data_url: null });
+    findOneMsg.mockResolvedValue({ room_id: 'r1', enrollment_id: other, content: 'yo', created_at: at('2026-07-20T11:00:00Z'), deleted_at: null });
+
+    const convos = await listConversations(me);
+    expect(convos).toHaveLength(1);
+    expect(convos[0]).toMatchObject({ roomId: 'r1', peerId: other, peerName: 'Bob', lastMessage: 'yo', unread: true });
+  });
+
+  it('markDmRead sets last_read_at on my membership', async () => {
+    findByPkRoom.mockResolvedValue({ id: 'r1', room_type: 'dm' });
+    await markDmRead(me, 'r1');
+    expect(updateMember).toHaveBeenCalledWith(
+      expect.objectContaining({ last_read_at: expect.any(Date) }),
+      { where: { room_id: 'r1', enrollment_id: me } },
+    );
   });
 });

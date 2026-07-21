@@ -1,8 +1,10 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-export type CommunityNotificationType = 'mention' | 'reply' | 'like';
-export type CommunityNotificationSourceType = 'post' | 'comment';
+export type CommunityNotificationType =
+  | 'mention' | 'reply' | 'like'
+  | 'friend_request' | 'friend_accepted' | 'new_message';
+export type CommunityNotificationSourceType = 'post' | 'comment' | 'friendship' | 'dm';
 
 export interface CommunityNotificationAttributes {
   id?: string;
@@ -50,12 +52,15 @@ CommunityNotification.init(
       allowNull: true,
       references: { model: 'community_members', key: 'id' },
     },
+    // VARCHAR on the DB (not a PG enum); values are constrained by a widened
+    // CHECK (see ensureMessagingSchema). Kept as STRING here so Sequelize doesn't
+    // reject the newer friend/message types at the model layer.
     notification_type: {
-      type: DataTypes.ENUM('mention', 'reply', 'like'),
+      type: DataTypes.STRING(30),
       allowNull: false,
     },
     source_type: {
-      type: DataTypes.ENUM('post', 'comment'),
+      type: DataTypes.STRING(30),
       allowNull: false,
     },
     source_id: {

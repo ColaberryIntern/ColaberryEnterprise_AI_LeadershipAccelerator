@@ -174,8 +174,8 @@ export async function pingPresence(): Promise<{ presence: CommunityPresenceStatu
 
 export interface CommunityNotification {
   id: string;
-  notification_type: 'mention' | 'reply' | 'like';
-  source_type: 'post' | 'comment';
+  notification_type: 'mention' | 'reply' | 'like' | 'friend_request' | 'friend_accepted' | 'new_message';
+  source_type: 'post' | 'comment' | 'friendship' | 'dm';
   source_id: string;
   read: boolean;
   created_at: string;
