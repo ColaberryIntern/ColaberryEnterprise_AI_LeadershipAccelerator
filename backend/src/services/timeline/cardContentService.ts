@@ -130,6 +130,18 @@ export const CONTENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
  * Idempotent + cheap on the hot path: a fresh copy is returned without any LLM
  * call or write. Only a stale/absent copy triggers a regenerate.
  */
+/**
+ * Types whose student-facing content is LLM-generated from the week context (they
+ * have no hand-authored body) and so should GENERATE on first open when blank —
+ * exactly like `warmup` — instead of rendering an empty card. The Claude Code
+ * spine lives here: setup_lab (enablement) + the build stations
+ * (implementation_task / artifact_submission, render_band build_artifacts).
+ * Without this, an un-warmed build card renders blank and never self-heals — the
+ * failure mode that made weeks 6–11 look "not built out". prompt_lab is covered
+ * separately via SECTION_ROSTER_TYPES (it also needs the week roster).
+ */
+const GENERATE_ON_FIRST_OPEN = new Set(['setup_lab', 'implementation_task', 'artifact_submission']);
+
 export async function ensureFreshContent(cardId: string): Promise<{ content: CardContent | null; regenerated: boolean }> {
   const card = await TimelineCard.findByPk(cardId);
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
@@ -137,12 +149,13 @@ export async function ensureFreshContent(cardId: string): Promise<{ content: Car
   const existing = meta.content && typeof meta.content === 'object' ? (meta.content as CardContent) : null;
   const at = typeof meta.content_at === 'string' ? Date.parse(meta.content_at) : null;
 
-  // Empty card: Self Study readings AND roster-summary cards (announcement /
-  // overview) GENERATE on first open instead of staying blank — the first student
-  // to open one produces the class-wide copy. Other card types stay blank (never
-  // auto-generate for a card intentionally left without content).
+  // Empty card: Self Study readings, roster-summary cards (announcement /
+  // overview), and the Claude Code spine (setup_lab + build stations) GENERATE on
+  // first open instead of staying blank — the first student to open one produces
+  // the class-wide copy. Other card types stay blank (never auto-generate for a
+  // card intentionally left without content).
   if (!existing) {
-    if (card.type === 'warmup' || SECTION_ROSTER_TYPES.has(card.type)) {
+    if (card.type === 'warmup' || SECTION_ROSTER_TYPES.has(card.type) || GENERATE_ON_FIRST_OPEN.has(card.type)) {
       try { const r = await generateCardContent(cardId); return { content: r.content, regenerated: true }; }
       catch { return { content: null, regenerated: false }; }
     }

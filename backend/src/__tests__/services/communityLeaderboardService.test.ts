@@ -12,18 +12,18 @@ jest.mock('../../models/CommunityPost', () => ({}));
 jest.mock('../../models/CommunityComment', () => ({}));
 jest.mock('../../models/CommunityLike', () => ({}));
 jest.mock('../../models/CommunityPostReport', () => ({}));
-jest.mock('../../models/CommunityPointsEvent', () => ({ findAll: jest.fn() }));
+jest.mock('../../models/StudentPointsEvent', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 jest.mock('../../models/CommunityLeaderboardEntry', () => ({ upsert: jest.fn() }));
 
 import { rankMembers, getLeaderboard } from '../../services/communityLeaderboardService';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
-import CommunityPointsEvent from '../../models/CommunityPointsEvent';
+import StudentPointsEvent from '../../models/StudentPointsEvent';
 import CommunityLeaderboardEntry from '../../models/CommunityLeaderboardEntry';
 
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findAllMembers = CommunityMember.findAll as jest.Mock;
-const findAllPointsEvents = CommunityPointsEvent.findAll as jest.Mock;
+const findAllPoints = (StudentPointsEvent as any).findAll as jest.Mock;
 const upsertLeaderboardEntry = CommunityLeaderboardEntry.upsert as jest.Mock;
 
 beforeEach(() => jest.clearAllMocks());
@@ -73,26 +73,29 @@ describe('rankMembers (pure)', () => {
 });
 
 describe('getLeaderboard', () => {
-  it('happy path: all_time reads CommunityMember.points directly, no event query', async () => {
+  it('happy path: ranks by the canonical StudentPointsEvent total (keyed by enrollment)', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findAllMembers.mockResolvedValue([
-      { id: 'm1', display_name: 'Ada', points: 100 },
-      { id: 'm2', display_name: 'Bea', points: 200 },
+      { id: 'm1', display_name: 'Ada', enrollment_id: 'e1' },
+      { id: 'm2', display_name: 'Bea', enrollment_id: 'e2' },
+    ]);
+    findAllPoints.mockResolvedValue([
+      { enrollment_id: 'e1', points: 100 },
+      { enrollment_id: 'e2', points: 200 },
     ]);
 
     const result = await getLeaderboard(enrollmentId, 'all_time');
 
     expect(result[0]).toMatchObject({ member_id: 'm2', points: 200, rank: 1 });
-    expect(findAllPointsEvents).not.toHaveBeenCalled();
   });
 
-  it('happy path: 7d sums only points_events within the window, not the running total', async () => {
+  it('happy path: 7d sums only canonical events within the window', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
-    findAllMembers.mockResolvedValue([{ id: 'm1', display_name: 'Ada', points: 9999 }]);
-    findAllPointsEvents.mockResolvedValue([
-      { member_id: 'm1', points: 1 },
-      { member_id: 'm1', points: 1 },
-      { member_id: 'm1', points: -1 },
+    findAllMembers.mockResolvedValue([{ id: 'm1', display_name: 'Ada', enrollment_id: 'e1' }]);
+    findAllPoints.mockResolvedValue([
+      { enrollment_id: 'e1', points: 1 },
+      { enrollment_id: 'e1', points: 1 },
+      { enrollment_id: 'e1', points: -1 },
     ]);
 
     const result = await getLeaderboard(enrollmentId, '7d');
@@ -102,8 +105,8 @@ describe('getLeaderboard', () => {
 
   it('boundary path: a member with no events in the window ranks at 0 points, not omitted', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
-    findAllMembers.mockResolvedValue([{ id: 'm1', display_name: 'Ada', points: 500 }]);
-    findAllPointsEvents.mockResolvedValue([]);
+    findAllMembers.mockResolvedValue([{ id: 'm1', display_name: 'Ada', enrollment_id: 'e1' }]);
+    findAllPoints.mockResolvedValue([]);
 
     const result = await getLeaderboard(enrollmentId, '30d');
 
@@ -117,12 +120,13 @@ describe('getLeaderboard', () => {
     const result = await getLeaderboard(enrollmentId, '7d');
 
     expect(result).toEqual([]);
-    expect(findAllPointsEvents).not.toHaveBeenCalled();
+    expect(findAllPoints).not.toHaveBeenCalled();
   });
 
   it('idempotency: recomputing snapshots each ranked member via upsert (safe to rerun for the same period)', async () => {
     findByPkEnrollment.mockResolvedValue(mockEnrollment);
-    findAllMembers.mockResolvedValue([{ id: 'm1', display_name: 'Ada', points: 50 }]);
+    findAllMembers.mockResolvedValue([{ id: 'm1', display_name: 'Ada', enrollment_id: 'e1' }]);
+    findAllPoints.mockResolvedValue([{ enrollment_id: 'e1', points: 50 }]);
 
     await getLeaderboard(enrollmentId, 'all_time');
     await getLeaderboard(enrollmentId, 'all_time');

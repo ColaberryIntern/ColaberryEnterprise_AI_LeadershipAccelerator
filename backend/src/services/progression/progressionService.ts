@@ -28,7 +28,6 @@ const EVIDENCE_SOURCE_BY_TYPE: Record<string, EvidenceSource> = {
   project_task: 'implementation',
   internship_activity: 'implementation',
   artifact_submission: 'artifact',
-  github_sync: 'github_commit',
   evaluation: 'instructor_review',
   certification_exercise: 'instructor_review',
   mock_interview: 'deliverable',

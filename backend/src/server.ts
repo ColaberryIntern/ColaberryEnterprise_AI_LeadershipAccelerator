@@ -23,6 +23,7 @@ import v1Routes from './routes/v1Routes';
 import advisorRoutes from './routes/advisorRoutes';
 import showcaseArtifactRoutes from './routes/showcaseArtifactRoutes';
 import buildArtifactRoutes from './routes/buildArtifactRoutes';
+import buildLogDraftRoutes from './routes/buildLogDraftRoutes';
 import publicPortfolioRoutes from './routes/publicPortfolioRoutes';
 import { previewProxyMiddleware } from './middlewares/previewProxyMiddleware';
 import { startScheduler } from './services/schedulerService';
@@ -77,6 +78,7 @@ app.use(participantRoutes);
 app.use(communityRoomsRoutes);
 app.use(showcaseArtifactRoutes);
 app.use(buildArtifactRoutes);
+app.use(buildLogDraftRoutes);
 app.use(publicPortfolioRoutes);
 app.use(advisorRoutes);
 app.use(alumniReferralRoutes);
@@ -835,7 +837,7 @@ async function ensureExperienceBuilderSchema() {
     // once anything is approved/unapproved by hand, this guard is false and never fights the author.
     `UPDATE curriculum_type_definitions SET approved = TRUE, approved_at = NOW(), approved_by = 'system:baseline'
        WHERE slug IN ('announcement','overview','warmup','video','knowledge_check','deep_dive','prompt_lab',
-                      'implementation_task','github_sync','artifact_submission','reflection','community_discussion',
+                      'implementation_task','artifact_submission','reflection','community_discussion',
                       'mock_interview','survey','evaluation','live_class')
        AND NOT EXISTS (SELECT 1 FROM curriculum_type_definitions WHERE approved = TRUE)`,
     `CREATE TABLE IF NOT EXISTS component_analytics (
@@ -1086,6 +1088,34 @@ async function ensureBlogSchema() {
   console.log('[DB] Blog schema ensured');
 }
 
+// AI News Flash intelligence pipeline — the library table behind the news feed.
+// Idempotent DDL, DB-side defaults; the ingestion service upserts by guid.
+async function ensureAiNewsSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS ai_news_items (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       guid VARCHAR(200) NOT NULL UNIQUE,
+       source VARCHAR(80) NOT NULL,
+       title TEXT NOT NULL,
+       url TEXT,
+       excerpt TEXT,
+       published_at TIMESTAMPTZ,
+       importance INTEGER NOT NULL DEFAULT 0,
+       summary_json JSONB,
+       card_id UUID,
+       first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_ai_news_importance ON ai_news_items (importance DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_ai_news_card ON ai_news_items (card_id)`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] AI News schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] AI News schema ensured');
+}
+
 // Today Timeline v2 (Phase 1): per-student append-only feed sequence backing the
 // never-ending engagement feed. Deterministic pagination + interact-to-hide;
 // sibling of the *_views ledgers. Idempotent DDL, DB-side defaults.
@@ -1113,6 +1143,30 @@ async function ensureTodayFeedSchema() {
     catch (err: any) { console.warn('[DB] Today feed schema statement failed:', err.message?.split('\n')[0]); }
   }
   console.log('[DB] Today feed schema ensured');
+}
+
+// Feed Control plane — additive per-card + per-type routing/cadence columns.
+// `priority` + `release_date` already exist on timeline_cards (activated here);
+// these add the surface override + cadence/frequency/pin knobs. All nullable →
+// a card/type with no override falls back to its type default then the policy.
+async function ensureFeedControlSchema() {
+  const statements = [
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_surface VARCHAR(20)`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_cadence INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_frequency_cap INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS feed_cooldown_days INTEGER`,
+    `ALTER TABLE timeline_cards ADD COLUMN IF NOT EXISTS pinned_until TIMESTAMPTZ`,
+    `CREATE INDEX IF NOT EXISTS idx_tc_priority ON timeline_cards (priority DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_tc_pinned ON timeline_cards (pinned_until)`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_cadence INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_frequency_cap INTEGER`,
+    `ALTER TABLE curriculum_type_definitions ADD COLUMN IF NOT EXISTS feed_cooldown_days INTEGER`,
+  ];
+  for (const sql of statements) {
+    try { await sequelize.query(sql); }
+    catch (err: any) { console.warn('[DB] Feed control schema statement failed:', err.message?.split('\n')[0]); }
+  }
+  console.log('[DB] Feed control schema ensured');
 }
 
 // Enhance the existing (stub) `testimonial` curriculum type into the working
@@ -1707,6 +1761,58 @@ async function ensureMissedOpportunitiesSchema() {
 // only, no ALTERs to existing tables. NO cross-table FK constraints (plain UUID
 // columns, like student_tasks) so creation ordering never matters. The whole
 // feature stays dark behind env.communityRoomsEnabled regardless of these tables.
+// Messaging extras (additive, idempotent): a per-member DM read cursor for
+// unread state, and a widened community_notifications type CHECK so friend /
+// message notifications can be inserted (the column is VARCHAR; only the CHECK
+// restricts values). Both safe to run every boot.
+async function ensureMessagingSchema() {
+  const statements = [
+    `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`,
+    `ALTER TABLE community_notifications DROP CONSTRAINT IF EXISTS ck_community_notifications_type`,
+    `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message'))`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure messaging schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Messaging schema ensured');
+}
+
+// Friendships — the friend graph behind the portal Contacts rail. Idempotent,
+// additive; status is VARCHAR + CHECK (not a Postgres ENUM) so new states are a
+// one-line CHECK change, never a type migration. No feature flag.
+async function ensureFriendshipSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS friendships (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       requester_id UUID NOT NULL,
+       addressee_id UUID NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       CONSTRAINT ck_friendships_status CHECK (status IN ('pending','accepted','declined'))
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS friendships_pair_unique ON friendships (requester_id, addressee_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships (addressee_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships (requester_id)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      if (!err.message?.includes('already exists')) {
+        console.warn('[DB] Failed to ensure Friendship schema:', err.message);
+      }
+    }
+  }
+  console.log('[DB] Friendship schema ensured');
+}
+
 async function ensureCommunityRoomsSchema() {
   const statements = [
     `CREATE TABLE IF NOT EXISTS community_rooms (
@@ -1736,6 +1842,9 @@ async function ensureCommunityRoomsSchema() {
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_cohort ON community_rooms (linked_cohort_id)`,
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_category ON community_rooms (category)`,
     `CREATE INDEX IF NOT EXISTS idx_community_rooms_privacy_status ON community_rooms (privacy, status)`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS is_video BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS always_open BOOLEAN NOT NULL DEFAULT false`,
+    `ALTER TABLE community_rooms ADD COLUMN IF NOT EXISTS meeting_link VARCHAR(600)`,
 
     `CREATE TABLE IF NOT EXISTS room_memberships (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1889,6 +1998,33 @@ async function ensureCommunityRoomsSchema() {
      )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS room_reports_idem_unique ON room_reports (idempotency_key) WHERE idempotency_key IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS idx_room_reports_status ON room_reports (status)`,
+
+    `CREATE TABLE IF NOT EXISTS room_presence (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       room_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       in_video BOOLEAN NOT NULL DEFAULT false,
+       last_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS room_presence_unique ON room_presence (room_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_room_presence_room_seen ON room_presence (room_id, last_seen_at)`,
+
+    `CREATE TABLE IF NOT EXISTS community_contributions (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       enrollment_id UUID NOT NULL,
+       category VARCHAR(30) NOT NULL,
+       action VARCHAR(40) NOT NULL,
+       points INTEGER NOT NULL DEFAULT 0,
+       room_id UUID,
+       booking_id UUID,
+       message_id UUID,
+       idempotency_key VARCHAR(180) NOT NULL,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS community_contributions_idem_unique ON community_contributions (idempotency_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_community_contributions_enrollment_cat ON community_contributions (enrollment_id, category)`,
   ];
   for (const sql of statements) {
     try {
@@ -1972,9 +2108,16 @@ async function start(): Promise<void> {
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
   await ensureTodayFeedSchema();
+  await ensureFeedControlSchema();
+  await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
     .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
     .catch((err: any) => console.warn('[DB] Blog boot refresh skipped:', err?.message?.split('\n')[0]));
+  // AI News Flash pipeline: populate the library on a fresh env (non-blocking).
+  // Card materialization is cost-gated by AI_NEWS_INGEST_ENABLED (see the service).
+  import('./services/intel/aiNewsIngestionService')
+    .then(({ refreshAiNewsIfEmpty }) => refreshAiNewsIfEmpty())
+    .catch((err: any) => console.warn('[DB] AI News boot ingest skipped:', err?.message?.split('\n')[0]));
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();
@@ -1986,6 +2129,21 @@ async function start(): Promise<void> {
   // unconditionally (cheap CREATE IF NOT EXISTS); the feature stays dark behind
   // env.communityRoomsEnabled at the route/worker/linkage layers.
   await ensureCommunityRoomsSchema();
+  // Friendships (portal Contacts rail friend graph) — idempotent, additive, no flag.
+  await ensureFriendshipSchema();
+  // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
+  await ensureMessagingSchema();
+  // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
+  // Gated on the feature flag so it only populates envs where Rooms is enabled.
+  if (env.communityRoomsEnabled) {
+    try {
+      const { seedDefaultCommunityRooms } = await import('./seeds/seedDefaultCommunityRooms');
+      const r = await seedDefaultCommunityRooms();
+      console.log(`[CommunityRooms] default rooms: ${r.created} created, ${r.existing} existing`);
+    } catch (err: any) {
+      console.warn('[CommunityRooms] default room seed failed:', err?.message);
+    }
+  }
   // Additive schema self-heal for the models that break user-facing flows when
   // they drift behind their table (sync({alter}) is off — see below). Adds any
   // missing column as NULLABLE; never drops/alters. Fixes the recurring
@@ -2040,6 +2198,10 @@ async function start(): Promise<void> {
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
+      // Feed Control: re-apply stored type routing to the registry AFTER the seed
+      // (typeSeeder re-asserts surface columns from code, so routing must win last).
+      const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');
+      await applyFeedRoutingToRegistry();
     } catch (err: any) {
       console.warn('[TimelineEngine] seed failed:', err?.message);
     }
@@ -2221,6 +2383,14 @@ async function start(): Promise<void> {
       import('./services/communityRooms/roomOutboxService')
         .then(({ drainOutbox }) => drainOutbox(25))
         .catch((err) => console.warn('[CommunityRoomsOutbox] drain failed:', err?.message));
+    });
+
+    // Sweep RSVP reminders into the outbox every 5 minutes. Idempotent — the
+    // outbox de-dups each (booking, window) reminder; the drain above delivers.
+    cron.schedule('*/5 * * * *', () => {
+      import('./services/communityRooms/roomReminderService')
+        .then(({ sweepReminders }) => sweepReminders())
+        .catch((err) => console.warn('[CommunityRoomsReminders] sweep failed:', err?.message));
     });
   }
 

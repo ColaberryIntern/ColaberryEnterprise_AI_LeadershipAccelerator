@@ -17,6 +17,7 @@ import HealthDashboardTab from './orchestration/HealthDashboardTab';
 import ExperienceStudioTab from './orchestration/ExperienceStudioTab';
 import CurriculumComposerTab from './orchestration/composer/CurriculumComposerTab';
 import TimelineEditorTab from './orchestration/TimelineEditorTab';
+import FeedControlTab from './orchestration/FeedControlTab';
 import WorkstationTab from './orchestration/WorkstationTab';
 import '../../styles/orchestration.css';
 
@@ -31,6 +32,7 @@ const TABS = [
   { id: 'composer', label: 'Curriculum Composer' },
   { id: 'types', label: 'Experience Studio' },
   { id: 'timeline', label: 'Timeline' },
+  { id: 'feed-control', label: 'Feed Control' },
   { id: 'analytics', label: 'Analytics' },
   { id: 'health', label: 'Health' },
 ];
@@ -99,6 +101,7 @@ export default function AdminOrchestrationPage() {
           {activeTab === 'blueprint' && <ProgramBlueprintTab {...tabProps} />}
           {activeTab === 'overview' && <ProgramOverviewTab {...tabProps} />}
           {activeTab === 'timeline' && <TimelineEditorTab />}
+          {activeTab === 'feed-control' && <FeedControlTab />}
           {activeTab === 'sessions' && <SessionControlTab {...tabProps} />}
           {activeTab === 'sections' && <SectionControlTab {...tabProps} onNavigateToMiniSections={handleNavigateToMiniSections} />}
           {activeTab === 'mini-sections' && <MiniSectionControlTab {...tabProps} initialLessonId={selectedLessonId} />}

@@ -2,6 +2,7 @@ import RoomOutboxEvent from '../../models/RoomOutboxEvent';
 import RoomBooking from '../../models/RoomBooking';
 import { ROOM_EVENTS } from './roomEvents';
 import { getMeetingProvider } from './meetingProvider';
+import { postSystemMessage } from './roomMessageService';
 
 // Side-effect handlers for community-room domain events. EVERY handler must be
 // idempotent — the outbox may deliver the same event more than once. A handler
@@ -15,14 +16,17 @@ export async function handleRoomEvent(event: RoomOutboxEvent): Promise<void> {
       await ensureBookingMeeting(event.aggregate_id);
       return;
 
-    // Observational for this release — reserved hooks for reminders / feed
-    // fan-out / timeline publication (added in later phases). No-op = processed.
+    case ROOM_EVENTS.SessionStartingSoon:
+      await deliverReminder(event);
+      return;
+
+    // Observational for this release — reserved hooks for feed fan-out /
+    // timeline publication (added in later phases). No-op = processed.
     case ROOM_EVENTS.RoomCreated:
     case ROOM_EVENTS.RoomAccessChanged:
     case ROOM_EVENTS.BookingRequested:
     case ROOM_EVENTS.TimelinePublished:
     case ROOM_EVENTS.RsvpChanged:
-    case ROOM_EVENTS.SessionStartingSoon:
     case ROOM_EVENTS.SessionWentLive:
     case ROOM_EVENTS.MemberJoinedSession:
     case ROOM_EVENTS.SessionCompleted:
@@ -33,6 +37,22 @@ export async function handleRoomEvent(event: RoomOutboxEvent): Promise<void> {
     default:
       return;
   }
+}
+
+// Deliver an RSVP reminder as a "Commons" system notice in the session's room.
+// Idempotent: skips dead sessions and de-dups on the reminder marker, so an
+// outbox retry never posts the reminder twice.
+const DEAD_STATES = ['cancelled', 'completed', 'archived', 'removed'];
+async function deliverReminder(event: RoomOutboxEvent): Promise<void> {
+  const booking = await RoomBooking.findByPk(event.aggregate_id);
+  if (!booking) return; // aggregate removed
+  if (DEAD_STATES.includes(booking.state)) return; // don't remind for a session that's over/cancelled
+
+  const window = (event.payload?.window as string) === '24h' ? '24h' : '1h';
+  const message = window === '24h'
+    ? `🗓️ Reminder: "${booking.title}" is coming up in the next day.`
+    : `⏰ "${booking.title}" starts within the hour — see you there!`;
+  await postSystemMessage(booking.room_id, message, { marker: `reminder:${booking.id}:${window}`, bookingId: booking.id });
 }
 
 // Provision the Google Meet (or configured provider) conference for a booking.

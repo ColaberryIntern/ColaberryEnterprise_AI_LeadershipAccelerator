@@ -4,6 +4,12 @@ import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
 import { toTitleCase } from '../../utils/titleCase';
 
+// Community byline helpers — a card carrying `author` renders as a post (avatar +
+// name + level badge) instead of the generic curriculum header.
+const LEVEL_NAMES: Record<number, string> = { 1: 'Apprentice', 2: 'Builder', 3: 'Architect', 4: 'Principal' };
+const authorInitials = (n: string) => n.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() || '').join('') || '?';
+const authorColor = (n: string) => { let h = 0; for (let i = 0; i < n.length; i++) h = (h * 31 + n.charCodeAt(i)) >>> 0; return `hsl(${h % 360} 48% 42%)`; };
+
 /**
  * TimelineCard — the universal card of the Timeline Engine, in Colaberry
  * Design E. One presentational component renders every curriculum type; the
@@ -42,9 +48,10 @@ export interface TimelineFeedCard {
   capabilities?: string[];   // the type's Parts — gate optional render sections (empty ⇒ show all, backward-compatible)
   type_thumbnail?: string | null;   // the type's Experience Studio thumbnail (AI banner) — the card's DEFAULT image; own media art overrides it
   week_title?: string | null;   // the week's SECTION title from the Blueprint — the Overview card's display title (no week number)
+  author?: { name: string; avatar_url: string | null; level: number } | null;   // community posts: member byline (avatar + name + level) so the card reads as a real post
 }
 
-export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone';
+export type Kind = 'video' | 'skilljar' | 'lab' | 'test' | 'reading' | 'survey' | 'event' | 'milestone' | 'setuplab' | 'timemachine';
 
 export interface Visual { kind: Kind; color: string; }
 
@@ -68,12 +75,15 @@ export const BAND: Record<string, Visual> = {
   community: { kind: 'reading', color: '#367895' },
   study: { kind: 'reading', color: '#367895' },
   warmup: { kind: 'reading', color: '#2E6A86' },
+  intel: { kind: 'reading', color: '#2E6A86' },   // Intelligence Pipeline types (news/research/tools/…)
   survey: { kind: 'survey', color: '#E8920C' },
   reflection: { kind: 'survey', color: '#E8920C' },
   quiz: { kind: 'test', color: '#5BA63C' },
   exam: { kind: 'test', color: '#5BA63C' },
   evaluation: { kind: 'test', color: '#5BA63C' },
   promptlab: { kind: 'lab', color: '#FB2832' },
+  prompt_catalog: { kind: 'lab', color: '#D97757' },   // Prompt Lab — Claude Code practice-prompt catalog
+  build_artifacts: { kind: 'lab', color: '#D97757' },   // Build Artifact(s) Lab — Claude Code build station
   task: { kind: 'lab', color: '#FB2832' },
   artifact: { kind: 'lab', color: '#FB2832' },
   presentation: { kind: 'lab', color: '#FB2832' },
@@ -86,8 +96,14 @@ export const BAND: Record<string, Visual> = {
   achievement: { kind: 'milestone', color: '#5BA63C' },
   badge: { kind: 'milestone', color: '#5BA63C' },
   streak: { kind: 'milestone', color: '#E8920C' },
+  setup_lab: { kind: 'setuplab', color: '#D97757' },   // Claude Code enablement lab (dark, get-unblocked)
+  architect_mindset: { kind: 'timemachine', color: '#367895' },   // The Architect Time Machine (cinematic decision simulation)
 };
 export const visualFor = (band: string): Visual => BAND[band] || { kind: 'reading', color: '#367895' };
+
+// Curriculum types that run IN Claude Code — the tile shows a "Claude Code" corner
+// strip so a student knows they'll need Claude Code open to complete the activity.
+export const CLAUDE_CODE_TYPES = new Set(['setup_lab', 'prompt_lab', 'implementation_task', 'artifact_submission']);
 
 const KIND_GRADIENT: Record<Kind, string> = {
   video: 'linear-gradient(135deg,#367895,#2E6A86)',
@@ -98,6 +114,8 @@ const KIND_GRADIENT: Record<Kind, string> = {
   survey: 'linear-gradient(135deg,#E8920C,#FB2832)',
   event: 'linear-gradient(135deg,#FB2832,#C20E1E)',
   milestone: 'linear-gradient(135deg,#5BA63C,#3C7A26)',
+  setuplab: 'linear-gradient(135deg,#22334f,#0c1322)',
+  timemachine: 'linear-gradient(135deg,#12303c,#0a1a22)',
 };
 
 // small header-tile icon per kind
@@ -111,6 +129,8 @@ const Icon: React.FC<{ kind: Kind }> = ({ kind }) => {
     case 'survey': return <path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" fill="currentColor" />;
     case 'event': return <><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></>;
     case 'milestone': return <path d="M6 21V4M6 5h11l-2 3 2 3H6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />;
+    case 'setuplab': return <><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M7 9l3 3-3 3M13 15h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></>;
+    case 'timemachine': return <><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" /><path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><circle cx="12" cy="12" r="1.5" fill="currentColor" /></>;
     default: return <path d="M4 5h7v15H4z" stroke="currentColor" strokeWidth="2" />;
   }
 };
@@ -309,6 +329,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       aria-label={playable ? `Play ${card.video?.title || card.title}` : `Open ${card.title}`}
     >
       {watermark}
+      {CLAUDE_CODE_TYPES.has(card.type) && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#D97757,#C4633A)' }}>Claude Code</span>}
       {card.type === 'testimonial' && <span className="mt-ribbon">Testimonial</span>}
       {card.type === 'podcast' && <span className="mt-ribbon">Podcast</span>}
       {card.type === 'blog' && <span className="mt-ribbon blue">Blog</span>}
@@ -328,12 +349,18 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   return (
     <div className={`tl-card fcard${locked ? ' locked' : ''}${compact ? ' compact' : ''}`}>
       <div className="fc-head">
-        <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>
+        {card.author
+          ? (card.author.avatar_url
+              ? <img className="tc-avatar" src={card.author.avatar_url} alt={card.author.name} />
+              : <span className="tc-avatar" style={{ background: authorColor(card.author.name) }}>{authorInitials(card.author.name)}</span>)
+          : <span className="ico" style={{ background: v.color }}><svg viewBox="0 0 24 24" fill="none"><Icon kind={v.kind} /></svg></span>}
         <div style={{ minWidth: 0 }}>
-          <div className="ttl">{tc(card.week_title || card.content?.title || card.title)}</div>
+          <div className="ttl">{card.author ? card.author.name : tc(card.week_title || card.content?.title || card.title)}</div>
           <div className="sub">
-            <span className={`tl-chip ${v.kind === 'skilljar' || v.kind === 'survey' ? 'cert' : 'learning'}`} style={{ padding: '2px 9px' }}><span className="sw" />{card.student_label}</span>
-            {pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}
+            {card.author
+              ? <span className={`tc-lvl-badge lvl-${card.author.level}`}>Level {card.author.level} · {LEVEL_NAMES[card.author.level] || `Level ${card.author.level}`}</span>
+              : <span className={`tl-chip ${v.kind === 'skilljar' || v.kind === 'survey' ? 'cert' : 'learning'}`} style={{ padding: '2px 9px' }}><span className="sw" />{card.student_label}</span>}
+            {!card.author && pts > 0 && <span className={`tl-ptbadge${done ? ' earned' : ''}`}>+{pts} pts</span>}
           </div>
         </div>
         <span className="st-ic"><StatePip status={card.status} /></span>

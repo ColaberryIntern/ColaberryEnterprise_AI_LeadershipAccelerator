@@ -9,7 +9,7 @@ import { sequelize } from '../config/database';
 export type RoomCategory =
   | 'start_here' | 'your_cohort' | 'build_together' | 'career_cert'
   | 'live_now' | 'demos_events' | 'social' | 'private_rooms';
-export type RoomType = 'persistent' | 'scheduled' | 'private_shell';
+export type RoomType = 'persistent' | 'scheduled' | 'private_shell' | 'dm';
 export type RoomPrivacy = 'public' | 'cohort' | 'invite_only' | 'private';
 export type RoomStatus = 'active' | 'archived' | 'locked' | 'removed';
 
@@ -31,6 +31,9 @@ export interface CommunityRoomAttributes {
   linked_live_session_id?: string | null;
   is_system?: boolean;
   created_by?: string;
+  is_video?: boolean;
+  always_open?: boolean;
+  meeting_link?: string | null;
   metadata?: Record<string, unknown>;
   created_at?: Date;
   updated_at?: Date;
@@ -54,6 +57,9 @@ class CommunityRoom extends Model<CommunityRoomAttributes> implements CommunityR
   declare linked_live_session_id: string | null;
   declare is_system: boolean;
   declare created_by: string;
+  declare is_video: boolean;
+  declare always_open: boolean;
+  declare meeting_link: string | null;
   declare metadata: Record<string, unknown>;
   declare created_at: Date;
   declare updated_at: Date;
@@ -78,6 +84,9 @@ CommunityRoom.init(
     linked_live_session_id: { type: DataTypes.UUID, allowNull: true },
     is_system: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     created_by: { type: DataTypes.STRING(60), allowNull: false, defaultValue: 'system' },
+    is_video: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    always_open: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+    meeting_link: { type: DataTypes.STRING(600), allowNull: true },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
   },
   {

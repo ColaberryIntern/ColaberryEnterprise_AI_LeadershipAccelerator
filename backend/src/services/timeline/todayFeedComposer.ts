@@ -28,9 +28,13 @@ import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineServi
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, type TodayItemKind } from './todayFeedPlan';
-import { gatherAnchored } from './todayAnchoredSources';
+import { gatherAnchored, rehydrateCommunityItems } from './todayAnchoredSources';
+import { env } from '../../config/env';
+import { getFeedPolicy } from './feedConfigService';
 
-/** Inject one ambient item after every CADENCE anchored items. */
+/** Legacy default: inject one ambient item after every CADENCE anchored items.
+ *  When FEED_CONTROL_ENABLED, cadence + the active ambient providers come from
+ *  the editable feed policy instead (feedConfigService). */
 const CADENCE = 2;
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 30;
@@ -54,6 +58,7 @@ export interface TodayFeedItem {
   estimated_time: number | null;
   status: string | null;       // anchored progress status
   interacted: boolean;
+  author?: { name: string; avatar_url: string | null; level: number } | null;  // community posts: the member byline
 }
 
 export interface TodayPage {
@@ -133,12 +138,19 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     }
   }
 
+  // Cadence + active ambient providers come from the editable policy when the
+  // Feed Control plane is on; otherwise the legacy hardcoded constants (flag-off
+  // ≡ byte-identical to before).
+  const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
+  const cadence = policy ? policy.todayCadence : CADENCE;
+  const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
+
   const anchoredQueue = await gatherAnchored(enrollmentId, placedRefs);
   const plan = planSlots({
     count: need,
     anchoredAvailable: anchoredQueue.length,
-    providers: AMBIENT_PROVIDERS,
-    cadence: CADENCE,
+    providers,
+    cadence,
     anchoredPlaced,
     ambientPlaced,
   });
@@ -147,7 +159,7 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   const perProviderNeed: Record<AmbientProviderSlug, number> = { blog: 0, podcast: 0, testimonial: 0 };
   for (const s of plan.slots) if (s.kind === 'ambient' && s.provider) perProviderNeed[s.provider]++;
   const ambientQueues: Record<AmbientProviderSlug, AmbientItem[]> = { blog: [], podcast: [], testimonial: [] };
-  for (const p of AMBIENT_PROVIDERS) {
+  for (const p of providers) {
     if (perProviderNeed[p] > 0) ambientQueues[p] = await pickAmbientBatch(enrollmentId, p, perProviderNeed[p], placedMedia[p]);
   }
 
@@ -192,6 +204,9 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
 
   const slice = existing.slice(from, targetEnd);
   const items = slice.map((r): TodayFeedItem => ({ ...(r.item as TodayFeedItem), position: r.position, interacted: r.interacted_at != null }));
+  // Community cards are dynamic — refresh their media/author/text from the live
+  // post so the append-only snapshot never shows stale content (fail-soft).
+  await rehydrateCommunityItems(items);
   return { items, nextCursor: from + items.length, exhausted: exhausted && items.length < size };
 }
 

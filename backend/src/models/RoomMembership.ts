@@ -17,6 +17,7 @@ export interface RoomMembershipAttributes {
   invited_by?: string | null;
   joined_at?: Date | null;
   left_at?: Date | null;
+  last_read_at?: Date | null; // DM unread cursor (added by ensureMessagingSchema)
   created_at?: Date;
   updated_at?: Date;
 }
@@ -31,6 +32,7 @@ class RoomMembership extends Model<RoomMembershipAttributes> implements RoomMemb
   declare invited_by: string | null;
   declare joined_at: Date | null;
   declare left_at: Date | null;
+  declare last_read_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -46,6 +48,7 @@ RoomMembership.init(
     invited_by: { type: DataTypes.UUID, allowNull: true },
     joined_at: { type: DataTypes.DATE, allowNull: true },
     left_at: { type: DataTypes.DATE, allowNull: true },
+    last_read_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,

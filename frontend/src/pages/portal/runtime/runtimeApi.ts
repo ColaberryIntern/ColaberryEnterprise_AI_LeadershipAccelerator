@@ -75,8 +75,55 @@ export interface AssessmentSubmit {
   duration_ms?: number | null; started_at?: string | null;
 }
 
+// ── The Architect Time Machine (architect_mindset) ───────────────────────────
+export interface AmOption { id: string; label: string; custom?: boolean }
+export interface AmInterviewQuestion { id: string; text: string; mode: 'single' | 'multiple'; options: AmOption[]; dimension?: string }
+export interface AmScenario {
+  version: string; week: number; baseline: boolean; title: string; series: string; experience: string;
+  principle: string; tagline: string;
+  request: { from: string; text: string };
+  initial_system: string[];
+  first_decision: { prompt: string; options: AmOption[] };
+  zoom_out: { people: string[]; information: string[]; decisions: string[]; operations: string[]; titles?: { people?: string; information?: string; decisions?: string; operations?: string } };
+  signature_reveals: string[];
+  interview_part_1: AmInterviewQuestion[];
+  interview_part_2: AmInterviewQuestion[];
+  consequence: { horizon: Array<{ point: string; risk: number; note?: string }>; dashboard?: Array<{ label: string; value: string; trend?: 'up' | 'down' | 'flat' }>; reveal: string; lesson: string };
+  rearchitecture: { prompt: string };
+  receipt: { counts: Array<{ label: string; value: string }>; represented_hours: number; minutes: number; qualification: string };
+  adr: { fields: string[]; title?: string };
+  project_transfer: { prompt: string; questions: string[] };
+  commitment_prompt: string;
+}
+export interface AmInterviewAnswer { choice?: string | null; choices?: string[]; custom?: string | null; explanation?: string | null }
+export interface AmProgress {
+  state: string;
+  first_decision?: { choice?: string; custom?: string | null; reasoning?: string };
+  revised_decision?: { choice?: string; custom?: string | null };
+  interview?: Record<string, AmInterviewAnswer>;
+  assumptions?: string[]; tradeoffs?: string[]; failure_modes?: string[];
+  reflection?: string | null; commitment?: string | null;
+  project_transfer?: { assumed_solution?: string; outcome?: string };
+  flags?: { zoom_out_viewed?: boolean; consequence_viewed?: boolean };
+  evaluation?: { baseline?: boolean; signal?: number; total?: number; stage?: { slug: string; label: string }; dimensions?: Array<{ key: string; label: string; weight: number; score: number; evidence: string; strength: string; gap: string }>; observation?: string; source?: string } | null;
+}
+export interface AmReceipt { counts: Array<{ label: string; value: string }>; represented_hours: number; minutes: number; ratio: number; qualification: string }
+export interface AmLedger { lessons_completed: number; decisions_recorded: number; assumptions_discovered: number; failure_modes_examined: number; perspectives_encountered: number; represented_hours: number }
+export interface AmGap { code: string; label: string }
+export interface AmStateView { scenario: AmScenario; progress: AmProgress; status: string; receipt: AmReceipt; gaps: AmGap[]; ledger: AmLedger }
+
 export const runtimeApi = {
   open: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}`).then((r) => r.data as RtOpen),
+  architectState: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/architect/state`).then((r) => r.data as AmStateView),
+  architectAdvance: (cardId: string, to: string, patch?: Partial<AmProgress>) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/advance`, { to, patch }).then((r) => r.data as { state: string; saved: boolean }),
+  architectInterview: (cardId: string, part: 1 | 2, answers: Record<string, AmInterviewAnswer>) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/interview`, { part, answers }).then((r) => r.data as { saved: boolean; answered: number }),
+  architectEvaluate: (cardId: string) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/evaluate`, {}).then((r) => r.data as { evaluation: AmProgress['evaluation']; gaps: AmGap[] }),
+  architectComplete: (cardId: string) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/complete`, {}).then((r) => r.data as { already: boolean; outcome?: any; artifact?: any; readiness?: Readiness; receipt: AmReceipt; evaluation: AmProgress['evaluation']; baseline: boolean; ledger: AmLedger }),
+  architectLedger: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/architect/ledger`).then((r) => r.data as { ledger: AmLedger }),
   nudge: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/nudge`).then((r) => r.data as Nudge),
   mentor: (cardId: string, mode: string, message: string, history: Array<{ role: string; content: string }>) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/mentor`, { mode, message, history }).then((r) => r.data as MentorReply),

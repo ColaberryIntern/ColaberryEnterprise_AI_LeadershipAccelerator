@@ -61,6 +61,21 @@
 .tl-de .tl-wkmid{min-width:160px;text-align:center}
 .tl-de .tl-wklbl{font-size:16px;font-weight:700;color:var(--text-strong);line-height:1.1}
 
+/* classroom search / filter — live-narrows the week feed as the student types */
+.tl-de .tl-search{position:relative;margin-bottom:14px}
+.tl-de .tl-search-ic{position:absolute;left:16px;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--text-muted);pointer-events:none}
+.tl-de .tl-search-input{width:100%;height:46px;padding:0 46px;border:1px solid var(--border-default);border-radius:var(--r-pill);
+  background:var(--surface-page);color:var(--text-body);font-family:inherit;font-size:15px;transition:.16s var(--ease)}
+.tl-de .tl-search-input::placeholder{color:var(--text-muted)}
+.tl-de .tl-search-input:hover{border-color:var(--berry)}
+.tl-de .tl-search-input:focus{outline:none;border-color:var(--berry);box-shadow:0 0 0 3px rgba(54,120,149,.18)}
+.tl-de .tl-search-input::-webkit-search-cancel-button{-webkit-appearance:none;appearance:none}
+.tl-de .tl-search-clear{position:absolute;right:9px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:none;border-radius:var(--r-pill);
+  background:var(--surface-sunken);color:var(--text-muted);display:flex;align-items:center;justify-content:center;transition:.16s var(--ease)}
+.tl-de .tl-search-clear:hover{background:var(--cherry);color:#fff}
+.tl-de .tl-search-clear svg{width:15px;height:15px}
+.tl-de .tl-search-count{margin:-4px 0 12px 6px}
+
 /* two-column classroom layout. FB-style responsive rule: when the screen
    shrinks, the feed NEVER shrinks with it — the right rail disappears first
    and the feed keeps its normal card/image size, centered like a FB feed. */
@@ -107,6 +122,12 @@
 .tl-de .fc-head .ttl{font-weight:700;font-size:16px;color:var(--text-strong);line-height:1.25}
 .tl-de .fc-head .sub{font-size:13px;color:var(--text-muted);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .tl-de .fc-head .st-ic{margin-left:auto;flex:none}
+/* Community post byline — avatar + name + level badge, so the card reads as a real post */
+.tl-de .fc-head .tc-avatar{width:38px;height:38px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:14px;letter-spacing:.02em;object-fit:cover;overflow:hidden}
+.tl-de .fc-head .tc-lvl-badge{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.01em;border-radius:999px;padding:2px 9px;background:#eef2f7;color:#334155}
+.tl-de .fc-head .tc-lvl-badge.lvl-2{background:#e0edff;color:#1d4ed8}
+.tl-de .fc-head .tc-lvl-badge.lvl-3{background:#ede9fe;color:#6d28d9}
+.tl-de .fc-head .tc-lvl-badge.lvl-4{background:#ffe4e6;color:#be123c}
 .tl-de .fc-body{padding:0 20px 14px}
 .tl-de .fc-body p{margin:0 0 14px;color:var(--text-body);font-size:14.5px}
 /* ── Locked card: big lock over a dimmed tile; every interaction is blocked ── */

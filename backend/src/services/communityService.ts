@@ -1,9 +1,13 @@
+import { Op } from 'sequelize';
 import CommunityMember, { CommunityPresenceStatus } from '../models/CommunityMember';
 import CommunityPost from '../models/CommunityPost';
 import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
+import { awardCommunityXp } from './progression/communityXpService';
+import { award, revoke, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
+import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
@@ -46,6 +50,31 @@ export function levelFor(points: number): number {
   return LEVEL_TIERS.reduce((acc, tier) => (points >= tier.min ? tier.level : acc), 1);
 }
 
+// Contribution points — awarded to the author for creating content, so posting
+// and commenting move the needle (previously only likes-received earned points,
+// which made the leaderboard feel static). Tunable; adjust here to reweight.
+const POINTS_PER_POST = 5;
+const POINTS_PER_COMMENT = 2;
+
+// Best-effort points award, mirroring the like→points path (bump points, log a
+// points event so period leaderboards see it, recompute level). Wrapped so a
+// points failure can NEVER fail the post/comment itself (failure-first).
+async function awardContributionPoints(memberId: string, points: number): Promise<void> {
+  try {
+    await CommunityMember.increment('points', { by: points, where: { id: memberId } });
+    await CommunityPointsEvent.create({ member_id: memberId, points });
+    const member = await CommunityMember.findByPk(memberId);
+    if (member) {
+      const newLevel = levelFor(member.points);
+      if (newLevel !== member.level) await member.update({ level: newLevel });
+    }
+  } catch (err) {
+    log('warn', 'award_points_failed', {
+      member_id: memberId, points, outcome: 'failure', error_class: (err as any)?.error_class ?? 'Error',
+    });
+  }
+}
+
 function log(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string, unknown>): void {
   console[level](JSON.stringify({ timestamp: new Date().toISOString(), level, service: 'community', event, ...ctx }));
 }
@@ -70,11 +99,64 @@ export interface PostFeedItem {
   pinned: boolean;
   like_count: number;
   comment_count: number;
+  // Server-authenticated per-viewer like state (Phase 4 contract fix). The
+  // frontend must render from this rather than defaulting every post to "not
+  // liked" in transient component state — a page refresh used to lose the
+  // viewer's likes because the truth never left the server.
+  viewer_has_liked: boolean;
   mentioned_member_ids: string[];
   min_level: number;
   locked: boolean;
   created_at: Date;
-  member: { id: string; display_name: string; avatar_url: string | null };
+  member: { id: string; display_name: string; avatar_url: string | null; level: number };
+  // Up to 3 most-recent distinct commenters (avatar stack on the card).
+  recent_commenters: { id: string; display_name: string; avatar_url: string | null }[];
+}
+
+// Cursor-based feed pagination (Phase 4 #4). The cursor is an opaque, ordering-
+// aware keyset over (pinned, created_at, id) — the exact tuple listPosts orders
+// by — so paging never skips or duplicates a row even as new posts land. It is
+// base64url(JSON) rather than a bare offset so the client treats it as opaque.
+interface PostCursor {
+  pinned: boolean;
+  created_at: string;
+  id: string;
+}
+
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 50;
+
+function encodePostCursor(item: { pinned: boolean; created_at: Date; id: string }): string {
+  return Buffer.from(
+    JSON.stringify({ p: item.pinned, c: item.created_at.toISOString(), i: item.id })
+  ).toString('base64url');
+}
+
+// Returns null (not throws) for a malformed cursor so a stale/garbage cursor
+// degrades to "start from the top" rather than 500ing the feed.
+function decodePostCursor(cursor: string): PostCursor | null {
+  try {
+    const raw = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+    if (typeof raw?.p !== 'boolean' || typeof raw?.c !== 'string' || typeof raw?.i !== 'string') {
+      return null;
+    }
+    if (Number.isNaN(Date.parse(raw.c))) return null;
+    return { pinned: raw.p, created_at: raw.c, id: raw.i };
+  } catch {
+    return null;
+  }
+}
+
+// Batched viewer-liked lookup for a page of posts — one query for the whole
+// page instead of N. Empty input short-circuits (no query) so an empty feed
+// costs nothing.
+async function viewerLikedPostIds(postIds: string[], viewerMemberId: string): Promise<Set<string>> {
+  if (postIds.length === 0) return new Set();
+  const likes = await CommunityLike.findAll({
+    where: { likeable_type: 'post', likeable_id: postIds, member_id: viewerMemberId },
+    attributes: ['likeable_id'],
+  });
+  return new Set((likes as any[]).map((l) => l.likeable_id));
 }
 
 // Idempotent — safe to call on every request. One CommunityMember row per
@@ -132,9 +214,11 @@ function assertLevelUnlocked(post: CommunityPost, viewerMemberId: string, viewer
 }
 
 function toFeedItem(
-  post: CommunityPost & { member: { id: string; display_name: string; avatar_url: string | null } },
+  post: CommunityPost & { member: { id: string; display_name: string; avatar_url: string | null; level: number } },
   viewerMemberId: string,
-  viewerLevel: number
+  viewerLevel: number,
+  viewerHasLiked: boolean,
+  recentCommenters: PostFeedItem['recent_commenters'] = []
 ): PostFeedItem {
   const locked = post.member_id !== viewerMemberId && viewerLevel < post.min_level;
   return {
@@ -145,11 +229,13 @@ function toFeedItem(
     pinned: post.pinned,
     like_count: post.like_count,
     comment_count: post.comment_count,
+    viewer_has_liked: viewerHasLiked,
     mentioned_member_ids: locked ? [] : post.mentioned_member_ids,
     min_level: post.min_level,
     locked,
     created_at: post.created_at,
-    member: { id: post.member.id, display_name: post.member.display_name, avatar_url: post.member.avatar_url },
+    member: { id: post.member.id, display_name: post.member.display_name, avatar_url: post.member.avatar_url, level: post.member.level },
+    recent_commenters: recentCommenters,
   };
 }
 
@@ -186,12 +272,36 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     min_level: input.min_level ?? 0,
   });
 
+  // In-app notification per mention (REQ-C6) — one row per (recipient, post),
+  // fired exactly once since the post itself is only ever created once here.
+  if (mentionedIds.length > 0) {
+    await CommunityNotification.bulkCreate(
+      mentionedIds.map((mentionedId) => ({
+        member_id: mentionedId,
+        actor_member_id: member.id,
+        notification_type: 'mention' as const,
+        source_type: 'post' as const,
+        source_id: post.id,
+      }))
+    );
+  }
+
+  // Reward the author for contributing (Ali feedback 2026-07-20 — posting now
+  // earns points, not just likes-received).
+  await awardContributionPoints(member.id, POINTS_PER_POST);
+  // Canonical points (the ONE ledger — HUD total + unified leaderboard) + the
+  // Community lane of the Skill-XP lens. Best-effort; never breaks the post.
+  await award(enrollmentId, { eventType: 'community_post', eventKey: `community_post:${post.id}`, points: POINTS_PER_POST }).catch(() => {});
+  await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${post.id}`, 'community:post').catch(() => {});
+
   log('info', 'post_created', {
     post_id: post.id, member_id: member.id, cohort_id: cohortId, min_level: post.min_level, outcome: 'success',
   });
 
   // The author is creating their own post — never locked to them, so this
-  // is a plain projection rather than a toFeedItem() lock check.
+  // is a plain projection rather than a toFeedItem() lock check. Author badge
+  // uses the canonical level (one ladder).
+  const authorLevel = levelForPoints((await getPointsSummary(enrollmentId)).total).level;
   return {
     id: post.id,
     body: post.body,
@@ -200,35 +310,129 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     pinned: post.pinned,
     like_count: post.like_count,
     comment_count: post.comment_count,
+    viewer_has_liked: false,
     mentioned_member_ids: post.mentioned_member_ids,
     min_level: post.min_level,
     locked: false,
     created_at: post.created_at,
-    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url },
+    member: { id: member.id, display_name: member.display_name, avatar_url: member.avatar_url, level: authorLevel },
+    recent_commenters: [],
   };
 }
 
-export async function listPosts(enrollmentId: string, category?: string): Promise<PostFeedItem[]> {
+export interface ListPostsOptions {
+  category?: string;
+  cursor?: string | null;
+  limit?: number;
+}
+
+export interface PostFeedPage {
+  posts: PostFeedItem[];
+  next_cursor: string | null;
+}
+
+// Cursor-paginated cohort feed. Ordering is (pinned DESC, created_at DESC,
+// id DESC) — the id tiebreak makes it deterministic when two posts share a
+// timestamp, which is exactly what keyset pagination needs to never skip or
+// repeat a row. A cursor selects "everything strictly after this tuple" via a
+// row-value comparison expressed as an Op.or ladder; without a cursor the first
+// page is returned unfiltered (so the existing cohort/category where-shape is
+// unchanged). Fetches limit+1 to detect whether a further page exists.
+// Up to 3 most-recent distinct commenters per post (avatar stack on the card).
+// One query for the whole page; empty input short-circuits.
+async function recentCommentersByPost(
+  postIds: string[]
+): Promise<Map<string, { id: string; display_name: string; avatar_url: string | null }[]>> {
+  const byPost = new Map<string, { id: string; display_name: string; avatar_url: string | null }[]>();
+  if (postIds.length === 0) return byPost;
+  const comments = await CommunityComment.findAll({
+    where: { post_id: postIds },
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
+    order: [['created_at', 'DESC']],
+  });
+  for (const c of comments as any[]) {
+    const list = byPost.get(c.post_id) ?? [];
+    if (list.length < 3 && !list.some((m) => m.id === c.member.id)) {
+      list.push({ id: c.member.id, display_name: c.member.display_name, avatar_url: c.member.avatar_url });
+      byPost.set(c.post_id, list);
+    }
+  }
+  return byPost;
+}
+
+// The post-author level badge must show the ONE canonical level (same ladder as
+// the profile/leaderboard/HUD), not the legacy CommunityMember.level. Batched:
+// one query resolves every distinct author's canonical total → level.
+async function canonicalLevelByMemberId(
+  members: Array<{ id: string; enrollment_id?: string | null; level: number }>,
+): Promise<Map<string, number>> {
+  const enrollmentIds = members.map((m) => m.enrollment_id).filter(Boolean) as string[];
+  const totals = await getTotalsForEnrollments(enrollmentIds);
+  const out = new Map<string, number>();
+  for (const m of members) {
+    out.set(m.id, m.enrollment_id ? levelForPoints(totals.get(m.enrollment_id) ?? 0).level : m.level);
+  }
+  return out;
+}
+
+export async function listPosts(
+  enrollmentId: string,
+  options: ListPostsOptions = {}
+): Promise<PostFeedPage> {
   const [viewer, cohortId] = await Promise.all([
     getOrCreateMember(enrollmentId),
     resolveCohortId(enrollmentId),
   ]);
 
+  const limit = Math.min(Math.max(1, options.limit ?? DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE);
+
   const where: Record<string, unknown> = { cohort_id: cohortId, status: 'visible' };
-  if (category) {
-    where.category = category;
+  if (options.category) {
+    where.category = options.category;
   }
 
-  const posts = await CommunityPost.findAll({
+  const cursor = options.cursor ? decodePostCursor(options.cursor) : null;
+  if (cursor) {
+    // Row-value keyset: rows after (pinned, created_at, id) under the DESC
+    // ordering above. Booleans compare false < true in Postgres, so a
+    // pinned-false cursor correctly yields no earlier (pinned-true) rows.
+    where[Op.or as any] = [
+      { pinned: { [Op.lt]: cursor.pinned } },
+      { pinned: cursor.pinned, created_at: { [Op.lt]: new Date(cursor.created_at) } },
+      { pinned: cursor.pinned, created_at: new Date(cursor.created_at), id: { [Op.lt]: cursor.id } },
+    ];
+  }
+
+  const rows = await CommunityPost.findAll({
     where,
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [
       ['pinned', 'DESC'],
       ['created_at', 'DESC'],
+      ['id', 'DESC'],
     ],
+    limit: limit + 1,
   });
 
-  return posts.map((post: any) => toFeedItem(post, viewer.id, viewer.level));
+  const hasMore = rows.length > limit;
+  const pageRows = hasMore ? rows.slice(0, limit) : rows;
+
+  const postIds = pageRows.map((p: any) => p.id);
+  const [likedIds, commentersByPost] = await Promise.all([
+    viewerLikedPostIds(postIds, viewer.id),
+    recentCommentersByPost(postIds),
+  ]);
+  const posts = pageRows.map((post: any) =>
+    toFeedItem(post, viewer.id, viewer.level, likedIds.has(post.id), commentersByPost.get(post.id) ?? []));
+
+  // Author badges show the canonical level (one ladder everywhere).
+  const authorLevels = await canonicalLevelByMemberId(pageRows.map((p: any) => p.member).filter(Boolean));
+  for (const p of posts) p.member.level = authorLevels.get(p.member.id) ?? p.member.level;
+
+  const last = pageRows[pageRows.length - 1] as any;
+  const next_cursor = hasMore && last ? encodePostCursor(last) : null;
+
+  return { posts, next_cursor };
 }
 
 // New read endpoint (REQ-C4) — the demo surface for "open gated content, see
@@ -243,9 +447,13 @@ export async function getPostById(enrollmentId: string, postId: string): Promise
 
   const post = await requireVisiblePostInCohort(postId, cohortId);
   const withMember = await CommunityPost.findByPk(post.id, {
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
   });
-  return toFeedItem(withMember as any, viewer.id, viewer.level);
+  const likedIds = await viewerLikedPostIds([post.id], viewer.id);
+  const item = toFeedItem(withMember as any, viewer.id, viewer.level, likedIds.has(post.id));
+  const author = (withMember as any)?.member;
+  if (author) item.member.level = (await canonicalLevelByMemberId([author])).get(author.id) ?? item.member.level;
+  return item;
 }
 
 // Author-only for v1 (smallest version that satisfies "students can ... pin").
@@ -263,7 +471,7 @@ export async function togglePin(
   ]);
 
   const post = await CommunityPost.findByPk(postId, {
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
   });
   if (!post || post.status === 'removed') {
     throw notFoundError('Post not found');
@@ -281,8 +489,14 @@ export async function togglePin(
 
   log('info', 'post_pin_toggled', { post_id: post.id, member_id: member.id, pinned: input.pinned, outcome: 'success' });
 
-  // Author-only route — never locked to the caller.
+  // Author-only route — never locked to the caller. The author may still have
+  // liked their own post, so surface the real viewer_has_liked rather than
+  // hardcoding false (which would flicker the like button off after a pin).
+  const likedIds = await viewerLikedPostIds([post.id], member.id);
   const postAny = post as any;
+  // Author-only route — the author IS the caller, so the canonical badge level
+  // is the caller's own canonical level (one ladder).
+  const authorLevel = levelForPoints((await getPointsSummary(enrollmentId)).total).level;
   return {
     id: post.id,
     body: post.body,
@@ -291,6 +505,7 @@ export async function togglePin(
     pinned: post.pinned,
     like_count: post.like_count,
     comment_count: post.comment_count,
+    viewer_has_liked: likedIds.has(post.id),
     mentioned_member_ids: post.mentioned_member_ids,
     min_level: post.min_level,
     locked: false,
@@ -299,7 +514,9 @@ export async function togglePin(
       id: postAny.member.id,
       display_name: postAny.member.display_name,
       avatar_url: postAny.member.avatar_url,
+      level: authorLevel,
     },
+    recent_commenters: [],
   };
 }
 
@@ -333,6 +550,7 @@ export async function createComment(
   assertLevelUnlocked(post, member.id, member.level);
 
   let parentCommentId: string | null = null;
+  let notifyRecipientId: string | null = post.member_id;
   if (input.parent_comment_id) {
     const parent = await CommunityComment.findByPk(input.parent_comment_id);
     if (!parent || parent.post_id !== postId) {
@@ -342,6 +560,9 @@ export async function createComment(
       throw validationError('Replies are one level deep only — cannot reply to a reply');
     }
     parentCommentId = parent.id;
+    // A reply notifies the parent comment's author, not the post's author —
+    // one recipient per comment event, keeping this a 1:1 event->notification.
+    notifyRecipientId = parent.member_id;
   }
 
   const comment = await CommunityComment.create({
@@ -352,6 +573,23 @@ export async function createComment(
   });
 
   await post.increment('comment_count', { by: 1 });
+
+  // Reward the commenter for contributing (Ali feedback 2026-07-20).
+  await awardContributionPoints(member.id, POINTS_PER_COMMENT);
+  await award(enrollmentId, { eventType: 'community_comment', eventKey: `community_comment:${comment.id}`, points: POINTS_PER_COMMENT }).catch(() => {});
+  await awardCommunityXp(enrollmentId, POINTS_PER_COMMENT, `cxp:comment:${comment.id}`, 'community:comment').catch(() => {});
+
+  // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
+  // comments on their own post/comment.
+  if (notifyRecipientId && notifyRecipientId !== member.id) {
+    await CommunityNotification.create({
+      member_id: notifyRecipientId,
+      actor_member_id: member.id,
+      notification_type: 'reply',
+      source_type: 'comment',
+      source_id: comment.id,
+    });
+  }
 
   log('info', 'comment_created', {
     comment_id: comment.id,
@@ -384,7 +622,7 @@ export async function listComments(enrollmentId: string, postId: string): Promis
 
   const comments = await CommunityComment.findAll({
     where: { post_id: postId },
-    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url'] }],
+    include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [['created_at', 'ASC']],
   });
 
@@ -484,16 +722,69 @@ export async function toggleLike(
     where: { member_id: member.id, likeable_type: likeableType, likeable_id: likeableId },
   });
 
+  // Resolve the author's canonical (enrollment-scoped) identity + a stable,
+  // presence-based key so a like awards +1 into the canonical StudentPointsEvent
+  // ledger and an unlike revokes it. The community leaderboard reads only that
+  // ledger, so without this likes-received would not count toward standings
+  // (posts/comments/recognition already award canonically; this restores likes to
+  // parity). Separate from the line-764 refetch, which reads post-increment points
+  // for the legacy level column.
+  const authorMember = await CommunityMember.findByPk(authorMemberId);
+  const authorEnrollmentId = authorMember?.enrollment_id ?? null;
+  const likeEventKey = `community_like:${likeableType}:${likeableId}:${member.id}`;
+
   let liked: boolean;
   if (created) {
     await CommunityMember.increment('points', { by: 1, where: { id: authorMemberId } });
     await CommunityPointsEvent.create({ member_id: authorMemberId, points: 1 });
+    // Canonical: likes-received count on the leaderboard. Presence-based +
+    // idempotent on (author, likeable, liker); self-likes award too (parity with
+    // the legacy +1, capped at 1 by the unique like row). Best-effort, matching
+    // the createPost/createComment canonical-award pattern in this file.
+    if (authorEnrollmentId) {
+      await award(authorEnrollmentId, {
+        eventType: 'community_like',
+        eventKey: likeEventKey,
+        points: 1,
+        metadata: { likeable_type: likeableType, likeable_id: likeableId, liker_member_id: member.id },
+      }).catch(() => {});
+    }
     if (post) await post.increment('like_count', { by: 1 });
+    // Notify the author that someone liked their content (Ali feedback 2026-07-20).
+    // Only on a real new like (created) and never for a self-like. The notify is a
+    // secondary side effect: a like must never fail because its notification failed.
+    // This also keeps the like path working during a deploy where the new 'like'
+    // code lands before the CHECK-constraint migration (20260720) runs — the insert
+    // would be rejected, but the like itself still succeeds.
+    if (authorMemberId !== member.id) {
+      try {
+        await CommunityNotification.create({
+          member_id: authorMemberId,
+          actor_member_id: member.id,
+          notification_type: 'like',
+          source_type: likeableType,
+          source_id: likeableId,
+        });
+      } catch (err) {
+        log('warn', 'like_notification_failed', {
+          error_class: err instanceof Error ? err.constructor.name : 'UnknownError',
+          author_member_id: authorMemberId,
+          actor_member_id: member.id,
+          likeable_type: likeableType,
+          likeable_id: likeableId,
+        });
+      }
+    }
     liked = true;
   } else {
     await likeRow.destroy();
     await CommunityMember.decrement('points', { by: 1, where: { id: authorMemberId } });
     await CommunityPointsEvent.create({ member_id: authorMemberId, points: -1 });
+    // Canonical: reverse the like-point so an unlike removes it from the
+    // leaderboard. Idempotent — revoking an absent event is a no-op.
+    if (authorEnrollmentId) {
+      await revoke(authorEnrollmentId, likeEventKey).catch(() => {});
+    }
     if (post) await post.decrement('like_count', { by: 1 });
     liked = false;
   }
@@ -563,22 +854,25 @@ export interface MemberProfile {
   created_at: Date;
 }
 
-function toMemberProfile(member: CommunityMember): MemberProfile {
+// points/level come from the ONE canonical ledger (StudentPointsEvent + the
+// LEVELS ladder), NOT the legacy CommunityMember.points column — so a member's
+// score/level here matches the top-right HUD everywhere.
+function toMemberProfile(member: CommunityMember, canonicalPoints: number): MemberProfile {
   return {
     id: member.id,
     display_name: member.display_name,
     avatar_url: member.avatar_url,
     bio: member.bio,
-    level: member.level,
-    points: member.points,
+    level: levelForPoints(canonicalPoints).level,
+    points: canonicalPoints,
     presence: derivePresence(member.last_active_at),
     created_at: member.created_at,
   };
 }
 
 export async function getMyProfile(enrollmentId: string): Promise<MemberProfile> {
-  const member = await getOrCreateMember(enrollmentId);
-  return toMemberProfile(member);
+  const [member, summary] = await Promise.all([getOrCreateMember(enrollmentId), getPointsSummary(enrollmentId)]);
+  return toMemberProfile(member, summary.total);
 }
 
 // Cross-member lookups return NotFoundError uniformly whether the member
@@ -593,7 +887,8 @@ export async function getMemberProfileById(enrollmentId: string, targetMemberId:
   if (!target || (target as any).enrollment?.cohort_id !== cohortId) {
     throw notFoundError('Member not found');
   }
-  return toMemberProfile(target);
+  const total = (await getPointsSummary(target.enrollment_id)).total;
+  return toMemberProfile(target, total);
 }
 
 export async function updateMyProfile(enrollmentId: string, input: UpdateProfileInput): Promise<MemberProfile> {
@@ -606,20 +901,22 @@ export async function updateMyProfile(enrollmentId: string, input: UpdateProfile
 
   await member.update(updates);
   log('info', 'profile_updated', { member_id: member.id, fields: Object.keys(updates), outcome: 'success' });
-  return toMemberProfile(member);
+  const total = (await getPointsSummary(enrollmentId)).total;
+  return toMemberProfile(member, total);
 }
 
-// Cohort-scoped directory — ordered by points DESC, reusing the existing
-// idx_community_members_points index. This stays a flat, point-ordered list
-// for the directory surface; ranked/windowed leaderboards live in
-// communityLeaderboardService.ts::getLeaderboard.
+// Cohort-scoped directory — ordered by canonical points DESC. Points/level come
+// from the ONE ledger (batched), so this matches the leaderboard + HUD.
 export async function listMembers(enrollmentId: string): Promise<MemberProfile[]> {
   const cohortId = await resolveCohortId(enrollmentId);
 
   const members = await CommunityMember.findAll({
     include: [{ model: Enrollment, as: 'enrollment', attributes: [], where: { cohort_id: cohortId } }],
-    order: [['points', 'DESC']],
   });
 
-  return members.map(toMemberProfile);
+  const totals = await getTotalsForEnrollments(members.map((m: any) => m.enrollment_id));
+  return members
+    .map((m: any) => ({ profile: toMemberProfile(m, totals.get(m.enrollment_id) ?? 0), pts: totals.get(m.enrollment_id) ?? 0 }))
+    .sort((a, b) => b.pts - a.pts || a.profile.display_name.localeCompare(b.profile.display_name))
+    .map((x) => x.profile);
 }

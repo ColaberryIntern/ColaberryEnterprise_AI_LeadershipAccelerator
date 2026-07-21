@@ -18,6 +18,7 @@ import { emitPointsEarned, onPointsEarned } from '../../../services/pointsFx';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayFeedV2 from './TodayFeedV2';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
+import CommunityPulse from './CommunityPulse';
 import '../../../components/timeline/timeline.css';
 
 const TodayShell: React.FC = () => {
@@ -309,6 +310,8 @@ const TodayShell: React.FC = () => {
 
         {/* ── right sidebar ── */}
         <aside className="te-side">
+          {/* Live community pulse — surfaces rooms people are in + live/next sessions */}
+          <CommunityPulse />
           {/* Your day — meters fold into the command band when the redesign flag is on */}
           {!redesign && (
           <div className="te-card te-scard accent-leaf">

@@ -42,12 +42,12 @@ const SEQ: Record<ComposerScope, string[]> = {
   lesson: ['overview', 'video', 'knowledge_check'],
   session: ['announcement', 'overview', 'video', 'warmup', 'prompt_lab', 'reflection'],
   day: ['warmup', 'video', 'prompt_lab', 'reflection'],
-  week: ['announcement', 'overview', 'warmup', 'video', 'knowledge_check', 'deep_dive', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'reflection', 'community_discussion', 'mock_interview', 'survey', 'evaluation'],
-  sprint: ['announcement', 'overview', 'video', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'demo', 'reflection', 'evaluation'],
-  month: ['announcement', 'overview', 'deep_dive', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'presentation', 'reflection', 'mock_interview', 'evaluation'],
+  week: ['announcement', 'overview', 'warmup', 'video', 'knowledge_check', 'deep_dive', 'prompt_lab', 'implementation_task', 'artifact_submission', 'reflection', 'community_discussion', 'mock_interview', 'survey', 'evaluation'],
+  sprint: ['announcement', 'overview', 'video', 'prompt_lab', 'implementation_task', 'artifact_submission', 'demo', 'reflection', 'evaluation'],
+  month: ['announcement', 'overview', 'deep_dive', 'prompt_lab', 'implementation_task', 'artifact_submission', 'presentation', 'reflection', 'mock_interview', 'evaluation'],
   certification_module: ['overview', 'deep_dive', 'prompt_lab', 'implementation_task', 'certification_exercise', 'evaluation'],
-  internship: ['announcement', 'implementation_task', 'github_sync', 'artifact_submission', 'presentation', 'evaluation'],
-  program: ['announcement', 'overview', 'video', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'mock_interview', 'evaluation'],
+  internship: ['announcement', 'implementation_task', 'artifact_submission', 'presentation', 'evaluation'],
+  program: ['announcement', 'overview', 'video', 'prompt_lab', 'implementation_task', 'artifact_submission', 'mock_interview', 'evaluation'],
 };
 
 const clampMin = (n: number) => Math.max(3, Math.min(600, Math.round(n)));

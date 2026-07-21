@@ -28,18 +28,24 @@ const A = '/api/admin/community/rooms';
 router.get(`${P}/home`, flagGate, requireParticipant, c.getHome);
 router.get(`${P}/people`, flagGate, requireParticipant, c.getPeople);
 router.get(`${P}/events`, flagGate, requireParticipant, c.listEvents);
+router.get(`${P}/impact`, flagGate, requireParticipant, c.impact);
 
 router.get(`${P}/rooms`, flagGate, requireParticipant, c.listRooms);
 router.post(`${P}/rooms`, flagGate, requireParticipant, c.createRoom);
 router.get(`${P}/rooms/:id`, flagGate, requireParticipant, c.getRoom);
 router.patch(`${P}/rooms/:id`, flagGate, requireParticipant, c.updateRoom);
 router.post(`${P}/rooms/:id/join`, flagGate, requireParticipant, c.joinRoom);
+router.post(`${P}/rooms/:id/join-video`, flagGate, requireParticipant, c.joinVideoRoom);
+router.post(`${P}/rooms/:id/presence`, flagGate, requireParticipant, c.roomPresence);
+router.post(`${P}/rooms/:id/invite`, flagGate, requireParticipant, c.invite);
+router.delete(`${P}/rooms/:id`, flagGate, requireParticipant, c.deleteRoom);
 router.post(`${P}/rooms/:id/request-access`, flagGate, requireParticipant, c.requestAccess);
 router.post(`${P}/rooms/:id/leave`, flagGate, requireParticipant, c.leaveRoom);
 router.patch(`${P}/rooms/:id/notification`, flagGate, requireParticipant, c.setNotificationPref);
 router.get(`${P}/rooms/:id/messages`, flagGate, requireParticipant, c.listMessages);
 router.post(`${P}/rooms/:id/messages`, flagGate, requireParticipant, c.postMessage);
 router.patch(`${P}/rooms/:id/messages/:messageId/question`, flagGate, requireParticipant, c.setQuestionStatus);
+router.post(`${P}/rooms/:id/messages/:messageId/verify-answer`, flagGate, requireParticipant, c.verifyAnswer);
 
 router.post(`${P}/bookings`, flagGate, requireParticipant, c.createBooking);
 router.post(`${P}/bookings/:id/publish`, flagGate, requireParticipant, c.publishBooking);
