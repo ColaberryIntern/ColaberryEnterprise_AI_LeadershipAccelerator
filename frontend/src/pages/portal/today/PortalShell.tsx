@@ -249,10 +249,14 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   // most-active (the API sorts). Capped so there's never a long scroll. Incoming
   // friend requests get pulled out into their own Requests section.
   const [railView, setRailView] = useState<'people' | 'find'>('people');
+  const [findQuery, setFindQuery] = useState('');
   const RAIL_MAX = 15;
   const incoming = contacts.filter((c) => c.friendshipStatus === 'incoming');
   const people = contacts.filter((c) => c.friendshipStatus !== 'incoming').slice(0, RAIL_MAX);
   const onlineNow = contacts.filter((c) => c.presence !== 'offline').length;
+  // Find-people directory, filtered by the search box.
+  const findQ = findQuery.trim().toLowerCase();
+  const findFiltered = findQ ? contacts.filter((c) => c.name.toLowerCase().includes(findQ)) : contacts;
   // "Find people" flips the rail to the full cohort directory; a back button
   // flips home. Only meaningful when the rail is expanded.
   const showFind = railView === 'find' && !contactsCollapsed;
@@ -356,9 +360,20 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
               </button>
               <h3>Find people</h3>
             </div>
+            <div className="te-ct-search-wrap">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              <input
+                className="te-ct-search"
+                type="text"
+                autoFocus
+                value={findQuery}
+                onChange={(e) => setFindQuery(e.target.value)}
+                placeholder="Search your cohort…"
+                aria-label="Search people"
+              />
+            </div>
             <div className="te-ct-list">
-              <div className="te-ct-grp">{cohortName} · {contacts.length}</div>
-              {contacts.map((c) => (
+              {findFiltered.map((c) => (
                 <div key={c.id} className="te-ctrow te-ctrow-static" title={c.name}>
                   <span className="te-ctav" style={{ background: c.color }}>{c.avatarUrl ? <img src={c.avatarUrl} alt="" /> : c.initials}<span className={`te-ctpres ${c.presence}`} /></span>
                   <span className="te-ctname">{c.name}</span>
@@ -373,8 +388,8 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
                   )}
                 </div>
               ))}
-              {contacts.length === 0 && (
-                <div className="te-ct-empty">No one from your cohort is here yet.</div>
+              {findFiltered.length === 0 && (
+                <div className="te-ct-empty">{findQuery.trim() ? `No one matches “${findQuery.trim()}”.` : 'No one from your cohort is here yet.'}</div>
               )}
             </div>
           </>
@@ -396,7 +411,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
                 </svg>
               </button>
             </div>
-            <button type="button" className="te-ct-find" title="Find people" onClick={() => { setContactsCollapsed(false); setRailView('find'); }}>
+            <button type="button" className="te-ct-find" title="Find people" onClick={() => { setContactsCollapsed(false); setRailView('find'); setFindQuery(''); }}>
               <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M21 21l-4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
               <span>Find people</span>
             </button>

@@ -10388,3 +10388,10 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali "keep going" after the sandbox + self-heal. Turns the what-if sandbox from a one-off explorer into an operational control — build a feed once (e.g. "Onboarding week" / "Exam week"), save it, and re-apply or switch in one click.
   - Verification: Frontend `tsc` clean on FeedControlTab (only pre-existing `@dnd-kit` local gap); no `eslint-disable` directives. Backend tsc (Docker/CI authoritative). Preset apply reuses the existing sandbox "Apply to live" path (today_eligible + ambientProviders) behind its confirm.
   - Notes: Branch `workstream/feed-control-presets` off main. Backend+nginx deploy. Presets store only the included-type selection (not policy) for v1.
+
+- [x] Find people: real search field (type to filter the cohort directory)
+  - Date: 2026-07-21
+  - Session: CC-20260720-8xqz
+  - What changed: The "Find people" pill looked like a search box but was a button that only flipped to the directory list — students who tried to type got nowhere. Added an auto-focused search input at the top of the Find-people view that filters the cohort by name as you type (case-insensitive), with a "No one matches" empty state; the query resets each time Find people is opened. Files: frontend/src/pages/portal/today/{PortalShell.tsx, TodayShell.css}.
+  - Verification: no dangling refs; authoritative frontend build via the prod nginx Docker image; live on prod.
+  - Notes: Branch workstream/find-people-search. Frontend-only -> nginx-only prod deploy (backend untouched).

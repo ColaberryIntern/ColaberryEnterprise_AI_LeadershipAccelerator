@@ -171,6 +171,12 @@
 .te-ct-back{width:28px;height:28px;flex:none;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .te-ct-back:hover{background:var(--sunken);color:var(--strong)}
 .te-ct-back svg{width:16px;height:16px}
+/* search field inside Find people (type to filter the cohort) */
+.te-ct-search-wrap{display:flex;align-items:center;gap:9px;margin:8px 12px 4px;background:var(--sunken);border:1px solid var(--border);border-radius:var(--r-pill);padding:8px 14px}
+.te-ct-search-wrap:focus-within{border-color:var(--berry)}
+.te-ct-search-wrap svg{width:16px;height:16px;flex:none;color:var(--muted)}
+.te-ct-search{flex:1;min-width:0;border:none;background:none;outline:none;font-family:inherit;font-size:14px;color:var(--body)}
+.te-ct-search::placeholder{color:var(--muted)}
 .te-ctrow-static{cursor:default}
 .te-ctrow-static:hover{background:none;color:var(--body)}
 .te-ct-add{margin-left:auto;flex:none;font-size:12px;font-weight:700;padding:4px 12px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--berry);cursor:pointer;font-family:inherit;transition:background .14s,color .14s}
