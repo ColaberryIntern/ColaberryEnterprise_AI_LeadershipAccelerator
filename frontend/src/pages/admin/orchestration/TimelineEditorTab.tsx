@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  DndContext, closestCenter, PointerSensor, KeyboardSensor, useSensor, useSensors, DragEndEvent,
+  DndContext, DragOverlay, useDroppable, pointerWithin, rectIntersection,
+  PointerSensor, KeyboardSensor, useSensor, useSensors,
+  DragEndEvent, DragStartEvent, CollisionDetection,
 } from '@dnd-kit/core';
 import {
   SortableContext, verticalListSortingStrategy, rectSortingStrategy, useSortable, arrayMove, sortableKeyboardCoordinates,
@@ -35,6 +37,14 @@ const BUCKET_COLOR: Record<Bucket, string> = {
   pre_class: '#6B6B6B', learn: '#367895', practice: '#E8920C', build: '#FB2832',
   reflect: '#8256B5', share: '#5BA63C', advance: '#B5710A',
 };
+
+// Cross-lane drag: each lane is a droppable whose id encodes its bucket, so a card
+// dropped anywhere in a lane (even an EMPTY one) tells the board which bucket
+// received it. Prefixed so it never collides with a card's UUID.
+const LANE_DROP_PREFIX = 'lane::';
+const laneDroppableId = (bucket: string) => `${LANE_DROP_PREFIX}${bucket}`;
+const isLaneId = (id: string) => id.startsWith(LANE_DROP_PREFIX);
+const bucketFromLaneId = (id: string) => id.slice(LANE_DROP_PREFIX.length) as Bucket;
 
 // Every card is an Experience Studio TYPE. Its render_band drives the thumbnail
 // (what kind of event it is) and which per-card controls appear in the editor.
@@ -216,32 +226,28 @@ const MiniCard: React.FC<{
 // Collapsed BY DEFAULT: shows the interactive OVERVIEW board (drag-to-reorder flow
 // boxes with inline Activate/Deactivate + Delete; green = live, grey = draft). The
 // header caret expands to the full card list with large student-facing previews.
+//
+// Cards drag WITHIN a lane to reorder AND ACROSS lanes to re-bucket. The shared
+// DndContext lives at the BOARD level (below) so a drag can cross lanes; each lane
+// is itself a droppable (id `lane::<bucket>`) so even an EMPTY lane accepts a card,
+// and its SortableContext handles ordering among the cards it holds.
 const BucketSection: React.FC<{
-  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; thumbOf: (type: string) => string | null; onReorder: (bucket: Bucket, ids: string[]) => void; onAdd: (bucket: Bucket) => void;
+  bucket: Bucket; cards: Card[]; bandOf: (type: string) => string; labelOf: (type: string) => string; thumbOf: (type: string) => string | null; onAdd: (bucket: Bucket) => void;
+  // Board-level flag: some card (anywhere) is being dragged. Used to neutralize the
+  // inline video iframes lane-wide (see .te-lane.dragging CSS) — iframes are separate
+  // browsing contexts that swallow pointer events, so without this the pointer is
+  // "lost" the moment the cursor passes over a player and the drop silently no-ops.
+  dragging: boolean;
   hasGating: boolean; onEditGating: (bucket: Bucket) => void;
   cardActions: Omit<React.ComponentProps<typeof SortableCard>, 'card' | 'band' | 'studentLabel' | 'typeThumbUrl'>;
-}> = ({ bucket, cards, bandOf, labelOf, thumbOf, onReorder, onAdd, hasGating, onEditGating, cardActions }) => {
+}> = ({ bucket, cards, bandOf, labelOf, thumbOf, onAdd, dragging, hasGating, onEditGating, cardActions }) => {
   const [collapsed, setCollapsed] = useState(true);   // collapse by default
-  // While a card is being dragged we neutralize the inline video iframes in this
-  // lane (see .te-lane.dragging CSS). Iframes are separate browsing contexts that
-  // swallow pointer events, so without this the pointer is "lost" the moment the
-  // cursor passes over another card's player — dnd-kit then reports over=null and
-  // the drop silently no-ops (the "drag doesn't save" bug).
-  const [dragging, setDragging] = useState(false);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
   const ids = cards.map((c) => c.id);
-  const onDragEnd = (e: DragEndEvent) => {
-    setDragging(false);
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const oldI = ids.indexOf(String(active.id));
-    const newI = ids.indexOf(String(over.id));
-    if (oldI < 0 || newI < 0) return;
-    onReorder(bucket, arrayMove(ids, oldI, newI));
-  };
+  // The whole lane body is a drop target so a card can be dropped onto an EMPTY
+  // lane, or onto the padding around cards — the board's onDragEnd reads this id
+  // to know which bucket received the card. `isOver` is only true over empty area
+  // (the board's collision detection resolves to a specific CARD when over one).
+  const { setNodeRef: setLaneRef, isOver } = useDroppable({ id: laneDroppableId(bucket) });
   return (
     <div style={{ marginBottom: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
@@ -269,19 +275,17 @@ const BucketSection: React.FC<{
         <button className="tl-mini" onClick={() => onAdd(bucket)}>+ Add card</button>
       </div>
 
-      {collapsed ? (
-        cards.length === 0 ? (
-          <div style={{ fontSize: 12, color: '#C4C4C4', padding: '2px 0 8px 20px' }}>No cards yet — “+ Add card” to start this lane.</div>
-        ) : (
-          // Interactive overview board — the draggable flow boxes with inline
-          // Activate/Deactivate + Delete (replaces the old static Mermaid map).
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={() => setDragging(true)}
-            onDragCancel={() => setDragging(false)}
-            onDragEnd={onDragEnd}
-          >
+      {/* Lane body = the drop zone. Highlights when a dragged card hovers its empty
+          area (dropping there appends to this lane / re-buckets a card from another). */}
+      <div ref={setLaneRef} className={`te-lanebody${dragging && isOver ? ' te-lane-over' : ''}`}>
+        {collapsed ? (
+          cards.length === 0 ? (
+            <div className="te-lane-empty">
+              {dragging ? 'Drop here to move a card into this lane' : 'No cards yet — “+ Add card” to start this lane.'}
+            </div>
+          ) : (
+            // Interactive overview board — the draggable flow boxes with inline
+            // Activate/Deactivate + Delete (replaces the old static Mermaid map).
             <div className={`te-lane te-ovwrap${dragging ? ' dragging' : ''}`}>
               <SortableContext items={ids} strategy={rectSortingStrategy}>
                 {chunk(cards, 3).map((row, ri) => (
@@ -297,29 +301,21 @@ const BucketSection: React.FC<{
                 ))}
               </SortableContext>
               <div className="te-ovcap">
-                Drag ⠿ to reorder · ◐ / ● activate-deactivate · 🗑 delete · click a card to edit ·{' '}
+                Drag ⠿ to reorder or move between lanes · ◐ / ● activate-deactivate · 🗑 delete · click a card to edit ·{' '}
                 <button type="button" className="te-ovlink" onClick={() => setCollapsed(false)}>open full view →</button>
               </div>
             </div>
-          </DndContext>
-        )
-      ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={() => setDragging(true)}
-          onDragCancel={() => setDragging(false)}
-          onDragEnd={onDragEnd}
-        >
+          )
+        ) : (
           <div className={`te-lane${dragging ? ' dragging' : ''}`}>
             <SortableContext items={ids} strategy={verticalListSortingStrategy}>
               {cards.length === 0
-                ? <div style={{ fontSize: 12, color: '#C4C4C4', padding: '4px 0 8px 18px' }}>No cards in this bucket yet.</div>
+                ? <div className="te-lane-empty">{dragging ? 'Drop here to move a card into this lane' : 'No cards in this bucket yet.'}</div>
                 : cards.map((c) => <SortableCard key={c.id} card={c} band={bandOf(c.type)} studentLabel={labelOf(c.type)} typeThumbUrl={thumbOf(c.type)} {...cardActions} />)}
             </SortableContext>
           </div>
-        </DndContext>
-      )}
+        )}
+      </div>
     </div>
   );
 };
@@ -656,6 +652,23 @@ const TimelineEditorTab: React.FC = () => {
   const [sectionGating, setSectionGating] = useState<Bucket | null>(null);   // which section's gating modal is open
   const [savingSection, setSavingSection] = useState(false);
   const [orderSaved, setOrderSaved] = useState(false);   // transient "order saved" confirmation after a drag
+  const [activeId, setActiveId] = useState<string | null>(null);   // card being dragged (for the DragOverlay)
+  const [dragging, setDragging] = useState(false);                 // any drag in progress (iframe shield, lane highlights)
+
+  // One board-level DndContext spans every lane, so a card can be dragged within a
+  // lane (reorder) OR across lanes (re-bucket). Pointer-first collision detection
+  // that prefers a CARD over the lane container, so drops between cards land where
+  // the cursor is and only empty-area drops resolve to the lane itself.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+  const collisionDetection = useCallback<CollisionDetection>((args) => {
+    const pointerHits = pointerWithin(args);
+    const hits = pointerHits.length ? pointerHits : rectIntersection(args);
+    const cardHit = hits.find((h) => !isLaneId(String(h.id)));
+    return cardHit ? [cardHit] : hits;
+  }, []);
 
   // Load the courses once and default to the AI Systems Architect Accelerator —
   // the Timeline is scoped to one course.
@@ -744,6 +757,10 @@ const TimelineEditorTab: React.FC = () => {
   );
   const laneCards = (bucket: Bucket) => weekCards.filter((c) => c.bucket === bucket).sort((a, b) => a.order - b.order);
 
+  // id -> card, scoped to the visible week (cross-lane drags stay within a week).
+  const cardById = useMemo(() => new Map(weekCards.map((c) => [c.id, c])), [weekCards]);
+  const activeCard = activeId ? cardById.get(activeId) || null : null;
+
   const onReorder = async (bucket: Bucket, ids: string[]) => {
     if (!board) return;
     const orderMap = new Map(ids.map((id, i) => [id, i]));
@@ -761,6 +778,82 @@ const TimelineEditorTab: React.FC = () => {
       setError(e?.response?.data?.error || e?.message || 'Reorder failed — the new order was not saved');
       loadBoard();
     }
+  };
+
+  // Move a card into a DIFFERENT lane: re-bucket it and resequence BOTH the source
+  // and destination lanes. The reorder endpoint takes an optional `bucket` per item,
+  // so a single call persists the move + both lanes' new order atomically.
+  const onMoveAcross = async (cardId: string, fromBucket: Bucket, toBucket: Bucket, destOrderedIds: string[]) => {
+    if (!board) return;
+    const srcIds = laneCards(fromBucket).map((c) => c.id).filter((id) => id !== cardId);
+    const destOrder = new Map(destOrderedIds.map((id, i) => [id, i]));
+    const srcOrder = new Map(srcIds.map((id, i) => [id, i]));
+    // Optimistic: re-bucket the moved card and resequence both lanes immediately.
+    setBoard({
+      ...board,
+      cards: board.cards.map((c) => {
+        if (c.id === cardId) return { ...c, bucket: toBucket, order: destOrder.get(cardId)! };
+        if (destOrder.has(c.id)) return { ...c, order: destOrder.get(c.id)! };
+        if (srcOrder.has(c.id)) return { ...c, order: srcOrder.get(c.id)! };
+        return c;
+      }),
+    });
+    setError('');
+    try {
+      const items = [
+        ...destOrderedIds.map((id, i) => ({ id, order: i, bucket: toBucket })),
+        ...srcIds.map((id, i) => ({ id, order: i })),
+      ];
+      await api.put('/api/admin/orchestration/timeline/cards/reorder', { items });
+      setOrderSaved(true);
+      window.setTimeout(() => setOrderSaved(false), 1800);
+    } catch (e: any) {
+      setError(e?.response?.data?.error || e?.message || 'Move failed — the card was not re-bucketed');
+      loadBoard();
+    }
+  };
+
+  const endDrag = () => { setActiveId(null); setDragging(false); };
+  const onDragStart = (e: DragStartEvent) => { setActiveId(String(e.active.id)); setDragging(true); };
+  // Single handler for the whole board: same-lane drops reorder; cross-lane drops
+  // re-bucket. `over` is a CARD id (dropped on/near a card) or a `lane::` id
+  // (dropped on a lane's empty area) — see the board's collision detection.
+  const onDragEnd = (e: DragEndEvent) => {
+    endDrag();
+    const { active, over } = e;
+    if (!over) return;
+    const activeCardId = String(active.id);
+    const src = cardById.get(activeCardId);
+    if (!src) return;
+    const fromBucket = src.bucket as Bucket;
+
+    const overId = String(over.id);
+    let toBucket: Bucket;
+    let overCardId: string | null = null;
+    if (isLaneId(overId)) {
+      toBucket = bucketFromLaneId(overId);
+    } else {
+      const overCard = cardById.get(overId);
+      if (!overCard) return;
+      toBucket = overCard.bucket as Bucket;
+      overCardId = overId;
+    }
+
+    if (fromBucket === toBucket) {
+      const ids = laneCards(fromBucket).map((c) => c.id);
+      const oldI = ids.indexOf(activeCardId);
+      const newI = overCardId ? ids.indexOf(overCardId) : ids.length - 1;
+      if (oldI < 0 || newI < 0 || oldI === newI) return;
+      onReorder(fromBucket, arrayMove(ids, oldI, newI));
+      return;
+    }
+
+    // Cross-lane: insert at the over-card's slot (else append to the lane's tail).
+    const destIds = laneCards(toBucket).map((c) => c.id).filter((id) => id !== activeCardId);
+    const overIdx = overCardId ? destIds.indexOf(overCardId) : -1;
+    const insertAt = overIdx < 0 ? destIds.length : overIdx;
+    destIds.splice(insertAt, 0, activeCardId);
+    onMoveAcross(activeCardId, fromBucket, toBucket, destIds);
   };
 
   const openAdd = (bucket: Bucket, wk?: number | null) => {
@@ -1013,6 +1106,16 @@ const TimelineEditorTab: React.FC = () => {
         .te-ovarrow{flex:none;align-self:center;color:#9AC79A;font-size:16px;font-weight:700}
         .te-ovcap{font-size:11px;color:#9AA0A6;margin-top:6px}
         .te-ovlink{border:none;background:none;padding:0;font:inherit;color:#367895;font-weight:600;cursor:pointer;text-decoration:underline}
+        /* Lane body = the cross-lane drop zone. Highlights when a dragged card hovers
+           its empty area; the empty-lane text becomes a comfortable drop target. */
+        .te-lanebody{border-radius:12px;transition:background .12s ease,box-shadow .12s ease}
+        .te-lane-over{background:#EAF3F6;box-shadow:inset 0 0 0 2px #9CC6D4}
+        .te-lane-empty{font-size:12px;color:#C4C4C4;padding:10px 0 10px 20px;min-height:34px;display:flex;align-items:center}
+        .te-lane-over .te-lane-empty{color:#1F5266;font-weight:600}
+        /* Card chip that follows the cursor while dragging (DragOverlay). */
+        .te-drag-overlay{display:flex;align-items:center;gap:7px;max-width:230px;padding:9px 12px;border-radius:9px;background:#fff;border:1px solid #BEE0BE;box-shadow:0 12px 26px rgba(0,0,0,.24);cursor:grabbing}
+        .te-drag-overlay .te-mini-ico{flex:none;font-size:15px;line-height:1}
+        .te-drag-overlay .te-mini-ttl{flex:1;min-width:0;font-size:12px;font-weight:600;color:#284A2C;line-height:1.25;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden}
         .te-act{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;padding:6px 13px;border:1px solid #DADADA;background:#fff;border-radius:7px;cursor:pointer;color:#4A4A4A}
         .te-act:hover{background:#F5F5F5}
         .te-act:disabled{opacity:.55;cursor:not-allowed}
@@ -1107,11 +1210,30 @@ const TimelineEditorTab: React.FC = () => {
             <button className="tl-wk" onClick={() => { const next = (weeks.nums[weeks.nums.length - 1] || 0) + 1; setWeek(next); openAdd('learn', next); }}>+ Week</button>
           </div>
 
-          {BUCKETS.map((b) => (
-            <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} thumbOf={thumbOf} onReorder={onReorder} onAdd={openAdd}
-              hasGating={(sectionRuleFor(b)?.rules.length || 0) > 0} onEditGating={(bk) => setSectionGating(bk)}
-              cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish, onPreview: setStudentView }} />
-          ))}
+          <DndContext
+            sensors={sensors}
+            collisionDetection={collisionDetection}
+            onDragStart={onDragStart}
+            onDragCancel={endDrag}
+            onDragEnd={onDragEnd}
+          >
+            {BUCKETS.map((b) => (
+              <BucketSection key={b} bucket={b} cards={laneCards(b)} bandOf={bandOf} labelOf={labelOf} thumbOf={thumbOf} onAdd={openAdd}
+                dragging={dragging}
+                hasGating={(sectionRuleFor(b)?.rules.length || 0) > 0} onEditGating={(bk) => setSectionGating(bk)}
+                cardActions={{ onEdit: openEdit, onClone, onDelete, onPublish, onPreview: setStudentView }} />
+            ))}
+            {/* The card follows the cursor as a light chip while dragging (works the
+                same whether the source lane is collapsed or expanded). */}
+            <DragOverlay dropAnimation={null}>
+              {activeCard ? (
+                <div className="te-drag-overlay">
+                  <span className="te-mini-ico" aria-hidden>{bandIcon(bandOf(activeCard.type))}</span>
+                  <span className="te-mini-ttl">{activeCard.title}</span>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </>
       )}
 
