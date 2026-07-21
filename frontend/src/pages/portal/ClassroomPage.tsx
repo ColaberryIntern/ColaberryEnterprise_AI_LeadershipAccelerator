@@ -203,11 +203,13 @@ const ClassroomPage: React.FC = () => {
   // completion is an explicit action inside the drawer, not a side effect of opening.
   const openCard = useCallback((card: TimelineFeedCard) => { setSelectedId(card.id); }, []);
   const completeCard = useCallback(async (card: TimelineFeedCard) => {
-    try {
-      const res = await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
-      await load();
-      emitPointsEarned(res.data?.points_awarded ?? 0);   // HUD burst + chime (0 = already earned → silent)
-    } catch { /* surfaced on next load; keep the UI responsive */ }
+    // No swallow: a gate rejection (422 watch / 423 lock) must propagate so the
+    // caller (TimelineCard.handleCollect / CardDetailBody) can surface "watch it
+    // first" instead of the tile falsely flipping to "collected". Callers own the
+    // error UX; both catch.
+    const res = await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+    await load();
+    emitPointsEarned(res.data?.points_awarded ?? 0);   // HUD burst + chime (0 = already earned → silent)
   }, [load]);
   const selectedCard = useMemo(() => feed?.cards.find((c) => c.id === selectedId) ?? null, [feed, selectedId]);
 
