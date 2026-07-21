@@ -90,7 +90,8 @@ export const CARD_TYPES: CardTypeDef[] = [
   D({ slug: 'video', label: 'Video', student_label: 'Video', bucket: 'learn', render_band: 'media', est_minutes: 12, learning_xp: 15 }), // ⚑ rotates via networkVideoService — candidate for feed_mode:'ambient'; kept anchored/class in Phase 0
   // Week 0 — free lead-magnet content (the "AI Preview" tier): social proof + light learning.
   D({ slug: 'testimonial', label: 'Testimonial', student_label: 'Testimonial', bucket: 'pre_class', render_band: 'media', est_minutes: 3, learning_xp: 5, home_surface: 'today', feed_mode: 'ambient' }),
-  D({ slug: 'podcast', label: 'Podcast', student_label: 'Podcast', bucket: 'learn', render_band: 'media', est_minutes: 18, learning_xp: 10, home_surface: 'today', feed_mode: 'ambient' }),
+  D({ slug: 'podcast', label: 'Podcast', student_label: 'Podcast', bucket: 'learn', render_band: 'media', est_minutes: 18, learning_xp: 0, home_surface: 'today', feed_mode: 'ambient' }), // no points — podcasts are ambient listening, not a points-collecting task
+
   D({ slug: 'blog', label: 'Blog', student_label: 'Blog', bucket: 'learn', render_band: 'deepdive', est_minutes: 5, learning_xp: 10, home_surface: 'today', feed_mode: 'ambient' }),
   D({ slug: 'warmup', label: 'Self Study', student_label: 'Self Study', bucket: 'pre_class', render_band: 'warmup', est_minutes: 15, learning_xp: 10 }),
   D({ slug: 'knowledge_check', label: 'Knowledge Check', student_label: 'Knowledge Check', bucket: 'learn', render_band: 'quiz', est_minutes: 10, learning_xp: 15, difficulty: 'core', ai_evaluation: true, prompt_pairs: ['kc'] }),
