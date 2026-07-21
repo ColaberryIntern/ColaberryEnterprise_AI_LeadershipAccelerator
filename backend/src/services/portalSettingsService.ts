@@ -326,6 +326,17 @@ export async function setResume(
     console.warn('[Settings] resume parse (non-fatal):', err?.message);
   }
 
+  // Award the one-time "profile set up" points (+25) for uploading a resume /
+  // LinkedIn PDF — this is the "Upload your resume" setup step. Idempotent per
+  // enrollment (event_key 'profile_completed'), so re-uploading never re-awards.
+  // Best-effort: a points failure must never fail the upload.
+  try {
+    const { award } = await import('./pointsService');
+    await award(enrollmentId, { eventType: 'profile_completed' });
+  } catch (err: any) {
+    console.warn('[Settings] resume points award (non-fatal):', err?.message);
+  }
+
   return getSettings(enrollmentId);
 }
 

@@ -15,6 +15,7 @@ import {
 } from './shellUtils';
 import portalApi from '../../../utils/portalApi';
 import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../../services/pointsFx';
+import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi';
 import { runtimeApi } from '../runtime/runtimeApi';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayFeedV2 from './TodayFeedV2';
@@ -102,13 +103,29 @@ const TodayShell: React.FC = () => {
     if (!file || busy) return;
     setBusy(true);
     setUploadName(file.name);
+    const prevTotal = points?.total ?? 0;
     try {
       const isText = /\.(txt|md)$/i.test(file.name) || file.type.startsWith('text/');
-      const text = isText ? await file.text() : `[Uploaded file: ${file.name}]`;
-      const r = await ingestBackground({ resume_text: text });
+      if (isText) {
+        await ingestBackground({ resume_text: await file.text() });
+      } else {
+        // Binary (PDF/DOCX/etc — incl. LinkedIn "Save to PDF"): send the REAL
+        // file bytes to the extracting endpoint, NOT a placeholder, so the
+        // resume/LinkedIn actually parses server-side and fills the profile.
+        const data_base64 = await fileToBase64(file);
+        await uploadResume({ file_name: file.name, mime: file.type || 'application/octet-stream', data_base64 });
+      }
       await loadAll();
+      // Refresh the HUD total and celebrate any newly-awarded points (+25 the
+      // first time a resume/LinkedIn is uploaded).
+      try {
+        const fresh = await fetchPoints();
+        setPoints(fresh);
+        const gained = (fresh?.total ?? 0) - prevTotal;
+        if (gained > 0) emitPointsEarned(gained);
+      } catch { /* keep prior total */ }
       setShowUpload(false);
-      flash(r.parsed ? 'Got it — personalizing your experience in the background' : 'Uploaded — we will personalize as you go');
+      flash('Got it — personalizing your experience in the background');
     } catch { flash('Could not upload that right now'); } finally { setBusy(false); }
   };
 
