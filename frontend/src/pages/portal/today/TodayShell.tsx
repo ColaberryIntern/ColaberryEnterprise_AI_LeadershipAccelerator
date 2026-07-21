@@ -19,6 +19,8 @@ import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayFeedV2 from './TodayFeedV2';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
+import NextLiveClassCard from './NextLiveClassCard';
+import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
 
 const TodayShell: React.FC = () => {
@@ -37,6 +39,9 @@ const TodayShell: React.FC = () => {
 
   const me = useMemo(readParticipant, []);
   const { flags } = usePortalFlags();
+  // Next live class (from live_sessions). Null for Explorers/guests with no
+  // scheduled session — the shell then falls back to the first-class card.
+  const { session: nextLiveSession } = useNextLiveSession();
 
   const loadAll = useCallback(async () => {
     const [p, s, pr, cl, st] = await Promise.allSettled([
@@ -356,7 +361,13 @@ const TodayShell: React.FC = () => {
             </button>
           </div>
 
-          {schedule?.first_class && (
+          {/* Next live class — when the student has an upcoming/live session
+              (from live_sessions) show the live-session card; otherwise fall
+              back to the first-class cohort countdown UNCHANGED. The Open House
+              "Coming up" card below is unaffected in either case. */}
+          {nextLiveSession ? (
+            <NextLiveClassCard session={nextLiveSession} />
+          ) : schedule?.first_class ? (
             <div className="te-card te-scard">
               <h3>Countdown to your first class</h3>
               <div className="te-muted">{schedule.first_class.cohort_name || 'Your cohort'}{schedule.first_class.core_day ? ` · ${schedule.first_class.core_day}s ${schedule.first_class.core_time || ''}` : ''}</div>
@@ -369,7 +380,7 @@ const TodayShell: React.FC = () => {
               )}
               {schedule.first_class.source === 'next_open_cohort' && <div className="te-muted" style={{ marginTop: 8 }}>Next cohort start (join to lock your seat)</div>}
             </div>
-          )}
+          ) : null}
 
           <div className="te-card te-scard">
             <h3>Coming up</h3>

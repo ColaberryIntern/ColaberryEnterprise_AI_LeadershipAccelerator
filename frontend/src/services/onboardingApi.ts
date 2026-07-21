@@ -115,6 +115,34 @@ export async function fetchSchedule(): Promise<OnboardingSchedule> {
   return data;
 }
 
+// ── Next live class session (server-picked from live_sessions) ───────────────
+export interface NextLiveSession {
+  id: string;
+  session_number: number;
+  title: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  status: 'scheduled' | 'live';
+  meeting_link: string | null;
+  meeting_provider: string | null;
+  timezone: string | null; // cohort IANA zone (e.g. America/Chicago) for the time label
+}
+/** The student's next scheduled/live class session, or null if none is upcoming. */
+export async function getNextSession(): Promise<NextLiveSession | null> {
+  const { data } = await portalApi.get<{ next_session: NextLiveSession | null }>('/api/portal/next-session');
+  return data.next_session ?? null;
+}
+
+// ── Join a live session (records attendance + awards session_attended once) ───
+export interface JoinSessionResult { ok: true; status: 'present' | 'late'; awarded: boolean; points: number; }
+/** Record attendance for a live session. Idempotent — safe to call on every join
+ *  click; awards the session_attended points only the first time. */
+export async function joinSession(sessionId: string): Promise<JoinSessionResult> {
+  const { data } = await portalApi.post<JoinSessionResult>(`/api/portal/sessions/${sessionId}/join`);
+  return data;
+}
+
 /** Upcoming public events (Open Houses) from CCPP, for the portal calendar. */
 export async function fetchPublicEvents(days = 30): Promise<OpenHouseView[]> {
   const { data } = await portalApi.get<{ events: OpenHouseView[] }>(`/api/portal/events?days=${days}`);

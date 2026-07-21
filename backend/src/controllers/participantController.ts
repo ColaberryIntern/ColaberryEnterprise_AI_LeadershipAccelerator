@@ -3,8 +3,9 @@ import {
   requestMagicLink, verifyMagicLink, getParticipantProfile,
   getParticipantDashboard, getParticipantSessions, getParticipantSessionDetail,
   getParticipantSubmissions, createParticipantSubmission, uploadParticipantSubmission,
-  getParticipantProgress,
+  getParticipantProgress, getNextLiveSession,
 } from '../services/participantService';
+import { joinLiveSession } from '../services/liveSessionAttendanceService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
 import { getStreak, claimStreak } from '../services/streakService';
@@ -216,6 +217,25 @@ export async function handleGetSessions(req: Request, res: Response, next: NextF
   try {
     const sessions = await getParticipantSessions(req.participant!.sub, req.participant!.cohort_id);
     res.json({ sessions });
+  } catch (err) { next(err); }
+}
+
+// Lean payload for the Today "Next live class" card (live_sessions-backed).
+export async function handleGetNextSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await getNextLiveSession(req.participant!.cohort_id);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Student joined a live session — record attendance + award credit once.
+export async function handleJoinSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await joinLiveSession(
+      req.participant!.sub, req.params.id as string, req.participant!.cohort_id
+    );
+    if (!result) return res.status(404).json({ error: 'Session not found or not joinable' });
+    res.json(result);
   } catch (err) { next(err); }
 }
 

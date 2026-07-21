@@ -18,6 +18,8 @@ import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
+import LiveSession from '../../models/LiveSession';
+import AttendanceRecord from '../../models/AttendanceRecord';
 import { resolveCohortId } from '../communityService';
 import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
@@ -158,6 +160,83 @@ export async function rehydrateCommunityItems(items: TodayFeedItem[]): Promise<v
   }
 }
 
+// ─── Live-session replay ("You missed it") ──────────────────────────────
+// A completed session the student didn't attend surfaces as a replay card:
+// inline recording + AI recap. Both the recording_url and recap_json.summary
+// are admin-set / async-generated and may arrive AFTER the card is frozen into
+// the append-only impression snapshot, so the DYNAMIC fields (video + summary)
+// live in one shared deriver used at both compose-time (sessionReplayItem) and
+// serve-time (rehydrateSessionItems) — the same split as communityFieldsFromPost.
+
+type SessionReplayFields = {
+  id: string;
+  title: string | null;
+  recording_url?: string | null;
+  recap_json?: { summary?: string | null } | null;
+};
+
+// The fields that can change after the card is placed: the recording becomes
+// available and the recap is generated. Everything else on the card is static.
+export function sessionFieldsFromRow(s: Pick<SessionReplayFields, 'recording_url' | 'recap_json'>): Pick<TodayFeedItem, 'description' | 'video'> {
+  const summary = typeof s.recap_json?.summary === 'string' ? s.recap_json.summary.trim() : '';
+  return {
+    description: summary || 'Recap coming soon.',
+    video: s.recording_url ? { url: s.recording_url, presenter: null, poster: null } : null,
+  };
+}
+
+/** Completed LiveSession the student missed → a Today feed replay item. Pure. */
+export function sessionReplayItem(session: SessionReplayFields): TodayFeedItem {
+  const dyn = sessionFieldsFromRow(session);
+  return {
+    position: 0,
+    kind: 'anchored',
+    ref: `session:${session.id}`,
+    // live_class is registered under the 'group' (Group / Live) surface; fall
+    // back to 'group' if the registry ever drops it.
+    surface: surfaceOf('live_class') ?? 'group',
+    type: 'live_class',
+    render_band: 'live_class',
+    card_id: null,
+    title: `You missed it — ${session.title ?? 'Live class'}`,
+    subtitle: 'Live class recap',
+    description: dyn.description,
+    image: null,
+    video: dyn.video,
+    blog: null,
+    content: null,
+    week: null,
+    estimated_time: null,
+    status: 'available',
+    interacted: false,
+    author: null,
+  };
+}
+
+/**
+ * Serve-time re-hydration of placed session cards — heals a "You missed it"
+ * card that was frozen into the impression snapshot BEFORE the recording was
+ * uploaded or the recap generated. Batched, only when session items are present.
+ * Fail-soft — on error the snapshot is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateSessionItems(items: TodayFeedItem[]): Promise<void> {
+  const sessions = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('session:'));
+  if (!sessions.length) return;
+  try {
+    const ids = Array.from(new Set(sessions.map((i) => i.ref.slice('session:'.length))));
+    const rows = await LiveSession.findAll({ where: { id: ids }, attributes: ['id', 'recording_url', 'recap_json'] });
+    const byId = new Map(rows.map((r) => { const plain = r.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    for (const it of sessions) {
+      const row = byId.get(it.ref.slice('session:'.length));
+      if (!row) continue;
+      const dyn = sessionFieldsFromRow(row);
+      it.video = dyn.video; it.description = dyn.description;
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] session rehydrate failed:', err?.message?.split('\n')[0]);
+  }
+}
+
 async function classCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
   try {
     const feed = await getFeed(enrollmentId);
@@ -215,6 +294,36 @@ async function communityCandidates(enrollmentId: string, placedRefs: Set<string>
   }
 }
 
+async function missedSessionCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
+  try {
+    const cohortId = await resolveCohortId(enrollmentId);
+    // Completed sessions for the cohort, most-recent first (session_number DESC).
+    const sessions = await LiveSession.findAll({
+      where: { cohort_id: cohortId, status: 'completed' },
+      order: [['session_number', 'DESC']],
+    });
+    if (!sessions.length) return [];
+    // Two-step "LEFT JOIN": load the student's attendance for those sessions.
+    // Attended = a row with status present|late|excused. Absentee = NO row OR
+    // status='absent' → those are the ones they "missed".
+    const sessionIds = sessions.map((s) => s.id);
+    const attendance = await AttendanceRecord.findAll({
+      where: { enrollment_id: enrollmentId, session_id: sessionIds },
+      attributes: ['session_id', 'status'],
+    });
+    const attendedSessionIds = new Set(
+      (attendance as any[]).filter((a) => a.status !== 'absent').map((a) => a.session_id),
+    );
+    return sessions
+      .filter((s) => !attendedSessionIds.has(s.id) && !placedRefs.has(`session:${s.id}`))
+      .slice(0, 3)
+      .map((s) => sessionReplayItem(s.get({ plain: true }) as any));
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] missed session failed:', err?.message?.split('\n')[0]);
+    return [];
+  }
+}
+
 /**
  * The blended anchored queue for the Today feed. Class-only unless
  * env.todayAggregateSources is on, in which case Project + Community are blended
@@ -222,10 +331,19 @@ async function communityCandidates(enrollmentId: string, placedRefs: Set<string>
  */
 export async function gatherAnchored(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
   const cls = await classCandidates(enrollmentId, placedRefs);
-  if (!env.todayAggregateSources) return cls;
-  const [project, community] = await Promise.all([
-    projectCandidates(enrollmentId, placedRefs),
-    communityCandidates(enrollmentId, placedRefs),
-  ]);
-  return blendSurfaces([cls, project, community]);
+  // Each extra surface is gated by its own flag; when all are off this returns
+  // the class-only queue unchanged (flag-off ≡ byte-identical to before).
+  const extras: TodayFeedItem[][] = [];
+  if (env.todayAggregateSources) {
+    const [project, community] = await Promise.all([
+      projectCandidates(enrollmentId, placedRefs),
+      communityCandidates(enrollmentId, placedRefs),
+    ]);
+    extras.push(project, community);
+  }
+  if (env.todaySessionReplays) {
+    extras.push(await missedSessionCandidates(enrollmentId, placedRefs));
+  }
+  if (!extras.length) return cls;
+  return blendSurfaces([cls, ...extras]);
 }

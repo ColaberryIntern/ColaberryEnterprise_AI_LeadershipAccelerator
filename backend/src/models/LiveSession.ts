@@ -17,6 +17,7 @@ export interface LiveSessionAttributes {
   recording_url?: string;
   materials_json?: any;
   curriculum_json?: any;
+  recap_json?: any;
   build_phase_unlock?: boolean;
   required_prior_sessions?: any;
   presentation_phase_flag?: boolean;
@@ -45,6 +46,7 @@ class LiveSession extends Model<LiveSessionAttributes> implements LiveSessionAtt
   declare recording_url: string;
   declare materials_json: any;
   declare curriculum_json: any;
+  declare recap_json: any;
   declare build_phase_unlock: boolean;
   declare required_prior_sessions: any;
   declare presentation_phase_flag: boolean;
@@ -121,6 +123,10 @@ LiveSession.init(
       allowNull: true,
     },
     curriculum_json: {
+      type: DataTypes.JSONB,
+      allowNull: true,
+    },
+    recap_json: {
       type: DataTypes.JSONB,
       allowNull: true,
     },
