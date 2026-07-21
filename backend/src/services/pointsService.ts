@@ -64,6 +64,17 @@ export async function award(enrollmentId: string, input: AwardInput): Promise<{ 
   return { awarded: created, points: created ? points : 0 };
 }
 
+/**
+ * Remove a previously-awarded event (an action was undone — e.g. an unlike).
+ * Idempotent: revoking an event that was never awarded, or already revoked, is a
+ * no-op. Keyed the same as award(), so a toggleable action awards on and revokes
+ * off the same (enrollment_id, event_key). Returns whether a row was removed.
+ */
+export async function revoke(enrollmentId: string, eventKey: string): Promise<{ revoked: boolean }> {
+  const removed = await StudentPointsEvent.destroy({ where: { enrollment_id: enrollmentId, event_key: eventKey } });
+  return { revoked: removed > 0 };
+}
+
 /** Whether a specific event has already been awarded to an enrollment (idempotency check). */
 export async function hasAwarded(enrollmentId: string, eventKey: string): Promise<boolean> {
   const row = await StudentPointsEvent.findOne({ where: { enrollment_id: enrollmentId, event_key: eventKey } });

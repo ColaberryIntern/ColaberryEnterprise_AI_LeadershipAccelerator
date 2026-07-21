@@ -21,6 +21,7 @@ jest.mock('../../models/CommunityNotification', () => ({ create: jest.fn() }));
 // their real model methods don't hit the DB (points/level come from here).
 jest.mock('../../services/pointsService', () => ({
   award: jest.fn(async () => ({ awarded: true, points: 0 })),
+  revoke: jest.fn(async () => ({ revoked: true })),
   getPointsSummary: jest.fn(async () => ({ total: 0, events: [] })),
   getTotalsForEnrollments: jest.fn(async () => new Map()),
   levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
@@ -38,7 +39,10 @@ import CommunityComment from '../../models/CommunityComment';
 import CommunityLike from '../../models/CommunityLike';
 import CommunityPointsEvent from '../../models/CommunityPointsEvent';
 import CommunityNotification from '../../models/CommunityNotification';
+import { award, revoke } from '../../services/pointsService';
 
+const awardCanonical = award as jest.Mock;
+const revokeCanonical = revoke as jest.Mock;
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
 const findAllMembers = CommunityMember.findAll as jest.Mock;
@@ -291,6 +295,40 @@ describe('toggleLike', () => {
     expect(decrementMember).toHaveBeenCalledWith('points', { by: 1, where: { id: otherMemberId } });
     expect(mockPost.decrement).toHaveBeenCalledWith('like_count', { by: 1 });
     expect(createPointsEvent).toHaveBeenCalledWith({ member_id: otherMemberId, points: -1 });
+  });
+
+  it('canonical: liking a post credits community_like into the canonical ledger (leaderboard) for the author', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(mockPost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-can-1' }, true]);
+    findByPkMember.mockResolvedValue({ ...mockAuthor, enrollment_id: 'author-enr-1' });
+    countLikes.mockResolvedValue(1);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    // Keyed by (likeable, liker) so it's presence-based + idempotent, and awarded
+    // to the AUTHOR's enrollment (the leaderboard reads StudentPointsEvent).
+    expect(awardCanonical).toHaveBeenCalledWith('author-enr-1', expect.objectContaining({
+      eventType: 'community_like',
+      eventKey: `community_like:post:${postId}:${memberId}`,
+      points: 1,
+    }));
+    expect(revokeCanonical).not.toHaveBeenCalled();
+  });
+
+  it('canonical: unliking a post revokes the community_like from the canonical ledger (drops off the leaderboard)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(mockPost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-can-2', destroy: jest.fn() }, false]);
+    findByPkMember.mockResolvedValue({ ...mockAuthor, enrollment_id: 'author-enr-1' });
+    countLikes.mockResolvedValue(0);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    expect(revokeCanonical).toHaveBeenCalledWith('author-enr-1', `community_like:post:${postId}:${memberId}`);
+    expect(awardCanonical).not.toHaveBeenCalled();
   });
 
   it('failure path (REQ-C9): throws ForbiddenError (403) for a post outside the cohort', async () => {
