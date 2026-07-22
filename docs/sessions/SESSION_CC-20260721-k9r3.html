@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, July 22, 2026 at 6:13 AM</div>
-    <div><span class="sid">CC-20260721-k9r3</span><span class="count">6 changes</span></div>
+    <div class="meta">Generated Wednesday, July 22, 2026 at 7:53 AM</div>
+    <div><span class="sid">CC-20260721-k9r3</span><span class="count">7 changes</span></div>
   </header>
   <main>
     
@@ -147,6 +147,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">pure-module `tsc` 0 errors; CI (PR #691); generated outlines for Orientation + Week 1 (Arch/Build) render the full segment-by-segment teaching plan. Deploy = backend (endpoint) + nginx (button).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">PR #691, branch `workstream/class-kit-outline`. The outline is auto-generated from the deck spec, so it stays in sync and covers all 12 weeks for free.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Factual corrections (PwC 62%, WEF projections labeled, Manual/Plan/Auto), a source/evidence ledger, and a Present menu (Rehearse / Download standalone / Readiness report)</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Highest-value slice of Ali&#39;s Class-Experience upgrade spec (CLAUDE_CODE_PROMPT_PRESENT_CLASS_EXPERIENCE.md). **Corrections:** Orientation PwC wage premium → **62%** (2026 Global AI Jobs Barometer, was 56%/2025); WEF figures explicitly labeled **projections** (170M created / 92M displaced / net +78M / 39% skills by 2030); Week 1 permission modes → **Manual / Plan / Auto** (current Claude Code behavior + a &quot;product terms can shift&quot; caveat) in both classTeachContent + classSessionPlan architectureBeats; Dario Amodei line reframed as a reported paraphrase, Huang quote kept exact. **Source ledger:** `EvidenceClaim` on `TeachSlide` (+ KitSlide) → a small &quot;📎 Sources:&quot; footer on factual slides (kitHtml `evidenceHtml`) + surfaced in the readiness report. **Present menu:** `▶ Present` split-button dropdown in AdminAcceleratorPage — Present (live), 🎓 Rehearse (`?mode=rehearse`, live OFF so practice doesn&#39;t broadcast), ⬇️ Download standalone HTML (`?mode=standalone` → blob download), 📋 Readiness report. Backend: `renderSessionKitDoc(mode)` + `renderSessionReadinessReport` (counts + evidence ledger + prep + basic gates) + `GET .../kit-doc?mode=` + `GET .../readiness` (requireAdmin).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">pure-module `tsc` 0 errors; CI (PR #700); rendered — 62% / PwC / projection / &quot;Manual (approve each)&quot; / &quot;Sources:&quot; footers all present. Deploy = backend (render + endpoints) + nginx (Present menu).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #700, branch `workstream/class-kit-experience-v2`. Budget-limited straight shot per Ali; deferred items noted above for a future phase.</span></div>
           
         </div>
       </article>
