@@ -112,6 +112,61 @@ export async function curateVideosForGaps(
   };
 }
 
+export interface TopicPackResult {
+  videos: CuratedVideo[];
+  used_minutes: number;
+  count: number;
+  notes: string[];
+  source: 'youtube' | 'none';
+}
+
+/**
+ * Curate a THEMED pack of short videos (e.g. Week 0's "latest in AI") — NOT
+ * gap-based. Searches each theme, de-dupes by video id across themes, and
+ * collects up to `count` videos (optionally within a time budget). Every video
+ * is tagged with one shared competency so it still counts toward coverage. Pure
+ * ranking/dedup; injectable search for testing.
+ */
+export async function curateTopicPack(
+  themes: string[],
+  competency: string,
+  competencyLabel: string,
+  opts: { count?: number; budgetMinutes?: number; minSeconds?: number; maxSeconds?: number } = {},
+  deps: CurationDeps = { search: searchShortVideos },
+): Promise<TopicPackResult> {
+  const count = opts.count ?? 35;
+  const budgetSeconds = (opts.budgetMinutes ?? 0) * 60; // 0 ⇒ no time cap (count is the cap)
+  const seen = new Set<string>();
+  const collected: CuratedVideo[] = [];
+  const notes: string[] = [];
+  let usedSeconds = 0;
+  let gotAny = false;
+
+  for (const theme of themes) {
+    if (collected.length >= count) break;
+    let cands: VideoCandidate[] = [];
+    try { cands = await deps.search(theme, { minSeconds: opts.minSeconds, maxSeconds: opts.maxSeconds }); }
+    catch (e: any) { notes.push(`Search failed for "${theme}": ${e?.message || 'error'}.`); continue; }
+    if (cands.length) gotAny = true;
+    for (const c of rankCandidates(cands, theme)) {
+      if (collected.length >= count) break;
+      if (seen.has(c.video_id)) continue;
+      if (budgetSeconds > 0 && usedSeconds + c.duration_seconds > budgetSeconds) continue;
+      seen.add(c.video_id);
+      usedSeconds += c.duration_seconds;
+      collected.push({ ...c, competency, competency_label: competencyLabel });
+    }
+  }
+  if (!gotAny) notes.unshift('No video candidates returned — verify YOUTUBE_API_KEY and connectivity.');
+  return {
+    videos: collected,
+    used_minutes: Math.round((usedSeconds / 60) * 10) / 10,
+    count: collected.length,
+    notes,
+    source: gotAny ? 'youtube' : 'none',
+  };
+}
+
 /** Map a curated video to a draft PlanCard payload — tagged with the exact
  *  competency it fills so coverage moves for a real reason. */
 export function curatedVideoToCard(v: CuratedVideo, week: number | null) {

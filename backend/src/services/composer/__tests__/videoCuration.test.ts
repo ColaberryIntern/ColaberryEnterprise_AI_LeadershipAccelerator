@@ -5,7 +5,7 @@
  * truncation), and failures degrade instead of throwing.
  */
 import { iso8601ToSeconds, secondsToLabel, VideoCandidate } from '../youtubeClient';
-import { rankCandidates, curateVideosForGaps, curatedVideoToCard, CuratedVideo } from '../videoCurationService';
+import { rankCandidates, curateVideosForGaps, curateTopicPack, curatedVideoToCard, CuratedVideo } from '../videoCurationService';
 import { CoverageGap } from '../coverageGapEngine';
 
 const vid = (id: string, seconds: number, views: number, title: string): VideoCandidate => ({
@@ -87,6 +87,24 @@ describe('curateVideosForGaps', () => {
     const a = await curateVideosForGaps(g, { budgetMinutes: 30 }, deps);
     const b = await curateVideosForGaps(g, { budgetMinutes: 30 }, deps);
     expect(a).toEqual(b);
+  });
+});
+
+describe('curateTopicPack', () => {
+  it('collects up to count, de-duped across themes, all tagged one competency', async () => {
+    const res = await curateTopicPack(
+      ['ai news', 'ai tools'], 'ai_literacy', 'Latest in AI', { count: 2 },
+      { search: async (q: string) => [vid('a', 300, 10, `AI ${q}`), vid('b', 400, 5, `More ${q}`)] },
+    );
+    expect(res.videos.length).toBe(2);                       // count cap respected
+    expect(new Set(res.videos.map((v) => v.video_id)).size).toBe(2); // de-duped
+    expect(res.videos.every((v) => v.competency === 'ai_literacy')).toBe(true);
+    expect(res.source).toBe('youtube');
+  });
+  it('degrades to source none when nothing comes back', async () => {
+    const res = await curateTopicPack(['x'], 'ai_literacy', 'Latest in AI', {}, { search: async () => [] });
+    expect(res.videos).toEqual([]);
+    expect(res.source).toBe('none');
   });
 });
 

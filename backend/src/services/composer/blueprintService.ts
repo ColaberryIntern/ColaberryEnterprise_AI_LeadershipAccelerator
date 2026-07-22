@@ -8,7 +8,7 @@ import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { CurriculumPlan, ComposerScope, PlanCard } from './types';
 import { generateCurriculum, scaffoldPlan, BlueprintInput } from './composerAi';
 import { coverageGaps } from './coverageGapEngine';
-import { curateVideosForGaps, curatedVideoToCard } from './videoCurationService';
+import { curateVideosForGaps, curateTopicPack, curatedVideoToCard } from './videoCurationService';
 import { validateCurriculum, BlueprintLike } from './validationEngine';
 import { estimateEvidence } from './evidenceEngine';
 import { deriveDna } from './curriculumDna';
@@ -132,6 +132,28 @@ export async function curateVideoFill(id: string, opts: { budgetMinutes?: number
   const curation = await curateVideosForGaps(gaps, { topic: bp.title, budgetMinutes: opts.budgetMinutes });
   const cards = curation.videos.map((v) => curatedVideoToCard(v, bp.week));
   return { gaps, curation, cards };
+}
+
+/** Default "latest in AI" themes for a Week-0 style topic pack. */
+export const AI_NEWS_THEMES = [
+  'latest AI news 2026', 'new AI tools 2026', 'AI breakthroughs 2026',
+  'generative AI update 2026', 'Claude AI new features', 'AI agents explained 2026',
+  'large language model news 2026', 'AI for business 2026', 'AI coding assistant 2026',
+  'model context protocol MCP explained', 'prompt engineering explained', 'AI research explained 2026',
+];
+
+/**
+ * Themed video pack for a week (e.g. Week 0's "latest in AI"). READ-ONLY preview —
+ * no mutation. Returns the raw pack + candidate cards (each tagged ai_literacy so
+ * they still count toward coverage). Not gap-based.
+ */
+export async function curateTopicPackFill(id: string, opts: { count?: number; themes?: string[]; budgetMinutes?: number } = {}) {
+  const bp = await CurriculumBlueprint.findByPk(id);
+  if (!bp) throw Object.assign(new Error('Blueprint not found'), { status: 404 });
+  const themes = (opts.themes && opts.themes.length) ? opts.themes : AI_NEWS_THEMES;
+  const pack = await curateTopicPack(themes, 'ai_literacy', 'Latest in AI', { count: opts.count ?? 35, budgetMinutes: opts.budgetMinutes });
+  const cards = pack.videos.map((v) => curatedVideoToCard(v, bp.week));
+  return { pack, cards };
 }
 
 export interface ApprovedVideo { video_url: string; title: string; channel?: string; duration_seconds: number; competency: string; competency_label?: string }
