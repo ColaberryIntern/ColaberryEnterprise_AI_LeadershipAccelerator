@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
 import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { recordReadBeat, collectBlog } from '../services/runtime/blogReadGateService';
+import { getBlogReader } from '../services/blog/blogReaderService';
 import { recordDwellBeat } from '../services/runtime/cardDwellService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { getNudge } from '../services/runtime/mentorNudgeService';
@@ -155,6 +156,16 @@ export async function handleBlogCollect(req: Request, res: Response, next: NextF
   try {
     const blogId = blogIdSchema.parse(req.params.blogId);
     res.json(await collectBlog(eid(req), blogId));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** GET /api/portal/runtime/today/blog/:blogId/reader — the post's article, fetched +
+ *  sanitized server-side for in-Workspace reading (the training site refuses to be
+ *  iframed). Fail-soft: { ok:false, source_url } lets the client fall back to the link. */
+export async function handleBlogReader(req: Request, res: Response, next: NextFunction) {
+  try {
+    const blogId = blogIdSchema.parse(req.params.blogId);
+    res.json(await getBlogReader(blogId));
   } catch (err) { fail(res, err, next); }
 }
 
