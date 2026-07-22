@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import {
   fetchCommunityMembers, setCommunityMemberRole, setCommunityMemberFreeAccess, fetchViewAsUrl,
-  AdminCommunityMember, CommunityMemberRole,
+  setCommunityMemberMgmtRole,
+  AdminCommunityMember, CommunityMemberRole, MgmtRole, MGMT_ROLES, MGMT_ROLE_LABEL,
 } from '../../services/communityAdminApi';
 
 const ROLES: CommunityMemberRole[] = ['student', 'mentor', 'staff'];
@@ -100,6 +101,28 @@ export default function AdminCommunityRolesPage() {
     }
   };
 
+  // Assign the management-portal role for a staff member (or clear it). Only
+  // meaningful for staff — the control is disabled for everyone else.
+  const onMgmtRole = async (m: AdminCommunityMember, mgmtRole: MgmtRole | null) => {
+    if ((m.mgmt_role ?? null) === mgmtRole) return;
+    setSavingId(m.id);
+    setNotice(null);
+    setError(null);
+    try {
+      const updated = await setCommunityMemberMgmtRole(m.id, mgmtRole);
+      setMembers((prev) => prev.map((x) => (x.id === m.id ? { ...x, mgmt_role: updated } : x)));
+      setNotice(
+        updated
+          ? `${m.display_name} is now ${MGMT_ROLE_LABEL[updated as MgmtRole]} in the Management Portal.`
+          : `${m.display_name} no longer has a Management Portal role.`,
+      );
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? 'Failed to update management role');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   // Open the member's portal in a new tab, READ-ONLY (server-enforced). Mints a
   // fresh read-only token per click.
   const onViewAs = async (m: AdminCommunityMember) => {
@@ -118,7 +141,7 @@ export default function AdminCommunityRolesPage() {
 
   return (
     <>
-      <PageHeader title="Community Roles" subtitle="Assign the mentor / staff role shown on member cards in the People directory. Everyone starts as Member." />
+      <PageHeader title="Community Roles" subtitle="Assign the mentor / staff role shown on member cards. Mark someone Staff to give them a Management Portal role (Owner, Admin, Curriculum, Revenue, Admissions, Support)." />
       <SectionCard>
         <form className="row g-2 align-items-end mb-3" onSubmit={onSearch}>
           <div className="col-md-6">
@@ -146,7 +169,7 @@ export default function AdminCommunityRolesPage() {
           <div className="table-responsive">
             <table className="table table-sm align-middle mb-0">
               <thead>
-                <tr><th>Name</th><th>Email</th><th style={{ width: 140 }}>Signed up</th><th style={{ width: 120 }}>Free Access</th><th style={{ width: 200 }}>Role</th><th style={{ width: 110 }}>View as</th></tr>
+                <tr><th>Name</th><th>Email</th><th style={{ width: 140 }}>Signed up</th><th style={{ width: 110 }}>Free Access</th><th style={{ width: 150 }}>Role</th><th style={{ width: 170 }}>Mgmt Role</th><th style={{ width: 100 }}>View as</th></tr>
               </thead>
               <tbody>
                 {members.map((m) => (
@@ -177,6 +200,22 @@ export default function AdminCommunityRolesPage() {
                       >
                         {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                       </select>
+                    </td>
+                    <td>
+                      {m.role === 'staff' ? (
+                        <select
+                          className="form-select form-select-sm"
+                          value={m.mgmt_role ?? ''}
+                          disabled={savingId === m.id}
+                          onChange={(e) => onMgmtRole(m, (e.target.value || null) as MgmtRole | null)}
+                          aria-label={`Management role for ${m.display_name}`}
+                        >
+                          <option value="">None</option>
+                          {MGMT_ROLES.map((r) => <option key={r} value={r}>{MGMT_ROLE_LABEL[r]}</option>)}
+                        </select>
+                      ) : (
+                        <span className="text-muted small" title="Only staff can hold a Management Portal role">—</span>
+                      )}
                     </td>
                     <td>
                       <button

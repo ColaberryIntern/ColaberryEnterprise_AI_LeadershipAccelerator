@@ -1118,6 +1118,9 @@ export interface AdminMemberRow {
   // True when this member's enrollment holds an active comped ('Free Access')
   // seat — full program access at $0, granted by an admin (not a paid plan).
   free_access: boolean;
+  // Management-portal role (owner/admin/curriculum/revenue/admissions/support)
+  // for staff members, or null. Drives the Mgmt Role control on the roster.
+  mgmt_role: string | null;
 }
 
 export async function listMembersForAdmin(search?: string): Promise<AdminMemberRow[]> {
@@ -1149,6 +1152,7 @@ export async function listMembersForAdmin(search?: string): Promise<AdminMemberR
     role: (m.role as CommunityMemberRole) ?? 'student',
     signed_up_at: m.enrollment?.created_at ? new Date(m.enrollment.created_at).toISOString() : null,
     free_access: m.enrollment_id ? compSet.has(m.enrollment_id) : false,
+    mgmt_role: m.mgmt_role ?? null,
   }));
 
   rows.sort((a, b) => (b.signed_up_at ?? '').localeCompare(a.signed_up_at ?? ''));
