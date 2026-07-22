@@ -8,6 +8,8 @@ import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
 import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest, colorFor } from '../../../services/cohortPresenceApi';
+import { fetchPeoplePanel, PeoplePanel } from '../../../services/peoplePanelApi';
+import PeoplePanelRail from './PeoplePanelRail';
 import { pingPresence } from '../../../services/communityApi';
 import { openDm } from '../../../services/dmApi';
 import ChatDock, { DmTarget } from './ChatDock';
@@ -170,15 +172,26 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   // while we're anywhere in the portal (not just the Community tab). Fail-soft:
   // any error keeps the last roster and never breaks the shell.
   const [contacts, setContacts] = useState<CohortContact[]>([]);
+  // Role-aware People panel (flag-gated server-side). null = flag OFF or error, in
+  // which case the rail falls back to the legacy cohort-presence view below.
+  const [panel, setPanel] = useState<PeoplePanel | null>(null);
   const refreshContacts = useCallback(() => {
     fetchCohortPresence().then(setContacts).catch(() => { /* keep last roster */ });
   }, []);
+  const refreshPanel = useCallback(() => {
+    fetchPeoplePanel().then(setPanel).catch(() => { /* fall back to cohort rail */ });
+  }, []);
   useEffect(() => {
     refreshContacts();
+    refreshPanel();
     pingPresence().catch(() => { /* non-fatal */ });
-    const id = window.setInterval(() => { refreshContacts(); pingPresence().catch(() => { /* non-fatal */ }); }, 60_000);
+    const id = window.setInterval(() => {
+      refreshContacts();
+      refreshPanel();
+      pingPresence().catch(() => { /* non-fatal */ });
+    }, 60_000);
     return () => window.clearInterval(id);
-  }, [refreshContacts]);
+  }, [refreshContacts, refreshPanel]);
   // Friend actions — fire, then refetch so friendshipStatus (and the friends-first
   // order) update. Fail-soft: an error just leaves the person addable.
   const onAddFriend = useCallback((id: string) => {
@@ -194,6 +207,11 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   }, []);
   const openChat = useCallback((c: CohortContact) => {
     openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(() => { /* non-fatal */ });
+  }, [openChatTarget]);
+  // People-panel rows carry only enrollmentId + name; derive the colour the same way
+  // the cohort rail does so the same person is always the same colour.
+  const openPerson = useCallback((enrollmentId: string, name: string) => {
+    openDm(enrollmentId).then((roomId) => openChatTarget({ roomId, name, color: colorFor(enrollmentId) })).catch(() => { /* non-fatal */ });
   }, [openChatTarget]);
 
   // Bridge: other surfaces (e.g. the community member profile drawer) open a DM
@@ -400,7 +418,16 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
           viewports it is the FIRST thing to collapse (avatar-only rail), before
           the left nav — see the staged .te-contacts media rules in TodayShell.css. */}
       <aside className="te-contacts" aria-label="Cohort contacts">
-        {showFind ? (
+        {panel ? (
+          // Role-aware People panel (PEOPLE_PANEL_ROLES_ENABLED=true). When null (flag
+          // OFF or fetch error) the legacy cohort-presence rail below renders unchanged.
+          <PeoplePanelRail
+            panel={panel}
+            collapsed={contactsCollapsed}
+            onToggleCollapsed={() => setContactsCollapsed((c) => !c)}
+            onOpenPerson={openPerson}
+          />
+        ) : showFind ? (
           <>
             {/* Find-people view — the full cohort directory, reachable by clicking
                 "Find people" and dismissed with the back arrow. */}

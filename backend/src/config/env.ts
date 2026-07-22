@@ -171,6 +171,12 @@ export const env = {
   // a rebuild. Default OFF: flag-off keeps the legacy "Level N · Apprentice/…/Principal"
   // HUD byte-identical.
   fiveBandUiEnabled: process.env.FIVE_BAND_UI_ENABLED === 'true',
+  // Role-aware "People" right-rail panel. Staff/admin see cross-cohort presence
+  // (online now) + a classes list + a sponsors/businesses list; students see their
+  // class first, then recently-active people OUTSIDE their cohort. Default OFF:
+  // flag-off makes GET /api/portal/people/panel return { enabled:false } and the rail
+  // keeps its cohort-scoped presence behavior byte-identical (ships dark).
+  peoplePanelRolesEnabled: process.env.PEOPLE_PANEL_ROLES_ENABLED === 'true',
   // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
   // links). Master switch OFF by default: the community-room routes return 404,
   // the outbox drain cron no-ops, and createSession skips linked-room creation

@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Role-aware People panel + ali+business promoted to admin (2026-07-21)
+- [x] **Right-rail People panel is now role-aware (flag-gated): staff see everyone online across all cohorts + all classes/businesses; students see their class first + top-10 recently-online outside it. Also promoted ali+business@colaberry.com to staff+owner (admin).**
+  - Date: 2026-07-21
+  - Session: CC-20260721-g8k4
+  - What changed: New `backend/src/services/peoplePanelService.ts` (`getPeoplePanel` → staff: online[cross-cohort via derivePresence] + classes[one grouped COUNT] + businesses[Sponsor/SponsorSeat, best-effort]; student: my_class[cohort-scoped] + active_now[top-10 outside cohort by last_active_at]). New `GET /api/portal/people/panel` in participantRoutes (requireParticipant) — flag OFF → `{enabled:false}` before importing the service; flag ON → the role-aware payload. Flag `PEOPLE_PANEL_ROLES_ENABLED` in env.ts + .env.example (default OFF). Frontend: new `peoplePanelApi.ts` (returns null on disabled/error → legacy fallback) + new `PeoplePanelRail.tsx` (reuses te-ct* styles; person rows open DM) + `PortalShell.tsx` branches the te-contacts aside (panel ? role-rail : legacy cohort rail). Role = `isStaffEnrollment OR mgmt_role!=null` (fail-safe to student). Presence = `community_members.last_active_at → derivePresence` (online ≤90s / idle ≤10min). Tests: `peoplePanelService.test.ts`. Separately: prod DB update promoting ali+business (enrollment 750b8448) community_members row student→staff, mgmt_role null→owner (super_admin via mgmt bridge).
+  - Why: Ali's request — admins/staff should see everyone logged in + all classes; students see their class first then top-10 active people; and make ali+business an admin. Ordering per Ali: staff = online first then classes/businesses; student = class first then active-now.
+  - Verification: Loop Architect maker → SEPARATE verifier 10/10 PASS (flag OFF byte-identical rendered DOM; no student cross-cohort leak beyond the intended top-10; role fail-safe to student; real fields/models cross-checked; no N+1 — one grouped COUNT; businesses try/catch degrades to []; eslint-clean under react-jsx runtime; tests assert all branches). Promotion verified via before/after DB read. CI pending on push.
+  - Notes: Non-blocking nit (verifier): `buildBusinesses` counts a seat redeemed whenever `assigned_enrollment_id` is non-null (reassigned/expired over-counted in the staff-only seat total) — cosmetic, add `status='redeemed'` later. Branch `workstream/people-panel-roles`. Next: deploy (backend+nginx) + enable `PEOPLE_PANEL_ROLES_ENABLED` on prod.
+
 ### Points Economy — paid gate broadened to accelerator cohort (2026-07-21)
 - [x] **Broadened `isBuildEntitled` so cohort_type='accelerator' is build-entitled (billing may be 'pending'); real accelerator students build, only free Explorers are gated. Prompted by a prod safety check before flipping the paid gate.**
   - Date: 2026-07-21

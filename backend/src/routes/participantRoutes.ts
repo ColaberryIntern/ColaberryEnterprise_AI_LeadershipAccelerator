@@ -60,6 +60,7 @@ import {
   handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
 import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
+import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
@@ -912,6 +913,22 @@ router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) =
     const { getCohortPresence } = await import('../services/cohortPresenceService');
     const contacts = await getCohortPresence(req.participant!.sub, req.participant!.cohort_id);
     res.json({ contacts });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Role-aware "People" panel for the right rail (flag-gated; default OFF). Flag OFF
+// returns { enabled:false } and the rail falls back to GET /api/portal/cohort/presence,
+// so merging/deploying changes nothing until PEOPLE_PANEL_ROLES_ENABLED=true. Flag ON
+// returns { enabled:true, ...panel } — staff get cross-cohort presence + classes +
+// businesses; students get their class + recently-active people outside it.
+router.get('/api/portal/people/panel', requireParticipant, async (req, res) => {
+  try {
+    if (!env.peoplePanelRolesEnabled) { res.json({ enabled: false }); return; }
+    const { getPeoplePanel } = await import('../services/peoplePanelService');
+    const panel = await getPeoplePanel(req.participant!.sub, req.participant!.cohort_id);
+    res.json({ enabled: true, ...panel });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
