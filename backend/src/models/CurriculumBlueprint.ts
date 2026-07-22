@@ -23,6 +23,7 @@ export interface CurriculumBlueprintAttributes {
   learning_objectives?: any;      // string[]
   competencies?: any;             // string[]
   architect_domains?: any;        // string[]
+  session_competencies?: any;     // string[] — taught by live session / Academy course, no typed card
   bloom?: any;                    // string[]
   evidence_produced?: any;        // string[]
   github_deliverables?: any;      // string[]
@@ -66,6 +67,7 @@ class CurriculumBlueprint extends Model<CurriculumBlueprintAttributes> implement
   declare learning_objectives: any;
   declare competencies: any;
   declare architect_domains: any;
+  declare session_competencies: any;
   declare bloom: any;
   declare evidence_produced: any;
   declare github_deliverables: any;
@@ -109,6 +111,7 @@ CurriculumBlueprint.init({
   learning_objectives: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
   competencies: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
   architect_domains: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
+  session_competencies: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
   bloom: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
   evidence_produced: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },
   github_deliverables: { type: DataTypes.JSONB, allowNull: false, defaultValue: [] },

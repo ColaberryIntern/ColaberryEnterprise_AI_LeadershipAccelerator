@@ -8,6 +8,7 @@
  */
 import { resolve } from '../timeline/typeRegistry';
 import { PlanCard } from './types';
+import { resolveCompetencies } from './competencyDictionary';
 
 export const ARCHITECT_JOURNEY = [
   'Builder', 'Prompt Engineer', 'Context Engineer', 'Systems Builder',
@@ -29,13 +30,15 @@ const STAGE_COMPETENCIES: Record<ArchitectStage, string[]> = {
 export interface JourneyStage { name: ArchitectStage; index: number; contributes: boolean; competencies: string[] }
 export interface JourneyResult { stages: JourneyStage[]; focus_stage: ArchitectStage; why: string }
 
-/** PURE — which journey stages this plan advances, and its primary focus. */
-export function journeyContribution(cards: PlanCard[]): JourneyResult {
+/** PURE — which journey stages this plan advances, and its primary focus.
+ *  sessionCompetencies = what the live session / Academy course teaches (no typed card). */
+export function journeyContribution(cards: PlanCard[], sessionCompetencies: string[] = []): JourneyResult {
   const present = new Set<string>();
   for (const c of cards) {
-    (c.competencies || []).forEach((k) => present.add(k));
-    (resolve(c.type)?.competencies || []).forEach((k) => present.add(k));
+    resolveCompetencies(c.competencies).forEach((k) => present.add(k));
+    resolveCompetencies(resolve(c.type)?.competencies).forEach((k) => present.add(k));
   }
+  resolveCompetencies(sessionCompetencies).forEach((k) => present.add(k));
 
   let focus: ArchitectStage = 'Builder';
   let focusHits = 0;

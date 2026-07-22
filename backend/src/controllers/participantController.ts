@@ -17,7 +17,7 @@ import { getEnrollmentView, selectCohort, SelectCohortReason } from '../services
 import { z } from 'zod';
 import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
-import Enrollment from '../models/Enrollment';
+import { isFreePreviewTier } from '../services/access/contentEntitlement';
 import { getUpcomingPublicEvents } from '../services/publicEventsService';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
 import { getCheckinInfo } from '../services/sessionKitService';
@@ -162,9 +162,10 @@ export async function handleClaimStreak(req: Request, res: Response, next: NextF
 export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
   try {
     const schedule = await getOnboardingSchedule(req.participant!.sub);
-    // Explorer status drives the free-tier conversion funnel on the portal (Today).
-    const enr = await Enrollment.findByPk(req.participant!.sub, { attributes: ['enrollment_type'] });
-    res.json({ ...schedule, is_explorer: (enr as any)?.enrollment_type === 'explorer' });
+    // Free-preview status drives the enroll/pay conversion funnel on the portal
+    // (Today). Single source of truth = contentEntitlement.isFreePreviewTier
+    // (payment-keyed when CONTENT_PAID_GATE_ENABLED, else legacy explorer-only).
+    res.json({ ...schedule, is_explorer: await isFreePreviewTier(req.participant!.sub) });
   } catch (err) { next(err); }
 }
 

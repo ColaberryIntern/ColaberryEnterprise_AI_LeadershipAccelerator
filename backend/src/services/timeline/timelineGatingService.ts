@@ -24,6 +24,8 @@ import TimelineCardProgress from '../../models/TimelineCardProgress';
 import TimelineSectionRule from '../../models/TimelineSectionRule';
 import { resolve as resolveType } from './typeRegistry';
 import { isStaffEnrollment } from '../access/staffAccess';
+import { isFreePreviewTier } from '../access/contentEntitlement';
+import { env } from '../../config/env';
 
 // ── predicate model ──────────────────────────────────────────────────────────
 export type UnlockScope = 'week' | 'all';
@@ -182,6 +184,19 @@ export async function assertCardUnlocked(enrollmentId: string, card: TimelineCar
 
     const progress = await TimelineCardProgress.findOne({ where: { card_id: card.id, enrollment_id: enrollmentId } });
     if (progress && (progress.status === 'completed' || progress.status === 'in_progress')) return;
+
+    // Curriculum paywall backstop (flag-gated): the free-preview tier can open ONLY
+    // Week 0 — a week>0 card stays locked until the student enrolls AND pays. Closes
+    // the deep-link hole (feed-filtering in getFeed alone would not stop a direct
+    // card open/complete). Flag OFF => inert, so legacy behavior is unchanged.
+    if (env.contentPaidGateEnabled && card.week != null && card.week > 0) {
+      if (await isFreePreviewTier(enrollmentId)) {
+        throw Object.assign(
+          new Error('Enroll and pay to unlock this week.'),
+          { status: 423, code: 'card_locked', reason: 'Enroll and pay to unlock this week.' },
+        );
+      }
+    }
 
     const cards = await loadGlobalCards();
     const completed = await TimelineCardProgress.findAll({
