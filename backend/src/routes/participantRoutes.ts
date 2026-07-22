@@ -1019,4 +1019,26 @@ router.get('/api/portal/community/members/:memberId', requireParticipant, async 
   }
 });
 
+// ── Management-portal bridge (employees only) ────────────────────────────────
+// Lets a staff member with a mgmt role open the admin portal from inside their
+// student session — no separate credentials.
+router.get('/api/portal/mgmt/status', requireParticipant, async (req, res) => {
+  try {
+    const { getMgmtStatus } = await import('../services/access/mgmtBridgeService');
+    res.json(await getMgmtStatus(req.participant!.sub));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.post('/api/portal/mgmt/enter', requireParticipant, async (req, res) => {
+  try {
+    const { mintMgmtAdminToken } = await import('../services/access/mgmtBridgeService');
+    const minted = await mintMgmtAdminToken(req.participant!.sub);
+    if (!minted) { res.status(403).json({ error: 'Not a management user' }); return; }
+    res.json(minted);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
