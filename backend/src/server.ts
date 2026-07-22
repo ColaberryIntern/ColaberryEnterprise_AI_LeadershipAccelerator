@@ -1488,6 +1488,7 @@ async function ensureCurriculumComposerSchema() {
        learning_objectives JSONB NOT NULL DEFAULT '[]'::jsonb,
        competencies JSONB NOT NULL DEFAULT '[]'::jsonb,
        architect_domains JSONB NOT NULL DEFAULT '[]'::jsonb,
+       session_competencies JSONB NOT NULL DEFAULT '[]'::jsonb,
        bloom JSONB NOT NULL DEFAULT '[]'::jsonb,
        evidence_produced JSONB NOT NULL DEFAULT '[]'::jsonb,
        github_deliverables JSONB NOT NULL DEFAULT '[]'::jsonb,
@@ -1516,6 +1517,8 @@ async function ensureCurriculumComposerSchema() {
      )`,
     `CREATE INDEX IF NOT EXISTS idx_curriculum_blueprints_status ON curriculum_blueprints (status)`,
     `CREATE INDEX IF NOT EXISTS idx_curriculum_blueprints_week ON curriculum_blueprints (week)`,
+    // Additive column for pre-existing tables (session/Academy competencies — see competencyDictionary).
+    `ALTER TABLE curriculum_blueprints ADD COLUMN IF NOT EXISTS session_competencies JSONB NOT NULL DEFAULT '[]'::jsonb`,
   ];
   for (const sql of statements) {
     try { await sequelize.query(sql); }

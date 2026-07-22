@@ -65,6 +65,23 @@ export interface BlueprintContextDTO {
   prompt_text: string;
 }
 
+// ── coverage gap-fill (YouTube) shapes ───────────────────────────────────────
+export interface CuratedVideoPreview {
+  video_id: string; title: string; channel: string; url: string;
+  duration_seconds: number; duration_label: string; thumbnail_url: string | null; view_count: number;
+  competency: string; competency_label: string;
+}
+export interface CurationResult {
+  videos: CuratedVideoPreview[];
+  filled: string[];
+  unfilled: Array<{ competency: string; label: string; reason: string }>;
+  budget_minutes: number; used_minutes: number; notes: string[]; source: 'youtube' | 'none';
+}
+export interface ApprovedVideo {
+  video_url: string; title: string; channel?: string; duration_seconds: number;
+  competency: string; competency_label?: string;
+}
+
 // ── API client ───────────────────────────────────────────────────────────────
 export const composerApi = {
   palette: () => api.get('/api/admin/composer/palette').then((r) => r.data.types as PaletteType[]),
@@ -78,6 +95,13 @@ export const composerApi = {
   generate: (id: string, instruction: string, scope?: string) => api.post(`/api/admin/composer/blueprints/${id}/generate`, { instruction, scope }).then((r) => r.data as { plan: Plan; source: string; cost_usd: number; assessment: Assessment }),
   validate: (id: string) => api.get(`/api/admin/composer/blueprints/${id}/validate`).then((r) => r.data as { plan: Plan; assessment: Assessment }),
   publish: (id: string) => api.post(`/api/admin/composer/blueprints/${id}/publish`).then((r) => r.data),
+  // Coverage gap-fill. curate = read-only YouTube preview; applyVideos = NON-destructive
+  // add of the operator-approved videos (no LLM regen, unlike the old rec "Apply").
+  curateVideos: (id: string, budgetMinutes?: number) =>
+    api.post(`/api/admin/composer/blueprints/${id}/curate-videos`, budgetMinutes ? { budget_minutes: budgetMinutes } : {})
+      .then((r) => r.data as { gaps: Array<{ competency: string; label: string }>; curation: CurationResult; cards: PlanCard[] }),
+  applyVideos: (id: string, videos: ApprovedVideo[]) =>
+    api.post(`/api/admin/composer/blueprints/${id}/apply-videos`, { videos }).then((r) => r.data as { plan: Plan; assessment: Assessment; added: number }),
   // The LIVE Timeline board (same source the Timeline tab + student feed read) —
   // lets the Composer canvas mirror what's actually published, not a stale plan.
   timelineBoard: (programId: string) => api.get('/api/admin/orchestration/timeline', { params: { program_id: programId } }).then((r) => r.data as { cards: TimelineBoardCard[] }),
