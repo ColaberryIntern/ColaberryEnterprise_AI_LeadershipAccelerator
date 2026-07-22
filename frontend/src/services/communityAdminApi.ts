@@ -4,6 +4,14 @@ import api from '../utils/api';
 // axios instance (attaches the admin_token). Backend: admin/communityMemberRoutes.
 export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
 
+// Management-portal roles a staff member can hold. Empty string = no mgmt role.
+export type MgmtRole = 'owner' | 'admin' | 'curriculum' | 'revenue' | 'admissions' | 'support';
+export const MGMT_ROLES: MgmtRole[] = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support'];
+export const MGMT_ROLE_LABEL: Record<MgmtRole, string> = {
+  owner: 'Owner', admin: 'Admin', curriculum: 'Curriculum',
+  revenue: 'Revenue', admissions: 'Admissions', support: 'Support',
+};
+
 export interface AdminCommunityMember {
   id: string;
   // Enrollment id — used to open the read-only "View as" session. Null if the
@@ -17,6 +25,8 @@ export interface AdminCommunityMember {
   signed_up_at: string | null;
   // True when this member holds an active comped ("Free Access") seat.
   free_access: boolean;
+  // Management-portal role for staff (null when none / not staff).
+  mgmt_role: string | null;
 }
 
 export async function fetchCommunityMembers(search?: string): Promise<AdminCommunityMember[]> {
@@ -51,6 +61,17 @@ export async function setCommunityMemberFreeAccess(memberId: string, grant: bool
     `/api/admin/community/members/${memberId}/free-access`,
   );
   return data.member.free_access;
+}
+
+// Assign (or clear, with mgmtRole=null) the management-portal role for a staff
+// member. The backend rejects a non-null role unless the member is 'staff'.
+// Returns the resulting mgmt_role. Backend: PATCH .../members/:id/mgmt-role.
+export async function setCommunityMemberMgmtRole(memberId: string, mgmtRole: MgmtRole | null): Promise<string | null> {
+  const { data } = await api.patch<{ member: { mgmt_role: string | null } }>(
+    `/api/admin/community/members/${memberId}/mgmt-role`,
+    { mgmt_role: mgmtRole },
+  );
+  return data.member.mgmt_role;
 }
 
 // Mint a read-only "View as member" URL for an enrollment (server enforces

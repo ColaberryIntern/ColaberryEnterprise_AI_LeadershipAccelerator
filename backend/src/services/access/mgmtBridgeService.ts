@@ -41,11 +41,11 @@ export interface MintedMgmtToken {
 
 /**
  * Mint a scoped admin JWT for a staff member. Returns null if they are not a
- * mgmt user. The JWT's `role` is chosen so the generic admin guards behave:
- * owner → 'super_admin' and admin → 'admin' (pass requireAdmin), while every
- * scoped role keeps its own value (so it FAILS requireAdmin on un-scoped routers
- * and only passes requireSection for its sections). `mgmt_role` carries the true
- * role that adminAllowedSections()/requireSection() enforce against. Short-lived.
+ * mgmt user. The JWT's `role` is 'super_admin' for owner and 'admin' for every
+ * other role, so the token passes the per-route `requireAdmin` that guards each
+ * admin router. The real scoping is done by `mgmtSectionGate` (mounted globally
+ * ahead of the sub-routers), which reads `mgmt_role` and caps the request to the
+ * sections that adminAllowedSections()/sectionsForRole() permit. Short-lived.
  */
 export async function mintMgmtAdminToken(enrollmentId: string): Promise<MintedMgmtToken | null> {
   const mgmt = await loadMgmtRole(enrollmentId);
@@ -53,7 +53,7 @@ export async function mintMgmtAdminToken(enrollmentId: string): Promise<MintedMg
 
   const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['email'] });
   const email = (enrollment as any)?.email || '';
-  const jwtRole = mgmt === 'owner' ? 'super_admin' : mgmt === 'admin' ? 'admin' : mgmt;
+  const jwtRole = mgmt === 'owner' ? 'super_admin' : 'admin';
 
   const admin_token = jwt.sign(
     { sub: enrollmentId, email, role: jwtRole, mgmt_role: mgmt },
