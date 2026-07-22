@@ -64,10 +64,21 @@ interface Props {
   enrollmentId: string;
   name: string;
   onClose: () => void;
-  onViewAsStudent: (id: string) => void;
+  onViewAsStudent?: (id: string) => void;
+  // Read-only mode (Support role): hides the Free Access toggle and the
+  // View-as button — the drawer becomes a pure "student story", no controls
+  // that change anything.
+  readOnly?: boolean;
+  // API base for the history fetch. Defaults to the accelerator (program-section)
+  // path; the Support surface passes '/api/admin/students' so the same payload is
+  // served from its own students-section-gated route.
+  endpointBase?: string;
 }
 
-const PersonHistoryDrawer: React.FC<Props> = ({ enrollmentId, name, onClose, onViewAsStudent }) => {
+const PersonHistoryDrawer: React.FC<Props> = ({
+  enrollmentId, name, onClose, onViewAsStudent,
+  readOnly = false, endpointBase = '/api/admin/accelerator/enrollments',
+}) => {
   const [data, setData] = useState<PersonHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -78,12 +89,12 @@ const PersonHistoryDrawer: React.FC<Props> = ({ enrollmentId, name, onClose, onV
   useEffect(() => {
     let live = true;
     setLoading(true); setError(false); setFreeAccess(null);
-    api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/history`)
+    api.get(`${endpointBase}/${enrollmentId}/history`)
       .then((res) => { if (live) { setData(res.data); setFreeAccess(!!res.data?.profile?.free_access); } })
       .catch(() => { if (live) setError(true); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [enrollmentId]);
+  }, [enrollmentId, endpointBase]);
 
   // Grant/revoke a comped seat for this enrollment (100% discount, normal student).
   const toggleFreeAccess = async () => {
@@ -143,18 +154,22 @@ const PersonHistoryDrawer: React.FC<Props> = ({ enrollmentId, name, onClose, onV
                 ${Number(p?.total_paid).toLocaleString('en-US', { maximumFractionDigits: 2 })} collected
               </span>
             )}
-            <button
-              className={`btn btn-sm ms-auto ${freeAccess ? 'btn-success' : 'btn-outline-success'}`}
-              disabled={freeAccess === null || savingFa}
-              onClick={toggleFreeAccess}
-              title="Comp this person's seat — full program access at $0 (a 100% discount; not a staff role)"
-            >
-              <i className="ri-gift-line me-1" aria-hidden="true"></i>
-              {savingFa ? '…' : freeAccess ? 'Free Access ✓' : 'Grant Free Access'}
-            </button>
-            <button className="btn btn-outline-primary btn-sm" onClick={() => onViewAsStudent(enrollmentId)}>
-              <i className="ri-eye-line me-1" aria-hidden="true"></i>View as student
-            </button>
+            {!readOnly && (
+              <>
+                <button
+                  className={`btn btn-sm ms-auto ${freeAccess ? 'btn-success' : 'btn-outline-success'}`}
+                  disabled={freeAccess === null || savingFa}
+                  onClick={toggleFreeAccess}
+                  title="Comp this person's seat — full program access at $0 (a 100% discount; not a staff role)"
+                >
+                  <i className="ri-gift-line me-1" aria-hidden="true"></i>
+                  {savingFa ? '…' : freeAccess ? 'Free Access ✓' : 'Grant Free Access'}
+                </button>
+                <button className="btn btn-outline-primary btn-sm" onClick={() => onViewAsStudent?.(enrollmentId)}>
+                  <i className="ri-eye-line me-1" aria-hidden="true"></i>View as student
+                </button>
+              </>
+            )}
           </div>
           {p?.enrollment_records > 1 && (
             <div className="small text-muted mt-1">
