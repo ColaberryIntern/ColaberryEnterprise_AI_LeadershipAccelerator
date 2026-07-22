@@ -5,6 +5,7 @@ import TimelineFeed from '../../components/timeline/TimelineFeed';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import TodayFeedV2 from './today/TodayFeedV2';
+import SkillMeter from './SkillMeter';
 import { runtimeApi } from './runtime/runtimeApi';
 import '../../components/timeline/timeline.css';
 import PortalShell from './today/PortalShell';
@@ -271,15 +272,22 @@ const ClassroomPage: React.FC = () => {
 
       <div className="tl-grid">
         <div className="tl-feedcol">
-          <div className="tl-card tl-banner tl-ac-berry">
-            <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
-            <div className="pr">
-              <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
-              <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
-              <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
-              <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
+          {/* Week 0 (Free Preview): a skill meter — one bar per foundational AI
+              skill the preview tags, filling as tagged activities complete. Paid
+              weeks keep the plain week-progress banner. */}
+          {week === 0 ? (
+            <SkillMeter cards={weekCards} />
+          ) : (
+            <div className="tl-card tl-banner tl-ac-berry">
+              <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
+              <div className="pr">
+                <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
+                <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
+                <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
+                <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Week 0 (Free Preview) IS the never-ending Today timeline — the same
               engine as the Today tab. Paid weeks stay the finite, searchable week
