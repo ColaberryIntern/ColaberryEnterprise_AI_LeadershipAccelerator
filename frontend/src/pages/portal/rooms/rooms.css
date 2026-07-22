@@ -189,3 +189,43 @@
 .rm-sess-until.live{color:var(--cherry-deep,#C20E1E)}
 .rm-sess-cal{display:inline-flex;align-items:center;gap:3px;color:var(--berry,#367895);font-weight:700;text-decoration:none;white-space:nowrap}
 .rm-sess-cal:hover{text-decoration:underline}
+
+/* ── Room pane tabs (Chat / Docs & Files) — same idiom as SettingsPage's
+   .set-tabs/.set-tab, renamed to the rm- prefix for this file's convention ── */
+.rm-tabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--border-subtle,#E4E4E3);margin-bottom:14px}
+.rm-tab{appearance:none;background:none;border:none;border-bottom:2px solid transparent;padding:9px 4px;margin-right:18px;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--muted,#6B6B6B);cursor:pointer}
+.rm-tab:hover{color:var(--body,#2B2B2B)}
+.rm-tab.active{color:var(--cherry,#FB2832);border-bottom-color:var(--cherry,#FB2832);font-weight:700}
+.rm-tab:focus-visible{outline:2px solid var(--cherry,#FB2832);outline-offset:2px;border-radius:6px}
+
+/* ── Docs & Files panel ──────────────────────────────────────────────────── */
+.rm-files{display:flex;flex-direction:column;gap:14px}
+.rm-files-scope{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.rm-files-scope select{border:1px solid var(--border,#D8D8D8);border-radius:var(--r-8,8px);padding:7px 10px;font-size:13.5px;font-family:inherit;background:var(--surface,#fff);color:var(--strong,#1A1A1A);max-width:100%}
+.rm-files-recap-link{font-size:13px;font-weight:700;color:var(--berry,#367895);text-decoration:none;white-space:nowrap}
+.rm-files-recap-link:hover{text-decoration:underline}
+
+.rm-reslist{display:flex;flex-direction:column;gap:2px;min-height:60px}
+.rm-resrow{display:flex;align-items:flex-start;gap:10px;padding:10px 4px;border-bottom:1px solid var(--border-subtle,#E4E4E3)}
+.rm-resrow:last-child{border-bottom:none}
+.rm-res-icon{flex:none;font-size:18px;line-height:1.4}
+.rm-res-main{flex:1;min-width:0}
+.rm-res-title{display:inline;background:none;border:none;padding:0;font-family:inherit;font-size:13.5px;font-weight:700;color:var(--strong,#1A1A1A);text-decoration:none;cursor:pointer;text-align:left}
+button.rm-res-title:hover,a.rm-res-title:hover{color:var(--berry,#367895);text-decoration:underline}
+.rm-res-body{font-size:13px;color:var(--body,#2B2B2B);white-space:pre-wrap;word-break:break-word;margin-top:3px}
+.rm-res-meta{font-size:11.5px;color:var(--muted,#6B6B6B);margin-top:3px}
+.rm-res-del{flex:none;border:none;background:none;font-size:14px;color:var(--muted,#6B6B6B);cursor:pointer;opacity:0;transition:opacity .12s}
+.rm-resrow:hover .rm-res-del{opacity:1}
+.rm-res-del:hover{color:var(--cherry-text,#E5121D)}
+
+.rm-uploader{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--border-subtle,#E4E4E3);padding-top:14px}
+.rm-dropzone{border:2px dashed var(--border,#D8D8D8);border-radius:var(--r-12,12px);text-align:center;padding:20px 14px;cursor:pointer;background:var(--sunken,#F1F1F0);font-size:13.5px;font-weight:600;color:var(--body,#2B2B2B)}
+.rm-dropzone.busy{opacity:.7;cursor:wait}
+.rm-dropzone-hint{margin-top:4px;font-size:11.5px;font-weight:400;color:var(--muted,#6B6B6B)}
+.rm-file-input-hidden{display:none}
+.rm-upload-error{font-size:12.5px;color:var(--cherry-text,#E5121D)}
+
+.rm-addlink{display:flex;flex-direction:column;gap:8px;border:1px solid var(--border-subtle,#E4E4E3);border-radius:var(--r-12,12px);padding:12px}
+.rm-addlink select,.rm-addlink input,.rm-addlink textarea{border:1px solid var(--border,#D8D8D8);border-radius:var(--r-8,8px);padding:8px 11px;font-size:13.5px;font-family:inherit;background:var(--surface,#fff);color:var(--strong,#1A1A1A)}
+.rm-addlink textarea{min-height:70px;resize:vertical}
+.rm-addlink-actions{display:flex;justify-content:flex-end;gap:8px}

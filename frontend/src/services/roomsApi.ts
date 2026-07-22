@@ -76,6 +76,7 @@ export interface RoomView {
   visibility: 'full' | 'shell';
   room: Room;
   membership: RoomMembership | null;
+  can_upload_resource: boolean;
 }
 
 export interface RoomMembership {
@@ -101,6 +102,7 @@ export interface BookingCard {
   outcome: string | null;
   host_enrollment_id: string | null;
   emoji?: string;
+  related_live_session_id?: string | null;
 }
 
 export interface RoomsHome {
@@ -289,4 +291,94 @@ export interface ImpactResponse {
 export async function fetchImpact(): Promise<ImpactResponse> {
   const { data } = await portalApi.get<ImpactResponse>('/api/portal/community/impact');
   return data;
+}
+
+// ─── Docs & Files ───────────────────────────────────────────────────────────
+export type RoomResourceType = 'link' | 'file' | 'recording' | 'recap' | 'note';
+
+export interface RoomResource {
+  id: string;
+  room_id: string;
+  booking_id: string | null;
+  resource_type: RoomResourceType;
+  title: string | null;
+  url: string | null;
+  body: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  created_by_enrollment_id: string | null;
+  is_pinned: boolean;
+  created_at: string;
+  // Server-computed (uploader or a moderator) — never guessed client-side.
+  can_delete: boolean;
+}
+
+export interface LibraryView {
+  room_id: string;
+  resources: RoomResource[];
+  can_upload: boolean;
+}
+
+export async function fetchLibrary(): Promise<LibraryView> {
+  const { data } = await portalApi.get<LibraryView>('/api/portal/community/library');
+  return data;
+}
+
+export async function fetchRoomBookings(roomId: string): Promise<BookingCard[]> {
+  const { data } = await portalApi.get<{ bookings: BookingCard[] }>(`/api/portal/community/rooms/${roomId}/bookings`);
+  return data.bookings;
+}
+
+export async function fetchRoomResources(
+  roomId: string,
+  opts?: { bookingId?: string | 'none'; resourceType?: RoomResourceType },
+): Promise<RoomResource[]> {
+  const { data } = await portalApi.get<{ resources: RoomResource[] }>(`/api/portal/community/rooms/${roomId}/resources`, {
+    params: opts?.bookingId || opts?.resourceType ? { booking_id: opts?.bookingId, resource_type: opts?.resourceType } : undefined,
+  });
+  return data.resources;
+}
+
+export async function uploadRoomFile(
+  roomId: string,
+  file: File,
+  opts?: { bookingId?: string; title?: string },
+): Promise<RoomResource> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (opts?.bookingId) formData.append('booking_id', opts.bookingId);
+  if (opts?.title) formData.append('title', opts.title);
+  const { data } = await portalApi.post<{ resource: RoomResource }>(
+    `/api/portal/community/rooms/${roomId}/resources/file`,
+    formData,
+    { headers: { 'Content-Type': 'multipart/form-data' } },
+  );
+  return data.resource;
+}
+
+export async function createRoomResource(
+  roomId: string,
+  input: { resource_type: 'link' | 'recording' | 'recap' | 'note'; booking_id?: string; title?: string; url?: string; body?: string },
+): Promise<RoomResource> {
+  const { data } = await portalApi.post<{ resource: RoomResource }>(`/api/portal/community/rooms/${roomId}/resources`, input);
+  return data.resource;
+}
+
+export async function deleteRoomResource(roomId: string, resourceId: string): Promise<void> {
+  await portalApi.delete(`/api/portal/community/rooms/${roomId}/resources/${resourceId}`);
+}
+
+// Authenticated download — the route is Bearer-token-gated (entitlement
+// re-checked server-side), so a plain <a href> won't carry the JWT. Mirrors
+// downloadResume() in portalSettingsApi.ts.
+export async function downloadRoomResource(roomId: string, resource: RoomResource): Promise<void> {
+  const res = await portalApi.get(`/api/portal/community/rooms/${roomId}/resources/${resource.id}/download`, { responseType: 'blob' });
+  const url = URL.createObjectURL(res.data as Blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = resource.title || 'file';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
