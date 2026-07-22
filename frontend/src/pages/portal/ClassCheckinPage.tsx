@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
-import { joinSession, setSessionPulse, askSessionQuestion, PulseState } from '../../services/onboardingApi';
+import {
+  joinSession, setSessionPulse, askSessionQuestion, PulseState,
+  getCompanionState, submitPollResponse, CompanionState,
+} from '../../services/onboardingApi';
 import { emitPointsEarned } from '../../services/pointsFx';
 
 // Public live-class check-in landing (`/portal/class-checkin/:sessionId`).
@@ -35,6 +38,13 @@ function formatDate(d: string): string {
   const dt = new Date(`${d}T00:00:00`);
   if (Number.isNaN(dt.getTime())) return d;
   return dt.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+/** Emoji-labelled kind for the live question card. */
+function kindLabel(kind: 'prediction' | 'poll' | 'trivia'): string {
+  if (kind === 'trivia') return '🧠 Trivia';
+  if (kind === 'prediction') return '🔮 Make your prediction';
+  return '📊 Live poll';
 }
 
 /** Accepts "13:00", "13:00:00" (→ "1:00 PM") or an already-formatted "1:00 PM". */
@@ -76,6 +86,23 @@ const ClassCheckinPage: React.FC = () => {
       .then(() => { setQuestion(''); setQState('sent'); setTimeout(() => setQState('idle'), 1800); })
       .catch(() => setQState('idle'));
   }, [sessionId, question]);
+
+  // Mirror the instructor deck: once checked in, poll the companion state so the
+  // phone switches to whatever is on screen (status / a live question / broadcast).
+  const [companion, setCompanion] = useState<CompanionState | null>(null);
+  useEffect(() => {
+    if (joinPhase !== 'checked') return;
+    let alive = true;
+    const tick = () => getCompanionState(sessionId).then((s) => { if (alive) setCompanion(s); }).catch(() => { /* keep last view */ });
+    tick();
+    const id = window.setInterval(tick, 2500);
+    return () => { alive = false; window.clearInterval(id); };
+  }, [joinPhase, sessionId]);
+
+  const answerPoll = useCallback((key: string, choice: number) => {
+    setCompanion((c) => (c && c.question ? { ...c, question: { ...c.question, my_choice: choice } } : c));
+    submitPollResponse(sessionId, key, choice).catch(() => { /* best-effort */ });
+  }, [sessionId]);
 
   // 1) Load the public class info (title/date/cohort) for either path.
   const loadInfo = useCallback(() => {
@@ -177,46 +204,85 @@ const ClassCheckinPage: React.FC = () => {
                 <h1 className="cbck-title">{info.title}</h1>
                 <p className="cbck-meta">{info.cohort_name}{info.start_time ? ` · ${formatTime(info.start_time)}` : ''}</p>
 
-                {/* Live class controller — your phone drives the room */}
-                <div className="cbck-controller">
-                  <p className="cbck-ctl-label">Tap your status any time</p>
-                  <div className="cbck-status-grid">
-                    {([
-                      { s: 'here', label: "I'm here", emoji: '👋' },
-                      { s: 'building', label: 'Building', emoji: '🛠️' },
-                      { s: 'stuck', label: "I'm stuck", emoji: '✋' },
-                      { s: 'finished', label: 'Finished', emoji: '✅' },
-                    ] as { s: PulseState; label: string; emoji: string }[]).map(({ s, label, emoji }) => (
-                      <button
-                        key={s}
-                        type="button"
-                        className={`cbck-status cbck-status-${s}${pulse === s ? ' is-active' : ''}`}
-                        onClick={() => tapPulse(s)}
-                        aria-pressed={pulse === s}
-                      >
-                        <span className="cbck-status-emoji" aria-hidden="true">{emoji}</span>
-                        {label}
+                {/* ── LIVE QUESTION — appears automatically when the instructor is on a question slide ── */}
+                {companion?.phase === 'question' && companion.question ? (
+                  <div className="cbck-controller">
+                    <p className="cbck-ctl-label">{kindLabel(companion.question.kind)}</p>
+                    <p className="cbck-q-text">{companion.question.q}</p>
+                    <div className="cbck-q-opts">
+                      {(companion.question.options || []).map((opt, idx) => {
+                        const q = companion.question!;
+                        const mine = q.my_choice === idx;
+                        const correct = q.revealed && q.answer === idx;
+                        return (
+                          <button
+                            key={idx}
+                            type="button"
+                            className={`cbck-q-opt${mine ? ' is-mine' : ''}${correct ? ' is-correct' : ''}`}
+                            onClick={() => answerPoll(q.key, idx)}
+                            disabled={q.revealed}
+                          >
+                            <span className="cbck-q-letter">{String.fromCharCode(65 + idx)}</span>
+                            <span className="cbck-q-opt-text">{opt}</span>
+                            {correct && <span className="cbck-q-check" aria-hidden="true">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="cbck-text cbck-text-sub">
+                      {companion.question.revealed ? 'Answer revealed ✓' : companion.question.my_choice != null ? 'Locked in ✓ — you can change it' : 'Tap your answer'}
+                    </p>
+                  </div>
+                ) : companion?.phase === 'broadcast' ? (
+                  /* ── BUILDER BROADCAST — appears when the instructor reaches that segment ── */
+                  <div className="cbck-controller">
+                    <p className="cbck-ctl-label">🎬 Builder Broadcast — record 30 seconds</p>
+                    <ul className="cbck-broadcast-list">
+                      {(companion.broadcast_prompts || []).map((p, idx) => <li key={idx}>{p}</li>)}
+                    </ul>
+                    <p className="cbck-text cbck-text-sub">Record it on your phone and post your Build Proof.</p>
+                  </div>
+                ) : (
+                  /* ── DEFAULT — status controller + ask a question ── */
+                  <div className="cbck-controller">
+                    <p className="cbck-ctl-label">Tap your status any time</p>
+                    <div className="cbck-status-grid">
+                      {([
+                        { s: 'here', label: "I'm here", emoji: '👋' },
+                        { s: 'building', label: 'Building', emoji: '🛠️' },
+                        { s: 'stuck', label: "I'm stuck", emoji: '✋' },
+                        { s: 'finished', label: 'Finished', emoji: '✅' },
+                      ] as { s: PulseState; label: string; emoji: string }[]).map(({ s, label, emoji }) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className={`cbck-status cbck-status-${s}${pulse === s ? ' is-active' : ''}`}
+                          onClick={() => tapPulse(s)}
+                          aria-pressed={pulse === s}
+                        >
+                          <span className="cbck-status-emoji" aria-hidden="true">{emoji}</span>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="cbck-ask">
+                      <input
+                        type="text"
+                        className="cbck-ask-input"
+                        placeholder="Ask a question…"
+                        value={question}
+                        onChange={(e) => setQuestion(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') sendQuestion(); }}
+                        maxLength={280}
+                        aria-label="Ask a question"
+                      />
+                      <button type="button" className="cbck-ask-send" onClick={sendQuestion} disabled={!question.trim() || qState === 'sending'}>
+                        {qState === 'sent' ? 'Sent ✓' : qState === 'sending' ? '…' : 'Send'}
                       </button>
-                    ))}
+                    </div>
+                    <p className="cbck-text cbck-text-sub">Your instructor sees this on screen — no need to interrupt.</p>
                   </div>
-
-                  <div className="cbck-ask">
-                    <input
-                      type="text"
-                      className="cbck-ask-input"
-                      placeholder="Ask a question…"
-                      value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') sendQuestion(); }}
-                      maxLength={280}
-                      aria-label="Ask a question"
-                    />
-                    <button type="button" className="cbck-ask-send" onClick={sendQuestion} disabled={!question.trim() || qState === 'sending'}>
-                      {qState === 'sent' ? 'Sent ✓' : qState === 'sending' ? '…' : 'Send'}
-                    </button>
-                  </div>
-                  <p className="cbck-text cbck-text-sub">Your instructor sees this on screen — no need to interrupt.</p>
-                </div>
+                )}
 
                 <button type="button" className="cbck-btn cbck-btn-ghost" onClick={enterClass}>Open the live room</button>
               </div>
@@ -345,6 +411,33 @@ const CBCK_CSS = `
   border:none; border-radius:var(--radius-pill);
 }
 .cbck-ask-send:disabled{ opacity:.5; cursor:default; }
+
+/* Live question (mirrors the instructor's screen) */
+.cbck-q-text{ font-size:19px; font-weight:700; line-height:1.35; color:var(--text-strong); margin:2px 0 16px; }
+.cbck-q-opts{ display:flex; flex-direction:column; gap:10px; }
+.cbck-q-opt{
+  display:flex; align-items:center; gap:12px; width:100%; min-height:56px; padding:10px 14px; cursor:pointer; text-align:left;
+  font-size:16px; font-weight:600; color:var(--text-body);
+  background:var(--surface-card); border:2px solid var(--border-default); border-radius:var(--radius-lg);
+  transition:border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.cbck-q-opt:active{ transform:scale(.99); }
+.cbck-q-opt:disabled{ cursor:default; }
+.cbck-q-letter{
+  flex:none; width:30px; height:30px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+  font-weight:800; font-size:14px; color:var(--text-muted); background:var(--surface-subtle); border:1.5px solid var(--border-default);
+}
+.cbck-q-opt-text{ flex:1; min-width:0; }
+.cbck-q-opt.is-mine{ border-color:var(--brand-accent); background:color-mix(in srgb, var(--brand-accent) 8%, transparent); }
+.cbck-q-opt.is-mine .cbck-q-letter{ background:var(--brand-accent); color:#fff; border-color:var(--brand-accent); }
+.cbck-q-opt.is-correct{ border-color:var(--green-600, #3C7A26); background:color-mix(in srgb, var(--green-600, #3C7A26) 12%, transparent); }
+.cbck-q-opt.is-correct .cbck-q-letter{ background:var(--green-600, #3C7A26); color:#fff; border-color:var(--green-600, #3C7A26); }
+.cbck-q-check{ margin-left:auto; color:var(--green-600, #3C7A26); font-weight:800; }
+.cbck-broadcast-list{ list-style:none; margin:6px 0 0; padding:0; display:flex; flex-direction:column; gap:8px; text-align:left; }
+.cbck-broadcast-list li{
+  padding:11px 14px; font-size:15px; font-weight:600; color:var(--text-body);
+  background:var(--surface-subtle); border:1.5px solid var(--border-default); border-left:5px solid var(--amber-500, #E8920C); border-radius:var(--radius-lg);
+}
 
 .cbck-spin{
   width:34px; height:34px; margin:8px auto 16px; border-radius:50%;
