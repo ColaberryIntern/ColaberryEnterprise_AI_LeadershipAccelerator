@@ -182,6 +182,33 @@ export async function askSessionQuestion(sessionId: string, text: string): Promi
   await portalApi.post(`/api/portal/sessions/${sessionId}/chat`, { content: text });
 }
 
+/** The live view the student's phone should show — mirrors the instructor deck. */
+export interface CompanionState {
+  phase: 'status' | 'question' | 'broadcast';
+  title: string;
+  question: {
+    key: string;
+    kind: 'prediction' | 'poll' | 'trivia';
+    q: string;
+    options: string[];
+    answer: number | null;
+    revealed: boolean;
+    my_choice: number | null;
+  } | null;
+  broadcast_prompts?: string[];
+  my_pulse: PulseState | null;
+}
+
+export async function getCompanionState(sessionId: string): Promise<CompanionState> {
+  const { data } = await portalApi.get<CompanionState>(`/api/portal/sessions/${sessionId}/companion-state`);
+  return data;
+}
+
+/** Answer the live poll/prediction/trivia currently on the instructor's screen. */
+export async function submitPollResponse(sessionId: string, pollKey: string, choice: number): Promise<void> {
+  await portalApi.post(`/api/portal/sessions/${sessionId}/poll-response`, { poll_key: pollKey, choice });
+}
+
 /** Upcoming public events (Open Houses) from CCPP, for the portal calendar. */
 export async function fetchPublicEvents(days = 30): Promise<OpenHouseView[]> {
   const { data } = await portalApi.get<{ events: OpenHouseView[] }>(`/api/portal/events?days=${days}`);

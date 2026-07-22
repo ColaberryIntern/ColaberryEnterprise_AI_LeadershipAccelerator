@@ -25,6 +25,7 @@ export function deckScript(): string {
   var total = K.totalMinutes || 120;
   var i = 0;
   var moments = [];
+  var revealed = {};
 
   var elProgress = document.getElementById('kprogress');
   var elCounter = document.getElementById('kcounter');
@@ -48,10 +49,30 @@ export function deckScript(): string {
     elCounter.textContent = (i + 1) + ' / ' + slides.length;
     renderNotes();
     updatePace();
+    broadcastCurrent();
     slides[i].scrollTop = 0;
   }
   function next(){ show(i + 1); }
   function prev(){ show(i - 1); }
+
+  // Broadcast the deck's CURRENT view so students' phones switch to match it.
+  function broadcastCurrent(){
+    var live = K.live || {};
+    if (!live.enabled || !live.broadcastEndpoint) return;
+    var sm = (K.slides || [])[i];
+    if (!sm) return;
+    var q = sm.question ? {
+      key: sm.question.key, kind: sm.question.kind, q: sm.question.q,
+      options: sm.question.options, answer: sm.question.answer, revealed: !!revealed[sm.id],
+    } : null;
+    var body = {
+      slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
+      phase: sm.phase, question: q, broadcast_prompts: sm.broadcast_prompts,
+    };
+    fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+    }).catch(function(){});
+  }
 
   // ---- pace tracker ----
   var startKey = 'kit_start_' + (K.meta && K.meta.sessionId || 'x');
@@ -98,15 +119,39 @@ export function deckScript(): string {
 
   // ---- pulse rail ----
   var live = K.live || { enabled: false };
-  var pulse = { here: 0, building: 0, stuck: 0, finished: 0, questions: [] };
+  var pulse = { here: 0, building: 0, stuck: 0, finished: 0, present: 0, participated: 0, questions: [], poll: null };
   var elLive = document.getElementById('kraillive');
   function setPulseCell(id, v){ var el = document.getElementById(id); if (el) el.textContent = v; }
+
+  function renderPoll(){
+    var el = document.getElementById('kpoll');
+    if (!el) return;
+    var p = pulse.poll;
+    if (!p || !p.options || !p.options.length){ el.style.display = 'none'; return; }
+    var sm = (K.slides || [])[i];
+    var revealedNow = sm && sm.question && revealed[sm.id];
+    var ans = sm && sm.question && typeof sm.question.answer === 'number' ? sm.question.answer : -1;
+    var total = p.total || 0;
+    var rows = p.options.map(function(opt, idx){
+      var n = (p.tally && p.tally[idx]) || 0;
+      var pct = total ? Math.round(n / total * 100) : 0;
+      var isCorrect = revealedNow && idx === ans;
+      return '<div class="kpoll-row' + (isCorrect ? ' correct' : '') + '">' +
+        '<div class="lab"><span>' + esc(opt) + '</span><span class="n">' + n + '</span></div>' +
+        '<div class="kpoll-bar"><i style="width:' + pct + '%"></i></div></div>';
+    }).join('');
+    el.innerHTML = '<div class="kpoll-head">Live answers · ' + total + ' voted</div>' + rows;
+    el.style.display = 'block';
+  }
 
   function renderPulse(){
     setPulseCell('kp-here', pulse.here);
     setPulseCell('kp-building', pulse.building);
     setPulseCell('kp-stuck', pulse.stuck);
     setPulseCell('kp-finished', pulse.finished);
+    setPulseCell('kp-present', pulse.present || 0);
+    setPulseCell('kp-participated', pulse.participated || 0);
+    renderPoll();
     var ql = document.getElementById('kqlist');
     if (ql){
       if (!pulse.questions || !pulse.questions.length){
@@ -138,7 +183,7 @@ export function deckScript(): string {
     var url = live.endpoint + (live.endpoint.indexOf('?') >= 0 ? '&' : '?') + 't=' + encodeURIComponent(live.token || '');
     fetch(url, { headers: { 'Accept': 'application/json' } })
       .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){ if (d){ pulse = { here: d.here||0, building: d.building||0, stuck: d.stuck||0, finished: d.finished||0, questions: d.questions||[] }; renderPulse(); updatePace(); } })
+      .then(function(d){ if (d){ pulse = { here: d.here||0, building: d.building||0, stuck: d.stuck||0, finished: d.finished||0, present: d.present||0, participated: d.participated||0, questions: d.questions||[], poll: d.poll||null }; renderPulse(); updatePace(); } })
       .catch(function(){});
   }
 
@@ -156,6 +201,8 @@ export function deckScript(): string {
       var line = wrap.querySelector('.kreveal-line'); if (line) line.classList.add('show');
       var correct = wrap.querySelector('.kopt[data-correct="1"]'); if (correct) correct.classList.add('correct');
       rb.style.display = 'none';
+      // tell the phones the answer is revealed too
+      var sm = (K.slides || [])[i]; if (sm) { revealed[sm.id] = true; broadcastCurrent(); }
       return;
     }
     var cb = e.target.closest('.kcopy');

@@ -131,6 +131,31 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_pulse_enrollment_session ON session_pulse (enrollment_id, session_id)`,
     `CREATE INDEX IF NOT EXISTS idx_session_pulse_session ON session_pulse (session_id)`,
 
+    // ---- session_broadcast (instructor → phones sync) ----
+    // One row per session holding the instructor deck's CURRENT view state
+    // (which slide/segment, and the active question/broadcast payload). Students'
+    // phones poll this and switch to the matching view, so the companion app is
+    // always slaved to what is on screen.
+    `CREATE TABLE IF NOT EXISTS session_broadcast (
+       session_id UUID PRIMARY KEY REFERENCES live_sessions(id),
+       state JSONB NOT NULL DEFAULT '{}'::jsonb,
+       updated_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+
+    // ---- session_poll_responses (phones → deck tallies) ----
+    // One answer per (student, poll) — poll_key is stable per interaction slide,
+    // so re-answering updates the choice (ON CONFLICT) instead of double-counting.
+    `CREATE TABLE IF NOT EXISTS session_poll_responses (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       enrollment_id UUID NOT NULL REFERENCES enrollments(id),
+       poll_key VARCHAR(200) NOT NULL,
+       choice INTEGER NOT NULL,
+       created_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_poll_responses_key ON session_poll_responses (session_id, enrollment_id, poll_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_session_poll_responses_key ON session_poll_responses (session_id, poll_key)`,
+
     // ---- session_gates ----
     // gate_type is DataTypes.STRING(50) in the model (NOT an ENUM) → plain VARCHAR, no CHECK.
     `CREATE TABLE IF NOT EXISTS session_gates (
