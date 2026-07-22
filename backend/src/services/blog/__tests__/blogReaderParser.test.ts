@@ -4,9 +4,12 @@ import { parseBlogPostHtml, sanitizeArticleHtml } from '../blogReaderParser';
  *  uses for a single post: props.pageProps.post. */
 function postPage(post: unknown): string {
   const data = { props: { pageProps: { post } } };
+  // Next.js escapes `<` as < inside __NEXT_DATA__ so a `</script>` in the JSON
+  // (e.g. a post body containing <script>) can't prematurely close the tag. Mirror it.
+  const json = JSON.stringify(data).replace(/</g, '\\u003c');
   return `<!DOCTYPE html><html><head><title>Post</title></head><body>
     <main class="snav-pad"><article>rendered</article></main>
-    <script id="__NEXT_DATA__" type="application/json">${JSON.stringify(data)}</script>
+    <script id="__NEXT_DATA__" type="application/json">${json}</script>
   </body></html>`;
 }
 
