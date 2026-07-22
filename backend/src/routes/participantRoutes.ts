@@ -52,7 +52,7 @@ import {
 import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
@@ -140,6 +140,9 @@ router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, req
 // Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).
 router.post('/api/portal/runtime/today/blog/:blogId/read', watchBeatRateLimiter, requireParticipant, handleBlogReadBeat);
 router.post('/api/portal/runtime/today/blog/:blogId/collect', requireParticipant, handleBlogCollect);
+// In-Workspace blog reader: the post's article fetched + sanitized server-side (the
+// training site sends X-Frame-Options: DENY, so it can't be iframed directly).
+router.get('/api/portal/runtime/today/blog/:blogId/reader', requireParticipant, handleBlogReader);
 // Generic dwell gate: heartbeat for passive-content types (intel/reflection/…).
 router.post('/api/portal/runtime/cards/:cardId/dwell', watchBeatRateLimiter, requireParticipant, handleDwellBeat);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);

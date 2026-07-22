@@ -14,9 +14,14 @@ import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 
 export interface BlogReadState { read_s: number; required_s: number; met: boolean; }
 
-export function useBlogReadGate(blogId: string | null) {
+/**
+ * `autoStart` arms the gate immediately (the Workspace opens the post IN a frame, so
+ * reading begins on open); the drawer leaves it false and arms via start() when the
+ * student clicks "Read the post" (the post opens in a new tab there).
+ */
+export function useBlogReadGate(blogId: string | null, autoStart = false) {
   const [state, setState] = useState<BlogReadState | null>(null);
-  const [started, setStarted] = useState(false);
+  const [started, setStarted] = useState(autoStart);
   const lastBeatRef = useRef<number>(0);
 
   const start = useCallback(() => setStarted(true), []);
