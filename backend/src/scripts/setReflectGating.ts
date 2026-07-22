@@ -15,12 +15,9 @@
 import { sequelize } from '../config/database';
 import TimelineCard from '../models/TimelineCard';
 import { updateCard } from '../services/timeline/timelineAdminService';
+import { reflectGateFor, reflectSiblingFlags } from '../services/timeline/reflectGating';
 
 const CANONICAL_PROGRAM = '92b98a72-8681-4f04-8ba1-16a18334cd0b';
-
-const LEARN_GATE = [{ kind: 'section_complete', bucket: 'learn', scope: 'week', label: 'the Learn section' }];
-const EVAL_GATE = [{ kind: 'type_complete', type: 'evaluation', scope: 'week', label: 'the evaluation' }];
-const SURVEY_GATE = [{ kind: 'type_complete', type: 'survey', scope: 'week', label: 'the feedback survey' }];
 
 interface GateReport { week: number; type: string; card_id: string; gate: string | null }
 
@@ -40,17 +37,13 @@ export async function setReflectGating(programId = CANONICAL_PROGRAM, onlyWeeks?
 
   for (const week of weeks) {
     const cards = await TimelineCard.findAll({ where: { cohort_id: null, program_id: programId, week, bucket: 'reflect' } });
-    const hasEval = cards.some((c) => c.type === 'evaluation');
-    const hasSurvey = cards.some((c) => c.type === 'survey');
+    const siblings = reflectSiblingFlags(cards);
 
     for (const c of cards) {
-      let rules: any[] | null = null;
-      if (c.type === 'evaluation') rules = LEARN_GATE;                                   // ← Learn complete
-      else if (c.type === 'survey') rules = hasEval ? EVAL_GATE : LEARN_GATE;            // ← Evaluation (or Learn if no eval, e.g. Week 0)
-      else if (c.type === 'reflection') rules = hasSurvey ? SURVEY_GATE : (hasEval ? EVAL_GATE : LEARN_GATE); // ← Survey complete
+      const rules = reflectGateFor(c.type, siblings);
       if (!rules) { report.push({ week, type: c.type, card_id: c.id, gate: null }); continue; }
       await updateCard(c.id, { unlock_rules: rules });
-      report.push({ week, type: c.type, card_id: c.id, gate: (rules[0] as any).label });
+      report.push({ week, type: c.type, card_id: c.id, gate: rules[0].label ?? null });
     }
   }
   return report;
