@@ -48,6 +48,22 @@ function architectureHtml(bullets: string[] | undefined): string {
     `<div class="karch-item"><div class="kn">${i + 1}</div><p>${esc(b)}</p></div>`).join('') + '</div>';
 }
 
+/** Small source footer for factual slides (publisher · title (year) [qualifier]). */
+function evidenceHtml(slide: KitSlide): string {
+  if (!slide.evidence || !slide.evidence.length) return '';
+  const items = slide.evidence
+    .map((e) => {
+      const bits = [e.publisher];
+      if (e.sourceTitle) bits.push(e.sourceTitle);
+      let s = bits.join(' · ');
+      if (e.publicationDate) s += ` (${e.publicationDate})`;
+      if (e.note) s += ` — ${e.note}`;
+      return esc(s);
+    })
+    .join(' &nbsp;·&nbsp; ');
+  return `<div class="kevidence">📎 Sources: ${items}</div>`;
+}
+
 /** Mermaid diagram block (rendered client-side; raw source shows if the CDN fails). */
 function diagramHtml(slide: KitSlide): string {
   if (!slide.diagram) return '';
@@ -147,7 +163,8 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
         (slide.body ? `<p class="kbody">${esc(slide.body)}</p>` : '') +
         bulletsHtml(slide.bullets) +
         (slide.prompt ? promptHtml(slide.prompt.label, slide.prompt.prompt) : '') +
-        diagramHtml(slide)
+        diagramHtml(slide) +
+        evidenceHtml(slide)
       );
     case 'interaction':
       return interactionHtml(slide);

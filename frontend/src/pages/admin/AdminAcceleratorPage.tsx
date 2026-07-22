@@ -122,6 +122,8 @@ function AdminAcceleratorPage() {
   const [editingSession, setEditingSession] = useState<LiveSession | null>(null);
   // Session id whose Class Kit (QR + start-class panel) is open, else null.
   const [kitSessionId, setKitSessionId] = useState<string | null>(null);
+  // Session id whose Present dropdown menu is open, else null.
+  const [presentMenu, setPresentMenu] = useState<string | null>(null);
   // Session id whose Class Details (curriculum/blueprint) modal is open, else null.
   // Cohort days-off (dates a class was skipped) shown as removable chips above the table.
   const [skippedDates, setSkippedDates] = useState<string[]>([]);
@@ -279,18 +281,47 @@ function AdminAcceleratorPage() {
   // Open the full interactive Class Kit teaching deck in a new tab. The window is
   // opened synchronously (in the click gesture) to dodge popup blockers, then the
   // deck HTML — fetched with the admin JWT — is written into it.
-  const handleOpenKitDeck = async (sessionId: string) => {
+  const handleOpenKitDeck = async (sessionId: string, mode: 'live' | 'rehearse' = 'live') => {
     const w = window.open('', '_blank');
     if (!w) { showToast('Allow pop-ups to open the Class Kit deck', 'error'); return; }
-    w.document.write('<!doctype html><title>Loading Class Kit…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the Class Kit deck…</body>');
+    const label = mode === 'rehearse' ? 'Rehearsal (live sync off)' : 'Class Kit';
+    w.document.write(`<!doctype html><title>Loading…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the ${label}…</body>`);
     try {
-      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/kit-doc`, { responseType: 'text' });
+      const q = mode === 'rehearse' ? '?mode=rehearse' : '';
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/kit-doc${q}`, { responseType: 'text' });
       w.document.open();
       w.document.write(res.data as string);
       w.document.close();
     } catch {
       try { w.document.body.innerHTML = '<div style="font-family:system-ui,sans-serif;padding:2rem;color:#c00">Could not load the Class Kit. Close this tab and try again.</div>'; } catch { /* window may be gone */ }
       showToast('Failed to open the Class Kit deck', 'error');
+    }
+  };
+
+  // Download the standalone (offline) class HTML.
+  const handleDownloadKit = async (sessionId: string, title: string) => {
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/kit-doc?mode=standalone`, { responseType: 'text' });
+      const blob = new Blob([res.data as string], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `class-experience-${(title || 'session').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)}.html`;
+      a.click();
+      showToast('Downloaded the standalone class file', 'success');
+    } catch { showToast('Failed to download the class file', 'error'); }
+  };
+
+  // Open the instructor readiness report (prep + source ledger).
+  const handleOpenReadiness = async (sessionId: string) => {
+    const w = window.open('', '_blank');
+    if (!w) { showToast('Allow pop-ups to open the readiness report', 'error'); return; }
+    w.document.write('<!doctype html><title>Readiness…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the readiness report…</body>');
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/readiness`, { responseType: 'text' });
+      w.document.open(); w.document.write(res.data as string); w.document.close();
+    } catch {
+      try { w.document.body.innerHTML = '<div style="font-family:system-ui,sans-serif;padding:2rem;color:#c00">Could not load the readiness report.</div>'; } catch { /* window gone */ }
+      showToast('Failed to open the readiness report', 'error');
     }
   };
 
@@ -720,7 +751,17 @@ function AdminAcceleratorPage() {
                       </td>
                       <td>
                         <div className="d-flex gap-1">
-                          <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class. The check-in QR is on the first slides.">▶ Present</button>
+                          <div className="btn-group" style={{ position: 'relative' }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class. The check-in QR is on the first slides.">▶ Present</button>
+                            <button className="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" onClick={() => setPresentMenu(presentMenu === s.id ? null : s.id)} title="More: Rehearse · Download · Readiness"><span className="visually-hidden">More</span></button>
+                            {presentMenu === s.id && (
+                              <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 1050, display: 'block' }}>
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenKitDeck(s.id, 'rehearse'); }}>🎓 Rehearse (live off)</button>
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleDownloadKit(s.id, s.title); }}>⬇️ Download standalone HTML</button>
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenReadiness(s.id); }}>📋 Readiness report</button>
+                              </div>
+                            )}
+                          </div>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => handleOpenOutline(s.id)} title="Open the plain-language class outline (teaching plan) — review, prepare, or print">📋 Outline</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => setKitSessionId(s.id)} title="Printable check-in QR + Start Class + roster (a paper backup — the deck already shows the QR)">QR</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>

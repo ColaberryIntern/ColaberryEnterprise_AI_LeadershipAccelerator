@@ -12,7 +12,7 @@ import {
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { buildSessionKit } from '../services/sessionKitService';
-import { renderSessionKitDoc, renderSessionOutline } from '../services/sessionKitDocService';
+import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, KitDocMode } from '../services/sessionKitDocService';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -121,7 +121,18 @@ export async function handleGetSessionKit(req: Request, res: Response, next: Nex
 // admin UI fetches this with the admin JWT and opens it in a new tab.
 export async function handleGetSessionKitDoc(req: Request, res: Response, next: NextFunction) {
   try {
-    const html = await renderSessionKitDoc(req.params.id as string);
+    const q = req.query.mode;
+    const mode: KitDocMode = q === 'rehearse' || q === 'standalone' ? q : 'live';
+    const html = await renderSessionKitDoc(req.params.id as string, mode);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+// Instructor readiness report (teaching-plan counts + source/evidence ledger + prep).
+export async function handleGetSessionReadiness(req: Request, res: Response, next: NextFunction) {
+  try {
+    const html = await renderSessionReadinessReport(req.params.id as string);
     if (!html) return res.status(404).json({ error: 'Session not found' });
     res.type('html').send(html);
   } catch (err) { next(err); }
