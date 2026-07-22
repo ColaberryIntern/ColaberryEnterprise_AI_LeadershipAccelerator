@@ -13,6 +13,7 @@ import {
   WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS,
 } from '../../data/classSessionPlan';
 import { weekBlueprint } from '../../data/weekBlueprints';
+import { teachSlidesFor, TeachSlide, ORIENTATION_TEACH } from '../../data/classTeachContent';
 import {
   SegmentTemplate, SegmentMode, runOfShowFor, scaleSegments,
   formatClock, durationMinutes, formatLongDate, weekdayOf,
@@ -21,7 +22,7 @@ import {
 export type SlideKind =
   | 'cover' | 'rules' | 'bullets' | 'architecture' | 'example' | 'microbuild'
   | 'prompt' | 'checkpoint' | 'buildmap' | 'interaction' | 'failure' | 'recovery'
-  | 'demos' | 'broadcast' | 'break' | 'cta' | 'segment' | 'presenterOnly' | 'assignment';
+  | 'demos' | 'broadcast' | 'break' | 'cta' | 'segment' | 'presenterOnly' | 'assignment' | 'teach';
 
 export interface KitSlide {
   id: string;
@@ -161,6 +162,23 @@ function buildWeekBrief(week: number | null, wc: WeekClassContent): AssignmentBr
   };
 }
 
+/** Map deep teaching slides for one segment into KitSlides (kind 'teach'). */
+function teachToSlides(teach: TeachSlide[], segId: string, seg: KitSegment): KitSlide[] {
+  return teach
+    .filter((t) => t.segment === segId)
+    .map((t, i) =>
+      slide(seg, 200 + i, 'teach', {
+        eyebrow: t.eyebrow,
+        title: t.title,
+        body: t.body,
+        bullets: t.bullets,
+        prompt: t.code ? { label: t.code.label, prompt: t.code.code } : undefined,
+        diagram: t.diagram,
+        presenterTip: t.script || seg.purpose,
+      }),
+    );
+}
+
 /** Mermaid flow of the build checkpoints (CP0 → … → CPn) with a rescue branch. */
 function buildCheckpointDiagram(cps: BuildCheckpoint[]): string {
   if (!cps.length) return '';
@@ -285,6 +303,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
   const out: KitSlide[] = [...openingSlides(meta, segs)];
   if (!wc) return out;
   const m = wc.monday;
+  const mteach = teachSlidesFor(meta.week, 'monday'); // deep teaching slides, inserted per segment
 
   const cold = segById(segs, 'cold-open');
   out.push(slide(cold, 0, 'segment', {
@@ -303,6 +322,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     eyebrow: '💼 The business problem', title: 'Why this matters beyond the tool', body: m.tension,
     presenterTip: 'This is the LinkedIn clip. Stay on the business stakes, not the syntax.',
   }));
+  out.push(...teachToSlides(mteach, 'business-problem', prob));
 
   const arch = segById(segs, 'architecture');
   out.push(slide(arch, 0, 'architecture', {
@@ -311,12 +331,14 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     diagramCaption: 'How this week’s system fits together — walk it left to right.',
     presenterTip: 'Walk the diagram node by node: components, the risky edges, the decisions. This is the evergreen lesson — take your time (≈20 min). Ask the room where the trust boundary is.',
   }));
+  out.push(...teachToSlides(mteach, 'architecture', arch));
 
   const dec = segById(segs, 'deconstruct');
   out.push(slide(dec, 0, 'example', {
     eyebrow: '🔍 Deconstruct a real example', title: 'What works, and what fails', body: m.realExample,
     presenterTip: 'Show the good and the broken. The failure is the breakdown clip.',
   }));
+  out.push(...teachToSlides(mteach, 'deconstruct', dec));
 
   out.push(breakSlide(segById(segs, 'reset')));
 
@@ -325,6 +347,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     eyebrow: '🛠️ Guided micro-build', title: 'Start the first component', body: m.microBuild,
     presenterTip: 'Watch the pulse. If people go “stuck”, slow down. This is the tutorial sequence.',
   }));
+  out.push(...teachToSlides(mteach, 'micro-build', micro));
 
   const chal = segById(segs, 'challenge');
   out.push(slide(chal, 0, 'interaction', {
@@ -354,6 +377,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
   const out: KitSlide[] = [...openingSlides(meta, segs)];
   if (!wc) return out;
   const t = wc.thursday;
+  const tteach = teachSlidesFor(meta.week, 'thursday'); // deep teaching slides, inserted per segment
 
   const preview = segById(segs, 'result-preview');
   out.push(slide(preview, 0, 'segment', {
@@ -378,6 +402,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     diagramCaption: 'Everyone moves together, checkpoint to checkpoint. Stuck? The rescue branch catches you up.',
     presenterTip: 'Show the safety rails: the checkpoints and the rescue branch. Nobody gets left behind. Confirm CP0 before the first prompt.',
   }));
+  out.push(...teachToSlides(tteach, 'build-map', map));
   t.checkpoints.forEach((cp, i) => {
     out.push(slide(map, i + 1, 'checkpoint', {
       eyebrow: `Checkpoint ${cp.n}`, title: cp.label, body: cp.detail, checkpoint: cp,
@@ -385,25 +410,37 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     }));
   });
 
+  // Guided build: the deep teaching steps when authored, else the plain prompt beats.
   const guided = segById(segs, 'guided-build');
-  t.prompts.forEach((p, i) => {
-    out.push(slide(guided, i, 'prompt', {
-      eyebrow: `⌨️ Guided build · prompt ${i + 1}`, title: p.label, prompt: p,
-      presenterTip: 'Paste on screen, narrate the decision (not every character), run it, show the result.',
-    }));
-  });
+  const gbTeach = teachToSlides(tteach, 'guided-build', guided);
+  if (gbTeach.length) {
+    out.push(...gbTeach);
+  } else {
+    t.prompts.forEach((p, i) => {
+      out.push(slide(guided, i, 'prompt', {
+        eyebrow: `⌨️ Guided build · prompt ${i + 1}`, title: p.label, prompt: p,
+        presenterTip: 'Paste on screen, narrate the decision (not every character), run it, show the result.',
+      }));
+    });
+  }
 
   out.push(breakSlide(segById(segs, 'reset')));
 
+  // Failure + recovery: the deep teaching version when authored, else the two beats.
   const fail = segById(segs, 'failure');
-  out.push(slide(fail, 0, 'failure', {
-    eyebrow: '💥 Failure injection', title: 'Let’s break it on purpose', body: t.failureInjection,
-    presenterTip: 'Do not hide the error. This controlled failure is the highest-retention moment of the show.',
-  }));
-  out.push(slide(fail, 1, 'recovery', {
-    eyebrow: '🔧 Recover like an architect', title: 'Diagnose and fix', body: t.recovery,
-    presenterTip: 'Narrate the diagnosis. This is where they learn architecture thinking, not just syntax.',
-  }));
+  const failTeach = teachToSlides(tteach, 'failure', fail);
+  if (failTeach.length) {
+    out.push(...failTeach);
+  } else {
+    out.push(slide(fail, 0, 'failure', {
+      eyebrow: '💥 Failure injection', title: 'Let’s break it on purpose', body: t.failureInjection,
+      presenterTip: 'Do not hide the error. This controlled failure is the highest-retention moment of the show.',
+    }));
+    out.push(slide(fail, 1, 'recovery', {
+      eyebrow: '🔧 Recover like an architect', title: 'Diagnose and fix', body: t.recovery,
+      presenterTip: 'Narrate the diagnosis. This is where they learn architecture thinking, not just syntax.',
+    }));
+  }
 
   const demos = segById(segs, 'demos');
   out.push(slide(demos, 0, 'demos', {
@@ -450,6 +487,7 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
       eyebrow: `${os.presenter} · ${os.minutes} min`, title: os.title, bullets: os.beats,
       presenterTip: si === 0 ? 'Your hour, Ali. Quotes, data, the program promise.' : `Hand off to ${os.presenter}. Keep to ${os.minutes} minutes — the pace bar will tell you if you drift.`,
     }));
+    out.push(...teachToSlides(ORIENTATION_TEACH, segIds[si], seg));
   });
 
   const close = segById(segs, 'setup');

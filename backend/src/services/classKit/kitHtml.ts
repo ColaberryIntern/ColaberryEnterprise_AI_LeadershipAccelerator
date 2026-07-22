@@ -140,6 +140,15 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
       return coverHtml(spec, slide);
     case 'assignment':
       return assignmentHtml(slide);
+    case 'teach':
+      return (
+        (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
+        `<h2 class="ktitle">${esc(slide.title)}</h2>` +
+        (slide.body ? `<p class="kbody">${esc(slide.body)}</p>` : '') +
+        bulletsHtml(slide.bullets) +
+        (slide.prompt ? promptHtml(slide.prompt.label, slide.prompt.prompt) : '') +
+        diagramHtml(slide)
+      );
     case 'interaction':
       return interactionHtml(slide);
     case 'rules':
