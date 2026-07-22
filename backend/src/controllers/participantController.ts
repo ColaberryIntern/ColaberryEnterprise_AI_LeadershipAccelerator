@@ -3,10 +3,13 @@ import {
   requestMagicLink, verifyMagicLink, getParticipantProfile,
   getParticipantDashboard, getParticipantSessions, getParticipantSessionDetail,
   getParticipantSubmissions, createParticipantSubmission, uploadParticipantSubmission,
-  getParticipantProgress,
+  getParticipantProgress, getNextLiveSession,
 } from '../services/participantService';
+import { joinLiveSession } from '../services/liveSessionAttendanceService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
+import { getBandForEnrollment } from '../services/progression/progressionService';
+import { env } from '../config/env';
 import { getStreak, claimStreak } from '../services/streakService';
 import { getPointsDrilldown } from '../services/pointsDrilldownService';
 import { getSubscription, startCheckout, cancelSubscription, confirmCheckout } from '../services/subscriptionService';
@@ -17,6 +20,19 @@ import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseSer
 import Enrollment from '../models/Enrollment';
 import { getUpcomingPublicEvents } from '../services/publicEventsService';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
+import { getCheckinInfo } from '../services/sessionKitService';
+
+// PUBLIC (no auth): minimal, non-sensitive info for the pre-login check-in
+// landing page a student reaches by scanning the Class Kit QR. Shows which
+// class they are about to check in to; the meeting link is NOT returned here
+// (revealed only after login + check-in). 404 if the session does not exist.
+export async function handleGetCheckinInfo(req: Request, res: Response, next: NextFunction) {
+  try {
+    const info = await getCheckinInfo(req.params.id as string);
+    if (!info) return res.status(404).json({ error: 'Session not found' });
+    res.json(info);
+  } catch (err) { next(err); }
+}
 
 export async function handleIngestBackground(req: Request, res: Response, next: NextFunction) {
   try {
@@ -39,8 +55,14 @@ export async function handleGetOnboardingProfile(req: Request, res: Response, ne
 
 export async function handleGetPoints(req: Request, res: Response, next: NextFunction) {
   try {
-    const summary = await getPointsSummary(req.participant!.sub);
-    res.json(summary);
+    const enrollmentId = req.participant!.sub;
+    const summary = await getPointsSummary(enrollmentId);
+    // Additive: attach the canonical 5-band identity + the runtime UI flag so the
+    // HUD can switch to the band ladder without a rebuild. Existing fields (total,
+    // events) are untouched; unknown fields are ignored by legacy clients, and the
+    // frontend only reads `band` when `fiveBandUiEnabled` is true.
+    const band = await getBandForEnrollment(enrollmentId, summary.total);
+    res.json({ ...summary, band, fiveBandUiEnabled: env.fiveBandUiEnabled });
   } catch (err) { next(err); }
 }
 
@@ -216,6 +238,25 @@ export async function handleGetSessions(req: Request, res: Response, next: NextF
   try {
     const sessions = await getParticipantSessions(req.participant!.sub, req.participant!.cohort_id);
     res.json({ sessions });
+  } catch (err) { next(err); }
+}
+
+// Lean payload for the Today "Next live class" card (live_sessions-backed).
+export async function handleGetNextSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await getNextLiveSession(req.participant!.cohort_id);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Student joined a live session — record attendance + award credit once.
+export async function handleJoinSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await joinLiveSession(
+      req.participant!.sub, req.params.id as string, req.participant!.cohort_id
+    );
+    if (!result) return res.status(404).json({ error: 'Session not found or not joinable' });
+    res.json(result);
   } catch (err) { next(err); }
 }
 

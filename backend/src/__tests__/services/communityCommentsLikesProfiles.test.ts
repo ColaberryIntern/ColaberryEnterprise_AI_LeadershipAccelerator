@@ -20,11 +20,17 @@ jest.mock('../../models/CommunityNotification', () => ({ create: jest.fn() }));
 // listMembersForAdmin flags comped seats via subscriptionService — mock it so
 // this unit test stays isolated from the billing layer (no comp by default).
 jest.mock('../../services/subscriptionService', () => ({ activeCompEnrollmentIds: jest.fn(async () => new Set()) }));
+// setMemberRole best-effort auto-syncs 'staff' to auto_staff_sync orgs — mock the
+// org models so this unit test stays isolated (no auto-sync orgs by default).
+jest.mock('../../models/Organization', () => ({ findAll: jest.fn(async () => []) }));
+jest.mock('../../models/OrgMember', () => ({ findOrCreate: jest.fn(), destroy: jest.fn() }));
 // communityService now folds into the canonical points system; mock those so
 // their real model methods don't hit the DB (points/level come from here).
 jest.mock('../../services/pointsService', () => ({
   award: jest.fn(async () => ({ awarded: true, points: 0 })),
   revoke: jest.fn(async () => ({ revoked: true })),
+  hasAwarded: jest.fn(async () => false),
+  sumPointsTodayByEventTypes: jest.fn(async () => 0),
   getPointsSummary: jest.fn(async () => ({ total: 0, events: [] })),
   getTotalsForEnrollments: jest.fn(async () => new Map()),
   levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
@@ -58,10 +64,12 @@ import CommunityComment from '../../models/CommunityComment';
 import CommunityLike from '../../models/CommunityLike';
 import CommunityPointsEvent from '../../models/CommunityPointsEvent';
 import CommunityNotification from '../../models/CommunityNotification';
-import { award, revoke } from '../../services/pointsService';
+import { award, revoke, hasAwarded } from '../../services/pointsService';
+import { env } from '../../config/env';
 
 const awardCanonical = award as jest.Mock;
 const revokeCanonical = revoke as jest.Mock;
+const hasAwardedMock = hasAwarded as jest.Mock;
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
 const findAllMembers = CommunityMember.findAll as jest.Mock;
@@ -495,6 +503,110 @@ describe('toggleLike', () => {
   });
 });
 
+// Post-quality gate (COMMUNITY_POST_QUALITY_GATE_ENABLED): a post's +5 is
+// withheld at creation and released on the FIRST PEER like (see createPost + the
+// gate hook in toggleLike). These tests exercise the release side (toggleLike).
+describe('post-quality gate release on first peer like (COMMUNITY_POST_QUALITY_GATE_ENABLED)', () => {
+  const gatePost: any = {
+    id: postId, cohort_id: cohortId, status: 'visible', member_id: otherMemberId,
+    min_level: 0, increment: jest.fn(), decrement: jest.fn(),
+  };
+  const author: any = { id: otherMemberId, points: 0, level: 1, enrollment_id: 'author-enr-1', update: jest.fn() };
+
+  afterEach(() => {
+    (env as any).communityPostQualityGateEnabled = false;
+  });
+
+  it('flag OFF: a peer like awards only the like point, never a post reward (byte-identical to today)', async () => {
+    (env as any).communityPostQualityGateEnabled = false;
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]); // liker = memberId (a peer)
+    findByPkPost.mockResolvedValue(gatePost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-g0' }, true]);
+    findByPkMember.mockResolvedValue({ ...author });
+    countLikes.mockResolvedValue(1);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    expect(awardCanonical).toHaveBeenCalledWith('author-enr-1', expect.objectContaining({ eventType: 'community_like' }));
+    expect(awardCanonical).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'community_post' }));
+    expect(hasAwardedMock).not.toHaveBeenCalled();
+  });
+
+  it('flag ON: the first peer like releases the withheld +5 to the post author (keyed to the post)', async () => {
+    (env as any).communityPostQualityGateEnabled = true;
+    hasAwardedMock.mockResolvedValue(false); // not yet rewarded
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]); // liker peer
+    findByPkPost.mockResolvedValue(gatePost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-g1' }, true]);
+    findByPkMember.mockResolvedValue({ ...author });
+    countLikes.mockResolvedValue(1);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    expect(hasAwardedMock).toHaveBeenCalledWith('author-enr-1', `community_post:${postId}`);
+    expect(awardCanonical).toHaveBeenCalledWith('author-enr-1', expect.objectContaining({
+      eventType: 'community_post',
+      eventKey: `community_post:${postId}`,
+      points: 5,
+    }));
+    // legacy contribution points are released to the AUTHOR too (member_id otherMemberId)
+    expect(incrementMember).toHaveBeenCalledWith('points', { by: 5, where: { id: otherMemberId } });
+  });
+
+  it('flag ON: a self-like never releases the post reward', async () => {
+    (env as any).communityPostQualityGateEnabled = true;
+    hasAwardedMock.mockResolvedValue(false);
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    // liker IS the author (same member id as the post's member_id)
+    findOrCreateMember.mockResolvedValue([{ ...mockMember, id: otherMemberId }, false]);
+    findByPkPost.mockResolvedValue(gatePost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-self-g' }, true]);
+    findByPkMember.mockResolvedValue({ ...author });
+    countLikes.mockResolvedValue(1);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    expect(hasAwardedMock).not.toHaveBeenCalled();
+    expect(awardCanonical).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'community_post' }));
+  });
+
+  it('flag ON: a re-like / second peer like does not double-release (already rewarded)', async () => {
+    (env as any).communityPostQualityGateEnabled = true;
+    hasAwardedMock.mockResolvedValue(true); // the post was already rewarded on the first peer like
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkPost.mockResolvedValue(gatePost);
+    findOrCreateLike.mockResolvedValue([{ id: 'like-g2' }, true]);
+    findByPkMember.mockResolvedValue({ ...author });
+    countLikes.mockResolvedValue(2);
+
+    await toggleLike(enrollmentId, 'post', postId);
+
+    expect(hasAwardedMock).toHaveBeenCalledWith('author-enr-1', `community_post:${postId}`);
+    expect(awardCanonical).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'community_post' }));
+  });
+
+  it('flag ON: liking a COMMENT never releases a post reward', async () => {
+    (env as any).communityPostQualityGateEnabled = true;
+    hasAwardedMock.mockResolvedValue(false);
+    const commentId = 'comment-gate';
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    findByPkComment.mockResolvedValue({ id: commentId, post_id: postId, member_id: otherMemberId });
+    findByPkPost.mockResolvedValue({ id: postId, cohort_id: cohortId, status: 'visible', min_level: 0 });
+    findOrCreateLike.mockResolvedValue([{ id: 'like-cmt-g' }, true]);
+    findByPkMember.mockResolvedValue({ ...author });
+    countLikes.mockResolvedValue(1);
+
+    await toggleLike(enrollmentId, 'comment', commentId);
+
+    expect(hasAwardedMock).not.toHaveBeenCalled();
+    expect(awardCanonical).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'community_post' }));
+  });
+});
+
 describe('level-gated content (REQ-C4)', () => {
   const gatedPost: any = {
     id: postId, cohort_id: cohortId, status: 'visible', member_id: otherMemberId, min_level: 3, increment: jest.fn(),
@@ -718,9 +830,9 @@ describe('member profiles + directory', () => {
     // Deliberately unsorted input incl. a null-enrollment row, to prove the
     // service orders by sign-up DESC and pushes the null-enrollment row last.
     findAllMembers.mockResolvedValue([
-      { id: 'm1', display_name: 'Ada', role: 'mentor', enrollment: { email: 'ada@x.com', created_at: '2026-07-01T00:00:00Z' } },
-      { id: 'm2', display_name: 'Bob', role: 'student', enrollment: null },
-      { id: 'm3', display_name: 'Cid', role: 'staff', enrollment: { email: 'cid@x.com', created_at: '2026-07-10T00:00:00Z' } },
+      { id: 'm1', enrollment_id: 'enr-1', display_name: 'Ada', role: 'mentor', enrollment: { email: 'ada@x.com', created_at: '2026-07-01T00:00:00Z' } },
+      { id: 'm2', enrollment_id: null, display_name: 'Bob', role: 'student', enrollment: null },
+      { id: 'm3', enrollment_id: 'enr-3', display_name: 'Cid', role: 'staff', enrollment: { email: 'cid@x.com', created_at: '2026-07-10T00:00:00Z' } },
     ]);
 
     const rows = await listMembersForAdmin('ad');
@@ -734,9 +846,9 @@ describe('member profiles + directory', () => {
     // Final rows: newest sign-up first, null-enrollment last. free_access defaults
     // false here (mock members carry no enrollment_id → empty comp set).
     expect(rows).toEqual([
-      { id: 'm3', display_name: 'Cid', email: 'cid@x.com', role: 'staff', signed_up_at: '2026-07-10T00:00:00.000Z', free_access: false },
-      { id: 'm1', display_name: 'Ada', email: 'ada@x.com', role: 'mentor', signed_up_at: '2026-07-01T00:00:00.000Z', free_access: false },
-      { id: 'm2', display_name: 'Bob', email: null, role: 'student', signed_up_at: null, free_access: false },
+      { id: 'm3', enrollment_id: 'enr-3', display_name: 'Cid', email: 'cid@x.com', role: 'staff', signed_up_at: '2026-07-10T00:00:00.000Z', free_access: false },
+      { id: 'm1', enrollment_id: 'enr-1', display_name: 'Ada', email: 'ada@x.com', role: 'mentor', signed_up_at: '2026-07-01T00:00:00.000Z', free_access: false },
+      { id: 'm2', enrollment_id: null, display_name: 'Bob', email: null, role: 'student', signed_up_at: null, free_access: false },
     ]);
   });
 });

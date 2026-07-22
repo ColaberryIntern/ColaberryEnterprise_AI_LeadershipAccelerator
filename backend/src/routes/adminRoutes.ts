@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { auditMiddleware } from '../middlewares/auditMiddleware';
+import { requireSection } from '../middlewares/authMiddleware';
 import authRoutes from './admin/authRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import leadRoutes from './admin/leadRoutes';
@@ -148,6 +149,11 @@ router.use(userJourneyMapsRoutes);
 router.use(roleRoutes);
 router.use(implementationStrategyRoutes);
 router.use(visitorAnalyticsRoutes);
+// RBAC: the Inbox & Content section is excluded for mgmt 'admin' (Kes) and every
+// scoped role — enforced server-side (not just hidden in the nav). Path-scoped so
+// it runs only for these prefixes, before each sub-router's own requireAdmin.
+router.use('/api/admin/inbox', requireSection('inbox_content'));
+router.use('/api/admin/content-queue', requireSection('inbox_content'));
 router.use(inboxRoutes);
 router.use(missedOpportunitiesRoutes);
 router.use(contentQueueRoutes);

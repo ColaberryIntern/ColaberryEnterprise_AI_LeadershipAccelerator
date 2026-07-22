@@ -1,4 +1,4 @@
-import { parseSessionTimeToHHMM } from '../sessionTime';
+import { parseSessionTimeToHHMM, tzAbbrev } from '../sessionTime';
 
 describe('parseSessionTimeToHHMM', () => {
   it('converts 12-hour PM to 24-hour', () => {
@@ -30,5 +30,23 @@ describe('parseSessionTimeToHHMM', () => {
     expect(parseSessionTimeToHHMM('9pm')).toBeNull();
     expect(parseSessionTimeToHHMM('25:00')).toBeNull();
     expect(parseSessionTimeToHHMM('10:75')).toBeNull();
+  });
+});
+
+describe('tzAbbrev', () => {
+  it('maps the Central program zone to CT (fixes the hardcoded-ET mislabel)', () => {
+    expect(tzAbbrev('America/Chicago')).toBe('CT');
+  });
+
+  it('maps the other US zones', () => {
+    expect(tzAbbrev('America/New_York')).toBe('ET');
+    expect(tzAbbrev('America/Denver')).toBe('MT');
+    expect(tzAbbrev('America/Los_Angeles')).toBe('PT');
+  });
+
+  it('returns "" for unknown/missing zone so no misleading suffix is shown', () => {
+    expect(tzAbbrev('Europe/London')).toBe('');
+    expect(tzAbbrev(null)).toBe('');
+    expect(tzAbbrev(undefined)).toBe('');
   });
 });

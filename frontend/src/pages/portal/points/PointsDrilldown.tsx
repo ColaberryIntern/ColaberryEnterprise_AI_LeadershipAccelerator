@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPointsDrilldown, DrilldownView, levelFor } from '../../../services/onboardingApi';
+import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor, bandHudNext } from '../../../services/onboardingApi';
 import { fmtCentralDate } from '../today/shellUtils';
+import LevelJourney from './LevelJourney';
 import './PointsPage.css';
+
+/** Turn a readiness ladder slug (e.g. "junior_builder") into a label. */
+function humanizeLevel(s: string | null | undefined): string {
+  if (!s) return '';
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 /**
  * PointsDrilldown — the three-lens points breakdown, self-contained so it can be
@@ -50,6 +57,11 @@ const XpBar: React.FC<{ label: string; value: number; max: number; color: string
 const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryLink = true }) => {
   const [data, setData] = useState<DrilldownView | null>(null);
   const [loading, setLoading] = useState(true);
+  // 5-band re-skin: the canonical band + runtime flag ride the points payload.
+  // Used only for the free-ceiling "Become an AI Builder" card below; the rest of
+  // the drill-down is unchanged whether the flag is on or off.
+  const [band, setBand] = useState<Band | null>(null);
+  const [fiveBand, setFiveBand] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -57,11 +69,27 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
       .then((d) => { if (alive) setData(d); })
       .catch(() => { /* keep null → empty state */ })
       .finally(() => { if (alive) setLoading(false); });
+    fetchPoints()
+      .then((p) => { if (alive) { setBand(p.band ?? null); setFiveBand(!!p.fiveBandUiEnabled); } })
+      .catch(() => { /* card stays hidden on error */ });
     return () => { alive = false; };
   }, []);
 
+  // Locked-door conversion card: shown only to a free account that has reached the
+  // AI Enabled band on points alone (its ceiling). Advancing past it needs paid
+  // build evidence, so this is the one honest place to invite the upgrade.
+  const showUpgrade = fiveBand && !!band && band.cappedByPointsOnly && band.bandSlug === 'enabled';
+
   const total = data?.engagement.total ?? 0;
   const lvl = levelFor(total);
+  // 5-band identity: when the flag is on, the level name + "what's next" come from
+  // the canonical band (AI Aware I …) so this page matches the HUD exactly. When
+  // off, the legacy Apprentice/…/Principal identity is unchanged.
+  const useBand = fiveBand && !!band;
+  const idName = useBand ? band!.rungName : lvl.name;
+  const headed = useBand
+    ? bandHudNext(band!, total)
+    : (lvl.next ? `${(lvl.next.min - total).toLocaleString()} pts to ${lvl.next.name}` : 'Top level reached');
   const xp = data?.skill_xp ?? null;
   const xpMax = xp ? Math.max(xp.learning, xp.builder, xp.community, 1) : 1;
   const readiness = data?.readiness ?? null;
@@ -70,20 +98,38 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
 
   return (
     <div className="points-root">
+      {/* Locked-door upgrade card — free AI Enabled ceiling → "Become an AI Builder".
+          Calm, executive tone: one accent edge, a padlock, and a single CTA to the
+          in-portal upgrade path (Settings → Subscription). */}
+      {showUpgrade && (
+        <div className="pts-upgrade" role="note" aria-label="Become an AI Builder">
+          <span className="pts-upgrade-lock" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><rect x="4" y="10.5" width="16" height="10" rx="2.2" stroke="currentColor" strokeWidth="2" /><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="15.5" r="1.4" fill="currentColor" /></svg>
+          </span>
+          <div className="pts-upgrade-body">
+            <span className="pts-upgrade-k">Next step</span>
+            <h3 className="pts-upgrade-h">Become an AI Builder</h3>
+            <p className="pts-upgrade-p">Building starts inside the program. Join to unlock AI Builder and the path to AI Architect.</p>
+          </div>
+          <Link className="te-btn cherry" to="/portal/settings?tab=subscription">Unlock AI Builder</Link>
+        </div>
+      )}
+
       {/* Where you are → where you're headed */}
       <div className="pts-hero">
         <div className="pts-hero-now">
           <span className="k">Where you are</span>
-          <div className="v"><b>{lvl.name}</b> · {total.toLocaleString()} pts</div>
+          <div className="v"><b>{idName}</b> · {total.toLocaleString()} pts</div>
         </div>
         <svg className="pts-hero-arrow" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         <div className="pts-hero-next">
           <span className="k">Where you're headed</span>
-          <div className="v">
-            {lvl.next ? <><b>{lvl.next.name}</b> · {(lvl.next.min - total).toLocaleString()} pts to go</> : <b>Top level reached</b>}
-          </div>
+          <div className="v">{headed}</div>
         </div>
       </div>
+
+      {/* The whole level ladder, visual — AI Aware I → AI Architect */}
+      <LevelJourney points={total} currentName={useBand ? band!.rungName : lvl.name} />
 
       <div className="pts-lenses">
         {/* Lens 1 — Engagement */}
@@ -91,8 +137,8 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           <div className="pts-lens-h"><span className="tag">1 · Engagement</span><h3>Your points</h3></div>
           <div className="pts-big">{total.toLocaleString()}<span> pts</span></div>
           <div className="pts-levelrow">
-            <span className="pts-chip">{lvl.name}</span>
-            <span className="pts-mut">{lvl.next ? `${(lvl.next.min - total).toLocaleString()} to ${lvl.next.name}` : 'Max level'}</span>
+            <span className="pts-chip">{idName}</span>
+            <span className="pts-mut">{headed}</span>
           </div>
           <div className="pts-track"><i style={{ width: `${lvl.pct}%`, background: '#FB2832' }} /></div>
           <div className="pts-streak">
@@ -130,17 +176,17 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           <div className="pts-readi">
             <ReadinessRing pct={readiness?.pct ?? 0} />
             <div className="pts-readi-meta">
-              <div className="lvl">{readiness ? `Level ${readiness.level}` : 'Not started'}</div>
+              <div className="lvl">{readiness ? `Level ${humanizeLevel(readiness.level)}` : 'Not started'}</div>
               <div className="pts-mut">
                 {readiness?.at_max ? 'You\'ve reached the top Builder level.'
-                  : readiness?.next_level ? `Next: ${readiness.next_level}`
+                  : readiness?.next_level ? `Next: ${humanizeLevel(readiness.next_level)}`
                   : 'Grows as you demonstrate competency.'}
               </div>
             </div>
           </div>
           {readiness && !readiness.at_max && (
             <div className="pts-gaps">
-              <span className="pts-gaps-h">{readiness.gaps.length ? `What's left to ${readiness.next_level}` : 'Gate cleared — promotion pending'}</span>
+              <span className="pts-gaps-h">{readiness.gaps.length ? `What's left to ${humanizeLevel(readiness.next_level)}` : 'Gate cleared — promotion pending'}</span>
               {readiness.gaps.length
                 ? <ul>{readiness.gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
                 : <div className="pts-mut">You meet every requirement for the next level.</div>}

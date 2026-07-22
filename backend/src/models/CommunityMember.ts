@@ -13,6 +13,9 @@ export interface CommunityMemberAttributes {
   level?: number;
   points?: number;
   role?: CommunityMemberRole;
+  // Management-portal role for staff (owner|admin|curriculum|revenue|admissions|
+  // support), or null for non-mgmt members. Gates admin sections via mgmtRoles.ts.
+  mgmt_role?: string | null;
   presence_status?: CommunityPresenceStatus;
   last_active_at?: Date | null;
   created_at?: Date;
@@ -28,6 +31,7 @@ class CommunityMember extends Model<CommunityMemberAttributes> implements Commun
   declare level: number;
   declare points: number;
   declare role: CommunityMemberRole;
+  declare mgmt_role: string | null;
   declare presence_status: CommunityPresenceStatus;
   declare last_active_at: Date | null;
   declare created_at: Date;
@@ -76,6 +80,12 @@ CommunityMember.init(
       type: DataTypes.STRING(20),
       allowNull: false,
       defaultValue: 'student',
+    },
+    mgmt_role: {
+      // Management-portal role (owner|admin|curriculum|revenue|admissions|support)
+      // or null. CHECK-constrained in ensureCommunityMemberRoleSchema().
+      type: DataTypes.STRING(20),
+      allowNull: true,
     },
     presence_status: {
       // 'online'/'away' are P2 (websocket presence layer, spec §6.A/§8) — the

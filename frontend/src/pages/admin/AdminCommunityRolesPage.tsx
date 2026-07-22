@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { PageHeader, SectionCard } from '../../components/admin/shell';
 import {
-  fetchCommunityMembers, setCommunityMemberRole, setCommunityMemberFreeAccess,
+  fetchCommunityMembers, setCommunityMemberRole, setCommunityMemberFreeAccess, fetchViewAsUrl,
   AdminCommunityMember, CommunityMemberRole,
 } from '../../services/communityAdminApi';
 
@@ -100,6 +100,22 @@ export default function AdminCommunityRolesPage() {
     }
   };
 
+  // Open the member's portal in a new tab, READ-ONLY (server-enforced). Mints a
+  // fresh read-only token per click.
+  const onViewAs = async (m: AdminCommunityMember) => {
+    if (!m.enrollment_id) { setError(`${m.display_name} has no enrollment to view.`); return; }
+    setSavingId(m.id);
+    setError(null);
+    try {
+      const url = await fetchViewAsUrl(m.enrollment_id);
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? 'Failed to open read-only view');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   return (
     <>
       <PageHeader title="Community Roles" subtitle="Assign the mentor / staff role shown on member cards in the People directory. Everyone starts as Member." />
@@ -130,7 +146,7 @@ export default function AdminCommunityRolesPage() {
           <div className="table-responsive">
             <table className="table table-sm align-middle mb-0">
               <thead>
-                <tr><th>Name</th><th>Email</th><th style={{ width: 140 }}>Signed up</th><th style={{ width: 120 }}>Free Access</th><th style={{ width: 200 }}>Role</th></tr>
+                <tr><th>Name</th><th>Email</th><th style={{ width: 140 }}>Signed up</th><th style={{ width: 120 }}>Free Access</th><th style={{ width: 200 }}>Role</th><th style={{ width: 110 }}>View as</th></tr>
               </thead>
               <tbody>
                 {members.map((m) => (
@@ -161,6 +177,17 @@ export default function AdminCommunityRolesPage() {
                       >
                         {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                       </select>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        disabled={savingId === m.id || !m.enrollment_id}
+                        onClick={() => onViewAs(m)}
+                        title={`Open ${m.display_name}'s portal, read-only`}
+                      >
+                        <i className="ri-eye-line me-1" aria-hidden="true"></i>View
+                      </button>
                     </td>
                   </tr>
                 ))}

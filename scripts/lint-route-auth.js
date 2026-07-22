@@ -4,8 +4,11 @@
  *
  * Fails if any admin route file lacks a recognized auth guard — the regression check for the P0-1
  * remediation (15 admin route files were unauthenticated). Recognized guards: requireAdmin (the
- * standard admin gate) and requireCoryAuthorized (Cory's command interface). A new admin route
- * file with no guard fails CI loudly instead of silently shipping an open endpoint.
+ * standard admin gate), requireCoryAuthorized (Cory's command interface), requireAnyAdmin (any
+ * admin-portal identity incl. bridge-minted staff mgmt tokens — used by /api/admin/me which
+ * self-scopes by role), requireSection (per-section mgmt-RBAC guard), and requireSalesOrAdmin
+ * (sales + admin, used by lead routes). A new admin route file with no guard fails CI loudly
+ * instead of silently shipping an open endpoint.
  *
  * Run: `node scripts/lint-route-auth.js`
  */
@@ -13,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 
 const DIR = path.resolve(__dirname, '../backend/src/routes/admin');
-const GUARDS = ['requireAdmin', 'requireCoryAuthorized'];
+const GUARDS = ['requireAdmin', 'requireCoryAuthorized', 'requireAnyAdmin', 'requireSection', 'requireSalesOrAdmin'];
 
 let files;
 try {

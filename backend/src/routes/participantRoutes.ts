@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
 import {
   handleOrgRegister, handleOrgInvites, handleOrgOverview,
@@ -21,9 +22,9 @@ import {
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
-  handleGetDashboard, handleGetSessions, handleGetSessionDetail,
+  handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
-  handleGetProgress,
+  handleGetProgress, handleGetCheckinInfo,
 } from '../controllers/participantController';
 import {
   handleGetCurriculum, handleGetModuleDetail, handleStartLesson,
@@ -51,7 +52,7 @@ import {
 import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleWatchBeat, handleGetSurvey, handleSaveSurvey,
+  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
   handleGetPeerWins, handleSubmitWin, handleCheerWin,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
@@ -75,6 +76,9 @@ router.get('/api/portal/verify', handleVerifyMagicLink);
 // experience) and the phone-handoff exchange (public — no session yet).
 router.get('/api/portal/flags', handleGetPortalFlags);
 router.get('/api/portal/handoff/exchange', handleExchangeHandoff);
+// Public check-in landing info (no auth): a not-yet-logged-in student who scans
+// the Class Kit QR can see which class they're checking in to. No meeting link.
+router.get('/api/portal/sessions/:id/checkin-info', handleGetCheckinInfo);
 
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
@@ -138,8 +142,18 @@ const watchBeatRateLimiter = rateLimit({
   message: { error: 'Too many watch beats — please slow down' },
 });
 router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
+// Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).
+router.post('/api/portal/runtime/today/blog/:blogId/read', watchBeatRateLimiter, requireParticipant, handleBlogReadBeat);
+router.post('/api/portal/runtime/today/blog/:blogId/collect', requireParticipant, handleBlogCollect);
+// In-Workspace blog reader: the post's article fetched + sanitized server-side (the
+// training site sends X-Frame-Options: DENY, so it can't be iframed directly).
+router.get('/api/portal/runtime/today/blog/:blogId/reader', requireParticipant, handleBlogReader);
+// Generic dwell gate: heartbeat for passive-content types (intel/reflection/…).
+router.post('/api/portal/runtime/cards/:cardId/dwell', watchBeatRateLimiter, requireParticipant, handleDwellBeat);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
+router.get('/api/portal/next-session', requireParticipant, handleGetNextSession);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
+router.post('/api/portal/sessions/:id/join', requireParticipant, handleJoinSession);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
 router.post('/api/portal/sessions/:id/chat', requireParticipant, handlePostSessionChat);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
@@ -327,6 +341,19 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
     res.status(500).json({ error: 'Failed to retrieve Project DNA' });
   }
 });
+
+// Paid/entitlement gate (flag-gated, default OFF) on the build + evidence subsystem.
+// Scoped to the singular /api/portal/project subtree — that is the whole build/
+// evidence surface projectRoutes serves (setup, architect-build, compile, verify,
+// progression-evaluate, build-session, telemetry, capabilities, visual-review, ...).
+// requireParticipant is included here so req.participant is resolved BEFORE the gate
+// runs (projectRoutes' own per-route requireParticipant then re-runs harmlessly).
+// Deliberately NOT applied as `router.use(gate, projectRoutes)`: a path-less mount
+// would leak the participant gate onto the plural /api/portal/projects nav, the
+// /api/portal/onboarding route, and the /api/admin/governance/* admin endpoints this
+// same router also carries. Those stay open, as do learning + community mounts.
+// Inert unless BUILD_PAID_GATE_ENABLED=true (ships dark).
+router.use('/api/portal/project', requireParticipant, requireBuildEntitlement);
 
 // Project endpoints
 router.use(projectRoutes);
@@ -1000,6 +1027,28 @@ router.get('/api/portal/community/members/:memberId', requireParticipant, async 
     res.json({ profile });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// ── Management-portal bridge (employees only) ────────────────────────────────
+// Lets a staff member with a mgmt role open the admin portal from inside their
+// student session — no separate credentials.
+router.get('/api/portal/mgmt/status', requireParticipant, async (req, res) => {
+  try {
+    const { getMgmtStatus } = await import('../services/access/mgmtBridgeService');
+    res.json(await getMgmtStatus(req.participant!.sub));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.post('/api/portal/mgmt/enter', requireParticipant, async (req, res) => {
+  try {
+    const { mintMgmtAdminToken } = await import('../services/access/mgmtBridgeService');
+    const minted = await mintMgmtAdminToken(req.participant!.sub);
+    if (!minted) { res.status(403).json({ error: 'Not a management user' }); return; }
+    res.json(minted);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

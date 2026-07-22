@@ -84,4 +84,34 @@ router.delete('/api/admin/community/members/:memberId/free-access', requireAdmin
   }
 });
 
+/**
+ * PATCH /api/admin/community/members/:memberId/mgmt-role
+ * Assign (or clear, with null) the management-portal role for a staff member.
+ * Only a 'staff' member may hold a mgmt role. Drives admin-section access via
+ * mgmtRoles.ts + the student→admin bridge.
+ */
+router.patch('/api/admin/community/members/:memberId/mgmt-role', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { MGMT_ROLES } = await import('../../services/access/mgmtRoles');
+    const raw = req.body?.mgmt_role;
+    const mgmt_role = raw === null || raw === undefined || raw === '' ? null : String(raw);
+    if (mgmt_role !== null && !(MGMT_ROLES as readonly string[]).includes(mgmt_role)) {
+      res.status(400).json({ error: `mgmt_role must be null or one of: ${MGMT_ROLES.join(', ')}` });
+      return;
+    }
+    const { default: CommunityMember } = await import('../../models/CommunityMember');
+    const member = await CommunityMember.findByPk(req.params.memberId as string);
+    if (!member) { res.status(404).json({ error: 'Member not found' }); return; }
+    if (mgmt_role !== null && member.role !== 'staff') {
+      res.status(400).json({ error: 'Member must be Staff to hold a management role' });
+      return;
+    }
+    await member.update({ mgmt_role });
+    res.json({ member: { id: member.id, mgmt_role } });
+  } catch (err: any) {
+    console.error('[CommunityMemberRoutes] PATCH /community/members/:memberId/mgmt-role error:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

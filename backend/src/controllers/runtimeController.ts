@@ -7,6 +7,9 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
 import { recordWatchBeat } from '../services/runtime/watchProgressService';
+import { recordReadBeat, collectBlog } from '../services/runtime/blogReadGateService';
+import { getBlogReader } from '../services/blog/blogReaderService';
+import { recordDwellBeat } from '../services/runtime/cardDwellService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { getNudge } from '../services/runtime/mentorNudgeService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
@@ -133,6 +136,47 @@ export async function handleWatchBeat(req: Request, res: Response, next: NextFun
   try {
     const beat = watchBeatSchema.parse(req.body);
     res.json(await recordWatchBeat(eid(req), String(req.params.cardId), beat));
+  } catch (err) { fail(res, err, next); }
+}
+
+const readBeatSchema = z.object({ delta_s: z.number().min(0).max(600) });
+const blogIdSchema = z.string().uuid();
+
+/** POST /api/portal/runtime/today/blog/:blogId/read — throttled read heartbeat for
+ *  the blog 2-minute read gate. Returns { read_s, required_s, met }. */
+export async function handleBlogReadBeat(req: Request, res: Response, next: NextFunction) {
+  try {
+    const blogId = blogIdSchema.parse(req.params.blogId);
+    const beat = readBeatSchema.parse(req.body);
+    res.json(await recordReadBeat(eid(req), blogId, beat));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** POST /api/portal/runtime/today/blog/:blogId/collect — award blog points once the
+ *  read gate is met (422 otherwise). Idempotent per blog. */
+export async function handleBlogCollect(req: Request, res: Response, next: NextFunction) {
+  try {
+    const blogId = blogIdSchema.parse(req.params.blogId);
+    res.json(await collectBlog(eid(req), blogId));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** GET /api/portal/runtime/today/blog/:blogId/reader — the post's article, fetched +
+ *  sanitized server-side for in-Workspace reading (the training site refuses to be
+ *  iframed). Fail-soft: { ok:false, source_url } lets the client fall back to the link. */
+export async function handleBlogReader(req: Request, res: Response, next: NextFunction) {
+  try {
+    const blogId = blogIdSchema.parse(req.params.blogId);
+    res.json(await getBlogReader(blogId));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** POST /api/portal/runtime/cards/:cardId/dwell — heartbeat for the generic dwell
+ *  gate (passive-content types). Returns { dwell_s, required_s, met }. */
+export async function handleDwellBeat(req: Request, res: Response, next: NextFunction) {
+  try {
+    const beat = readBeatSchema.parse(req.body);
+    res.json(await recordDwellBeat(eid(req), String(req.params.cardId), beat));
   } catch (err) { fail(res, err, next); }
 }
 

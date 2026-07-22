@@ -29,6 +29,9 @@ import {
   getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
   detectAbsentParticipants, computeAllReadinessScores,
 } from './acceleratorService';
+import { finalizeSessionAttendance } from './liveSessionAttendanceService';
+import { generateSessionRecap } from './sessionRecapService';
+import { ensureSessionMeetLink } from './meetingService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 
 /**
@@ -2195,6 +2198,11 @@ export function startScheduler(): void {
       // 24-hour reminders
       const upcoming24h = await getUpcomingSessions(24);
       for (const session of upcoming24h) {
+        // Ensure a teaching Meet link exists before reminding (idempotent; retries
+        // each tick until it succeeds, so a transient Google failure self-heals).
+        await ensureSessionMeetLink(session).catch((err: any) =>
+          console.error(`[Scheduler] Meet link ensure failed for session ${session.id}:`, err.message)
+        );
         const dedupKey = `${session.id}-24h`;
         if (sentReminders.has(dedupKey)) continue; // Already sent this reminder
         const enrollments = await Enrollment.findAll({
@@ -2263,6 +2271,17 @@ export function startScheduler(): void {
       for (const session of toComplete) {
         await session.update({ status: 'completed' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as completed`);
+
+        // Generate the AI recap (best-effort) — surfaced to absentees in the Today
+        // "you missed it" replay card. (Wiring it into the recap email is a follow-up.)
+        await generateSessionRecap(session).catch((err: any) =>
+          console.error(`[Scheduler] Recap generation failed for session ${session.id}:`, err.message)
+        );
+
+        // Fill leave_time/duration for anyone who self-joined but never left.
+        await finalizeSessionAttendance(session.id).catch((err: any) =>
+          console.error(`[Scheduler] Attendance finalize failed for session ${session.id}:`, err.message)
+        );
 
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);

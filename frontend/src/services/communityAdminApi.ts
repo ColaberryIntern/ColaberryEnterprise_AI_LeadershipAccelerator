@@ -6,6 +6,9 @@ export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
 
 export interface AdminCommunityMember {
   id: string;
+  // Enrollment id — used to open the read-only "View as" session. Null if the
+  // member somehow has no linked enrollment.
+  enrollment_id: string | null;
   display_name: string;
   email: string | null;
   role: CommunityMemberRole;
@@ -48,4 +51,14 @@ export async function setCommunityMemberFreeAccess(memberId: string, grant: bool
     `/api/admin/community/members/${memberId}/free-access`,
   );
   return data.member.free_access;
+}
+
+// Mint a read-only "View as member" URL for an enrollment (server enforces
+// read-only) and return it. The caller opens it in a new tab. Reuses the
+// accelerator view-as-token endpoint (admin-authenticated).
+export async function fetchViewAsUrl(enrollmentId: string): Promise<string> {
+  const { data } = await api.get<{ url: string }>(
+    `/api/admin/accelerator/enrollments/${enrollmentId}/view-as-token`,
+  );
+  return data.url;
 }

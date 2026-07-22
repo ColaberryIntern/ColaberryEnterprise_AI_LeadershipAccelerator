@@ -22,6 +22,8 @@ import { selectPodcastForEnrollment } from '../timeline/podcastMediaService';
 import { selectBlogForEnrollment } from '../timeline/blogMediaService';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { ritualStudentLabel } from './communityRituals';
+import { QueryTypes } from 'sequelize';
+import { sequelize } from '../../config/database';
 
 /** Build the student's signal vector from progression + completed evidence + portfolio. */
 export async function studentSignals(enrollmentId: string): Promise<StudentSignals> {
@@ -62,10 +64,44 @@ export async function cardContext(cardId: string) {
   return { id: c.id, type: c.type, title: c.title, description: c.description, student_label: def?.student_label || c.type, metadata: c.metadata, program_id: (c as any).program_id ?? null, week: c.week ?? null };
 }
 
+/** Open an ambient blog (ref `blog:<id>`) in the runtime. These have no timeline_card
+ *  row, so the card is synthesized from the blog library; "completed" = points already
+ *  collected (student_points_events, same `blog:<id>` key the read gate awards on). The
+ *  Workspace fetches + renders the sanitized article in a frame (blogReaderService). */
+async function openAmbientBlogCard(enrollmentId: string, cardId: string) {
+  const blogId = cardId.slice('blog:'.length);
+  const rows = await sequelize.query<{ title: string; excerpt: string | null; url: string; thumbnail_url: string | null }>(
+    `SELECT title, excerpt, url, thumbnail_url FROM blog_posts WHERE id = :id AND is_active`,
+    { replacements: { id: blogId }, type: QueryTypes.SELECT },
+  );
+  const row = rows[0];
+  if (!row) throw Object.assign(new Error('Blog not available'), { status: 404 });
+  const collected = await sequelize.query<{ event_key: string }>(
+    `SELECT event_key FROM student_points_events WHERE enrollment_id = :eid AND event_key = :key LIMIT 1`,
+    { replacements: { eid: enrollmentId, key: `blog:${blogId}` }, type: QueryTypes.SELECT },
+  );
+  const done = collected.length > 0;
+  return {
+    card: {
+      id: cardId, type: 'blog', title: row.title, subtitle: null, description: row.excerpt,
+      student_label: 'Blog', render_band: 'blog', estimated_time: 5, competencies: null,
+      evidence_required: false, video: null,
+      blog: { url: (row.url || '').trim(), title: row.title, excerpt: row.excerpt, thumbnail: row.thumbnail_url },
+      course: null, points: { learning: 10 },
+      content: null, type_thumbnail: row.thumbnail_url, week_title: null,
+    },
+    progress: { status: done ? 'completed' : 'available', completed_at: null as string | null },
+  };
+}
+
 /** Open a published card for the runtime (card + the student's progress + video +
  *  the saved lesson content + the type's picture, so the workspace opens WITH the
  *  lesson the student saw on the card and its hero image). */
 export async function openCard(enrollmentId: string, cardId: string, opts: { readOnly?: boolean } = {}) {
+  // Ambient blogs have no timeline_card row (ref `blog:<id>`) — synthesize the card
+  // from the blog library so "Enter workspace" can open the in-system reader.
+  if (cardId.startsWith('blog:')) return openAmbientBlogCard(enrollmentId, cardId);
+
   const card = await TimelineCard.findByPk(cardId);
   if (!card || card.visibility !== 'published') throw Object.assign(new Error('Card not available'), { status: 404 });
   // Gating: a locked card (unmet prerequisites) can't be opened by direct URL.

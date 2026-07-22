@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment } from './runtimeApi';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { runtimeApi, RtOpen, Readiness, PromptEval, CardComment, BlogReaderContent } from './runtimeApi';
 import VideoEmbed, { WatchBeatPayload } from '../../../components/timeline/VideoEmbed';
 import AssessmentPanel from './AssessmentPanel';
-import { lessonDoc, readerDoc } from '../../../components/timeline/CardDetailBody';
+import { lessonDoc, readerDoc, blogReaderDoc } from '../../../components/timeline/CardDetailBody';
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
@@ -11,6 +11,7 @@ import PeerWinsPanel from '../../../components/timeline/PeerWinsPanel';
 import SkillsJarPanel from '../../../components/timeline/SkillsJarPanel';
 import { toTitleCase } from '../../../utils/titleCase';
 import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
+import { useBlogReadGate } from '../../../components/timeline/useBlogReadGate';
 import { useDeepDiveHost } from '../../../components/timeline/useDeepDiveHost';
 import SetupLabRender from '../../../components/timeline/SetupLabRender';
 import PromptCatalogRender from '../../../components/timeline/PromptCatalogRender';
@@ -32,11 +33,14 @@ const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 const RuntimeWorkspace: React.FC = () => {
   const { cardId = '' } = useParams();
   const navigate = useNavigate();
-  // Always return to the Classroom — this button is literally "Back to Classroom",
-  // and the Classroom restores the student's week + scroll from a session snapshot
-  // and loads reliably. (navigate(-1) landed on the slower Today feed when the
-  // student entered the workspace from there, which never restored its position.)
-  const goBack = useCallback(() => navigate('/portal/classroom'), [navigate]);
+  const location = useLocation();
+  // Return to WHERE THE STUDENT CAME FROM. The opener (CardDetailDrawer) stamps
+  // `state.from` with its pathname, so entering the workspace from the Timeline
+  // sends you back to the Timeline and from the Classroom back to the Classroom.
+  // Falls back to the Classroom on a deep link / direct load (no origin state).
+  const backTo = ((location.state as { from?: string } | null)?.from) || '/portal/classroom';
+  const backLabel = backTo.includes('/today') ? 'Back to Timeline' : 'Back to Classroom';
+  const goBack = useCallback(() => navigate(backTo), [navigate, backTo]);
   // Carry over the portal's light/dark setting: the workspace renders its own
   // chrome (not PortalShell), so read 'te-theme' and stamp data-theme on the .rt
   // root (drives runtimeCss) and on <html> (drives :root-scoped child components
@@ -61,6 +65,8 @@ const RuntimeWorkspace: React.FC = () => {
   const [completed, setCompleted] = useState(false);
   // Server-truth watch state for the 75% gate (video/testimonial/podcast).
   const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
+  // In-workspace blog reader payload (fetched + sanitized server-side).
+  const [blogReader, setBlogReader] = useState<BlogReaderContent | null>(null);
 
   // mentor
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -109,9 +115,16 @@ const RuntimeWorkspace: React.FC = () => {
     : undefined;
   const watchGated = isVideo && watch?.required_pct != null && !watch?.met;
   // Self Study reading: same per-section read-gate as the drawer — Mark complete only
-  // unlocks once every section has been read (>=10s each), via the reader's postMessages.
+  // unlocks once every section has been read (>=5s each), via the reader's postMessages.
   const isReader = band === 'warmup' && !!card?.content?.body_html;
   const readerProg = useReaderProgress(cardId, isReader && !completed);
+  // Ambient blog: read the post INSIDE the workspace (its live page sends
+  // X-Frame-Options: DENY, so we render the server-sanitized article), gated by the same
+  // 2-minute read gate the drawer uses — auto-armed on open since reading starts here.
+  const isBlog = card?.type === 'blog' && !!card?.blog?.url;
+  const blogId = isBlog && cardId.startsWith('blog:') ? cardId.slice('blog:'.length) : null;
+  const blogGate = useBlogReadGate(!completed ? blogId : null, true);
+  const blogReadPct = Math.min(100, Math.round(((blogGate.state?.read_s ?? 0) / (blogGate.state?.required_s || 120)) * 100));
   // Deep Dive Field Guide: renders its own self-contained HTML in an allow-scripts iframe
   // (same as the drawer's deepdive arm). The host bridge owns read/copy persistence
   // (restored across drawer↔workspace), the +100-point upload, and the gate — dd.complete
@@ -135,6 +148,17 @@ const RuntimeWorkspace: React.FC = () => {
   // the right rail. This is the single-scroll workstation layout applied to every type.
   const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && !isPeerWins && !!card?.content?.body_html;
   const fill = isReader || isLesson || isDeepDive;
+
+  // Load the post's article for the in-workspace reader (fail-soft: ok:false → link).
+  useEffect(() => {
+    if (!isBlog || !blogId) { setBlogReader(null); return; }
+    let alive = true;
+    setBlogReader(null);
+    runtimeApi.blogReader(blogId)
+      .then((c) => { if (alive) setBlogReader(c); })
+      .catch(() => { if (alive) setBlogReader({ ok: false, title: null, body_html: null, excerpt: null, author: null, featured_image: null, source_url: null }); });
+    return () => { alive = false; };
+  }, [isBlog, blogId]);
 
   const ask = useCallback(async (mode: string, message: string) => {
     if (!card) return;
@@ -180,8 +204,19 @@ const RuntimeWorkspace: React.FC = () => {
       setTimeout(goBack, 1200);
     } catch (e: any) { setError(e?.response?.data?.error || 'Completion failed.'); } finally { setBusy(''); }
   };
+  // Ambient blogs collect via the read gate (not the generic complete): the server
+  // re-checks the 2-minute read before awarding, and it's idempotent per blog.
+  const collectBlogPts = async () => {
+    if (!blogId) return; setBusy('complete');
+    try {
+      await runtimeApi.blogCollect(blogId);
+      setCompleted(true);
+      setMsgs((m) => [...m, { role: 'assistant', content: 'Nice — points collected. Taking you back to your timeline.', kind: 'complete' }]);
+      setTimeout(goBack, 1200);
+    } catch (e: any) { setError(e?.response?.data?.error || 'Keep reading a little longer to collect your points.'); } finally { setBusy(''); }
+  };
 
-  if (error) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← Classroom</button></div></div>;
+  if (error) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>{error} <button className="rt-btn" onClick={goBack}>← {backTo.includes('/today') ? 'Timeline' : 'Classroom'}</button></div></div>;
   if (!card) return <div className="rt" data-theme={theme}><style>{runtimeCss}</style><div className="rt-mid" style={{ padding: 40 }}>Loading your workspace…</div></div>;
 
   const emp = readiness?.employment; const cert = readiness?.certification; const jr = readiness?.journey; const evd = readiness?.evidence;
@@ -198,6 +233,15 @@ const RuntimeWorkspace: React.FC = () => {
       : isDeepDive && !ddComplete
         ? <span className="rt-muted">Finish the steps in the guide to complete{dd.total > 0 ? ` — ${dd.done} of ${dd.total} sections read` : ''}</span>
         : <button className={fill ? 'ss-complete-btn' : 'rt-btn cta'} disabled={busy === 'complete' || watchGated} title={watchGated ? `Reach ${watch?.required_pct}% watched to collect your points` : undefined} onClick={complete}>{completeLabel}</button>;
+  // Blog: collect appears only after the 2-minute read gate is met (server re-enforces).
+  const blogCompleteGate = completed
+    ? <span className="rt-pill done">✓ Completed — points collected</span>
+    : !blogGate.state?.met
+      ? <span className="rt-muted" style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          Read the post — {blogGate.state?.read_s ?? 0}s of {blogGate.state?.required_s ?? 120}s to collect your points
+          <span style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.12)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${blogReadPct}%`, background: '#367895', transition: 'width .5s ease' }} /></span>
+        </span>
+      : <button className="rt-btn cta" disabled={busy === 'complete'} onClick={collectBlogPts}>Collect +{card.points?.learning ?? 10} pts</button>;
   // Comments always render in the right rail now (every card type), so the center is a
   // single, clean scroll.
   const commentsBlock = (
@@ -222,17 +266,17 @@ const RuntimeWorkspace: React.FC = () => {
     <div className="rt" data-theme={theme}>
       <style>{runtimeCss}</style>
       <header className="rt-top">
-        <button className="rt-back" onClick={goBack} aria-label="Back to Classroom"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+        <button className="rt-back" onClick={goBack} aria-label={backLabel} title={backLabel}><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
         <div><div className="rt-kick">{card.student_label}{card.estimated_time ? ` · ${card.estimated_time} min` : ''}</div><div className="rt-title">{displayTitle}</div></div>
         <span className={`rt-pill ${completed ? 'done' : ''}`} style={{ marginLeft: 'auto' }}>{completed ? '✓ Completed' : 'In progress'}</span>
       </header>
 
       <div className="rt-body">
         {/* CENTER — activity */}
-        <main className={`rt-mid${fill || isSetupLab || isPromptCatalog || isArchitectMindset || isBuildArtifacts ? ' rt-mid--reader' : ''}`}>
+        <main className={`rt-mid${fill || isBlog || isSetupLab || isPromptCatalog || isArchitectMindset || isBuildArtifacts ? ' rt-mid--reader' : ''}`}>
           {/* Hero — the type's picture with the lesson title ON the image. Video bands keep
               their player; fill (reader/lesson) content fills the panel, so skip the hero. */}
-          {!isVideo && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && card.type_thumbnail && (
+          {!isVideo && !isSkillsJar && !fill && !isBlog && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && card.type_thumbnail && (
             <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', marginBottom: 14 }}>
               <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', maxHeight: 240, objectFit: 'cover' }} />
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(4,25,29,0) 42%, rgba(4,25,29,.74) 100%)' }} />
@@ -313,6 +357,31 @@ const RuntimeWorkspace: React.FC = () => {
               handles its own scoring, 75% gate, and completion. */}
           {isAssessment && (
             <AssessmentPanel cardId={card.id} onCompleted={(r) => { if (r) { setReadiness(r); setCompleted(true); } }} />
+          )}
+
+          {/* Blog: the post's article, fetched + sanitized server-side, rendered IN a
+              sandboxed frame so the student never leaves the system (the training site
+              refuses to be iframed). Fills the center as the single scroll; the read
+              gate + collect live in the slim foot. Falls back to the external link. */}
+          {isBlog && (
+            <div className="rt-readerwrap">
+              {blogReader === null ? (
+                <div className="rt-muted" style={{ padding: 40 }}>Loading the post…</div>
+              ) : blogReader.ok && blogReader.body_html ? (
+                <iframe
+                  className="rt-readerframe"
+                  title="Blog post"
+                  sandbox="allow-scripts allow-popups"
+                  srcDoc={blogReaderDoc(blogReader.body_html, blogReader.title || card.blog?.title || displayTitle, { featuredImage: blogReader.featured_image, author: blogReader.author, sourceUrl: blogReader.source_url })}
+                />
+              ) : (
+                <div style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'flex-start' }}>
+                  <p className="rt-muted" style={{ margin: 0 }}>We couldn't load this post inside the workspace.</p>
+                  {card.blog?.url && <a className="rt-btn pri" href={card.blog.url} target="_blank" rel="noopener noreferrer">Read on the training site ↗</a>}
+                </div>
+              )}
+              <div className="rt-readerfoot">{blogCompleteGate}</div>
+            </div>
           )}
 
           {/* Content-in-iframe cards (the Self Study immersive reader OR a generic lesson)
