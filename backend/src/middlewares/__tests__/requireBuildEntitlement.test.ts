@@ -68,8 +68,12 @@ describe('isBuildEntitled (pure rule)', () => {
     expect(isBuildEntitled(undefined, { cohort_type: 'sponsor' }, {})).toBe(false);
   });
 
-  it('a non-sponsor accelerator cohort does not itself entitle', () => {
-    expect(isBuildEntitled({ payment_status: 'pending' }, { cohort_type: 'accelerator' }, {})).toBe(false);
+  it('accelerator cohort (paid program) → true even when billing is pending', () => {
+    expect(isBuildEntitled({ payment_status: 'pending' }, { cohort_type: 'accelerator' }, {})).toBe(true);
+    // case-insensitive on cohort_type
+    expect(isBuildEntitled({ payment_status: 'pending' }, { cohort_type: 'Accelerator' }, {})).toBe(true);
+    // a genuine free Explorer cohort still does NOT entitle
+    expect(isBuildEntitled({ payment_status: 'pending' }, { cohort_type: 'explorer' }, {})).toBe(false);
   });
 });
 
@@ -133,6 +137,20 @@ describe('requireBuildEntitlement (middleware)', () => {
     (env as any).buildPaidGateEnabled = true;
     findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', cohort_id: 'c-sponsor' });
     findCohort.mockResolvedValue({ id: 'c-sponsor', cohort_type: 'sponsor' });
+    staffOf.mockResolvedValue(false);
+    compIdsOf.mockResolvedValue(new Set<string>());
+
+    const { req, res, next } = mockCtx();
+    await requireBuildEntitlement(req, res, next);
+
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.statusCode).toBe(0);
+  });
+
+  it('flag ON + entitled via accelerator cohort (billing pending) → next()', async () => {
+    (env as any).buildPaidGateEnabled = true;
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', cohort_id: 'c-acc' });
+    findCohort.mockResolvedValue({ id: 'c-acc', cohort_type: 'accelerator' });
     staffOf.mockResolvedValue(false);
     compIdsOf.mockResolvedValue(new Set<string>());
 
