@@ -59,6 +59,10 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     // Phase 4: AI recap ({ summary, takeaways[], generated_at, model }). Idempotent
     // column-add for tables that predate this column.
     `ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS recap_json JSONB`,
+    // Class Kit run-of-show ({ day_kind, day_label, week, public_title, intensive,
+    // run_of_show[], outline[], generated_at }). Powers the admin timetable view;
+    // the live deck re-derives content at render, so this is a durable record.
+    `ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS kit_json JSONB`,
 
     // ---- attendance_records ----
     `CREATE TABLE IF NOT EXISTS attendance_records (

@@ -12,6 +12,7 @@ import {
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { buildSessionKit } from '../services/sessionKitService';
+import { renderSessionKitDoc } from '../services/sessionKitDocService';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -112,6 +113,17 @@ export async function handleGetSessionKit(req: Request, res: Response, next: Nex
     const kit = await buildSessionKit(req.params.id as string);
     if (!kit) return res.status(404).json({ error: 'Session not found' });
     res.json(kit);
+  } catch (err) { next(err); }
+}
+
+// Class Kit deck: the full interactive teaching deck (HTML) an instructor opens
+// in a new tab and shares on screen to run the class. text/html, not JSON. The
+// admin UI fetches this with the admin JWT and opens it in a new tab.
+export async function handleGetSessionKitDoc(req: Request, res: Response, next: NextFunction) {
+  try {
+    const html = await renderSessionKitDoc(req.params.id as string);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
   } catch (err) { next(err); }
 }
 

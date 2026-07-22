@@ -3,7 +3,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
-  handleGetSessionKit,
+  handleGetSessionKit, handleGetSessionKitDoc,
   handleGenerateMeetLink, handleGenerateCohortMeetLinks,
   handleGetAttendance, handleMarkAttendance, handleUpdateAttendance,
   handleListEnrollmentSubmissions, handleListSessionSubmissions, handleCreateSubmission,
@@ -105,6 +105,8 @@ router.post('/api/admin/accelerator/cohorts/:cohortId/unskip', requireAdmin, han
 router.get('/api/admin/accelerator/sessions/:id/curriculum', requireAdmin, handleGetSessionCurriculum);
 router.post('/api/admin/accelerator/sessions/:id/meet-link', requireAdmin, handleGenerateMeetLink);
 router.get('/api/admin/accelerator/sessions/:id/kit', requireAdmin, handleGetSessionKit);
+// Full interactive Class Kit teaching deck (HTML) — opened in a new tab to run the class.
+router.get('/api/admin/accelerator/sessions/:id/kit-doc', requireAdmin, handleGetSessionKitDoc);
 router.post('/api/admin/accelerator/cohorts/:cohortId/meet-links', requireAdmin, handleGenerateCohortMeetLinks);
 router.get('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleGetAttendance);
 router.post('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleMarkAttendance);

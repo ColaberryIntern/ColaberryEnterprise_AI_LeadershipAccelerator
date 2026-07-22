@@ -276,6 +276,24 @@ function AdminAcceleratorPage() {
     } catch { showToast('Failed to generate Meet link', 'error'); }
   };
 
+  // Open the full interactive Class Kit teaching deck in a new tab. The window is
+  // opened synchronously (in the click gesture) to dodge popup blockers, then the
+  // deck HTML — fetched with the admin JWT — is written into it.
+  const handleOpenKitDeck = async (sessionId: string) => {
+    const w = window.open('', '_blank');
+    if (!w) { showToast('Allow pop-ups to open the Class Kit deck', 'error'); return; }
+    w.document.write('<!doctype html><title>Loading Class Kit…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the Class Kit deck…</body>');
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/kit-doc`, { responseType: 'text' });
+      w.document.open();
+      w.document.write(res.data as string);
+      w.document.close();
+    } catch {
+      try { w.document.body.innerHTML = '<div style="font-family:system-ui,sans-serif;padding:2rem;color:#c00">Could not load the Class Kit. Close this tab and try again.</div>'; } catch { /* window may be gone */ }
+      showToast('Failed to open the Class Kit deck', 'error');
+    }
+  };
+
   const handleStatusChange = async (sessionId: string, status: string) => {
     try {
       await api.patch(`/api/admin/accelerator/sessions/${sessionId}`, { status });
@@ -688,7 +706,8 @@ function AdminAcceleratorPage() {
                       </td>
                       <td>
                         <div className="d-flex gap-1">
-                          <button className="btn btn-outline-primary btn-sm" onClick={() => setKitSessionId(s.id)}>Kit</button>
+                          <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class">Kit ▶</button>
+                          <button className="btn btn-outline-primary btn-sm" onClick={() => setKitSessionId(s.id)} title="Quick launch panel: check-in QR + Start Class + roster (printable)">QR</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>
                           <button className="btn btn-outline-warning btn-sm" onClick={() => setSkipTarget(s)} title="Mark this date as a day off — this class and all later ones shift forward one slot">Skip</button>
                           {s.status === 'scheduled' && (
