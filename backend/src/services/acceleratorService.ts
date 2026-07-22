@@ -73,9 +73,14 @@ export async function updateSession(sessionId: string, data: Partial<{
 export async function deleteSession(sessionId: string) {
   const session = await LiveSession.findByPk(sessionId);
   if (!session) return false;
+  const cohortId = session.cohort_id; // capture before delete so we can compact after
   await AttendanceRecord.destroy({ where: { session_id: sessionId } });
   await AssignmentSubmission.destroy({ where: { session_id: sessionId } });
   await session.destroy();
+  // Compact the remaining sessions up (renumber + re-date) so there is no gap.
+  // Lazy import avoids any import cycle with sessionScheduleService.
+  const { reflowCohortSchedule } = await import('./sessionScheduleService');
+  await reflowCohortSchedule(cohortId);
   return true;
 }
 
@@ -315,6 +320,9 @@ export async function getCohortDashboard(cohortId: string) {
     next_session: nextSession,
     sessions,
     enrollments,
+    // Days off (skipped class dates) so the admin sessions view can show/un-skip
+    // them on initial load — the page loads sessions via this dashboard endpoint.
+    skipped_dates: ((cohort as any).settings_json?.schedule?.skipped_dates) || [],
   };
 }
 
