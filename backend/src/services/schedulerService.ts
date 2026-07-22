@@ -1819,18 +1819,18 @@ export function startScheduler(): void {
 
   // Daily content lifecycle (03:15 America/Chicago). AI News Flash: fetch free
   // AI-lab RSS feeds, dedup-upsert the library, and (when AI_NEWS_INGEST_ENABLED
-  // =true) materialize ONE fresh news card (AI_NEWS_MAX_PER_RUN, default 1 → ~1
-  // LLM call/day). Then prune: archive any generated (*_pipeline) card older than
-  // 30 days out of the feed, so each generator holds a rolling ~30-card window and
-  // cost stays bounded. Idempotent + cost-gated; see aiNewsIngestionService +
-  // generatedContentRetention.
+  // =true) materialize up to AI_NEWS_MAX_PER_RUN fresh news cards (prod=3, code
+  // floor 1 → ~3 LLM calls/day). Then prune: archive any generated (*_pipeline)
+  // card older than 30 days out of the feed, so each generator holds a rolling
+  // ~30-day window and cost stays bounded. Idempotent + cost-gated; see
+  // aiNewsIngestionService + generatedContentRetention.
   cron.schedule(
     '15 3 * * *',
     () => {
       instrumentCronJob('AiNewsRefresh', async () => {
         const { refreshAiNews } = await import('./intel/aiNewsIngestionService');
         const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
-        await refreshAiNews(); // maxCards defaults to AI_NEWS_MAX_PER_RUN (1/day)
+        await refreshAiNews(); // maxCards defaults to AI_NEWS_MAX_PER_RUN (prod=3)
         await pruneGeneratedContent(); // discard generated cards older than 30 days
       }).catch((err) => {
         console.error('[Scheduler] AI News refresh error:', err);

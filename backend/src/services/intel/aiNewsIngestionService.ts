@@ -233,8 +233,8 @@ export async function refreshAiNews(opts: { dryRun?: boolean; maxCards?: number;
 
   const materializeOn = opts.force || process.env.AI_NEWS_INGEST_ENABLED === 'true';
   if (!opts.dryRun && materializeOn) {
-    // Grab ONE fresh card per run by default (the daily cron → ~1 LLM call/day).
-    // Override per-run with opts.maxCards or globally with AI_NEWS_MAX_PER_RUN.
+    // Cards per run = opts.maxCards, else AI_NEWS_MAX_PER_RUN, else 1 (code floor).
+    // Prod sets AI_NEWS_MAX_PER_RUN=3 via compose (~3 gpt-4o-mini calls/day).
     const maxCards = opts.maxCards ?? Number(process.env.AI_NEWS_MAX_PER_RUN || 1);
     const pending = await AiNewsItem.findAll({
       where: { card_id: null as any },
