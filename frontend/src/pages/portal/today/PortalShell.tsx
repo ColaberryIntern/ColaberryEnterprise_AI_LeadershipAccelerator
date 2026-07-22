@@ -14,6 +14,7 @@ import ChatDock, { DmTarget } from './ChatDock';
 import MessagesButton from './MessagesButton';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
+import { useMgmtStatus } from '../useMgmtStatus';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
@@ -84,6 +85,18 @@ const COMPANY_NAV_GROUP: NavGroup = {
   ],
 };
 
+// "Management Portal" — a single link that opens the admin portal for employees
+// (staff with a management role). Shown only when useMgmtStatus().is_mgmt. Routes
+// to a landing that mints a scoped admin token then redirects into /admin.
+const MGMT_NAV_GROUP: NavGroup = {
+  grp: 'Employee',
+  items: [
+    { label: 'Management Portal', to: '/portal/mgmt-enter', icon: (
+      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 4v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+    ) },
+  ],
+};
+
 type PortalShellProps = {
   children: React.ReactNode;
   /** Count badge shown on the Today nav item (open onboarding steps). */
@@ -100,10 +113,16 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const location = useLocation();
   const isExplorer = useIsExplorer();   // Explorer = demo tier — shows a Demo pill on Projects
   const isOrgManager = useIsOrgManager(); // manager = also sees a "Your company" nav group
-  // Effective nav: managers get "Your company" prepended above "Your day".
+  const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
+  // Effective nav: employees get "Management Portal", managers get "Your company",
+  // both prepended above "Your day".
   const groups = useMemo<NavGroup[]>(
-    () => (isOrgManager ? [COMPANY_NAV_GROUP, ...NAV_GROUPS] : NAV_GROUPS),
-    [isOrgManager],
+    () => [
+      ...(mgmt.is_mgmt ? [MGMT_NAV_GROUP] : []),
+      ...(isOrgManager ? [COMPANY_NAV_GROUP] : []),
+      ...NAV_GROUPS,
+    ],
+    [isOrgManager, mgmt.is_mgmt],
   );
   // Mobile bottom tab bar mirrors the effective, navigable destinations.
   const tabItems = useMemo(

@@ -22,7 +22,7 @@ function NavItem({ link, active, onNavigate }: { link: NavLinkT; active: boolean
 }
 
 function AdminLayout() {
-  const { logout } = useAuth();
+  const { logout, canSection } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -65,9 +65,15 @@ function AdminLayout() {
   const handleLogout = () => { logout(); navigate('/admin/login'); };
   const closeMobile = () => setSidebarOpen(false);
 
+  // RBAC: only show pinned links / groups / search hits the logged-in admin's
+  // role may access (canSection is permissive until /me resolves, so legacy
+  // admins never flash an empty nav). The backend enforces the same per-section.
+  const pinned = PINNED_LINKS.filter((l) => canSection(l.section as string));
+  const groups = NAV_GROUPS.filter((g) => canSection(g.section));
+
   const q = query.trim().toLowerCase();
   const searchResults = q
-    ? ALL_LINKS.filter((l) => l.label.toLowerCase().includes(q))
+    ? ALL_LINKS.filter((l) => l.label.toLowerCase().includes(q) && canSection(l.section as string))
     : null;
 
   // Intelligence OS page gets full-screen treatment (no sidebar, no padding)
@@ -115,12 +121,12 @@ function AdminLayout() {
             ) : (
               <>
                 <div className="admin-nav-group admin-nav-group--pinned">
-                  {PINNED_LINKS.map((link) => (
+                  {pinned.map((link) => (
                     <NavItem key={link.path} link={link} active={isActive(link.path)} onNavigate={closeMobile} />
                   ))}
                 </div>
 
-                {NAV_GROUPS.map((group) => {
+                {groups.map((group) => {
                   const label = group.label as string;
                   const isCollapsed = !!collapsed[label];
                   const groupActive = group.links.some((l) => isActive(l.path));

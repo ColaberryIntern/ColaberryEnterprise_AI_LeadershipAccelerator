@@ -10857,3 +10857,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: green main CI after #639. Backend typecheck/tests/frontend-typecheck were already passing; only the route-auth lint tripped.
   - Verification: `node scripts/lint-route-auth.js` → OK, all 83 admin route files auth-guarded.
   - Notes: Branch `workstream/route-auth-lint-guards` off main. No deploy needed (CI-only script).
+
+### Mgmt-portal RBAC — Phase 2a: Management Portal link + admin section gating — 2026-07-21
+- [x] Employees open the admin portal from the student portal; admin sidebar is filtered to the role's sections
+  - Date: 2026-07-21
+  - Session: CC-20260721-r7k4
+  - What changed: Frontend for the mgmt-RBAC (builds on Phase-1 backend #639). (1) Admin `AuthContext` now fetches `GET /api/admin/me` on login and exposes `sections` / `mgmtRole` / `canSection()` (permissive until /me resolves, so legacy admins never flash an empty nav). (2) `adminNav.ts` tags each pinned link + group with its RBAC `section` key. (3) `AdminLayout` filters the sidebar (pinned, groups, search) by `canSection` — so a scoped admin only sees their sections (backend still enforces per-section). (4) Student portal: `useMgmtStatus` hook + a "Management Portal" nav item in `PortalShell` (shown only for staff with a mgmt role) → `/portal/mgmt-enter` (new `PortalMgmtEnterPage`) mints a scoped admin token via the bridge, stores it as admin_token, redirects to /admin — no separate credentials.
+  - Why: Ali — employees log into the mgmt portal from their student session; each sees only their sections. Owner (Ali) + Admin (Kes) are fully functional after this (Kes's Inbox&Content exclusion is enforced by Phase-1's requireSection).
+  - Verification: frontend `tsc --noEmit` clean on changed files. Phase-1 backend already deployed + verified.
+  - Notes: Branch `workstream/mgmt-rbac-frontend` off main. Deploy = nginx (frontend). Owner/Admin work end-to-end; scoped roles (Curriculum/Revenue → Program/Revenue APIs) still need their section route-guards (Phase 2b) and Support needs its student surface (Phase 2c) before those people are assigned. Frontend route-level guard (block direct-URL to a hidden section) is a defense-in-depth follow-up — the backend already 403s those APIs.
