@@ -5,7 +5,7 @@
  * truncation), and failures degrade instead of throwing.
  */
 import { iso8601ToSeconds, secondsToLabel, VideoCandidate } from '../youtubeClient';
-import { rankCandidates, curateVideosForGaps, curateTopicPack, curatedVideoToCard, CuratedVideo } from '../videoCurationService';
+import { rankCandidates, curateVideosForGaps, curateTopicPack, curatedVideoToCard, isOnTopic, CuratedVideo } from '../videoCurationService';
 import { CoverageGap } from '../coverageGapEngine';
 
 const vid = (id: string, seconds: number, views: number, title: string): VideoCandidate => ({
@@ -50,7 +50,7 @@ describe('curateVideosForGaps', () => {
     const res = await curateVideosForGaps(
       [gap('agentic_loops', 'Agentic Loop'), gap('plan_mode', 'Plan Mode')],
       { budgetMinutes: 30, topic: 'Claude Code' },
-      fake({ 'Agentic Loop': [vid('a', 300, 900, 'Agentic Loop tutorial')], 'Plan Mode': [vid('p', 300, 900, 'Plan Mode tutorial')] }),
+      fake({ 'Agentic Loop': [vid('a', 300, 900, 'Agentic Loop tutorial')], 'Plan Mode': [vid('p', 300, 900, 'Claude Plan Mode tutorial')] }),
     );
     expect(res.videos.map((v) => v.competency)).toEqual(['agentic_loops', 'plan_mode']);
     expect(res.videos[0].url).toContain('youtube.com');
@@ -63,7 +63,7 @@ describe('curateVideosForGaps', () => {
     const res = await curateVideosForGaps(
       [gap('a1', 'One'), gap('a2', 'Two')],
       { budgetMinutes: 8 }, // 480s; each video is 360s → only the first fits
-      fake({ One: [vid('x', 360, 10, 'One tutorial')], Two: [vid('y', 360, 10, 'Two tutorial')] }),
+      fake({ One: [vid('x', 360, 10, 'AI One tutorial')], Two: [vid('y', 360, 10, 'AI Two tutorial')] }),
     );
     expect(res.videos.map((v) => v.competency)).toEqual(['a1']);
     expect(res.unfilled).toEqual([{ competency: 'a2', label: 'Two', reason: 'budget' }]);
@@ -87,6 +87,32 @@ describe('curateVideosForGaps', () => {
     const a = await curateVideosForGaps(g, { budgetMinutes: 30 }, deps);
     const b = await curateVideosForGaps(g, { budgetMinutes: 30 }, deps);
     expect(a).toEqual(b);
+  });
+});
+
+describe('isOnTopic relevance guard', () => {
+  it('rejects off-domain titles, accepts AI/tech ones', () => {
+    expect(isOnTopic('A320 Engine Failure After Takeoff Training')).toBe(false);
+    expect(isOnTopic('IDP Capstone - Green Building')).toBe(false);
+    expect(isOnTopic('Purpose of Battery Breaker in UPS Systems')).toBe(false);
+    expect(isOnTopic('Claude Code Sub Agents in 7 Minutes')).toBe(true);
+    expect(isOnTopic('MCP Servers Explained for beginners')).toBe(true);
+    expect(isOnTopic('Observability vs Monitoring')).toBe(true);
+  });
+});
+
+describe('curateVideosForGaps relevance + de-dup', () => {
+  it('leaves a gap unfilled when only off-topic videos exist, and never reuses a video across gaps', async () => {
+    const res = await curateVideosForGaps(
+      [gap('circuit_breaker', 'Circuit Breaker'), gap('a', 'A'), gap('b', 'B')],
+      { budgetMinutes: 60 },
+      { search: async (q: string) => q.includes('Circuit Breaker')
+        ? [vid('elec', 300, 100, 'Battery Breaker in UPS Systems')]                 // off-topic → rejected
+        : [vid('shared', 300, 100, 'Claude AI agent tutorial')] },                  // same video offered to A and B
+    );
+    expect(res.unfilled.find((u) => u.competency === 'circuit_breaker')?.reason).toBe('no_candidates');
+    expect(res.videos.map((v) => v.competency)).toEqual(['a']);                     // A takes 'shared'
+    expect(res.unfilled.find((u) => u.competency === 'b')?.reason).toBe('no_candidates'); // B can't reuse it
   });
 });
 

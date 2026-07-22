@@ -39,6 +39,24 @@ export interface CurationDeps {
 
 const TARGET_SECONDS = 360; // ~6 min — the sweet spot we bias ranking toward
 
+// Relevance guard: a candidate is only acceptable if its title reads as AI/tech.
+// This kills the off-domain misfires (e.g. "circuit breaker" -> electrical UPS,
+// "fail closed" -> aircraft engine, "capstone" -> a construction capstone). Better
+// to leave a gap unfilled than to put a wrong video in front of a student.
+const TECH_ANCHORS = [
+  'ai', 'a.i', 'artificial intelligence', 'claude', 'anthropic', 'llm', 'gpt', 'chatgpt',
+  'mcp', 'agent', 'prompt', 'coding', 'code', 'software', 'api', 'machine learning', 'ml',
+  'model', 'data', 'cloud', 'devops', 'kubernetes', 'docker', 'microservice', 'security',
+  'python', 'javascript', 'typescript', 'engineering', 'automation', 'workflow', 'rag',
+  'vector', 'embedding', 'neural', 'deep learning', 'database', 'backend', 'frontend',
+  'system design', 'skill', 'subagent', 'context', 'token', 'fine-tun', 'openai', 'gemini',
+  'architecture', 'observability', 'reliability', 'governance', 'authentication', 'jwt', 'oauth',
+];
+export function isOnTopic(title: string): boolean {
+  const t = ` ${String(title || '').toLowerCase()} `;
+  return TECH_ANCHORS.some((a) => t.includes(` ${a} `) || t.includes(`${a} `) || t.includes(` ${a}`));
+}
+
 /** PURE — rank candidates for a gap by title relevance, popularity, duration fit. */
 export function rankCandidates(cands: VideoCandidate[], gapLabel: string): VideoCandidate[] {
   const words = gapLabel.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
@@ -70,6 +88,7 @@ export async function curateVideosForGaps(
   const videos: CuratedVideo[] = [];
   const unfilled: Unfilled[] = [];
   const notes: string[] = [];
+  const usedVideoIds = new Set<string>();   // no video fills two gaps in the same week
   let usedSeconds = 0;
   let gotAny = false;
 
@@ -84,17 +103,20 @@ export async function curateVideosForGaps(
       continue;
     }
     if (candidates.length) gotAny = true;
-    if (!candidates.length) {
+    // On-topic only (kills off-domain misfires) and no repeats across gaps.
+    const ranked = rankCandidates(candidates, gap.label).filter((c) => isOnTopic(c.title) && !usedVideoIds.has(c.video_id));
+    if (!ranked.length) {
       unfilled.push({ competency: gap.competency, label: gap.label, reason: 'no_candidates' });
       continue;
     }
-    const best = rankCandidates(candidates, gap.label)[0];
+    const best = ranked[0];
     if (usedSeconds + best.duration_seconds > budgetSeconds) {
       unfilled.push({ competency: gap.competency, label: gap.label, reason: 'budget' });
       notes.push(`Left "${gap.label}" unfilled — a ${best.duration_label} video exceeds the remaining ${Math.round((budgetSeconds - usedSeconds) / 60)} min of budget.`);
       continue;
     }
     usedSeconds += best.duration_seconds;
+    usedVideoIds.add(best.video_id);
     videos.push({ ...best, competency: gap.competency, competency_label: gap.label });
   }
 
@@ -148,7 +170,7 @@ export async function curateTopicPack(
     try { cands = await deps.search(theme, { minSeconds: opts.minSeconds, maxSeconds: opts.maxSeconds }); }
     catch (e: any) { notes.push(`Search failed for "${theme}": ${e?.message || 'error'}.`); continue; }
     if (cands.length) gotAny = true;
-    for (const c of rankCandidates(cands, theme)) {
+    for (const c of rankCandidates(cands, theme).filter((x) => isOnTopic(x.title))) {
       if (collected.length >= count) break;
       if (seen.has(c.video_id)) continue;
       if (budgetSeconds > 0 && usedSeconds + c.duration_seconds > budgetSeconds) continue;
