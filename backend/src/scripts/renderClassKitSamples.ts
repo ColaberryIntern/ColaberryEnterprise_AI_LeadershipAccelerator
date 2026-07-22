@@ -11,6 +11,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { buildKitSpec, BuildKitSpecInput } from '../services/classKit/kitSpec';
 import { renderKitHtml } from '../services/classKit/kitHtml';
+import { renderClassOutline } from '../services/classKit/outlineHtml';
 
 const OUT =
   process.env.KIT_SAMPLE_DIR ||
@@ -31,8 +32,11 @@ async function main(): Promise<void> {
     const spec = buildKitSpec({ session: s.session, cohortName: 'Cohort - July 2026', checkinUrl, qrSvg, meetLink: 'https://meet.google.com/abc-defg-hij' });
     const html = renderKitHtml(spec, { live: { enabled: false } });
     fs.writeFileSync(path.join(OUT, s.file), html, 'utf8');
+    const outline = renderClassOutline(spec);
+    const outlineFile = s.file.replace(/\.html$/, '-outline.html');
+    fs.writeFileSync(path.join(OUT, outlineFile), outline, 'utf8');
     // eslint-disable-next-line no-console
-    console.log('wrote', path.join(OUT, s.file), `(${html.length} bytes, ${spec.slides.length} slides)`);
+    console.log('wrote', s.file, `(${spec.slides.length} slides)`, '+', outlineFile);
   }
 }
 
