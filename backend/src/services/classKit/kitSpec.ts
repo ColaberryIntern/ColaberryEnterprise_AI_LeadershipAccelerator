@@ -10,7 +10,7 @@
  */
 import {
   DayKind, Interaction, ClassPrompt, BuildCheckpoint, WeekClassContent,
-  WEEK_CLASS_CONTENT, ORIENTATION_PLAN,
+  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS,
 } from '../../data/classSessionPlan';
 import { weekBlueprint } from '../../data/weekBlueprints';
 import {
@@ -41,6 +41,9 @@ export interface KitSlide {
   interaction?: Interaction;
   /** Visual "Prove It" assignment brief (rendered as an emoji/chart-like card). */
   brief?: AssignmentBrief;
+  /** Mermaid diagram source (rendered client-side) + its caption. */
+  diagram?: string;
+  diagramCaption?: string;
   /** Guidance shown in the instructor's presenter rail, never to the room. */
   presenterTip?: string;
   /** Reminder of what this segment is worth as public content. */
@@ -156,6 +159,15 @@ function buildWeekBrief(week: number | null, wc: WeekClassContent): AssignmentBr
     proof: wc.assignment.proof,
     tags: (bp?.competencies || []).slice(0, 5).map(humanizeTag),
   };
+}
+
+/** Mermaid flow of the build checkpoints (CP0 → … → CPn) with a rescue branch. */
+function buildCheckpointDiagram(cps: BuildCheckpoint[]): string {
+  if (!cps.length) return '';
+  const nodes = cps.map((cp) => `  CP${cp.n}["CP${cp.n} · ${cp.label}"]`).join('\n');
+  const chain = '  ' + cps.map((cp) => `CP${cp.n}`).join(' --> ');
+  const last = cps[cps.length - 1].n;
+  return `flowchart LR\n${nodes}\n${chain}\n  Rescue["🛟 Rescue branch"] -.stuck? catch up.-> CP${last}`;
 }
 
 /** Detect the class day kind from title first, then weekday, then fall back. */
@@ -276,31 +288,33 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
 
   const cold = segById(segs, 'cold-open');
   out.push(slide(cold, 0, 'segment', {
-    eyebrow: 'Cold open', title: 'By Thursday, this will exist', body: m.payoffPreview,
+    eyebrow: '🎬 Cold open', title: 'By Thursday, this will exist', body: m.payoffPreview,
     presenterTip: 'Show the finished artifact first. Sell the payoff before any theory.',
   }));
 
   const checkin = segById(segs, 'checkin');
   out.push(slide(checkin, 0, 'interaction', {
-    eyebrow: 'Predict', title: 'Before we start — make your call', interaction: m.designChoice,
+    eyebrow: '🔮 Predict', title: 'Before we start — make your call', interaction: m.designChoice,
     presenterTip: 'Everyone scans the QR here. Read the prediction; do not reveal yet — it pays off later.',
   }));
 
   const prob = segById(segs, 'business-problem');
   out.push(slide(prob, 0, 'bullets', {
-    eyebrow: 'The business problem', title: 'Why this matters beyond the tool', body: m.tension,
+    eyebrow: '💼 The business problem', title: 'Why this matters beyond the tool', body: m.tension,
     presenterTip: 'This is the LinkedIn clip. Stay on the business stakes, not the syntax.',
   }));
 
   const arch = segById(segs, 'architecture');
   out.push(slide(arch, 0, 'architecture', {
-    eyebrow: 'Architecture story', title: 'The architecture', bullets: m.architectureBeats,
-    presenterTip: 'Diagram it. Components, risks, decisions. This is the evergreen lesson — take your time.',
+    eyebrow: '🏛️ Architecture story', title: 'The architecture', bullets: m.architectureBeats,
+    diagram: meta.week != null ? ARCHITECTURE_DIAGRAMS[meta.week] : undefined,
+    diagramCaption: 'How this week’s system fits together — walk it left to right.',
+    presenterTip: 'Walk the diagram node by node: components, the risky edges, the decisions. This is the evergreen lesson — take your time (≈20 min). Ask the room where the trust boundary is.',
   }));
 
   const dec = segById(segs, 'deconstruct');
   out.push(slide(dec, 0, 'example', {
-    eyebrow: 'Deconstruct a real example', title: 'What works, and what fails', body: m.realExample,
+    eyebrow: '🔍 Deconstruct a real example', title: 'What works, and what fails', body: m.realExample,
     presenterTip: 'Show the good and the broken. The failure is the breakdown clip.',
   }));
 
@@ -308,25 +322,25 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
 
   const micro = segById(segs, 'micro-build');
   out.push(slide(micro, 0, 'microbuild', {
-    eyebrow: 'Guided micro-build', title: 'Start the first component', body: m.microBuild,
+    eyebrow: '🛠️ Guided micro-build', title: 'Start the first component', body: m.microBuild,
     presenterTip: 'Watch the pulse. If people go “stuck”, slow down. This is the tutorial sequence.',
   }));
 
   const chal = segById(segs, 'challenge');
   out.push(slide(chal, 0, 'interaction', {
-    eyebrow: 'Architecture challenge', title: 'Choose the design', interaction: m.designChoice,
+    eyebrow: '🧭 Architecture challenge', title: 'Choose the design', interaction: m.designChoice,
     presenterTip: 'Now reveal. Tie their Monday prediction to the right architecture.',
   }));
 
   const triv = segById(segs, 'trivia');
   out.push(slide(triv, 0, 'interaction', {
-    eyebrow: 'Knowledge check', title: 'Quick check', interaction: m.trivia,
+    eyebrow: '🧠 Knowledge check', title: 'Quick check', interaction: m.trivia,
     presenterTip: 'Fast. Reveal, one line of why, move on.',
   }));
 
   const trailer = segById(segs, 'trailer');
   out.push(slide(trailer, 0, 'cta', {
-    eyebrow: 'Thursday', title: 'Thursday we make it work', body: m.thursdayTrailer,
+    eyebrow: '🎟️ Thursday', title: 'Thursday we make it work', body: m.thursdayTrailer,
     presenterTip: 'Open loop. Leave them wanting Build Day. This is the social teaser.',
   }));
 
@@ -343,24 +357,26 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
 
   const preview = segById(segs, 'result-preview');
   out.push(slide(preview, 0, 'segment', {
-    eyebrow: 'Result preview', title: 'What you are producing today', body: t.resultPreview,
+    eyebrow: '🎯 Result preview', title: 'What you are producing today', body: t.resultPreview,
     presenterTip: 'Show the finished result first. This is the cold open of the episode.',
   }));
 
   const readiness = segById(segs, 'readiness');
   out.push(slide(readiness, 0, 'segment', {
-    eyebrow: 'Readiness check', title: 'You are ready to build if…', body: t.readinessCheck,
+    eyebrow: '✅ Readiness check', title: 'You are ready to build if…', body: t.readinessCheck,
     presenterTip: 'Ask the room to tap “I’m here”. Anyone not set up goes to the rescue branch.',
   }));
   out.push(slide(readiness, 1, 'interaction', {
-    eyebrow: 'Warm-up', title: 'Quick check', interaction: t.trivia,
+    eyebrow: '🧠 Warm-up', title: 'Quick check', interaction: t.trivia,
     presenterTip: 'One trivia to confirm last week landed before we build on it.',
   }));
 
   const map = segById(segs, 'build-map');
   out.push(slide(map, 0, 'buildmap', {
-    eyebrow: 'Build map', title: 'The checkpoints', bullets: t.buildMap,
-    presenterTip: 'Show the safety rails: checkpoints and the rescue branch. Nobody gets left behind.',
+    eyebrow: '🗺️ Build map', title: 'The checkpoints', bullets: t.buildMap,
+    diagram: buildCheckpointDiagram(t.checkpoints),
+    diagramCaption: 'Everyone moves together, checkpoint to checkpoint. Stuck? The rescue branch catches you up.',
+    presenterTip: 'Show the safety rails: the checkpoints and the rescue branch. Nobody gets left behind. Confirm CP0 before the first prompt.',
   }));
   t.checkpoints.forEach((cp, i) => {
     out.push(slide(map, i + 1, 'checkpoint', {
@@ -372,7 +388,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
   const guided = segById(segs, 'guided-build');
   t.prompts.forEach((p, i) => {
     out.push(slide(guided, i, 'prompt', {
-      eyebrow: `Guided build · prompt ${i + 1}`, title: p.label, prompt: p,
+      eyebrow: `⌨️ Guided build · prompt ${i + 1}`, title: p.label, prompt: p,
       presenterTip: 'Paste on screen, narrate the decision (not every character), run it, show the result.',
     }));
   });
@@ -381,23 +397,23 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
 
   const fail = segById(segs, 'failure');
   out.push(slide(fail, 0, 'failure', {
-    eyebrow: 'Failure injection', title: 'Let’s break it on purpose', body: t.failureInjection,
+    eyebrow: '💥 Failure injection', title: 'Let’s break it on purpose', body: t.failureInjection,
     presenterTip: 'Do not hide the error. This controlled failure is the highest-retention moment of the show.',
   }));
   out.push(slide(fail, 1, 'recovery', {
-    eyebrow: 'Recover like an architect', title: 'Diagnose and fix', body: t.recovery,
+    eyebrow: '🔧 Recover like an architect', title: 'Diagnose and fix', body: t.recovery,
     presenterTip: 'Narrate the diagnosis. This is where they learn architecture thinking, not just syntax.',
   }));
 
   const demos = segById(segs, 'demos');
   out.push(slide(demos, 0, 'demos', {
-    eyebrow: 'Student demonstrations', title: 'Show your build', body: 'Two or three students share their screen and demo what they built. The room votes on the strongest one.',
+    eyebrow: '🎤 Student demonstrations', title: 'Show your build', body: 'Two or three students share their screen and demo what they built. The room votes on the strongest one.',
     presenterTip: 'Call on students who tapped “I finished”. Social proof + peer learning = testimonial clips.',
   }));
 
   const bc = segById(segs, 'broadcast');
   out.push(slide(bc, 0, 'broadcast', {
-    eyebrow: 'Builder Broadcast', title: 'Record your 30-second Build Proof', bullets: BUILDER_BROADCAST_PROMPTS,
+    eyebrow: '🎬 Builder Broadcast', title: 'Record your 30-second Build Proof', bullets: BUILDER_BROADCAST_PROMPTS,
     body: `This week, your proof is: ${wc.builderBroadcastFocus}.`,
     presenterTip: 'Everyone records 30–60s on their phone using these five prompts. Opt-in becomes your content pipeline.',
   }));
