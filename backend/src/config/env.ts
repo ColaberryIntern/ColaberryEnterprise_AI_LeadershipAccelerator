@@ -131,6 +131,13 @@ export const env = {
   // per-card/type routing. Default OFF; flag-off keeps the legacy hardcoded
   // CADENCE=2 + fixed provider list + week→bucket→order behavior byte-identical.
   feedControlEnabled: process.env.FEED_CONTROL_ENABLED === 'true',
+  // Content paywall — gate the full 12-week curriculum behind PAYMENT (paid /
+  // admin-comp / staff / business-workspace), not just enrollment_type='explorer'.
+  // Default OFF: flag-off preserves the legacy explorer-only Week-0 gate byte-for-
+  // byte. Flip to true at launch (with the enrollment migration) so enrolled-but-
+  // unpaid members see the free preview until they pay. See
+  // services/access/contentEntitlement.ts.
+  contentPaidGateEnabled: process.env.CONTENT_PAID_GATE_ENABLED === 'true',
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',
