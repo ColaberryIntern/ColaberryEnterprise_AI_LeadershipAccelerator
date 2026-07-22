@@ -44,15 +44,19 @@ type EntitlementEnrollment = { payment_status?: string | null } | null | undefin
 type EntitlementCohort = { cohort_type?: string | null } | null | undefined;
 
 /**
- * PURE entitlement rule. "Entitled to build" is the OR of four signals:
+ * PURE entitlement rule. "Entitled to build" is the OR of five signals:
  *   - PAID:            enrollment.payment_status === 'paid'
  *   - admin-comped:    an active "Free Access" comp subscription (roleInfo.hasActiveComp)
  *   - staff/privileged: community_members.role === 'staff' (roleInfo.isStaff)
  *   - sponsor seat:    the enrollment sits in a cohort_type='sponsor' cohort
+ *   - accelerator seat: the enrollment sits in a cohort_type='accelerator' cohort — the
+ *                       paid program. Billing may be 'pending' (invoice / net-terms /
+ *                       sponsor-funded) while the student is legitimately building, so
+ *                       cohort membership (not the billing state) is the access signal.
  *
- * Only a genuine free Explorer (unpaid, non-comped, non-staff, non-sponsor) is
- * NOT entitled. A missing enrollment yields `false` here; the middleware makes the
- * separate fail-open decision for the "row genuinely absent" anomaly.
+ * Only a genuine free Explorer (unpaid, non-comped, non-staff, non-sponsor,
+ * non-accelerator) is NOT entitled. A missing enrollment yields `false` here; the
+ * middleware makes the separate fail-open decision for the "row genuinely absent" anomaly.
  */
 export function isBuildEntitled(
   enrollment: EntitlementEnrollment,
@@ -63,8 +67,17 @@ export function isBuildEntitled(
   const paid = enrollment.payment_status === 'paid';
   const comped = roleInfo?.hasActiveComp === true;
   const staff = roleInfo?.isStaff === true;
-  const sponsorSeat = String(cohort?.cohort_type ?? '').toLowerCase() === 'sponsor';
-  return paid || comped || staff || sponsorSeat;
+  const cohortType = String(cohort?.cohort_type ?? '').toLowerCase();
+  const sponsorSeat = cohortType === 'sponsor';
+  // Accelerator-cohort members are enrolled in the paid program; billing may sit at
+  // payment_status='pending' (invoice / net-terms / sponsor-funded) while they are
+  // legitimately building. Cohort membership IS the access signal — every
+  // non-accelerator/non-sponsor cohort (the free 'explorer' cohort, demo, or untagged)
+  // is still gated. (Prod 2026-07-21: 103 accelerator/pending students would otherwise
+  // be wrongly 402'd.) OPS INVARIANT: free/demo/open-house cohorts must NOT carry
+  // cohort_type='accelerator', or they would silently gain build access.
+  const acceleratorCohort = cohortType === 'accelerator';
+  return paid || comped || staff || sponsorSeat || acceleratorCohort;
 }
 
 // The 402 body returned to a confirmed free Explorer. Stable shape the frontend
