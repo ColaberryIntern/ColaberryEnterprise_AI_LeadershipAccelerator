@@ -14,10 +14,12 @@ import TimelineCard from '../../models/TimelineCard';
 import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { resolve } from './typeRegistry';
 
-/** Types whose generation receives the week's activity roster. Extend as other
- *  week-summary types (wrap-ups, weekly reflections) need it. `announcement` is
- *  the friendly week-opener that scans the section and reports what's ahead. */
-export const SECTION_ROSTER_TYPES = new Set(['announcement', 'prompt_lab']);
+/** Types whose generation receives the week's activity roster. `announcement` is
+ *  the friendly week-opener that scans the section and reports what's ahead;
+ *  `prompt_lab` builds practice against the week's real deliverables; `reflection`
+ *  is the week-closer that reflects the WHOLE week back to the student, so it must
+ *  see every activity that was placed (grouped by phase) to capture all of it. */
+export const SECTION_ROSTER_TYPES = new Set(['announcement', 'prompt_lab', 'reflection']);
 
 /** Meta/system cards excluded from the roster — they are not "things you'll do". */
 const EXCLUDED_TYPES = new Set([
