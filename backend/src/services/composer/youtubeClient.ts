@@ -30,6 +30,16 @@ export interface SearchOptions {
 
 const API = 'https://www.googleapis.com/youtube/v3';
 
+// Force IPv4 egress for these calls only. The YouTube API key is IP-restricted to
+// the host's IPv4, but the host egresses IPv6 by default — which the key rejects.
+// Scoped here via an undici dispatcher; no global runtime change. Falls back to the
+// default dispatcher (IPv6) if undici can't be resolved.
+let ipv4Dispatcher: any;
+try {
+  const { Agent } = require('undici');
+  ipv4Dispatcher = new Agent({ connect: { family: 4 } });
+} catch { /* default dispatcher — key IP restriction must then allow IPv6 */ }
+
 /** PURE — parse an ISO-8601 duration (e.g. "PT6M42S") to whole seconds. */
 export function iso8601ToSeconds(iso: string): number {
   const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(String(iso || '').trim());
@@ -54,7 +64,7 @@ async function fetchJson(url: string, timeoutMs: number, maxAttempts: number): P
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
-      const res = await fetch(url, { signal: ctrl.signal });
+      const res = await fetch(url, { signal: ctrl.signal, dispatcher: ipv4Dispatcher } as any);
       clearTimeout(timer);
       if (res.status === 429 || res.status >= 500) { lastErr = new Error(`YouTube API ${res.status}`); }
       else if (!res.ok) {
