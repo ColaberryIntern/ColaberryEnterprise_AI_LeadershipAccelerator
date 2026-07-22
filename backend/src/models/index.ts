@@ -40,6 +40,7 @@ import UserCurriculumProfile from './UserCurriculumProfile';
 import SessionGate from './SessionGate';
 import MentorConversation from './MentorConversation';
 import SessionChatMessage from './SessionChatMessage';
+import SessionPulse from './SessionPulse';
 import SkillMastery from './SkillMastery';
 import PromptTemplate from './PromptTemplate';
 import SectionConfig from './SectionConfig';
@@ -1036,6 +1037,7 @@ export {
   CurriculumModule, CurriculumLesson, LessonInstance,
   UserCurriculumProfile, SessionGate, MentorConversation,
   SessionChatMessage,
+  SessionPulse,
   SkillMastery,
   PromptTemplate,
   SectionConfig,
