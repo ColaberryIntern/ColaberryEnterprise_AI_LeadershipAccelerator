@@ -69,8 +69,9 @@ function computeForSession(s: LiveSession, cohortName: string): Computed | null 
     cohortName, checkinUrl: '', qrSvg: '', meetLink: s.meeting_link || null,
   });
 
+  // Deterministic payload (no timestamp) so re-running is a true no-op — the
+  // caller compares this against the stored kit_json and skips unchanged rows.
   const kit_json = {
-    generated_at: new Date().toISOString(),
     day_kind: spec.meta.dayKind,
     day_label: spec.meta.dayLabel,
     week: spec.meta.week,
@@ -106,11 +107,12 @@ async function main(): Promise<void> {
   for (const s of sessions) {
     const c = computeForSession(s, cohort.name);
     if (!c) { console.log(`  #${s.session_number}  [skip: unknown week] ${s.title}`); continue; }
-    const willChange = s.title !== c.title || (s.description || '') !== c.description;
+    const kitDiffers = JSON.stringify(s.kit_json ?? null) !== JSON.stringify(c.kit_json);
+    const willChange = s.title !== c.title || (s.description || '') !== c.description || kitDiffers;
     console.log(`  #${s.session_number}  ${s.session_date}`);
     console.log(`     old: ${s.title}`);
     console.log(`     new: ${c.title}${willChange ? '' : '  (unchanged)'}`);
-    if (commit) {
+    if (commit && willChange) {
       await s.update({ title: c.title, description: c.description, kit_json: c.kit_json });
       changed++;
     }

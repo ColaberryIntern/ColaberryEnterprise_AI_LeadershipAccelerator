@@ -251,7 +251,7 @@ ${slidesHtml}
 <div id="kcounter">1 / ${spec.slides.length}</div>
 <div id="khint">→ next · N notes · C compact · Q qr · M mark · S start</div>
 
-<script>window.__KIT__ = ${JSON.stringify(data)};</script>
+<script>window.__KIT__ = ${JSON.stringify(data).replace(/</g, '\\u003c')};</script>
 <script>${deckScript()}</script>
 </body>
 </html>`;

@@ -397,12 +397,12 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     }));
   });
 
-  const close = segById(segs, 'close');
-  out.push(slide(close, 0, 'interaction', {
+  const close = segById(segs, 'setup');
+  out.push(slide(close, 1, 'interaction', {
     eyebrow: 'One more', title: 'What do you leave with?', interaction: ORIENTATION_PLAN.trivia,
     presenterTip: 'Reveal: a working system + CCA-F + portfolio. Then the close.',
   }));
-  out.push(slide(close, 1, 'cta', {
+  out.push(slide(close, 2, 'cta', {
     eyebrow: 'Before Week 1', title: 'You are set up and oriented', bullets: ORIENTATION_PLAN.assignment.deliverables,
     body: `Proof: ${ORIENTATION_PLAN.assignment.proof}`,
     presenterTip: 'Everyone leaves tonight with Claude Code running. Week 1 Monday is Architecture Day.',

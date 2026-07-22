@@ -58,13 +58,15 @@ export const BUILD_RUN_OF_SHOW: SegmentTemplate[] = [
   { id: 'cta', startMin: 119, endMin: 120, label: 'Final CTA', mode: 'close', purpose: 'Point viewers to the free entry point', publicValue: 'Conversion' },
 ];
 
-/** Orientation — Ali's structure: welcome + 60 Ali + 30 Taiwo + 30 Swati + close. */
+// Orientation — Ali's exact structure: 60 Ali (incl. a 5-min welcome) + 30 Taiwo
+// + 30 Swati. Segment minutes match the per-presenter budgets so the pace bar
+// reads "on time" while a presenter is within their stated time (Ali 0-60,
+// Taiwo 60-90, Swati 90-120). The cohort close folds into the tail of setup.
 export const ORIENTATION_RUN_OF_SHOW: SegmentTemplate[] = [
   { id: 'welcome', startMin: 0, endMin: 5, label: 'Welcome + check-in', mode: 'open', purpose: 'Set the tone; students check in on their phones', publicValue: 'Opening hook' },
   { id: 'big-picture', startMin: 5, endMin: 60, label: 'The big picture (Ali)', mode: 'present', purpose: 'From AI user to AI builder — the moment, the proof, the program', publicValue: 'Evergreen keynote' },
   { id: 'platform', startMin: 60, endMin: 90, label: 'Your platform (Taiwo)', mode: 'present', purpose: 'Tour the daily command center', publicValue: 'Product walkthrough' },
-  { id: 'setup', startMin: 90, endMin: 118, label: 'Environment setup (Swati)', mode: 'build', purpose: 'Claude Code + VS Code live setup — everyone leaves set up', publicValue: 'Setup tutorial' },
-  { id: 'close', startMin: 118, endMin: 120, label: 'Close', mode: 'close', purpose: 'What to expect before Week 1', publicValue: 'CTA' },
+  { id: 'setup', startMin: 90, endMin: 120, label: 'Environment setup (Swati)', mode: 'build', purpose: 'Claude Code + VS Code live setup — everyone leaves set up; then what to expect before Week 1', publicValue: 'Setup tutorial' },
 ];
 
 export function runOfShowFor(dayKind: DayKind): SegmentTemplate[] {

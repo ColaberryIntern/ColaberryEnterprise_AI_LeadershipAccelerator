@@ -70,11 +70,6 @@ export function deckScript(): string {
     updatePace();
   });
 
-  function scheduledSeg(elapsedMin){
-    for (var s = 0; s < segs.length; s++){ if (elapsedMin >= segs[s].startMin && elapsedMin < segs[s].endMin) return segs[s]; }
-    return null;
-  }
-
   function updatePace(){
     var start = classStart();
     if (!start){
