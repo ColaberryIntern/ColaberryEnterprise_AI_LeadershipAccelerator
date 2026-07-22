@@ -1839,6 +1839,31 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
+  // Intelligence pipelines — the 9 generators beyond AI News Flash (arXiv research,
+  // tools, YouTube, quotes, eng-blogs, GitHub builds, MCP servers, Claude Code
+  // techniques, market intel). Daily 03:45 CT, staggered 30 min after AiNewsRefresh
+  // to spread LLM load. Each source self-registers via the sources barrel, is
+  // cost-gated by its own <SLUG>_INGEST_ENABLED flag (default OFF → ships dark),
+  // and is tracked per-source via instrumentCronJob(`Intel_<slug>`). Prune runs once
+  // after the loop (shared 30-day generated-content retention).
+  cron.schedule(
+    '45 3 * * *',
+    () => {
+      (async () => {
+        await import('./intel/sources'); // register all adapters (idempotent)
+        const { listIntelSources, runIntelPipeline } = await import('./intel/intelPipeline');
+        for (const src of listIntelSources()) {
+          await instrumentCronJob(`Intel_${src.slug}`, async () => {
+            await runIntelPipeline(src.slug);
+          }).catch((err) => console.error(`[Scheduler] Intel ${src.slug} error:`, err));
+        }
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await pruneGeneratedContent();
+      })().catch((err) => console.error('[Scheduler] Intel pipelines error:', err));
+    },
+    { timezone: 'America/Chicago' }
+  );
+
   // Distill each active student's recent sessions into their evolving LearnerMemory
   // once nightly (02:15 America/Chicago) — the AI Mentor's "gets to know you over
   // weeks" engine. Idempotent per (enrollment, day); safe to re-run.
