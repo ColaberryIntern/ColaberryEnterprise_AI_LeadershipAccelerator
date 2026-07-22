@@ -20,6 +20,10 @@ jest.mock('../../models/CommunityNotification', () => ({ create: jest.fn() }));
 // listMembersForAdmin flags comped seats via subscriptionService — mock it so
 // this unit test stays isolated from the billing layer (no comp by default).
 jest.mock('../../services/subscriptionService', () => ({ activeCompEnrollmentIds: jest.fn(async () => new Set()) }));
+// setMemberRole best-effort auto-syncs 'staff' to auto_staff_sync orgs — mock the
+// org models so this unit test stays isolated (no auto-sync orgs by default).
+jest.mock('../../models/Organization', () => ({ findAll: jest.fn(async () => []) }));
+jest.mock('../../models/OrgMember', () => ({ findOrCreate: jest.fn(), destroy: jest.fn() }));
 // communityService now folds into the canonical points system; mock those so
 // their real model methods don't hit the DB (points/level come from here).
 jest.mock('../../services/pointsService', () => ({

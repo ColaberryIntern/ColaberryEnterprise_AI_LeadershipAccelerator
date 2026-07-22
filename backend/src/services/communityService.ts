@@ -10,6 +10,8 @@ import { awardCommunityXp } from './progression/communityXpService';
 import { award, revoke, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
+import Organization from '../models/Organization';
+import OrgMember from '../models/OrgMember';
 import { activeCompEnrollmentIds } from './subscriptionService';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
@@ -1078,6 +1080,42 @@ export async function listMembersForAdmin(search?: string): Promise<AdminMemberR
   return rows;
 }
 
+/**
+ * Auto-roster sync: keep every org flagged `auto_staff_sync` in step with the
+ * community 'staff' role. Assigning staff adds the person as a member (idempotent
+ * on (org_id, email); it never downgrades an existing manager); un-assigning staff
+ * removes their member row. Manager rows are never touched by a role change.
+ * Best-effort — a sync failure must never fail the role change itself.
+ */
+async function syncStaffToAutoOrgs(enrollmentId: string, isStaff: boolean): Promise<void> {
+  try {
+    const orgs = await Organization.findAll({ where: { auto_staff_sync: true }, attributes: ['id'] });
+    if (!orgs.length) return;
+    const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['email'] });
+    const email = (enrollment as any)?.email;
+    if (!email) return;
+    for (const org of orgs) {
+      if (isStaff) {
+        await OrgMember.findOrCreate({
+          where: { org_id: org.id, email },
+          defaults: {
+            org_id: org.id, enrollment_id: enrollmentId, email,
+            role: 'member', invite_status: 'active', team: 'Staff', joined_at: new Date(),
+          } as any,
+        });
+      } else {
+        // Demoted from staff → drop them from the auto-roster (member rows only; a
+        // manager is never removed by a community role change).
+        await OrgMember.destroy({ where: { org_id: org.id, email, role: 'member' } });
+      }
+    }
+  } catch (err: any) {
+    log('warn', 'staff_org_sync_failed', {
+      enrollment_id: enrollmentId, is_staff: isStaff, outcome: 'failure', error_class: err?.error_class ?? 'Error',
+    });
+  }
+}
+
 export async function setMemberRole(targetMemberId: string, role: CommunityMemberRole): Promise<MemberProfile> {
   if (!isMemberRole(role)) {
     throw Object.assign(new Error(`Invalid role: ${role}`), { error_class: 'ValidationError' });
@@ -1088,6 +1126,8 @@ export async function setMemberRole(targetMemberId: string, role: CommunityMembe
   }
   await member.update({ role });
   log('info', 'member_role_set', { member_id: member.id, role, outcome: 'success' });
+  // Keep auto_staff_sync org rosters in step with the staff role (best-effort).
+  await syncStaffToAutoOrgs(member.enrollment_id, role === 'staff');
   const total = (await getPointsSummary(member.enrollment_id)).total;
   const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
   return toMemberProfile(member, total, badges);

@@ -11,6 +11,9 @@ export interface OrganizationAttributes {
   id?: string;
   name: string;
   owner_enrollment_id: string;
+  // Opt-in: when true, anyone assigned the community 'staff' role is auto-added to
+  // this org's roster (and removed on demotion). Default off.
+  auto_staff_sync?: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -19,6 +22,7 @@ class Organization extends Model<OrganizationAttributes> implements Organization
   declare id: string;
   declare name: string;
   declare owner_enrollment_id: string;
+  declare auto_staff_sync: boolean;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -39,6 +43,11 @@ Organization.init(
       allowNull: false,
       unique: true, // one management account per manager enrollment (idempotent register)
       references: { model: 'enrollments', key: 'id' },
+    },
+    auto_staff_sync: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
     },
   },
   {
