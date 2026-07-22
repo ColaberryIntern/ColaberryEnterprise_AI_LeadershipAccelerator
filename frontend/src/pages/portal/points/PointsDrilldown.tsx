@@ -11,6 +11,31 @@ function humanizeLevel(s: string | null | undefined): string {
   return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// The competency promotion ranks map onto the canonical BUILD bands (AI Builder I…
+// → AI Architect). Mirrors backend bandLadder — the ladder is the SAME thing the
+// journey shows, so the Readiness card speaks the band language instead of raw
+// internal slugs like "junior_builder". Rank-0 "builder" is the entry default
+// (not a promotion), so it has no band name — the learner simply isn't building yet.
+const READINESS_BAND: Record<string, string> = {
+  junior_builder: 'AI Builder I',
+  practitioner: 'AI Builder II',
+  developer: 'AI Builder III',
+  senior_developer: 'AI Builder IV',
+  engineer: 'AI Builder V',
+  senior_engineer: 'AI Builder VI',
+  architect_candidate: 'AI Architect',
+  architect: 'Senior AI Architect',
+};
+function bandForReadiness(slug: string | null | undefined): string {
+  if (!slug) return '';
+  return READINESS_BAND[slug] || humanizeLevel(slug);
+}
+/** "Evidence: 0 < 3" → "Evidence — 0 of 3". Leaves anything else untouched. */
+function formatGap(g: string): string {
+  const m = g.match(/^(.+?):\s*(\d+)\s*<\s*(\d+)\s*$/);
+  return m ? `${m[1].trim()} — ${m[2]} of ${m[3]}` : g;
+}
+
 /**
  * PointsDrilldown — the three-lens points breakdown, self-contained so it can be
  * rendered both on the dedicated /portal/points page AND inside the Settings
@@ -170,30 +195,39 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           )}
         </div>
 
-        {/* Lens 3 — Architect Readiness */}
+        {/* Lens 3 — Architect Readiness. This is the BUILD track (a different axis
+            from points): you earn the AI Builder → AI Architect bands by shipping
+            build evidence in the program, not by collecting points. Framed around
+            the band you're working toward so it matches the journey + HUD. */}
         <div className="pts-lens accent-leaf">
           <div className="pts-lens-h"><span className="tag">3 · Readiness</span><h3>Architect Readiness</h3></div>
           <div className="pts-readi">
             <ReadinessRing pct={readiness?.pct ?? 0} />
             <div className="pts-readi-meta">
-              <div className="lvl">{readiness ? `Level ${humanizeLevel(readiness.level)}` : 'Not started'}</div>
+              <div className="lvl">
+                {readiness?.at_max
+                  ? bandForReadiness(readiness.level) || 'AI Architect'
+                  : readiness?.next_level
+                    ? <>On the path to <b>{bandForReadiness(readiness.next_level)}</b></>
+                    : 'Not building yet'}
+              </div>
               <div className="pts-mut">
-                {readiness?.at_max ? 'You\'ve reached the top Builder level.'
-                  : readiness?.next_level ? `Next: ${humanizeLevel(readiness.next_level)}`
-                  : 'Grows as you demonstrate competency.'}
+                {readiness?.at_max
+                  ? "You've reached the top of the build ladder."
+                  : 'Earned by shipping build evidence in the program — not by points.'}
               </div>
             </div>
           </div>
           {readiness && !readiness.at_max && (
             <div className="pts-gaps">
-              <span className="pts-gaps-h">{readiness.gaps.length ? `What's left to ${humanizeLevel(readiness.next_level)}` : 'Gate cleared — promotion pending'}</span>
+              <span className="pts-gaps-h">{readiness.gaps.length ? `What unlocks ${bandForReadiness(readiness.next_level)}` : 'Requirements met — promotion pending'}</span>
               {readiness.gaps.length
-                ? <ul>{readiness.gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
-                : <div className="pts-mut">You meet every requirement for the next level.</div>}
+                ? <ul>{readiness.gaps.map((g, i) => <li key={i}>{formatGap(g)}</li>)}</ul>
+                : <div className="pts-mut">You meet every requirement for the next band.</div>}
             </div>
           )}
           {!readiness && (
-            <div className="pts-mut">Readiness measures demonstrated competency across the architecture domains. It fills in as you complete graded work.</div>
+            <div className="pts-mut">Readiness is the build track — you earn AI Builder → AI Architect by shipping evidence in the program. It fills in as you complete graded build work.</div>
           )}
         </div>
       </div>
