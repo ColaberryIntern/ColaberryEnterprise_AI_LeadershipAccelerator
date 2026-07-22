@@ -11128,3 +11128,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali — "There is no teaching. I think it's best if you just create an outline of the class because I don't know what playbook you are following." The outline makes the fixed run-of-show visible and surfaces the deep teaching content as a lesson plan. [[project_live_sessions_buildout]]
   - Verification: pure-module `tsc` 0 errors; CI (PR #691); generated outlines for Orientation + Week 1 (Arch/Build) render the full segment-by-segment teaching plan. Deploy = backend (endpoint) + nginx (button).
   - Notes: PR #691, branch `workstream/class-kit-outline`. The outline is auto-generated from the deck spec, so it stays in sync and covers all 12 weeks for free.
+
+### Fix mgmt-portal bridge landing — stalled all non-Support staff (2026-07-22)
+- [x] Student→admin bridge bounced authenticated staff to a login prompt
+  - Date: 2026-07-22
+  - Session: CC-20260722-r7k4
+  - What changed: `frontend/src/pages/portal/PortalMgmtEnterPage.tsx` — the "Management Portal" bridge now lands non-Support roles on `/admin/dashboard` (was `/admin`). The `/admin` index route is an unconditional `<Navigate to="/admin/login" replace />`, so a freshly-bridged, already-authenticated staff session was redirected straight to a login prompt. Hit owner/admin/curriculum/revenue/admissions (everyone except Support, who land on `/admin/students`).
+  - Verification: server-side repro on prod proved the bridge itself is correct — `/api/portal/mgmt/status` 200, `/api/portal/mgmt/enter` 200 (mints valid scoped admin token), `/api/admin/me` 200 with correct sections. Defect was purely the client landing route. Frontend typecheck (CI) authoritative; string-literal route change.
+  - Notes: branch `hotfix/mgmt-bridge-landing`. Instant workaround before deploy: the admin token is already stored by the bridge, so a stalled user can just visit `/admin/dashboard` directly (no re-login). [[project_mgmt_role_bridge_architecture]]
