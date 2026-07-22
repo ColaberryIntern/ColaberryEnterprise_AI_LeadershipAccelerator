@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Staff go through the same timeline locks as students (revert staff gating bypass) — 2026-07-22
+- [x] Staff are now subject to the same timeline prerequisite locks as every other student
+  - Date: 2026-07-22
+  - Session: CC-20260722-w9r4
+  - What changed: Removed the two `isStaffEnrollment` early-return bypass sites added 2026-07-21 (commit 74f70504). (1) `backend/src/services/timeline/timelineService.ts` `getFeed` no longer short-circuits the lock overlay to `'available'` for staff — every not-yet-engaged card now runs `evaluateCardLock` exactly like a student's, so staff see the real `locked`/`available`/`lock_reason`. (2) `backend/src/services/timeline/timelineGatingService.ts` `assertCardUnlocked` no longer returns early for staff, so a staff open/complete of a still-locked card is 423-gated like anyone else. Dropped the now-unused `isStaffEnrollment` import from both files. `services/access/staffAccess.ts` (`isStaffEnrollment`) is UNCHANGED and still consumed by `contentEntitlement.ts`, `requireBuildEntitlement.ts`, and `peoplePanelService.ts` — staff keep free content entitlement (no paywall) and the staff label; only the timeline-lock bypass is gone. The pure `evaluateCardLock` evaluator was not touched.
+  - Why: Ali — "I want the same locking rules to apply to staff because they are going through the training too and I want them to have the same experience as everyone else." Reverses the 2026-07-21 "staff unrestricted curriculum access" decision at the gating layer only.
+  - Verification: jest green — `timelineGatingService.test.ts` + `staffAccess.test.ts` + `contentEntitlement.test.ts` (3 suites, 32 tests passed); backend `tsc --noEmit` (TS 5.7.3) clean on both changed files (the sole remaining backend error is the known pre-existing `@anthropic-ai/sdk`-missing local drift, unrelated).
+  - Notes: Branch `workstream/staff-same-locks` off origin/main. Deploy = backend + nginx. Separate known gap (not this change): per-card evaluation/survey locks are DATA-driven in `timeline_cards.unlock_rules` and only written by the manual `setReflectGating.ts` (nothing runs it on boot/cron) — if a curriculum re-seed reset `unlock_rules` to `[]`, students AND staff will still see no eval/survey locks until that script is re-run.
+
 ### Role-aware People panel + ali+business promoted to admin (2026-07-21)
 - [x] **Right-rail People panel is now role-aware (flag-gated): staff see everyone online across all cohorts + all classes/businesses; students see their class first + top-10 recently-online outside it. Also promoted ali+business@colaberry.com to staff+owner (admin).**
   - Date: 2026-07-21
