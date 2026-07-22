@@ -127,6 +127,17 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
       'Checks if email digest is enabled. Compiles and sends daily/weekly digest emails at the configured hour and day to admin recipients.',
   },
   {
+    agent_name: 'AiNewsRefresh',
+    agent_type: 'scheduled_processor',
+    module: 'schedulerService',
+    source_file: 'backend/src/services/intel/aiNewsIngestionService.ts',
+    trigger_type: 'cron',
+    schedule: '15 3 * * *',
+    category: 'accelerator',
+    description:
+      'AI News Flash intelligence pipeline. Daily 03:15 CT: fetches free AI-lab RSS feeds, dedup-upserts the library, materializes up to AI_NEWS_MAX_PER_RUN news cards (cost-gated by AI_NEWS_INGEST_ENABLED), then prunes generated cards older than 30 days. A boot catch-up recovers a run missed by a redeploy. Registering it here gives the cron run-history + failure tracking via instrumentCronJob.',
+  },
+  {
     agent_name: 'SessionReminders',
     agent_type: 'reminder',
     module: 'schedulerService',
