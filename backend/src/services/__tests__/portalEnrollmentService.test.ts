@@ -14,8 +14,12 @@ const NOW = new Date(Date.UTC(2026, 6, 15, 12)); // July 15 2026
 const JULY = { id: 'c-july', name: 'Cohort - July 2026', start_date: '2026-07-23', core_day: 'Thursday', core_time: '1:00–3:00 PM EST', max_seats: 30, seats_taken: 12, status: 'open' };
 const NOV = { id: 'c-nov', name: 'Cohort - November 2026', start_date: '2026-11-05', core_day: 'Thursday', core_time: '1:00–3:00 PM EST', max_seats: 30, seats_taken: 0, status: 'open' };
 const EXPLORER = { id: 'c-explorer', name: 'Explorer — Prospects', start_date: '2026-01-01', core_day: 'Self-paced', core_time: 'Anytime', max_seats: 100000, seats_taken: 5, status: 'open' };
+// A private business/owner workspace. Named like a real class (no demo/explorer
+// keyword) but cohort_type='business' — must be invisible to students. Marked
+// 'open' on purpose to prove the guard is cohort_type-based, not status-based.
+const BUSINESS = { id: 'c-biz', name: 'Ali — Business', start_date: '2026-07-20', core_day: 'Private', core_time: 'N/A', max_seats: 5, seats_taken: 1, status: 'open', cohort_type: 'business' };
 
-const cohortsById: Record<string, any> = { 'c-july': JULY, 'c-nov': NOV, 'c-explorer': EXPLORER };
+const cohortsById: Record<string, any> = { 'c-july': JULY, 'c-nov': NOV, 'c-explorer': EXPLORER, 'c-biz': BUSINESS };
 
 describe('portalEnrollmentService', () => {
   beforeEach(() => {
@@ -45,6 +49,17 @@ describe('portalEnrollmentService', () => {
       expect(v!.status).toBe('not_enrolled');
       expect(v!.enrolled_cohort).toBeNull();
       expect(v!.default_cohort_id).toBe('c-july');
+    });
+
+    it('a private business cohort is hidden from students (not selectable, not counted as enrolled)', async () => {
+      (Cohort.findAll as jest.Mock).mockResolvedValue([EXPLORER, JULY, NOV, BUSINESS]);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c-biz', payment_status: 'paid' });
+      const v = await getEnrollmentView('e1', NOW);
+      // never appears in the selectable list…
+      expect(v!.cohorts.map((c) => c.id)).not.toContain('c-biz');
+      expect(v!.cohorts.map((c) => c.id)).toEqual(['c-july', 'c-nov']);
+      // …and sitting in a business cohort does not read as an enrolled class.
+      expect(v!.enrolled_cohort).toBeNull();
     });
 
     it('a student with a real cohort is enrolled (unpaid)', async () => {
