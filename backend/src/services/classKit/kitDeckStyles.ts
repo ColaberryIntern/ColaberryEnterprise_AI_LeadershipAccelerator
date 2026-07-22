@@ -173,10 +173,32 @@ body.rail-on #krail{display:flex}
 .kq-empty{font-size:12.5px;color:var(--subtle);padding:10px 0}
 
 /* ---------- overlays / toggles ---------- */
-.ktoggles{position:fixed;top:12px;right:16px;z-index:60;display:flex;gap:8px}
-.ktoggle{background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:7px 12px;font-size:12px;font-weight:700;color:var(--ink-2);cursor:pointer;box-shadow:0 4px 12px rgba(26,32,44,.08)}
-.ktoggle:hover{border-color:var(--cherry);color:var(--cherry-deep)}
-.ktoggle.on{background:var(--cherry);color:#fff;border-color:var(--cherry)}
+/* Control cluster — sits over the STAGE (left of the rail), never overlapping it,
+   and fades out when the mouse is idle so it stays out of the video. */
+.ktoggles{position:fixed;top:10px;right:16px;z-index:60;display:flex;gap:6px;
+  background:rgba(255,255,255,.72);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;padding:5px;
+  box-shadow:0 6px 20px rgba(26,32,44,.10);transition:opacity .4s ease}
+body.rail-on .ktoggles{right:calc(var(--rail-w) + 14px)}
+body.idle .ktoggles{opacity:0;pointer-events:none}
+.ktoggle{background:transparent;border:0;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer}
+.ktoggle:hover{background:var(--bg-soft);color:var(--cherry-deep)}
+.ktoggle.on{background:var(--cherry);color:#fff}
+
+/* Focus / Video mode — hide ALL chrome for a clean recording (presentation scene). */
+body.focus .ktoggles,body.focus #krail,body.focus #kpace,body.focus #kcounter,body.focus #khint,body.focus #knotes{display:none !important}
+body.focus .kstage{inset:0 !important}
+#kfocus-exit{position:fixed;top:12px;right:16px;z-index:61;display:none;background:rgba(17,26,36,.8);color:#fff;border:0;border-radius:999px;padding:8px 16px;font-weight:700;font-size:12px;cursor:pointer;opacity:.5;transition:opacity .3s}
+#kfocus-exit:hover{opacity:1}
+body.focus #kfocus-exit{display:block}
+body.focus.idle #kfocus-exit{opacity:0}
+
+/* Mermaid diagrams + diagram slide */
+.kdiagram{margin-top:2.4vh;display:flex;flex-direction:column;align-items:center}
+pre.mermaid{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:2vh 2vw;margin:0 auto;max-width:100%;overflow:auto;box-shadow:var(--shadow);
+  font-family:"Cascadia Mono",Consolas,monospace;font-size:12px;color:#94a3b8;line-height:1.4}
+pre.mermaid svg{max-width:100%;height:auto}
+pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transparent}
+.kdiagram-cap{margin-top:1.4vh;font-size:clamp(12px,.9vw,15px);color:var(--muted);font-weight:600;text-align:center;max-width:64ch}
 
 #kqr-overlay{position:fixed;inset:0;z-index:80;background:rgba(15,20,25,.92);display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:20px}
 #kqr-overlay.show{display:flex}

@@ -50,6 +50,7 @@ export function deckScript(): string {
     renderNotes();
     updatePace();
     broadcastCurrent();
+    if (window.__renderMermaid) window.__renderMermaid(slides[i]);
     slides[i].scrollTop = 0;
   }
   function next(){ show(i + 1); }
@@ -226,16 +227,20 @@ export function deckScript(): string {
     var el = slides[i];
     var tip = el.getAttribute('data-tip') || '';
     var pub = el.getAttribute('data-pub') || '';
+    var seg = segOfSlide(i);
     var nxt = (i + 1 < slides.length) ? (slides[i+1].getAttribute('data-slidetitle') || '') : 'End of class';
     elNotes.innerHTML =
-      '<span class="lbl">Presenter</span> ' + esc(tip) +
-      (pub ? '<br><span class="lbl pub">Content value</span> <span class="pub">' + esc(pub) + '</span>' : '') +
+      '<span class="lbl">' + esc(seg.label) + ' · planned ' + Math.round(seg.start) + '–' + Math.round(seg.end) + ' min</span> ' +
+      '<br><span class="lbl">Teach</span> ' + esc(tip) +
+      (pub ? '<br><span class="lbl pub">On camera</span> <span class="pub">' + esc(pub) + '</span>' : '') +
       '<br><span class="lbl nxt">Next</span> <span class="nxt">' + esc(nxt) + '</span>';
   }
 
   // ---- toggles / overlays ----
   function toggleCompact(){ document.body.classList.toggle('compact'); syncToggle('t-compact', document.body.classList.contains('compact')); }
   function toggleRail(){ document.body.classList.toggle('rail-on'); syncToggle('t-rail', document.body.classList.contains('rail-on')); }
+  // Focus / Video mode — hide all chrome for a clean recording.
+  function toggleFocus(){ document.body.classList.toggle('focus'); syncToggle('t-focus', document.body.classList.contains('focus')); }
   function toggleNotes(){ notesOn = !notesOn; elNotes.classList.toggle('show', notesOn); syncToggle('t-notes', notesOn); renderNotes(); }
   function toggleQR(){ document.getElementById('kqr-overlay').classList.toggle('show'); }
   function syncToggle(id, on){ var b = document.getElementById(id); if (b) b.classList.toggle('on', on); }
@@ -259,8 +264,14 @@ export function deckScript(): string {
   // wire toggle buttons
   bind('t-compact', toggleCompact); bind('t-rail', toggleRail); bind('t-notes', toggleNotes);
   bind('t-qr', toggleQR); bind('t-mark', markMoment); bind('t-download', downloadMoments);
+  bind('t-focus', toggleFocus); bind('kfocus-exit', toggleFocus);
   bind('t-print', function(){ window.print(); });
   function bind(id, fn){ var b = document.getElementById(id); if (b) b.addEventListener('click', function(e){ e.stopPropagation(); fn(); }); }
+
+  // Idle-hide: chrome fades when the mouse is still (keeps it out of the video).
+  var idleT;
+  function wake(){ document.body.classList.remove('idle'); clearTimeout(idleT); idleT = setTimeout(function(){ document.body.classList.add('idle'); }, 3500); }
+  document.addEventListener('mousemove', wake); document.addEventListener('keydown', wake); wake();
   document.getElementById('kqr-overlay').addEventListener('click', function(){ this.classList.remove('show'); });
 
   // ---- keys ----
@@ -274,6 +285,7 @@ export function deckScript(): string {
     else if (e.key === 'c' || e.key === 'C') toggleCompact();
     else if (e.key === 'q' || e.key === 'Q') toggleQR();
     else if (e.key === 'm' || e.key === 'M') markMoment();
+    else if (e.key === 'v' || e.key === 'V') toggleFocus();
     else if (e.key === 'd' || e.key === 'D') downloadMoments();
     else if (e.key === 'p' || e.key === 'P') window.print();
     else if (e.key === 's' || e.key === 'S') elStart.click();
