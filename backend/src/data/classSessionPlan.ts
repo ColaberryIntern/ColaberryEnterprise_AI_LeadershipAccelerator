@@ -1019,3 +1019,105 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
 export function weekClassContent(week: number): WeekClassContent | undefined {
   return WEEK_CLASS_CONTENT.find((w) => w.week === week);
 }
+
+/**
+ * Mermaid architecture diagrams — one per week, shown on the Architecture Day
+ * "architecture story" slide. Concise flowcharts of that week's system so the
+ * instructor can teach the shape at a glance (and the student sees the picture).
+ * Rendered client-side by mermaid; the raw source stays visible if the CDN is
+ * unreachable.
+ */
+export const ARCHITECTURE_DIAGRAMS: Record<number, string> = {
+  1: `flowchart LR
+  U["You: a task"] --> CC["Claude Code"]
+  subgraph LOOP["The agentic loop"]
+    CTX["Context window"]
+    T["Tools: read / edit / run"]
+    P["Permissions"]
+  end
+  CC --> LOOP
+  LOOP --> W["explore → plan → code → commit"]
+  W --> R[("Your repo")]
+  MD["CLAUDE.md — persistent standards"] -.-> CC`,
+  2: `flowchart TD
+  T["A task you repeat"] --> S["Agent Skill"]
+  S --> D["Description = the trigger"]
+  S --> B["Instruction body"]
+  S --> F["Extra files + scoped tools"]
+  D --> Q{"Claude matches the ask?"}
+  Q -->|"sharp"| Y["Fires every time"]
+  Q -->|"vague"| N["Never triggers"]`,
+  3: `flowchart LR
+  In["Business input"] --> API["Claude API"]
+  API --> SYS["System prompt + streaming"]
+  API --> TOOL["Tool use"]
+  TOOL --> EXT["Real systems / data"]
+  API --> OUT["Structured JSON output"]
+  OUT --> APP["Workflow Assistant"]
+  EVAL["Eval: dataset + grader"] -.measures.-> API`,
+  4: `flowchart TD
+  A["Ad-hoc prompt"] --> L["Technique ladder<br/>clear → specific → structured → examples"]
+  L --> TPL["Versioned template + variables"]
+  TPL --> G{"Passes eval?"}
+  G -->|yes| LIB["Prompt Library<br/>versioned · tested · documented"]
+  G -->|no| L
+  LIB --> TEAM["The whole team reuses"]`,
+  5: `flowchart LR
+  Client["MCP client (Claude)"] <--> Server["Your MCP server"]
+  Server --> Tools["Tools = actions"]
+  Server --> Res["Resources = context"]
+  Server --> Prompts["Prompts = templates"]
+  Insp["MCP inspector"] -.tests.-> Server`,
+  6: `flowchart LR
+  Client["Client"] <--> Server["Production-shaped MCP server"]
+  Server --> Samp["Sampling"]
+  Server --> Notif["Progress + log notifications"]
+  Server --> Roots["Roots = file-access limits"]
+  Server --> Trans["Transport: STDIO ↔ StreamableHTTP"]
+  Server --> Sys[("Real business system")]`,
+  7: `flowchart TD
+  Lead["Coordinator"] --> Ex["Explorer (read-only)"]
+  Lead --> Rev["Reviewer"]
+  Lead --> Ed["Editor"]
+  Ex --> Sum["Structured summaries"]
+  Rev --> Sum
+  Ed --> Sum
+  Sum --> Lead`,
+  8: `flowchart LR
+  Dev["Dev workflow"] --> Cmd["Custom commands"]
+  Dev --> Hook["Hooks = guardrails"]
+  Dev --> HL["Headless / SDK"]
+  HL --> V{"Verification passes?"}
+  V -->|yes| Ship["Auto-ship"]
+  V -->|no| Stop["Blocked"]
+  GH["GitHub Actions"] --> Rev["Automated code review"]`,
+  9: `flowchart LR
+  Call["External call"] --> TO["Timeout"]
+  TO --> Retry["Capped retry + backoff"]
+  Retry --> CB{"Circuit breaker"}
+  CB -->|open| FB["Fallback / dead-letter"]
+  CB -->|closed| OK["Success"]
+  Idem["Idempotency key"] -.safe replay.-> Call
+  Gate["Quality gate = eval"] --> Out["Trusted output"]`,
+  10: `flowchart TD
+  Act["Agent wants to act"] --> ABAC{"ABAC policy<br/>user·resource·action·context·risk"}
+  ABAC -->|allow| Do["Execute"]
+  ABAC -->|high risk| HITL["Human approval"]
+  ABAC -->|deny| Block["Fail-closed"]
+  HITL -->|approved| Do
+  Do --> Audit[("Audit trail = correlation id")]`,
+  11: `flowchart TD
+  L7["7 · Orchestration"] --> L6["6 · Observability"]
+  L6 --> L5["5 · Governance"]
+  L5 --> L4["4 · Intelligence"]
+  L4 --> L3["3 · Semantic"]
+  L3 --> L2["2 · Data Fabric"]
+  L2 --> L1[("1 · Storage")]`,
+  12: `flowchart LR
+  I1["Foundation"] --> Cap["Capstone system"]
+  I2["AI team"] --> Cap
+  I3["Integration + reliability"] --> Cap
+  I4["Governance + architecture"] --> Cap
+  Cap --> Expo["Architect Expo — demo + defense"]
+  Cap --> Cert["CCA-F exam"]`,
+};

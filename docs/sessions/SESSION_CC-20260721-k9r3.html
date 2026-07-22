@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, July 22, 2026 at 1:01 AM</div>
-    <div><span class="sid">CC-20260721-k9r3</span><span class="count">3 changes</span></div>
+    <div class="meta">Generated Wednesday, July 22, 2026 at 2:20 AM</div>
+    <div><span class="sid">CC-20260721-k9r3</span><span class="count">4 changes</span></div>
   </header>
   <main>
     
@@ -102,6 +102,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` 0 errors in src/; CI (PR #674); independent checker review; PROD deploy + end-to-end sync verify in this session.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">PR #674, branch `workstream/class-kit-sync`. Deploy = backend (new tables/routes) + nginx (deck + phone). Broadcast auth = kit token (deck) so students can&#39;t forge it; poll answers are participant-auth. The route-auth lint only scans `routes/admin/`; the sync routes are in `participantRoutes` with kit-token-or-admin / requireParticipant guards.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>The teaching deck is now real teaching material: per-week mermaid architecture diagrams, a Focus/Video mode, non-overlapping auto-hiding chrome, emoji headers, and a teaching-script notes view</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">From Ali&#39;s feedback (the deck must let him learn/review/practice a 2-hr class, be far more visual, and not wreck the video). **Mermaid diagrams**: `ARCHITECTURE_DIAGRAMS` (12 authored flowcharts, one per week) render on the Architecture Day &quot;architecture story&quot; slide + a generated checkpoint-flow (`buildCheckpointDiagram`) on the Build Day build-map slide. Rendered client-side via a mermaid CDN module, per slide on activation (`window.__renderMermaid` called from `show()` so hidden slides size correctly); raw source + caption remain if the CDN is unreachable. `securityLevel: &#39;loose&#39;` is safe — diagram source is authored constants only, never user input. **Clean chrome**: the control cluster (`.ktoggles`) shifts left of the pulse rail when the rail is on (was overlapping), gets a glass style, and **fades out on mouse-idle** (body.idle) so it stays out of the recording. **Focus/Video mode** (V or 🎥 Focus button, `body.focus`): hides ALL chrome (toggles, rail, pace bar, notes) for a clean full-bleed scene + an unobtrusive Exit control. **Teaching depth**: emoji headers on every key slide; presenter notes expanded into a teaching-script view (segment + planned minutes + what to teach + on-camera value + next).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">pure-module `tsc --noEmit` 0 errors; CI (PR #685); rendered samples served on localhost — mermaid renders, Focus mode + idle-hide work, diagrams on Architecture + Build slides. Backend-only (deck is server-rendered) → backend deploy + prod verify in this session.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #685, branch `workstream/class-kit-visuals`. Backend-only deploy (`up -d --build backend`). Mermaid loads from jsdelivr CDN — the app has no CSP and the deck opens same-origin via the ▶ Present path, so the module import resolves; a file:// open shows raw diagram source (fallback). Deeper per-slide scripting for all 24 sessions can continue iteratively.</span></div>
           
         </div>
       </article>

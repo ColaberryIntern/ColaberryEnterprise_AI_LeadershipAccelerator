@@ -48,6 +48,17 @@ function architectureHtml(bullets: string[] | undefined): string {
     `<div class="karch-item"><div class="kn">${i + 1}</div><p>${esc(b)}</p></div>`).join('') + '</div>';
 }
 
+/** Mermaid diagram block (rendered client-side; raw source shows if the CDN fails). */
+function diagramHtml(slide: KitSlide): string {
+  if (!slide.diagram) return '';
+  return (
+    '<div class="kdiagram">' +
+    `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
+    (slide.diagramCaption ? `<div class="kdiagram-cap">${esc(slide.diagramCaption)}</div>` : '') +
+    '</div>'
+  );
+}
+
 function promptHtml(label: string, prompt: string): string {
   return (
     '<div class="kprompt">' +
@@ -142,7 +153,8 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
         `<h2 class="ktitle">${esc(slide.title)}</h2>` +
-        architectureHtml(slide.bullets)
+        architectureHtml(slide.bullets) +
+        diagramHtml(slide)
       );
     case 'prompt': {
       const head = (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') + `<h2 class="ktitle">${esc(slide.title)}</h2>`;
@@ -166,7 +178,8 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
         `<h2 class="ktitle">${esc(slide.title)}</h2>` +
-        bulletsHtml(slide.bullets)
+        bulletsHtml(slide.bullets) +
+        diagramHtml(slide)
       );
     case 'break':
     case 'cta':
@@ -257,14 +270,16 @@ export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): strin
 <div id="kprogress"></div>
 
 <div class="ktoggles">
+  <button class="ktoggle" id="t-focus" title="Focus / Video mode — hide all chrome for a clean recording (V)">🎥 Focus</button>
   <button class="ktoggle" id="t-rail" title="Toggle the live pulse rail">Pulse</button>
-  <button class="ktoggle" id="t-notes" title="Presenter notes (N)">Notes</button>
+  <button class="ktoggle" id="t-notes" title="Presenter notes / teaching script (N)">Notes</button>
   <button class="ktoggle" id="t-compact" title="Compact for side-by-side with Claude Code (C)">Compact</button>
   <button class="ktoggle" id="t-qr" title="Full-screen QR (Q)">QR</button>
   <button class="ktoggle" id="t-mark" title="Mark this moment (M)">Mark</button>
   <button class="ktoggle" id="t-download" title="Download clip list (D)">Clips</button>
   <button class="ktoggle" id="t-print" title="Print (P)">Print</button>
 </div>
+<button id="kfocus-exit" title="Exit Focus mode (V)">Exit focus ✕</button>
 
 <div class="kstage">
 ${slidesHtml}
@@ -307,6 +322,25 @@ ${slidesHtml}
 
 <script>window.__KIT__ = ${JSON.stringify(data).replace(/</g, '\\u003c')};</script>
 <script>${deckScript()}</script>
+<script type="module">
+  // Mermaid diagrams — rendered per slide on activation (correct sizing even for
+  // slides that were hidden at load). Fails soft: if the CDN is unreachable the
+  // raw diagram source + caption still shows.
+  try {
+    const mermaid = (await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs')).default;
+    mermaid.initialize({ startOnLoad: false, theme: 'neutral', securityLevel: 'loose',
+      flowchart: { useMaxWidth: true, curve: 'basis', htmlLabels: true },
+      themeVariables: { fontFamily: 'Segoe UI, Roboto, sans-serif', fontSize: '18px', primaryColor: '#faf7f5', primaryBorderColor: '#e5121d', lineColor: '#367895' } });
+    window.__renderMermaid = function (scope) {
+      try {
+        const nodes = (scope || document).querySelectorAll('pre.mermaid:not([data-processed="true"])');
+        if (nodes.length) mermaid.run({ nodes });
+      } catch (e) {}
+    };
+    const active = document.querySelector('.kslide.active');
+    if (active) window.__renderMermaid(active);
+  } catch (e) { /* offline / blocked — raw source remains visible */ }
+</script>
 </body>
 </html>`;
 }
