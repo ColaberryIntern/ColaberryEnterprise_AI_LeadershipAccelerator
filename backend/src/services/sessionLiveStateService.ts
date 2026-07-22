@@ -18,6 +18,21 @@ export function isValidPulseState(s: unknown): s is PulseState {
   return typeof s === 'string' && (VALID_STATES as string[]).includes(s);
 }
 
+/**
+ * Authorization guard: true only if the session belongs to the caller's cohort.
+ * Every participant write/read here must pass this so a student in one cohort
+ * cannot touch another class's live state (CLAUDE.md Security: validate the
+ * resource belongs to the caller).
+ */
+export async function sessionInCohort(sessionId: string, cohortId: string | null | undefined): Promise<boolean> {
+  if (!cohortId) return false;
+  const rows = await sequelize.query(
+    `SELECT 1 FROM live_sessions WHERE id = :sid AND cohort_id = :cid LIMIT 1`,
+    { replacements: { sid: sessionId, cid: cohortId }, type: QueryTypes.SELECT },
+  );
+  return rows.length > 0;
+}
+
 /** Upsert a student's live status for a session (one row per enrollment+session). */
 export async function recordPulse(sessionId: string, enrollmentId: string, state: PulseState): Promise<void> {
   await sequelize.query(
@@ -142,9 +157,10 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
   let poll: LiveState['poll'] = null;
   const bc = await getBroadcast(sessionId);
   if (bc && bc.phase === 'question' && bc.question) {
+    const opts = Array.isArray(bc.question.options) ? bc.question.options : [];
     const tally = await getPollTally(sessionId, bc.question.key);
-    const filled = bc.question.options.map((_, i) => tally[i] || 0);
-    poll = { key: bc.question.key, options: bc.question.options, tally: filled, total: filled.reduce((a, b) => a + b, 0) };
+    const filled = opts.map((_, i) => tally[i] || 0);
+    poll = { key: bc.question.key, options: opts, tally: filled, total: filled.reduce((a, b) => a + b, 0) };
   }
 
   return {

@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, July 22, 2026 at 12:14 AM</div>
-    <div><span class="sid">CC-20260721-k9r3</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Wednesday, July 22, 2026 at 1:01 AM</div>
+    <div><span class="sid">CC-20260721-k9r3</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -87,6 +87,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` 0 errors in src/; CI green (backend typecheck, backend unit tests, frontend typecheck, secret/route-auth lint) on PR #662. PROD deploy + verify in this session (backend for the new table/routes + nginx for the frontend).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">PR #662, branch `workstream/class-kit-live-pulse`. Deploy = backend (`up -d --build backend`) then nginx (`--no-deps`). The route-auth lint only scans `routes/admin/`; the live-state route is in `participantRoutes` with a kit-token-or-admin guard. The &quot;We couldn&#39;t check you in&quot; Ali saw was an instructor account hitting the *student* check-in on a non-enrolled session — expected; instructors use &quot;▶ Present&quot;, students scan the deck&#39;s QR.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>The student phone is slaved to the instructor&#39;s deck (auto-switches to the live question/broadcast as the deck advances); live participation stats + poll tallies; visual &quot;Prove It&quot; assignment briefs</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**(two-way sync)** New `session_broadcast` (one row/session = the deck&#39;s current view) + `session_poll_responses` (one answer/student/poll, upsert) tables (idempotent DDL). `sessionLiveStateService` gains `setBroadcast/getBroadcast`, `recordPollResponse/getPollTally`, `getCompanionState`, and `getLiveState` now also returns `present` (checked-in via attendance) + `participated` (distinct pulse/answer/ask) + the active poll&#39;s live tally. Routes: `POST /broadcast` + `GET /live-state` (kit-token-or-admin), `GET /companion-state` + `POST /poll-response` + `POST /pulse` (requireParticipant). **Deck** (`kitDeckScript`) `broadcastCurrent()` POSTs its current slide/segment/active-question on every advance + on Reveal (poll_key = deterministic slide id); the rail shows checked-in + participating counts and **live poll result bars** (correct highlighted on reveal). **Phone** (`ClassCheckinPage`) polls `companion-state` every 2.5s and **switches view to match the screen** — status controller ↔ live question (tappable options, my_choice, reveal) ↔ Builder Broadcast prompts. `sessionKitDocService` passes ABSOLUTE endpoint + broadcastEndpoint (the deck runs in an about:blank window) + a minted kit token. **(visual assignments)** New `AssignmentBrief` + `&#39;assignment&#39;` slide kind: an emoji &quot;Prove It&quot; brief (difficulty / ⏱ time / 🏆 XP chips, an emoji deliverable journey, a 📸 proof callout, competency tags) built from the week blueprint + the class assignment.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` 0 errors in src/; CI (PR #674); independent checker review; PROD deploy + end-to-end sync verify in this session.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #674, branch `workstream/class-kit-sync`. Deploy = backend (new tables/routes) + nginx (deck + phone). Broadcast auth = kit token (deck) so students can&#39;t forge it; poll answers are participant-auth. The route-auth lint only scans `routes/admin/`; the sync routes are in `participantRoutes` with kit-token-or-admin / requireParticipant guards.</span></div>
           
         </div>
       </article>

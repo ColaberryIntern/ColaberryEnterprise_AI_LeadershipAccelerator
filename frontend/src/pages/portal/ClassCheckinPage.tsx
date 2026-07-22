@@ -210,7 +210,7 @@ const ClassCheckinPage: React.FC = () => {
                     <p className="cbck-ctl-label">{kindLabel(companion.question.kind)}</p>
                     <p className="cbck-q-text">{companion.question.q}</p>
                     <div className="cbck-q-opts">
-                      {companion.question.options.map((opt, idx) => {
+                      {(companion.question.options || []).map((opt, idx) => {
                         const q = companion.question!;
                         const mine = q.my_choice === idx;
                         const correct = q.revealed && q.answer === idx;

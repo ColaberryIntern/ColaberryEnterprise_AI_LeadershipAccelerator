@@ -2,8 +2,12 @@
  * kitHtml.ts — renders a KitSpec (kitSpec.ts) into a single self-contained HTML
  * document: the interactive Class Kit teaching deck. No external assets — CSS
  * (kitDeckStyles) and JS (kitDeckScript) are inlined, and the QR is an inline
- * SVG — so the deck opens from a blob URL, a file, or a served endpoint and runs
- * offline. Only the optional live-pulse poll talks to the network.
+ * SVG — so the deck itself renders from a blob URL, a file, or a served endpoint
+ * and runs offline. The LIVE pulse/sync (opts.live) additionally fetches its
+ * absolute same-origin endpoints, so it only works when the deck is opened
+ * same-origin as the app (the admin "▶ Present" path uses window.open + document
+ * .write, which inherits the admin origin). A file:// or blob: open renders the
+ * deck fine but the live sync stays dark (cross-origin fetches fail silently).
  *
  * Each slide is a <section> tagged with its segment window + presenter note, so
  * the client's pace tracker and presenter panel work purely from the DOM. All
