@@ -20,6 +20,19 @@ import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseSer
 import Enrollment from '../models/Enrollment';
 import { getUpcomingPublicEvents } from '../services/publicEventsService';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
+import { getCheckinInfo } from '../services/sessionKitService';
+
+// PUBLIC (no auth): minimal, non-sensitive info for the pre-login check-in
+// landing page a student reaches by scanning the Class Kit QR. Shows which
+// class they are about to check in to; the meeting link is NOT returned here
+// (revealed only after login + check-in). 404 if the session does not exist.
+export async function handleGetCheckinInfo(req: Request, res: Response, next: NextFunction) {
+  try {
+    const info = await getCheckinInfo(req.params.id as string);
+    if (!info) return res.status(404).json({ error: 'Session not found' });
+    res.json(info);
+  } catch (err) { next(err); }
+}
 
 export async function handleIngestBackground(req: Request, res: Response, next: NextFunction) {
   try {

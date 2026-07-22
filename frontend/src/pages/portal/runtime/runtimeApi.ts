@@ -18,6 +18,17 @@ export interface RtCard {
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 
+// In-Workspace blog reader payload (blogReaderService). ok:false ⇒ show the external link.
+export interface BlogReaderContent {
+  ok: boolean;
+  title: string | null;
+  body_html: string | null;
+  excerpt: string | null;
+  author: string | null;
+  featured_image: string | null;
+  source_url: string | null;
+}
+
 export interface SkillScore { key: string; label: string; score: number }
 export interface Readiness {
   progression: { xp: { learning: number; builder: number; community: number }; competencies: Array<{ domain_id: string; confidence: number; evidence_count: number }>; level: { slug: string; rank: number; readiness: number } };
@@ -137,6 +148,10 @@ export const runtimeApi = {
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/read`, beat).then((r) => r.data as { read_s: number; required_s: number; met: boolean }),
   blogCollect: (blogId: string) =>
     portalApi.post(`/api/portal/runtime/today/blog/${blogId}/collect`, {}).then((r) => r.data as { points_awarded: number; already: boolean }),
+  // In-Workspace reader: the post's article fetched + sanitized server-side so it can be
+  // framed (the training site sends X-Frame-Options: DENY). ok:false ⇒ fall back to link.
+  blogReader: (blogId: string) =>
+    portalApi.get(`/api/portal/runtime/today/blog/${blogId}/reader`).then((r) => r.data as BlogReaderContent),
   // Generic dwell gate (passive-content types): heartbeat while the card is open.
   cardDwell: (cardId: string, beat: { delta_s: number }) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/dwell`, beat).then((r) => r.data as { dwell_s: number; required_s: number; met: boolean }),

@@ -8,6 +8,7 @@ import {
 } from '../services/acceleratorService';
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
+import { buildSessionKit } from '../services/sessionKitService';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -60,6 +61,17 @@ export async function handleGenerateMeetLink(req: Request, res: Response, next: 
     const link = await generateMeetLink(session);
     if (!link) return res.status(500).json({ error: 'Failed to generate Meet link' });
     res.json({ meeting_link: link });
+  } catch (err) { next(err); }
+}
+
+// Class Kit: instructor-facing bundle for one session — session facts, meeting
+// link, cohort name, roster count, and a student check-in QR (SVG) that encodes
+// the absolute public check-in URL. 404 if the session does not exist.
+export async function handleGetSessionKit(req: Request, res: Response, next: NextFunction) {
+  try {
+    const kit = await buildSessionKit(req.params.id as string);
+    if (!kit) return res.status(404).json({ error: 'Session not found' });
+    res.json(kit);
   } catch (err) { next(err); }
 }
 
