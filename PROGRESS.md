@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Role-aware People panel + ali+business promoted to admin (2026-07-21)
+- [x] **Right-rail People panel is now role-aware (flag-gated): staff see everyone online across all cohorts + all classes/businesses; students see their class first + top-10 recently-online outside it. Also promoted ali+business@colaberry.com to staff+owner (admin).**
+  - Date: 2026-07-21
+  - Session: CC-20260721-g8k4
+  - What changed: New `backend/src/services/peoplePanelService.ts` (`getPeoplePanel` → staff: online[cross-cohort via derivePresence] + classes[one grouped COUNT] + businesses[Sponsor/SponsorSeat, best-effort]; student: my_class[cohort-scoped] + active_now[top-10 outside cohort by last_active_at]). New `GET /api/portal/people/panel` in participantRoutes (requireParticipant) — flag OFF → `{enabled:false}` before importing the service; flag ON → the role-aware payload. Flag `PEOPLE_PANEL_ROLES_ENABLED` in env.ts + .env.example (default OFF). Frontend: new `peoplePanelApi.ts` (returns null on disabled/error → legacy fallback) + new `PeoplePanelRail.tsx` (reuses te-ct* styles; person rows open DM) + `PortalShell.tsx` branches the te-contacts aside (panel ? role-rail : legacy cohort rail). Role = `isStaffEnrollment OR mgmt_role!=null` (fail-safe to student). Presence = `community_members.last_active_at → derivePresence` (online ≤90s / idle ≤10min). Tests: `peoplePanelService.test.ts`. Separately: prod DB update promoting ali+business (enrollment 750b8448) community_members row student→staff, mgmt_role null→owner (super_admin via mgmt bridge).
+  - Why: Ali's request — admins/staff should see everyone logged in + all classes; students see their class first then top-10 active people; and make ali+business an admin. Ordering per Ali: staff = online first then classes/businesses; student = class first then active-now.
+  - Verification: Loop Architect maker → SEPARATE verifier 10/10 PASS (flag OFF byte-identical rendered DOM; no student cross-cohort leak beyond the intended top-10; role fail-safe to student; real fields/models cross-checked; no N+1 — one grouped COUNT; businesses try/catch degrades to []; eslint-clean under react-jsx runtime; tests assert all branches). Promotion verified via before/after DB read. CI pending on push.
+  - Notes: Non-blocking nit (verifier): `buildBusinesses` counts a seat redeemed whenever `assigned_enrollment_id` is non-null (reassigned/expired over-counted in the staff-only seat total) — cosmetic, add `status='redeemed'` later. Branch `workstream/people-panel-roles`. Next: deploy (backend+nginx) + enable `PEOPLE_PANEL_ROLES_ENABLED` on prod.
+
 ### Points Economy — paid gate broadened to accelerator cohort (2026-07-21)
 - [x] **Broadened `isBuildEntitled` so cohort_type='accelerator' is build-entitled (billing may be 'pending'); real accelerator students build, only free Explorers are gated. Prompted by a prod safety check before flipping the paid gate.**
   - Date: 2026-07-21
@@ -10900,3 +10909,11 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali — "I need the Mgmt portal to open up in a different tab when you click on it."
   - Verification: frontend `tsc --noEmit` clean on PortalShell.
   - Notes: Branch `workstream/mgmt-portal-newtab` off main. Deploy = nginx (frontend-only).
+### Points dashboard — Readiness card (#3) speaks the band language — 2026-07-21
+- [x] Reframed the Architect Readiness card around the AI Builder → AI Architect bands with clear requirements (no raw slugs)
+  - Date: 2026-07-21
+  - Session: CC-20260720-x9r4
+  - What changed: The Readiness lens showed confusing internal ladder slugs — "Level Builder / Next: Junior Builder / Evidence 0 < 3" — where rank-0 "builder" is actually the entry DEFAULT (not a promotion) and "junior_builder" is really AI Builder I. Now: (1) the card is framed around the band you're working toward — **"On the path to AI Builder I"** (mapping the promotion ranks → build bands, mirroring backend `bandLadder`: junior_builder→AI Builder I … architect_candidate→AI Architect), with copy clarifying it's the **build track — earned by shipping evidence, not points**; (2) requirements read **"Evidence — 0 of 3"** instead of "Evidence: 0 < 3"; (3) the gap header is **"What unlocks AI Builder I"**. The confusing "Level Builder" (the entry slug) is gone.
+  - Why: Ali on the live points page — "I don't understand the chart for #3. Fix this to match what we are actually doing … that table under it is really confusing." The data was correct; the labels were raw internal slugs. [[project_today_timeline_v2]]
+  - Verification: Frontend `tsc` clean (0 errors, ignoring 3 @dnd-kit). Frontend-only relabel — reuses the merged band ladder's rank→band mapping; no backend/economy change.
+  - Notes: Branch `workstream/readiness-card-clarity`. Frontend-only → nginx `--no-deps`. The Classroom "Your status" card shows the same "Level Builder" slug — left for the Classroom→timeline rework (Ali's separate #2 request).
