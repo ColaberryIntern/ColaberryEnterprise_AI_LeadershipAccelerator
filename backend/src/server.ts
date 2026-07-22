@@ -2175,10 +2175,11 @@ async function start(): Promise<void> {
   import('./services/blog/blogIngestionService')
     .then(({ refreshBlogPostsIfEmpty }) => refreshBlogPostsIfEmpty())
     .catch((err: any) => console.warn('[DB] Blog boot refresh skipped:', err?.message?.split('\n')[0]));
-  // AI News Flash pipeline: populate the library on a fresh env (non-blocking).
-  // Card materialization is cost-gated by AI_NEWS_INGEST_ENABLED (see the service).
+  // AI News Flash pipeline: populate a fresh env, then catch up a missed daily
+  // run so a redeploy through the 03:15 cron window doesn't drop a day's card
+  // (non-blocking). Materialization is cost-gated by AI_NEWS_INGEST_ENABLED.
   import('./services/intel/aiNewsIngestionService')
-    .then(({ refreshAiNewsIfEmpty }) => refreshAiNewsIfEmpty())
+    .then(({ refreshAiNewsOnBoot }) => refreshAiNewsOnBoot())
     .catch((err: any) => console.warn('[DB] AI News boot ingest skipped:', err?.message?.split('\n')[0]));
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
