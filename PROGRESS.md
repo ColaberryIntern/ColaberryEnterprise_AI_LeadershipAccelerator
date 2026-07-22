@@ -10909,3 +10909,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali on the live points page — "I don't understand the chart for #3. Fix this to match what we are actually doing … that table under it is really confusing." The data was correct; the labels were raw internal slugs. [[project_today_timeline_v2]]
   - Verification: Frontend `tsc` clean (0 errors, ignoring 3 @dnd-kit). Frontend-only relabel — reuses the merged band ladder's rank→band mapping; no backend/economy change.
   - Notes: Branch `workstream/readiness-card-clarity`. Frontend-only → nginx `--no-deps`. The Classroom "Your status" card shows the same "Level Builder" slug — left for the Classroom→timeline rework (Ali's separate #2 request).
+
+### Classroom — Free Preview (Week 0) is the never-ending Today feed — 2026-07-21
+- [x] Classroom Week 0 renders the same never-ending timeline engine as the Today tab
+  - Date: 2026-07-21
+  - Session: CC-20260720-x9r4
+  - What changed: The Classroom was a finite, week-scoped card feed (`TimelineFeed` over `feed.cards.filter(week)`). Now **Week 0 (Free Preview)** renders `<TodayFeedV2>` — the exact never-ending engine (`GET /api/portal/runtime/today`, cursor-paginated, ambient-blended) the Today tab uses. Paid weeks keep the finite searchable week feed. Supporting changes: (1) `completeCard` is now **blog-aware** (ambient blogs from the feed collect via `runtimeApi.blogCollect`, not the card endpoint) and emits `emitCardCollected` so a collected card drops off the infinite feed; (2) the drawer now stores the **selected card object** instead of an id→`feed.cards` lookup, so ambient cards (blogs/podcasts, not in `feed.cards`) open correctly.
+  - Why: Ali — "Free Preview (wk0) of the Classroom section should be the same timeline as Today. The never ending timeline." Chose the interim: "Use the same engine as the timeline. Just for Wk 0." [[project_today_timeline_v2]] [[project_student_project_backend]]
+  - Verification: Frontend `tsc` clean (0 errors, ignoring 3 @dnd-kit). Reuses TodayFeedV2 as-is; falls back to the finite wk0 cards if the Today endpoint 404s (flag off).
+  - Notes: Branch `workstream/classroom-wk0-today-feed`. Frontend-only → nginx `--no-deps`. Interim scope (Ali's call): Week 0 only; the full per-section never-ending feed with section-scoped engine + paid/staff section arrows is the deferred larger build. A paid user who navigates to Week 0 sees their full Today feed (not wk0-scoped) — acceptable for the free-preview-focused interim.
