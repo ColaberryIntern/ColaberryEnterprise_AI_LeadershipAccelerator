@@ -573,6 +573,10 @@ async function ensureOrgSchema() {
     `CREATE UNIQUE INDEX IF NOT EXISTS org_members_org_email_unique ON org_members (org_id, email)`,
     `CREATE INDEX IF NOT EXISTS idx_org_members_org_id ON org_members (org_id)`,
     `CREATE INDEX IF NOT EXISTS idx_org_members_enrollment_id ON org_members (enrollment_id)`,
+    // Opt-in auto-roster: when true, anyone assigned the community 'staff' role is
+    // automatically added to this org's roster (and removed on demotion). See
+    // communityService.setMemberRole → syncStaffToAutoOrgs.
+    `ALTER TABLE organizations ADD COLUMN IF NOT EXISTS auto_staff_sync BOOLEAN NOT NULL DEFAULT false`,
   ];
   for (const sql of statements) {
     try {
