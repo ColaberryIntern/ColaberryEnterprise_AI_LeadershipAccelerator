@@ -503,7 +503,11 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {done
           ? <span className="pip done" style={{ fontSize: 14 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts earned</span>
           : preview
-            ? <span className="tld-note" style={{ padding: '8px 12px' }}>For students, this footer has <b>Close</b> and <b>Enter workspace →</b> (the full activity + AI Mentor).</span>
+            ? (onEnterWorkspace
+                // Admin "Student view": show the SAME "Enter workspace →" CTA the
+                // student gets, in the same footer spot, wired to open the workspace.
+                ? <button type="button" className="tl-btn primary" onClick={onEnterWorkspace}>Enter workspace →</button>
+                : <span className="tld-note" style={{ padding: '8px 12px' }}>For students, this footer has <b>Close</b> and <b>Enter workspace →</b> (the full activity + AI Mentor).</span>)
             : (
               <>
                 {gateMsg && <span className="tld-gatemsg">{gateMsg}</span>}

@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Tuesday, July 21, 2026 at 5:52 PM</div>
-    <div><span class="sid">CC-20260721-t8k4</span><span class="count">3 changes</span></div>
+    <div class="meta">Generated Tuesday, July 21, 2026 at 7:47 PM</div>
+    <div><span class="sid">CC-20260721-t8k4</span><span class="count">4 changes</span></div>
   </header>
   <main>
     
@@ -102,6 +102,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` 0 errors; backend `tsc --noEmit` 0 errors in the changed/new files (junctioned root node_modules; the ~267 residual lines are the known pre-existing TS-4.9.5/zod-v4 `.d.cts` noise, none in my files); jest `workspacePreviewUrl.test.ts` 4/4 pass (URL contract: token-in-hash, encoded next, trailing-slash strip, prod fallback, next round-trips to a valid internal `/portal/` path).</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/student-view-toggle` (continued). Read-only was Ali&#39;s explicit choice over a writable test-student run — so the gated controls RENDER but don&#39;t advance (watch beats are writes → 403; Complete won&#39;t unlock). The runtime only opens PUBLISHED cards (404 on drafts) and enforces gating (423 on a locked card for the non-staff test student) — hence the button shows for published cards only, and a gated card will show as locked (itself a visible safeguard). Reuses the existing read-only &quot;View as member&quot; token mechanism (`/portal/view-as`), scoped to a test student. Touches /backend → deploy is backend + nginx.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>Fixed the cramped inline student view and moved the workspace CTA to the real footer position</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Two fixes to the drawer&#39;s Student view (per Ali — it &quot;was not showing correctly&quot; and the workspace button was in the wrong place). (1) Rendering: the Student view now fills the drawer full-height like the real student popup — in student mode `.te-dbody` becomes a flex column (`.te-dbody--student`, padding 0, overflow hidden) and `&lt;CardDetailBody&gt;` renders in a `.te-studentfill` flex:1 container (head + scrolling body + footer), instead of being squished into a small bordered box (the Self Study reader was cut off top/bottom). (2) Workspace CTA: removed the separate top &quot;Open the workspace&quot; bar; the &quot;Enter workspace →&quot; button now lives in `&lt;CardDetailBody&gt;`&#39;s footer — the SAME spot the student sees it — wired via `onEnterWorkspace` to the existing read-only workspace opener (published saved cards only; drafts still show the &quot;this footer has Close and Enter workspace&quot; note). `CardDetailBody`: in `preview` mode, when `onEnterWorkspace` is provided, render the real &quot;Enter workspace →&quot; button instead of the note (unchanged for the feed-tile popup, which passes no `onEnterWorkspace`). Stayed READ-ONLY per Ali. Frontend-only, 2 files: components/timeline/CardDetailBody.tsx, pages/admin/orchestration/TimelineEditorTab.tsx.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">frontend `tsc --noEmit` → 0 errors across the whole frontend.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/student-view-workspace-footer` off origin/main. Read-only confirmed again (writable &quot;run it for real&quot; was offered and declined). Frontend-only → deploy is nginx `--no-deps` (no backend restart). Flow: Student view toggle → footer &quot;Enter workspace →&quot; → new tab opens the read-only runtime for this card, just like a student going popup → workspace.</span></div>
           
         </div>
       </article>
