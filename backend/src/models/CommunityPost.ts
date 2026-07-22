@@ -3,6 +3,16 @@ import { sequelize } from '../config/database';
 
 export type CommunityPostStatus = 'visible' | 'removed';
 
+// Structured payload for a weekly Community Ritual post (community_discussion type).
+// The post IS a community_posts row tethered to the curriculum card + program/week
+// it was posted from; ritual_meta records which ritual it answered and the guided
+// field values, so the wall can render the tile without re-parsing `body`. See
+// services/runtime/communityRituals.ts for the 12 ritual field shapes.
+export interface RitualMeta {
+  ritual: string;                                  // ritual key, e.g. 'roll_call' | 'cohort_wins'
+  values: Record<string, string | string[]>;       // guided field values, keyed by field.key
+}
+
 export interface CommunityPostAttributes {
   id?: string;
   member_id: string;
@@ -18,6 +28,13 @@ export interface CommunityPostAttributes {
   removed_at?: Date | null;
   removed_by?: string | null;
   min_level?: number;
+  // Curriculum tether (nullable — only set on posts originated from a card, e.g.
+  // Peer Wins). Lets the Peer Wins grid aggregate this cohort's wins for one
+  // (program, week) and dedupe a student's win to one-per-card.
+  program_id?: string | null;
+  week?: number | null;
+  source_card_id?: string | null;
+  ritual_meta?: RitualMeta | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -37,6 +54,10 @@ class CommunityPost extends Model<CommunityPostAttributes> implements CommunityP
   declare removed_at: Date | null;
   declare removed_by: string | null;
   declare min_level: number;
+  declare program_id: string | null;
+  declare week: number | null;
+  declare source_card_id: string | null;
+  declare ritual_meta: RitualMeta | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -114,6 +135,25 @@ CommunityPost.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
+    },
+    // Peer Wins curriculum tether — all nullable/additive so every existing post
+    // (and the general community composer) is unaffected. Server-derived from the
+    // card on submit; never trusted from client input for grading.
+    program_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    week: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    source_card_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    ritual_meta: {
+      type: DataTypes.JSONB,
+      allowNull: true,
     },
   },
   {

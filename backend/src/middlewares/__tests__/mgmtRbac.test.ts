@@ -1,0 +1,93 @@
+jest.mock('jsonwebtoken', () => ({ verify: jest.fn() }));
+jest.mock('../../config/env', () => ({ env: { jwtSecret: 'test-secret' } }));
+
+import jwt from 'jsonwebtoken';
+import { requireSection, adminAllowedSections } from '../authMiddleware';
+
+const verify = jwt.verify as unknown as jest.Mock;
+
+function ctx(payload: any, withAuth = true) {
+  const req: any = { method: 'GET', headers: withAuth ? { authorization: 'Bearer t' } : {} };
+  const res: any = {
+    statusCode: 0, body: null as any,
+    status(c: number) { this.statusCode = c; return this; },
+    json(b: any) { this.body = b; return this; },
+  };
+  const next = jest.fn();
+  verify.mockReturnValue(payload);
+  return { req, res, next };
+}
+
+describe('adminAllowedSections — role → sections', () => {
+  it('legacy full admins see every section', () => {
+    expect(adminAllowedSections({ role: 'super_admin' })).toContain('inbox_content');
+    expect(adminAllowedSections({ role: 'admin' })).toContain('revenue');
+    expect(adminAllowedSections({ role: 'admin' }).length).toBeGreaterThan(5);
+  });
+  it('mgmt owner = everything; mgmt admin = everything EXCEPT inbox_content', () => {
+    expect(adminAllowedSections({ role: 'super_admin', mgmt_role: 'owner' })).toContain('inbox_content');
+    const kes = adminAllowedSections({ role: 'admin', mgmt_role: 'admin' });
+    expect(kes).toContain('revenue');
+    expect(kes).toContain('program');
+    expect(kes).not.toContain('inbox_content'); // Kes cannot see Inbox & Content
+  });
+  it('scoped roles get exactly their sections', () => {
+    expect(adminAllowedSections({ role: 'curriculum', mgmt_role: 'curriculum' }).sort()).toEqual(['dashboard', 'program']);
+    expect(adminAllowedSections({ role: 'revenue', mgmt_role: 'revenue' }).sort()).toEqual(['dashboard', 'revenue']);
+    expect(adminAllowedSections({ role: 'support', mgmt_role: 'support' })).toEqual(['students']);
+  });
+  it('unknown / non-admin identities get nothing (deny by default)', () => {
+    expect(adminAllowedSections({ role: 'sales' })).toEqual([]);
+    expect(adminAllowedSections({ role: 'participant' })).toEqual([]);
+    expect(adminAllowedSections({ role: 'x', mgmt_role: 'not_a_role' })).toEqual([]);
+  });
+});
+
+describe('requireSection — enforcement', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('mgmt admin (Kes) is 403 on inbox_content but passes revenue', () => {
+    let c = ctx({ role: 'admin', mgmt_role: 'admin' });
+    requireSection('inbox_content')(c.req, c.res, c.next);
+    expect(c.res.statusCode).toBe(403);
+    expect(c.next).not.toHaveBeenCalled();
+
+    c = ctx({ role: 'admin', mgmt_role: 'admin' });
+    requireSection('revenue')(c.req, c.res, c.next);
+    expect(c.next).toHaveBeenCalledTimes(1);
+  });
+
+  it('scoped curriculum passes program, 403 on revenue', () => {
+    let c = ctx({ role: 'curriculum', mgmt_role: 'curriculum' });
+    requireSection('program')(c.req, c.res, c.next);
+    expect(c.next).toHaveBeenCalledTimes(1);
+
+    c = ctx({ role: 'curriculum', mgmt_role: 'curriculum' });
+    requireSection('revenue')(c.req, c.res, c.next);
+    expect(c.res.statusCode).toBe(403);
+    expect(c.next).not.toHaveBeenCalled();
+  });
+
+  it('support reaches students only', () => {
+    let c = ctx({ role: 'support', mgmt_role: 'support' });
+    requireSection('students')(c.req, c.res, c.next);
+    expect(c.next).toHaveBeenCalledTimes(1);
+
+    c = ctx({ role: 'support', mgmt_role: 'support' });
+    requireSection('program')(c.req, c.res, c.next);
+    expect(c.res.statusCode).toBe(403);
+  });
+
+  it('legacy full admin passes every section incl. inbox_content', () => {
+    const c = ctx({ role: 'super_admin' });
+    requireSection('inbox_content')(c.req, c.res, c.next);
+    expect(c.next).toHaveBeenCalledTimes(1);
+  });
+
+  it('missing auth → 401', () => {
+    const c = ctx({ role: 'admin' }, false);
+    requireSection('revenue')(c.req, c.res, c.next);
+    expect(c.res.statusCode).toBe(401);
+    expect(c.next).not.toHaveBeenCalled();
+  });
+});

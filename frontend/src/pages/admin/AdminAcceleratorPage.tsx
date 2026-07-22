@@ -122,6 +122,13 @@ function AdminAcceleratorPage() {
   const [editingSession, setEditingSession] = useState<LiveSession | null>(null);
   // Session id whose Class Kit (QR + start-class panel) is open, else null.
   const [kitSessionId, setKitSessionId] = useState<string | null>(null);
+  // Session id whose Class Details (curriculum/blueprint) modal is open, else null.
+  // Cohort days-off (dates a class was skipped) shown as removable chips above the table.
+  const [skippedDates, setSkippedDates] = useState<string[]>([]);
+  // Session pending a "mark as day off" confirm, else null.
+  const [skipTarget, setSkipTarget] = useState<LiveSession | null>(null);
+  // Date pending an "un-skip" (restore day off) confirm, else null.
+  const [unskipTarget, setUnskipTarget] = useState<string | null>(null);
   const [sessionForm, setSessionForm] = useState({
     session_number: 1, title: '', description: '', session_date: '',
     start_time: '10:00 AM', end_time: '11:30 AM', session_type: 'core' as 'core' | 'lab',
@@ -184,12 +191,20 @@ function AdminAcceleratorPage() {
       setDashboard(res.data);
       setSessions(res.data.sessions || []);
       setEnrollments(res.data.enrollments || []);
+      // Only overwrite skipped_dates when the response actually carries the field —
+      // the dashboard endpoint may omit it, and we don't want to clobber the value
+      // just set from a skip/unskip mutation response.
+      if (Array.isArray(res.data.skipped_dates)) setSkippedDates(res.data.skipped_dates);
     } catch {
       showToast('Failed to load dashboard', 'error');
     }
   }, [selectedCohortId]); // eslint-disable-line
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
+
+  // Reset days-off chips when switching cohorts so one cohort's days off never bleed
+  // into another. loadDashboard then repopulates them from the response (when present).
+  useEffect(() => { setSkippedDates([]); }, [selectedCohortId]);
 
   // -- Session handlers --
 
@@ -225,12 +240,58 @@ function AdminAcceleratorPage() {
     } catch { showToast('Failed to delete session', 'error'); }
   };
 
+  // Mark a session's date as a cohort day off: this class and every later one shift
+  // forward one slot. The response carries the re-dated sessions + updated days-off
+  // list, which we apply immediately; loadDashboard then refreshes the rest.
+  const handleSkipSession = async () => {
+    if (!skipTarget) return;
+    try {
+      const res = await api.post(`/api/admin/accelerator/sessions/${skipTarget.id}/skip`);
+      if (Array.isArray(res.data?.sessions)) setSessions(res.data.sessions);
+      if (Array.isArray(res.data?.skipped_dates)) setSkippedDates(res.data.skipped_dates);
+      showToast('Day off marked — schedule shifted forward', 'success');
+      setSkipTarget(null);
+      loadDashboard();
+    } catch { showToast('Failed to mark day off', 'error'); }
+  };
+
+  // Remove a cohort day off: later sessions compact back onto the freed date.
+  const handleUnskip = async () => {
+    if (!unskipTarget || !selectedCohortId) return;
+    try {
+      const res = await api.post(`/api/admin/accelerator/cohorts/${selectedCohortId}/unskip`, { date: unskipTarget });
+      if (Array.isArray(res.data?.sessions)) setSessions(res.data.sessions);
+      if (Array.isArray(res.data?.skipped_dates)) setSkippedDates(res.data.skipped_dates);
+      showToast('Day off removed — schedule restored', 'success');
+      setUnskipTarget(null);
+      loadDashboard();
+    } catch { showToast('Failed to remove day off', 'error'); }
+  };
+
   const handleGenerateMeet = async (sessionId: string) => {
     try {
       const res = await api.post(`/api/admin/accelerator/sessions/${sessionId}/meet-link`);
       showToast(`Meet link generated: ${res.data.meeting_link}`, 'success');
       loadDashboard();
     } catch { showToast('Failed to generate Meet link', 'error'); }
+  };
+
+  // Open the full interactive Class Kit teaching deck in a new tab. The window is
+  // opened synchronously (in the click gesture) to dodge popup blockers, then the
+  // deck HTML — fetched with the admin JWT — is written into it.
+  const handleOpenKitDeck = async (sessionId: string) => {
+    const w = window.open('', '_blank');
+    if (!w) { showToast('Allow pop-ups to open the Class Kit deck', 'error'); return; }
+    w.document.write('<!doctype html><title>Loading Class Kit…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the Class Kit deck…</body>');
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/kit-doc`, { responseType: 'text' });
+      w.document.open();
+      w.document.write(res.data as string);
+      w.document.close();
+    } catch {
+      try { w.document.body.innerHTML = '<div style="font-family:system-ui,sans-serif;padding:2rem;color:#c00">Could not load the Class Kit. Close this tab and try again.</div>'; } catch { /* window may be gone */ }
+      showToast('Failed to open the Class Kit deck', 'error');
+    }
   };
 
   const handleStatusChange = async (sessionId: string, status: string) => {
@@ -421,6 +482,8 @@ function AdminAcceleratorPage() {
   };
 
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  // Compact label for day-off chips, e.g. "Jul 27".
+  const formatDayOff = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : d;
   const formatDateTime = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
   // "3 days ago" style relative label for when someone registered.
@@ -579,6 +642,24 @@ function AdminAcceleratorPage() {
             </button>
           }
         >
+            {skippedDates.length > 0 && (
+              <div className="d-flex flex-wrap align-items-center gap-2 px-3 pt-3">
+                <span className="text-muted small fw-medium">Days off:</span>
+                {skippedDates.map((d) => (
+                  <span key={d} className="badge rounded-pill text-bg-light text-dark border d-inline-flex align-items-center gap-1" style={{ fontSize: 12.5, fontWeight: 500, paddingRight: 6 }}>
+                    <span aria-hidden="true">📅</span> {formatDayOff(d)}
+                    <button
+                      type="button"
+                      className="btn-close ms-1"
+                      style={{ fontSize: 9, width: 9, height: 9 }}
+                      aria-label={`Remove day off ${formatDayOff(d)}`}
+                      title="Un-skip this day — later sessions compact back"
+                      onClick={() => setUnskipTarget(d)}
+                    />
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="table-responsive">
               <table className="table table-hover mb-0">
                 <thead className="table-light">
@@ -599,7 +680,15 @@ function AdminAcceleratorPage() {
                   ) : sessions.map((s) => (
                     <tr key={s.id}>
                       <td>{s.session_number}</td>
-                      <td className="fw-medium">{s.title}</td>
+                      <td className="fw-medium">
+                        <button
+                          className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
+                          onClick={() => handleOpenKitDeck(s.id)}
+                          title="Open the class presentation (Class Kit deck) in a new tab — the QR to check in is on the first slides"
+                        >
+                          {s.title}
+                        </button>
+                      </td>
                       <td>{formatDate(s.session_date)}</td>
                       <td className="small">{s.start_time} - {s.end_time}</td>
                       <td>{statusBadge(s.session_type)}</td>
@@ -617,8 +706,10 @@ function AdminAcceleratorPage() {
                       </td>
                       <td>
                         <div className="d-flex gap-1">
-                          <button className="btn btn-outline-primary btn-sm" onClick={() => setKitSessionId(s.id)}>Kit</button>
+                          <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class. The check-in QR is on the first slides.">▶ Present</button>
+                          <button className="btn btn-outline-secondary btn-sm" onClick={() => setKitSessionId(s.id)} title="Printable check-in QR + Start Class + roster (a paper backup — the deck already shows the QR)">QR</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>
+                          <button className="btn btn-outline-warning btn-sm" onClick={() => setSkipTarget(s)} title="Mark this date as a day off — this class and all later ones shift forward one slot">Skip</button>
                           {s.status === 'scheduled' && (
                             <button className="btn btn-outline-danger btn-sm" onClick={() => handleStatusChange(s.id, 'completed')}>Complete</button>
                           )}
@@ -959,6 +1050,8 @@ function AdminAcceleratorPage() {
         <ClassKitModal sessionId={kitSessionId} onClose={() => setKitSessionId(null)} />
       )}
 
+      {/* Class Details — curriculum / week-blueprint for a session (opened from Title) */}
+
       {/* Session Create/Edit Modal */}
       {showSessionModal && (
         <>
@@ -1045,6 +1138,32 @@ function AdminAcceleratorPage() {
         confirmVariant="danger"
         onConfirm={handleDeleteSession}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Skip (day off) Confirm */}
+      <ConfirmModal
+        show={!!skipTarget}
+        title="Mark Day Off"
+        message={skipTarget
+          ? `Mark ${formatDate(skipTarget.session_date)} as a day off? This class and all later ones shift forward one slot. You can un-skip later.`
+          : ''}
+        confirmLabel="Mark Day Off"
+        confirmVariant="warning"
+        onConfirm={handleSkipSession}
+        onCancel={() => setSkipTarget(null)}
+      />
+
+      {/* Un-skip (restore day off) Confirm */}
+      <ConfirmModal
+        show={!!unskipTarget}
+        title="Remove Day Off"
+        message={unskipTarget
+          ? `Remove the ${formatDate(unskipTarget)} day off? Later sessions compact back onto that date.`
+          : ''}
+        confirmLabel="Remove Day Off"
+        confirmVariant="primary"
+        onConfirm={handleUnskip}
+        onCancel={() => setUnskipTarget(null)}
       />
     </>
   );

@@ -7,6 +7,7 @@ import PortalLoginPage from '../pages/portal/PortalLoginPage';
 import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
 import PortalViewAsPage from '../pages/portal/PortalViewAsPage';
+import PortalMgmtEnterPage from '../pages/portal/PortalMgmtEnterPage';
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 import PortalHandoffPage from '../pages/portal/PortalHandoffPage';
 import ClassCheckinPage from '../pages/portal/ClassCheckinPage';
@@ -53,6 +54,8 @@ const portalRoutes = (
       {/* Design E student surfaces — each renders its own PortalShell chrome,
           so they sit OUTSIDE PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
+      {/* Employee → management portal: mints a scoped admin token, redirects to /admin. */}
+      <Route path="/portal/mgmt-enter" element={<PortalMgmtEnterPage />} />
       <Route path="/portal/settings" element={<SettingsPage />} />
       <Route path="/portal/path" element={<PathPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />

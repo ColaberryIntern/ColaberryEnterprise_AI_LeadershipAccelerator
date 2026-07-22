@@ -178,11 +178,22 @@ export const env = {
   // a rebuild. Default OFF: flag-off keeps the legacy "Level N · Apprentice/…/Principal"
   // HUD byte-identical.
   fiveBandUiEnabled: process.env.FIVE_BAND_UI_ENABLED === 'true',
+  // Role-aware "People" right-rail panel. Staff/admin see cross-cohort presence
+  // (online now) + a classes list + a sponsors/businesses list; students see their
+  // class first, then recently-active people OUTSIDE their cohort. Default OFF:
+  // flag-off makes GET /api/portal/people/panel return { enabled:false } and the rail
+  // keeps its cohort-scoped presence behavior byte-identical (ships dark).
+  peoplePanelRolesEnabled: process.env.PEOPLE_PANEL_ROLES_ENABLED === 'true',
   // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
   // links). Master switch OFF by default: the community-room routes return 404,
   // the outbox drain cron no-ops, and createSession skips linked-room creation
   // until COMMUNITY_ROOMS_ENABLED=true is set explicitly in an environment.
   communityRoomsEnabled: process.env.COMMUNITY_ROOMS_ENABLED === 'true',
+  // Peer Wins — the Cohort Wins grid behind the community_discussion type. ON by
+  // default; set PEER_WINS_ENABLED=false to revert the type to the plain 'community'
+  // reading render (a full-stack kill switch — typeRegistry picks the render_band
+  // from this, and the boot type-seed re-asserts it to the DB).
+  peerWinsEnabled: process.env.PEER_WINS_ENABLED !== 'false',
   chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
   chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 

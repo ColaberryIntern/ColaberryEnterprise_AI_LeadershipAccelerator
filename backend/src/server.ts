@@ -533,12 +533,40 @@ async function ensureCommunityMemberRoleSchema() {
     `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'student'`,
     `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_role`,
     `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_role CHECK (role IN ('student', 'mentor', 'staff'))`,
+    // Management-portal role for staff (Owner/Admin/Curriculum/Revenue/Admissions/
+    // Support). NULL = not a mgmt user. Gates admin sections via mgmtRoles.ts.
+    `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS mgmt_role VARCHAR(20)`,
+    `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_mgmt_role`,
+    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_mgmt_role CHECK (mgmt_role IS NULL OR mgmt_role IN ('owner','admin','curriculum','revenue','admissions','support'))`,
   ];
   for (const sql of statements) {
     try {
       await sequelize.query(sql);
     } catch (err: any) {
       console.warn('[DB] community member role schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureCommunityWinsSchema() {
+  // Peer Wins (community_discussion type) — tether a community post to the
+  // curriculum card + program/week it was posted from, plus a structured win_meta.
+  // All nullable/additive; idempotent DDL (sequelize.sync is disabled on this graph)
+  // so a deploy adds the columns without a manual migration step. The partial index
+  // makes the per-(cohort, program, week) wins aggregation cheap.
+  const statements = [
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS program_id UUID`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS week INTEGER`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS source_card_id UUID`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS ritual_meta JSONB`,
+    `CREATE INDEX IF NOT EXISTS idx_community_posts_wins ON community_posts (cohort_id, program_id, week) WHERE source_card_id IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_community_posts_source_card ON community_posts (source_card_id, member_id) WHERE source_card_id IS NOT NULL`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] community wins schema stmt skipped:', err?.message);
     }
   }
 }
@@ -2105,6 +2133,8 @@ async function start(): Promise<void> {
   await ensureLiveSessionSchema();
 
   await ensureCommunityMemberRoleSchema();
+  // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
+  await ensureCommunityWinsSchema();
   // Free-trial Organization / Manager layer — org + roster tables (idempotent).
   await ensureOrgSchema();
   // Student self-serve subscriptions (idempotent).

@@ -78,6 +78,8 @@ export const BAND: Record<string, Visual> = {
   announcement: { kind: 'reading', color: '#367895' },
   discussion: { kind: 'reading', color: '#367895' },
   community: { kind: 'reading', color: '#367895' },
+  peer_wins: { kind: 'reading', color: '#5BA63C' },   // Cohort Wins grid — green = growth/celebration
+
   study: { kind: 'reading', color: '#367895' },
   warmup: { kind: 'reading', color: '#2E6A86' },
   intel: { kind: 'reading', color: '#2E6A86' },   // Intelligence Pipeline types (news/research/tools/…)

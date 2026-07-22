@@ -315,6 +315,11 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     category: input.category ?? null,
     mentioned_member_ids: mentionedIds,
     min_level: input.min_level ?? 0,
+    // Curriculum tether — only present on Community Ritual posts (service-derived).
+    program_id: input.program_id ?? null,
+    week: input.week ?? null,
+    source_card_id: input.source_card_id ?? null,
+    ritual_meta: input.ritual_meta ?? null,
   });
 
   // In-app notification per mention (REQ-C6) — one row per (recipient, post),

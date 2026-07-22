@@ -516,6 +516,23 @@ Return STRICT json matching this shape (an AmScenario): {
 }
 Multiple-choice options must be plausible professional instincts, never one-obviously-correct plus absurd distractors, and never a memorization test. Do not invent a technical claim the WEEK CONTEXT does not support.`;
 
+// ── community_discussion → weekly Community Ritual ────────────────────────────
+// The card renders a LIVE bespoke panel (PeerWinsPanel, render_band 'peer_wins')
+// that runs a DIFFERENT ritual each week (Roll Call, Skill Drop, Cohort Wins,
+// Unblock Me, Hot Take, Architect Manifesto…; the exact prompt + composer + wall
+// come from communityRituals.ts, resolved by the card's week). The generation
+// prompt only frames the card (a neutral title + one sentence) — the ritual UI is
+// code, not generated content, so the prompt must NOT name a specific ritual.
+const PEER_WINS_GENERATION_PROMPT = [
+  "You author the end-of-week Community card for the AI Systems Architect Accelerator — a share-with-your-cohort moment a NON-TECHNICAL business executive reaches AFTER finishing this week's section.",
+  'The card renders a LIVE weekly ritual (a guided composer + the cohort wall) whose exact prompt is set in code per week — you do NOT write it. Your only job is a short, inviting title + one framing sentence.',
+  'Ground everything in the WEEK CONTEXT above and refer to the week by its section TITLE, never by number. Invent no technical claim the context does not support.',
+  'Produce ONLY these two, and set every other output key empty:',
+  '- title: a short, warm invitation tied to this week\'s topic (for example "Share what you built — {the week\'s section topic}"). Do NOT name a specific ritual.',
+  '- summary: ONE warm sentence (max ~24 words) inviting the student to post and cheer their classmates. Plain language, no jargon, no hype.',
+  'Set the rest empty: body_html "", questions [], reflection "", discussion_prompt "", github_task null, evaluation_criteria [], completion "".',
+].join('\n');
+
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
   architect_mindset: {
@@ -829,6 +846,35 @@ export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
       '(2-4 short paragraphs: what it is, who it is for, the outcome, and a clear "Join" call to action), and a ' +
       'one-sentence summary. Do not invent details that are not in the booking.',
     thumbnail_url: thumbnailUrlFor('community_live_session'),
+    approved: true,
+    status: 'published',
+  },
+
+  community_discussion: {
+    student_label: 'Community Ritual',
+    category: 'Community',
+    icon: 'bi-people-fill',
+    badge_class: 'bg-success',
+    estimated_time: 15,
+    // Renders the LIVE ritual panel (render_band 'peer_wins'): a different guided
+    // ritual per week (composer + cohort wall + kudos), resolved from the card's
+    // week in communityRituals.ts. Parts signal what the student gets; the panel is
+    // code-driven so they don't gate behavior.
+    capabilities: ['reflection', 'comments', 'likes', 'sharing'],
+    inputs: [],
+    variable_keys: [], // zero author input — the runtime injects the week blueprint
+    outputs: [
+      { key: 'title', type: 'string', description: 'A short, warm invitation tied to the week topic' },
+      { key: 'summary', type: 'string', description: 'One warm sentence inviting a ritual post' },
+    ],
+    // Posting a win is OPTIONAL — engaging with the card completes it (never gated
+    // on posting). Display-only field; runtime completion is the explicit Mark complete.
+    completion_rules: { on: 'view' },
+    evaluation_type: 'none',
+    generation_prompt: PEER_WINS_GENERATION_PROMPT,
+    // EXPLICIT — an authored entry overrides the ...AI_THUMBNAILS spread, so the
+    // thumbnail must be re-stated here or the type ships with no banner.
+    thumbnail_url: thumbnailUrlFor('community_discussion'),
     approved: true,
     status: 'published',
   },

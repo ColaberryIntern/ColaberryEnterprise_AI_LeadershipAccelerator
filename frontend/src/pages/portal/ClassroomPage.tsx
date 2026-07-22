@@ -4,9 +4,12 @@ import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
+import TodayFeedV2 from './today/TodayFeedV2';
+import SkillMeter from './SkillMeter';
+import { runtimeApi } from './runtime/runtimeApi';
 import '../../components/timeline/timeline.css';
 import PortalShell from './today/PortalShell';
-import { emitPointsEarned, onPointsEarned } from '../../services/pointsFx';
+import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../services/pointsFx';
 import { filterCardsByQuery, tokenizeQuery } from '../../utils/classroomSearch';
 
 /**
@@ -101,7 +104,10 @@ const ClassroomPage: React.FC = () => {
   const [feed, setFeed] = useState<Feed | null>(null);
   const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'error'>('loading');
   const [week, setWeek] = useState<number | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Store the selected CARD object (not just an id): the Week-0 never-ending feed
+  // surfaces ambient cards (blogs/podcasts) that aren't in feed.cards, so an
+  // id→feed.cards lookup would fail to open them.
+  const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
   const [query, setQuery] = useState<string>('');
   const [now, setNow] = useState<number>(() => (typeof performance !== 'undefined' ? Date.now() : 0));
 
@@ -201,17 +207,20 @@ const ClassroomPage: React.FC = () => {
 
   // Opening a card now shows its detail drawer (preview + in-app video player);
   // completion is an explicit action inside the drawer, not a side effect of opening.
-  const openCard = useCallback((card: TimelineFeedCard) => { setSelectedId(card.id); }, []);
+  const openCard = useCallback((card: TimelineFeedCard) => { setSelectedCard(card); }, []);
   const completeCard = useCallback(async (card: TimelineFeedCard) => {
     // No swallow: a gate rejection (422 watch / 423 lock) must propagate so the
-    // caller (TimelineCard.handleCollect / CardDetailBody) can surface "watch it
-    // first" instead of the tile falsely flipping to "collected". Callers own the
-    // error UX; both catch.
-    const res = await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`);
+    // caller can surface "watch it first" instead of the tile falsely flipping to
+    // "collected". Ambient blogs (ref `blog:<id>`) — surfaced by the Week-0
+    // never-ending feed — collect via the blog read gate, not the card endpoint.
+    const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
+    const res = blogId
+      ? await runtimeApi.blogCollect(blogId)
+      : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
     await load();
-    emitPointsEarned(res.data?.points_awarded ?? 0);   // HUD burst + chime (0 = already earned → silent)
+    emitPointsEarned(res?.points_awarded ?? 0);   // HUD burst + chime (0 = already earned → silent)
+    emitCardCollected(card.id);                    // drop it off the never-ending feed
   }, [load]);
-  const selectedCard = useMemo(() => feed?.cards.find((c) => c.id === selectedId) ?? null, [feed, selectedId]);
 
   if (uiState === 'loading') return <PortalShell><div className="tl-de"><div className="tl-empty">Loading your classroom…</div></div></PortalShell>;
   if (uiState === 'disabled') return (
@@ -263,49 +272,65 @@ const ClassroomPage: React.FC = () => {
 
       <div className="tl-grid">
         <div className="tl-feedcol">
-          <div className="tl-card tl-banner tl-ac-berry">
-            <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
-            <div className="pr">
-              <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
-              <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
-              <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
-              <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
-            </div>
-          </div>
-
-          {weekCards.length > 0 && (
-            <>
-              <div className="tl-search">
-                <svg className="tl-search-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-                <input
-                  type="search"
-                  className="tl-search-input"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
-                  placeholder="Search this week — try “Prompt Lab”"
-                  aria-label="Search this week's cards"
-                  autoComplete="off"
-                />
-                {searching && (
-                  <button type="button" className="tl-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
-                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-                  </button>
-                )}
+          {/* Week 0 (Free Preview): a skill meter — one bar per foundational AI
+              skill the preview tags, filling as tagged activities complete. Paid
+              weeks keep the plain week-progress banner. */}
+          {week === 0 ? (
+            <SkillMeter cards={weekCards} />
+          ) : (
+            <div className="tl-card tl-banner tl-ac-berry">
+              <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
+              <div className="pr">
+                <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
+                <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
+                <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
+                <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
               </div>
-              {searching && (
-                <div className="tl-search-count tl-small" role="status" aria-live="polite">
-                  {visibleCards.length} of {weekCards.length} {weekCards.length === 1 ? 'card' : 'cards'} match “{query.trim()}”
-                </div>
-              )}
-            </>
+            </div>
           )}
 
-          {weekCards.length === 0
-            ? <div className="tl-empty">No cards here yet.</div>
-            : visibleCards.length === 0
-              ? <div className="tl-empty">No cards match “{query.trim()}”. <button type="button" className="tl-btn sm primary" style={{ marginLeft: 8 }} onClick={() => setQuery('')}>Clear search</button></div>
-              : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
+          {/* Week 0 (Free Preview) IS the never-ending Today timeline — the same
+              engine as the Today tab. Paid weeks stay the finite, searchable week
+              feed. */}
+          {week === 0 ? (
+            <TodayFeedV2 fallbackCards={visibleCards} onOpen={openCard} onWorkspace={openCard} onComplete={completeCard} />
+          ) : (
+            <>
+              {weekCards.length > 0 && (
+                <>
+                  <div className="tl-search">
+                    <svg className="tl-search-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                    <input
+                      type="search"
+                      className="tl-search-input"
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
+                      placeholder="Search this week — try “Prompt Lab”"
+                      aria-label="Search this week's cards"
+                      autoComplete="off"
+                    />
+                    {searching && (
+                      <button type="button" className="tl-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                      </button>
+                    )}
+                  </div>
+                  {searching && (
+                    <div className="tl-search-count tl-small" role="status" aria-live="polite">
+                      {visibleCards.length} of {weekCards.length} {weekCards.length === 1 ? 'card' : 'cards'} match “{query.trim()}”
+                    </div>
+                  )}
+                </>
+              )}
+
+              {weekCards.length === 0
+                ? <div className="tl-empty">No cards here yet.</div>
+                : visibleCards.length === 0
+                  ? <div className="tl-empty">No cards match “{query.trim()}”. <button type="button" className="tl-btn sm primary" style={{ marginLeft: 8 }} onClick={() => setQuery('')}>Clear search</button></div>
+                  : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
+            </>
+          )}
         </div>
 
         <aside className="tl-side">
@@ -335,7 +360,7 @@ const ClassroomPage: React.FC = () => {
         </aside>
       </div>
 
-      <CardDetailDrawer card={selectedCard} onClose={() => setSelectedId(null)} onComplete={completeCard} />
+      <CardDetailDrawer card={selectedCard} onClose={() => setSelectedCard(null)} onComplete={completeCard} />
     </div>
     </PortalShell>
   );

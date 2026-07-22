@@ -6,6 +6,7 @@
  * idempotent via the (card_id, enrollment_id) unique constraint.
  */
 import { Op } from 'sequelize';
+import { ritualStudentLabel } from '../runtime/communityRituals';
 import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineCardProgress';
 import Enrollment from '../../models/Enrollment';
@@ -273,7 +274,9 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return {
       id: card.id,
       type: card.type,
-      student_label: def?.student_label || card.type,
+      // community_discussion cards show their WEEK'S ritual name (Roll Call, Cohort
+      // Wins, …) so each week's card reads as a distinct ritual on the tile.
+      student_label: ritualStudentLabel(card.type, card.week ?? null, def?.student_label || card.type),
       render_band: def?.render_band || 'overview',
       title: card.title,
       subtitle: card.subtitle,

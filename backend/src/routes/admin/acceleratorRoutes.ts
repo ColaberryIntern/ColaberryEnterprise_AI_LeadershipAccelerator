@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
-  handleGetSessionKit,
+  handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
+  handleGetSessionKit, handleGetSessionKitDoc,
   handleGenerateMeetLink, handleGenerateCohortMeetLinks,
   handleGetAttendance, handleMarkAttendance, handleUpdateAttendance,
   handleListEnrollmentSubmissions, handleListSessionSubmissions, handleCreateSubmission,
@@ -98,8 +99,14 @@ router.get('/api/admin/accelerator/enrollments/:id/history', requireAdmin, handl
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
 router.delete('/api/admin/accelerator/sessions/:id', requireAdmin, handleDeleteSession);
+// Schedule management: skip a session's day (push forward), un-skip a date, per-session curriculum
+router.post('/api/admin/accelerator/sessions/:id/skip', requireAdmin, handleSkipSession);
+router.post('/api/admin/accelerator/cohorts/:cohortId/unskip', requireAdmin, handleUnskipDate);
+router.get('/api/admin/accelerator/sessions/:id/curriculum', requireAdmin, handleGetSessionCurriculum);
 router.post('/api/admin/accelerator/sessions/:id/meet-link', requireAdmin, handleGenerateMeetLink);
 router.get('/api/admin/accelerator/sessions/:id/kit', requireAdmin, handleGetSessionKit);
+// Full interactive Class Kit teaching deck (HTML) — opened in a new tab to run the class.
+router.get('/api/admin/accelerator/sessions/:id/kit-doc', requireAdmin, handleGetSessionKitDoc);
 router.post('/api/admin/accelerator/cohorts/:cohortId/meet-links', requireAdmin, handleGenerateCohortMeetLinks);
 router.get('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleGetAttendance);
 router.post('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleMarkAttendance);

@@ -1,0 +1,64 @@
+/**
+ * mgmtRoles — the single source of truth for the management-portal RBAC.
+ *
+ * A staff member (community role 'staff') can be given ONE management role. Each
+ * role maps to the set of admin sidebar SECTIONS they may see AND reach. The
+ * frontend hides nav/routes by these sections; the backend ENFORCES them per
+ * router (hiding nav is not access control). Keep this list in step with the
+ * frontend `adminNav.ts` section keys — the server is the authority (the admin
+ * `/me` endpoint returns the caller's allowed sections from here).
+ */
+
+// Section keys — one per pinned link + one per nav group in adminNav.ts, plus
+// 'students' (the Support-only read-only student-story surface, which is NOT a
+// normal nav group).
+export const SECTION_KEYS = [
+  'dashboard', 'trust', 'war_room',        // pinned
+  'revenue', 'campaigns', 'lead_ingestion', 'inbox_content',
+  'program', 'intelligence', 'system',     // groups
+  'students',                              // support-only surface
+] as const;
+export type SectionKey = typeof SECTION_KEYS[number];
+
+export const ALL_SECTIONS: SectionKey[] = [...SECTION_KEYS];
+
+// The management roles. 'owner' sees everything; the rest are scoped.
+export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support'] as const;
+export type MgmtRole = typeof MGMT_ROLES[number];
+
+export interface MgmtRoleDef {
+  role: MgmtRole;
+  label: string;
+  sections: SectionKey[];   // sections this role may see AND reach
+}
+
+const ADMIN_EXCEPT_INBOX: SectionKey[] = ALL_SECTIONS.filter((s) => s !== 'inbox_content');
+
+export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
+  owner: { role: 'owner', label: 'Owner', sections: ALL_SECTIONS },
+  // Everything except Inbox & Content (per Ali).
+  admin: { role: 'admin', label: 'Admin', sections: ADMIN_EXCEPT_INBOX },
+  // Curriculum → the Program group (accelerator, community-roles, orchestration,
+  // AI org, enterprise intelligence, projects) + a Dashboard landing.
+  curriculum: { role: 'curriculum', label: 'Curriculum', sections: ['dashboard', 'program'] },
+  // Revenue → the Revenue group.
+  revenue: { role: 'revenue', label: 'Revenue', sections: ['dashboard', 'revenue'] },
+  // Admissions → the Lead Ingestion group (placeholder scope until assigned).
+  admissions: { role: 'admissions', label: 'Admissions', sections: ['dashboard', 'lead_ingestion'] },
+  // Support → NO normal admin nav; only the read-only student-story surface.
+  support: { role: 'support', label: 'Support', sections: ['students'] },
+};
+
+export function isMgmtRole(role: string | undefined | null): role is MgmtRole {
+  return !!role && (MGMT_ROLES as readonly string[]).includes(role);
+}
+
+/** The sections a role may access. Unknown roles get nothing (deny by default). */
+export function sectionsForRole(role: string | undefined | null): SectionKey[] {
+  return isMgmtRole(role) ? MGMT_ROLE_DEFS[role].sections : [];
+}
+
+/** Authoritative access check — may this role reach this section? */
+export function roleCanAccessSection(role: string | undefined | null, section: SectionKey): boolean {
+  return sectionsForRole(role).includes(section);
+}

@@ -6,17 +6,58 @@ import {
   computeReadinessScore, computeAllReadinessScores, getCohortDashboard,
   listCohortEnrollments, setPortalAccess, getPortalLoginUrl, getReadOnlyViewAsUrl,
 } from '../services/acceleratorService';
+import {
+  skipSessionDate, unskipDate, getSessionCurriculum, getCohortSkippedDates,
+} from '../services/sessionScheduleService';
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { buildSessionKit } from '../services/sessionKitService';
+import { renderSessionKitDoc } from '../services/sessionKitDocService';
 import { LiveSession } from '../models';
 
 // -- Sessions --
 
 export async function handleListSessions(req: Request, res: Response, next: NextFunction) {
   try {
-    const sessions = await listSessionsByCohort(req.params.cohortId as string);
-    res.json({ sessions });
+    const cohortId = req.params.cohortId as string;
+    const sessions = await listSessionsByCohort(cohortId);
+    const skipped_dates = await getCohortSkippedDates(cohortId);
+    res.json({ sessions, skipped_dates });
+  } catch (err) { next(err); }
+}
+
+// -- Session schedule management (skip-a-day / un-skip / per-session curriculum) --
+
+// Skip the day this session sits on: adds its date to the cohort's skipped_dates
+// and reflows, pushing this + later sessions to the next open slots. 404 if missing.
+export async function handleSkipSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await skipSessionDate(req.params.id as string);
+    if (!result) return res.status(404).json({ error: 'Session not found' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Un-skip a previously skipped date for a cohort, then reflow so sessions compact back.
+export async function handleUnskipDate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { date } = req.body || {};
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'date (YYYY-MM-DD) is required' });
+    }
+    const result = await unskipDate(req.params.cohortId as string, date);
+    if (!result) return res.status(404).json({ error: 'Cohort not found' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Per-session curriculum: the week blueprint parsed from the session title. Never
+// throws on a missing blueprint (returns blueprint: null). 404 only if session missing.
+export async function handleGetSessionCurriculum(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await getSessionCurriculum(req.params.id as string);
+    if (!result) return res.status(404).json({ error: 'Session not found' });
+    res.json(result);
   } catch (err) { next(err); }
 }
 
@@ -72,6 +113,17 @@ export async function handleGetSessionKit(req: Request, res: Response, next: Nex
     const kit = await buildSessionKit(req.params.id as string);
     if (!kit) return res.status(404).json({ error: 'Session not found' });
     res.json(kit);
+  } catch (err) { next(err); }
+}
+
+// Class Kit deck: the full interactive teaching deck (HTML) an instructor opens
+// in a new tab and shares on screen to run the class. text/html, not JSON. The
+// admin UI fetches this with the admin JWT and opens it in a new tab.
+export async function handleGetSessionKitDoc(req: Request, res: Response, next: NextFunction) {
+  try {
+    const html = await renderSessionKitDoc(req.params.id as string);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
   } catch (err) { next(err); }
 }
 

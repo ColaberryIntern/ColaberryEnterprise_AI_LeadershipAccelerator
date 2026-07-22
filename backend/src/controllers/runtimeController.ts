@@ -8,12 +8,15 @@ import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
 import { recordWatchBeat } from '../services/runtime/watchProgressService';
 import { recordReadBeat, collectBlog } from '../services/runtime/blogReadGateService';
+import { getBlogReader } from '../services/blog/blogReaderService';
 import { recordDwellBeat } from '../services/runtime/cardDwellService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
 import { getNudge } from '../services/runtime/mentorNudgeService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
+import { getRitualWall, submitRitualPost } from '../services/runtime/peerWinsService';
+import { toggleLike } from '../services/communityService';
 import { getAssessment, submitAssessment, sectionResultsSummary } from '../services/runtime/assessmentService';
 import {
   getState as architectState, advance as architectAdvance, saveInterview as architectSaveInterview,
@@ -158,6 +161,16 @@ export async function handleBlogCollect(req: Request, res: Response, next: NextF
   } catch (err) { fail(res, err, next); }
 }
 
+/** GET /api/portal/runtime/today/blog/:blogId/reader — the post's article, fetched +
+ *  sanitized server-side for in-Workspace reading (the training site refuses to be
+ *  iframed). Fail-soft: { ok:false, source_url } lets the client fall back to the link. */
+export async function handleBlogReader(req: Request, res: Response, next: NextFunction) {
+  try {
+    const blogId = blogIdSchema.parse(req.params.blogId);
+    res.json(await getBlogReader(blogId));
+  } catch (err) { fail(res, err, next); }
+}
+
 /** POST /api/portal/runtime/cards/:cardId/dwell — heartbeat for the generic dwell
  *  gate (passive-content types). Returns { dwell_s, required_s, met }. */
 export async function handleDwellBeat(req: Request, res: Response, next: NextFunction) {
@@ -181,6 +194,23 @@ export async function handleGetSurvey(req: Request, res: Response, next: NextFun
 }
 export async function handleSaveSurvey(req: Request, res: Response, next: NextFunction) {
   try { res.json(await saveSurvey(eid(req), String(req.params.cardId), req.body || {})); } catch (e) { fail(res, e, next); }
+}
+
+// Community Rituals (community_discussion) — read the week's ritual + the cohort
+// wall for a card, post/edit your own guided answer, and cheer a classmate's.
+// Field values are ritual-specific (see communityRituals.ts); the service validates
+// required fields against the resolved ritual, so the schema here is intentionally open.
+const submitRitualSchema = z.object({
+  values: z.record(z.string(), z.union([z.string(), z.array(z.string())])).default({}),
+});
+export async function handleGetPeerWins(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getRitualWall(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSubmitWin(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await submitRitualPost(eid(req), String(req.params.cardId), submitRitualSchema.parse(req.body || {}).values)); } catch (e) { fail(res, e, next); }
+}
+export async function handleCheerWin(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await toggleLike(eid(req), 'post', String(req.params.winId))); } catch (e) { fail(res, e, next); }
 }
 
 // Knowledge Check (quiz) + Evaluation — load questions (no answers leaked) / submit + score
