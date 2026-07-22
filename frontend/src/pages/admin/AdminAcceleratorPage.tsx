@@ -697,8 +697,8 @@ function AdminAcceleratorPage() {
                       <td className="fw-medium">
                         <button
                           className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
-                          onClick={() => handleOpenKitDeck(s.id)}
-                          title="Open the class presentation (Class Kit deck) in a new tab — the QR to check in is on the first slides"
+                          onClick={() => handleOpenOutline(s.id)}
+                          title="Open the class outline — the minute-by-minute teaching plan. Use ▶ Present to run the slides."
                         >
                           {s.title}
                         </button>
