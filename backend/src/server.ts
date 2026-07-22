@@ -2215,6 +2215,21 @@ async function start(): Promise<void> {
   import('./services/intel/aiNewsIngestionService')
     .then(({ refreshAiNewsOnBoot }) => refreshAiNewsOnBoot())
     .catch((err: any) => console.warn('[DB] AI News boot ingest skipped:', err?.message?.split('\n')[0]));
+  // Intelligence pipelines (the 9 generators): ensure the shared library table,
+  // register all source adapters, then run each source's boot catch-up so a
+  // redeploy through the cron window doesn't drop a day (non-blocking). Each is
+  // cost-gated by its own <SLUG>_INGEST_ENABLED flag (default OFF) — dark until set.
+  import('./services/intel/sources')
+    .then(async () => {
+      const { ensureIntelItemsSchema } = await import('./models/IntelItem');
+      await ensureIntelItemsSchema();
+      const { listIntelSources, runIntelPipelineOnBoot } = await import('./services/intel/intelPipeline');
+      for (const src of listIntelSources()) {
+        runIntelPipelineOnBoot(src.slug).catch((err: any) =>
+          console.warn(`[DB] Intel ${src.slug} boot ingest skipped:`, err?.message?.split('\n')[0]));
+      }
+    })
+    .catch((err: any) => console.warn('[DB] Intel pipelines boot skipped:', err?.message?.split('\n')[0]));
   // Experience Builder (Phase 1) — AI Component columns + component_versions.
   await ensureExperienceBuilderSchema();
   await ensureCurriculumComposerSchema();
