@@ -1,9 +1,13 @@
 import crypto from 'crypto';
 import { Op } from 'sequelize';
 import {
-  Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail,
+  Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail, Subscription,
 } from '../models';
 import { env } from '../config/env';
+
+// PaySimple dashboard base for the admin "open this payer in PaySimple" deep link.
+// Override with PAYSIMPLE_DASHBOARD_BASE if the account uses a different host.
+const PAYSIMPLE_DASHBOARD_BASE = process.env.PAYSIMPLE_DASHBOARD_BASE || 'https://app.paysimple.com';
 
 export async function listSessionsByCohort(cohortId: string) {
   return LiveSession.findAll({
@@ -476,12 +480,25 @@ export async function listCohortEnrollments(cohortId: string) {
     if (!prev || new Date(l.created_at ?? 0) < new Date(prev.created_at ?? 0)) leadByEmail.set(key, l);
   }
 
+  // Subscription enrichment: the student's self-serve paid plan (monthly/annual/comp)
+  // so the admin can see who is actually on a paid subscription vs a one-off/none.
+  // Latest subscription per enrollment; one query, no N+1.
+  const enrollmentIds = enrollments.map((e) => e.id);
+  const subs = enrollmentIds.length
+    ? await Subscription.findAll({ where: { enrollment_id: { [Op.in]: enrollmentIds } }, order: [['created_at', 'DESC']] })
+    : [];
+  const subByEnrollment = new Map<string, Subscription>();
+  for (const s of subs) if (!subByEnrollment.has(s.enrollment_id)) subByEnrollment.set(s.enrollment_id, s);
+
   return enrollments.map((e) => {
     const lead = leadByEmail.get((e.email || '').toLowerCase().trim());
     const json = e.toJSON() as any;
     // Never leak the reusable portal login token into the list payload.
     delete json.portal_token;
     delete json.portal_token_expires_at;
+    const sub = subByEnrollment.get(e.id);
+    // PaySimple customer id lives on the enrollment and/or the subscription.
+    const psCustomerId = json.paysimple_customer_id || sub?.paysimple_customer_id || null;
     return {
       ...json,
       lead_source: lead?.source ?? null,
@@ -489,6 +506,12 @@ export async function listCohortEnrollments(cohortId: string) {
       utm_source: lead?.utm_source ?? null,
       utm_campaign: lead?.utm_campaign ?? null,
       page_url: lead?.page_url ?? null,
+      // Paid-subscription visibility for the admin roster.
+      subscription: sub
+        ? { plan: sub.plan, status: sub.status, amount_cents: sub.amount_cents, current_period_end: sub.current_period_end }
+        : null,
+      // Deep link to the payer's record in PaySimple (best-effort; base is overridable).
+      paysimple_url: psCustomerId ? `${PAYSIMPLE_DASHBOARD_BASE}/#/customer/${psCustomerId}` : null,
     };
   });
 }
