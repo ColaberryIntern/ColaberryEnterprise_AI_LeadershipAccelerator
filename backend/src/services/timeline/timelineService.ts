@@ -17,6 +17,7 @@ import { selectPodcastForEnrollment } from './podcastMediaService';
 import { selectBlogForEnrollment } from './blogMediaService';
 import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingService';
 import { isStaffEnrollment } from '../access/staffAccess';
+import { isFreePreviewTier } from '../access/contentEntitlement';
 import { env } from '../../config/env';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
@@ -157,7 +158,7 @@ export interface TimelineFeed {
   cohort_id: string | null;
   buckets: string[];
   cards: FeedCard[];
-  is_explorer?: boolean;   // true = free Explorer tier — drives the enroll upsell (Week-0-only content gate is ON by default; EXPLORER_WEEK0_ONLY=false lifts it)
+  is_explorer?: boolean;   // true = free-preview tier (Week 0 only) — drives the enroll/pay upsell. Source: contentEntitlement.isFreePreviewTier (payment-keyed when CONTENT_PAID_GATE_ENABLED, else legacy explorer-only).
 }
 
 /**
@@ -207,15 +208,15 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return { cohort_id: null, buckets: [...BUCKET_ORDER], cards: [] };
   }
 
-  // Free lead-magnet gate (DEFAULT ON): Explorers (unenrolled free-trial prospects)
-  // see ONLY the Week 0 "AI Preview" tier; paid enrollments see the full 12-week
-  // curriculum. Set EXPLORER_WEEK0_ONLY=false to lift the gate (e.g. a launch promo
-  // that opens the whole program to free signups); any other value keeps it on.
-  // (The 2026-07 launch briefly ran with it off; gating is the permanent default.)
-  const isExplorer = (enrollment as any).enrollment_type === 'explorer';
-  const gateExplorersToWeek0 = process.env.EXPLORER_WEEK0_ONLY !== 'false';
+  // Curriculum paywall: the free-preview tier sees ONLY the Week 0 "AI Preview";
+  // full members see all 12 weeks. The single source of truth for who is gated is
+  // contentEntitlement.isFreePreviewTier — which, with CONTENT_PAID_GATE_ENABLED on,
+  // keys on PAYMENT (paid/comp/staff/business) so guests AND enrolled-but-unpaid
+  // members are gated, and with the flag off preserves the legacy explorer-only
+  // Week-0 gate (honoring EXPLORER_WEEK0_ONLY) byte-for-byte.
+  const isFreeTier = await isFreePreviewTier(enrollmentId);
   const allCards = await getGlobalCards();
-  const cards = (isExplorer && gateExplorersToWeek0) ? allCards.filter((c) => c.week === 0) : allCards;
+  const cards = isFreeTier ? allCards.filter((c) => c.week === 0) : allCards;
 
   const progressRows = await TimelineCardProgress.findAll({
     where: { enrollment_id: enrollmentId, card_id: { [Op.in]: cards.map((c) => c.id) } },
@@ -372,5 +373,5 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     feedCards.sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order);
   }
 
-  return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
+  return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isFreeTier };
 }

@@ -119,7 +119,9 @@ async function resolveTargetCohort(): Promise<Cohort | null> {
     if (c) return c;
   }
   const open = (await Cohort.findAll({ where: { status: 'open' }, order: [['start_date', 'ASC']], limit: 10 })) || [];
-  return open.find((c: any) => !isNonPayingCohortName(c.name)) || null;
+  // Never route a paying subscriber into the free Explorer/demo buckets OR a private
+  // business/owner workspace (cohort_type='business').
+  return open.find((c: any) => !isNonPayingCohortName(c.name) && String(c.cohort_type ?? '').toLowerCase() !== 'business') || null;
 }
 
 /**

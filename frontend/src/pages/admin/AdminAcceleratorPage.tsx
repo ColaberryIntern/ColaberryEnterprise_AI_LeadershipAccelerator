@@ -59,6 +59,8 @@ interface EnrollmentInfo {
   payment_status?: string;
   payment_method?: string;
   amount_paid?: number;
+  paysimple_url?: string | null;
+  subscription?: { plan: string; status: string; amount_cents: number; current_period_end?: string | null } | null;
   portal_enabled?: boolean;
   created_at?: string;
   enrollment_type?: string;
@@ -792,6 +794,20 @@ function AdminAcceleratorPage() {
                           {typeof e.amount_paid === 'number' && e.amount_paid > 0 ? (
                             <div className="text-muted" style={{ fontSize: '0.72rem' }}>
                               ${e.amount_paid.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} paid
+                            </div>
+                          ) : null}
+                          {e.subscription && e.subscription.status === 'active' ? (
+                            <div style={{ fontSize: '0.72rem', marginTop: 2 }}>
+                              <span className={`badge ${e.subscription.plan === 'comp' ? 'bg-info' : 'bg-success'}`}>
+                                {e.subscription.plan === 'annual' ? 'Annual' : e.subscription.plan === 'monthly' ? 'Monthly' : e.subscription.plan === 'comp' ? 'Comp' : e.subscription.plan} subscription
+                              </span>
+                            </div>
+                          ) : null}
+                          {e.paysimple_url ? (
+                            <div style={{ fontSize: '0.72rem', marginTop: 2 }}>
+                              <a href={e.paysimple_url} target="_blank" rel="noopener noreferrer">
+                                Payment info <i className="ri-external-link-line" aria-hidden="true"></i>
+                              </a>
                             </div>
                           ) : null}
                         </td>
