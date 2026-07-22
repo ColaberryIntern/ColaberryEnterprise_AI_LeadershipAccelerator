@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { auditMiddleware } from '../middlewares/auditMiddleware';
 import { requireSection } from '../middlewares/authMiddleware';
+import { mgmtSectionGate } from '../middlewares/mgmtSectionGate';
 import authRoutes from './admin/authRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import leadRoutes from './admin/leadRoutes';
@@ -83,10 +84,15 @@ import trustRoutes from './admin/trustRoutes';
 import communityModerationRoutes from './admin/communityModerationRoutes';
 import communityMemberRoutes from './admin/communityMemberRoutes';
 import podcastRoutes from './admin/podcastRoutes';
+import studentStoryRoutes from './admin/studentStoryRoutes';
 
 const router = Router();
 
 router.use(auditMiddleware);
+// RBAC: global section gate. Caps bridge-minted scoped mgmt roles (curriculum,
+// revenue, admissions, support) to their allowed sections by request path.
+// Legacy admins and owner pass untouched; runs before every admin sub-router.
+router.use(mgmtSectionGate);
 router.use(authRoutes);
 router.use(cohortRoutes);
 router.use(leadRoutes);
@@ -174,5 +180,6 @@ router.use(mentorReviewRoutes);
 router.use(trustRoutes);
 router.use(communityModerationRoutes);
 router.use(communityMemberRoutes);
+router.use(studentStoryRoutes);
 
 export default router;
