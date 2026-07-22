@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, July 22, 2026 at 1:45 AM</div>
-    <div><span class="sid">CC-20260722-r9k4</span><span class="count">1 change</span></div>
+    <div class="meta">Generated Wednesday, July 22, 2026 at 2:01 AM</div>
+    <div><span class="sid">CC-20260722-r9k4</span><span class="count">2 changes</span></div>
   </header>
   <main>
     
@@ -71,7 +71,22 @@
           <div class="row"><span class="k">What changed</span><span class="v">(1) `services/timeline/sectionCurriculumContext.ts` — added `&#39;reflection&#39;` to `SECTION_ROSTER_TYPES` (was `announcement`, `prompt_lab`), so the reflection week-closer&#39;s generation now receives &quot;THIS WEEK&#39;S ACTIVITIES&quot; (the week&#39;s real roster) on top of the blueprint; membership test updated. (2) `seeds/seedComponentAuthoring.ts` — new `reflection` entry in `COMPONENT_AUTHORING` + `REFLECTION_GENERATION_PROMPT`: a light, self-contained &quot;Ledger&quot; `body_html` (every activity grouped by phase, by its real title; three stat tiles; two strategic signals — Readiness + Application), replacing the old dark &quot;answer these questions&quot; card. Zero author input; ships its own &lt;style&gt; (lessonDoc preserves it). (3) `docs/REFLECTION_WEEK_REVIEW_BUILDSPEC.md` — spec for the per-student follow-up (cross-card history service + bespoke renderer for real scores/deltas/interactivity).</span></div>
           <div class="row"><span class="k">Verification</span><span class="v ver">jest `sectionCurriculumContext.test.ts` 4/4 green (incl. new `reflection`-in-set assertion); backend `tsc --noEmit` exit 0. Dev end-to-end via the PRODUCTION path (`cardContentService.generateCardContent`, 3200 tok) on the real Week-1 reflection card → title &quot;Your Week in Review — Claude Code Foundations + Workspace&quot;, 15/15 real activity titles captured across all 6 phases, reflection card excluded from its own roster, light theme, no scripts, ~$0.0014.</span></div>
           
-        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/reflection-roster-injection` off main. NOT merged/deployed (pending Ali review + after-hours). Supersedes the earlier dev-only dark &quot;Reflection Studio&quot; prompt with the light Ledger Ali approved. Per-student results (actual scores/commits/Growth Score) + interactive capture are the follow-up (body_html is class-wide + scripts-free) — see the build spec.</span></div>
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/reflection-roster-injection` off main. Merged (PR #679) + deployed to prod backend 2026-07-22. Supersedes the earlier dev-only dark &quot;Reflection Studio&quot; prompt with the light Ledger Ali approved. Per-student results (actual scores/commits/Growth Score) + interactive capture are the follow-up (body_html is class-wide + scripts-free) — see the build spec.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Reflection generation renders ALL phases through Share (was dropping Reflect/Share, i.e. the eval + survey + community)</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`seeds/seedComponentAuthoring.ts` — strengthened `REFLECTION_GENERATION_PROMPT`&#39;s COVER instruction to require rendering every phase group in full through the final Share phase, calling out the common failure of stopping after Build and naming the Reflect (evaluation, survey) and Share (community) activities as must-include.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">prod hotfix of the same prompt then 3 consecutive `generateCardContent` runs on the real Week-1 reflection card → 13/13 activities across all 6 phases every time (Prep,Learn,Practice,Build,Reflect,Share). Codified identically into the seed so a backend rebuild/restart keeps it.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/reflection-phase-completeness` off main. Deploy = backend rebuild (so the compiled seed carries the fix; a plain restart otherwise re-applies the old seed prompt from the image).</span></div>
           
         </div>
       </article>
