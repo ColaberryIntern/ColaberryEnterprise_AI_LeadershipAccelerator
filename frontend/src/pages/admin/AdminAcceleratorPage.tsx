@@ -8,7 +8,6 @@ import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components
 import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
 import ClassKitModal from '../../components/admin/ClassKitModal';
-import ClassDetailsModal from '../../components/admin/ClassDetailsModal';
 
 interface Cohort {
   id: string;
@@ -122,7 +121,6 @@ function AdminAcceleratorPage() {
   // Session id whose Class Kit (QR + start-class panel) is open, else null.
   const [kitSessionId, setKitSessionId] = useState<string | null>(null);
   // Session id whose Class Details (curriculum/blueprint) modal is open, else null.
-  const [detailsSessionId, setDetailsSessionId] = useState<string | null>(null);
   // Cohort days-off (dates a class was skipped) shown as removable chips above the table.
   const [skippedDates, setSkippedDates] = useState<string[]>([]);
   // Session pending a "mark as day off" confirm, else null.
@@ -683,8 +681,8 @@ function AdminAcceleratorPage() {
                       <td className="fw-medium">
                         <button
                           className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
-                          onClick={() => setDetailsSessionId(s.id)}
-                          title="View class details & curriculum"
+                          onClick={() => handleOpenKitDeck(s.id)}
+                          title="Open the class presentation (Class Kit deck) in a new tab — the QR to check in is on the first slides"
                         >
                           {s.title}
                         </button>
@@ -706,8 +704,8 @@ function AdminAcceleratorPage() {
                       </td>
                       <td>
                         <div className="d-flex gap-1">
-                          <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class">Kit ▶</button>
-                          <button className="btn btn-outline-primary btn-sm" onClick={() => setKitSessionId(s.id)} title="Quick launch panel: check-in QR + Start Class + roster (printable)">QR</button>
+                          <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class. The check-in QR is on the first slides.">▶ Present</button>
+                          <button className="btn btn-outline-secondary btn-sm" onClick={() => setKitSessionId(s.id)} title="Printable check-in QR + Start Class + roster (a paper backup — the deck already shows the QR)">QR</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>
                           <button className="btn btn-outline-warning btn-sm" onClick={() => setSkipTarget(s)} title="Mark this date as a day off — this class and all later ones shift forward one slot">Skip</button>
                           {s.status === 'scheduled' && (
@@ -1037,9 +1035,6 @@ function AdminAcceleratorPage() {
       )}
 
       {/* Class Details — curriculum / week-blueprint for a session (opened from Title) */}
-      {detailsSessionId && (
-        <ClassDetailsModal sessionId={detailsSessionId} onClose={() => setDetailsSessionId(null)} />
-      )}
 
       {/* Session Create/Edit Modal */}
       {showSessionModal && (

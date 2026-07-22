@@ -114,6 +114,23 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     `ALTER TABLE session_checklists ADD CONSTRAINT ck_session_checklists_item_type CHECK (item_type IN ('tool_setup', 'account_creation', 'reading', 'prerequisite', 'custom'))`,
     `CREATE INDEX IF NOT EXISTS idx_session_checklists_session ON session_checklists (session_id)`,
 
+    // ---- session_pulse (live class participation) ----
+    // One row per (enrollment, session): the student's current live status. The
+    // instructor's Class Kit deck reads aggregate counts + recent questions to
+    // drive the pulse rail and presenter feedback. Upsert-on-conflict keeps it to
+    // one row per student per session (race-safe under rapid taps).
+    `CREATE TABLE IF NOT EXISTS session_pulse (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       enrollment_id UUID NOT NULL REFERENCES enrollments(id),
+       state VARCHAR(20) NOT NULL DEFAULT 'here',
+       updated_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `ALTER TABLE session_pulse DROP CONSTRAINT IF EXISTS ck_session_pulse_state`,
+    `ALTER TABLE session_pulse ADD CONSTRAINT ck_session_pulse_state CHECK (state IN ('here', 'building', 'stuck', 'finished'))`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_pulse_enrollment_session ON session_pulse (enrollment_id, session_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_session_pulse_session ON session_pulse (session_id)`,
+
     // ---- session_gates ----
     // gate_type is DataTypes.STRING(50) in the model (NOT an ENUM) → plain VARCHAR, no CHECK.
     `CREATE TABLE IF NOT EXISTS session_gates (

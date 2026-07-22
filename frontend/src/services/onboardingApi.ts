@@ -169,6 +169,19 @@ export async function joinSession(sessionId: string): Promise<JoinSessionResult>
   return data;
 }
 
+/** Live class pulse state a student can broadcast from their phone. */
+export type PulseState = 'here' | 'building' | 'stuck' | 'finished';
+
+/** Set the student's live status for a session (lights up the instructor's deck). */
+export async function setSessionPulse(sessionId: string, state: PulseState): Promise<void> {
+  await portalApi.post(`/api/portal/sessions/${sessionId}/pulse`, { state });
+}
+
+/** Ask a question during class — reuses the session chat so it reaches the deck. */
+export async function askSessionQuestion(sessionId: string, text: string): Promise<void> {
+  await portalApi.post(`/api/portal/sessions/${sessionId}/chat`, { content: text });
+}
+
 /** Upcoming public events (Open Houses) from CCPP, for the portal calendar. */
 export async function fetchPublicEvents(days = 30): Promise<OpenHouseView[]> {
   const { data } = await portalApi.get<{ events: OpenHouseView[] }>(`/api/portal/events?days=${days}`);

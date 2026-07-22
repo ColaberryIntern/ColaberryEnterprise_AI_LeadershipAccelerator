@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
-import { joinSession } from '../../services/onboardingApi';
+import { joinSession, setSessionPulse, askSessionQuestion, PulseState } from '../../services/onboardingApi';
 import { emitPointsEarned } from '../../services/pointsFx';
 
 // Public live-class check-in landing (`/portal/class-checkin/:sessionId`).
@@ -57,6 +57,25 @@ const ClassCheckinPage: React.FC = () => {
   const [info, setInfo] = useState<CheckinInfo | null>(null);
   const [joinPhase, setJoinPhase] = useState<JoinPhase>('idle');
   const joinRan = useRef(false);
+
+  // Live class controller (after check-in): status + ask-a-question.
+  const [pulse, setPulse] = useState<PulseState | null>(null);
+  const [question, setQuestion] = useState('');
+  const [qState, setQState] = useState<'idle' | 'sending' | 'sent'>('idle');
+
+  const tapPulse = useCallback((state: PulseState) => {
+    setPulse(state);
+    setSessionPulse(sessionId, state).catch(() => { /* best-effort; UI already reflects it */ });
+  }, [sessionId]);
+
+  const sendQuestion = useCallback(() => {
+    const text = question.trim();
+    if (!text) return;
+    setQState('sending');
+    askSessionQuestion(sessionId, text)
+      .then(() => { setQuestion(''); setQState('sent'); setTimeout(() => setQState('idle'), 1800); })
+      .catch(() => setQState('idle'));
+  }, [sessionId, question]);
 
   // 1) Load the public class info (title/date/cohort) for either path.
   const loadInfo = useCallback(() => {
@@ -157,8 +176,49 @@ const ClassCheckinPage: React.FC = () => {
                 <p className="cbck-eyebrow">You&rsquo;re checked in</p>
                 <h1 className="cbck-title">{info.title}</h1>
                 <p className="cbck-meta">{info.cohort_name}{info.start_time ? ` · ${formatTime(info.start_time)}` : ''}</p>
-                <button type="button" className="cbck-btn" onClick={enterClass}>Enter the class</button>
-                <p className="cbck-text cbck-text-sub">Opens the live room and class chat.</p>
+
+                {/* Live class controller — your phone drives the room */}
+                <div className="cbck-controller">
+                  <p className="cbck-ctl-label">Tap your status any time</p>
+                  <div className="cbck-status-grid">
+                    {([
+                      { s: 'here', label: "I'm here", emoji: '👋' },
+                      { s: 'building', label: 'Building', emoji: '🛠️' },
+                      { s: 'stuck', label: "I'm stuck", emoji: '✋' },
+                      { s: 'finished', label: 'Finished', emoji: '✅' },
+                    ] as { s: PulseState; label: string; emoji: string }[]).map(({ s, label, emoji }) => (
+                      <button
+                        key={s}
+                        type="button"
+                        className={`cbck-status cbck-status-${s}${pulse === s ? ' is-active' : ''}`}
+                        onClick={() => tapPulse(s)}
+                        aria-pressed={pulse === s}
+                      >
+                        <span className="cbck-status-emoji" aria-hidden="true">{emoji}</span>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="cbck-ask">
+                    <input
+                      type="text"
+                      className="cbck-ask-input"
+                      placeholder="Ask a question…"
+                      value={question}
+                      onChange={(e) => setQuestion(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') sendQuestion(); }}
+                      maxLength={280}
+                      aria-label="Ask a question"
+                    />
+                    <button type="button" className="cbck-ask-send" onClick={sendQuestion} disabled={!question.trim() || qState === 'sending'}>
+                      {qState === 'sent' ? 'Sent ✓' : qState === 'sending' ? '…' : 'Send'}
+                    </button>
+                  </div>
+                  <p className="cbck-text cbck-text-sub">Your instructor sees this on screen — no need to interrupt.</p>
+                </div>
+
+                <button type="button" className="cbck-btn cbck-btn-ghost" onClick={enterClass}>Open the live room</button>
               </div>
             )}
 
@@ -249,9 +309,42 @@ const CBCK_CSS = `
 .cbck-btn:focus-visible{ outline:none; box-shadow:var(--focus-ring); }
 .cbck-btn-ghost{
   color:var(--text-link); background:transparent; box-shadow:none;
-  border:1px solid var(--border-default); margin-top:10px;
+  border:1px solid var(--border-default); margin-top:14px;
 }
 .cbck-btn-ghost:hover{ background:var(--surface-subtle); }
+
+/* Live class controller */
+.cbck-controller{ width:100%; margin-top:22px; padding-top:20px; border-top:1px solid var(--border-subtle); }
+.cbck-ctl-label{ font-size:12px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text-muted); margin:0 0 12px; }
+.cbck-status-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.cbck-status{
+  display:flex; flex-direction:column; align-items:center; gap:6px;
+  min-height:76px; padding:12px 8px; cursor:pointer;
+  font-size:15px; font-weight:600; color:var(--text-body);
+  background:var(--surface-card); border:2px solid var(--border-default); border-radius:var(--radius-lg);
+  transition:border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.cbck-status:active{ transform:scale(.97); }
+.cbck-status-emoji{ font-size:24px; line-height:1; }
+.cbck-status.is-active{ color:#fff; border-color:transparent; }
+.cbck-status-here.is-active{ background:var(--blue-500, #367895); }
+.cbck-status-building.is-active{ background:var(--amber-500, #E8920C); }
+.cbck-status-stuck.is-active{ background:var(--red-500, #FB2832); }
+.cbck-status-finished.is-active{ background:var(--green-600, #3C7A26); }
+
+.cbck-ask{ display:flex; gap:8px; margin-top:14px; }
+.cbck-ask-input{
+  flex:1; min-width:0; height:48px; padding:0 14px;
+  font-size:15px; color:var(--text-body);
+  background:var(--surface-card); border:1.5px solid var(--border-default); border-radius:var(--radius-pill);
+}
+.cbck-ask-input:focus-visible{ outline:none; border-color:var(--brand-accent); box-shadow:var(--focus-ring); }
+.cbck-ask-send{
+  flex:none; height:48px; padding:0 18px; cursor:pointer;
+  font-size:15px; font-weight:700; color:var(--action-fg); background:var(--action-bg);
+  border:none; border-radius:var(--radius-pill);
+}
+.cbck-ask-send:disabled{ opacity:.5; cursor:default; }
 
 .cbck-spin{
   width:34px; height:34px; margin:8px auto 16px; border-radius:50%;

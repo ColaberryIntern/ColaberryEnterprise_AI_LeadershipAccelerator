@@ -10,9 +10,11 @@
 // Live pulse is off here (the deck runs standalone). Wiring the live-state feed
 // is a follow-up; renderKitHtml already accepts a { live } config for it.
 // ============================================================================
+import { env } from '../config/env';
 import { buildSessionKit } from './sessionKitService';
 import { buildKitSpec } from './classKit/kitSpec';
 import { renderKitHtml } from './classKit/kitHtml';
+import { mintKitToken } from './classKit/kitToken';
 
 /**
  * Render the Class Kit deck HTML for a session. Returns null if the session does
@@ -31,5 +33,18 @@ export async function renderSessionKitDoc(sessionId: string): Promise<string | n
     meetLink: kit.meeting_link,
   });
 
-  return renderKitHtml(spec, { live: { enabled: false } });
+  // Enable the live pulse: the deck (opened via document.write into an about:blank
+  // window) polls the session-scoped live-state endpoint with a short-lived kit
+  // token. The endpoint must be ABSOLUTE — a relative URL won't resolve from an
+  // about:blank document — and it stays same-origin as the admin page (which
+  // inherited that origin), so the fetch needs no CORS and no cookies.
+  const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/+$/, '');
+  return renderKitHtml(spec, {
+    live: {
+      enabled: true,
+      endpoint: `${base}/api/portal/sessions/${sessionId}/live-state`,
+      token: mintKitToken(sessionId),
+      pollMs: 4000,
+    },
+  });
 }

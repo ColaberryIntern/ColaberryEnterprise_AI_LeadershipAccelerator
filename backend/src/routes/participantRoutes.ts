@@ -3,6 +3,9 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { requireAdmin } from '../middlewares/authMiddleware';
+import { verifyKitToken } from '../services/classKit/kitToken';
+import { handleRecordPulse, handleGetLiveState } from '../controllers/sessionLiveController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
 import {
@@ -157,6 +160,19 @@ router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetai
 router.post('/api/portal/sessions/:id/join', requireParticipant, handleJoinSession);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
 router.post('/api/portal/sessions/:id/chat', requireParticipant, handlePostSessionChat);
+// Live class pulse: a student sets status from their phone (participant-auth); the
+// instructor Class Kit deck reads aggregate state via a session-scoped kit token
+// (baked into the admin-opened deck) OR an admin JWT.
+router.post('/api/portal/sessions/:id/pulse', requireParticipant, handleRecordPulse);
+router.get(
+  '/api/portal/sessions/:id/live-state',
+  (req, res, next) => {
+    const t = typeof req.query.t === 'string' ? req.query.t : undefined;
+    if (verifyKitToken(t, req.params.id as string)) return next();
+    return requireAdmin(req, res, next);
+  },
+  handleGetLiveState,
+);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
