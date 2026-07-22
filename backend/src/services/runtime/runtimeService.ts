@@ -21,6 +21,7 @@ import { selectTestimonialForEnrollment } from '../timeline/networkVideoService'
 import { selectPodcastForEnrollment } from '../timeline/podcastMediaService';
 import { selectBlogForEnrollment } from '../timeline/blogMediaService';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
+import { ritualStudentLabel } from './communityRituals';
 
 /** Build the student's signal vector from progression + completed evidence + portfolio. */
 export async function studentSignals(enrollmentId: string): Promise<StudentSignals> {
@@ -113,7 +114,7 @@ export async function openCard(enrollmentId: string, cardId: string, opts: { rea
   return {
     card: {
       id: card.id, type: card.type, title, subtitle: card.subtitle, description,
-      student_label: def?.student_label || card.type, render_band: def?.render_band || 'overview',
+      student_label: ritualStudentLabel(card.type, card.week ?? null, def?.student_label || card.type), render_band: def?.render_band || 'overview',
       estimated_time: card.estimated_time, competencies: card.competencies,
       evidence_required: !!def?.evidence_required, video,
       blog,

@@ -30,6 +30,7 @@
  * Lines tagged ⚑ are reversible product judgment-calls flagged for review.
  */
 import type { TimelineBucket } from '../../models/TimelineCard';
+import { env } from '../../config/env';
 
 export type PromptPair = 'concept' | 'build' | 'mentor' | 'kc' | 'reflection';
 
@@ -114,7 +115,14 @@ export const CARD_TYPES: CardTypeDef[] = [
   // The Architect Time Machine — a weekly cinematic decision simulation (bespoke
   // renderer, its own render_band). Week 0 is a baseline demo; Weeks 1-12 are scored.
   D({ slug: 'architect_mindset', label: 'Architect Mindset', student_label: 'Architect Time Machine', bucket: 'reflect', render_band: 'architect_mindset', est_minutes: 28, learning_xp: 100, builder_xp: 40, community_xp: 20, difficulty: 'stretch', competencies: ['systems_thinking', 'architecture', 'decision_making', 'tradeoffs', 'ai_governance'], evidence_required: true, ai_evaluation: true, portfolio_eligible: true, prompt_pairs: ['concept', 'reflection'] }),
-  D({ slug: 'community_discussion', label: 'Community Discussion', student_label: 'Community Discussion', bucket: 'share', render_band: 'community', est_minutes: 15, community_xp: 20, competencies: ['communication'], home_surface: 'community' }),
+  // Weekly Community Ritual — the end-of-week card runs a different ritual each week
+  // (Roll Call, Skill Drop, Cohort Wins, Unblock Me, Hot Take, Manifesto…; see
+  // communityRituals.ts). The per-week student chip is set at serialization by
+  // ritualStudentLabel(); this static label is the admin-facing fallback. render_band
+  // 'peer_wins' is a bespoke renderer; PEER_WINS_ENABLED can revert it to the plain
+  // 'community' reading render (applied just below, kept a literal here so the
+  // format-contract test can parse it).
+  D({ slug: 'community_discussion', label: 'Community Discussion', student_label: 'Community Ritual', bucket: 'share', render_band: 'peer_wins', est_minutes: 15, community_xp: 20, competencies: ['communication'], home_surface: 'community' }),
   D({ slug: 'presentation', label: 'Presentation', student_label: 'Presentation', bucket: 'share', render_band: 'presentation', est_minutes: 30, builder_xp: 60, community_xp: 10, difficulty: 'stretch', competencies: ['communication', 'leadership'], evidence_required: true, ai_evaluation: true, instructor_review: true, portfolio_eligible: true, prompt_pairs: ['mentor'] }), // ⚑ graded curriculum deliverable kept in class; could be community/group
   D({ slug: 'study_session', label: 'Study Session', student_label: 'Study Session', bucket: 'practice', render_band: 'study', est_minutes: 45, learning_xp: 10, community_xp: 5 }),
   D({ slug: 'demo', label: 'Demo', student_label: 'Demo', bucket: 'share', render_band: 'demo', est_minutes: 20, builder_xp: 40, community_xp: 10, difficulty: 'core', competencies: ['communication'], evidence_required: true, portfolio_eligible: true, prompt_pairs: ['mentor'], home_surface: 'community' }), // ⚑ peer showcase → community; could be project
@@ -152,6 +160,16 @@ export const CARD_TYPES: CardTypeDef[] = [
   D({ slug: 'daily_streak', label: 'Daily Streak', student_label: 'Daily Streak', bucket: 'advance', render_band: 'streak', est_minutes: 0, system: true, home_surface: 'today', feed_mode: 'ambient' }),
   D({ slug: 'completion_badge', label: 'Completion Badge', student_label: 'Completion Badge', bucket: 'advance', render_band: 'badge', est_minutes: 0, system: true, home_surface: 'today', feed_mode: 'ambient' }),
 ];
+
+// Peer Wins kill switch — PEER_WINS_ENABLED=false reverts the community_discussion
+// type from the bespoke Cohort Wins grid ('peer_wins') to the plain community
+// reading render ('community', still a valid BAND). Mutating the entry in place
+// keeps both the CARD_TYPES array and the REGISTRY map (and the boot type-seed that
+// re-asserts to the DB) consistent, while the source literal above stays parseable.
+if (!env.peerWinsEnabled) {
+  const cd = CARD_TYPES.find((t) => t.slug === 'community_discussion');
+  if (cd) { cd.render_band = 'community'; cd.student_label = 'Community Discussion'; }
+}
 
 const REGISTRY = new Map<string, CardTypeDef>(CARD_TYPES.map((t) => [t.slug, t]));
 

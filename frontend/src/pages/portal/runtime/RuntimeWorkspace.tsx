@@ -7,6 +7,7 @@ import { lessonDoc, readerDoc } from '../../../components/timeline/CardDetailBod
 import { parseVideoUrl, videoThumbnail } from '../../../utils/videoEmbed';
 import { runtimeCss } from './runtimeKit';
 import CardSurveyExperience from '../../../components/timeline/CardSurveyExperience';
+import PeerWinsPanel from '../../../components/timeline/PeerWinsPanel';
 import SkillsJarPanel from '../../../components/timeline/SkillsJarPanel';
 import { toTitleCase } from '../../../utils/titleCase';
 import { useReaderProgress } from '../../../components/timeline/useReaderProgress';
@@ -125,13 +126,14 @@ const RuntimeWorkspace: React.FC = () => {
   const isPromptCatalog = band === 'prompt_catalog' && !!card?.content?.body_html;   // Prompt Lab: practice-prompt catalog
   const isArchitectMindset = band === 'architect_mindset';   // The Architect Time Machine: full cinematic experience (self-contained, completes internally)
   const isBuildArtifacts = band === 'build_artifacts' && !!card?.content?.body_html;   // Build Artifact(s) Lab: build station
+  const isPeerWins = band === 'peer_wins';   // Community Discussion → Cohort Wins grid (post a win + cheer classmates)
   const [labCopied, setLabCopied] = useState(false);   // Setup Lab: reveal completion only after the prompt is copied
   const [allPromptsCopied, setAllPromptsCopied] = useState(false);   // Prompt Lab: reveal completion only after ALL prompts are copied
   // Layout: any content card whose body renders in an iframe — the Self Study reader OR a
   // generic lesson — FILLS the center as the single scroll (no dueling scrollbars). Video/
   // lab/reflect/survey/assessment keep the normal scrolling center. Comments always go to
   // the right rail. This is the single-scroll workstation layout applied to every type.
-  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && !!card?.content?.body_html;
+  const isLesson = !isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isReader && !isDeepDive && !isSetupLab && !isPromptCatalog && !isBuildArtifacts && !isPeerWins && !!card?.content?.body_html;
   const fill = isReader || isLesson || isDeepDive;
 
   const ask = useCallback(async (mode: string, message: string) => {
@@ -290,6 +292,13 @@ const RuntimeWorkspace: React.FC = () => {
             />
           )}
 
+          {/* Peer Wins — the Cohort Wins grid (post a win + cheer classmates). Self-
+              contained + self-styled, like the survey. Completion is the normal Mark
+              complete bar below (posting is optional, never gates completion). */}
+          {isPeerWins && (
+            <PeerWinsPanel cardId={card.id} />
+          )}
+
           {isReflect && (
             <div>
               {reflectionQs.length === 0 ? <button className="rt-btn pri" disabled={busy === 'reflect'} onClick={loadReflection}>{busy === 'reflect' ? 'Thinking…' : '✦ Get my reflection prompts'}</button>
@@ -385,7 +394,7 @@ const RuntimeWorkspace: React.FC = () => {
             </div>
           )}
           {/* Fallback for a non-media card with no body yet — just its description. */}
-          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && (
+          {!isVideo && !isLab && !isReflect && !isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && !isPeerWins && (
             <div className="rt-card">
               {card.content?.summary && <p>{card.content.summary}</p>}
               {card.description ? <p>{card.description}</p> : <p className="rt-muted">Work through this activity, then complete it below.</p>}

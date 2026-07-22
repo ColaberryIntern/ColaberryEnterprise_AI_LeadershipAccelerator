@@ -41,6 +41,32 @@ export interface SurveyAnswerItem { question: string; rating: number | null; com
 export interface SurveyAnswers { items: SurveyAnswerItem[]; open: string | null }
 export interface SurveyView { questions: string[]; open_prompt: string | null; answers: SurveyAnswers | null }
 
+// ── Community Rituals (community_discussion) ─────────────────────────────────
+export interface RitualField {
+  key: string; label: string; placeholder?: string; required?: boolean;
+  kind: 'text' | 'textarea' | 'list' | 'link' | 'choice'; choices?: string[]; mono?: boolean; maxLength?: number;
+}
+export type RitualVariant = 'standard' | 'chips' | 'prompt' | 'qa' | 'debate' | 'before_after' | 'manifesto';
+export interface PublicRitual {
+  key: string; week: number; name: string; icon: string; accent: string;
+  ask: string; lead: string; postCta: string;
+  fields: RitualField[]; headlineField: string; variant: RitualVariant;
+  reaction: { emoji: string; label: string }; mechanic: { icon: string; caption: string };
+  beforeAfter: [string, string] | null;
+}
+export interface RitualTileMember { id: string; name: string; avatar_url: string | null; level: number; initials: string }
+export interface RitualTile {
+  id: string; member: RitualTileMember; headline: string;
+  values: Record<string, string | string[]>; link: string | null;
+  like_count: number; viewer_has_liked: boolean; is_mine: boolean; created_at: string;
+}
+export interface RitualWall {
+  card_id: string; week: number | null; title: string | null;
+  ritual: PublicRitual; wall: RitualTile[]; my_post: RitualTile | null; count: number;
+  split: { choices: string[]; counts: number[] } | null;
+}
+export type RitualValues = Record<string, string | string[]>;
+
 // ── Assessments: Knowledge Check (quiz) + Evaluation ─────────────────────────
 export type AssessmentKind = 'quiz' | 'evaluation';
 export interface AssessmentQ { index: number; question: string; options: string[]; competency: string | null; correct_index?: number; explanation?: string | null }
@@ -139,6 +165,12 @@ export const runtimeApi = {
   survey: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/survey`).then((r) => r.data as SurveyView),
   saveSurvey: (cardId: string, payload: { items: Array<{ index: number; rating: number | null; comment?: string | null }>; open?: string | null }) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/survey`, payload).then((r) => r.data as { saved: true; answers: SurveyAnswers; points_awarded: number }),
+  // Community Rituals: read the week's ritual + cohort wall, post/edit my answer, cheer a classmate's.
+  ritualWall: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/peer-wins`).then((r) => r.data as RitualWall),
+  postRitual: (cardId: string, values: RitualValues) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/peer-wins`, { values }).then((r) => r.data as { post: RitualTile; created: boolean }),
+  cheerRitual: (cardId: string, postId: string) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/peer-wins/${postId}/cheer`, {}).then((r) => r.data as { liked: boolean; like_count: number }),
   assessment: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/assessment`).then((r) => r.data as AssessmentView),
   submitAssessment: (cardId: string, payload: AssessmentSubmit) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/assessment`, payload).then((r) => r.data as AssessmentResult),
