@@ -137,6 +137,54 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description:
       'AI News Flash intelligence pipeline. Daily 03:15 CT: fetches free AI-lab RSS feeds, dedup-upserts the library, materializes up to AI_NEWS_MAX_PER_RUN news cards (cost-gated by AI_NEWS_INGEST_ENABLED), then prunes generated cards older than 30 days. A boot catch-up recovers a run missed by a redeploy. Registering it here gives the cron run-history + failure tracking via instrumentCronJob.',
   },
+  // Intelligence pipelines — the 9 generators beyond AI News Flash. Daily 03:45 CT
+  // via the shared Intel cron loop; each cost-gated by its own <SLUG>_INGEST_ENABLED
+  // flag (default OFF → ships dark) and tracked per-source via instrumentCronJob.
+  {
+    agent_name: 'Intel_ai_research_digest', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_research_digest.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Research Digest pipeline (arXiv API + Papers with Code RSS). Daily 03:45 CT; cost-gated by AI_RESEARCH_DIGEST_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_architecture_breakdown', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_architecture_breakdown.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Architecture Breakdown pipeline (Netflix/AWS/Uber engineering blog RSS). Daily 03:45 CT; cost-gated by AI_ARCHITECTURE_BREAKDOWN_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_build_breakdown', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/build_breakdown.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Build Breakdown pipeline (GitHub Blog + dev.to AI RSS). Daily 03:45 CT; cost-gated by BUILD_BREAKDOWN_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_tool_of_the_day', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_tool_of_the_day.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Tool of the Day pipeline (curated tool seed + LLM profile). Daily 03:45 CT; cost-gated by AI_TOOL_OF_THE_DAY_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_quote_of_the_day', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/ai_quote_of_the_day.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Quote of the Day pipeline (curated quote seed + LLM). Daily 03:45 CT; cost-gated by AI_QUOTE_OF_THE_DAY_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_claude_code_technique', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/claude_code_technique.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Claude Code Technique pipeline (curated technique seed + LLM). Daily 03:45 CT; cost-gated by CLAUDE_CODE_TECHNIQUE_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_mcp_server_spotlight', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/mcp_server_spotlight.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'MCP Server Spotlight pipeline (MCP registry README + curated fallback). Daily 03:45 CT; cost-gated by MCP_SERVER_SPOTLIGHT_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_ai_video_stream', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/aiVideoStreamSource.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'AI Video Stream pipeline (YouTube Data API; needs YOUTUBE_API_KEY, degrades to no-op if absent). Daily 03:45 CT; cost-gated by AI_VIDEO_STREAM_INGEST_ENABLED (default off).',
+  },
+  {
+    agent_name: 'Intel_market_intelligence', agent_type: 'scheduled_processor', module: 'schedulerService',
+    source_file: 'backend/src/services/intel/sources/marketIntelligenceSource.ts', trigger_type: 'cron', schedule: '45 3 * * *', category: 'accelerator',
+    description: 'Market Intelligence pipeline (Opportunity Pulse REST; needs OPPORTUNITY_PULSE_URL, degrades to no-op if absent). Daily 03:45 CT; cost-gated by MARKET_INTELLIGENCE_INGEST_ENABLED (default off).',
+  },
   {
     agent_name: 'SessionReminders',
     agent_type: 'reminder',
