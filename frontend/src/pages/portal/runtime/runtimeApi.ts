@@ -149,8 +149,30 @@ export interface AmLedger { lessons_completed: number; decisions_recorded: numbe
 export interface AmGap { code: string; label: string }
 export interface AmStateView { scenario: AmScenario; progress: AmProgress; status: string; receipt: AmReceipt; gaps: AmGap[]; ledger: AmLedger }
 
+// Week in Review (reflection) — the per-student data behind the weekly reflection panel.
+export interface WrActivity {
+  card_id: string; type: string; label: string; title: string; bucket: string; phase: string;
+  minutes: number; completed: boolean; status: string; quiz_score: number | null;
+}
+export interface WrSkill { domain: string; label: string; beginning: number | null; current: number | null; delta: number | null; }
+export interface WrSignals { readiness: number | null; application: string | null; application_text: string | null; direction: string | null; note: string | null; }
+export interface WeekReview {
+  program_id: string | null; week: number | null; week_title: string | null;
+  stats: { total: number; completed: number; time_invested_min: number; points: number; growth_score: number };
+  activities: WrActivity[];
+  skills: WrSkill[];
+  evaluation: { score: number | null; passed: boolean | null; growth: number | null } | null;
+  survey: { avg_rating: number | null; open: string | null } | null;
+  signals: WrSignals | null;
+  generated_at: string;
+}
+export interface WrSignalsInput { readiness?: number | null; application?: string | null; application_text?: string | null; direction?: string | null; note?: string | null; }
+
 export const runtimeApi = {
   open: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}`).then((r) => r.data as RtOpen),
+  weekReview: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/week-review`).then((r) => r.data as WeekReview),
+  saveReflectionSignals: (cardId: string, body: WrSignalsInput) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/week-review/signals`, body).then((r) => r.data as WrSignals),
   architectState: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/architect/state`).then((r) => r.data as AmStateView),
   architectAdvance: (cardId: string, to: string, patch?: Partial<AmProgress>) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/advance`, { to, patch }).then((r) => r.data as { state: string; saved: boolean }),
