@@ -13,7 +13,7 @@ import {
   WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS,
 } from '../../data/classSessionPlan';
 import { weekBlueprint } from '../../data/weekBlueprints';
-import { teachSlidesFor, TeachSlide, ORIENTATION_TEACH } from '../../data/classTeachContent';
+import { teachSlidesFor, TeachSlide, EvidenceClaim, ORIENTATION_TEACH } from '../../data/classTeachContent';
 import {
   SegmentTemplate, SegmentMode, runOfShowFor, scaleSegments,
   formatClock, durationMinutes, formatLongDate, weekdayOf,
@@ -45,6 +45,8 @@ export interface KitSlide {
   /** Mermaid diagram source (rendered client-side) + its caption. */
   diagram?: string;
   diagramCaption?: string;
+  /** Sourced factual claims (rendered as a small source footer). */
+  evidence?: EvidenceClaim[];
   /** Guidance shown in the instructor's presenter rail, never to the room. */
   presenterTip?: string;
   /** Reminder of what this segment is worth as public content. */
@@ -174,6 +176,7 @@ function teachToSlides(teach: TeachSlide[], segId: string, seg: KitSegment): Kit
         bullets: t.bullets,
         prompt: t.code ? { label: t.code.label, prompt: t.code.code } : undefined,
         diagram: t.diagram,
+        evidence: t.evidence,
         presenterTip: t.script || seg.purpose,
       }),
     );

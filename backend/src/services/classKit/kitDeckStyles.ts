@@ -199,6 +199,7 @@ pre.mermaid{background:#fff;border:1.5px solid var(--line);border-radius:16px;pa
 pre.mermaid svg{max-width:100%;height:auto}
 pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transparent}
 .kdiagram-cap{margin-top:1.4vh;font-size:clamp(12px,.9vw,15px);color:var(--muted);font-weight:600;text-align:center;max-width:64ch}
+.kevidence{margin-top:2.4vh;font-size:clamp(11px,.7vh + .3vw,14px);color:var(--subtle);border-top:1px solid var(--line);padding-top:1vh;max-width:70ch}
 
 #kqr-overlay{position:fixed;inset:0;z-index:80;background:rgba(15,20,25,.92);display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:20px}
 #kqr-overlay.show{display:flex}

@@ -23,6 +23,17 @@
 
 import { GENERATED_WEEK_TEACH } from './classTeachWeeks';
 
+/** A sourced factual claim shown in a small footer + the readiness report. */
+export interface EvidenceClaim {
+  claim: string;
+  publisher: string;
+  sourceTitle?: string;
+  publicationDate?: string;
+  sourceType?: 'official-doc' | 'research' | 'company-report' | 'interview' | 'internal-verified' | 'secondary-reporting';
+  /** e.g. "projection", "paraphrase" — surfaced as a qualifier. */
+  note?: string;
+}
+
 export interface TeachSlide {
   /** Run-of-show segment id this slide belongs to. */
   segment: string;
@@ -36,6 +47,8 @@ export interface TeachSlide {
   code?: { label: string; code: string };
   /** Optional mermaid diagram source. */
   diagram?: string;
+  /** Sourced factual claims (rendered as a source footer + readiness report). */
+  evidence?: EvidenceClaim[];
   /** What the instructor says/does out loud (teaching script; goes to notes). */
   script?: string;
 }
@@ -54,8 +67,12 @@ export const ORIENTATION_TEACH: TeachSlide[] = [
   {
     segment: 'big-picture', eyebrow: '🌍 The moment', title: 'The people building AI are telling us what’s coming',
     body: 'This isn’t hype from the sidelines — the people building the frontier models are saying it out loud. AI agents already write production code, resolve support tickets, and draft contracts. The question is no longer IF your work changes; it’s which side of that change you’re on.',
-    bullets: ['“AI could eliminate half of entry-level white-collar jobs in 5 years.” — Dario Amodei, Anthropic', '“You won’t lose your job to an AI — you’ll lose it to someone who uses AI.” — Jensen Huang', 'Already true today, not a prediction'],
-    script: 'Open with energy. Read one quote, pause, let it land. “Tonight isn’t about fear — it’s about getting you on the right side of this.”',
+    bullets: ['Anthropic’s CEO has warned AI could wipe out up to half of entry-level white-collar jobs within five years (Dario Amodei, reported by Axios, 2025)', '“You’re not going to lose your job to an AI, but you’re going to lose your job to somebody who uses AI.” — Jensen Huang, NVIDIA', 'Already happening today, not just a forecast'],
+    evidence: [
+      { claim: 'AI could eliminate up to half of entry-level white-collar jobs within 5 years', publisher: 'Axios', sourceTitle: 'Interview with Dario Amodei (Anthropic)', publicationDate: '2025', sourceType: 'secondary-reporting', note: 'reported paraphrase' },
+      { claim: '“…lose your job to somebody who uses AI.”', publisher: 'Jensen Huang, NVIDIA', sourceType: 'interview' },
+    ],
+    script: 'Open with energy. Read the Huang quote, pause, let it land. Note the Amodei line is his reported warning, not a fixed forecast. “Tonight isn’t about fear — it’s about getting you on the right side of this.”',
   },
   {
     segment: 'big-picture', eyebrow: '📊 The gap', title: 'Most people USE AI. Very few learn to BUILD with it.',
@@ -65,9 +82,13 @@ export const ORIENTATION_TEACH: TeachSlide[] = [
   },
   {
     segment: 'big-picture', eyebrow: '💰 The premium', title: 'Knowing AI vs. not knowing it is now a compensation line',
-    body: 'This isn’t abstract. PwC measured a 56% wage premium for AI-skilled workers, and it’s widening every year. The World Economic Forum counts 92 million roles displaced by 2030 — and 170 million created. The bridge between the two columns is one skill: learning to build.',
-    bullets: ['+56% wage premium for AI-skilled workers (PwC 2025)', '−92M displaced / +170M created by 2030 (WEF)', 'The bridge is learning to build'],
-    script: 'Keep it factual and calm. These numbers do the persuading — you don’t have to oversell.',
+    body: 'This isn’t abstract. PwC’s 2026 Global AI Jobs Barometer found a 62% wage premium for workers with AI skills, and it’s widening every year. The World Economic Forum projects 170 million new roles by 2030 against 92 million displaced — a net gain, but one that goes to people who can direct AI. The bridge between the two columns is one skill: learning to build.',
+    bullets: ['+62% wage premium for AI-skilled workers (PwC, 2026 Global AI Jobs Barometer)', 'WEF projection by 2030: +170M created / −92M displaced / net +78M; 39% of core skills change', 'The bridge is learning to build'],
+    evidence: [
+      { claim: '62% wage premium for workers with AI skills', publisher: 'PwC', sourceTitle: 'Global AI Jobs Barometer', publicationDate: '2026', sourceType: 'company-report' },
+      { claim: '170M created / 92M displaced / net +78M; 39% of core skills change by 2030', publisher: 'World Economic Forum', sourceTitle: 'Future of Jobs Report 2025', publicationDate: '2025', sourceType: 'research', note: 'projection' },
+    ],
+    script: 'Keep it factual and calm. Say the WEF numbers are projections, not certainties. The PwC premium is measured. These numbers do the persuading — don’t oversell.',
   },
   {
     segment: 'big-picture', eyebrow: '🏆 The proof', title: 'Fourteen years of turning careers around',
@@ -175,8 +196,8 @@ const WEEK1: DayTeach = {
     },
     {
       segment: 'architecture', eyebrow: '🔧 Tools + permissions', title: 'Tools are what Claude can DO — permissions gate them',
-      body: 'Tools let Claude read files, edit them, run shell commands, and search. Permissions decide what fires without asking. Approval mode asks before every action; auto-accept runs freely; Plan Mode proposes a plan and waits. The mode you choose is a trust decision — high trust for a scratch repo, low trust for production.',
-      bullets: ['Tools: read · edit · run · search', 'Approval / auto-accept / Plan Mode', 'The mode is a trust decision'],
+      body: 'Tools let Claude read files, edit them, run shell commands, and search. Permissions decide what fires without asking. Manual mode asks before every action; Plan mode proposes a plan and waits for you; Auto mode runs freely. The mode you choose is a trust decision — high trust for a scratch repo, low trust for production. (Product terms can shift — teach the behavior, not the label.)',
+      bullets: ['Tools: read · edit · run · search', 'Manual (approve each) · Plan (propose, wait) · Auto (run freely)', 'The mode is a trust decision'],
       script: 'Frame it as safety, not friction: “The permission mode is how you sleep at night when an agent is editing your code.”',
     },
     {

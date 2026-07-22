@@ -3,7 +3,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
-  handleGetSessionKit, handleGetSessionKitDoc, handleGetSessionOutline,
+  handleGetSessionKit, handleGetSessionKitDoc, handleGetSessionOutline, handleGetSessionReadiness,
   handleGenerateMeetLink, handleGenerateCohortMeetLinks,
   handleGetAttendance, handleMarkAttendance, handleUpdateAttendance,
   handleListEnrollmentSubmissions, handleListSessionSubmissions, handleCreateSubmission,
@@ -109,6 +109,8 @@ router.get('/api/admin/accelerator/sessions/:id/kit', requireAdmin, handleGetSes
 router.get('/api/admin/accelerator/sessions/:id/kit-doc', requireAdmin, handleGetSessionKitDoc);
 // Plain-language class outline (teaching plan) — review / prepare / print.
 router.get('/api/admin/accelerator/sessions/:id/outline', requireAdmin, handleGetSessionOutline);
+// Instructor readiness report (prep + source/evidence ledger).
+router.get('/api/admin/accelerator/sessions/:id/readiness', requireAdmin, handleGetSessionReadiness);
 router.post('/api/admin/accelerator/cohorts/:cohortId/meet-links', requireAdmin, handleGenerateCohortMeetLinks);
 router.get('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleGetAttendance);
 router.post('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleMarkAttendance);

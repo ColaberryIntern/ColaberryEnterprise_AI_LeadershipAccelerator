@@ -217,7 +217,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
       architectureBeats: [
         'The agentic loop: context window + tools + permissions — what Claude Code can see, do, and is allowed to do',
         'The workflow that scales: explore → plan → code → commit (never skip explore and plan)',
-        'Permission modes: approval vs auto-accept vs Plan Mode, and when each is safe',
+        'Permission modes: Manual (approve each action), Plan (propose then wait), and Auto (run freely) — and when each is safe',
         'Context management: /compact, /clear, /context — treat the context window as a budget',
         'CLAUDE.md as persistent project memory — Claude reads it every session',
       ],
