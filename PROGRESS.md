@@ -10,6 +10,15 @@ Accelerator Program local dev environment — one-command setup for admin, stude
 
 ---
 
+### Points Economy — paid gate broadened to accelerator cohort (2026-07-21)
+- [x] **Broadened `isBuildEntitled` so cohort_type='accelerator' is build-entitled (billing may be 'pending'); real accelerator students build, only free Explorers are gated. Prompted by a prod safety check before flipping the paid gate.**
+  - Date: 2026-07-21
+  - Session: CC-20260721-g8k4
+  - What changed: `backend/src/middlewares/requireBuildEntitlement.ts` — `isBuildEntitled` now returns true for cohort_type='accelerator' (5th OR signal alongside paid|comped|staff|sponsor). A prod blast-radius check before enabling BUILD_PAID_GATE_ENABLED found 233 of 249 portal accounts non-paid, incl. **103 accelerator-cohort students at payment_status='pending'** (legit paid-program students, billing pending) — keying on payment_status='paid' alone would wrongly 402 them. Ops invariant documented in code: free/demo/open-house cohorts must not carry cohort_type='accelerator'. Tests updated (`requireBuildEntitlement.test.ts`): prior 'accelerator → false' assertion flipped to true (+ case-insensitive + explorer-still-gated) + a middleware accelerator/pending → next() case.
+  - Why: Ali chose "broaden to accelerator cohort, then flip" (2026-07-21) after seeing the blast radius. (Separately, 4 non-paid-gate flags were enabled on prod — FIVE_BAND_UI, POINTS_DAILY_CAPS, COMMUNITY_POST_QUALITY_GATE, COMMUNITY_LEVEL_USE_CANONICAL — so the 5-band ladder + anti-cheat are LIVE; the paid gate stays OFF until this deploys.)
+  - Verification: Loop Architect maker → SEPARATE verifier 10/10 PASS (pure OR-widening can't newly-block; case-insensitive; explorer/null still gated; flag default OFF + fail-open untouched; tests updated in place). CI pending on push. Prod deploy of Phases 1-5 confirmed live (main @2ecd217a, containers healthy, app 200, new dist files present).
+  - Notes: Branch `workstream/points-economy-paidgate` (from main). Next: operational cohort-tag check + flip BUILD_PAID_GATE_ENABLED=true to complete go-live. Prod .env backed up to .env.bak.pre-points-economy.
+
 ### Points Economy build — Phase 1: curriculum-type value alignment (2026-07-21)
 - [x] **Zeroed `deep_dive` builder_xp (25/10/0 → 25/0/0) so a free consumption card no longer awards build currency; the rest of the 50 types already match the design table, remaining tweaks live-tunable via points_config**
   - Date: 2026-07-21
