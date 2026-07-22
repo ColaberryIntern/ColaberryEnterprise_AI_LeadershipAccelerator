@@ -2330,6 +2330,13 @@ async function start(): Promise<void> {
       const { reconcileBuildStationLayout } = await import('./services/timeline/buildStationReconciler');
       const bs = await reconcileBuildStationLayout();
       if (bs.archived) console.log(`[TimelineEngine] build-station dedup: archived ${bs.archived} duplicate artifact_submission card(s)`);
+      // Invariant: every published reflect-chain eval/survey/reflection card carries
+      // its computed unlock_rules — self-heals drift from any card-creation path that
+      // bypasses createCard()'s auto-gate (seed scripts, legacy migrations) or cards
+      // added out of order. See reflectGatingReconciler.
+      const { reconcileReflectGating } = await import('./services/timeline/reflectGatingReconciler');
+      const rg = await reconcileReflectGating();
+      if (rg.fixed) console.log(`[TimelineEngine] reflect-gating reconcile: fixed ${rg.fixed}/${rg.checked} card(s)`);
     } catch (err: any) {
       console.warn('[TimelineEngine] seed failed:', err?.message);
     }

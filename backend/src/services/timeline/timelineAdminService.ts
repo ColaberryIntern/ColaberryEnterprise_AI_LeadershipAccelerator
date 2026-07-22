@@ -20,6 +20,7 @@ import { resolve as resolveType, allTypes, CardTypeDef } from './typeRegistry';
 import { normalizeCapabilities } from './timelineService';
 import { recomputeForCard, recomputeMany, recomputeBlueprintHours } from '../composer/blueprintRollup';
 import { normalizeRules, UnlockPredicate } from './timelineGatingService';
+import { REFLECT_GATED_TYPES, reflectGateFor, reflectSiblingFlags } from './reflectGating';
 
 export const BUCKETS: TimelineBucket[] = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
 const VISIBILITIES = ['draft', 'scheduled', 'published', 'archived'] as const;
@@ -268,6 +269,24 @@ async function assertTypeLaunched(slug: string): Promise<void> {
   }
 }
 
+/**
+ * Auto-apply the reflect-chain gate to a newly created eval/survey/reflection
+ * card, unless the author explicitly supplied unlock_rules (an explicit choice
+ * — including a deliberate `[]` — is never overridden). Cross-sibling drift
+ * (e.g. an evaluation added after its week's survey already existed) is swept
+ * up by the boot-time reflectGatingReconciler, not here.
+ */
+async function autoGateReflectCard(card: TimelineCard, input: CreateCardInput): Promise<void> {
+  if (input.unlock_rules !== undefined) return;
+  if (card.bucket !== 'reflect' || !(REFLECT_GATED_TYPES as readonly string[]).includes(card.type)) return;
+  const siblings = await TimelineCard.findAll({
+    where: { cohort_id: null, program_id: card.program_id, week: card.week, bucket: 'reflect' },
+    attributes: ['type'],
+  });
+  const rules = reflectGateFor(card.type, reflectSiblingFlags(siblings));
+  if (rules) await card.update({ unlock_rules: rules });
+}
+
 export async function createCard(input: CreateCardInput): Promise<TimelineCard> {
   const def = resolveType(input.type);
   if (!def) throw Object.assign(new Error(`Unknown card type "${input.type}"`), { status: 400 });
@@ -288,6 +307,7 @@ export async function createCard(input: CreateCardInput): Promise<TimelineCard> 
   }
   const card = await TimelineCard.create(attrs as any);
   await recomputeForCard(card); // keep the week's blueprint est_hours in sync
+  await autoGateReflectCard(card, input); // wire the reflect-chain lock so new eval/survey/reflection cards aren't born ungated
   return card;
 }
 
