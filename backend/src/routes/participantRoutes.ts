@@ -53,12 +53,14 @@ import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
   handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleGetPeerWins, handleSubmitWin, handleCheerWin,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
   handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
 import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
+import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
@@ -117,6 +119,10 @@ router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, ha
 // Weekly feedback Survey — read the questions + saved answers, and store answers.
 router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleGetSurvey);
 router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
+// Peer Wins (community_discussion) — the cohort's wins grid + post/edit your win + cheer a classmate's.
+router.get('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleGetPeerWins);
+router.post('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleSubmitWin);
+router.post('/api/portal/runtime/cards/:cardId/peer-wins/:winId/cheer', requireParticipant, handleCheerWin);
 router.get('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleGetAssessment);
 router.post('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleSubmitAssessment);
 // The Architect Time Machine (architect_mindset) — state/resume, validated stage
@@ -907,6 +913,22 @@ router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) =
     const { getCohortPresence } = await import('../services/cohortPresenceService');
     const contacts = await getCohortPresence(req.participant!.sub, req.participant!.cohort_id);
     res.json({ contacts });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Role-aware "People" panel for the right rail (flag-gated; default OFF). Flag OFF
+// returns { enabled:false } and the rail falls back to GET /api/portal/cohort/presence,
+// so merging/deploying changes nothing until PEOPLE_PANEL_ROLES_ENABLED=true. Flag ON
+// returns { enabled:true, ...panel } — staff get cross-cohort presence + classes +
+// businesses; students get their class + recently-active people outside it.
+router.get('/api/portal/people/panel', requireParticipant, async (req, res) => {
+  try {
+    if (!env.peoplePanelRolesEnabled) { res.json({ enabled: false }); return; }
+    const { getPeoplePanel } = await import('../services/peoplePanelService');
+    const panel = await getPeoplePanel(req.participant!.sub, req.participant!.cohort_id);
+    res.json({ enabled: true, ...panel });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
