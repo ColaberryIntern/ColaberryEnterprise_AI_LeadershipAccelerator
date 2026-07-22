@@ -1055,6 +1055,38 @@ async function ensureSurveyResponsesSchema() {
   }
 }
 
+// Reflection entries — per-student strategic signals captured by the weekly
+// "Week in Review" Reflection card (readiness, application, direction, + a JSONB
+// catch-all). One row per (card, enrollment), upserted on re-submit. Sibling of
+// ensureSurveyResponsesSchema.
+async function ensureReflectionEntriesSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS reflection_entries (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       card_id UUID NOT NULL,
+       enrollment_id UUID NOT NULL,
+       program_id UUID,
+       week INTEGER,
+       readiness INTEGER,
+       application VARCHAR(64),
+       direction VARCHAR(64),
+       note TEXT,
+       answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS reflection_entries_unique ON reflection_entries (card_id, enrollment_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reflection_entries_program_week ON reflection_entries (program_id, week)`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] reflection entries schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 // Assessment attempts — per-student Knowledge Check (quiz) + Evaluation attempts:
 // score, per-question responses, per-competency breakdown, 75% pass gate, and the
 // program_id+week keys that pair a section's quiz (beginning) with its evaluation
@@ -2166,6 +2198,8 @@ async function start(): Promise<void> {
   await ensureSurveyResponsesSchema();
   // Knowledge Check (quiz) + Evaluation attempts — scores, responses, pre/post correlation.
   await ensureAssessmentSchema();
+  // Weekly "Week in Review" Reflection — per-student captured signals (idempotent).
+  await ensureReflectionEntriesSchema();
   // Blog library (Blog type's auto-match mode) — catalog + per-student read ledger,
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();

@@ -17,6 +17,7 @@ import SetupLabRender from '../../../components/timeline/SetupLabRender';
 import PromptCatalogRender from '../../../components/timeline/PromptCatalogRender';
 import ArchitectTimeMachine from '../../../components/timeline/ArchitectTimeMachine';
 import BuildArtifactsRender from '../../../components/timeline/BuildArtifactsRender';
+import ReflectionReview from '../../../components/timeline/ReflectionReview';
 
 /**
  * RuntimeWorkspace — the Learning Runtime Intelligence student OS. Opens a
@@ -101,6 +102,7 @@ const RuntimeWorkspace: React.FC = () => {
   const isSurvey = band === 'survey';   // captured via the interactive SurveyForm
   const isAssessment = band === 'quiz' || band === 'evaluation';   // Knowledge Check + Evaluation, self-contained
   const isReflect = ['reflection', 'question'].includes(band);
+  const isReflection = band === 'reflection';   // Week in Review — bespoke per-student recap; the generic reflect path below stays for 'question'
   const isSkillsJar = band === 'skills_jar';   // Anthropic Skills Course — external course + certificate upload
   // The generated lesson title (e.g. "Overview — Claude Code Foundations + Workspace")
   // beats the card's raw title everywhere the student sees it. Curriculum titles
@@ -343,7 +345,12 @@ const RuntimeWorkspace: React.FC = () => {
             <PeerWinsPanel cardId={card.id} />
           )}
 
-          {isReflect && (
+          {/* Week in Review — the bespoke per-student recap (real completions, scores,
+              skill deltas) + strategic-signal capture. Self-contained + self-completing. */}
+          {isReflection && (
+            <ReflectionReview cardId={card.id} variant="workspace" />
+          )}
+          {isReflect && !isReflection && (
             <div>
               {reflectionQs.length === 0 ? <button className="rt-btn pri" disabled={busy === 'reflect'} onClick={loadReflection}>{busy === 'reflect' ? 'Thinking…' : '✦ Get my reflection prompts'}</button>
                 : <><div className="rt-lab">Reflect</div><ul className="rt-list">{reflectionQs.map((q, i) => <li key={i}>{q}</li>)}</ul></>}
@@ -474,7 +481,7 @@ const RuntimeWorkspace: React.FC = () => {
 
           {/* Surveys + assessments complete via their own flow; fill cards host the gate in
               their foot. Everything else gets the completion bar here in the center. */}
-          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && (
+          {!isSurvey && !isAssessment && !isSkillsJar && !fill && !isSetupLab && !isPromptCatalog && !isArchitectMindset && !isBuildArtifacts && !isReflection && (
             <div className="rt-complete">{completeGate}</div>
           )}
         </main>
