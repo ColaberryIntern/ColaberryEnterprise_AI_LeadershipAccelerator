@@ -93,17 +93,18 @@ const SkillMeter: React.FC<{ cards: TimelineFeedCard[] }> = ({ cards }) => {
 
       <svg viewBox="0 0 360 300" width="100%" style={{ display: 'block', maxHeight: 300 }} role="img" aria-label={`AI Architecture skill radar, ${overall}% overall`}>
         <defs>
+          {/* Colaberry design-system data-viz palette: berry blue → teal → leaf green. */}
           <radialGradient id="sr-bg" cx="50%" cy="46%" r="60%">
-            <stop offset="0%" stopColor="#5BE8FF" stopOpacity="0.10" />
-            <stop offset="100%" stopColor="#5BE8FF" stopOpacity="0" />
+            <stop offset="0%" stopColor="#367895" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#367895" stopOpacity="0" />
           </radialGradient>
           <linearGradient id="sr-fill" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#22D3EE" stopOpacity="0.42" />
-            <stop offset="55%" stopColor="#6366F1" stopOpacity="0.34" />
-            <stop offset="100%" stopColor="#D946EF" stopOpacity="0.30" />
+            <stop offset="0%" stopColor="#367895" stopOpacity="0.42" />
+            <stop offset="55%" stopColor="#2BA39A" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="#5BA63C" stopOpacity="0.30" />
           </linearGradient>
           <filter id="sr-glow" x="-30%" y="-30%" width="160%" height="160%">
-            <feGaussianBlur stdDeviation="3.2" result="b" />
+            <feGaussianBlur stdDeviation="2.6" result="b" />
             <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
@@ -119,9 +120,9 @@ const SkillMeter: React.FC<{ cards: TimelineFeedCard[] }> = ({ cards }) => {
         {SKILLS.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={CX} y1={CY} x2={x} y2={y} stroke="currentColor" strokeOpacity={0.12} strokeWidth={1} />; })}
 
         {/* data shape */}
-        <polygon points={dataPts} fill="url(#sr-fill)" stroke="#22D3EE" strokeWidth={2} strokeLinejoin="round" filter="url(#sr-glow)" style={{ transition: 'all .6s ease' }} />
-        {/* vertex nodes */}
-        {vals.map((r, i) => { const [x, y] = pt(i, R * Math.max(0.02, r.v)); return <circle key={i} cx={x} cy={y} r={r.done ? 3.4 : 2} fill={r.done ? '#5BE8FF' : 'currentColor'} fillOpacity={r.done ? 1 : 0.35} />; })}
+        <polygon points={dataPts} fill="url(#sr-fill)" stroke="#367895" strokeWidth={2} strokeLinejoin="round" filter="url(#sr-glow)" style={{ transition: 'all .6s ease' }} />
+        {/* vertex nodes — cherry accent on a completed skill */}
+        {vals.map((r, i) => { const [x, y] = pt(i, R * Math.max(0.02, r.v)); return <circle key={i} cx={x} cy={y} r={r.done ? 3.4 : 2} fill={r.done ? '#FB2832' : 'currentColor'} fillOpacity={r.done ? 1 : 0.35} />; })}
         <circle cx={CX} cy={CY} r={2.4} fill="currentColor" fillOpacity={0.4} />
 
         {/* labels + per-KPI value */}
@@ -133,7 +134,7 @@ const SkillMeter: React.FC<{ cards: TimelineFeedCard[] }> = ({ cards }) => {
           return (
             <text key={i} x={lx + dx} y={ly} textAnchor={anchor} dominantBaseline="middle" fontSize={9.2} style={{ letterSpacing: '.03em' }}>
               <tspan fill="currentColor" fillOpacity={0.72} fontWeight={600}>{r.label}</tspan>
-              <tspan fill={r.done ? '#0891B2' : 'currentColor'} fillOpacity={r.done ? 1 : 0.5} fontWeight={800} dx={5}>{Math.round(r.v * 100)}%</tspan>
+              <tspan fill={r.done ? '#2E6A86' : 'currentColor'} fillOpacity={r.done ? 1 : 0.5} fontWeight={800} dx={5}>{Math.round(r.v * 100)}%</tspan>
             </text>
           );
         })}
