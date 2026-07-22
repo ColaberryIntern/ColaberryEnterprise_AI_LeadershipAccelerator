@@ -533,6 +533,11 @@ async function ensureCommunityMemberRoleSchema() {
     `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS role VARCHAR(20) NOT NULL DEFAULT 'student'`,
     `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_role`,
     `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_role CHECK (role IN ('student', 'mentor', 'staff'))`,
+    // Management-portal role for staff (Owner/Admin/Curriculum/Revenue/Admissions/
+    // Support). NULL = not a mgmt user. Gates admin sections via mgmtRoles.ts.
+    `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS mgmt_role VARCHAR(20)`,
+    `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_mgmt_role`,
+    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_mgmt_role CHECK (mgmt_role IS NULL OR mgmt_role IN ('owner','admin','curriculum','revenue','admissions','support'))`,
   ];
   for (const sql of statements) {
     try {
