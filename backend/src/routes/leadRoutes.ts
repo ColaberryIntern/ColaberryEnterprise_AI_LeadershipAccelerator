@@ -4,7 +4,11 @@ import { submitLead } from '../controllers/leadController';
 import { requestSponsorshipKit } from '../controllers/sponsorshipController';
 import { handleLeadIngest } from '../controllers/leadIngestionController';
 import { handleSalesHubCory } from '../controllers/salesHubCoryController';
-import { handleSponsorInquiry } from '../controllers/sponsorController';
+import {
+  handleSponsorInquiry,
+  handleRequestSponsorLink,
+  handleVerifySponsorToken,
+} from '../controllers/sponsorController';
 import {
   handleGetLeaderboard,
   handleGetSponsorDashboard,
@@ -58,5 +62,10 @@ router.post('/api/sales-hub/cory', coryLimiter, handleSalesHubCory);
 // there); the leaderboard is fully public.
 router.get('/api/challenge/leaderboard', handleGetLeaderboard);
 router.get('/api/sponsor/dashboard', handleGetSponsorDashboard);
+
+// Sponsor portal login (magic-link, replaces the sponsor.id-as-token stopgap
+// above). Rate-limited like the other public lead-adjacent endpoints.
+router.post('/api/sponsor/request-link', leadRateLimiter, handleRequestSponsorLink);
+router.get('/api/sponsor/verify', handleVerifySponsorToken);
 
 export default router;

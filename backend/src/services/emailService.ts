@@ -2083,3 +2083,81 @@ export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): 
 
   console.log(`[Email] Community digest sent to: ${r.to} | date: ${data.digestDate} | msgId: ${info.messageId}`);
 }
+
+// --- Sponsor (Door B employer) Portal Magic Link Email ---
+
+interface SponsorMagicLinkData {
+  to: string;
+  contactName: string;
+  companyName: string;
+  token: string;
+}
+
+function buildSponsorMagicLinkHtml(data: SponsorMagicLinkData, magicLink: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    .notice { font-size: 13px; color: #718096; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Access Your Sponsor Dashboard</h1>
+
+  <p>Dear ${data.contactName},</p>
+
+  <p>You requested access to the <strong>${data.companyName}</strong> sponsor dashboard. Click the button below to sign in:</p>
+
+  <p><a href="${magicLink}" class="cta">Access My Dashboard</a></p>
+
+  <div class="highlight">
+    <strong>Your dashboard includes:</strong><br>
+    &bull; Seat usage (purchased, redeemed, available)<br>
+    &bull; Your sponsored team, ranked<br>
+    &bull; Demo Day candidates
+  </div>
+
+  <p class="notice">This link expires in 30 days. If you did not request this link, you can safely ignore this email.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+export async function sendSponsorMagicLink(data: SponsorMagicLinkData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping sponsor magic link email to:', data.to);
+    return;
+  }
+
+  const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const magicLink = `${portalBaseUrl}/sponsor/dashboard?token=${data.token}`;
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    `[Accelerator] Your Sponsor Dashboard Access Link`
+  );
+  const html = buildSponsorMagicLinkHtml(data, magicLink);
+  const info = await guardedSendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-sponsor-magic-link'),
+  });
+
+  console.log(`[Email] Sponsor magic link sent to: ${r.to} | msgId: ${info.messageId}`);
+}
