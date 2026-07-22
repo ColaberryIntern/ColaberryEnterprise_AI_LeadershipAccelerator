@@ -53,6 +53,7 @@ import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
   handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleGetPeerWins, handleSubmitWin, handleCheerWin,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
@@ -117,6 +118,10 @@ router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, ha
 // Weekly feedback Survey — read the questions + saved answers, and store answers.
 router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleGetSurvey);
 router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
+// Peer Wins (community_discussion) — the cohort's wins grid + post/edit your win + cheer a classmate's.
+router.get('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleGetPeerWins);
+router.post('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleSubmitWin);
+router.post('/api/portal/runtime/cards/:cardId/peer-wins/:winId/cheer', requireParticipant, handleCheerWin);
 router.get('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleGetAssessment);
 router.post('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleSubmitAssessment);
 // The Architect Time Machine (architect_mindset) — state/resume, validated stage

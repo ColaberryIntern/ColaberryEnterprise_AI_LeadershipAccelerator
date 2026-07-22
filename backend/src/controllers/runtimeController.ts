@@ -15,6 +15,8 @@ import { getNudge } from '../services/runtime/mentorNudgeService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
+import { getRitualWall, submitRitualPost } from '../services/runtime/peerWinsService';
+import { toggleLike } from '../services/communityService';
 import { getAssessment, submitAssessment, sectionResultsSummary } from '../services/runtime/assessmentService';
 import {
   getState as architectState, advance as architectAdvance, saveInterview as architectSaveInterview,
@@ -192,6 +194,23 @@ export async function handleGetSurvey(req: Request, res: Response, next: NextFun
 }
 export async function handleSaveSurvey(req: Request, res: Response, next: NextFunction) {
   try { res.json(await saveSurvey(eid(req), String(req.params.cardId), req.body || {})); } catch (e) { fail(res, e, next); }
+}
+
+// Community Rituals (community_discussion) — read the week's ritual + the cohort
+// wall for a card, post/edit your own guided answer, and cheer a classmate's.
+// Field values are ritual-specific (see communityRituals.ts); the service validates
+// required fields against the resolved ritual, so the schema here is intentionally open.
+const submitRitualSchema = z.object({
+  values: z.record(z.string(), z.union([z.string(), z.array(z.string())])).default({}),
+});
+export async function handleGetPeerWins(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getRitualWall(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSubmitWin(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await submitRitualPost(eid(req), String(req.params.cardId), submitRitualSchema.parse(req.body || {}).values)); } catch (e) { fail(res, e, next); }
+}
+export async function handleCheerWin(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await toggleLike(eid(req), 'post', String(req.params.winId))); } catch (e) { fail(res, e, next); }
 }
 
 // Knowledge Check (quiz) + Evaluation — load questions (no answers leaked) / submit + score

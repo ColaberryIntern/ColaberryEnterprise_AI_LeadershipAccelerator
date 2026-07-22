@@ -6,6 +6,7 @@ import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import CardSurveyExperience from './CardSurveyExperience';
+import PeerWinsPanel from './PeerWinsPanel';
 import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
@@ -248,6 +249,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isPromptCatalog = card.render_band === 'prompt_catalog';   // Prompt Lab: practice-prompt catalog (categories + reveal + copy)
   const isArchitectMindset = card.render_band === 'architect_mindset';   // The Architect Time Machine: cinematic decision simulation (bespoke renderer)
   const isBuildArtifacts = card.render_band === 'build_artifacts';   // Build Artifact(s) Lab: pick artifact + project, build station
+  const isPeerWins = card.render_band === 'peer_wins';   // Community Discussion → Cohort Wins grid (post a win + cheer classmates)
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
@@ -345,6 +347,8 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This build station has not been generated yet.</div>
+        ) : isPeerWins ? (
+          <PeerWinsPanel cardId={card.id} preview={preview} />
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>
@@ -595,7 +599,12 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 {/* Survey completes in-body via its own Submit; the workspace link
                     stays as a quiet secondary, not the primary CTA. */}
                 {/* Architect Time Machine renders its own "Enter the Time Machine" CTA in-panel (drawer variant). */}
-                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive || !!blog || dwellGated ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive || isPeerWins || !!blog || dwellGated ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {/* Peer Wins: posting is optional, so completion stays a plain Mark
+                    complete here (and in the workspace bar) — never gated on posting. */}
+                {isPeerWins && completeSafely && (
+                  <button type="button" className="tl-btn primary" onClick={completeSafely}>Mark complete</button>
+                )}
                 {/* Self Study: the Mark Complete button only appears once every section
                     has been read (>=5s each), matching the workstation's gate + style. */}
                 {isReader && readerProg.complete && completeSafely && (
