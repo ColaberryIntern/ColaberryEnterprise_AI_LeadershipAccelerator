@@ -1,8 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor } from '../../../services/onboardingApi';
+import { fetchPointsDrilldown, fetchPoints, DrilldownView, Band, levelFor, bandHudNext } from '../../../services/onboardingApi';
 import { fmtCentralDate } from '../today/shellUtils';
+import LevelJourney from './LevelJourney';
 import './PointsPage.css';
+
+/** Turn a readiness ladder slug (e.g. "junior_builder") into a label. */
+function humanizeLevel(s: string | null | undefined): string {
+  if (!s) return '';
+  return s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 /**
  * PointsDrilldown — the three-lens points breakdown, self-contained so it can be
@@ -75,6 +82,14 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
 
   const total = data?.engagement.total ?? 0;
   const lvl = levelFor(total);
+  // 5-band identity: when the flag is on, the level name + "what's next" come from
+  // the canonical band (AI Aware I …) so this page matches the HUD exactly. When
+  // off, the legacy Apprentice/…/Principal identity is unchanged.
+  const useBand = fiveBand && !!band;
+  const idName = useBand ? band!.rungName : lvl.name;
+  const headed = useBand
+    ? bandHudNext(band!, total)
+    : (lvl.next ? `${(lvl.next.min - total).toLocaleString()} pts to ${lvl.next.name}` : 'Top level reached');
   const xp = data?.skill_xp ?? null;
   const xpMax = xp ? Math.max(xp.learning, xp.builder, xp.community, 1) : 1;
   const readiness = data?.readiness ?? null;
@@ -104,16 +119,17 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
       <div className="pts-hero">
         <div className="pts-hero-now">
           <span className="k">Where you are</span>
-          <div className="v"><b>{lvl.name}</b> · {total.toLocaleString()} pts</div>
+          <div className="v"><b>{idName}</b> · {total.toLocaleString()} pts</div>
         </div>
         <svg className="pts-hero-arrow" viewBox="0 0 24 24" fill="none" aria-hidden><path d="M4 12h15M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
         <div className="pts-hero-next">
           <span className="k">Where you're headed</span>
-          <div className="v">
-            {lvl.next ? <><b>{lvl.next.name}</b> · {(lvl.next.min - total).toLocaleString()} pts to go</> : <b>Top level reached</b>}
-          </div>
+          <div className="v">{headed}</div>
         </div>
       </div>
+
+      {/* The whole level ladder, visual — AI Aware I → AI Architect */}
+      <LevelJourney points={total} currentName={useBand ? band!.rungName : lvl.name} />
 
       <div className="pts-lenses">
         {/* Lens 1 — Engagement */}
@@ -121,8 +137,8 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           <div className="pts-lens-h"><span className="tag">1 · Engagement</span><h3>Your points</h3></div>
           <div className="pts-big">{total.toLocaleString()}<span> pts</span></div>
           <div className="pts-levelrow">
-            <span className="pts-chip">{lvl.name}</span>
-            <span className="pts-mut">{lvl.next ? `${(lvl.next.min - total).toLocaleString()} to ${lvl.next.name}` : 'Max level'}</span>
+            <span className="pts-chip">{idName}</span>
+            <span className="pts-mut">{headed}</span>
           </div>
           <div className="pts-track"><i style={{ width: `${lvl.pct}%`, background: '#FB2832' }} /></div>
           <div className="pts-streak">
@@ -160,17 +176,17 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           <div className="pts-readi">
             <ReadinessRing pct={readiness?.pct ?? 0} />
             <div className="pts-readi-meta">
-              <div className="lvl">{readiness ? `Level ${readiness.level}` : 'Not started'}</div>
+              <div className="lvl">{readiness ? `Level ${humanizeLevel(readiness.level)}` : 'Not started'}</div>
               <div className="pts-mut">
                 {readiness?.at_max ? 'You\'ve reached the top Builder level.'
-                  : readiness?.next_level ? `Next: ${readiness.next_level}`
+                  : readiness?.next_level ? `Next: ${humanizeLevel(readiness.next_level)}`
                   : 'Grows as you demonstrate competency.'}
               </div>
             </div>
           </div>
           {readiness && !readiness.at_max && (
             <div className="pts-gaps">
-              <span className="pts-gaps-h">{readiness.gaps.length ? `What's left to ${readiness.next_level}` : 'Gate cleared — promotion pending'}</span>
+              <span className="pts-gaps-h">{readiness.gaps.length ? `What's left to ${humanizeLevel(readiness.next_level)}` : 'Gate cleared — promotion pending'}</span>
               {readiness.gaps.length
                 ? <ul>{readiness.gaps.map((g, i) => <li key={i}>{g}</li>)}</ul>
                 : <div className="pts-mut">You meet every requirement for the next level.</div>}
