@@ -294,6 +294,20 @@ function AdminAcceleratorPage() {
     }
   };
 
+  // Open the plain-language class outline (teaching plan) in a new tab.
+  const handleOpenOutline = async (sessionId: string) => {
+    const w = window.open('', '_blank');
+    if (!w) { showToast('Allow pop-ups to open the outline', 'error'); return; }
+    w.document.write('<!doctype html><title>Loading outline…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the class outline…</body>');
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/outline`, { responseType: 'text' });
+      w.document.open(); w.document.write(res.data as string); w.document.close();
+    } catch {
+      try { w.document.body.innerHTML = '<div style="font-family:system-ui,sans-serif;padding:2rem;color:#c00">Could not load the outline. Close this tab and try again.</div>'; } catch { /* window gone */ }
+      showToast('Failed to open the outline', 'error');
+    }
+  };
+
   const handleStatusChange = async (sessionId: string, status: string) => {
     try {
       await api.patch(`/api/admin/accelerator/sessions/${sessionId}`, { status });
@@ -707,6 +721,7 @@ function AdminAcceleratorPage() {
                       <td>
                         <div className="d-flex gap-1">
                           <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class. The check-in QR is on the first slides.">▶ Present</button>
+                          <button className="btn btn-outline-secondary btn-sm" onClick={() => handleOpenOutline(s.id)} title="Open the plain-language class outline (teaching plan) — review, prepare, or print">📋 Outline</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => setKitSessionId(s.id)} title="Printable check-in QR + Start Class + roster (a paper backup — the deck already shows the QR)">QR</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>
                           <button className="btn btn-outline-warning btn-sm" onClick={() => setSkipTarget(s)} title="Mark this date as a day off — this class and all later ones shift forward one slot">Skip</button>

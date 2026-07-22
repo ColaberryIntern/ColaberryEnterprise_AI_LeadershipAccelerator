@@ -14,7 +14,26 @@ import { env } from '../config/env';
 import { buildSessionKit } from './sessionKitService';
 import { buildKitSpec } from './classKit/kitSpec';
 import { renderKitHtml } from './classKit/kitHtml';
+import { renderClassOutline } from './classKit/outlineHtml';
 import { mintKitToken } from './classKit/kitToken';
+
+/**
+ * Render the plain-language CLASS OUTLINE for a session — a one-page teaching plan
+ * (segments, time windows, the teaching points under each) to review and prepare
+ * from. Same content as the deck, read as a lesson plan. Null if session missing.
+ */
+export async function renderSessionOutline(sessionId: string): Promise<string | null> {
+  const kit = await buildSessionKit(sessionId);
+  if (!kit) return null;
+  const spec = buildKitSpec({
+    session: kit.session,
+    cohortName: kit.cohort_name,
+    checkinUrl: kit.checkin_url,
+    qrSvg: kit.qr_svg,
+    meetLink: kit.meeting_link,
+  });
+  return renderClassOutline(spec);
+}
 
 /**
  * Render the Class Kit deck HTML for a session. Returns null if the session does

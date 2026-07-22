@@ -12,7 +12,7 @@ import {
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { buildSessionKit } from '../services/sessionKitService';
-import { renderSessionKitDoc } from '../services/sessionKitDocService';
+import { renderSessionKitDoc, renderSessionOutline } from '../services/sessionKitDocService';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -122,6 +122,16 @@ export async function handleGetSessionKit(req: Request, res: Response, next: Nex
 export async function handleGetSessionKitDoc(req: Request, res: Response, next: NextFunction) {
   try {
     const html = await renderSessionKitDoc(req.params.id as string);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+// Class Outline: a plain-language, one-page teaching plan (segments + time
+// windows + the teaching points) to review/prepare/print. text/html. 404 if missing.
+export async function handleGetSessionOutline(req: Request, res: Response, next: NextFunction) {
+  try {
+    const html = await renderSessionOutline(req.params.id as string);
     if (!html) return res.status(404).json({ error: 'Session not found' });
     res.type('html').send(html);
   } catch (err) { next(err); }
