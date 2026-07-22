@@ -78,7 +78,7 @@ function coverHtml(spec: KitSpec, slide: KitSlide): string {
   const m = spec.meta;
   const chips: string[] = [];
   chips.push(`<div class="kchip"><b>${esc(m.dayLabel)}</b><span>${m.week != null ? 'Week ' + m.week : 'Kickoff'}</span></div>`);
-  if (m.intensive) chips.push(`<div class="kchip"><b>${esc(m.intensive.replace(/^Intensive \\d+ · /, ''))}</b><span>Focus</span></div>`);
+  if (m.intensive) chips.push(`<div class="kchip"><b>${esc(m.intensive.replace(/^Intensive \d+ · /, ''))}</b><span>Focus</span></div>`);
   chips.push(`<div class="kchip"><b>${esc(m.timeRange || (m.durationMin + ' min'))}</b><span>${esc(m.dateLabel.split(',')[0] || 'Class')}</span></div>`);
   const left =
     `<div><div class="keyebrow">${esc(slide.eyebrow || m.cohortName)}</div>` +
