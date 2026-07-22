@@ -533,8 +533,97 @@ const PEER_WINS_GENERATION_PROMPT = [
   'Set the rest empty: body_html "", questions [], reflection "", discussion_prompt "", github_task null, evaluation_criteria [], completion "".',
 ].join('\n');
 
+// ── reflection → the weekly "Week in Review" (the week-CLOSER) ───────────────
+// A roster-summary type (SECTION_ROSTER_TYPES): the runtime prepends the week
+// Blueprint ("WEEK CONTEXT") AND the week's real activity roster ("THIS WEEK'S
+// ACTIVITIES"), so this reflection reflects the WHOLE week back — every activity
+// placed, grouped by phase — not a generic "what did you learn?". Generic render
+// band → it ships its own light, self-contained CSS inside body_html (lessonDoc
+// preserves <style>). The light "Ledger" design: evidence first, two strategic
+// signals last (readiness + application). NOTE: per-student results (scores,
+// commits) are NOT injected yet — fills are class-wide/illustrative until the
+// cross-card student-history binding + bespoke renderer land (see the build spec).
+const REFLECTION_GENERATION_PROMPT = [
+  "You write the weekly Reflection for the AI Systems Architect Accelerator: the week-CLOSER that reflects the WHOLE week back to the student — what they did, what moved, what to carry forward. The WEEK CONTEXT above gives the week topic, objectives, competencies, and level. THIS WEEK'S ACTIVITIES above lists the ACTUAL curriculum items placed in this week, in journey order with each item's phase in brackets and its minutes. Ground everything in both; invent nothing; cover the whole week.",
+  '',
+  'VOICE: calm, warm, authoritative — an executive coach speaking in second person ("you"), past tense ("this week you…"). No hype, minimal emoji.',
+  'TITLE: exactly the words "Your Week in Review", a space, an em dash, a space, then the week topic EXACTLY as written in the WEEK CONTEXT — copy it verbatim. Example: "Your Week in Review — Claude Code Foundations + Workspace".',
+  'SUMMARY: one warm sentence (max ~22 words) naming what this week changed in them, grounded in the topic and outcomes.',
+  '',
+  'BODY_HTML: output the following in order and NOTHING else. FIRST copy this <style> block VERBATIM, character for character:',
+  '<style>',
+  '  body{max-width:880px;margin:0 auto;background:#f6f7f9;color:#16223c;padding:20px;line-height:1.5;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
+  '  h1,p{margin:0}',
+  '  .e{font-size:11px;font-weight:800;letter-spacing:.13em;text-transform:uppercase;color:#2e5aac}',
+  '  h1{font-size:23px;letter-spacing:-.01em;margin:8px 0 6px;line-height:1.16}',
+  '  .sub{color:#586a86;font-size:15px;max-width:64ch}',
+  '  .st{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 4px}',
+  '  .st span{background:#fff;border:1px solid #e9ecf2;border-radius:999px;padding:6px 13px;font-size:12.5px;color:#586a86}',
+  '  .st b{color:#16223c}',
+  '  .l{font-size:11px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;margin:22px 0 8px}',
+  '  .p{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#8b94a8;margin:13px 0 6px}',
+  '  .b{background:#fff;border:1px solid #e9ecf2;border-radius:12px;padding:2px 14px}',
+  '  .i{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #eef0f4}',
+  '  .i:first-child{border-top:0}',
+  '  .i .g{width:20px;text-align:center;flex:none}',
+  '  .i .t{flex:1;font-size:13px;font-weight:600}',
+  '  .i .m{font-size:11.5px;color:#8b94a8;font-weight:600;white-space:nowrap}',
+  '  .q{background:#fff;border:1px solid #e9ecf2;border-radius:12px;padding:14px;margin-bottom:9px}',
+  '  .q .k{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#2e5aac}',
+  '  .q .t2{font-size:14px;font-weight:650;margin:5px 0 3px}',
+  '  .q .w{font-size:11px;color:#8b94a8}',
+  '  .sv{color:#8b94a8;font-size:12px;margin-top:14px}',
+  '</style>',
+  '',
+  'THEN the content, using ONLY these classes — no other classes, no inline styles, no <script>, no <img>:',
+  '  <p class="e">Week {N from WEEK CONTEXT} · {week topic}</p><h1>a warm past-tense headline naming what they accomplished this week</h1><p class="sub">one grounding sentence tying the week\'s work to becoming an AI Systems Architect</p>',
+  '  three tiles from THIS WEEK\'S ACTIVITIES header: <div class="st"><span><b>{N} activities</b></span><span><b>{total time, e.g. ~7.7 hrs}</b> invested</span><span><b>{level from WEEK CONTEXT}</b> level</span></div>',
+  '  <p class="l">What you did this week</p>',
+  '  Then for EACH phase that has activities, in journey order Prep, Learn, Practice, Build, Reflect, Share: <p class="p">{Phase name} · {count}</p><div class="b"> one row per activity in that phase: <div class="i"><span class="g">{activity emoji}</span><span class="t">{the activity\'s real title — the words AFTER the colon on its THIS WEEK\'S ACTIVITIES line, verbatim}</span><span class="m">{that activity\'s minutes}m</span></div> </div>',
+  '  <p class="l">Before you go</p>',
+  '  <div class="q"><p class="k">Readiness</p><p class="t2">a specific question asking how confident they now feel applying THIS week\'s core skill on real work</p><p class="w">Shapes your review schedule and where your mentor focuses next.</p></div>',
+  '  <div class="q"><p class="k">Application</p><p class="t2">a question asking where they will put this week\'s skill to work first</p><p class="w">Tailors the examples we show you — and shows your sponsor the ROI.</p></div>',
+  '  <p class="sv">Saved to your learning story — close this and keep going whenever you\'re ready.</p>',
+  '',
+  'COVER EVERY activity from THIS WEEK\'S ACTIVITIES, grouped by phase — do not skip, merge, or invent any; only omit pure system cards and the reflection activity itself (this IS that moment). For each row use the activity\'s real TITLE — the text AFTER the colon on its THIS WEEK\'S ACTIVITIES line, verbatim — NOT the short type label before the colon; use its exact minutes; never re-estimate. Activity emoji by type: 📣 announcement, 📖 self study/reading, ✅ knowledge check/quiz/evaluation, 🎬 video, 👥 live class, 🔎 deep dive, 🎓 skills course, 🧪 prompt lab, 🖥️ setup, 🏗️ implementation/build, 🔁 github sync, 📦 artifact, 🧭 architect mindset, 📝 survey, 🤝 community/discussion.',
+  'Keep it compact so the whole response stays well within length limits: one line per activity, terse copy. Every opening tag has a matching closing tag; the CSS must be valid. (The skills-growth meters and concept map are intentionally omitted from this generated body — they belong to the reflection panel, rendered from the student\'s own history, not to class-wide generated content.)',
+  '',
+  'questions: an array of EXACTLY the two full question SENTENCES you wrote in the .t2 fields of the two .q blocks above (the readiness question sentence, then the application question sentence) — the sentences themselves, never the labels "Readiness"/"Application".',
+  'reflection: one short coaching stem inviting the student to write the single biggest thing that clicked this week.',
+  'discussion_prompt: one warm invitation to share their biggest insight from this week\'s topic with the cohort.',
+  'github_task: null.',
+  'evaluation_criteria: [].',
+  'completion: "Marked complete when the participant reviews their week and answers the two reflections."',
+].join('\n');
+
 export const COMPONENT_AUTHORING: Record<string, AuthoredFields> = {
   ...AI_THUMBNAILS,
+  reflection: {
+    label: 'Reflection',
+    student_label: 'Reflection',
+    description: "The weekly week-closer: reflects the WHOLE week back to the student — every activity they did (grouped by phase), the skills the week moved, and the concepts they explored — then captures two strategic signals (readiness + application). A roster-summary type (SECTION_ROSTER_TYPES): the runtime injects the week Blueprint AND the real activity roster, so it covers every card placed in the week. Ships its own light, self-contained CSS in body_html.",
+    category: 'Reflect',
+    icon: 'bi-journal-check',
+    badge_class: 'bg-info',
+    estimated_time: 10,
+    difficulty: 'intro',
+    capabilities: ['reflection', 'portfolio', 'sharing', 'comments'],
+    inputs: [],
+    variable_keys: [], // zero author input — the runtime injects blueprint + week roster
+    outputs: [
+      { key: 'title', type: 'string', description: 'Your Week in Review — {week topic}' },
+      { key: 'body_html', type: 'html', description: 'Light "Ledger" week review: what you did (every activity by phase), skills moved, concepts, two reflections' },
+      { key: 'summary', type: 'string', description: 'One-sentence framing of what the week changed' },
+      { key: 'questions', type: 'json', description: 'The two strategic reflections (readiness, application)' },
+      { key: 'reflection', type: 'string', description: 'A coaching stem for the biggest takeaway' },
+    ],
+    completion_rules: { on: 'submit' },
+    evaluation_type: 'none',
+    generation_prompt: REFLECTION_GENERATION_PROMPT,
+    thumbnail_url: thumbnailUrlFor('reflection'),
+    approved: true,
+    status: 'published',
+  },
   architect_mindset: {
     label: 'Architect Mindset',
     student_label: 'Architect Time Machine',
