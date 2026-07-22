@@ -59,6 +59,7 @@ import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
   handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleGetWeekReview, handleSaveReflectionSignals,
   handleGetPeerWins, handleSubmitWin, handleCheerWin,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
@@ -125,6 +126,9 @@ router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, ha
 // Weekly feedback Survey — read the questions + saved answers, and store answers.
 router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleGetSurvey);
 router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
+// Week in Review (reflection) — per-student review data + save the strategic signals.
+router.get('/api/portal/runtime/cards/:cardId/week-review', requireParticipant, handleGetWeekReview);
+router.post('/api/portal/runtime/cards/:cardId/week-review/signals', requireParticipant, handleSaveReflectionSignals);
 // Peer Wins (community_discussion) — the cohort's wins grid + post/edit your win + cheer a classmate's.
 router.get('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleGetPeerWins);
 router.post('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleSubmitWin);

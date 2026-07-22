@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Wednesday, July 22, 2026 at 2:01 AM</div>
-    <div><span class="sid">CC-20260722-r9k4</span><span class="count">2 changes</span></div>
+    <div class="meta">Generated Wednesday, July 22, 2026 at 2:43 AM</div>
+    <div><span class="sid">CC-20260722-r9k4</span><span class="count">3 changes</span></div>
   </header>
   <main>
     
@@ -87,6 +87,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">prod hotfix of the same prompt then 3 consecutive `generateCardContent` runs on the real Week-1 reflection card → 13/13 activities across all 6 phases every time (Prep,Learn,Practice,Build,Reflect,Share). Codified identically into the seed so a backend rebuild/restart keeps it.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/reflection-phase-completeness` off main. Deploy = backend rebuild (so the compiled seed carries the fix; a plain restart otherwise re-applies the old seed prompt from the image).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>The weekly reflection now shows each student their OWN recap (real completions, scores, skill deltas, survey) and captures strategic signals</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**Backend** — new `models/ReflectionEntry.ts` (table `reflection_entries`, unique `(card_id, enrollment_id)`, idempotent upsert) + `ensureReflectionEntriesSchema()` at boot (no global sync) + registered in `models/index.ts`; new `services/runtime/weekReviewService.ts` — `getWeekReview(enrollmentId, cardId)` composes the week&#39;s roster × this enrollment&#39;s `TimelineCardProgress` (completions + quiz_score), `assessmentService.getSectionProgress` (per-competency pre/post deltas + evaluation), the weekly `CardSurveyResponse`, and the saved `ReflectionEntry`, into a typed `WeekReview` (graceful-degrade on sparse data); `saveReflectionSignals` upsert; pure helpers (`computeStats`/`cardPoints`/`sortByPhase`/`humanize`) unit-tested. Two card-scoped participant routes (GET `…/week-review`, POST `…/week-review/signals`, Zod-validated) + controller handlers. **Frontend** — new bespoke `ReflectionReview.tsx` (+ `.css`) renders the light &quot;Ledger&quot; from real data (growth score, evidence by phase with scores, skill gain-meters, survey call-back) + the interactive Readiness slider / Application + Direction chips (save-as-you-pick, best-effort self-complete); `runtimeApi` gains `weekReview`/`saveReflectionSignals` + types; wired into `CardDetailBody` (drawer) and `RuntimeWorkspace` (workspace); the tile BAND entry already existed.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">backend jest `weekReviewService.test.ts` 8/8 (stats/points/phase-order/humanize); backend + frontend `tsc --noEmit --skipLibCheck` clean of my files (0 errors); CI authoritative. End-to-end dev-instance QA pending before prod.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/reflection-student-layer` off main. Additive (new table via ensure-schema, new routes, new bespoke render branch guarded on `render_band===&#39;reflection&#39;`; the generic `question` reflect path is preserved). NOT deployed to prod — this is a UI feature for dev-instance QA + Ali review first. Per-student result data is currently sparse in prod (cohort hasn&#39;t generated much), so the panel degrades gracefully; a seeded dev enrollment shows the full experience.</span></div>
           
         </div>
       </article>

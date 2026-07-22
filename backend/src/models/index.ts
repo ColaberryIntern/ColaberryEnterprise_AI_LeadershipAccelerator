@@ -5,6 +5,7 @@ import PodcastView from './PodcastView';
 import TimelineCardComment from './TimelineCardComment';
 import CardSurveyResponse from './CardSurveyResponse';
 import AssessmentAttempt from './AssessmentAttempt';
+import ReflectionEntry from './ReflectionEntry';
 import AdminUser from './AdminUser';
 import Lead from './Lead';
 import AutomationLog from './AutomationLog';
@@ -1023,7 +1024,7 @@ OrgMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment',
 Enrollment.hasMany(OrgMember, { foreignKey: 'enrollment_id', as: 'orgMemberships' });
 
 export {
-  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, AdminUser, Lead, AutomationLog,
+  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,

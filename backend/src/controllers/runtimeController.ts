@@ -15,6 +15,7 @@ import { getNudge } from '../services/runtime/mentorNudgeService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
+import { getWeekReview, saveReflectionSignals } from '../services/runtime/weekReviewService';
 import { getRitualWall, submitRitualPost } from '../services/runtime/peerWinsService';
 import { toggleLike } from '../services/communityService';
 import { getAssessment, submitAssessment, sectionResultsSummary } from '../services/runtime/assessmentService';
@@ -194,6 +195,26 @@ export async function handleGetSurvey(req: Request, res: Response, next: NextFun
 }
 export async function handleSaveSurvey(req: Request, res: Response, next: NextFunction) {
   try { res.json(await saveSurvey(eid(req), String(req.params.cardId), req.body || {})); } catch (e) { fail(res, e, next); }
+}
+
+// Week in Review (reflection) — the PER-STUDENT data behind the weekly reflection
+// panel (real completions, scores, survey, skill deltas, saved signals), and the
+// upsert of the strategic signals the student captures (readiness/application/direction).
+export async function handleGetWeekReview(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getWeekReview(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+const reflectionSignalsSchema = z.object({
+  readiness: z.number().int().min(1).max(5).nullable().optional(),
+  application: z.string().max(64).nullable().optional(),
+  application_text: z.string().max(1000).nullable().optional(),
+  direction: z.string().max(64).nullable().optional(),
+  note: z.string().max(2000).nullable().optional(),
+});
+export async function handleSaveReflectionSignals(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = reflectionSignalsSchema.parse(req.body || {});
+    res.json(await saveReflectionSignals(eid(req), String(req.params.cardId), body));
+  } catch (e) { fail(res, e, next); }
 }
 
 // Community Rituals (community_discussion) — read the week's ritual + the cohort
