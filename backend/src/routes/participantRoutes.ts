@@ -3,6 +3,10 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { requireAdmin } from '../middlewares/authMiddleware';
+import { verifyKitToken } from '../services/classKit/kitToken';
+import { handleRecordPulse, handleGetLiveState } from '../controllers/sessionLiveController';
+import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
 import {
   handleOrgRegister, handleOrgInvites, handleOrgOverview,
@@ -23,7 +27,7 @@ import {
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
-  handleGetProgress,
+  handleGetProgress, handleGetCheckinInfo,
 } from '../controllers/participantController';
 import {
   handleGetCurriculum, handleGetModuleDetail, handleStartLesson,
@@ -51,13 +55,15 @@ import {
 import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleGetPeerWins, handleSubmitWin, handleCheerWin,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
   handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
 import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
+import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
@@ -74,6 +80,9 @@ router.get('/api/portal/verify', handleVerifyMagicLink);
 // experience) and the phone-handoff exchange (public — no session yet).
 router.get('/api/portal/flags', handleGetPortalFlags);
 router.get('/api/portal/handoff/exchange', handleExchangeHandoff);
+// Public check-in landing info (no auth): a not-yet-logged-in student who scans
+// the Class Kit QR can see which class they're checking in to. No meeting link.
+router.get('/api/portal/sessions/:id/checkin-info', handleGetCheckinInfo);
 
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
@@ -113,6 +122,10 @@ router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, ha
 // Weekly feedback Survey — read the questions + saved answers, and store answers.
 router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleGetSurvey);
 router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
+// Peer Wins (community_discussion) — the cohort's wins grid + post/edit your win + cheer a classmate's.
+router.get('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleGetPeerWins);
+router.post('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleSubmitWin);
+router.post('/api/portal/runtime/cards/:cardId/peer-wins/:winId/cheer', requireParticipant, handleCheerWin);
 router.get('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleGetAssessment);
 router.post('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleSubmitAssessment);
 // The Architect Time Machine (architect_mindset) — state/resume, validated stage
@@ -136,6 +149,9 @@ router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, req
 // Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).
 router.post('/api/portal/runtime/today/blog/:blogId/read', watchBeatRateLimiter, requireParticipant, handleBlogReadBeat);
 router.post('/api/portal/runtime/today/blog/:blogId/collect', requireParticipant, handleBlogCollect);
+// In-Workspace blog reader: the post's article fetched + sanitized server-side (the
+// training site sends X-Frame-Options: DENY, so it can't be iframed directly).
+router.get('/api/portal/runtime/today/blog/:blogId/reader', requireParticipant, handleBlogReader);
 // Generic dwell gate: heartbeat for passive-content types (intel/reflection/…).
 router.post('/api/portal/runtime/cards/:cardId/dwell', watchBeatRateLimiter, requireParticipant, handleDwellBeat);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
@@ -144,6 +160,19 @@ router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetai
 router.post('/api/portal/sessions/:id/join', requireParticipant, handleJoinSession);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
 router.post('/api/portal/sessions/:id/chat', requireParticipant, handlePostSessionChat);
+// Live class pulse: a student sets status from their phone (participant-auth); the
+// instructor Class Kit deck reads aggregate state via a session-scoped kit token
+// (baked into the admin-opened deck) OR an admin JWT.
+router.post('/api/portal/sessions/:id/pulse', requireParticipant, handleRecordPulse);
+router.get(
+  '/api/portal/sessions/:id/live-state',
+  (req, res, next) => {
+    const t = typeof req.query.t === 'string' ? req.query.t : undefined;
+    if (verifyKitToken(t, req.params.id as string)) return next();
+    return requireAdmin(req, res, next);
+  },
+  handleGetLiveState,
+);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
@@ -329,6 +358,19 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
     res.status(500).json({ error: 'Failed to retrieve Project DNA' });
   }
 });
+
+// Paid/entitlement gate (flag-gated, default OFF) on the build + evidence subsystem.
+// Scoped to the singular /api/portal/project subtree — that is the whole build/
+// evidence surface projectRoutes serves (setup, architect-build, compile, verify,
+// progression-evaluate, build-session, telemetry, capabilities, visual-review, ...).
+// requireParticipant is included here so req.participant is resolved BEFORE the gate
+// runs (projectRoutes' own per-route requireParticipant then re-runs harmlessly).
+// Deliberately NOT applied as `router.use(gate, projectRoutes)`: a path-less mount
+// would leak the participant gate onto the plural /api/portal/projects nav, the
+// /api/portal/onboarding route, and the /api/admin/governance/* admin endpoints this
+// same router also carries. Those stay open, as do learning + community mounts.
+// Inert unless BUILD_PAID_GATE_ENABLED=true (ships dark).
+router.use('/api/portal/project', requireParticipant, requireBuildEntitlement);
 
 // Project endpoints
 router.use(projectRoutes);
@@ -892,6 +934,22 @@ router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) =
   }
 });
 
+// Role-aware "People" panel for the right rail (flag-gated; default OFF). Flag OFF
+// returns { enabled:false } and the rail falls back to GET /api/portal/cohort/presence,
+// so merging/deploying changes nothing until PEOPLE_PANEL_ROLES_ENABLED=true. Flag ON
+// returns { enabled:true, ...panel } — staff get cross-cohort presence + classes +
+// businesses; students get their class + recently-active people outside it.
+router.get('/api/portal/people/panel', requireParticipant, async (req, res) => {
+  try {
+    if (!env.peoplePanelRolesEnabled) { res.json({ enabled: false }); return; }
+    const { getPeoplePanel } = await import('../services/peoplePanelService');
+    const panel = await getPeoplePanel(req.participant!.sub, req.participant!.cohort_id);
+    res.json({ enabled: true, ...panel });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
 // Friends — send a request / respond to one. Idempotent, cohort-scoped. The
 // caller's friendship status toward each cohort-mate rides on /cohort/presence
 // (friendshipStatus), so the rail needs no separate list endpoint.
@@ -1002,6 +1060,28 @@ router.get('/api/portal/community/members/:memberId', requireParticipant, async 
     res.json({ profile });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// ── Management-portal bridge (employees only) ────────────────────────────────
+// Lets a staff member with a mgmt role open the admin portal from inside their
+// student session — no separate credentials.
+router.get('/api/portal/mgmt/status', requireParticipant, async (req, res) => {
+  try {
+    const { getMgmtStatus } = await import('../services/access/mgmtBridgeService');
+    res.json(await getMgmtStatus(req.participant!.sub));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.post('/api/portal/mgmt/enter', requireParticipant, async (req, res) => {
+  try {
+    const { mintMgmtAdminToken } = await import('../services/access/mgmtBridgeService');
+    const minted = await mintMgmtAdminToken(req.participant!.sub);
+    if (!minted) { res.status(403).json({ error: 'Not a management user' }); return; }
+    res.json(minted);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

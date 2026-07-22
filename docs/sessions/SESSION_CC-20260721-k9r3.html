@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260721-k9r3 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, July 22, 2026 at 12:14 AM</div>
+    <div><span class="sid">CC-20260721-k9r3</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Class Kit: per-class interactive teaching deck (&quot;AI Architect Today · Learn It Monday / Build It Thursday&quot;) + renamed all 25 July sessions to blueprint titles + rich descriptions + stored run-of-show</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Built the **Class Kit** — a self-contained, Open-House-style interactive HTML teaching deck per class that runs the session. (1) `data/classSessionPlan.ts`: per-week Monday (Architecture Day) + Thursday (Build Day) content beats + Orientation (Ali 60 / Taiwo 30 / Swati 30), grounded in `data/weekBlueprints.ts` + the 12-week show slate from the content-strategy brief. (2) `services/classKit/`: `runOfShow.ts` (the strategy&#39;s 120-min Architecture/Build/Orientation segment templates + TZ-safe time helpers + duration scaling), `kitSpec.ts` (assembles a deck spec — slides tagged with their pace segment — from the blueprint), `kitDeckStyles.ts` / `kitDeckScript.ts` / `kitHtml.ts` (the self-contained deck engine). Deck features: a **live pace tracker** (Start class → clock; ON TIME / BEHIND / AHEAD vs the run-of-show + mini-timeline — the &quot;when to speed up / falling behind&quot; magic, fully client-side), a **pulse rail** + presenter feedback (ready to receive the live student feed — next increment), polls/trivia/predictions with reveal, copy-ready Claude Code prompts, checkpoints, failure+recovery, **Builder Broadcast**, **Mark-this-moment** (downloadable clip list), presenter notes, **Compact** mode for docking beside Claude Code, and a full-screen check-in QR. (3) `sessionKitDocService.renderSessionKitDoc` + `GET /api/admin/accelerator/sessions/:id/kit-doc` (requireAdmin) render the deck; admin **&quot;Kit ▶&quot;** button (AdminAcceleratorPage) opens it in a new tab (synchronous window.open + document.write to dodge popup blockers). (4) `live_sessions.kit_json` JSONB column (idempotent DDL in `ensureLiveSessionSchema`) stores the run-of-show. (5) `scripts/updateClassSessionContent.ts` renamed all 25 July sessions from generic role names (&quot;Week 1: Business Analyst&quot;) to `Week N · Architecture/Build Day — &lt;Blueprint Title&gt;`, wrote Monday/Thursday descriptions, and populated kit_json (canonical-compare so re-runs are true no-ops).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` 0 errors in src/ (the 267 are pre-existing zod-v4/d3 node_modules parse noise); CI green (backend typecheck, backend unit tests, frontend typecheck, secret/route-auth lint) on PR #656; independent checker review PASS on 8/9 checks (1 cosmetic regex bug found + fixed). PROD VERIFIED (2026-07-21): backend `/health` 200; `[DB] Live Sessions schema ensured` + `kit_json` column present; 25 sessions renamed with kit_json (Orientation 4 segs / Architecture 10 / Build 9); `kit-doc` endpoint → HTTP 401 unauth (admin-gated); direct render of a real prod session = 43,789 bytes with pace bar + prompts + blueprint title + inline QR + deck runtime; served frontend bundle `main.a071b7a9.js` contains the `kit-doc` opener.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PRs #656 (build) + #658 (idempotent-writer follow-up), branch `workstream/class-kit-live-sessions`. Deployed backend then nginx `--no-deps` (sequential, to avoid parallel-build OOM). Cohort `1f1d86f4-6da5-4767-a250-cd8310570bea` (Cohort - July 2026, 40 enrolled). **STAGED next increment (not yet built):** the live student-phone pulse (a `session_pulse` table + phone companion: here/building/stuck/finished + questions) wired to the deck&#39;s pulse rail via a kit token — the rail + presenter-feedback logic are already built to receive it. Shipped the deck + pace tracker + naming first because Orientation is 2026-07-23.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Live student-phone pulse (here/building/stuck/finished + questions) wired to the deck&#39;s rail; clicking a class title opens the presentation deck</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**(flow, from Ali&#39;s feedback)** Clicking a session TITLE now opens the Class Kit presentation deck in a new tab (the check-in QR is on the first slides); the primary row button is **&quot;▶ Present&quot;** (was &quot;Kit ▶&quot;); the QR modal is demoted to a small **&quot;QR&quot;** (printable backup); the confusing Class Details curriculum popup was removed (the deck is the details). **(live pulse — the deck&#39;s &quot;edges&quot;)** New `session_pulse` table (idempotent DDL in `ensureLiveSessionSchema`, one upserted row per enrollment+session, unique index, ON CONFLICT) + `SessionPulse` model (registered in models/index). `POST /api/portal/sessions/:id/pulse` (requireParticipant) sets here/building/stuck/finished; `GET /api/portal/sessions/:id/live-state` returns aggregate counts + recent questions, guarded by a **session-scoped kit token** (baked into the admin-opened deck) OR an admin JWT — questions reuse `session_chat_messages`. `services/classKit/kitToken.ts` mints/verifies the token (12h, `env.jwtSecret`). `sessionKitDocService` now renders the deck with **live enabled**, pointing at an **absolute same-origin** live-state URL (a relative URL won&#39;t resolve from the `about:blank` window the deck is `document.write`n into) + a minted token. **Student phone companion:** after check-in, `ClassCheckinPage` becomes the class controller — big here/building/stuck/finished buttons + Ask-a-question (reuses class chat) — which light up the deck&#39;s pulse rail + presenter feedback.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` 0 errors in src/; CI green (backend typecheck, backend unit tests, frontend typecheck, secret/route-auth lint) on PR #662. PROD deploy + verify in this session (backend for the new table/routes + nginx for the frontend).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #662, branch `workstream/class-kit-live-pulse`. Deploy = backend (`up -d --build backend`) then nginx (`--no-deps`). The route-auth lint only scans `routes/admin/`; the live-state route is in `participantRoutes` with a kit-token-or-admin guard. The &quot;We couldn&#39;t check you in&quot; Ali saw was an instructor account hitting the *student* check-in on a non-enrolled session — expected; instructors use &quot;▶ Present&quot;, students scan the deck&#39;s QR.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260721-k9r3</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

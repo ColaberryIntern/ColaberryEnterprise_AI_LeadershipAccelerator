@@ -1,19 +1,22 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import './TodayShell.css';
-import { fetchPoints, fetchSchedule, levelFor, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
+import { fetchPoints, fetchSchedule, levelFor, bandHudNext, PointsSummary, OnboardingSchedule } from '../../../services/onboardingApi';
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
 import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest, colorFor } from '../../../services/cohortPresenceApi';
+import { fetchPeoplePanel, PeoplePanel } from '../../../services/peoplePanelApi';
+import PeoplePanelRail from './PeoplePanelRail';
 import { pingPresence } from '../../../services/communityApi';
 import { openDm } from '../../../services/dmApi';
 import ChatDock, { DmTarget } from './ChatDock';
 import MessagesButton from './MessagesButton';
 import { useIsExplorer } from '../useIsExplorer';
 import { useIsOrgManager } from '../useIsOrgManager';
+import { useMgmtStatus } from '../useMgmtStatus';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
@@ -21,7 +24,7 @@ import ConfettiCelebration from '../../../components/ConfettiCelebration';
 // Rooms are built and navigate; Cert Prep / Portfolio are deferred past the
 // P0 launch fence and render as a dimmed "Soon" item. (Rooms IS the group-chat
 // surface — text + video rooms — so the old "Group Chat" placeholder was removed.)
-type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean };
+type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean; newTab?: boolean };
 type NavGroup = { grp: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -84,6 +87,18 @@ const COMPANY_NAV_GROUP: NavGroup = {
   ],
 };
 
+// "Management Portal" — a single link that opens the admin portal for employees
+// (staff with a management role). Shown only when useMgmtStatus().is_mgmt. Routes
+// to a landing that mints a scoped admin token then redirects into /admin.
+const MGMT_NAV_GROUP: NavGroup = {
+  grp: 'Employee',
+  items: [
+    { label: 'Management Portal', to: '/portal/mgmt-enter', newTab: true, icon: (
+      <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 4v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+    ) },
+  ],
+};
+
 type PortalShellProps = {
   children: React.ReactNode;
   /** Count badge shown on the Today nav item (open onboarding steps). */
@@ -100,10 +115,16 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const location = useLocation();
   const isExplorer = useIsExplorer();   // Explorer = demo tier — shows a Demo pill on Projects
   const isOrgManager = useIsOrgManager(); // manager = also sees a "Your company" nav group
-  // Effective nav: managers get "Your company" prepended above "Your day".
+  const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
+  // Effective nav: employees get "Management Portal", managers get "Your company",
+  // both prepended above "Your day".
   const groups = useMemo<NavGroup[]>(
-    () => (isOrgManager ? [COMPANY_NAV_GROUP, ...NAV_GROUPS] : NAV_GROUPS),
-    [isOrgManager],
+    () => [
+      ...(mgmt.is_mgmt ? [MGMT_NAV_GROUP] : []),
+      ...(isOrgManager ? [COMPANY_NAV_GROUP] : []),
+      ...NAV_GROUPS,
+    ],
+    [isOrgManager, mgmt.is_mgmt],
   );
   // Mobile bottom tab bar mirrors the effective, navigable destinations.
   const tabItems = useMemo(
@@ -151,15 +172,26 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   // while we're anywhere in the portal (not just the Community tab). Fail-soft:
   // any error keeps the last roster and never breaks the shell.
   const [contacts, setContacts] = useState<CohortContact[]>([]);
+  // Role-aware People panel (flag-gated server-side). null = flag OFF or error, in
+  // which case the rail falls back to the legacy cohort-presence view below.
+  const [panel, setPanel] = useState<PeoplePanel | null>(null);
   const refreshContacts = useCallback(() => {
     fetchCohortPresence().then(setContacts).catch(() => { /* keep last roster */ });
   }, []);
+  const refreshPanel = useCallback(() => {
+    fetchPeoplePanel().then(setPanel).catch(() => { /* fall back to cohort rail */ });
+  }, []);
   useEffect(() => {
     refreshContacts();
+    refreshPanel();
     pingPresence().catch(() => { /* non-fatal */ });
-    const id = window.setInterval(() => { refreshContacts(); pingPresence().catch(() => { /* non-fatal */ }); }, 60_000);
+    const id = window.setInterval(() => {
+      refreshContacts();
+      refreshPanel();
+      pingPresence().catch(() => { /* non-fatal */ });
+    }, 60_000);
     return () => window.clearInterval(id);
-  }, [refreshContacts]);
+  }, [refreshContacts, refreshPanel]);
   // Friend actions — fire, then refetch so friendshipStatus (and the friends-first
   // order) update. Fail-soft: an error just leaves the person addable.
   const onAddFriend = useCallback((id: string) => {
@@ -175,6 +207,11 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   }, []);
   const openChat = useCallback((c: CohortContact) => {
     openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(() => { /* non-fatal */ });
+  }, [openChatTarget]);
+  // People-panel rows carry only enrollmentId + name; derive the colour the same way
+  // the cohort rail does so the same person is always the same colour.
+  const openPerson = useCallback((enrollmentId: string, name: string) => {
+    openDm(enrollmentId).then((roomId) => openChatTarget({ roomId, name, color: colorFor(enrollmentId) })).catch(() => { /* non-fatal */ });
   }, [openChatTarget]);
 
   // Bridge: other surfaces (e.g. the community member profile drawer) open a DM
@@ -259,6 +296,14 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
 
   const total = points?.total ?? 0;
   const lvl = levelFor(total);
+  // 5-band re-skin (runtime flag on the points payload). When ON, the HUD shows
+  // the canonical band rung (e.g. "AI Enabled II") as the level identity; when OFF
+  // band is null and the legacy "Apprentice/…/Principal" identity is byte-identical.
+  const band = points?.fiveBandUiEnabled ? points.band ?? null : null;
+  const idName = band ? band.rungName : lvl.name;
+  const nextLine = band
+    ? bandHudNext(band, total)
+    : (lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level');
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
@@ -318,12 +363,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
             to="/portal/settings?tab=points"
             className={`te-hud${fx ? ' bump' : ''}${active.startsWith('/portal/settings') ? ' active' : ''}`}
             title="View your points breakdown"
-            aria-label={`${total} points, level ${lvl.name} — view your points breakdown`}
+            aria-label={`${total} points, level ${idName} — view your points breakdown`}
           >
             {fx && <span key={fx.key} className="te-hud-burst" aria-hidden="true">+{fx.delta}</span>}
-            <div className="row"><span className="lvl"><svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>{lvl.name}</span><span className="pts">{displayTotal.toLocaleString()} pts</span></div>
+            <div className="row"><span className="lvl"><svg className="star" viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>{idName}</span><span className="pts">{displayTotal.toLocaleString()} pts</span></div>
             <div className="bar"><i style={{ width: `${lvl.pct}%` }} /></div>
-            <div className="next">{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level'}</div>
+            <div className="next">{nextLine}</div>
           </Link>
           <Link to="/portal/settings" className={`te-iconbtn${active.startsWith('/portal/settings') ? ' active' : ''}`} title="Settings" aria-label="Settings">
             <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" /><path d="M19.4 13a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.82 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 7.5 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 13a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 6.5a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 2.6h.09A1.65 1.65 0 0 0 11 1.09V1a2 2 0 0 1 4 0v.09A1.65 1.65 0 0 0 16.5 4.6l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 21.4 11H21a2 2 0 0 1 0 4z" stroke="currentColor" strokeWidth="1.7" strokeLinejoin="round" /></svg>
@@ -352,6 +397,8 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
               );
               if (isActive) return <span key={n.label} className="te-navbtn active">{inner}</span>;
               if (n.soon) return <span key={n.label} className="te-navbtn is-soon" title="Coming soon" aria-disabled="true">{inner}</span>;
+              // Open in a NEW TAB (e.g. Management Portal) so the student session stays put.
+              if (n.newTab) return <a key={n.label} className="te-navbtn" href={n.to!} target="_blank" rel="noopener noreferrer">{inner}</a>;
               return <Link key={n.label} className="te-navbtn" to={n.to!}>{inner}</Link>;
             })}
           </React.Fragment>
@@ -373,7 +420,16 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
           viewports it is the FIRST thing to collapse (avatar-only rail), before
           the left nav — see the staged .te-contacts media rules in TodayShell.css. */}
       <aside className="te-contacts" aria-label="Cohort contacts">
-        {showFind ? (
+        {panel ? (
+          // Role-aware People panel (PEOPLE_PANEL_ROLES_ENABLED=true). When null (flag
+          // OFF or fetch error) the legacy cohort-presence rail below renders unchanged.
+          <PeoplePanelRail
+            panel={panel}
+            collapsed={contactsCollapsed}
+            onToggleCollapsed={() => setContactsCollapsed((c) => !c)}
+            onOpenPerson={openPerson}
+          />
+        ) : showFind ? (
           <>
             {/* Find-people view — the full cohort directory, reachable by clicking
                 "Find people" and dismissed with the back arrow. */}

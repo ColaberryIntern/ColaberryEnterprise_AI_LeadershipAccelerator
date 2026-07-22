@@ -1,4 +1,10 @@
 import portalApi from '../utils/portalApi';
+import type { Band } from './bandLadder';
+
+// Re-export the pure 5-band mirror so callers have one import surface for the
+// ladder. The pure module (bandLadder.ts) stays network-free for its unit test.
+export type { Band } from './bandLadder';
+export { BAND_RUNGS, bandRungForPoints, bandRungForLevel, bandHudNext } from './bandLadder';
 
 // ── Shapes returned by the Phase-1 onboarding endpoints (S1–S5) ──────────────
 
@@ -12,7 +18,22 @@ export interface PointsEvent {
 export interface PointsSummary {
   total: number;
   events: PointsEvent[];
+  // Additive (present once the backend exposes them; older clients ignore them).
+  // The frontend only reads `band` when `fiveBandUiEnabled` is true.
+  band?: Band;
+  fiveBandUiEnabled?: boolean;
 }
+
+// Runtime cache of the 5-band UI flag, populated whenever the HUD fetches points
+// (fetchPoints below). Lets flag-unaware presentational components (e.g.
+// LevelBadge, rendered deep in community lists that never fetch points) switch at
+// runtime without prop-drilling or a rebuild. Seeded from localStorage for a
+// flash-free first paint; defaults false so flag-off is byte-identical.
+function readCachedFiveBand(): boolean {
+  try { return localStorage.getItem('te_five_band_ui') === '1'; } catch { return false; }
+}
+let fiveBandUi: boolean = readCachedFiveBand();
+export function isFiveBandUiEnabled(): boolean { return fiveBandUi; }
 
 export interface OpenHouseView {
   id: string;
@@ -66,6 +87,11 @@ export async function freeSignup(body: { full_name: string; email: string }): Pr
 
 export async function fetchPoints(): Promise<PointsSummary> {
   const { data } = await portalApi.get<PointsSummary>('/api/portal/points');
+  // Cache the runtime UI flag for flag-unaware components (see isFiveBandUiEnabled).
+  if (typeof data.fiveBandUiEnabled === 'boolean') {
+    fiveBandUi = data.fiveBandUiEnabled;
+    try { localStorage.setItem('te_five_band_ui', data.fiveBandUiEnabled ? '1' : '0'); } catch { /* ignore */ }
+  }
   return data;
 }
 
@@ -141,6 +167,19 @@ export interface JoinSessionResult { ok: true; status: 'present' | 'late'; award
 export async function joinSession(sessionId: string): Promise<JoinSessionResult> {
   const { data } = await portalApi.post<JoinSessionResult>(`/api/portal/sessions/${sessionId}/join`);
   return data;
+}
+
+/** Live class pulse state a student can broadcast from their phone. */
+export type PulseState = 'here' | 'building' | 'stuck' | 'finished';
+
+/** Set the student's live status for a session (lights up the instructor's deck). */
+export async function setSessionPulse(sessionId: string, state: PulseState): Promise<void> {
+  await portalApi.post(`/api/portal/sessions/${sessionId}/pulse`, { state });
+}
+
+/** Ask a question during class — reuses the session chat so it reaches the deck. */
+export async function askSessionQuestion(sessionId: string, text: string): Promise<void> {
+  await portalApi.post(`/api/portal/sessions/${sessionId}/chat`, { content: text });
 }
 
 /** Upcoming public events (Open Houses) from CCPP, for the portal calendar. */

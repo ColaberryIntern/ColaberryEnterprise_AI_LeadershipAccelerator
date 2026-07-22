@@ -7,8 +7,10 @@ import PortalLoginPage from '../pages/portal/PortalLoginPage';
 import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
 import PortalViewAsPage from '../pages/portal/PortalViewAsPage';
+import PortalMgmtEnterPage from '../pages/portal/PortalMgmtEnterPage';
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 import PortalHandoffPage from '../pages/portal/PortalHandoffPage';
+import ClassCheckinPage from '../pages/portal/ClassCheckinPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
 import RuntimeWorkspace from '../pages/portal/runtime/RuntimeWorkspace';
@@ -45,10 +47,15 @@ const portalRoutes = (
     <Route path="/portal/view-as" element={<PortalViewAsPage />} />
     {/* Phone handoff — public: exchanges a one-time QR code for a session, then lands on Today. */}
     <Route path="/portal/handoff" element={<PortalHandoffPage />} />
+    {/* Live-class check-in — PUBLIC: a student may scan the room QR before signing
+        in. Records attendance if signed in, else routes them to log in. */}
+    <Route path="/portal/class-checkin/:sessionId" element={<ClassCheckinPage />} />
     <Route element={<PortalProtectedRoute />}>
       {/* Design E student surfaces — each renders its own PortalShell chrome,
           so they sit OUTSIDE PortalLayout. */}
       <Route path="/portal/today" element={<TodayShell />} />
+      {/* Employee → management portal: mints a scoped admin token, redirects to /admin. */}
+      <Route path="/portal/mgmt-enter" element={<PortalMgmtEnterPage />} />
       <Route path="/portal/settings" element={<SettingsPage />} />
       <Route path="/portal/path" element={<PathPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />
