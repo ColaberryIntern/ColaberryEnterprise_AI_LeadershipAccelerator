@@ -15,8 +15,10 @@ import { deckScript } from './kitDeckScript';
 
 export interface KitLiveConfig {
   enabled: boolean;
-  /** Absolute or app-relative URL returning { here, building, stuck, finished, questions[] }. */
+  /** Absolute URL returning the aggregate live state (deck reads). */
   endpoint?: string;
+  /** Absolute URL the deck POSTs its current view to (phones mirror it). */
+  broadcastEndpoint?: string;
   token?: string;
   pollMs?: number;
 }
@@ -92,10 +94,37 @@ function coverHtml(spec: KitSpec, slide: KitSlide): string {
   return `<div class="kcover-grid">${left}${right}</div>`;
 }
 
+function assignmentHtml(slide: KitSlide): string {
+  const b = slide.brief;
+  if (!b) return '';
+  const chips = [
+    `<span class="kbrf-chip kbrf-diff">🎓 ${esc(b.difficulty)}</span>`,
+    b.timeLabel ? `<span class="kbrf-chip">⏱️ ${esc(b.timeLabel)}</span>` : '',
+    `<span class="kbrf-chip kbrf-pts">🏆 ${b.points} XP</span>`,
+  ].join('');
+  const steps = b.steps
+    .map((s) => `<div class="kbrf-step"><span class="kbrf-emoji">${esc(s.emoji)}</span><span>${esc(s.text)}</span></div>`)
+    .join('');
+  const tags = b.tags.length
+    ? '<div class="kbrf-tags">' + b.tags.map((t) => `<span class="kbrf-tag">${esc(t)}</span>`).join('') + '</div>'
+    : '';
+  return (
+    `<div class="keyebrow">🎯 Prove it by Friday</div>` +
+    `<h2 class="ktitle">${esc(b.headline)}</h2>` +
+    `<div class="kbrf-formula">${esc(b.formula)}</div>` +
+    `<div class="kbrf-chips">${chips}</div>` +
+    `<div class="kbrf-steps">${steps}</div>` +
+    `<div class="kbrf-proof">📸 <b>Your proof:</b> ${esc(b.proof)}</div>` +
+    tags
+  );
+}
+
 function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
   switch (slide.kind) {
     case 'cover':
       return coverHtml(spec, slide);
+    case 'assignment':
+      return assignmentHtml(slide);
     case 'interaction':
       return interactionHtml(slide);
     case 'rules':
@@ -184,9 +213,28 @@ function timelineHtml(spec: KitSpec): string {
 export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): string {
   const m = spec.meta;
   const live = opts.live || { enabled: false };
+  // Per-slide broadcast metadata: what each phone should show when the deck is on
+  // this slide (status controller by default; the active question; or the Builder
+  // Broadcast prompts). poll key = the slide id (deterministic across re-renders).
+  const slidesMeta = spec.slides.map((s) => {
+    const phase = s.kind === 'interaction' && s.interaction ? 'question' : s.kind === 'broadcast' ? 'broadcast' : 'status';
+    const question = s.kind === 'interaction' && s.interaction
+      ? {
+          key: s.id, kind: s.interaction.kind, q: s.interaction.q, options: s.interaction.options,
+          answer: typeof s.interaction.answer === 'number' ? s.interaction.answer : null, revealed: false,
+        }
+      : null;
+    return {
+      id: s.id, phase, title: s.title, segment_label: s.segmentLabel,
+      question,
+      broadcast_prompts: s.kind === 'broadcast' ? spec.builderBroadcastPrompts : undefined,
+    };
+  });
+
   const data = {
     meta: { sessionId: m.sessionId, sessionNumber: m.sessionNumber, dayLabel: m.dayLabel },
     segments: spec.segments.map((s) => ({ id: s.id, label: s.label, startMin: s.startMin, endMin: s.endMin, mode: s.mode })),
+    slides: slidesMeta,
     totalMinutes: spec.totalMinutes,
     live,
   };
@@ -220,12 +268,14 @@ ${slidesHtml}
 
 <aside id="krail">
   <div class="krail-head"><span>Class pulse</span><span class="krail-live off" id="kraillive">STANDBY</span></div>
+  <div class="krail-stats"><b id="kp-present">0</b> checked in · <b id="kp-participated">0</b> participating</div>
   <div class="kpulse-grid">
     <div class="kpulse here"><b id="kp-here">0</b><span>here</span></div>
     <div class="kpulse building"><b id="kp-building">0</b><span>building</span></div>
     <div class="kpulse stuck"><b id="kp-stuck">0</b><span>stuck</span></div>
     <div class="kpulse finished"><b id="kp-finished">0</b><span>finished</span></div>
   </div>
+  <div class="kpoll" id="kpoll" style="display:none"></div>
   <div class="kfeedback go" id="kfeedback">Start the class clock and share your screen.</div>
   <div class="kq-head">Questions from the room</div>
   <div class="kq-list" id="kqlist"><div class="kq-empty">No questions yet. Students ask from their phones.</div></div>

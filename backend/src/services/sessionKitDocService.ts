@@ -43,6 +43,7 @@ export async function renderSessionKitDoc(sessionId: string): Promise<string | n
     live: {
       enabled: true,
       endpoint: `${base}/api/portal/sessions/${sessionId}/live-state`,
+      broadcastEndpoint: `${base}/api/portal/sessions/${sessionId}/broadcast`,
       token: mintKitToken(sessionId),
       pollMs: 4000,
     },

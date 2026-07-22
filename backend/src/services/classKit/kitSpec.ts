@@ -9,7 +9,7 @@
  * isolation and the same spec renders identically on server or in a test.
  */
 import {
-  DayKind, Interaction, ClassPrompt, BuildCheckpoint,
+  DayKind, Interaction, ClassPrompt, BuildCheckpoint, WeekClassContent,
   WEEK_CLASS_CONTENT, ORIENTATION_PLAN,
 } from '../../data/classSessionPlan';
 import { weekBlueprint } from '../../data/weekBlueprints';
@@ -21,7 +21,7 @@ import {
 export type SlideKind =
   | 'cover' | 'rules' | 'bullets' | 'architecture' | 'example' | 'microbuild'
   | 'prompt' | 'checkpoint' | 'buildmap' | 'interaction' | 'failure' | 'recovery'
-  | 'demos' | 'broadcast' | 'break' | 'cta' | 'segment' | 'presenterOnly';
+  | 'demos' | 'broadcast' | 'break' | 'cta' | 'segment' | 'presenterOnly' | 'assignment';
 
 export interface KitSlide {
   id: string;
@@ -39,10 +39,24 @@ export interface KitSlide {
   prompt?: ClassPrompt;
   checkpoint?: BuildCheckpoint;
   interaction?: Interaction;
+  /** Visual "Prove It" assignment brief (rendered as an emoji/chart-like card). */
+  brief?: AssignmentBrief;
   /** Guidance shown in the instructor's presenter rail, never to the room. */
   presenterTip?: string;
   /** Reminder of what this segment is worth as public content. */
   publicValue?: string;
+}
+
+export interface BriefStep { emoji: string; text: string; }
+export interface AssignmentBrief {
+  headline: string;        // the public "prove it" title
+  formula: string;         // "Learn it Monday. Build it Thursday. Prove it by Friday."
+  difficulty: string;      // Foundational / Core / Stretch
+  timeLabel: string;       // "~7 hrs"
+  points: number;          // XP for the brief
+  steps: BriefStep[];      // the deliverable journey
+  proof: string;           // the evidence to show
+  tags: string[];          // competencies earned
 }
 
 export interface KitSegment {
@@ -118,6 +132,31 @@ const BUILDER_BROADCAST_PROMPTS = [
   'Here is the proof that it works…',
   'The next thing I would improve is…',
 ];
+
+const DIFFICULTY_LABEL: Record<string, string> = { intro: 'Foundational', core: 'Core', stretch: 'Stretch' };
+const DIFFICULTY_POINTS: Record<string, number> = { intro: 75, core: 100, stretch: 150 };
+const STEP_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣'];
+const PROVE_FORMULA = 'Learn it Monday. Build it Thursday. Prove it by Friday.';
+
+function humanizeTag(t: string): string {
+  return t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Build a visual "Prove It" brief from a week's assignment + its blueprint. */
+function buildWeekBrief(week: number | null, wc: WeekClassContent): AssignmentBrief {
+  const bp = week != null ? weekBlueprint(week) : undefined;
+  const diff = (bp?.difficulty as string) || 'core';
+  return {
+    headline: wc.assignment.title,
+    formula: PROVE_FORMULA,
+    difficulty: DIFFICULTY_LABEL[diff] || 'Core',
+    timeLabel: bp ? `~${bp.estimated_hours} hrs` : '',
+    points: DIFFICULTY_POINTS[diff] || 100,
+    steps: wc.assignment.deliverables.map((d, i) => ({ emoji: STEP_EMOJIS[i] || '✅', text: d })),
+    proof: wc.assignment.proof,
+    tags: (bp?.competencies || []).slice(0, 5).map(humanizeTag),
+  };
+}
 
 /** Detect the class day kind from title first, then weekday, then fall back. */
 export function detectDayKind(title: string, dateStr: string): DayKind {
@@ -364,9 +403,9 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
   }));
 
   const cta = segById(segs, 'cta');
-  out.push(slide(cta, 0, 'cta', {
-    eyebrow: 'Prove it by Friday', title: wc.assignment.title, bullets: wc.assignment.deliverables,
-    body: `Proof: ${wc.assignment.proof}`,
+  out.push(slide(cta, 0, 'assignment', {
+    eyebrow: 'Prove it by Friday', title: wc.assignment.title,
+    brief: buildWeekBrief(meta.week, wc),
     presenterTip: 'Restate the assignment and the proof. Learn it Monday, build it Thursday, prove it by Friday.',
   }));
 
@@ -402,9 +441,18 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     eyebrow: 'One more', title: 'What do you leave with?', interaction: ORIENTATION_PLAN.trivia,
     presenterTip: 'Reveal: a working system + CCA-F + portfolio. Then the close.',
   }));
-  out.push(slide(close, 2, 'cta', {
-    eyebrow: 'Before Week 1', title: 'You are set up and oriented', bullets: ORIENTATION_PLAN.assignment.deliverables,
-    body: `Proof: ${ORIENTATION_PLAN.assignment.proof}`,
+  out.push(slide(close, 2, 'assignment', {
+    eyebrow: 'Before Week 1', title: ORIENTATION_PLAN.assignment.title,
+    brief: {
+      headline: ORIENTATION_PLAN.assignment.title,
+      formula: PROVE_FORMULA,
+      difficulty: 'Foundational',
+      timeLabel: '~1 hr',
+      points: 50,
+      steps: ORIENTATION_PLAN.assignment.deliverables.map((d, i) => ({ emoji: STEP_EMOJIS[i] || '✅', text: d })),
+      proof: ORIENTATION_PLAN.assignment.proof,
+      tags: ['AI Foundations', 'Workspace Setup'],
+    },
     presenterTip: 'Everyone leaves tonight with Claude Code running. Week 1 Monday is Architecture Day.',
   }));
 
