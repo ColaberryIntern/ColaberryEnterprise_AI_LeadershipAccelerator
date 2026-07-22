@@ -187,3 +187,24 @@ export async function applyVideoFill(id: string, approved: ApprovedVideo[]) {
   });
   return { plan: nextPlan, assessment, added: toAdd.length };
 }
+
+/** Remove all curated video cards (type video + video_url) from the draft plan and
+ *  re-assess. Used to reset a week before re-curating. Does NOT touch the live
+ *  Timeline (drafts only). */
+export async function clearVideoCards(id: string) {
+  const bp = await CurriculumBlueprint.findByPk(id);
+  if (!bp) throw Object.assign(new Error('Blueprint not found'), { status: 404 });
+  const plan: CurriculumPlan | null = bp.generated_plan || null;
+  if (!plan?.cards) return { removed: 0 };
+  const kept = plan.cards.filter((c) => !(c.type === 'video' && c.video_url));
+  const removed = plan.cards.length - kept.length;
+  if (removed) {
+    const nextPlan: CurriculumPlan = { ...plan, cards: kept };
+    const assessment = assessPlan(bp, nextPlan);
+    await bp.update({
+      generated_plan: nextPlan, dna: assessment.dna,
+      quality_score: assessment.validation.quality, coverage_score: assessment.validation.coverage, readiness_score: assessment.validation.readiness,
+    });
+  }
+  return { removed };
+}
