@@ -33,6 +33,18 @@ function parseWeek(title: string): number | null {
   return m ? parseInt(m[1], 10) : null;
 }
 
+/** Order-insensitive JSON serialization (sorts object keys recursively). */
+function canonical(v: unknown): string {
+  const norm = (x: any): any => {
+    if (Array.isArray(x)) return x.map(norm);
+    if (x && typeof x === 'object') {
+      return Object.keys(x).sort().reduce((o: any, k) => { o[k] = norm(x[k]); return o; }, {});
+    }
+    return x;
+  };
+  return JSON.stringify(norm(v));
+}
+
 function computeForSession(s: LiveSession, cohortName: string): Computed | null {
   const dayKind = detectDayKind(s.title, s.session_date);
   const week = dayKind === 'orientation' ? null : parseWeek(s.title);
@@ -107,7 +119,10 @@ async function main(): Promise<void> {
   for (const s of sessions) {
     const c = computeForSession(s, cohort.name);
     if (!c) { console.log(`  #${s.session_number}  [skip: unknown week] ${s.title}`); continue; }
-    const kitDiffers = JSON.stringify(s.kit_json ?? null) !== JSON.stringify(c.kit_json);
+    // Compare kit_json canonically: Postgres JSONB read-back reorders keys, so a
+    // plain JSON.stringify would always differ. Sorting keys recursively makes the
+    // writer a true no-op on re-run (persisted state is already identical either way).
+    const kitDiffers = canonical(s.kit_json ?? null) !== canonical(c.kit_json);
     const willChange = s.title !== c.title || (s.description || '') !== c.description || kitDiffers;
     console.log(`  #${s.session_number}  ${s.session_date}`);
     console.log(`     old: ${s.title}`);
