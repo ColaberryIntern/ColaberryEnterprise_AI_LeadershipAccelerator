@@ -15,9 +15,11 @@
  *    not block the completion/XP pipeline, so callers get 0 back on any error.
  *  - Flag-gated by env.portalPointsAwardEnabled (ON by default).
  */
-import { award } from '../pointsService';
+import { award, sumPointsTodayByEventTypes } from '../pointsService';
 import { resolve as resolveType } from '../timeline/typeRegistry';
 import { env } from '../../config/env';
+import { centralDateKey } from '../centralDate';
+import { applyDailyCap, isAmbientLearningType, AMBIENT_LEARNING_CAP, AMBIENT_LEARNING_EVENT_TYPE } from './dailyCap';
 // PointsConfig is loaded lazily (dynamic import) inside the resolver so that
 // importing this module never triggers the model's Model.init() at load time —
 // keeps services that depend on it unit-testable with mocked models.
@@ -75,10 +77,31 @@ export async function resolveCardEngagementPoints(card: CardLike): Promise<numbe
 export async function awardCardCompletionPoints(enrollmentId: string, card: CardLike): Promise<number> {
   if (!env.portalPointsAwardEnabled) return 0;
   try {
-    const points = await resolveCardEngagementPoints(card);
+    let points = await resolveCardEngagementPoints(card);
     if (points <= 0) return 0;
+
+    let eventType = eventTypeForCard(card);
+
+    // Anti-cheat ambient daily cap (POINTS_DAILY_CAPS_ENABLED, default OFF). The
+    // low-value repeatable feed types are grindable, so clamp the award such
+    // that the day's ambient total can never exceed AMBIENT_LEARNING_CAP. These
+    // completions bank under a dedicated event_type so the running ambient total
+    // is measurable in isolation (a plain card_complete can't be told apart from
+    // real coursework). A clamp to 0 (cap already reached) skips the award —
+    // identical to the points<=0 path above, so idempotency (keyed per card via
+    // `card:<id>`) is untouched. Flag OFF ⇒ this block is inert and the award is
+    // byte-identical to today.
+    if (env.pointsDailyCapsEnabled && isAmbientLearningType(card.type)) {
+      const already = await sumPointsTodayByEventTypes(
+        enrollmentId, [AMBIENT_LEARNING_EVENT_TYPE], centralDateKey(Date.now()),
+      );
+      points = applyDailyCap({ alreadyAwardedToday: already, proposedAward: points, cap: AMBIENT_LEARNING_CAP });
+      if (points <= 0) return 0;
+      eventType = AMBIENT_LEARNING_EVENT_TYPE;
+    }
+
     const res = await award(enrollmentId, {
-      eventType: eventTypeForCard(card),
+      eventType,
       eventKey: `card:${card.id}`,
       points,
       metadata: { card_id: card.id, type: card.type },

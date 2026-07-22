@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
 import {
   handleOrgRegister, handleOrgInvites, handleOrgOverview,
@@ -329,6 +330,19 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
     res.status(500).json({ error: 'Failed to retrieve Project DNA' });
   }
 });
+
+// Paid/entitlement gate (flag-gated, default OFF) on the build + evidence subsystem.
+// Scoped to the singular /api/portal/project subtree — that is the whole build/
+// evidence surface projectRoutes serves (setup, architect-build, compile, verify,
+// progression-evaluate, build-session, telemetry, capabilities, visual-review, ...).
+// requireParticipant is included here so req.participant is resolved BEFORE the gate
+// runs (projectRoutes' own per-route requireParticipant then re-runs harmlessly).
+// Deliberately NOT applied as `router.use(gate, projectRoutes)`: a path-less mount
+// would leak the participant gate onto the plural /api/portal/projects nav, the
+// /api/portal/onboarding route, and the /api/admin/governance/* admin endpoints this
+// same router also carries. Those stay open, as do learning + community mounts.
+// Inert unless BUILD_PAID_GATE_ENABLED=true (ships dark).
+router.use('/api/portal/project', requireParticipant, requireBuildEntitlement);
 
 // Project endpoints
 router.use(projectRoutes);

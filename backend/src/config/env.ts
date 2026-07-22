@@ -139,6 +139,38 @@ export const env = {
   // feed the top-right HUD total. ON by default; set PORTAL_POINTS_AWARD_ENABLED=false
   // to dark-disable coursework awards (streak + RSVP awards are unaffected).
   portalPointsAwardEnabled: process.env.PORTAL_POINTS_AWARD_ENABLED !== 'false',
+  // Paid/entitlement gate on the build + evidence subsystem (/api/portal/project*).
+  // Free "Explorer" accounts get HTTP 402 with an upgrade payload; paid / comped /
+  // staff / sponsor-seat enrollments pass. Default OFF (inverted vs the points flag
+  // above) so merging/deploying changes NOTHING until BUILD_PAID_GATE_ENABLED=true.
+  buildPaidGateEnabled: process.env.BUILD_PAID_GATE_ENABLED === 'true',
+  // Community level reconcile — fold the legacy CommunityMember.level tiers
+  // (0/1500/2700/4200 in communityService.LEVEL_TIERS) onto the ONE canonical
+  // points ladder (pointsService.levelForPoints, 0/150/400/900). Default OFF:
+  // communityService.levelFor keeps its legacy tiers byte-identical. When ON,
+  // levelFor defers to the canonical ladder, eliminating the A/B threshold
+  // disagreement. Leaderboard ranking is unaffected — it reads the canonical
+  // StudentPointsEvent total, not levelFor.
+  communityLevelUseCanonical: process.env.COMMUNITY_LEVEL_USE_CANONICAL === 'true',
+  // Anti-cheat daily point caps (progression/dailyCap.ts): clamp low-value
+  // ambient-feed completions (AMBIENT_LEARNING_CAP/day) and community
+  // post/comment/like awards (COMMUNITY_CAP/day) so neither category can be
+  // farmed for unbounded points in a single Central day. Default OFF — flag off
+  // is byte-identical to today (no clamping; every award fires at full value).
+  pointsDailyCapsEnabled: process.env.POINTS_DAILY_CAPS_ENABLED === 'true',
+  // Community post-quality gate: withhold a post's +5 creation reward until a
+  // PEER (someone other than the author) likes it, so spam-posting earns
+  // nothing. The +5 is released — idempotently, on the post's own event key —
+  // on the first peer like (see communityService.toggleLike). Default OFF:
+  // posts reward +5 on creation exactly as today.
+  communityPostQualityGateEnabled: process.env.COMMUNITY_POST_QUALITY_GATE_ENABLED === 'true',
+  // Five-band UI — the frontend re-skin to the canonical 5-band ladder (AI Aware →
+  // AI Enabled → AI Builder → AI Architect) as the primary level identity, plus the
+  // free-ceiling "Become an AI Builder" upgrade card. Surfaced to the client in the
+  // GET /api/portal/points response (additive) so the SPA switches at runtime without
+  // a rebuild. Default OFF: flag-off keeps the legacy "Level N · Apprentice/…/Principal"
+  // HUD byte-identical.
+  fiveBandUiEnabled: process.env.FIVE_BAND_UI_ENABLED === 'true',
   // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
   // links). Master switch OFF by default: the community-room routes return 404,
   // the outbox drain cron no-ops, and createSession skips linked-room creation

@@ -1,5 +1,6 @@
 import StudentPointsEvent from '../models/StudentPointsEvent';
 import { award, hasAwarded } from './pointsService';
+import { centralDateKey } from './centralDate';
 
 /**
  * Daily streak — server-authoritative, idempotent, escalating.
@@ -17,20 +18,14 @@ import { award, hasAwarded } from './pointsService';
  *  - Claiming twice in one Central day is a no-op (idempotent on the event key).
  */
 
-const CENTRAL_TZ = 'America/Chicago';
 export const STREAK_EVENT_TYPE = 'daily_streak';
 const keyFor = (dateKey: string): string => `${STREAK_EVENT_TYPE}:${dateKey}`;
 
-/** 'YYYY-MM-DD' for an instant as seen in Central time. */
-export function centralDateKey(ms: number): string {
-  const parts: Record<string, string> = {};
-  for (const p of new Intl.DateTimeFormat('en-US', {
-    timeZone: CENTRAL_TZ, year: 'numeric', month: '2-digit', day: '2-digit',
-  }).formatToParts(new Date(ms))) {
-    if (p.type !== 'literal') parts[p.type] = p.value;
-  }
-  return `${parts.year}-${parts.month}-${parts.day}`;
-}
+// centralDateKey now lives in ./centralDate so the points economy (streaks +
+// daily caps + HUD) shares ONE Central-day boundary. Re-exported here so
+// existing consumers (and this service's test) keep importing it from
+// streakService unchanged.
+export { centralDateKey };
 
 /** Previous calendar day for a 'YYYY-MM-DD' key (pure date arithmetic, tz-safe). */
 function prevKey(key: string): string {
