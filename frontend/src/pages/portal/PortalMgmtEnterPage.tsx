@@ -13,12 +13,14 @@ export default function PortalMgmtEnterPage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    portalApi.post<{ admin_token?: string }>('/api/portal/mgmt/enter')
+    portalApi.post<{ admin_token?: string; role?: string }>('/api/portal/mgmt/enter')
       .then((res) => {
         const token = res.data?.admin_token;
         if (!token) { setError('You do not have management access.'); return; }
         localStorage.setItem('admin_token', token);
-        window.location.replace('/admin');
+        // Support has no admin nav — only the read-only student-story surface —
+        // so land them straight on it. Everyone else opens the admin home.
+        window.location.replace(res.data?.role === 'support' ? '/admin/students' : '/admin');
       })
       .catch((e: any) => setError(e?.response?.data?.error || 'Could not open the management portal.'));
   }, []);

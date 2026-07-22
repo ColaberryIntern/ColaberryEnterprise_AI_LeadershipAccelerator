@@ -84,6 +84,7 @@ import trustRoutes from './admin/trustRoutes';
 import communityModerationRoutes from './admin/communityModerationRoutes';
 import communityMemberRoutes from './admin/communityMemberRoutes';
 import podcastRoutes from './admin/podcastRoutes';
+import studentStoryRoutes from './admin/studentStoryRoutes';
 
 const router = Router();
 
@@ -179,5 +180,6 @@ router.use(mentorReviewRoutes);
 router.use(trustRoutes);
 router.use(communityModerationRoutes);
 router.use(communityMemberRoutes);
+router.use(studentStoryRoutes);
 
 export default router;
