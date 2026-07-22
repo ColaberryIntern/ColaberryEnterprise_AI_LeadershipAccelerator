@@ -19,8 +19,11 @@ export default function PortalMgmtEnterPage() {
         if (!token) { setError('You do not have management access.'); return; }
         localStorage.setItem('admin_token', token);
         // Support has no admin nav — only the read-only student-story surface —
-        // so land them straight on it. Everyone else opens the admin home.
-        window.location.replace(res.data?.role === 'support' ? '/admin/students' : '/admin');
+        // so land them straight on it. Everyone else opens the admin dashboard.
+        // NOTE: land on '/admin/dashboard', NOT '/admin' — the '/admin' index
+        // route unconditionally redirects to '/admin/login', which would bounce
+        // an already-authenticated bridge session back to a login prompt.
+        window.location.replace(res.data?.role === 'support' ? '/admin/students' : '/admin/dashboard');
       })
       .catch((e: any) => setError(e?.response?.data?.error || 'Could not open the management portal.'));
   }, []);
