@@ -10848,3 +10848,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali on the live points page — "update this dashboard to match the new point system … I'm AI Aware I and it's saying junior builder. They need to be in sync. Also build something there that makes it very clear what each level is and how many points and the whole journey. Make it very visual like the path page." [[project_today_timeline_v2]]
   - Verification: Frontend `tsc` clean (0 errors, ignoring 3 @dnd-kit). Reuses the merged band ladder (`bandLadder.ts` / `BAND_RUNGS` / `bandHudNext`) — no new economy logic, no backend change.
   - Notes: Branch `workstream/points-dashboard-5band` off origin/main (53e852c8, which has the 5-band economy). Frontend-only → nginx `--no-deps`. Build bands (AI Builder/AI Architect) are server-only in the ladder; the journey represents them statically as locked. Other legacy-named surfaces (PathPage, ImpactPanel) left for the g8k4 economy build to reconcile.
+
+### CI fix: route-auth lint recognizes the new admin guards — 2026-07-21
+- [x] Add requireAnyAdmin/requireSection/requireSalesOrAdmin to the route-auth-lint guard list
+  - Date: 2026-07-21
+  - Session: CC-20260721-r7k4
+  - What changed: `scripts/lint-route-auth.js` GUARDS extended with `requireAnyAdmin`, `requireSection`, `requireSalesOrAdmin`. The mgmt-RBAC Phase-1 (#639) swapped `/api/admin/me` from requireAdmin → requireAnyAdmin, so `authRoutes.ts` no longer contained the literal `requireAdmin` and the lint (which greps admin route files for a recognized guard string) failed main CI. These are all legitimate admin auth guards.
+  - Why: green main CI after #639. Backend typecheck/tests/frontend-typecheck were already passing; only the route-auth lint tripped.
+  - Verification: `node scripts/lint-route-auth.js` → OK, all 83 admin route files auth-guarded.
+  - Notes: Branch `workstream/route-auth-lint-guards` off main. No deploy needed (CI-only script).
