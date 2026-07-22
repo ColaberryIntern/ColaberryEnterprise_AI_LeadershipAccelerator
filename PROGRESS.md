@@ -11011,6 +11011,14 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: Frontend `tsc` clean (0 errors, ignoring 3 @dnd-kit). Confirmed prod Week-0 has 5 core cards; the type map covers all 6 foundational skills. Frontend-only.
   - Notes: Branch `workstream/wk0-foundational-skills`. Frontend-only → nginx `--no-deps`. Tracks the 5 core Week-0 curriculum activities (`weekCards`), so completing a core activity via the never-ending feed or drawer → `load()` → the bars move. It's completion-based, NOT points (points are the separate HUD/engagement ledger). Ambient browsing content (blogs/podcasts in the endless scroll) still earns points but isn't a "core skill-build" — a follow-up could count those too. The type→skill map is curated (a real per-card content tag is the eventual upgrade).
 
+### Classroom — skill meter upgraded to a futuristic 10-KPI AI-Architecture radar — 2026-07-22
+- [x] Six stacked bars replaced by one compact, futuristic capability radar of the top 10 AI-Architecture skills
+  - Date: 2026-07-22
+  - Session: CC-20260720-x9r4
+  - What changed: `SkillMeter` now renders a **10-KPI radar** (SVG, no deps) — the top AI-Architecture skills as axes: LLM Core, Prompting, RAG, Vectors, Agents & MCP, Eval & Guardrails, System Design, Context Eng., Governance, Deploy & Ops. A glowing gradient polygon in the Colaberry design-system data-viz palette (berry blue → teal → leaf green, cherry accents) fills toward each axis as the student completes preview activities; concentric decagon grid rings, axis spokes, glowing vertex nodes, and per-axis labels with a live % readout ("meters on 10 KPIs"). Header shows overall % + builds. Ten KPIs in the footprint of the old six bars. Theme-aware (grid/labels use currentColor; neon accents pop on both). Same activity-type→skill map (extended to 10 skills), so completing any core activity grows the shape.
+  - Why: Ali — "Add another row. We want the top 10 skills when it comes to AI Architecture — build something that looks visually better … don't take up more space … very pretty … meters on 10 KPIs … make it look more futuristic." [[project_today_timeline_v2]]
+  - Verification: Frontend `tsc` clean (0 errors, ignoring 3 @dnd-kit). Pure SVG, self-contained, CSP-safe. Frontend-only.
+  - Notes: Branch `workstream/skill-radar-10kpi`. Frontend-only → nginx `--no-deps`. Values are completion-based (done/total per mapped skill) from the wk0 core activities; near-empty until activities are completed (grows as they finish). A filled Artifact preview shared with Ali to show the realized look.
 ### Mgmt-portal RBAC — Phase 2b: scoped-role section gate + in-app role assignment — 2026-07-22
 - [x] Scoped mgmt roles (Curriculum/Revenue/Admissions/Support) reach exactly their sections; assign roles from Community Roles page
   - Date: 2026-07-22
