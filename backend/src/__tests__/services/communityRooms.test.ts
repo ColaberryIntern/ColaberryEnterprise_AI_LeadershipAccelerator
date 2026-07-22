@@ -4,7 +4,7 @@ import {
   canTransition, assertTransition, isTerminalBookingState, nextStates,
 } from '../../services/communityRooms/roomStateMachine';
 import {
-  isEligible, roomVisibility, canJoinMeeting, canPost, canModerate, toRoomShell,
+  isEligible, roomVisibility, canJoinMeeting, canPost, canModerate, canUploadResource, toRoomShell,
   RoomAccessContext,
 } from '../../services/communityRooms/roomEntitlementService';
 import { eventIdempotencyKey, ROOM_EVENTS } from '../../services/communityRooms/roomEvents';
@@ -108,6 +108,27 @@ describe('roomEntitlement — admin + moderation + locking', () => {
   });
   it('canPost is false in a non-active room', () => {
     expect(canPost(room({ status: 'archived' }), student, null)).toBe(false);
+  });
+});
+
+describe('roomEntitlement — canUploadResource', () => {
+  it('public room: staff may upload, a student may not (the ctxOf bug this fixes)', () => {
+    const r = room({ privacy: 'public' });
+    expect(canUploadResource(r, admin, null)).toBe(true);
+    expect(canUploadResource(r, student, null)).toBe(false);
+  });
+  it('an archived room blocks even staff (canPost gate)', () => {
+    expect(canUploadResource(room({ privacy: 'public', status: 'archived' }), admin, null)).toBe(false);
+  });
+  it('cohort room: a matching-cohort student may upload with no explicit membership', () => {
+    const r = room({ privacy: 'cohort', linked_cohort_id: 'c1' });
+    expect(canUploadResource(r, student, null)).toBe(true);
+  });
+  it('private room: an active member may upload, a non-member may not, staff always may', () => {
+    const r = room({ privacy: 'private' });
+    expect(canUploadResource(r, student, membership({ access_state: 'active' }))).toBe(true);
+    expect(canUploadResource(r, student, null)).toBe(false);
+    expect(canUploadResource(r, admin, null)).toBe(true);
   });
 });
 
