@@ -101,6 +101,9 @@ describe('pathToSection — request path → section', () => {
     expect(pathToSection('/api/admin/inbox/threads')).toBe('inbox_content');
     expect(pathToSection('/api/admin/students/abc')).toBe('students');
     expect(pathToSection('/api/admin/composer/blueprints')).toBe('program');
+    expect(pathToSection('/api/admin/capabilities')).toBe('program');
+    expect(pathToSection('/api/admin/recipes')).toBe('program');
+    expect(pathToSection('/api/admin/feed-control/board')).toBe('program');
   });
   it('does not let /community capture /communications', () => {
     expect(pathToSection('/api/admin/communications/send')).toBe('campaigns');
@@ -164,6 +167,18 @@ describe('mgmtSectionGate — global path enforcement', () => {
     expect(c.next).toHaveBeenCalledTimes(1);
 
     c = gctx({ role: 'admin', mgmt_role: 'curriculum' }, '/api/admin/composer/blueprints');
+    mgmtSectionGate(c.req, c.res, c.next);
+    expect(c.next).toHaveBeenCalledTimes(1);
+
+    c = gctx({ role: 'admin', mgmt_role: 'curriculum' }, '/api/admin/capabilities');
+    mgmtSectionGate(c.req, c.res, c.next);
+    expect(c.next).toHaveBeenCalledTimes(1);
+
+    c = gctx({ role: 'admin', mgmt_role: 'curriculum' }, '/api/admin/recipes');
+    mgmtSectionGate(c.req, c.res, c.next);
+    expect(c.next).toHaveBeenCalledTimes(1);
+
+    c = gctx({ role: 'admin', mgmt_role: 'curriculum' }, '/api/admin/feed-control/board');
     mgmtSectionGate(c.req, c.res, c.next);
     expect(c.next).toHaveBeenCalledTimes(1);
 
