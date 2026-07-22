@@ -548,6 +548,29 @@ async function ensureCommunityMemberRoleSchema() {
   }
 }
 
+async function ensureCommunityWinsSchema() {
+  // Peer Wins (community_discussion type) — tether a community post to the
+  // curriculum card + program/week it was posted from, plus a structured win_meta.
+  // All nullable/additive; idempotent DDL (sequelize.sync is disabled on this graph)
+  // so a deploy adds the columns without a manual migration step. The partial index
+  // makes the per-(cohort, program, week) wins aggregation cheap.
+  const statements = [
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS program_id UUID`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS week INTEGER`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS source_card_id UUID`,
+    `ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS ritual_meta JSONB`,
+    `CREATE INDEX IF NOT EXISTS idx_community_posts_wins ON community_posts (cohort_id, program_id, week) WHERE source_card_id IS NOT NULL`,
+    `CREATE INDEX IF NOT EXISTS idx_community_posts_source_card ON community_posts (source_card_id, member_id) WHERE source_card_id IS NOT NULL`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] community wins schema stmt skipped:', err?.message);
+    }
+  }
+}
+
 async function ensureOrgSchema() {
   // Free-trial Organization / Manager layer. A manager registers free → gets a
   // management org + their own free enrollment; teammates join as free members.
@@ -2110,6 +2133,8 @@ async function start(): Promise<void> {
   await ensureLiveSessionSchema();
 
   await ensureCommunityMemberRoleSchema();
+  // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
+  await ensureCommunityWinsSchema();
   // Free-trial Organization / Manager layer — org + roster tables (idempotent).
   await ensureOrgSchema();
   // Student self-serve subscriptions (idempotent).

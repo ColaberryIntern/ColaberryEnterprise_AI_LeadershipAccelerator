@@ -176,6 +176,11 @@ export const env = {
   // the outbox drain cron no-ops, and createSession skips linked-room creation
   // until COMMUNITY_ROOMS_ENABLED=true is set explicitly in an environment.
   communityRoomsEnabled: process.env.COMMUNITY_ROOMS_ENABLED === 'true',
+  // Peer Wins — the Cohort Wins grid behind the community_discussion type. ON by
+  // default; set PEER_WINS_ENABLED=false to revert the type to the plain 'community'
+  // reading render (a full-stack kill switch — typeRegistry picks the render_band
+  // from this, and the boot type-seed re-asserts it to the DB).
+  peerWinsEnabled: process.env.PEER_WINS_ENABLED !== 'false',
   chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
   chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 
