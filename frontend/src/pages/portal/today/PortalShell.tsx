@@ -22,7 +22,7 @@ import ConfettiCelebration from '../../../components/ConfettiCelebration';
 // Rooms are built and navigate; Cert Prep / Portfolio are deferred past the
 // P0 launch fence and render as a dimmed "Soon" item. (Rooms IS the group-chat
 // surface — text + video rooms — so the old "Group Chat" placeholder was removed.)
-type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean };
+type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean; newTab?: boolean };
 type NavGroup = { grp: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -91,7 +91,7 @@ const COMPANY_NAV_GROUP: NavGroup = {
 const MGMT_NAV_GROUP: NavGroup = {
   grp: 'Employee',
   items: [
-    { label: 'Management Portal', to: '/portal/mgmt-enter', icon: (
+    { label: 'Management Portal', to: '/portal/mgmt-enter', newTab: true, icon: (
       <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 4v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
     ) },
   ],
@@ -379,6 +379,8 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
               );
               if (isActive) return <span key={n.label} className="te-navbtn active">{inner}</span>;
               if (n.soon) return <span key={n.label} className="te-navbtn is-soon" title="Coming soon" aria-disabled="true">{inner}</span>;
+              // Open in a NEW TAB (e.g. Management Portal) so the student session stays put.
+              if (n.newTab) return <a key={n.label} className="te-navbtn" href={n.to!} target="_blank" rel="noopener noreferrer">{inner}</a>;
               return <Link key={n.label} className="te-navbtn" to={n.to!}>{inner}</Link>;
             })}
           </React.Fragment>

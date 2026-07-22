@@ -10891,3 +10891,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali — "skip a class which rotates all the dates (I'm not teaching class 2 → push forward), delete a session and the next fills in, and click a title to see the class topics." Skip=push-forward + reversible (confirmed via preview). [[project_live_sessions_buildout]]
   - Verification: backend + frontend `tsc --noEmit` = 0 errors in changed files. Independent checker PASS all 7 with a concrete skip trace proving push-forward (Jul 27 class → Jul 30, everything shifts, no class Jul 27) + delete compacts; deterministic/idempotent, TZ-safe, collision-safe (no unique index on session_date/number so the per-row shuffle can't trip a constraint).
   - Notes: Branch `workstream/session-schedule-mgmt`. Backend + frontend → full deploy. Reflow is authoritative over manual one-off date edits (recomputed on next skip/delete) — intended. Titles ("Week N: topic") are preserved on reflow; only date + session_number change.
+
+### Mgmt-portal RBAC — Management Portal link opens in a new tab — 2026-07-21
+- [x] The "Management Portal" nav link opens /admin in a NEW tab (student session stays put)
+  - Date: 2026-07-21
+  - Session: CC-20260721-r7k4
+  - What changed: `PortalShell` NavItem gains `newTab?`; the Management Portal item sets it; the nav renderer renders a `newTab` item as `<a href target="_blank" rel="noopener noreferrer">` instead of a same-tab `<Link>`. The new tab loads `/portal/mgmt-enter`, mints the scoped admin token, and lands in /admin — so the student portal tab is left untouched.
+  - Why: Ali — "I need the Mgmt portal to open up in a different tab when you click on it."
+  - Verification: frontend `tsc --noEmit` clean on PortalShell.
+  - Notes: Branch `workstream/mgmt-portal-newtab` off main. Deploy = nginx (frontend-only).
