@@ -24,7 +24,7 @@ import {
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
-  handleGetProgress,
+  handleGetProgress, handleGetCheckinInfo,
 } from '../controllers/participantController';
 import {
   handleGetCurriculum, handleGetModuleDetail, handleStartLesson,
@@ -75,6 +75,9 @@ router.get('/api/portal/verify', handleVerifyMagicLink);
 // experience) and the phone-handoff exchange (public — no session yet).
 router.get('/api/portal/flags', handleGetPortalFlags);
 router.get('/api/portal/handoff/exchange', handleExchangeHandoff);
+// Public check-in landing info (no auth): a not-yet-logged-in student who scans
+// the Class Kit QR can see which class they're checking in to. No meeting link.
+router.get('/api/portal/sessions/:id/checkin-info', handleGetCheckinInfo);
 
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);

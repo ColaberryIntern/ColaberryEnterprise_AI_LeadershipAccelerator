@@ -7,6 +7,7 @@ import AdminCurriculumTab from './AdminCurriculumTab';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
+import ClassKitModal from '../../components/admin/ClassKitModal';
 
 interface Cohort {
   id: string;
@@ -117,6 +118,8 @@ function AdminAcceleratorPage() {
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [editingSession, setEditingSession] = useState<LiveSession | null>(null);
+  // Session id whose Class Kit (QR + start-class panel) is open, else null.
+  const [kitSessionId, setKitSessionId] = useState<string | null>(null);
   const [sessionForm, setSessionForm] = useState({
     session_number: 1, title: '', description: '', session_date: '',
     start_time: '10:00 AM', end_time: '11:30 AM', session_type: 'core' as 'core' | 'lab',
@@ -612,6 +615,7 @@ function AdminAcceleratorPage() {
                       </td>
                       <td>
                         <div className="d-flex gap-1">
+                          <button className="btn btn-outline-primary btn-sm" onClick={() => setKitSessionId(s.id)}>Kit</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>
                           {s.status === 'scheduled' && (
                             <button className="btn btn-outline-danger btn-sm" onClick={() => handleStatusChange(s.id, 'completed')}>Complete</button>
@@ -932,6 +936,11 @@ function AdminAcceleratorPage() {
           enrollments={enrollments.map((e) => ({ id: e.id, full_name: e.full_name, email: e.email, company: e.company }))}
           showToast={showToast}
         />
+      )}
+
+      {/* Class Kit — projector-friendly QR + start-class panel for a session */}
+      {kitSessionId && (
+        <ClassKitModal sessionId={kitSessionId} onClose={() => setKitSessionId(null)} />
       )}
 
       {/* Session Create/Edit Modal */}
