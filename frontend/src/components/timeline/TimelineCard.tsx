@@ -4,6 +4,7 @@ import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
 import { toTitleCase } from '../../utils/titleCase';
 import portalApi from '../../utils/portalApi';
+import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 
 // Server-derived watch state for a card (the video watch gate). watched_pct is
 // the ratcheted server total; the collect button unlocks when met.
@@ -177,6 +178,10 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   // native controls too).
   const podcastAudio = card.type === 'podcast' && card.video?.url && isAudioUrl(card.video.url) ? card.video.url : null;
   const [playingInline, setPlayingInline] = useState(false);
+  // Podcasts start muted (autoplay policy + product default); read once at mount —
+  // the student's own unmute/mute on the player persists it for every podcast from
+  // here on (see podcastMutePreference), so this tile never needs to re-read it.
+  const [podcastMutedDefault] = useState(getPodcastMuted);
   const inlineAudioRef = useRef<HTMLAudioElement | null>(null);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const [inView, setInView] = useState(false);
@@ -302,28 +307,23 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       </div>
     </div>
   ) : playable && !podcastAudio && playingInline ? (
-    // Viewport autoplay PREVIEW: muted (autoplay ⇒ muted in VideoEmbed) and
-    // click-through to the drawer (full video + sound). A muted scroll-by preview
-    // never marks the card complete — completion happens in the drawer.
-    <div
-      className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}
-      role="button" tabIndex={0} style={{ cursor: 'pointer' }}
-      onClick={() => !locked && onOpen?.(card)}
-      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); onOpen?.(card); } }}
-    >
-      <div style={{ pointerEvents: 'none' }}>
-        <VideoEmbed
-          source={source}
-          title={card.video?.title || shortTitle}
-          poster={ownPoster || posterUrl}
-          autoplay
-          badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
-          onEnded={() => setPlayingInline(false)}
-          onWatchBeat={watchable && !done
-            ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
-            : undefined}
-        />
-      </div>
+    // Viewport autoplay PREVIEW: muted (autoplay ⇒ muted in VideoEmbed). Unlike the
+    // old click-through-to-drawer behaviour, the tile's own controls (native
+    // play/pause/mute/seek, revealed on hover) are directly usable right here — the
+    // footer "Open" button is now the ONLY way to the side panel. A muted scroll-by
+    // preview never marks the card complete — completion happens in the drawer.
+    <div className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}>
+      <VideoEmbed
+        source={source}
+        title={card.video?.title || shortTitle}
+        poster={ownPoster || posterUrl}
+        autoplay
+        badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+        onEnded={() => setPlayingInline(false)}
+        onWatchBeat={watchable && !done
+          ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
+          : undefined}
+      />
     </div>
   ) : podcastAudio ? (
     // Podcast tile with a direct audio episode: clicking the artwork starts the
@@ -357,6 +357,8 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           <audio
             ref={inlineAudioRef}
             style={{ width: '100%' }} src={podcastAudio} controls autoPlay
+            muted={podcastMutedDefault}
+            onVolumeChange={(e) => setPodcastMuted(e.currentTarget.muted)}
             onEnded={() => setPlayingInline(false)}
           />
         </span>

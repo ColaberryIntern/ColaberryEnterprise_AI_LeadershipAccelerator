@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { VideoSource, providerLabel, withAutoplay, isAudioUrl } from '../../utils/videoEmbed';
+import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 
 /**
  * VideoEmbed — plays a lesson video in-app from any supported link (YouTube,
@@ -54,6 +55,10 @@ const addParam = (u: string, p: string) => u + (u.includes('?') ? '&' : '?') + p
 
 const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, autoplay, onWatchBeat, fallbackDurationS }) => {
   const [playing, setPlaying] = useState(!!autoplay);
+  // Podcasts start muted (browser autoplay policy + product default); the value is
+  // read once at mount and only ever changed by the student's own control, which
+  // persists it back for every podcast from here on — see podcastMutePreference.
+  const [podcastMuted] = useState(getPodcastMuted);
 
   // --- watch accumulation (refs so handlers/effects never go stale) ---
   const bufRef = useRef({ delta: 0, position: 0, duration: 0 });
@@ -212,6 +217,8 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
               src={source.embedUrl}
               controls
               autoPlay
+              muted={podcastMuted}
+              onVolumeChange={(e) => setPodcastMuted(e.currentTarget.muted)}
               onTimeUpdate={mediaTimeUpdate('audio')}
               onPause={() => flushRef.current('audio')}
               onEnded={mediaEnded('audio')}
