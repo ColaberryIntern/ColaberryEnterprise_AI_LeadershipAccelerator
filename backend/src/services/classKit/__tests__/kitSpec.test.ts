@@ -1,7 +1,8 @@
 import QRCode from 'qrcode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildKitSpec, detectDayKind, BuildKitSpecInput } from '../kitSpec';
+import { detectDayKind, BuildKitSpecInput } from '../kitSpec';
+import { buildKitSpec } from '../kitSpecDaySlides';
 import { renderKitHtml } from '../kitHtml';
 
 /**
@@ -58,9 +59,15 @@ describe('buildKitSpec', () => {
       session_date: '2026-07-30', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
     }));
     expect(spec.meta.dayKind).toBe('build');
-    expect(spec.slides.some((s) => s.kind === 'prompt' && !!s.prompt)).toBe(true);
+    // A real copy-ready prompt exists somewhere in the guided build — as a plain
+    // 'prompt' slide when no deep teaching is authored for the segment, or on a
+    // 'teach' slide carrying code when it is (Week 1 has deep guided-build content).
+    expect(spec.slides.some((s) => !!s.prompt)).toBe(true);
     expect(spec.slides.some((s) => s.kind === 'checkpoint')).toBe(true);
-    expect(spec.slides.some((s) => s.kind === 'failure')).toBe(true);
+    // The failure-injection moment exists as either the plain 'failure' slide
+    // (no deep teaching authored) or deep 'teach' content tagged to that segment
+    // (Week 1 has both a break-it and fix-it deep-teaching pair).
+    expect(spec.slides.some((s) => s.segmentId === 'failure')).toBe(true);
     expect(spec.slides.some((s) => s.kind === 'broadcast')).toBe(true);
   });
 

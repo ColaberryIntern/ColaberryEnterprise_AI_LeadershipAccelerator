@@ -12,8 +12,8 @@
 // ============================================================================
 import { env } from '../config/env';
 import { buildSessionKit } from './sessionKitService';
-import { buildKitSpec } from './classKit/kitSpec';
-import { renderKitHtml } from './classKit/kitHtml';
+import { buildKitSpec } from './classKit/kitSpecDaySlides';
+import { renderKitHtml, modeForSlide } from './classKit/kitHtml';
 import { renderClassOutline } from './classKit/outlineHtml';
 import { mintKitToken } from './classKit/kitToken';
 
@@ -102,6 +102,22 @@ export async function renderSessionReadinessReport(sessionId: string): Promise<s
   const evidence = slides.flatMap((s) => s.evidence || []);
   const hasMeet = !!kit.meeting_link;
 
+  // Visual readiness: mode mix, visual page types, and the coding-prompt/lecture
+  // hygiene checks from the storytelling upgrade (PR #? — see PROGRESS.md).
+  const modes = slides.map((s) => modeForSlide(s));
+  const modeCount = (m: 'teach' | 'story' | 'build') => modes.filter((x) => x === m).length;
+  const storyPages = count((s) => s.kind === 'hook' || s.kind === 'beforeafter');
+  const theaterPolls = count((s) => !!s.interaction?.theater);
+  const promptsMissingResult = slides.filter((s) => s.prompt && (!s.prompt.expectedResult || !s.prompt.stopCondition)).length;
+  // Longest run of consecutive plain teach-mode pages with no diagram/visual —
+  // the "no more than two text-heavy pages in a row" rule from the storytelling plan.
+  let maxTextStreak = 0, curStreak = 0;
+  for (const s of slides) {
+    const textHeavy = modeForSlide(s) === 'teach' && !s.diagram && s.kind !== 'cover' && s.kind !== 'rules';
+    curStreak = textHeavy ? curStreak + 1 : 0;
+    if (curStreak > maxTextStreak) maxTextStreak = curStreak;
+  }
+
   const gate = (ok: boolean, label: string) => `<li class="${ok ? 'ok' : 'warn'}">${ok ? '✅' : '⚠️'} ${esc(label)}</li>`;
   const evidenceRows = evidence.length
     ? evidence.map((e) => `<li><b>${esc(e.publisher)}</b>${e.sourceTitle ? ' · ' + esc(e.sourceTitle) : ''}${e.publicationDate ? ' (' + esc(e.publicationDate) + ')' : ''}${e.note ? ' — <i>' + esc(e.note) + '</i>' : ''}<br><span class="claim">“${esc(e.claim)}”</span></li>`).join('')
@@ -131,6 +147,14 @@ export async function renderSessionReadinessReport(sessionId: string): Promise<s
   <div class="stat"><b>${interactions}</b><span>polls/trivia</span></div>
   <div class="stat"><b>${diagrams}</b><span>diagrams</span></div>
 </div>
+<h2>Presentation mix</h2>
+<div class="grid">
+  <div class="stat"><b>${modeCount('teach')}</b><span>Teach mode</span></div>
+  <div class="stat"><b>${modeCount('story')}</b><span>Story mode</span></div>
+  <div class="stat"><b>${modeCount('build')}</b><span>Build mode</span></div>
+  <div class="stat"><b>${storyPages}</b><span>hook/before-after</span></div>
+  <div class="stat"><b>${theaterPolls}</b><span>Decision Theater</span></div>
+</div>
 <h2>Readiness gates</h2>
 <ul>
   ${gate(slides.length >= 12, `Content depth — ${slides.length} slides (${teach} teaching)`)}
@@ -138,6 +162,8 @@ export async function renderSessionReadinessReport(sessionId: string): Promise<s
   ${gate(hasMeet, hasMeet ? 'Meeting link generated' : 'No meeting link yet — generate one from the session row')}
   ${gate(spec.meta.dayKind === 'orientation' || prompts > 0, spec.meta.dayKind === 'build' ? `Build prompts present (${prompts})` : 'Prompts present where expected')}
   ${gate(true, 'QR check-in embedded on the cover + full-screen (Q)')}
+  ${gate(maxTextStreak <= 2, maxTextStreak <= 2 ? 'No more than 2 text-heavy pages in a row' : `${maxTextStreak} text-heavy pages in a row — consider a hook, diagram, or before/after to break it up`)}
+  ${prompts > 0 ? gate(promptsMissingResult === 0, promptsMissingResult === 0 ? 'Every prompt has an expected result + stop condition' : `${promptsMissingResult}/${prompts} prompts missing an expected result or stop condition`) : ''}
 </ul>
 <h2>Source / evidence ledger</h2>
 <ul>${evidenceRows}</ul>

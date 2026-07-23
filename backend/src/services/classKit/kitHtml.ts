@@ -16,6 +16,10 @@
 import { KitSpec, KitSlide } from './kitSpec';
 import { DECK_CSS } from './kitDeckStyles';
 import { deckScript } from './kitDeckScript';
+import { esc, attr } from './kitRenderUtils';
+import { buildBayHtml } from './kitBuildBay';
+import { theaterHtml } from './kitTheater';
+import { hookHtml, beforeAfterHtml } from './kitStoryVisuals';
 
 export interface KitLiveConfig {
   enabled: boolean;
@@ -31,11 +35,20 @@ export interface RenderKitOptions {
   live?: KitLiveConfig;
 }
 
-function esc(s: unknown): string {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } as Record<string, string>)[c]);
+/** The presentation mode this slide should render in — derived from its kind
+ * (and, for coding slides, whether it actually carries a prompt) rather than a
+ * manual per-slide flag, so the deck auto-switches without the instructor
+ * pressing Compact every time coding begins. */
+export type PresentationMode = 'teach' | 'story' | 'build';
+
+export function modeForSlide(slide: KitSlide): PresentationMode {
+  if (slide.interaction?.theater) return 'story';
+  if (slide.kind === 'hook' || slide.kind === 'beforeafter' || slide.kind === 'break' || slide.kind === 'cta'
+    || slide.kind === 'failure' || slide.kind === 'recovery') return 'story';
+  if (slide.kind === 'prompt' || slide.kind === 'buildmap' || slide.kind === 'checkpoint') return 'build';
+  if (slide.kind === 'teach' && slide.prompt) return 'build';
+  return 'teach';
 }
-function attr(s: unknown): string { return esc(s); }
 
 function bulletsHtml(bullets: string[] | undefined, cls = 'kpoints'): string {
   if (!bullets || !bullets.length) return '';
@@ -83,16 +96,6 @@ function diagramHtml(slide: KitSlide): string {
     '<div class="kdiagram">' +
     `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
     (slide.diagramCaption ? `<div class="kdiagram-cap"><span class="kdiagram-cap-ico">🧭</span><span>${esc(slide.diagramCaption)}</span></div>` : '') +
-    '</div>'
-  );
-}
-
-function promptHtml(label: string, prompt: string): string {
-  return (
-    '<div class="kprompt">' +
-    '<div class="kprompt-bar"><span class="dots"><i></i><i></i><i></i></span>' +
-    `<span>${esc(label)}</span><button class="kcopy" type="button">Copy prompt</button></div>` +
-    `<pre data-raw="${attr(prompt)}">${esc(prompt)}</pre>` +
     '</div>'
   );
 }
@@ -174,12 +177,16 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
         `<h2 class="ktitle">${esc(slide.title)}</h2>` +
         teachLeadHtml(slide.body) +
         cardGridHtml(slide.bullets) +
-        (slide.prompt ? promptHtml(slide.prompt.label, slide.prompt.prompt) : '') +
+        (slide.prompt ? buildBayHtml(slide) : '') +
         diagramHtml(slide) +
         evidenceHtml(slide)
       );
     case 'interaction':
-      return interactionHtml(slide);
+      return slide.interaction?.theater ? theaterHtml(slide) : interactionHtml(slide);
+    case 'hook':
+      return hookHtml(slide);
+    case 'beforeafter':
+      return beforeAfterHtml(slide);
     case 'rules':
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
@@ -196,7 +203,7 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
       );
     case 'prompt': {
       const head = (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') + `<h2 class="ktitle">${esc(slide.title)}</h2>`;
-      return head + (slide.prompt ? promptHtml(slide.prompt.label, slide.prompt.prompt) : '');
+      return head + buildBayHtml(slide, slide.promptOf);
     }
     case 'checkpoint': {
       const cp = slide.checkpoint;
@@ -242,6 +249,7 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
 function slideSection(spec: KitSpec, slide: KitSlide): string {
   return (
     `<section class="kslide ${esc(slide.kind)}" ` +
+    `data-mode="${attr(modeForSlide(slide))}" ` +
     `data-segstart="${attr(slide.segStartMin)}" data-segend="${attr(slide.segEndMin)}" ` +
     `data-seglabel="${attr(slide.segmentLabel)}" data-slidetitle="${attr(slide.title)}" ` +
     `data-tip="${attr(slide.presenterTip || '')}" data-pub="${attr(slide.publicValue || '')}">` +
@@ -272,16 +280,27 @@ export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): strin
   // this slide (status controller by default; the active question; or the Builder
   // Broadcast prompts). poll key = the slide id (deterministic across re-renders).
   const slidesMeta = spec.slides.map((s) => {
-    const phase = s.kind === 'interaction' && s.interaction ? 'question' : s.kind === 'broadcast' ? 'broadcast' : 'status';
+    const mode = modeForSlide(s);
+    const phase = mode === 'build' && s.prompt
+      ? 'prompt'
+      : s.kind === 'interaction' && s.interaction ? 'question' : s.kind === 'broadcast' ? 'broadcast' : 'status';
     const question = s.kind === 'interaction' && s.interaction
       ? {
           key: s.id, kind: s.interaction.kind, q: s.interaction.q, options: s.interaction.options,
           answer: typeof s.interaction.answer === 'number' ? s.interaction.answer : null, revealed: false,
+          theater: s.interaction.theater ? true : undefined,
         }
       : null;
+    const prompt = phase === 'prompt' && s.prompt
+      ? {
+          label: s.prompt.label, prompt: s.prompt.prompt, pasteWhere: s.prompt.pasteWhere,
+          ccMode: s.prompt.ccMode, expectedResult: s.prompt.expectedResult,
+          stopCondition: s.prompt.stopCondition, rescue: s.prompt.rescue,
+        }
+      : undefined;
     return {
-      id: s.id, phase, title: s.title, segment_label: s.segmentLabel,
-      question,
+      id: s.id, mode, phase, title: s.title, segment_label: s.segmentLabel,
+      question, prompt,
       broadcast_prompts: s.kind === 'broadcast' ? spec.builderBroadcastPrompts : undefined,
     };
   });

@@ -9,7 +9,8 @@
 import QRCode from 'qrcode';
 import * as fs from 'fs';
 import * as path from 'path';
-import { buildKitSpec, BuildKitSpecInput } from '../services/classKit/kitSpec';
+import { BuildKitSpecInput } from '../services/classKit/kitSpec';
+import { buildKitSpec } from '../services/classKit/kitSpecDaySlides';
 import { renderKitHtml } from '../services/classKit/kitHtml';
 import { renderClassOutline } from '../services/classKit/outlineHtml';
 

@@ -46,6 +46,8 @@ export async function recordPulse(sessionId: string, enrollmentId: string, state
 
 // ---- broadcast (deck → phones) ----
 
+export type TheaterState = 'voting' | 'locked' | 'revealed';
+
 export interface BroadcastQuestion {
   key: string;               // stable per interaction slide (poll grouping key)
   kind: 'prediction' | 'poll' | 'trivia';
@@ -53,6 +55,22 @@ export interface BroadcastQuestion {
   options: string[];
   answer?: number | null;    // trivia correct index (only meaningful once revealed)
   revealed: boolean;
+  /** Present only for "Live Decision Theater" full-screen moments. When set,
+   * recordPollResponse enforces the lock server-side (not just hidden client-side). */
+  theater?: { state: TheaterState };
+}
+
+/** A coding prompt pushed to student phones (Build Mode) so they can copy it
+ * without reading it off the projected screen. All fields but label/prompt are
+ * optional — older content without Build Bay metadata still broadcasts fine. */
+export interface BroadcastPrompt {
+  label: string;
+  prompt: string;
+  pasteWhere?: string;
+  ccMode?: string;
+  expectedResult?: string;
+  stopCondition?: string;
+  rescue?: string;
 }
 
 export interface BroadcastState {
@@ -60,9 +78,10 @@ export interface BroadcastState {
   slide_id: string;
   title: string;
   segment_label: string;
-  phase: 'status' | 'question' | 'broadcast';
+  phase: 'status' | 'question' | 'broadcast' | 'prompt';
   question: BroadcastQuestion | null;
   broadcast_prompts?: string[];
+  prompt?: BroadcastPrompt | null;
   updated_at?: string;
 }
 
@@ -89,7 +108,18 @@ export async function getBroadcast(sessionId: string): Promise<BroadcastState | 
 
 // ---- poll responses (phones → deck) ----
 
+/** Thrown when a Live Decision Theater vote has been locked by the instructor —
+ * the controller maps this to 409 so the phone can show "voting is locked"
+ * instead of silently accepting a vote that will never be counted. */
+export class PollLockedError extends Error {
+  constructor() { super('POLL_LOCKED'); this.name = 'PollLockedError'; }
+}
+
 export async function recordPollResponse(sessionId: string, enrollmentId: string, pollKey: string, choice: number): Promise<void> {
+  const bc = await getBroadcast(sessionId);
+  if (bc?.question?.key === pollKey && bc.question.theater && bc.question.theater.state !== 'voting') {
+    throw new PollLockedError();
+  }
   await sequelize.query(
     `INSERT INTO session_poll_responses (session_id, enrollment_id, poll_key, choice, created_at)
        VALUES (:sid, :eid, :key, :choice, NOW())
@@ -175,10 +205,11 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
 // ---- companion (phone) view ----
 
 export interface CompanionState {
-  phase: 'status' | 'question' | 'broadcast';
+  phase: 'status' | 'question' | 'broadcast' | 'prompt';
   title: string;
   question: (BroadcastQuestion & { my_choice: number | null }) | null;
   broadcast_prompts?: string[];
+  prompt?: BroadcastPrompt | null;
   my_pulse: PulseState | null;
 }
 
@@ -197,6 +228,9 @@ export async function getCompanionState(sessionId: string, enrollmentId: string)
   }
   if (bc.phase === 'broadcast') {
     return { phase: 'broadcast', title: bc.title, question: null, broadcast_prompts: bc.broadcast_prompts, my_pulse };
+  }
+  if (bc.phase === 'prompt') {
+    return { phase: 'prompt', title: bc.title, question: null, prompt: bc.prompt || null, my_pulse };
   }
   // question phase — include this student's own answer
   let my_choice: number | null = null;

@@ -182,9 +182,20 @@ export async function askSessionQuestion(sessionId: string, text: string): Promi
   await portalApi.post(`/api/portal/sessions/${sessionId}/chat`, { content: text });
 }
 
+/** A coding prompt broadcast to student phones during Build Mode. */
+export interface BroadcastPrompt {
+  label: string;
+  prompt: string;
+  pasteWhere?: string;
+  ccMode?: string;
+  expectedResult?: string;
+  stopCondition?: string;
+  rescue?: string;
+}
+
 /** The live view the student's phone should show — mirrors the instructor deck. */
 export interface CompanionState {
-  phase: 'status' | 'question' | 'broadcast';
+  phase: 'status' | 'question' | 'broadcast' | 'prompt';
   title: string;
   question: {
     key: string;
@@ -194,8 +205,12 @@ export interface CompanionState {
     answer: number | null;
     revealed: boolean;
     my_choice: number | null;
+    /** Present only for "Live Decision Theater" full-screen moments — the phone
+     * must not let a student vote (or re-vote) once the instructor has locked it. */
+    theater?: { state: 'voting' | 'locked' | 'revealed' };
   } | null;
   broadcast_prompts?: string[];
+  prompt?: BroadcastPrompt | null;
   my_pulse: PulseState | null;
 }
 

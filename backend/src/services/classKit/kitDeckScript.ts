@@ -26,6 +26,7 @@ export function deckScript(): string {
   var i = 0;
   var moments = [];
   var revealed = {};
+  var theaterState = {}; // slide id -> 'voting' | 'locked' | 'revealed'
 
   var elProgress = document.getElementById('kprogress');
   var elCounter = document.getElementById('kcounter');
@@ -47,14 +48,29 @@ export function deckScript(): string {
     for (var k = 0; k < slides.length; k++){ slides[k].classList.toggle('active', k === i); }
     elProgress.style.width = ((i + 1) / slides.length * 100) + '%';
     elCounter.textContent = (i + 1) + ' / ' + slides.length;
+    applyMode();
+    var sm = (K.slides || [])[i];
+    if (sm && sm.question && sm.question.theater && !theaterState[sm.id]) theaterState[sm.id] = 'voting';
     renderNotes();
     updatePace();
     broadcastCurrent();
+    renderTheater();
     if (window.__renderMermaid) window.__renderMermaid(slides[i]);
     slides[i].scrollTop = 0;
   }
   function next(){ show(i + 1); }
   function prev(){ show(i - 1); }
+
+  // Auto-switch the presentation mode (Teach / Story / Build) from the active
+  // slide's data-mode — this is what makes Build Mode's dark left-aligned
+  // layout + collapsed rail kick in automatically when coding begins, no
+  // manual Compact toggle required.
+  function applyMode(){
+    var sm = (K.slides || [])[i];
+    var mode = (sm && sm.mode) || 'teach';
+    document.body.classList.remove('mode-teach', 'mode-story', 'mode-build');
+    document.body.classList.add('mode-' + mode);
+  }
 
   // Broadcast the deck's CURRENT view so students' phones switch to match it.
   function broadcastCurrent(){
@@ -65,10 +81,12 @@ export function deckScript(): string {
     var q = sm.question ? {
       key: sm.question.key, kind: sm.question.kind, q: sm.question.q,
       options: sm.question.options, answer: sm.question.answer, revealed: !!revealed[sm.id],
+      theater: sm.question.theater ? { state: theaterState[sm.id] || 'voting' } : undefined,
     } : null;
     var body = {
       slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
       phase: sm.phase, question: q, broadcast_prompts: sm.broadcast_prompts,
+      prompt: sm.prompt || undefined,
     };
     fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
@@ -145,6 +163,56 @@ export function deckScript(): string {
     el.style.display = 'block';
   }
 
+  // ---- Live Decision Theater — full-screen poll on the active slide ----
+  // Scoped to the ".kslide.active" class (not IDs) so multiple theater slides in
+  // one deck never collide. Reads the SAME pulse.poll tally the rail already
+  // polls — no separate endpoint. The vote lock is enforced server-side
+  // (sessionLiveStateService.recordPollResponse); this just reflects state.
+  function renderTheater(){
+    var active = document.querySelector('.kslide.active');
+    if (!active) return;
+    var root = active.querySelector('.ktheater');
+    if (!root) return;
+    var sm = (K.slides || [])[i];
+    if (!sm) return;
+    var st = theaterState[sm.id] || 'voting';
+    var badge = root.querySelector('[data-role="badge"]');
+    var countEl = root.querySelector('[data-role="count"]');
+    var tiles = root.querySelectorAll('.ktheater-tile');
+    var lockBtn = root.querySelector('[data-action="lock"]');
+    var revealBtn = root.querySelector('[data-action="reveal"]');
+    var reopenBtn = root.querySelector('[data-action="reopen"]');
+    var explain = root.querySelector('[data-role="explain"]');
+    var p = pulse.poll;
+    var total = (p && p.total) || 0;
+    if (countEl) countEl.textContent = total + (pulse.present ? (' of ' + pulse.present + ' voted') : ' voted');
+    if (badge){
+      badge.className = 'ktheater-badge ' + st;
+      badge.textContent = st === 'locked' ? '🔒 Vote locked' : st === 'revealed' ? '✅ Results' : '🗳️ Voting open';
+    }
+    if (lockBtn) lockBtn.style.display = st === 'voting' ? '' : 'none';
+    if (revealBtn) revealBtn.style.display = st === 'locked' ? '' : 'none';
+    if (reopenBtn) reopenBtn.style.display = st === 'locked' ? '' : 'none';
+    if (explain) explain.style.display = st === 'revealed' ? '' : 'none';
+    for (var k = 0; k < tiles.length; k++){
+      var idx = parseInt(tiles[k].getAttribute('data-idx'), 10);
+      var n = (p && p.tally && p.tally[idx]) || 0;
+      var pct = total ? Math.round(n / total * 100) : 0;
+      var fill = tiles[k].querySelector('.fill');
+      var pctEl = tiles[k].querySelector('.pct');
+      if (st === 'revealed'){
+        if (fill) fill.style.width = pct + '%';
+        if (pctEl) pctEl.textContent = pct + '%';
+        var isCorrect = sm.question && typeof sm.question.answer === 'number' && sm.question.answer === idx;
+        tiles[k].classList.toggle('correct', !!isCorrect);
+      } else {
+        if (fill) fill.style.width = '0%';
+        if (pctEl) pctEl.textContent = '';
+        tiles[k].classList.remove('correct');
+      }
+    }
+  }
+
   function renderPulse(){
     setPulseCell('kp-here', pulse.here);
     setPulseCell('kp-building', pulse.building);
@@ -153,6 +221,7 @@ export function deckScript(): string {
     setPulseCell('kp-present', pulse.present || 0);
     setPulseCell('kp-participated', pulse.participated || 0);
     renderPoll();
+    renderTheater();
     var ql = document.getElementById('kqlist');
     if (ql){
       if (!pulse.questions || !pulse.questions.length){
@@ -195,6 +264,20 @@ export function deckScript(): string {
 
   // ---- reveal + copy ----
   document.addEventListener('click', function(e){
+    var theaterBtn = e.target.closest('[data-action="lock"], [data-action="reveal"], [data-action="reopen"]');
+    if (theaterBtn){
+      e.stopPropagation();
+      var sm2 = (K.slides || [])[i];
+      if (sm2){
+        var action = theaterBtn.getAttribute('data-action');
+        if (action === 'lock') theaterState[sm2.id] = 'locked';
+        else if (action === 'reveal'){ theaterState[sm2.id] = 'revealed'; revealed[sm2.id] = true; }
+        else if (action === 'reopen') theaterState[sm2.id] = 'voting';
+        broadcastCurrent();
+        renderTheater();
+      }
+      return;
+    }
     var rb = e.target.closest('.kreveal-btn');
     if (rb){
       e.stopPropagation();

@@ -101,8 +101,16 @@ const ClassCheckinPage: React.FC = () => {
 
   const answerPoll = useCallback((key: string, choice: number) => {
     setCompanion((c) => (c && c.question ? { ...c, question: { ...c.question, my_choice: choice } } : c));
-    submitPollResponse(sessionId, key, choice).catch(() => { /* best-effort */ });
+    submitPollResponse(sessionId, key, choice).catch(() => { /* best-effort; a locked vote simply won't be counted server-side */ });
   }, [sessionId]);
+
+  const [copyState, setCopyState] = useState<'idle' | 'copied'>('idle');
+  const copyPrompt = useCallback((text: string) => {
+    navigator.clipboard?.writeText(text).then(() => {
+      setCopyState('copied');
+      setTimeout(() => setCopyState('idle'), 1600);
+    }).catch(() => { /* clipboard may be unavailable; the prompt is still readable on screen */ });
+  }, []);
 
   // 1) Load the public class info (title/date/cohort) for either path.
   const loadInfo = useCallback(() => {
@@ -207,6 +215,11 @@ const ClassCheckinPage: React.FC = () => {
                 {/* ── LIVE QUESTION — appears automatically when the instructor is on a question slide ── */}
                 {companion?.phase === 'question' && companion.question ? (
                   <div className="cbck-controller">
+                    {companion.question.theater && (
+                      <p className={`cbck-theater-badge${companion.question.theater.state !== 'voting' ? ' is-locked' : ''}`}>
+                        {companion.question.theater.state === 'locked' ? '🔒 Voting locked' : companion.question.theater.state === 'revealed' ? '✅ Results are in' : '🗳️ Live vote — everyone is watching'}
+                      </p>
+                    )}
                     <p className="cbck-ctl-label">{kindLabel(companion.question.kind)}</p>
                     <p className="cbck-q-text">{companion.question.q}</p>
                     <div className="cbck-q-opts">
@@ -214,13 +227,14 @@ const ClassCheckinPage: React.FC = () => {
                         const q = companion.question!;
                         const mine = q.my_choice === idx;
                         const correct = q.revealed && q.answer === idx;
+                        const locked = !!q.theater && q.theater.state !== 'voting';
                         return (
                           <button
                             key={idx}
                             type="button"
                             className={`cbck-q-opt${mine ? ' is-mine' : ''}${correct ? ' is-correct' : ''}`}
                             onClick={() => answerPoll(q.key, idx)}
-                            disabled={q.revealed}
+                            disabled={q.revealed || locked}
                           >
                             <span className="cbck-q-letter">{String.fromCharCode(65 + idx)}</span>
                             <span className="cbck-q-opt-text">{opt}</span>
@@ -230,8 +244,47 @@ const ClassCheckinPage: React.FC = () => {
                       })}
                     </div>
                     <p className="cbck-text cbck-text-sub">
-                      {companion.question.revealed ? 'Answer revealed ✓' : companion.question.my_choice != null ? 'Locked in ✓ — you can change it' : 'Tap your answer'}
+                      {companion.question.revealed
+                        ? 'Answer revealed ✓'
+                        : companion.question.theater && companion.question.theater.state === 'locked'
+                          ? 'Vote locked — waiting for the reveal'
+                          : companion.question.my_choice != null ? 'Locked in ✓ — you can change it' : 'Tap your answer'}
                     </p>
+                  </div>
+                ) : companion?.phase === 'prompt' && companion.prompt ? (
+                  /* ── BUILD MODE PROMPT — copy-ready, no need to read it off the screen ── */
+                  <div className="cbck-controller">
+                    <p className="cbck-ctl-label">⌨️ {companion.prompt.label}</p>
+                    <div className="cbck-prompt-box">
+                      <pre>{companion.prompt.prompt}</pre>
+                    </div>
+                    <button type="button" className="cbck-btn cbck-copy-btn" onClick={() => copyPrompt(companion.prompt!.prompt)}>
+                      {copyState === 'copied' ? 'Copied ✓' : `📋 Copy · paste into ${companion.prompt.pasteWhere || 'Claude Code'}`}
+                    </button>
+                    {companion.prompt.expectedResult && (
+                      <p className="cbck-prompt-meta"><b>👀 You should see:</b> {companion.prompt.expectedResult}</p>
+                    )}
+                    {companion.prompt.stopCondition && (
+                      <p className="cbck-prompt-meta"><b>🛑 Stop when:</b> {companion.prompt.stopCondition}</p>
+                    )}
+                    <div className="cbck-status-grid" style={{ marginTop: 16 }}>
+                      {([
+                        { s: 'building', label: 'Building', emoji: '🛠️' },
+                        { s: 'stuck', label: "I'm stuck", emoji: '✋' },
+                        { s: 'finished', label: 'Finished', emoji: '✅' },
+                      ] as { s: PulseState; label: string; emoji: string }[]).map(({ s, label, emoji }) => (
+                        <button
+                          key={s}
+                          type="button"
+                          className={`cbck-status cbck-status-${s}${pulse === s ? ' is-active' : ''}`}
+                          onClick={() => tapPulse(s)}
+                          aria-pressed={pulse === s}
+                        >
+                          <span className="cbck-status-emoji" aria-hidden="true">{emoji}</span>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 ) : companion?.phase === 'broadcast' ? (
                   /* ── BUILDER BROADCAST — appears when the instructor reaches that segment ── */
@@ -438,6 +491,24 @@ const CBCK_CSS = `
   padding:11px 14px; font-size:15px; font-weight:600; color:var(--text-body);
   background:var(--surface-subtle); border:1.5px solid var(--border-default); border-left:5px solid var(--amber-500, #E8920C); border-radius:var(--radius-lg);
 }
+
+/* Live Decision Theater badge on the phone */
+.cbck-theater-badge{
+  display:inline-block; margin:0 0 12px; padding:6px 14px; border-radius:999px;
+  font-size:12.5px; font-weight:700; letter-spacing:.02em;
+  background:color-mix(in srgb, var(--brand-accent) 12%, transparent); color:var(--brand-accent);
+}
+.cbck-theater-badge.is-locked{ background:var(--status-danger-bg); color:var(--status-danger); }
+
+/* Build Mode prompt (copy-ready) */
+.cbck-prompt-box{
+  margin-top:2px; background:#0f1720; border:1px solid #26313f; border-radius:var(--radius-lg);
+  padding:14px; text-align:left; overflow-x:auto;
+}
+.cbck-prompt-box pre{ margin:0; font-family:ui-monospace,"Cascadia Mono",Consolas,monospace; font-size:13.5px; line-height:1.5; color:#e7eef6; white-space:pre-wrap; word-break:break-word; }
+.cbck-copy-btn{ margin-top:12px; }
+.cbck-prompt-meta{ margin:10px 0 0; text-align:left; font-size:13.5px; line-height:1.5; color:var(--text-body); }
+.cbck-prompt-meta b{ color:var(--text-strong); }
 
 .cbck-spin{
   width:34px; height:34px; margin:8px auto 16px; border-radius:50%;
