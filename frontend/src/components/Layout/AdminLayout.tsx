@@ -37,7 +37,7 @@ function NavItem({ link, active, onNavigate }: { link: NavLinkT; active: boolean
 }
 
 function AdminLayout() {
-  const { logout, canSection, mgmtRole } = useAuth();
+  const { logout, canSection, hasPortalAccount } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -84,7 +84,7 @@ function AdminLayout() {
   // role may access (canSection is permissive until /me resolves, so legacy
   // admins never flash an empty nav). The backend enforces the same per-section.
   const pinned = PINNED_LINKS.filter(
-    (l) => canSection(l.section as string) && (!l.requiresMgmtBridge || !!mgmtRole),
+    (l) => canSection(l.section as string) && (!l.requiresMgmtBridge || hasPortalAccount),
   );
   const groups = NAV_GROUPS.filter((g) => canSection(g.section));
 
@@ -93,7 +93,7 @@ function AdminLayout() {
     ? ALL_LINKS.filter(
         (l) => l.label.toLowerCase().includes(q)
           && canSection(l.section as string)
-          && (!l.requiresMgmtBridge || !!mgmtRole),
+          && (!l.requiresMgmtBridge || hasPortalAccount),
       )
     : null;
 
