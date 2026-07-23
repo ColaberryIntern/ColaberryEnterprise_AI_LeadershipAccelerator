@@ -95,6 +95,10 @@ const FEED: Feat[] = [
 
 const initials = (n: string) => n.split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 const lvlTone = (rank: number): string => (rank >= 7 ? '#E8920C' : rank >= 3 ? '#5BA63C' : '#367895');
+// Mirrors companyUi.ptsTone — kept as a local const here since this preview page
+// is intentionally standalone (sample data, no shared imports from portal/company).
+const ptsTone = (points: number): string => (points >= 2400 ? '#E8920C' : points >= 800 ? '#5BA63C' : points >= 150 ? '#367895' : 'var(--text-subtle)');
+const totalPoints = (m: Member): number => m.xp.learning + m.xp.builder + m.xp.community;
 
 function Spark({ actual, projected }: { actual: number[]; projected: number[] }) {
   const W = 340, H = 96, pad = 8;
@@ -328,7 +332,10 @@ function ManagementPreviewPage() {
                     <button key={mm.name} type="button" onClick={() => openStudent(mm.name)} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto', gap: 'var(--space-3)', alignItems: 'center', textAlign: 'left', background: 'none', border: 'none', borderRadius: 'var(--radius-md)', cursor: 'pointer', padding: 'var(--space-2)' }} onMouseOver={(e) => { e.currentTarget.style.background = 'var(--surface-subtle)'; }} onMouseOut={(e) => { e.currentTarget.style.background = 'none'; }}>
                       <span style={{ display: 'grid', placeItems: 'center', width: 32, height: 32, borderRadius: '50%', background: `color-mix(in srgb, ${lvlTone(mm.rank)} 16%, white)`, color: 'var(--text-strong)', fontWeight: 800, fontSize: 11 }}>{initials(mm.name)}</span>
                       <div style={{ minWidth: 0 }}><div style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>{mm.name}</div><div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-subtle)' }}>{mm.team} · {mm.readiness}% ready · +{mm.builderXpWeek} bXP/wk</div></div>
-                      <span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: lvlTone(mm.rank), padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>{mm.level}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', alignItems: 'flex-end' }}>
+                        <span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: lvlTone(mm.rank), padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>{mm.level}</span>
+                        <span title="Active points (points-economy total, all streams)" style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: ptsTone(totalPoints(mm)), padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>{totalPoints(mm).toLocaleString()} pts</span>
+                      </div>
                     </button>
                   ))}
                 </div>
