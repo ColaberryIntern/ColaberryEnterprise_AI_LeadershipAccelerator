@@ -63,17 +63,20 @@ const TodayShell: React.FC = () => {
   const { session: nextLiveSession } = useNextLiveSession();
 
   const loadAll = useCallback(async () => {
+    console.log('[DEBUG loadAll START]');
     const [p, s, pr, cl, st] = await Promise.allSettled([
       fetchPoints(), fetchSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'), fetchStreak(),
     ]);
+    console.log('[DEBUG loadAll RESULTS]', { pStatus: p.status, sStatus: s.status, prStatus: pr.status, clStatus: cl.status, stStatus: st.status, clCardCount: cl.status === 'fulfilled' ? (cl.value.data?.cards || []).length : 'N/A', clReason: cl.status === 'rejected' ? String(cl.reason) : undefined });
     if (p.status === 'fulfilled') setPoints(p.value);
     if (s.status === 'fulfilled') setSchedule(s.value);
     if (pr.status === 'fulfilled') setProfile(pr.value);
     if (cl.status === 'fulfilled') setCurriculum(((cl.value.data?.cards as TimelineFeedCard[]) || []).sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || a.order - b.order));
     if (st.status === 'fulfilled') setStreak(st.value);
+    console.log('[DEBUG loadAll DONE]');
   }, []);
 
-  useEffect(() => { loadAll(); }, [loadAll]);
+  useEffect(() => { console.log('[DEBUG mount effect firing loadAll]'); loadAll(); }, [loadAll]);
   // Refetch the Today feed + status whenever points are earned (e.g. a quick-check
   // completed in the drawer) so the sidebar stays live without a navigation.
   useEffect(() => onPointsEarned(() => { void loadAll(); }), [loadAll]);
