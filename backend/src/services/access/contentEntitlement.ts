@@ -105,3 +105,34 @@ export async function isFreePreviewTier(enrollmentId: string): Promise<boolean> 
     return false;
   }
 }
+
+/**
+ * Page-level content gate (Classroom / Projects / Cert Prep) — DELIBERATELY a
+ * separate flag from `contentPaidGateEnabled` above (different blast radius:
+ * this blocks whole pages behind <PageGate>, that one filters weeks inside the
+ * Timeline feed + backstops card opens; independent rollback/staging). Always
+ * computes the MODERN rule (no legacy explorer-only branch) — gated only by its
+ * own flag, so its correctness never depends on CONTENT_PAID_GATE_ENABLED's
+ * rollout state elsewhere. Fails OPEN on any error or when the flag is off
+ * (dark-ship: zero behavior change until explicitly turned on).
+ */
+export async function resolveContentPageAccess(enrollmentId: string): Promise<{ isStaff: boolean; hasFullAccess: boolean }> {
+  if (!env.contentPageGateEnabled) return { isStaff: false, hasFullAccess: true };
+  try {
+    if (!enrollmentId) return { isStaff: false, hasFullAccess: true };
+    const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'payment_status', 'cohort_id'] });
+    if (!enrollment) return { isStaff: false, hasFullAccess: true };
+    const cohort = enrollment.cohort_id
+      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type'] })
+      : null;
+    const [isStaff, compIds] = await Promise.all([
+      isStaffEnrollment(enrollmentId),
+      activeCompEnrollmentIds([enrollmentId]),
+    ]);
+    const hasFullAccess = hasFullCurriculumAccess(enrollment, cohort, { isStaff, hasActiveComp: compIds.has(enrollmentId) });
+    return { isStaff, hasFullAccess };
+  } catch (err: any) {
+    console.warn('[contentEntitlement] resolveContentPageAccess failed open:', err?.message);
+    return { isStaff: false, hasFullAccess: true };
+  }
+}

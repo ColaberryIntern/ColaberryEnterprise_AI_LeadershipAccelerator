@@ -13,6 +13,7 @@ import PortalHandoffPage from '../pages/portal/PortalHandoffPage';
 import ClassCheckinPage from '../pages/portal/ClassCheckinPage';
 import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
+import PageGate from '../components/paywall/PageGate';
 import RuntimeWorkspace from '../pages/portal/runtime/RuntimeWorkspace';
 import PortalLessonPage from '../pages/portal/PortalLessonPage';
 import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
@@ -61,7 +62,7 @@ const portalRoutes = (
       <Route path="/portal/path" element={<PathPage />} />
       <Route path="/portal/schedule" element={<SchedulePage />} />
       <Route path="/portal/points" element={<PointsPage />} />
-      <Route path="/portal/projects" element={<ProjectsPage />} />
+      <Route path="/portal/projects" element={<PageGate feature="projects"><ProjectsPage /></PageGate>} />
       <Route path="/portal/community" element={<CommunityPage />} />
       <Route path="/portal/community/people" element={<PeopleDirectoryPage />} />
       <Route path="/portal/rooms" element={<RoomsPage />} />
@@ -71,7 +72,7 @@ const portalRoutes = (
           "Your company" nav group only for org managers, and the page itself
           shows a friendly error if a non-manager reaches it. */}
       <Route path="/portal/company" element={<CompanyPage />} />
-      <Route path="/portal/classroom" element={<ClassroomPage />} />
+      <Route path="/portal/classroom" element={<PageGate feature="classroom"><ClassroomPage /></PageGate>} />
       {/* Learning Runtime Intelligence — immersive per-card student workspace. */}
       <Route path="/portal/runtime/:cardId" element={<RuntimeWorkspace />} />
       {/* Retired AI Project Builder entry points → student home. */}

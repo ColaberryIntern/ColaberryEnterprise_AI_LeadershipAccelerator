@@ -14,17 +14,21 @@ import { pingPresence } from '../../../services/communityApi';
 import { openDm } from '../../../services/dmApi';
 import ChatDock, { DmTarget } from './ChatDock';
 import MessagesButton from './MessagesButton';
-import { useIsExplorer } from '../useIsExplorer';
+import { useEntitlement } from '../useEntitlement';
 import { useIsOrgManager } from '../useIsOrgManager';
 import { useMgmtStatus } from '../useMgmtStatus';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
+import type { GatedFeatureKey } from '../../../components/paywall/gatedFeatures';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
 // icon per item. Today / Path / Schedule / Projects / Classroom / Community /
 // Rooms are built and navigate; Cert Prep / Portfolio are deferred past the
 // P0 launch fence and render as a dimmed "Soon" item. (Rooms IS the group-chat
 // surface — text + video rooms — so the old "Group Chat" placeholder was removed.)
-type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean; newTab?: boolean };
+// `gate` marks an item as content-paywalled (<PageGate> on its route) — the item
+// STAYS a clickable Link (unlike `soon`, which fully disables it): a free/unpaid
+// student can click through and see the upsell screen the route itself renders.
+type NavItem = { label: string; to?: string; icon: React.ReactNode; soon?: boolean; newTab?: boolean; gate?: GatedFeatureKey };
 type NavGroup = { grp: string; items: NavItem[] };
 
 export const NAV_GROUPS: NavGroup[] = [
@@ -45,10 +49,10 @@ export const NAV_GROUPS: NavGroup[] = [
   {
     grp: 'Build and learn',
     items: [
-      { label: 'Projects', to: '/portal/projects', icon: (
+      { label: 'Projects', to: '/portal/projects', gate: 'projects', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M3 12l9 4 9-4M3 17l9 4 9-4" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
       ) },
-      { label: 'Classroom', to: '/portal/classroom', icon: (
+      { label: 'Classroom', to: '/portal/classroom', gate: 'classroom', icon: (
         <svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M7 11v5c0 1 2 2 5 2s5-1 5-2v-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },
       { label: 'Cert Prep', soon: true, icon: (
@@ -116,7 +120,7 @@ type PortalShellProps = {
  */
 const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const location = useLocation();
-  const isExplorer = useIsExplorer();   // Explorer = demo tier — shows a Demo pill on Projects
+  const { isStaff, hasFullAccess } = useEntitlement();   // drives the nav lock badge on gated items
   const isOrgManager = useIsOrgManager(); // manager = also sees a "Your company" nav group
   const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
   // Effective nav: employees get "Management Portal", managers get "Your company",
@@ -394,7 +398,14 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
                   <span className="ic">{n.icon}</span>
                   <span className="lb">{n.label}</span>
                   {n.label === 'Today' && !!todayBadge && todayBadge > 0 && <span className="badge">{todayBadge}</span>}
-                  {n.label === 'Projects' && isExplorer && <span className="te-soon" style={{ background: '#E8920C', color: '#fff', fontWeight: 700 }}>Demo</span>}
+                  {n.gate && !isStaff && !hasFullAccess && (
+                    <span className="te-navlock" title="Requires a paid seat" aria-label="Locked — requires a paid seat">
+                      <svg viewBox="0 0 24 24" width="11" height="11" fill="none" aria-hidden="true">
+                        <rect x="5" y="10" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="2" />
+                        <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeWidth="2" />
+                      </svg>
+                    </span>
+                  )}
                   {n.soon && <span className="te-soon">Soon</span>}
                 </>
               );
