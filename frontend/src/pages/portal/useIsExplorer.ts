@@ -17,7 +17,6 @@ export function useIsExplorer(): boolean {
       .then((s) => { if (alive) setIsExplorer(!!s.is_explorer); })
       .catch(() => { /* default: treat as enrolled (no demo lock) if unknown */ });
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed is read once at mount by design
-  }, []);
+  }, [seed]);
   return isExplorer;
 }

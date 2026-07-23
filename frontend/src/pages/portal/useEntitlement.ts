@@ -31,8 +31,7 @@ export function useEntitlement(): Entitlement {
       .then((s) => { if (alive) setState({ isStaff: !!s.is_staff, hasFullAccess: s.has_full_access !== false, loading: false }); })
       .catch(() => { if (alive) setState({ isStaff: false, hasFullAccess: true, loading: false }); });
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed is read once at mount by design
-  }, []);
+  }, [seed]);
 
   return state;
 }
