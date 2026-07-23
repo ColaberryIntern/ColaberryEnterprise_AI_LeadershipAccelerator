@@ -42,10 +42,20 @@ function bulletsHtml(bullets: string[] | undefined, cls = 'kpoints'): string {
   return `<ul class="${cls}">` + bullets.map((b) => `<li>${esc(b)}</li>`).join('') + '</ul>';
 }
 
-function architectureHtml(bullets: string[] | undefined): string {
+/** Numbered visual card grid — used for architecture beats, build maps, and deep
+ * teaching bullets so the substance of the class reads like a dashboard, not a
+ * bulleted memo. */
+function cardGridHtml(bullets: string[] | undefined): string {
   if (!bullets || !bullets.length) return '';
   return '<div class="karch">' + bullets.map((b, i) =>
     `<div class="karch-item"><div class="kn">${i + 1}</div><p>${esc(b)}</p></div>`).join('') + '</div>';
+}
+
+/** The teaching punchline (TeachSlide.body) framed as a highlighted insight card
+ * instead of a plain paragraph — "lead with the conclusion" storytelling. */
+function teachLeadHtml(body: string | undefined): string {
+  if (!body) return '';
+  return `<div class="kteach-lead"><span class="kteach-ico">💡</span><p>${esc(body)}</p></div>`;
 }
 
 /** Small source footer for factual slides (publisher · title (year) [qualifier]). */
@@ -64,13 +74,15 @@ function evidenceHtml(slide: KitSlide): string {
   return `<div class="kevidence">📎 Sources: ${items}</div>`;
 }
 
-/** Mermaid diagram block (rendered client-side; raw source shows if the CDN fails). */
+/** Mermaid diagram block (rendered client-side; raw source shows if the CDN fails).
+ * The caption renders as a "why it matters" callout, not a muted footnote — the
+ * diagram is the visual, the caption is the story it tells. */
 function diagramHtml(slide: KitSlide): string {
   if (!slide.diagram) return '';
   return (
     '<div class="kdiagram">' +
     `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
-    (slide.diagramCaption ? `<div class="kdiagram-cap">${esc(slide.diagramCaption)}</div>` : '') +
+    (slide.diagramCaption ? `<div class="kdiagram-cap"><span class="kdiagram-cap-ico">🧭</span><span>${esc(slide.diagramCaption)}</span></div>` : '') +
     '</div>'
   );
 }
@@ -160,8 +172,8 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
         `<h2 class="ktitle">${esc(slide.title)}</h2>` +
-        (slide.body ? `<p class="kbody">${esc(slide.body)}</p>` : '') +
-        bulletsHtml(slide.bullets) +
+        teachLeadHtml(slide.body) +
+        cardGridHtml(slide.bullets) +
         (slide.prompt ? promptHtml(slide.prompt.label, slide.prompt.prompt) : '') +
         diagramHtml(slide) +
         evidenceHtml(slide)
@@ -179,7 +191,7 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
         `<h2 class="ktitle">${esc(slide.title)}</h2>` +
-        architectureHtml(slide.bullets) +
+        cardGridHtml(slide.bullets) +
         diagramHtml(slide)
       );
     case 'prompt': {
@@ -204,7 +216,7 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
         `<h2 class="ktitle">${esc(slide.title)}</h2>` +
-        bulletsHtml(slide.bullets) +
+        cardGridHtml(slide.bullets) +
         diagramHtml(slide)
       );
     case 'break':

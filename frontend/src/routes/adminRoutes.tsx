@@ -53,11 +53,16 @@ import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
 import AdminFunnelPage from '../pages/admin/AdminFunnelPage';
 import CbSystemCommand from '../pages/admin/CbSystemCommand';
 import AdminTrustCenterPage from '../pages/admin/AdminTrustCenterPage';
+import AdminPortalEnterPage from '../pages/admin/AdminPortalEnterPage';
 const adminRoutes = (
   <>
     <Route path="/admin" element={<Navigate to="/admin/login" replace />} />
     <Route path="/admin/login" element={<AdminLoginPage />} />
     <Route element={<ProtectedRoute />}>
+      {/* Staff → own student portal ("AI Training"): mints a full-access portal
+          token, redirects to /portal/today. Sits outside AdminLayout, like the
+          portal's mirror-image /portal/mgmt-enter sits outside PortalLayout. */}
+      <Route path="/admin/ai-training-enter" element={<AdminPortalEnterPage />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
         <Route path="/admin/war-room" element={<WarRoomPage />} />

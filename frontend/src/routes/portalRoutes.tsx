@@ -28,6 +28,7 @@ import ProjectsPage from '../pages/portal/projects/ProjectsPage';
 import CommunityPage from '../pages/portal/community/CommunityPage';
 import PeopleDirectoryPage from '../pages/portal/community/PeopleDirectoryPage';
 import RoomsPage from '../pages/portal/rooms/RoomsPage';
+import GlobalLibraryPage from '../pages/portal/library/GlobalLibraryPage';
 import CompanyPage from '../pages/portal/company/CompanyPage';
 import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
 
@@ -65,6 +66,7 @@ const portalRoutes = (
       <Route path="/portal/community/people" element={<PeopleDirectoryPage />} />
       <Route path="/portal/rooms" element={<RoomsPage />} />
       <Route path="/portal/rooms/:roomId" element={<RoomsPage />} />
+      <Route path="/portal/library" element={<GlobalLibraryPage />} />
       {/* Manager surface — renders its own PortalShell chrome; the shell adds the
           "Your company" nav group only for org managers, and the page itself
           shows a friendly error if a non-manager reaches it. */}

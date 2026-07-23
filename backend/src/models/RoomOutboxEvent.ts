@@ -8,7 +8,7 @@ import { sequelize } from '../config/database';
 // a no-op. Named room_outbox_events to avoid colliding with the existing
 // community_events (per-cohort calendar) table.
 export type RoomOutboxStatus = 'pending' | 'processing' | 'processed' | 'failed' | 'dead';
-export type RoomOutboxAggregateType = 'room' | 'booking' | 'attendee' | 'message';
+export type RoomOutboxAggregateType = 'room' | 'booking' | 'attendee' | 'message' | 'resource';
 
 export interface RoomOutboxEventAttributes {
   id?: string;

@@ -68,6 +68,9 @@ export const NAV_GROUPS: NavGroup[] = [
       { label: 'Rooms', to: '/portal/rooms', icon: (
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M17 9l4-2v10l-4-2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
       ) },
+      { label: 'Library', to: '/portal/library', icon: (
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6V4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+      ) },
       { label: 'Portfolio', soon: true, icon: (
         <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M9 6V4h6v2M3 12h18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
       ) },

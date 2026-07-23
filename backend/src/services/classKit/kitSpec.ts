@@ -148,6 +148,16 @@ function humanizeTag(t: string): string {
   return t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** First sentence of a longer passage, capped — used to turn a paragraph of
+ * authored context into a one-line diagram caption instead of a generic label. */
+function firstSentence(s: string | undefined, maxLen = 150): string {
+  if (!s) return '';
+  const m = s.match(/^[^.!?]*[.!?]/);
+  let out = (m ? m[0] : s).trim();
+  if (out.length > maxLen) out = out.slice(0, maxLen - 1).trimEnd() + '…';
+  return out;
+}
+
 /** Build a visual "Prove It" brief from a week's assignment + its blueprint. */
 function buildWeekBrief(week: number | null, wc: WeekClassContent): AssignmentBrief {
   const bp = week != null ? weekBlueprint(week) : undefined;
@@ -331,7 +341,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
   out.push(slide(arch, 0, 'architecture', {
     eyebrow: '🏛️ Architecture story', title: 'The architecture', bullets: m.architectureBeats,
     diagram: meta.week != null ? ARCHITECTURE_DIAGRAMS[meta.week] : undefined,
-    diagramCaption: 'How this week’s system fits together — walk it left to right.',
+    diagramCaption: `Walk it left to right. ${firstSentence(m.tension) || 'This is how this week’s system fits together.'}`,
     presenterTip: 'Walk the diagram node by node: components, the risky edges, the decisions. This is the evergreen lesson — take your time (≈20 min). Ask the room where the trust boundary is.',
   }));
   out.push(...teachToSlides(mteach, 'architecture', arch));
