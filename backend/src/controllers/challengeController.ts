@@ -13,6 +13,7 @@ import {
   rankParticipants,
   RankedParticipant,
 } from '../services/challengeScoringService';
+import { isValidSponsorToken } from '../services/sponsorAuthService';
 
 /* ------------------------------------------------------------------ */
 /*  Shared helpers                                                     */
@@ -220,15 +221,15 @@ export async function handleGetLeaderboard(
 // Demo-Day candidates. This is the corporate "talent discovery" view —
 // who your real AI builders are — so it surfaces rank/tier/points per employee.
 //
-// AUTH (follow-up): this endpoint is registered PUBLIC (ahead of the deployed
-// auth guard) so the sponsor portal can read without an admin session, but it
-// must not be open to enumeration. As a stopgap it requires an access token
-// supplied via the `access_token` query param OR the `x-sponsor-token` header,
-// compared against the sponsor's id-derived token. REAL-AUTH FOLLOW-UP: replace
-// this with a signed, per-sponsor bearer token (short-lived JWT issued at seat
-// purchase) validated in middleware, and move the route behind a sponsor-scoped
-// guard. Tracked as a hardening task — do not ship the stopgap as the final
-// authorization story.
+// AUTH: this endpoint is registered PUBLIC (ahead of the deployed auth guard)
+// so the sponsor portal can read without an admin session, but it must not be
+// open to enumeration. It requires an access token supplied via the
+// `access_token` query param OR the `x-sponsor-token` header, compared
+// against a random, expiring, emailed-only token (sponsorAuthService) — never
+// the sponsor's own id. Sponsors obtain the token via
+// POST /api/sponsor/request-link (emails a magic link) and
+// GET /api/sponsor/verify (exchanges it for this token), the same
+// email-possession model as the participant portal.
 const sponsorDashboardQuerySchema = z.object({
   sponsor_id: z.string().trim().uuid('sponsor_id must be a valid UUID'),
   access_token: z.string().trim().min(1).optional(),
@@ -259,12 +260,9 @@ interface SponsorDashboardResponse {
   demo_day_candidates: DashboardParticipant[];
 }
 
-// Stopgap token: the sponsor id is itself the shared secret for now. A real
-// per-sponsor bearer token replaces this (see the follow-up note above).
-function isAuthorizedForSponsor(req: Request, sponsorId: string, queryToken?: string): boolean {
+function isAuthorizedForSponsor(req: Request, sponsor: Sponsor, queryToken?: string): boolean {
   const headerToken = req.header('x-sponsor-token') ?? undefined;
-  const provided = queryToken ?? headerToken;
-  return Boolean(provided) && provided === sponsorId;
+  return isValidSponsorToken(sponsor, queryToken ?? headerToken);
 }
 
 interface SeatRow extends SponsorSeat {}
@@ -294,15 +292,15 @@ export async function handleGetSponsorDashboard(
     // Validate the Sponsor exists. Unlike the leaderboard, an unknown sponsor is
     // a 404 — this is an authenticated employer surface, not a public render.
     const sponsor = await Sponsor.findByPk(query.sponsor_id, {
-      attributes: ['id', 'company_name', 'seats_purchased'],
+      attributes: ['id', 'company_name', 'seats_purchased', 'portal_token', 'portal_token_expires_at'],
     });
     if (!sponsor) {
       res.status(404).json({ error: 'Sponsor not found.' });
       return;
     }
 
-    // Access-token gate (stopgap — see REAL-AUTH FOLLOW-UP note above).
-    if (!isAuthorizedForSponsor(req, sponsor.id, query.access_token)) {
+    // Access-token gate — see AUTH note above.
+    if (!isAuthorizedForSponsor(req, sponsor, query.access_token)) {
       res.status(401).json({
         error: 'Missing or invalid access token.',
         hint: 'Supply access_token query param or x-sponsor-token header.',
