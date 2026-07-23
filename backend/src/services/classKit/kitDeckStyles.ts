@@ -186,17 +186,22 @@ body.rail-on #krail{display:flex}
 /* Small persistent QR for latecomers — appears on slides after the cover,
    once the instructor has pressed Start class (before that, the cover's own
    big QR is the promoted one; showing a second QR pre-start would just clutter
-   the room-settling moment without helping anyone). */
-#klateqr{position:fixed;left:16px;bottom:calc(var(--pace-h) + 16px);z-index:45;
-  display:none;flex-direction:column;align-items:center;gap:4px;
-  background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:14px;
-  padding:8px;box-shadow:0 10px 28px rgba(26,32,44,.16);cursor:pointer;opacity:.85;transition:opacity .2s}
+   the room-settling moment without helping anyone). Grouped with the existing
+   top-right chrome cluster (.ktoggles) rather than a new corner — every slide
+   layout (centered Story Mode, left-aligned Build Mode, two-column cover) already
+   keeps that zone clear, so it stays out of whatever the video is framing. Fades
+   on idle and hides entirely in Focus/Video mode, same as the rest of that cluster. */
+#klateqr{position:fixed;top:56px;right:16px;z-index:44;
+  display:none;flex-direction:column;align-items:center;gap:3px;
+  background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;
+  padding:6px;box-shadow:0 10px 28px rgba(26,32,44,.16);cursor:pointer;opacity:.8;transition:opacity .2s,right .2s}
 #klateqr:hover{opacity:1}
 #klateqr.show{display:flex}
-body.idle #klateqr{opacity:.35}
-.klateqr-box{width:64px;height:64px}
+body.rail-on #klateqr{right:calc(var(--rail-w) + 14px)}
+body.idle #klateqr{opacity:.3}
+.klateqr-box{width:52px;height:52px}
 .klateqr-box svg{width:100%;height:100%;display:block}
-.klateqr-label{font-size:10px;font-weight:700;color:var(--berry);text-transform:uppercase;letter-spacing:.4px}
+.klateqr-label{font-size:9px;font-weight:700;color:var(--berry);text-transform:uppercase;letter-spacing:.3px}
 body.focus #klateqr{display:none !important}
 
 /* ---------- overlays / toggles ---------- */
