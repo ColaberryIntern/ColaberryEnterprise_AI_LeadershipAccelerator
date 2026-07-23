@@ -13,6 +13,10 @@ export interface ParticipantPayload {
   // no-op their write when req.participant.read_only is set.
   read_only?: boolean;
   impersonated_by?: string; // admin sub/email that minted the read-only token (audit)
+  // NOT a JWT claim — populated per-request by Community Rooms'
+  // attachCommunityStaffContext middleware (community_members.role === 'staff'),
+  // so downstream handlers can read "is this participant staff" synchronously.
+  isStaff?: boolean;
 }
 
 // Safe (non-mutating) HTTP methods — the only ones a read-only viewer may use.

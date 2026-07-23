@@ -2,8 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchRoom, fetchRoomMessages, postRoomMessage, requestRoomAccess, joinVideoRoom,
   touchRoomPresence, deleteRoom, inviteToRoom, fetchPeople, verifyAnswer, myEnrollmentId,
-  RoomView, RoomMessage, RoomPerson,
+  fetchRoomBookings, RoomView, RoomMessage, RoomPerson, BookingCard,
 } from '../../../services/roomsApi';
+import RoomFilesPanel from './RoomFilesPanel';
 
 const CAT_EMOJI: Record<string, string> = {
   start_here: '👋', your_cohort: '🎓', build_together: '🛠️', career_cert: '💼',
@@ -58,6 +59,8 @@ const InviteModal: React.FC<{ roomId: string; onClose: () => void; onDone: () =>
   );
 };
 
+type RoomTab = 'chat' | 'files';
+
 const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () => void }> = ({ roomId, onDeleted, onChanged }) => {
   const [view, setView] = useState<RoomView | null | 'error'>(null);
   const [messages, setMessages] = useState<RoomMessage[] | null>(null);
@@ -65,16 +68,26 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   const [draft, setDraft] = useState('');
   const [asking, setAsking] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [paneTab, setPaneTab] = useState<RoomTab>('chat');
+  const [bookings, setBookings] = useState<BookingCard[] | undefined>(undefined);
   const sinceRef = useRef<string | undefined>(undefined);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const loadRoom = useCallback(async () => {
     setMessages(null); sinceRef.current = undefined;
+    setPaneTab('chat'); setBookings(undefined);
     try { setView(await fetchRoom(roomId)); } catch { setView('error'); }
   }, [roomId]);
   useEffect(() => { loadRoom(); }, [loadRoom]);
 
   const canChat = view !== null && view !== 'error' && view.visibility === 'full';
+
+  // Lazily load this room's bookings the first time the Files tab opens, so the
+  // "by class" picker has data without adding a request to the default chat view.
+  useEffect(() => {
+    if (paneTab !== 'files' || bookings !== undefined || !canChat) return;
+    fetchRoomBookings(roomId).then(setBookings).catch(() => setBookings([]));
+  }, [paneTab, bookings, canChat, roomId]);
 
   const pollMessages = useCallback(async () => {
     const res = await fetchRoomMessages(roomId, sinceRef.current);
@@ -197,41 +210,50 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
         {isOwner && !room.is_system && <button type="button" className="te-btn ghost sm rm-danger" onClick={doDelete}>Delete</button>}
       </div>
 
-      <div className="rm-chat">
-        <div className="rm-msgs">
-          {messages === null && <div className="rm-empty">Loading conversation…</div>}
-          {messages !== null && messages.length === 0 && <div className="rm-empty">No messages yet — say hello 👋</div>}
-          {messages?.map((m) => {
-            if (m.kind === 'system') {
-              return <div key={m.id} className="rm-sysmsg">{m.content}</div>;
-            }
-            const isQuestion = m.kind === 'question';
-            const isVerifiedAnswer = verifiedAnswerIds.has(m.id);
-            const canMarkAnswer = iHaveOpenQuestion && !!m.enrollment_id && m.enrollment_id !== myId && !isQuestion && !isVerifiedAnswer;
-            return (
-              <div key={m.id} className={`rm-msg${isQuestion ? ' is-q' : ''}${isVerifiedAnswer ? ' is-ans' : ''}`}>
-                <span className="cm-avatar sm">{initials(m.sender_name)}</span>
-                <div className="rm-msg-body">
-                  <div className="rm-msg-top">
-                    <span className="rm-msg-name">{m.sender_name}</span>
-                    {isQuestion && <span className={`rm-qchip${m.question_status === 'verified' ? ' done' : ''}`}>{m.question_status === 'verified' ? '✓ Answered' : '❓ Question'}</span>}
-                    {isVerifiedAnswer && <span className="rm-ansbadge">✓ Verified answer</span>}
-                    <span className="rm-msg-time">{timeAgo(m.created_at)}</span>
-                    {canMarkAnswer && <button type="button" className="rm-markans" onClick={() => doVerify(m.id)}>✓ Mark as answer</button>}
-                  </div>
-                  <div className="rm-msg-text">{m.content}</div>
-                </div>
-              </div>
-            );
-          })}
-          <div ref={endRef} />
-        </div>
-        <div className="rm-chatbar">
-          <button type="button" className={`rm-askbtn${asking ? ' on' : ''}`} onClick={() => setAsking((v) => !v)} title="Ask as a question so people can mark the answer" aria-pressed={asking}>❓</button>
-          <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder={asking ? 'Ask a question…' : `Message ${room.name}…`} maxLength={4000} />
-          <button type="button" className="te-btn cherry sm" onClick={send} disabled={!draft.trim()}>{asking ? 'Ask' : 'Send'}</button>
-        </div>
+      <div className="rm-tabs" role="tablist" aria-label="Room sections">
+        <button type="button" role="tab" aria-selected={paneTab === 'chat'} className={`rm-tab${paneTab === 'chat' ? ' active' : ''}`} onClick={() => setPaneTab('chat')}>Chat</button>
+        <button type="button" role="tab" aria-selected={paneTab === 'files'} className={`rm-tab${paneTab === 'files' ? ' active' : ''}`} onClick={() => setPaneTab('files')}>Docs &amp; Files</button>
       </div>
+
+      {paneTab === 'chat' && (
+        <div className="rm-chat">
+          <div className="rm-msgs">
+            {messages === null && <div className="rm-empty">Loading conversation…</div>}
+            {messages !== null && messages.length === 0 && <div className="rm-empty">No messages yet — say hello 👋</div>}
+            {messages?.map((m) => {
+              if (m.kind === 'system') {
+                return <div key={m.id} className="rm-sysmsg">{m.content}</div>;
+              }
+              const isQuestion = m.kind === 'question';
+              const isVerifiedAnswer = verifiedAnswerIds.has(m.id);
+              const canMarkAnswer = iHaveOpenQuestion && !!m.enrollment_id && m.enrollment_id !== myId && !isQuestion && !isVerifiedAnswer;
+              return (
+                <div key={m.id} className={`rm-msg${isQuestion ? ' is-q' : ''}${isVerifiedAnswer ? ' is-ans' : ''}`}>
+                  <span className="cm-avatar sm">{initials(m.sender_name)}</span>
+                  <div className="rm-msg-body">
+                    <div className="rm-msg-top">
+                      <span className="rm-msg-name">{m.sender_name}</span>
+                      {isQuestion && <span className={`rm-qchip${m.question_status === 'verified' ? ' done' : ''}`}>{m.question_status === 'verified' ? '✓ Answered' : '❓ Question'}</span>}
+                      {isVerifiedAnswer && <span className="rm-ansbadge">✓ Verified answer</span>}
+                      <span className="rm-msg-time">{timeAgo(m.created_at)}</span>
+                      {canMarkAnswer && <button type="button" className="rm-markans" onClick={() => doVerify(m.id)}>✓ Mark as answer</button>}
+                    </div>
+                    <div className="rm-msg-text">{m.content}</div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={endRef} />
+          </div>
+          <div className="rm-chatbar">
+            <button type="button" className={`rm-askbtn${asking ? ' on' : ''}`} onClick={() => setAsking((v) => !v)} title="Ask as a question so people can mark the answer" aria-pressed={asking}>❓</button>
+            <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder={asking ? 'Ask a question…' : `Message ${room.name}…`} maxLength={4000} />
+            <button type="button" className="te-btn cherry sm" onClick={send} disabled={!draft.trim()}>{asking ? 'Ask' : 'Send'}</button>
+          </div>
+        </div>
+      )}
+
+      {paneTab === 'files' && <RoomFilesPanel roomId={roomId} canUpload={view.can_upload_resource} bookings={bookings} />}
 
       {showInvite && <InviteModal roomId={roomId} onClose={() => setShowInvite(false)} onDone={() => { loadRoom(); onChanged(); }} />}
     </div>

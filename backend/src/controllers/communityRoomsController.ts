@@ -1,22 +1,26 @@
 import { Request, Response } from 'express';
+import path from 'path';
 import { Op } from 'sequelize';
 import CommunityRoom from '../models/CommunityRoom';
 import RoomBooking from '../models/RoomBooking';
 import RoomMembership from '../models/RoomMembership';
 import CommunityMember from '../models/CommunityMember';
-import { RoomAccessContext } from '../services/communityRooms/roomEntitlementService';
+import { RoomAccessContext, canUploadResource } from '../services/communityRooms/roomEntitlementService';
 import * as rooms from '../services/communityRooms/roomService';
 import * as members from '../services/communityRooms/roomMembershipService';
 import * as bookings from '../services/communityRooms/roomBookingService';
 import * as messages from '../services/communityRooms/roomMessageService';
 import * as moderation from '../services/communityRooms/roomModerationService';
 import * as recognition from '../services/communityRooms/roomRecognitionService';
+import * as resourceSvc from '../services/communityRooms/roomResourceService';
 import { derivePresence } from '../services/communityService';
 import { hereCounts, touchRoomPresence } from '../services/communityRooms/roomPresenceService';
+import { roomResourceUpload, ROOM_RESOURCE_DIR } from '../config/upload';
 import {
   CreateRoomSchema, UpdateRoomSchema, ListRoomsQuerySchema, NotificationPrefSchema,
   PostMessageSchema, ListMessagesQuerySchema, QuestionStatusSchema, VerifyAnswerSchema,
   CreateBookingSchema, RsvpSchema, ReportSchema, InviteSchema, PresenceSchema,
+  ListRoomResourcesQuerySchema, CreateRoomResourceSchema, UploadRoomResourceFieldsSchema,
 } from '../schemas/communityRoomsSchemas';
 
 const CAT_EMOJI: Record<string, string> = {
@@ -30,7 +34,7 @@ const CAT_EMOJI: Record<string, string> = {
 // the enrollment id ALWAYS comes from req.participant.sub.
 
 function ctxOf(req: Request): RoomAccessContext {
-  return { enrollmentId: req.participant!.sub, cohortId: req.participant!.cohort_id, isAdmin: false };
+  return { enrollmentId: req.participant!.sub, cohortId: req.participant!.cohort_id, isAdmin: req.participant!.isStaff === true };
 }
 
 function fail(res: Response, err: any): void {
@@ -294,6 +298,87 @@ export async function getHome(req: Request, res: Response): Promise<void> {
       up_next: upNext,
       my_rooms: myRooms.map((r) => ({ id: r.id, name: r.name, category: r.category, privacy: r.privacy })),
     });
+  } catch (err) { fail(res, err); }
+}
+
+// --- Docs & Files ---
+
+export async function listRoomBookings(req: Request, res: Response): Promise<void> {
+  try {
+    const rows = await bookings.listBookingsForRoom(ctxOf(req), String(req.params.id));
+    res.json({ bookings: rows.map((b) => ({ ...bookingCard(b), related_live_session_id: b.related_live_session_id })) });
+  } catch (err) { fail(res, err); }
+}
+
+export async function listResources(req: Request, res: Response): Promise<void> {
+  const parsed = ListRoomResourcesQuerySchema.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid query', issues: parsed.error.issues }); return; }
+  try {
+    const resources = await resourceSvc.listResources(ctxOf(req), String(req.params.id), {
+      bookingId: parsed.data.booking_id,
+      resourceType: parsed.data.resource_type,
+    });
+    res.json({ resources });
+  } catch (err) { fail(res, err); }
+}
+
+export async function uploadResourceFile(req: Request, res: Response): Promise<void> {
+  roomResourceUpload.single('file')(req, res, async (err) => {
+    if (err) { res.status(400).json({ error: err.message }); return; }
+    if (!req.file) { res.status(400).json({ error: 'No file uploaded' }); return; }
+    const parsed = UploadRoomResourceFieldsSchema.safeParse(req.body || {});
+    if (!parsed.success) { res.status(400).json({ error: 'Invalid fields', issues: parsed.error.issues }); return; }
+    try {
+      const resource = await resourceSvc.createFileResource(ctxOf(req), String(req.params.id), {
+        bookingId: parsed.data.booking_id ?? null,
+        title: parsed.data.title,
+        file: req.file,
+      });
+      res.status(201).json({ resource });
+    } catch (e) { fail(res, e); }
+  });
+}
+
+export async function createResource(req: Request, res: Response): Promise<void> {
+  const parsed = CreateRoomResourceSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid resource', issues: parsed.error.issues }); return; }
+  try {
+    const resource = await resourceSvc.createLinkOrNoteResource(ctxOf(req), String(req.params.id), {
+      bookingId: parsed.data.booking_id ?? null,
+      resourceType: parsed.data.resource_type,
+      title: parsed.data.title,
+      url: parsed.data.url,
+      body: parsed.data.body,
+    });
+    res.status(201).json({ resource });
+  } catch (err) { fail(res, err); }
+}
+
+export async function deleteResource(req: Request, res: Response): Promise<void> {
+  try {
+    await resourceSvc.deleteResource(ctxOf(req), String(req.params.id), String(req.params.resourceId));
+    res.json({ ok: true });
+  } catch (err) { fail(res, err); }
+}
+
+export async function downloadResource(req: Request, res: Response): Promise<void> {
+  try {
+    const resource = await resourceSvc.getResourceForDownload(ctxOf(req), String(req.params.id), String(req.params.resourceId));
+    res.setHeader('Content-Type', resource.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${(resource.title || resource.storage_key || 'file').replace(/["\r\n]/g, '')}"`);
+    res.sendFile(path.join(ROOM_RESOURCE_DIR, resource.storage_key as string));
+  } catch (err) { fail(res, err); }
+}
+
+// The Global Library — a well-known public room whose resources are visible to
+// every participant. Lazily ensured on first access (idempotent findOrCreate).
+export async function getLibrary(req: Request, res: Response): Promise<void> {
+  try {
+    const ctx = ctxOf(req);
+    const room = await rooms.ensureGlobalLibraryRoom();
+    const membership = await rooms.getMembership(room.id, ctx.enrollmentId);
+    const resources = await resourceSvc.listResources(ctx, room.id, {});
+    res.json({ room_id: room.id, resources, can_upload: canUploadResource(room, ctx, membership) });
   } catch (err) { fail(res, err); }
 }
 

@@ -2047,6 +2047,12 @@ async function ensureCommunityRoomsSchema() {
        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
      )`,
     `CREATE INDEX IF NOT EXISTS idx_room_resources_room ON room_resources (room_id, resource_type)`,
+    // Docs & Files (room_resources 'file' uploads): real files carry their MIME
+    // type, byte size, and the disk-resolved storage key (UUID+ext) separately
+    // from `url`, which stays reserved for link/recording resource types.
+    `ALTER TABLE room_resources ADD COLUMN IF NOT EXISTS mime_type VARCHAR(120)`,
+    `ALTER TABLE room_resources ADD COLUMN IF NOT EXISTS size_bytes INTEGER`,
+    `ALTER TABLE room_resources ADD COLUMN IF NOT EXISTS storage_key VARCHAR(255)`,
 
     `CREATE TABLE IF NOT EXISTS room_outbox_events (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

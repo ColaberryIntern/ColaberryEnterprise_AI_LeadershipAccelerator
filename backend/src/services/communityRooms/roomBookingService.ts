@@ -269,6 +269,26 @@ export async function completeBooking(ctx: RoomAccessContext, bookingId: string)
   return booking;
 }
 
+// "Revisit different classes" (Docs & Files by-class picker). No cross-room
+// aggregate exists for this — listEvents/getHome are cross-room "happening
+// now" feeds, not a single room's full booking history — so this is a new,
+// narrowly-scoped read.
+export async function listBookingsForRoom(
+  ctx: RoomAccessContext,
+  roomId: string,
+  opts: { limit?: number } = {},
+): Promise<RoomBooking[]> {
+  const room = await CommunityRoom.findByPk(roomId);
+  if (!room) throw notFoundError('Room not found');
+  const membership = await membershipFor(roomId, ctx.enrollmentId);
+  if (!isEligible(room, ctx, membership)) throw forbiddenError('You are not eligible for this room');
+  return RoomBooking.findAll({
+    where: { room_id: roomId },
+    order: [['start_at', 'DESC']],
+    limit: opts.limit || 100,
+  });
+}
+
 export async function cancelBooking(ctx: RoomAccessContext, bookingId: string): Promise<RoomBooking> {
   const { booking, room } = await loadBookingWithRoom(bookingId);
   const membership = await membershipFor(room.id, ctx.enrollmentId);

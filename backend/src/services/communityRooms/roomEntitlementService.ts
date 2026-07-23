@@ -95,6 +95,22 @@ export function canPost(
   return isEligible(room, ctx, membership);
 }
 
+// Docs & Files upload gate. Public rooms (incl. the Global Library, which is
+// itself a public room) restrict uploads to staff (ctx.isAdmin) — everyone
+// else may only read. Cohort/invite-only/private rooms allow any eligible
+// member (staff, cohort match, or active membership) to upload, matching
+// "students can add files to private rooms, or private rooms they've been
+// added to."
+export function canUploadResource(
+  room: CommunityRoom,
+  ctx: RoomAccessContext,
+  membership: RoomMembership | null | undefined,
+): boolean {
+  if (!canPost(room, ctx, membership)) return false;
+  if (room.privacy === 'public') return ctx.isAdmin === true;
+  return true;
+}
+
 export function canModerate(
   ctx: RoomAccessContext,
   membership: RoomMembership | null | undefined,
