@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
 import CommunityMember from '../../models/CommunityMember';
 import Enrollment from '../../models/Enrollment';
+import { signParticipantJwt } from '../participantService';
 import { isMgmtRole, sectionsForRole, MGMT_ROLE_DEFS, type SectionKey } from './mgmtRoles';
 
 /**
@@ -61,4 +62,33 @@ export async function mintMgmtAdminToken(enrollmentId: string): Promise<MintedMg
     { expiresIn: '12h' },
   );
   return { admin_token, role: mgmt, sections: sectionsForRole(mgmt) };
+}
+
+export interface MintedPortalToken {
+  portal_token: string;
+}
+
+/**
+ * The reverse of mintMgmtAdminToken: from inside an admin session, a staff
+ * member jumps back into their OWN student/portal account with no separate
+ * login — "AI Training" in the admin nav. Re-checks live mgmt status (not
+ * just the admin JWT's `mgmt_role` claim) so a role revoked mid-session can't
+ * ride a stale 12h admin token back into the portal. Returns a normal,
+ * full-access participant token (this is the member's own account, not a
+ * read-only view of someone else's — see acceleratorService.getReadOnlyViewAsUrl
+ * for that separate, unrelated impersonation path). Null if not a mgmt user.
+ */
+export async function mintPortalTokenForStaff(enrollmentId: string): Promise<MintedPortalToken | null> {
+  const mgmt = await loadMgmtRole(enrollmentId);
+  if (!mgmt || !isMgmtRole(mgmt)) return null;
+
+  const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'email', 'cohort_id'] });
+  if (!enrollment) return null;
+
+  const portal_token = signParticipantJwt({
+    id: enrollment.id,
+    email: (enrollment as any).email,
+    cohort_id: (enrollment as any).cohort_id,
+  });
+  return { portal_token };
 }

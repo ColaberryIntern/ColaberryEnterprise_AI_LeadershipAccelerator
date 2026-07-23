@@ -16,4 +16,23 @@ router.get('/api/admin/me', requireAnyAdmin, (req: Request, res: Response) => {
   res.json({ user: admin, sections: adminAllowedSections(admin), mgmt_role: admin?.mgmt_role ?? null });
 });
 
+// Admin→portal bridge ("AI Training" nav link) — the reverse of
+// POST /api/portal/mgmt/enter. Only a bridge-minted staff token (mgmt_role
+// present) has a connected enrollment to send back into; a legacy full
+// AdminUser login has no student account, so it 403s.
+router.post('/api/admin/portal/enter', requireAnyAdmin, async (req: Request, res: Response) => {
+  const admin = (req as any).admin;
+  if (!admin?.mgmt_role) {
+    res.status(403).json({ error: 'No connected student portal for this account.' });
+    return;
+  }
+  const { mintPortalTokenForStaff } = await import('../../services/access/mgmtBridgeService');
+  const minted = await mintPortalTokenForStaff(admin.sub);
+  if (!minted) {
+    res.status(403).json({ error: 'No connected student portal for this account.' });
+    return;
+  }
+  res.json(minted);
+});
+
 export default router;

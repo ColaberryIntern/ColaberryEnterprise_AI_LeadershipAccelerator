@@ -8,6 +8,22 @@ import { PINNED_LINKS, NAV_GROUPS, ALL_LINKS, NavLink as NavLinkT } from './admi
 const COLLAPSE_KEY = 'admin.nav.collapsed.v1';
 
 function NavItem({ link, active, onNavigate }: { link: NavLinkT; active: boolean; onNavigate: () => void }) {
+  const inner = (
+    <>
+      <i className={`ri-${link.icon} admin-nav-ricon`} aria-hidden="true" />
+      <span>{link.label}</span>
+    </>
+  );
+  // External destinations / bridge-landing pages open in a new tab so the
+  // current admin session stays put (mirrors the portal sidebar's Management
+  // Portal link).
+  if (link.newTab) {
+    return (
+      <a href={link.path} className="admin-nav-link" target="_blank" rel="noopener noreferrer" onClick={onNavigate}>
+        {inner}
+      </a>
+    );
+  }
   return (
     <Link
       to={link.path}
@@ -15,14 +31,13 @@ function NavItem({ link, active, onNavigate }: { link: NavLinkT; active: boolean
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
     >
-      <i className={`ri-${link.icon} admin-nav-ricon`} aria-hidden="true" />
-      <span>{link.label}</span>
+      {inner}
     </Link>
   );
 }
 
 function AdminLayout() {
-  const { logout, canSection } = useAuth();
+  const { logout, canSection, mgmtRole } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -68,12 +83,18 @@ function AdminLayout() {
   // RBAC: only show pinned links / groups / search hits the logged-in admin's
   // role may access (canSection is permissive until /me resolves, so legacy
   // admins never flash an empty nav). The backend enforces the same per-section.
-  const pinned = PINNED_LINKS.filter((l) => canSection(l.section as string));
+  const pinned = PINNED_LINKS.filter(
+    (l) => canSection(l.section as string) && (!l.requiresMgmtBridge || !!mgmtRole),
+  );
   const groups = NAV_GROUPS.filter((g) => canSection(g.section));
 
   const q = query.trim().toLowerCase();
   const searchResults = q
-    ? ALL_LINKS.filter((l) => l.label.toLowerCase().includes(q) && canSection(l.section as string))
+    ? ALL_LINKS.filter(
+        (l) => l.label.toLowerCase().includes(q)
+          && canSection(l.section as string)
+          && (!l.requiresMgmtBridge || !!mgmtRole),
+      )
     : null;
 
   // Intelligence OS page gets full-screen treatment (no sidebar, no padding)

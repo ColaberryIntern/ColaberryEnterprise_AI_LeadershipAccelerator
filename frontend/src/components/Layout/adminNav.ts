@@ -7,7 +7,14 @@
 // `section` is the management-portal RBAC section key (mirrors backend
 // mgmtRoles.ts SECTION_KEYS). AdminLayout hides a link/group when the logged-in
 // admin's role can't access its section; the backend enforces the same.
-export interface NavLink { path: string; label: string; icon: string; section?: string; }
+// `newTab` renders the link as a plain <a target="_blank"> instead of a router
+// <Link> (mirrors the portal sidebar's identical NavItem.newTab pattern) — for
+// external destinations (My Day) or internal bridge-landing pages (AI Training)
+// where the current admin tab should stay put. `requiresMgmtBridge` hides the
+// link unless the logged-in identity is a bridge-minted staff account (has a
+// connected student/portal enrollment to bridge into) — a legacy full AdminUser
+// has no enrollment to send to, so the link would always 403 for them.
+export interface NavLink { path: string; label: string; icon: string; section?: string; newTab?: boolean; requiresMgmtBridge?: boolean; }
 export interface NavGroup { label: string | null; section: string; links: NavLink[]; }
 
 /** Always-visible quick set above the collapsible groups. */
@@ -17,6 +24,13 @@ export const PINNED_LINKS: NavLink[] = [
   { path: '/admin/war-room', label: 'War Room', icon: 'radar-line', section: 'war_room' },
   // Support role's sole surface (also visible to owner/admin who hold 'students').
   { path: '/admin/students', label: 'Student Story', icon: 'file-user-line', section: 'students' },
+  // advisor.colaberry.ai's own "My Day" queue — a separate app with its own
+  // Google SSO, so this is a plain external link, no session bridge needed.
+  { path: 'https://advisor.colaberry.ai/my-day/', label: 'My Day', icon: 'calendar-check-line', section: 'students', newTab: true },
+  // Reverse of "Management Portal": a staff member jumps back into their OWN
+  // connected student portal account with no separate login. Lands on
+  // /admin/ai-training-enter, which mints a portal token and redirects.
+  { path: '/admin/ai-training-enter', label: 'AI Training', icon: 'book-open-line', section: 'students', newTab: true, requiresMgmtBridge: true },
 ];
 
 export const NAV_GROUPS: NavGroup[] = [
