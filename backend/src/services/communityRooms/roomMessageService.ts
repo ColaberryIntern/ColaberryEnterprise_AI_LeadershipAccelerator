@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import CommunityRoom from '../../models/CommunityRoom';
 import RoomMessage, { RoomMessageKind, RoomQuestionStatus } from '../../models/RoomMessage';
 import RoomMembership from '../../models/RoomMembership';
+import RoomResource from '../../models/RoomResource';
 import { RoomAccessContext, canPost, canReadContent, canModerate } from './roomEntitlementService';
 import { getOrCreateMember } from '../communityService';
 import { recordContribution } from './roomRecognitionService';
@@ -28,6 +29,7 @@ export interface PostMessageInput {
   content: string;
   kind?: RoomMessageKind;
   thread_root_id?: string;
+  resource_id?: string;
 }
 
 export async function postMessage(ctx: RoomAccessContext, roomId: string, input: PostMessageInput): Promise<RoomMessage> {
@@ -39,6 +41,20 @@ export async function postMessage(ctx: RoomAccessContext, roomId: string, input:
   const membership = await membershipFor(roomId, ctx.enrollmentId);
   if (!canPost(room, ctx, membership)) throw forbiddenError('You cannot post in this room');
 
+  // Chat file-attach: the client already uploaded via the Docs & Files
+  // pipeline (POST .../resources/file, which does its own canUploadResource
+  // check) and is now linking that resource into a chat message. Re-verify
+  // here too — never trust a client-supplied id pairing (same rule the Docs &
+  // Files service follows for booking/room pairing).
+  let metadata: Record<string, unknown> = {};
+  if (input.resource_id) {
+    const resource = await RoomResource.findByPk(input.resource_id);
+    if (!resource || resource.room_id !== roomId || resource.resource_type !== 'file') {
+      throw validationError('That file could not be attached to this message');
+    }
+    metadata = { resource_id: resource.id };
+  }
+
   const member = await getOrCreateMember(ctx.enrollmentId);
   const message = await RoomMessage.create({
     room_id: roomId,
@@ -48,6 +64,7 @@ export async function postMessage(ctx: RoomAccessContext, roomId: string, input:
     kind: input.kind || 'message',
     thread_root_id: input.thread_root_id ?? null,
     question_status: input.kind === 'question' ? 'open' : null,
+    metadata,
   });
   return message;
 }

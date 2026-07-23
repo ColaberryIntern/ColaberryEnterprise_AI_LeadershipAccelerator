@@ -55,6 +55,10 @@ export const PostMessageSchema = z.object({
   content: z.string().min(1).max(4000),
   kind: z.enum(['message', 'question']).optional(),
   thread_root_id: z.string().uuid().optional(),
+  // Links this message to a room_resources row already uploaded via the Docs &
+  // Files pipeline (POST .../resources/file), so a chat message can carry a
+  // real, entitlement-checked download instead of a bare filename string.
+  resource_id: z.string().uuid().optional(),
 });
 export type PostMessageBody = z.infer<typeof PostMessageSchema>;
 

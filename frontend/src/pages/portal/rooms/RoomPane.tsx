@@ -2,9 +2,16 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchRoom, fetchRoomMessages, postRoomMessage, requestRoomAccess, joinVideoRoom,
   touchRoomPresence, deleteRoom, inviteToRoom, fetchPeople, verifyAnswer, myEnrollmentId,
-  fetchRoomBookings, RoomView, RoomMessage, RoomPerson, BookingCard,
+  fetchRoomBookings, uploadRoomFile, downloadRoomResource, RoomView, RoomMessage, RoomPerson, BookingCard,
 } from '../../../services/roomsApi';
-import RoomFilesPanel from './RoomFilesPanel';
+import RoomFilesPanel, { ACCEPT, ALLOWED_MIMES, ALLOWED_EXT, MAX_SIZE, extOf } from './RoomFilesPanel';
+
+// A chat-attached file's message content is always "📎 <title>" (see
+// handleAttachFile below) — strip the marker back off to recover the title
+// for both the download call and re-render.
+function fileTitleFromContent(content: string): string {
+  return content.replace(/^📎\s*/, '');
+}
 
 const CAT_EMOJI: Record<string, string> = {
   start_here: '👋', your_cohort: '🎓', build_together: '🛠️', career_cert: '💼',
@@ -70,6 +77,8 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   const [showInvite, setShowInvite] = useState(false);
   const [paneTab, setPaneTab] = useState<RoomTab>('chat');
   const [bookings, setBookings] = useState<BookingCard[] | undefined>(undefined);
+  const [attaching, setAttaching] = useState(false);
+  const [attachError, setAttachError] = useState('');
   const sinceRef = useRef<string | undefined>(undefined);
   const endRef = useRef<HTMLDivElement | null>(null);
 
@@ -128,6 +137,33 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
       setMessages((prev) => [...(prev || []), msg]);
     } catch { setDraft(text); setAsking(wasAsking); }
   };
+
+  // Attach-from-chat: uploads through the same Docs & Files endpoint as the
+  // dedicated tab (so it shows up there too), then posts a message linking to
+  // the new resource — giving chat a real, downloadable attachment instead of
+  // someone typing a filename as plain text (the exact gap this closes).
+  const handleAttachFile = useCallback(async (file: File) => {
+    if (!ALLOWED_MIMES.has(file.type) && !ALLOWED_EXT.has(extOf(file.name))) {
+      setAttachError('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, PNG, JPG, WEBP');
+      return;
+    }
+    if (file.size > MAX_SIZE) { setAttachError('File must be under 50MB.'); return; }
+    setAttaching(true); setAttachError('');
+    try {
+      const resource = await uploadRoomFile(roomId, file);
+      const msg = await postRoomMessage(roomId, `📎 ${resource.title || file.name}`, undefined, resource.id);
+      sinceRef.current = msg.created_at;
+      setMessages((prev) => [...(prev || []), msg]);
+    } catch (e) {
+      const apiMsg = (e as { response?: { data?: { error?: string } } }).response?.data?.error;
+      setAttachError(apiMsg || 'Could not attach that file. Please try again.');
+    } finally { setAttaching(false); }
+  }, [roomId]);
+  const handleAttachInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleAttachFile(file);
+    e.target.value = '';
+  }, [handleAttachFile]);
 
   // Full refetch (not the incremental poll) — used after verifying an answer so
   // the question's new status + the answer badge show immediately.
@@ -227,6 +263,7 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
               const isQuestion = m.kind === 'question';
               const isVerifiedAnswer = verifiedAnswerIds.has(m.id);
               const canMarkAnswer = iHaveOpenQuestion && !!m.enrollment_id && m.enrollment_id !== myId && !isQuestion && !isVerifiedAnswer;
+              const resourceId = m.metadata?.resource_id;
               return (
                 <div key={m.id} className={`rm-msg${isQuestion ? ' is-q' : ''}${isVerifiedAnswer ? ' is-ans' : ''}`}>
                   <span className="cm-avatar sm">{initials(m.sender_name)}</span>
@@ -238,15 +275,28 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
                       <span className="rm-msg-time">{timeAgo(m.created_at)}</span>
                       {canMarkAnswer && <button type="button" className="rm-markans" onClick={() => doVerify(m.id)}>✓ Mark as answer</button>}
                     </div>
-                    <div className="rm-msg-text">{m.content}</div>
+                    <div className="rm-msg-text">
+                      {resourceId ? (
+                        <button type="button" className="rm-msg-file" onClick={() => downloadRoomResource(roomId, { id: resourceId, title: fileTitleFromContent(m.content) })}>
+                          📎 {fileTitleFromContent(m.content)}
+                        </button>
+                      ) : m.content}
+                    </div>
                   </div>
                 </div>
               );
             })}
             <div ref={endRef} />
           </div>
+          {attachError && <div className="rm-upload-error">{attachError}</div>}
           <div className="rm-chatbar">
             <button type="button" className={`rm-askbtn${asking ? ' on' : ''}`} onClick={() => setAsking((v) => !v)} title="Ask as a question so people can mark the answer" aria-pressed={asking}>❓</button>
+            {view.can_upload_resource && (
+              <>
+                <button type="button" className="rm-askbtn" onClick={() => document.getElementById('rm-chat-file-input')?.click()} title="Attach a file (added to this room's Docs & Files too)" aria-label="Attach a file" disabled={attaching}>{attaching ? '…' : '📎'}</button>
+                <input id="rm-chat-file-input" type="file" accept={ACCEPT} className="rm-file-input-hidden" onChange={handleAttachInput} />
+              </>
+            )}
             <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder={asking ? 'Ask a question…' : `Message ${room.name}…`} maxLength={4000} />
             <button type="button" className="te-btn cherry sm" onClick={send} disabled={!draft.trim()}>{asking ? 'Ask' : 'Send'}</button>
           </div>
