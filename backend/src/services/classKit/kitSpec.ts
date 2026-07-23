@@ -18,6 +18,7 @@ import {
   SegmentTemplate, SegmentMode, runOfShowFor, scaleSegments,
   formatClock, durationMinutes, formatLongDate, weekdayOf,
 } from './runOfShow';
+import { KitConfig } from './kitConfig';
 
 export type SlideKind =
   | 'cover' | 'rules' | 'bullets' | 'architecture' | 'example' | 'microbuild'
@@ -131,6 +132,8 @@ export interface BuildKitSpecInput {
   checkinUrl: string;
   qrSvg: string;
   meetLink: string | null;
+  /** Instructor-adjustable overrides (kitConfig.ts). Omit for the defaults. */
+  config?: KitConfig;
 }
 
 /** The rules slide — how students use their phone during class (same every class). */
