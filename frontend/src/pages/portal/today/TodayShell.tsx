@@ -64,8 +64,12 @@ const TodayShell: React.FC = () => {
 
   const loadAll = useCallback(async () => {
     console.log('[DEBUG loadAll START]');
+    const tag = (name: string, p: Promise<any>) => p.then(
+      (v) => { console.log(`[DEBUG settled OK] ${name}`); return v; },
+      (e) => { console.log(`[DEBUG settled ERR] ${name}`, String(e)); throw e; },
+    );
     const [p, s, pr, cl, st] = await Promise.allSettled([
-      fetchPoints(), fetchSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'), fetchStreak(),
+      tag('fetchPoints', fetchPoints()), tag('fetchSchedule', fetchSchedule()), tag('fetchOnboardingProfile', fetchOnboardingProfile()), tag('classroom', portalApi.get('/api/portal/classroom')), tag('fetchStreak', fetchStreak()),
     ]);
     console.log('[DEBUG loadAll RESULTS]', { pStatus: p.status, sStatus: s.status, prStatus: pr.status, clStatus: cl.status, stStatus: st.status, clCardCount: cl.status === 'fulfilled' ? (cl.value.data?.cards || []).length : 'N/A', clReason: cl.status === 'rejected' ? String(cl.reason) : undefined });
     if (p.status === 'fulfilled') setPoints(p.value);
