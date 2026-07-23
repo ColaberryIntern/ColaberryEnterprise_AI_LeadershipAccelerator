@@ -198,7 +198,14 @@ pre.mermaid{background:#fff;border:1.5px solid var(--line);border-radius:16px;pa
   font-family:"Cascadia Mono",Consolas,monospace;font-size:12px;color:#94a3b8;line-height:1.4}
 pre.mermaid svg{max-width:100%;height:auto}
 pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transparent}
-.kdiagram-cap{margin-top:1.4vh;font-size:clamp(12px,.9vw,15px);color:var(--muted);font-weight:600;text-align:center;max-width:64ch}
+.kdiagram-cap{margin-top:1.6vh;display:flex;gap:10px;align-items:flex-start;font-size:clamp(13px,.9vw,16px);color:#1a4a5c;font-weight:600;text-align:left;max-width:64ch;background:#eef7fa;border:1.5px solid var(--berry);border-radius:12px;padding:1.3vh 1.4vw}
+.kdiagram-cap-ico{flex:none;font-size:1.15em;line-height:1}
+
+/* teach-slide "lead with the conclusion" insight card */
+.kteach-lead{margin-top:2.2vh;display:flex;gap:12px;align-items:flex-start;max-width:68ch;
+  background:var(--bg-soft);border:1.5px solid var(--line);border-left:5px solid var(--berry);border-radius:14px;padding:1.6vh 1.6vw}
+.kteach-ico{flex:none;font-size:clamp(18px,2vh,24px);line-height:1.3}
+.kteach-lead p{font-size:clamp(15px,.6vw + .85vh,22px);line-height:1.5;color:var(--ink-2);font-weight:600}
 .kevidence{margin-top:2.4vh;font-size:clamp(11px,.7vh + .3vw,14px);color:var(--subtle);border-top:1px solid var(--line);padding-top:1vh;max-width:70ch}
 
 #kqr-overlay{position:fixed;inset:0;z-index:80;background:rgba(15,20,25,.92);display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:20px}
