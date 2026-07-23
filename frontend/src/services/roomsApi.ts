@@ -120,7 +120,7 @@ export interface RoomMessage {
   kind: string;
   question_status: string | null;
   thread_root_id?: string | null;
-  metadata?: { verified_answer_id?: string; verified_answer_by?: string; verified_at?: string; [k: string]: unknown } | null;
+  metadata?: { verified_answer_id?: string; verified_answer_by?: string; verified_at?: string; resource_id?: string; [k: string]: unknown } | null;
   created_at: string;
 }
 
@@ -212,8 +212,11 @@ export async function fetchRoomMessages(roomId: string, since?: string): Promise
   return data;
 }
 
-export async function postRoomMessage(roomId: string, content: string, kind?: 'message' | 'question'): Promise<RoomMessage> {
-  const { data } = await portalApi.post<{ message: RoomMessage }>(`/api/portal/community/rooms/${roomId}/messages`, kind ? { content, kind } : { content });
+export async function postRoomMessage(roomId: string, content: string, kind?: 'message' | 'question', resourceId?: string): Promise<RoomMessage> {
+  const body: { content: string; kind?: 'message' | 'question'; resource_id?: string } = { content };
+  if (kind) body.kind = kind;
+  if (resourceId) body.resource_id = resourceId;
+  const { data } = await portalApi.post<{ message: RoomMessage }>(`/api/portal/community/rooms/${roomId}/messages`, body);
   return data.message;
 }
 
@@ -370,8 +373,10 @@ export async function deleteRoomResource(roomId: string, resourceId: string): Pr
 
 // Authenticated download — the route is Bearer-token-gated (entitlement
 // re-checked server-side), so a plain <a href> won't carry the JWT. Mirrors
-// downloadResume() in portalSettingsApi.ts.
-export async function downloadRoomResource(roomId: string, resource: RoomResource): Promise<void> {
+// downloadResume() in portalSettingsApi.ts. Takes the minimal shape (not the
+// full RoomResource) so a chat message's { resource_id, derived title } can
+// also drive a download without a second resource fetch.
+export async function downloadRoomResource(roomId: string, resource: { id: string; title?: string | null }): Promise<void> {
   const res = await portalApi.get(`/api/portal/community/rooms/${roomId}/resources/${resource.id}/download`, { responseType: 'blob' });
   const url = URL.createObjectURL(res.data as Blob);
   const a = document.createElement('a');
