@@ -4,6 +4,7 @@ import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
 import { toTitleCase } from '../../utils/titleCase';
 import portalApi from '../../utils/portalApi';
+import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 
 // Server-derived watch state for a card (the video watch gate). watched_pct is
 // the ratcheted server total; the collect button unlocks when met.
@@ -302,28 +303,25 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       </div>
     </div>
   ) : playable && !podcastAudio && playingInline ? (
-    // Viewport autoplay PREVIEW: muted (autoplay ⇒ muted in VideoEmbed) and
-    // click-through to the drawer (full video + sound). A muted scroll-by preview
-    // never marks the card complete — completion happens in the drawer.
-    <div
-      className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}
-      role="button" tabIndex={0} style={{ cursor: 'pointer' }}
-      onClick={() => !locked && onOpen?.(card)}
-      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && !locked) { e.preventDefault(); onOpen?.(card); } }}
-    >
-      <div style={{ pointerEvents: 'none' }}>
-        <VideoEmbed
-          source={source}
-          title={card.video?.title || shortTitle}
-          poster={ownPoster || posterUrl}
-          autoplay
-          badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
-          onEnded={() => setPlayingInline(false)}
-          onWatchBeat={watchable && !done
-            ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
-            : undefined}
-        />
-      </div>
+    // Viewport autoplay PREVIEW: muted (autoplay ⇒ muted in VideoEmbed). Unlike the
+    // old click-through-to-drawer behaviour, the tile's own controls (native
+    // play/pause/mute/seek, revealed on hover) are directly usable right here — the
+    // footer "Open"/"Workspace" buttons are now the only ways to the side panel, and
+    // both stop this inline preview first so the drawer's own player is never
+    // competing with an unmuted tile playing underneath it. A muted scroll-by
+    // preview never marks the card complete — completion happens in the drawer.
+    <div className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}>
+      <VideoEmbed
+        source={source}
+        title={card.video?.title || shortTitle}
+        poster={ownPoster || posterUrl}
+        autoplay
+        badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
+        onEnded={() => setPlayingInline(false)}
+        onWatchBeat={watchable && !done
+          ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
+          : undefined}
+      />
     </div>
   ) : podcastAudio ? (
     // Podcast tile with a direct audio episode: clicking the artwork starts the
@@ -357,6 +355,12 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           <audio
             ref={inlineAudioRef}
             style={{ width: '100%' }} src={podcastAudio} controls autoPlay
+            // Read fresh on every (re)mount — this element is destroyed and recreated
+            // each time the tile scrolls out of and back into view, so a stale
+            // useState here would silently re-mute an episode the student already
+            // unmuted. See podcastMutePreference for the sticky cross-episode contract.
+            muted={getPodcastMuted()}
+            onVolumeChange={(e) => setPodcastMuted(e.currentTarget.muted)}
             onEnded={() => setPlayingInline(false)}
           />
         </span>
@@ -455,9 +459,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         <button type="button" className={`cmt${showComments ? ' liked' : ''}`} disabled={locked} onClick={() => !locked && setShowComments((s) => !s)}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment
         </button>
-        {/* Quick shortcut into the full workspace (video + AI Mentor + comments). */}
+        {/* Quick shortcut into the full workspace (video + AI Mentor + comments).
+            Stops the tile's own inline preview first — same reason as "Open" below —
+            so an unmuted tile doesn't keep playing underneath the drawer's own player. */}
         {onWorkspace && !locked && (
-          <button type="button" className="cmt" onClick={() => onWorkspace(card)}>
+          <button type="button" className="cmt" onClick={() => { setPlayingInline(false); onWorkspace(card); }}>
             <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 20h8M12 17v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Workspace
           </button>
         )}
