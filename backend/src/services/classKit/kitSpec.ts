@@ -23,7 +23,7 @@ export type SlideKind =
   | 'cover' | 'rules' | 'bullets' | 'architecture' | 'example' | 'microbuild'
   | 'prompt' | 'checkpoint' | 'buildmap' | 'interaction' | 'failure' | 'recovery'
   | 'demos' | 'broadcast' | 'break' | 'cta' | 'segment' | 'presenterOnly' | 'assignment' | 'teach'
-  | 'hook' | 'beforeafter';
+  | 'hook' | 'beforeafter' | 'storybeat';
 
 export interface KitSlide {
   id: string;
@@ -57,6 +57,11 @@ export interface KitSlide {
   publicValue?: string;
   /** Story Mode before/after comparison ('beforeafter' kind). */
   beforeAfter?: { label?: string; before: string[]; after: string[] };
+  /** Story Mode 'storybeat' fields — large icon, narrative body (uses the base
+   * `body` field), and an optional closing punch line. */
+  icon?: string;
+  punch?: string;
+  tone?: 'cherry' | 'berry' | 'amber' | 'leaf' | 'violet';
 }
 
 export interface BriefStep { emoji: string; text: string; }

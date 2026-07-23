@@ -6,7 +6,7 @@
  * there is no circular dependency between the two.
  */
 import {
-  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS,
+  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS, StoryBeat,
 } from '../../data/classSessionPlan';
 import { teachSlidesFor, ORIENTATION_TEACH } from '../../data/classTeachContent';
 import { runOfShowFor } from './runOfShow';
@@ -16,6 +16,21 @@ import {
   detectDayKind, parseWeek, buildMeta, toSegments,
   BUILDER_BROADCAST_PROMPTS, PROVE_FORMULA, STEP_EMOJIS, PHONE_RULES,
 } from './kitSpec';
+
+/** Insert any authored "change of pace" story beats right after a segment's
+ * own content. No-op when the week/day has none authored for that segment —
+ * this is how the feature stays opt-in per class rather than forcing every
+ * week to have one before it's actually written. */
+function pushStoryBeats(out: KitSlide[], beats: Record<string, StoryBeat[]> | undefined, segId: string, seg: KitSegment): void {
+  const list = beats?.[segId];
+  if (!list || !list.length) return;
+  list.forEach((b, i) => {
+    out.push(slide(seg, 900 + i, 'storybeat', {
+      eyebrow: b.eyebrow, title: b.title, body: b.body, icon: b.icon, punch: b.punch, tone: b.tone,
+      presenterTip: 'Change of pace — tell the story, let it land, then move on. Do not over-explain it.',
+    }));
+  });
+}
 
 // -- Architecture Day (Monday) --------------------------------------------------
 
@@ -50,6 +65,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     presenterTip: 'This is the LinkedIn clip. Stay on the business stakes, not the syntax.',
   }));
   out.push(...teachToSlides(mteach, 'business-problem', prob));
+  pushStoryBeats(out, m.storyBeats, 'business-problem', prob);
 
   const arch = segById(segs, 'architecture');
   out.push(slide(arch, 0, 'architecture', {
@@ -59,6 +75,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     presenterTip: 'Walk the diagram node by node: components, the risky edges, the decisions. This is the evergreen lesson — take your time (≈20 min). Ask the room where the trust boundary is.',
   }));
   out.push(...teachToSlides(mteach, 'architecture', arch));
+  pushStoryBeats(out, m.storyBeats, 'architecture', arch);
 
   const dec = segById(segs, 'deconstruct');
   out.push(slide(dec, 0, 'example', {
@@ -66,6 +83,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     presenterTip: 'Show the good and the broken. The failure is the breakdown clip.',
   }));
   out.push(...teachToSlides(mteach, 'deconstruct', dec));
+  pushStoryBeats(out, m.storyBeats, 'deconstruct', dec);
 
   out.push(breakSlide(segById(segs, 'reset')));
 
@@ -222,6 +240,7 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
       presenterTip: si === 0 ? 'Your hour, Ali. Quotes, data, the program promise.' : `Hand off to ${os.presenter}. Keep to ${os.minutes} minutes — the pace bar will tell you if you drift.`,
     }));
     out.push(...teachToSlides(ORIENTATION_TEACH, segIds[si], seg));
+    pushStoryBeats(out, ORIENTATION_PLAN.storyBeats, segIds[si], seg);
   });
 
   const close = segById(segs, 'setup');

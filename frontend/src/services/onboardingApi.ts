@@ -163,10 +163,27 @@ export async function getNextSession(): Promise<NextLiveSession | null> {
 // ── Join a live session (records attendance + awards session_attended once) ───
 export interface JoinSessionResult { ok: true; status: 'present' | 'late'; awarded: boolean; points: number; }
 /** Record attendance for a live session. Idempotent — safe to call on every join
- *  click; awards the session_attended points only the first time. */
-export async function joinSession(sessionId: string): Promise<JoinSessionResult> {
-  const { data } = await portalApi.post<JoinSessionResult>(`/api/portal/sessions/${sessionId}/join`);
+ *  click; awards the session_attended points only the first time. `source`
+ *  only affects the instructor deck's presence-ticker copy (classroom check-in
+ *  vs the portal's Join Meeting click) — attendance credit is identical either way. */
+export async function joinSession(sessionId: string, source: 'classroom' | 'meet' = 'classroom'): Promise<JoinSessionResult> {
+  const { data } = await portalApi.post<JoinSessionResult>(`/api/portal/sessions/${sessionId}/join`, { source });
   return data;
+}
+
+/** Best-effort "left the Meet tab" beacon, fired on page hide/unload. Uses a
+ * manual keepalive fetch (not axios) so the request can survive the page
+ * unloading — this is a proxy signal for the deck's ticker, not a reliable
+ * presence system (no real Google Meet join/leave webhook is available to us). */
+export function leaveMeetingBeacon(sessionId: string): void {
+  const token = localStorage.getItem('participant_token');
+  if (!token) return;
+  const base = process.env.REACT_APP_API_URL || '';
+  fetch(`${base}/api/portal/sessions/${sessionId}/leave-meet`, {
+    method: 'POST',
+    keepalive: true,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+  }).catch(() => { /* best-effort */ });
 }
 
 /** Live class pulse state a student can broadcast from their phone. */

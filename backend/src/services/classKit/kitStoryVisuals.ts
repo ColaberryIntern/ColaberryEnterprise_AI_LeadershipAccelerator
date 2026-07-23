@@ -16,6 +16,23 @@ export function hookHtml(slide: KitSlide): string {
   );
 }
 
+/** A "change of pace" story/teaching-moment slide: large icon anchor, eyebrow,
+ * headline, narrative body, and an optional closing punch line — for
+ * metaphors, real-world examples, and moments meant to be elaborated on live
+ * rather than read verbatim. Code-rendered (icon + color), not a photo. */
+export function storyBeatHtml(slide: KitSlide): string {
+  const tone = slide.tone || 'berry';
+  return (
+    `<div class="ksbeat ksbeat-${tone}">` +
+    (slide.icon ? `<div class="ksbeat-icon">${esc(slide.icon)}</div>` : '') +
+    (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
+    `<h2 class="ktitle">${esc(slide.title)}</h2>` +
+    (slide.body ? `<p class="ksbeat-body">${esc(slide.body)}</p>` : '') +
+    (slide.punch ? `<div class="ksbeat-punch">${esc(slide.punch)}</div>` : '') +
+    '</div>'
+  );
+}
+
 export function beforeAfterHtml(slide: KitSlide): string {
   const ba = slide.beforeAfter;
   if (!ba) return '';

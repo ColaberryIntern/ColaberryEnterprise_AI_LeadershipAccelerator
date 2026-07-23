@@ -1,7 +1,8 @@
 import { Op } from 'sequelize';
-import { LiveSession, AttendanceRecord } from '../models';
+import { LiveSession, AttendanceRecord, Enrollment } from '../models';
 import { award } from './pointsService';
 import { convertTo24h } from './acceleratorService';
+import { recordPresenceEvent, formatDisplayName } from './sessionPresenceService';
 
 // Live Sessions build-out Phase 3 (Session CC-20260721-s7h4): student-initiated
 // attendance capture + credit. When a student joins a live session from the
@@ -65,7 +66,8 @@ export async function joinLiveSession(
   enrollmentId: string,
   sessionId: string,
   cohortId: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  source: 'classroom' | 'meet' = 'classroom',
 ): Promise<JoinResult | null> {
   const session = await LiveSession.findOne({ where: { id: sessionId, cohort_id: cohortId } });
   if (!session || !JOINABLE_STATUSES.has(session.status)) return null;
@@ -106,7 +108,40 @@ export async function joinLiveSession(
     metadata: { session_id: sessionId, status: finalStatus },
   });
 
+  // Best-effort named presence event for the instructor deck's live ticker —
+  // never blocks or fails the join itself if the lookup/insert has trouble.
+  try {
+    const enrollment = await Enrollment.findByPk(enrollmentId);
+    if (enrollment) {
+      await recordPresenceEvent(
+        sessionId, enrollmentId,
+        source === 'meet' ? 'virtual_building_enter' : 'classroom_enter',
+        formatDisplayName((enrollment as any).full_name),
+      );
+    }
+  } catch (err) {
+    console.warn('[presence] join event failed (non-fatal):', (err as Error).message);
+  }
+
   return { ok: true, status: finalStatus, awarded, points };
+}
+
+/** A student left the Google Meet tab (best-effort, page-unload signal — see
+ * sessionPresenceService.ts header for why this is a proxy, not real presence). */
+export async function leaveMeetingSession(
+  enrollmentId: string, sessionId: string, cohortId: string,
+): Promise<boolean> {
+  const session = await LiveSession.findOne({ where: { id: sessionId, cohort_id: cohortId } });
+  if (!session) return false;
+  try {
+    const enrollment = await Enrollment.findByPk(enrollmentId);
+    if (enrollment) {
+      await recordPresenceEvent(sessionId, enrollmentId, 'virtual_building_leave', formatDisplayName((enrollment as any).full_name));
+    }
+  } catch (err) {
+    console.warn('[presence] leave event failed (non-fatal):', (err as Error).message);
+  }
+  return true;
 }
 
 /**

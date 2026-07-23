@@ -129,7 +129,7 @@ const ClassCheckinPage: React.FC = () => {
   //    ref guard stops React StrictMode's dev double-invoke from double-firing.
   const doJoin = useCallback(() => {
     setJoinPhase('joining');
-    joinSession(sessionId)
+    joinSession(sessionId, 'classroom')
       .then((r) => {
         setJoinPhase('checked');
         if (r.awarded) emitPointsEarned(r.points);

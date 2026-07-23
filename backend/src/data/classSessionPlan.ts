@@ -50,6 +50,18 @@ export interface BuildCheckpoint {
   detail: string;
 }
 
+/** A visual "change of pace" story/teaching-moment slide — icon + narrative,
+ * for metaphors, real-world examples, and the human stakes behind the tool.
+ * Code-rendered (large emoji + color), not a photo — no image pipeline exists. */
+export interface StoryBeat {
+  icon: string;             // large emoji anchor
+  eyebrow: string;
+  title: string;
+  body: string;             // 2-4 sentences, the story itself
+  punch?: string;           // optional closing one-liner, styled distinctly
+  tone?: 'cherry' | 'berry' | 'amber' | 'leaf' | 'violet';
+}
+
 /** Optional "Build Bay" metadata for a coding prompt. All fields are optional —
  * a prompt with none of them still renders (generic paste target + a fallback
  * rescue line), so this degrades gracefully on the hundreds of existing prompts
@@ -101,6 +113,10 @@ export interface WeekClassContent {
     /** Optional Story Mode cold-open — a single-statement full-screen visual hook
      * shown before the business-problem beat. Omit for weeks without one authored. */
     hook?: { headline: string; caption: string };
+    /** Optional "change of pace" story beats, inserted right after the named
+     * segment's content (segment id -> beats to insert there). Omit for weeks
+     * without any authored. */
+    storyBeats?: Record<string, StoryBeat[]>;
   };
 
   thursday: {
@@ -157,6 +173,7 @@ export const ORIENTATION_PLAN: {
   designChoice: Interaction;
   trivia: Interaction;
   assignment: { title: string; deliverables: string[]; proof: string };
+  storyBeats?: Record<string, StoryBeat[]>;
 } = {
   title: 'Orientation — Welcome to the Accelerator',
   publicTitle: 'From AI User to AI Builder — Orientation',
@@ -224,6 +241,32 @@ export const ORIENTATION_PLAN: {
     ],
     proof: 'A screenshot of Claude Code responding to your first prompt in VS Code.',
   },
+  storyBeats: {
+    'big-picture': [
+      {
+        icon: '🗡️', tone: 'cherry', eyebrow: 'The story behind this room',
+        title: 'Every builder starts as an apprentice',
+        body: 'In the old story, the hero trains for years before ever facing the dragon. In this one, you face it in week 12 — a real system, live, solving a real problem — and every week between now and then is you learning to hold the sword without cutting yourself. Nobody in this room slays anything alone; the rescue branch exists because the first swing is supposed to miss sometimes.',
+        punch: 'You are not here to watch someone else fight it. You are here to fight it yourself, with a net.',
+      },
+    ],
+    platform: [
+      {
+        icon: '🧗', tone: 'berry', eyebrow: 'Change of pace — the 1% architect',
+        title: 'Nobody notices day 3. Everyone notices week 12.',
+        body: 'A climber training for a summit does not feel stronger after one workout. She feels the SAME — sore, unsure, checking her form against people ahead of her. But she is 1% better, and 1% compounded for 84 days is not a small number anymore. Your points, your streak, your daily card on Today are not a game layer bolted onto learning. They are the only proof that day 3 mattered, on a day when it will not feel like it did.',
+        punch: 'Trust the compounding. The summit is not visible from base camp — that is normal, not a warning sign.',
+      },
+    ],
+    setup: [
+      {
+        icon: '🌱', tone: 'leaf', eyebrow: 'Before we set up — the locker room talk',
+        title: 'Everyone in this room feels behind their first week. That is the baseline, not a red flag.',
+        body: 'The people who eventually build the most impressive things almost always describe their first working session the same way: confusing, slower than expected, one small win they almost missed because they were looking for a bigger one. That feeling is not a sign you are in the wrong room. It is what "the unit of work just changed" feels like from the inside, before it feels like anything else.',
+        punch: 'Tonight the goal is not mastery. It is one prompt, one plan, one thing that actually ran.',
+      },
+    ],
+  },
 };
 
 /* ========================================================================== */
@@ -268,6 +311,32 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
       hook: {
         headline: 'You gave AI an answer to type. Now it can act.',
         caption: 'The unit of work just changed — from "what should I do" to "do it, and show me it worked."',
+      },
+      storyBeats: {
+        'business-problem': [
+          {
+            icon: '🎫', tone: 'berry', eyebrow: 'Change of pace — a real support ticket',
+            title: 'The chatbot gave the right answer. The customer waited four more days anyway.',
+            body: 'A support agent pastes a customer\'s error into a chatbot, gets a correct three-step fix, and then does what every chatbot user does next: copies it, opens four different internal tools by hand, retypes half of it because the formatting broke, and finally closes the ticket — three hours after the "answer" arrived. The chatbot was never the bottleneck. The eight manual handoffs after it were.',
+            punch: 'An agent does not just answer the ticket. It opens the tools, makes the change, and closes the loop.',
+          },
+        ],
+        architecture: [
+          {
+            icon: '✈️', tone: 'violet', eyebrow: 'Change of pace — the pilot\'s three hands',
+            title: 'Manual, Plan, and Auto are not settings. They are how much you trust the runway.',
+            body: 'A pilot hand-flies through a crowded pattern near the ground, engages autopilot to propose the cruise route and waits for a nod before committing to it, and only lets the plane fly itself hands-off over open, familiar sky. Nobody argues about which mode is "best" — the terrain decides. A vague CLAUDE.md rule in Auto mode is flying blind through the pattern.',
+            punch: 'The skill is not picking a favorite mode. It is reading the terrain correctly, every single time.',
+          },
+        ],
+        deconstruct: [
+          {
+            icon: '🐉', tone: 'cherry', eyebrow: 'Change of pace — the dragon in this example',
+            title: 'This is the dragon almost every builder in this room will eventually meet',
+            body: 'An agent with too much context, a vague instruction, and no plan will not fail loudly — it will fail confidently, editing the wrong files with total conviction and telling you it succeeded. That is not a Claude problem. It is what happens any time a powerful tool is given a fuzzy goal and full permission at the same time. You just watched it happen in the failing example above.',
+            punch: 'You do not slay this dragon by trusting it less. You slay it by being specific enough that it cannot wander.',
+          },
+        ],
       },
     },
     thursday: {
