@@ -5,7 +5,7 @@ import {
   getParticipantSubmissions, createParticipantSubmission, uploadParticipantSubmission,
   getParticipantProgress, getNextLiveSession,
 } from '../services/participantService';
-import { joinLiveSession } from '../services/liveSessionAttendanceService';
+import { joinLiveSession, leaveMeetingSession } from '../services/liveSessionAttendanceService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
 import { getBandForEnrollment } from '../services/progression/progressionService';
@@ -251,13 +251,27 @@ export async function handleGetNextSession(req: Request, res: Response, next: Ne
 }
 
 // Student joined a live session — record attendance + award credit once.
+// `source` distinguishes the QR/classroom check-in from the portal's Join
+// Meeting click, purely for the instructor deck's presence ticker copy
+// ("entering the classroom" vs "entering the Virtual Building") — it has no
+// effect on attendance credit, which treats both the same.
 export async function handleJoinSession(req: Request, res: Response, next: NextFunction) {
   try {
+    const source = req.body?.source === 'meet' ? 'meet' : 'classroom';
     const result = await joinLiveSession(
-      req.participant!.sub, req.params.id as string, req.participant!.cohort_id
+      req.participant!.sub, req.params.id as string, req.participant!.cohort_id, new Date(), source
     );
     if (!result) return res.status(404).json({ error: 'Session not found or not joinable' });
     res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Best-effort "left the Meet tab" signal (page-unload beacon from the portal).
+// Never 404s on a stale/already-ended session — the beacon may arrive late.
+export async function handleLeaveMeeting(req: Request, res: Response, next: NextFunction) {
+  try {
+    const ok = await leaveMeetingSession(req.participant!.sub, req.params.id as string, req.participant!.cohort_id);
+    res.json({ success: ok });
   } catch (err) { next(err); }
 }
 

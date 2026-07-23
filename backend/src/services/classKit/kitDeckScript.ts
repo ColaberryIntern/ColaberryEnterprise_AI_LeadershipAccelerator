@@ -55,11 +55,21 @@ export function deckScript(): string {
     updatePace();
     broadcastCurrent();
     renderTheater();
+    updateLateQr();
     if (window.__renderMermaid) window.__renderMermaid(slides[i]);
     slides[i].scrollTop = 0;
   }
   function next(){ show(i + 1); }
   function prev(){ show(i - 1); }
+
+  // Small persistent QR for latecomers — only past the cover slide, and only
+  // once the instructor has actually started class (see kitDeckStyles.ts
+  // #klateqr for the "why" — before Start, slide 1's own big QR is enough).
+  function updateLateQr(){
+    var el = document.getElementById('klateqr');
+    if (!el) return;
+    el.classList.toggle('show', i > 0 && !!classStart());
+  }
 
   // Auto-switch the presentation mode (Teach / Story / Build) from the active
   // slide's data-mode — this is what makes Build Mode's dark left-aligned
@@ -108,6 +118,7 @@ export function deckScript(): string {
     if (classStart()){ if (confirm('Reset the class clock?')) { setStart(0); } }
     else { setStart(Date.now()); }
     updatePace();
+    updateLateQr();
   });
 
   function updatePace(){
@@ -138,7 +149,7 @@ export function deckScript(): string {
 
   // ---- pulse rail ----
   var live = K.live || { enabled: false };
-  var pulse = { here: 0, building: 0, stuck: 0, finished: 0, present: 0, participated: 0, questions: [], poll: null };
+  var pulse = { here: 0, building: 0, stuck: 0, finished: 0, present: 0, participated: 0, questions: [], poll: null, recentEvents: [] };
   var elLive = document.getElementById('kraillive');
   function setPulseCell(id, v){ var el = document.getElementById(id); if (el) el.textContent = v; }
 
@@ -222,6 +233,7 @@ export function deckScript(): string {
     setPulseCell('kp-participated', pulse.participated || 0);
     renderPoll();
     renderTheater();
+    renderTicker();
     var ql = document.getElementById('kqlist');
     if (ql){
       if (!pulse.questions || !pulse.questions.length){
@@ -232,6 +244,35 @@ export function deckScript(): string {
         }).join('');
       }
     }
+  }
+
+  // "First L. entering the classroom / Virtual Building" — named join/leave
+  // events (session_presence_events). Virtual Building events are a proxy for
+  // Meet joins (no real presence webhook exists), so treat this as a UX
+  // flourish for the room, not a source of truth.
+  var TICKER_COPY = {
+    classroom_enter: { verb: 'entering the classroom', cls: 'classroom' },
+    virtual_building_enter: { verb: 'entering the Virtual Building', cls: 'building-enter' },
+    virtual_building_leave: { verb: 'leaving the Virtual Building', cls: 'building-leave' },
+  };
+  function timeAgo(iso){
+    var then = new Date(iso).getTime();
+    if (isNaN(then)) return '';
+    var secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+    if (secs < 60) return 'now';
+    var mins = Math.floor(secs / 60);
+    if (mins < 60) return mins + 'm ago';
+    return Math.floor(mins / 60) + 'h ago';
+  }
+  function renderTicker(){
+    var el = document.getElementById('kticker');
+    if (!el) return;
+    var events = pulse.recentEvents || [];
+    if (!events.length){ el.innerHTML = '<div class="kticker-empty">No one yet.</div>'; return; }
+    el.innerHTML = events.slice(0, 15).map(function(e){
+      var copy = TICKER_COPY[e.type] || { verb: 'here', cls: '' };
+      return '<div class="kticker-item ' + copy.cls + '"><span class="at">' + timeAgo(e.at) + '</span><b>' + esc(e.name) + '</b> ' + copy.verb + '</div>';
+    }).join('');
   }
 
   function renderFeedback(paceCls, elapsedMin, cur){
@@ -253,7 +294,7 @@ export function deckScript(): string {
     var url = live.endpoint + (live.endpoint.indexOf('?') >= 0 ? '&' : '?') + 't=' + encodeURIComponent(live.token || '');
     fetch(url, { headers: { 'Accept': 'application/json' } })
       .then(function(r){ return r.ok ? r.json() : null; })
-      .then(function(d){ if (d){ pulse = { here: d.here||0, building: d.building||0, stuck: d.stuck||0, finished: d.finished||0, present: d.present||0, participated: d.participated||0, questions: d.questions||[], poll: d.poll||null }; renderPulse(); updatePace(); } })
+      .then(function(d){ if (d){ pulse = { here: d.here||0, building: d.building||0, stuck: d.stuck||0, finished: d.finished||0, present: d.present||0, participated: d.participated||0, questions: d.questions||[], poll: d.poll||null, recentEvents: d.recentEvents||[] }; renderPulse(); updatePace(); } })
       .catch(function(){});
   }
 
@@ -298,6 +339,7 @@ export function deckScript(): string {
       cb.textContent = 'Copied'; setTimeout(function(){ cb.textContent = 'Copy prompt'; }, 1400);
       return;
     }
+    if (e.target.closest('#klateqr')){ e.stopPropagation(); toggleQR(); return; }
     if (e.target.closest('#kpace, #krail, #knotes, .ktoggles, #kqr-overlay, button, a')) return;
     // click zones: right = next, left = prev
     if (e.clientX > window.innerWidth * 0.28) next(); else prev();

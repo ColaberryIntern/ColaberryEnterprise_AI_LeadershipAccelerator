@@ -172,6 +172,33 @@ body.rail-on #krail{display:flex}
 .kq .who{display:block;font-size:11px;color:var(--subtle);font-weight:700;margin-top:5px}
 .kq-empty{font-size:12.5px;color:var(--subtle);padding:10px 0}
 
+/* Live arrivals ticker — named join/leave events (see sessionPresenceService.ts) */
+.kticker-head{margin-top:14px;font-size:12px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.kticker-list{margin-top:8px;max-height:120px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.kticker-item{font-size:12.5px;line-height:1.4;padding:7px 10px;border-radius:9px;background:#fff;border:1.5px solid var(--line);color:var(--ink-2)}
+.kticker-item b{color:var(--ink)}
+.kticker-item .at{float:right;color:var(--subtle);font-size:11px;font-weight:600}
+.kticker-item.classroom{border-left:4px solid var(--leaf)}
+.kticker-item.building-enter{border-left:4px solid var(--berry)}
+.kticker-item.building-leave{border-left:4px solid var(--subtle);color:var(--subtle)}
+.kticker-empty{font-size:12.5px;color:var(--subtle);padding:6px 0}
+
+/* Small persistent QR for latecomers — appears on slides after the cover,
+   once the instructor has pressed Start class (before that, the cover's own
+   big QR is the promoted one; showing a second QR pre-start would just clutter
+   the room-settling moment without helping anyone). */
+#klateqr{position:fixed;left:16px;bottom:calc(var(--pace-h) + 16px);z-index:45;
+  display:none;flex-direction:column;align-items:center;gap:4px;
+  background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:14px;
+  padding:8px;box-shadow:0 10px 28px rgba(26,32,44,.16);cursor:pointer;opacity:.85;transition:opacity .2s}
+#klateqr:hover{opacity:1}
+#klateqr.show{display:flex}
+body.idle #klateqr{opacity:.35}
+.klateqr-box{width:64px;height:64px}
+.klateqr-box svg{width:100%;height:100%;display:block}
+.klateqr-label{font-size:10px;font-weight:700;color:var(--berry);text-transform:uppercase;letter-spacing:.4px}
+body.focus #klateqr{display:none !important}
+
 /* ---------- overlays / toggles ---------- */
 /* Control cluster — sits over the STAGE (left of the rail), never overlapping it,
    and fades out when the mouse is idle so it stays out of the video. */
@@ -228,7 +255,8 @@ body.mode-build .karch-item p{color:#dbe6f0}
 /* rail collapses to a thin status strip — icons only, no cards/questions/poll */
 body.mode-build #krail{width:64px;padding:10px 6px}
 body.mode-build .krail-head,body.mode-build .krail-stats,body.mode-build .kpoll,
-body.mode-build .kfeedback,body.mode-build .kq-head,body.mode-build .kq-list{display:none}
+body.mode-build .kfeedback,body.mode-build .kq-head,body.mode-build .kq-list,
+body.mode-build .kticker-head,body.mode-build .kticker-list{display:none}
 body.mode-build .kpulse-grid{grid-template-columns:1fr;gap:6px}
 body.mode-build .kpulse{padding:6px 2px;text-align:center;border-left:none;border-top:3px solid transparent}
 body.mode-build .kpulse.here{border-top-color:var(--berry)} body.mode-build .kpulse.building{border-top-color:var(--amber)}
@@ -267,6 +295,32 @@ body.mode-story .ktoggles:hover{opacity:1}
 .khook{text-align:center;max-width:900px;margin:0 auto}
 .khook-line{font-size:clamp(30px,3vw + 3vh,68px);font-weight:800;line-height:1.15;letter-spacing:-1px;color:#fff}
 .khook-cap{margin-top:2.4vh;font-size:clamp(16px,.8vw + 1vh,25px);color:#9fb4c9}
+
+/* Story Beat — "change of pace" teaching moment. Icon + narrative, colorful
+   tone-tinted glow so each beat reads as a distinct visual moment even though
+   it's built from typography, not a photo. */
+.ksbeat{max-width:820px;margin:0 auto;text-align:center;position:relative;padding:2vh 1vw}
+.ksbeat-icon{font-size:clamp(56px,7vw,110px);line-height:1;margin-bottom:1.4vh;filter:drop-shadow(0 8px 22px rgba(0,0,0,.35))}
+.ksbeat .keyebrow{justify-content:center}
+.ksbeat .ktitle{font-size:clamp(26px,1.8vw + 1.8vh,50px)}
+.ksbeat-body{margin-top:2.2vh;font-size:clamp(16px,.7vw + .9vh,24px);line-height:1.55;color:#dbe6f0;max-width:66ch;margin-left:auto;margin-right:auto}
+.ksbeat-punch{margin-top:2.6vh;display:inline-block;font-weight:800;font-size:clamp(15px,.6vw + .8vh,21px);
+  padding:1.2vh 2vw;border-radius:999px;color:#fff}
+.ksbeat-cherry .ksbeat-icon{filter:drop-shadow(0 8px 26px rgba(251,40,50,.55))}
+.ksbeat-cherry .keyebrow{color:#ff8a94}
+.ksbeat-cherry .ksbeat-punch{background:linear-gradient(135deg,var(--cherry),var(--cherry-dark))}
+.ksbeat-berry .ksbeat-icon{filter:drop-shadow(0 8px 26px rgba(54,120,149,.55))}
+.ksbeat-berry .keyebrow{color:#7fd1e8}
+.ksbeat-berry .ksbeat-punch{background:linear-gradient(135deg,#367895,#1f4d63)}
+.ksbeat-amber .ksbeat-icon{filter:drop-shadow(0 8px 26px rgba(232,146,12,.55))}
+.ksbeat-amber .keyebrow{color:#ffcf8a}
+.ksbeat-amber .ksbeat-punch{background:linear-gradient(135deg,var(--amber),#a26208)}
+.ksbeat-leaf .ksbeat-icon{filter:drop-shadow(0 8px 26px rgba(60,122,38,.55))}
+.ksbeat-leaf .keyebrow{color:#8ee08a}
+.ksbeat-leaf .ksbeat-punch{background:linear-gradient(135deg,var(--leaf),#245018)}
+.ksbeat-violet .ksbeat-icon{filter:drop-shadow(0 8px 26px rgba(122,63,214,.55))}
+.ksbeat-violet .keyebrow{color:#c9a8f0}
+.ksbeat-violet .ksbeat-punch{background:linear-gradient(135deg,#7a3fd6,#4a2382)}
 
 .kba-grid{margin-top:2.6vh;display:grid;grid-template-columns:1fr 1fr;gap:1.6vw;max-width:920px}
 .kba-col{border-radius:16px;padding:2vh 1.6vw}

@@ -19,7 +19,7 @@ import { deckScript } from './kitDeckScript';
 import { esc, attr } from './kitRenderUtils';
 import { buildBayHtml } from './kitBuildBay';
 import { theaterHtml } from './kitTheater';
-import { hookHtml, beforeAfterHtml } from './kitStoryVisuals';
+import { hookHtml, beforeAfterHtml, storyBeatHtml } from './kitStoryVisuals';
 
 export interface KitLiveConfig {
   enabled: boolean;
@@ -43,7 +43,7 @@ export type PresentationMode = 'teach' | 'story' | 'build';
 
 export function modeForSlide(slide: KitSlide): PresentationMode {
   if (slide.interaction?.theater) return 'story';
-  if (slide.kind === 'hook' || slide.kind === 'beforeafter' || slide.kind === 'break' || slide.kind === 'cta'
+  if (slide.kind === 'hook' || slide.kind === 'beforeafter' || slide.kind === 'storybeat' || slide.kind === 'break' || slide.kind === 'cta'
     || slide.kind === 'failure' || slide.kind === 'recovery') return 'story';
   if (slide.kind === 'prompt' || slide.kind === 'buildmap' || slide.kind === 'checkpoint') return 'build';
   if (slide.kind === 'teach' && slide.prompt) return 'build';
@@ -187,6 +187,8 @@ function slideInnerHtml(spec: KitSpec, slide: KitSlide): string {
       return hookHtml(slide);
     case 'beforeafter':
       return beforeAfterHtml(slide);
+    case 'storybeat':
+      return storyBeatHtml(slide);
     case 'rules':
       return (
         (slide.eyebrow ? `<div class="keyebrow">${esc(slide.eyebrow)}</div>` : '') +
@@ -353,9 +355,16 @@ ${slidesHtml}
   </div>
   <div class="kpoll" id="kpoll" style="display:none"></div>
   <div class="kfeedback go" id="kfeedback">Start the class clock and share your screen.</div>
+  <div class="kticker-head">Live arrivals</div>
+  <div class="kticker-list" id="kticker"><div class="kticker-empty">No one yet.</div></div>
   <div class="kq-head">Questions from the room</div>
   <div class="kq-list" id="kqlist"><div class="kq-empty">No questions yet. Students ask from their phones.</div></div>
 </aside>
+
+<div id="klateqr" title="Scan to check in (Q for full-screen)">
+  <div class="klateqr-box">${m.qrSvg}</div>
+  <div class="klateqr-label">Scan to join</div>
+</div>
 
 <div id="kpace">
   <button class="kstart" id="kstart" type="button">Start class</button>

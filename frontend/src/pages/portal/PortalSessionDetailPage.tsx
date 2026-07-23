@@ -4,7 +4,7 @@ import portalApi from '../../utils/portalApi';
 import AnthropicCoursesBento from '../../components/portal/anthropic-bento/AnthropicCoursesBento';
 import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
 import { useCountdown } from '../../hooks/useCountdown';
-import { joinSession } from '../../services/onboardingApi';
+import { joinSession, leaveMeetingBeacon } from '../../services/onboardingApi';
 import { emitPointsEarned } from '../../services/pointsFx';
 
 /* ------------------------------------------------------------------ */
@@ -326,16 +326,41 @@ function PortalSessionDetailPage() {
   // Open the meeting synchronously (popup-blocker safe), then record attendance
   // best-effort. The credit call must never block or break joining the class;
   // the HUD "+N" burst (emitPointsEarned) is the on-success confirmation.
+  // source:'meet' tells the instructor deck's ticker to say "entering the
+  // Virtual Building" (vs the QR check-in's "entering the classroom").
+  const joinedMeetRef = useRef(false);
   const handleJoinMeeting = () => {
     const link = s?.meeting_link;
     if (!link) return;
     window.open(link, '_blank', 'noopener,noreferrer');
     if (id) {
-      joinSession(id)
+      joinedMeetRef.current = true;
+      joinSession(id, 'meet')
         .then((r) => { if (r.awarded) emitPointsEarned(r.points); })
         .catch(() => { /* attendance credit is best-effort */ });
     }
   };
+
+  // Best-effort "left the Virtual Building" signal: fires once, the first time
+  // this tab is hidden/closed after a Join click. This is a proxy for actually
+  // leaving the Meet call (no real presence webhook is available), so it can
+  // miss or misfire on a quick tab-switch — a ticker flourish, not an
+  // attendance record.
+  useEffect(() => {
+    if (!id) return;
+    let fired = false;
+    const maybeLeave = () => {
+      if (fired || !joinedMeetRef.current) return;
+      if (document.visibilityState === 'hidden') { fired = true; leaveMeetingBeacon(id); }
+    };
+    const onPageHide = () => { if (!fired && joinedMeetRef.current) { fired = true; leaveMeetingBeacon(id); } };
+    document.addEventListener('visibilitychange', maybeLeave);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', maybeLeave);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [id]);
 
   if (loading) {
     return (

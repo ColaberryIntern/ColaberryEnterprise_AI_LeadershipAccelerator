@@ -156,6 +156,21 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_session_poll_responses_key ON session_poll_responses (session_id, enrollment_id, poll_key)`,
     `CREATE INDEX IF NOT EXISTS idx_session_poll_responses_key ON session_poll_responses (session_id, poll_key)`,
 
+    // ---- session_presence_events (named join/leave feed for the instructor deck's ticker) ----
+    // display_name is denormalized at write time (mirrors session_chat_messages.sender_name
+    // above) — the ticker shows a point-in-time projection, not a live profile join.
+    `CREATE TABLE IF NOT EXISTS session_presence_events (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       session_id UUID NOT NULL REFERENCES live_sessions(id),
+       enrollment_id UUID NOT NULL REFERENCES enrollments(id),
+       event_type VARCHAR(30) NOT NULL,
+       display_name VARCHAR(100) NOT NULL,
+       created_at TIMESTAMPTZ DEFAULT NOW()
+     )`,
+    `ALTER TABLE session_presence_events DROP CONSTRAINT IF EXISTS ck_session_presence_events_type`,
+    `ALTER TABLE session_presence_events ADD CONSTRAINT ck_session_presence_events_type CHECK (event_type IN ('classroom_enter', 'virtual_building_enter', 'virtual_building_leave'))`,
+    `CREATE INDEX IF NOT EXISTS idx_session_presence_events_session_created ON session_presence_events (session_id, created_at)`,
+
     // ---- session_gates ----
     // gate_type is DataTypes.STRING(50) in the model (NOT an ENUM) → plain VARCHAR, no CHECK.
     `CREATE TABLE IF NOT EXISTS session_gates (

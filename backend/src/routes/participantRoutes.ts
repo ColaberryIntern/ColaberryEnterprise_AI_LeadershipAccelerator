@@ -28,7 +28,7 @@ import {
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
   handleIngestBackground, handleGetOnboardingProfile,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
-  handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession,
+  handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession, handleLeaveMeeting,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
   handleGetProgress, handleGetCheckinInfo,
 } from '../controllers/participantController';
@@ -165,6 +165,8 @@ router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
 router.get('/api/portal/next-session', requireParticipant, handleGetNextSession);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
 router.post('/api/portal/sessions/:id/join', requireParticipant, handleJoinSession);
+// Best-effort "left the Meet tab" beacon — see handleLeaveMeeting.
+router.post('/api/portal/sessions/:id/leave-meet', requireParticipant, handleLeaveMeeting);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
 router.post('/api/portal/sessions/:id/chat', requireParticipant, handlePostSessionChat);
 // Live class pulse: a student sets status from their phone (participant-auth); the

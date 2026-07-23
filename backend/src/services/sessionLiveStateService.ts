@@ -10,6 +10,7 @@
 // changes never duplicate. Questions reuse session_chat_messages.
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import { getRecentPresenceEvents, PresenceEvent } from './sessionPresenceService';
 
 export type PulseState = 'here' | 'building' | 'stuck' | 'finished';
 const VALID_STATES: PulseState[] = ['here', 'building', 'stuck', 'finished'];
@@ -153,6 +154,7 @@ export interface LiveState {
   finished: number;
   questions: LiveQuestion[];
   poll: { key: string; options: string[]; tally: number[]; total: number } | null;
+  recentEvents: PresenceEvent[]; // the deck's live "who's here" ticker
 }
 
 /** Aggregate class state for the instructor deck. */
@@ -193,12 +195,15 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
     poll = { key: bc.question.key, options: opts, tally: filled, total: filled.reduce((a, b) => a + b, 0) };
   }
 
+  const recentEvents = await getRecentPresenceEvents(sessionId);
+
   return {
     present: Number(presentRow?.n) || 0,
     participated: Number(participatedRow?.n) || 0,
     here: c.here, building: c.building, stuck: c.stuck, finished: c.finished,
     questions: msgs.map((m) => ({ name: m.sender_name, text: m.content, at: String(m.created_at) })),
     poll,
+    recentEvents,
   };
 }
 
