@@ -133,7 +133,7 @@ function AdminAcceleratorPage() {
   const [unskipTarget, setUnskipTarget] = useState<string | null>(null);
   const [sessionForm, setSessionForm] = useState({
     session_number: 1, title: '', description: '', session_date: '',
-    start_time: '10:00 AM', end_time: '11:30 AM', session_type: 'core' as 'core' | 'lab',
+    start_time: '10:00', end_time: '11:30', session_type: 'core' as 'core' | 'lab',
   });
 
   // Attendance state
@@ -350,7 +350,7 @@ function AdminAcceleratorPage() {
   const resetSessionForm = () => {
     setSessionForm({
       session_number: (sessions.length || 0) + 1, title: '', description: '', session_date: '',
-      start_time: '10:00 AM', end_time: '11:30 AM', session_type: 'core',
+      start_time: '10:00', end_time: '11:30', session_type: 'core',
     });
   };
 
@@ -529,6 +529,23 @@ function AdminAcceleratorPage() {
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
   // Compact label for day-off chips, e.g. "Jul 27".
   const formatDayOff = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : d;
+  // "18:30:00" -> "6:30 PM". Stored times are already Central wall-clock (no TZ math needed).
+  const formatClock12 = (t: string) => {
+    const m = /^(\d{1,2}):(\d{2})/.exec(t || '');
+    if (!m) return t || '';
+    let h = parseInt(m[1], 10);
+    const min = m[2];
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${min} ${ampm}`;
+  };
+  // "18:30:00", "20:30:00" -> "6:30 - 8:30 PM CT" (drops the repeated AM/PM when both share it).
+  const formatTimeRange = (start: string, end: string) => {
+    const s = formatClock12(start), e = formatClock12(end);
+    const sAmPm = s.split(' ')[1], eAmPm = e.split(' ')[1];
+    const sLabel = sAmPm && sAmPm === eAmPm ? s.replace(` ${sAmPm}`, '') : s;
+    return `${sLabel} - ${e} CT`;
+  };
   const formatDateTime = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
   // "3 days ago" style relative label for when someone registered.
@@ -735,7 +752,7 @@ function AdminAcceleratorPage() {
                         </button>
                       </td>
                       <td>{formatDate(s.session_date)}</td>
-                      <td className="small">{s.start_time} - {s.end_time}</td>
+                      <td className="small">{formatTimeRange(s.start_time, s.end_time)}</td>
                       <td>{statusBadge(s.session_type)}</td>
                       <td>{statusBadge(s.status)}</td>
                       <td>
@@ -762,12 +779,14 @@ function AdminAcceleratorPage() {
                               </div>
                             )}
                           </div>
-                          <button className="btn btn-outline-secondary btn-sm" onClick={() => handleOpenOutline(s.id)} title="Open the plain-language class outline (teaching plan) — review, prepare, or print">📋 Outline</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => setKitSessionId(s.id)} title="Printable check-in QR + Start Class + roster (a paper backup — the deck already shows the QR)">QR</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>
                           <button className="btn btn-outline-warning btn-sm" onClick={() => setSkipTarget(s)} title="Mark this date as a day off — this class and all later ones shift forward one slot">Skip</button>
                           {s.status === 'scheduled' && (
                             <button className="btn btn-outline-danger btn-sm" onClick={() => handleStatusChange(s.id, 'completed')}>Complete</button>
+                          )}
+                          {s.status === 'completed' && (
+                            <button className="btn btn-outline-secondary btn-sm" onClick={() => handleStatusChange(s.id, 'scheduled')} title="Revert to scheduled — e.g. it was marked complete for testing before the class actually ran">↩ Reopen</button>
                           )}
                           <button className="btn btn-outline-danger btn-sm" onClick={() => setDeleteTarget(s.id)}>Del</button>
                         </div>
@@ -1152,14 +1171,14 @@ function AdminAcceleratorPage() {
                   </div>
                   <div className="row g-2 mb-3">
                     <div className="col">
-                      <label className="form-label small fw-medium">Start Time</label>
-                      <input type="text" className="form-control form-control-sm" value={sessionForm.start_time}
-                        onChange={(e) => setSessionForm({ ...sessionForm, start_time: e.target.value })} placeholder="10:00 AM" />
+                      <label className="form-label small fw-medium">Start Time (CT)</label>
+                      <input type="time" className="form-control form-control-sm" value={sessionForm.start_time.slice(0, 5)}
+                        onChange={(e) => setSessionForm({ ...sessionForm, start_time: e.target.value })} />
                     </div>
                     <div className="col">
-                      <label className="form-label small fw-medium">End Time</label>
-                      <input type="text" className="form-control form-control-sm" value={sessionForm.end_time}
-                        onChange={(e) => setSessionForm({ ...sessionForm, end_time: e.target.value })} placeholder="11:30 AM" />
+                      <label className="form-label small fw-medium">End Time (CT)</label>
+                      <input type="time" className="form-control form-control-sm" value={sessionForm.end_time.slice(0, 5)}
+                        onChange={(e) => setSessionForm({ ...sessionForm, end_time: e.target.value })} />
                     </div>
                   </div>
                 </div>
