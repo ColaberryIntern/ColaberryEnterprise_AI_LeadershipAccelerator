@@ -85,8 +85,7 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
       .catch(() => { if (alive) showToast('Could not load the current configuration — showing defaults', 'error'); })
       .finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionId]);
+  }, [sessionId, showToast]);
 
   const save = async () => {
     if (!config) return;
