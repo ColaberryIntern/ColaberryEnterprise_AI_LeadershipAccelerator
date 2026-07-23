@@ -94,10 +94,16 @@ router.get('/api/portal/profile', requireParticipant, handleGetProfile);
 router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
 router.get('/api/portal/podcasts', requireParticipant, listPodcastsPortal);
 // Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
-// Inert unless CONTENT_PAGE_GATE_ENABLED=true (ships dark). <PageGate> already
-// blocks this on the frontend for a gated user in the common case; this is the
-// actual server-side security boundary (see requireContentEntitlement.ts).
-router.get('/api/portal/classroom', requireParticipant, requireContentEntitlement('classroom'), handleGetClassroomFeed);
+// NOT wrapped in requireContentEntitlement: TodayShell also reads this endpoint
+// (Today renders Week 0 from the same feed), so a hard 402 here would break Today
+// for free-tier users too. The real week-1-12 content boundary already lives
+// inside getFeed() itself (services/timeline/timelineService.ts), which filters
+// to Week 0 only for free-tier enrollments via isFreePreviewTier — gated by the
+// existing CONTENT_PAID_GATE_ENABLED flag. requireContentEntitlement stays
+// mounted below on the Classroom-EXCLUSIVE week-detail/reveal routes, which
+// Today never calls, and <PageGate> blocks the Classroom page itself on the
+// frontend for a gated user in the common case.
+router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 // Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
 router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);

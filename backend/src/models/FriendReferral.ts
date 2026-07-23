@@ -37,7 +37,13 @@ FriendReferral.init(
     tableName: 'friend_referrals',
     timestamps: true,
     underscored: true,
-    indexes: [{ fields: ['enrollment_id'] }],
+    indexes: [
+      { fields: ['enrollment_id'] },
+      // Idempotency key: resubmitting the referral form (retry, double-click,
+      // network hiccup + client retry) must not create duplicate rows for the
+      // same friend. See submitReferrals()'s `ignoreDuplicates` bulkCreate.
+      { unique: true, fields: ['enrollment_id', 'friend_email'] },
+    ],
   }
 );
 

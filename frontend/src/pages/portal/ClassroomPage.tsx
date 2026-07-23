@@ -113,7 +113,10 @@ const ClassroomPage: React.FC = () => {
     if (!restoredRef.current) {
       restoredRef.current = true;
       const snap = readViewSnapshot<ClassroomExtra>(VIEW_KEY);
-      if (snap && snap.extra.week != null && weeks.includes(snap.extra.week)) {
+      // snap.extra can be missing if a stale pre-refactor sessionStorage blob
+      // (old shape was {week, scrollY} with no wrapping `extra`) survives across
+      // a deploy — guard before reading .week so that doesn't throw.
+      if (snap && snap.extra && snap.extra.week != null && weeks.includes(snap.extra.week)) {
         setWeek(snap.extra.week);
         // Restore scroll once the feed is tall enough (its thumbnails have
         // loaded). restoreScroll waits for that, so it runs after App-level
@@ -141,7 +144,14 @@ const ClassroomPage: React.FC = () => {
     const bIdx = (b: string) => { const i = feed.buckets.indexOf(b); return i < 0 ? feed.buckets.length : i; };
     const bySection = (a: typeof feed.cards[number], b: typeof feed.cards[number]) =>
       bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order;
-    if (weeks.length === 0) return [...feed.cards].sort(bySection);
+    // weeks.length===0 now means this enrollment has NO week-1+ content — either a
+    // free-preview/explorer-tier student (whose entire feed is week-0-only, which
+    // now belongs to Today, not here) or a cohort with no week-tagged cards at all.
+    // Previously this fell back to dumping the WHOLE unfiltered feed.cards here,
+    // which — now that week 0 is excluded from `weeks` — silently leaked all of a
+    // free-tier student's week-0 content back into Classroom. Show nothing instead;
+    // the empty state below directs them to Today, where that content actually lives.
+    if (weeks.length === 0) return [];
     return feed.cards.filter((c) => c.week === week).sort(bySection);
   }, [feed, weeks, week]);
 

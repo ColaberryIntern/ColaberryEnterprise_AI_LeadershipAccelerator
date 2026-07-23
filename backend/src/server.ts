@@ -1024,6 +1024,15 @@ async function ensureFriendReferralSchema() {
   try {
     const { FriendReferral } = await import('./models');
     await FriendReferral.sync();
+    // .sync() only CREATEs a missing table — it does not backfill indexes onto a
+    // table that already exists (this one shipped to dev before the unique
+    // constraint below was added). Add it explicitly, idempotently, so
+    // submitReferrals()'s ignoreDuplicates bulkCreate has a real constraint to
+    // conflict against on every environment, not just fresh ones.
+    await sequelize.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS friend_referrals_enrollment_email_uidx
+         ON friend_referrals (enrollment_id, friend_email)`,
+    );
     console.log('[DB] FriendReferral schema ensured');
   } catch (err: any) {
     console.warn('[DB] FriendReferral schema ensure failed:', err.message?.split('\n')[0]);
