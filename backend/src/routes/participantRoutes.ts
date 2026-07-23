@@ -10,6 +10,7 @@ import {
   handleSetBroadcast, handleGetCompanionState, handleRecordPollResponse,
 } from '../controllers/sessionLiveController';
 import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
+import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
 import {
   handleOrgRegister, handleOrgInvites, handleOrgOverview,
@@ -26,7 +27,7 @@ import {
   handleGetSubscription, handleStartSubscriptionCheckout, handleCancelSubscription, handleConfirmCheckout,
   handleGetEnrollment, handleSelectEnrollmentCohort,
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
-  handleIngestBackground, handleGetOnboardingProfile,
+  handleIngestBackground, handleGetOnboardingProfile, handleSubmitReferrals,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
   handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession, handleLeaveMeeting,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
@@ -93,7 +94,10 @@ router.get('/api/portal/profile', requireParticipant, handleGetProfile);
 router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
 router.get('/api/portal/podcasts', requireParticipant, listPodcastsPortal);
 // Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
-router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
+// Inert unless CONTENT_PAGE_GATE_ENABLED=true (ships dark). <PageGate> already
+// blocks this on the frontend for a gated user in the common case; this is the
+// actual server-side security boundary (see requireContentEntitlement.ts).
+router.get('/api/portal/classroom', requireParticipant, requireContentEntitlement('classroom'), handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 // Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
 router.get('/api/portal/runtime/readiness', requireParticipant, handleReadiness);
@@ -204,6 +208,7 @@ router.get('/api/portal/events', requireParticipant, handleGetPublicEvents); // 
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
 router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
 router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);
+router.post('/api/portal/onboarding/referrals', requireParticipant, handleSubmitReferrals);
 // "Open on your phone" — authed desktop mints a single-use QR handoff code.
 router.post('/api/portal/handoff', requireParticipant, handleCreateHandoff);
 
@@ -392,7 +397,11 @@ router.use(workspaceRoutes);
 // Student CB-System operating model (priority queue, Run My Day, decisions)
 router.use(studentOpsRoutes);
 
-// Persisted student projects read API (Project Backend P1, flag-gated)
+// Persisted student projects read API (Project Backend P1, flag-gated).
+// Path-scoped (plural /api/portal/projects) so it can never leak onto the
+// singular /api/portal/project build-gate mount above — same care as that
+// mount's own comment. Inert unless CONTENT_PAGE_GATE_ENABLED=true (ships dark).
+router.use('/api/portal/projects', requireParticipant, requireContentEntitlement('projects'));
 router.use(projectsPortalRoutes);
 
 // Mentor endpoints
@@ -525,7 +534,7 @@ import {
   ReportPostSchema, LeaderboardQuerySchema, NotificationIdParamSchema,
 } from '../schemas/communitySchemas';
 
-router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
+router.get('/api/portal/classroom/week/:weekNum', requireParticipant, requireContentEntitlement('classroom'), async (req, res) => {
   const parsed = GetWeekSchema.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: 'Week must be 1–12', details: parsed.error.flatten() });
@@ -540,7 +549,7 @@ router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req
   }
 });
 
-router.post('/api/portal/classroom/week/:weekNum/reveal', requireParticipant, async (req, res) => {
+router.post('/api/portal/classroom/week/:weekNum/reveal', requireParticipant, requireContentEntitlement('classroom'), async (req, res) => {
   const weekParsed = GetWeekSchema.safeParse(req.params);
   const bodyParsed = RevealActivitySchema.safeParse(req.body);
   if (!weekParsed.success || !bodyParsed.success) {

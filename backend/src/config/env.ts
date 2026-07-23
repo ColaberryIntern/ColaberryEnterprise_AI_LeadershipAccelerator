@@ -151,6 +151,13 @@ export const env = {
   // staff / sponsor-seat enrollments pass. Default OFF (inverted vs the points flag
   // above) so merging/deploying changes NOTHING until BUILD_PAID_GATE_ENABLED=true.
   buildPaidGateEnabled: process.env.BUILD_PAID_GATE_ENABLED === 'true',
+  // Page-level content paywall — blocks whole pages (Classroom, Projects, Cert
+  // Prep) behind a "preview + upsell" screen for anyone without full curriculum
+  // access (see PageGate.tsx + services/access/contentEntitlement.resolveContentPageAccess).
+  // Deliberately a SEPARATE flag from contentPaidGateEnabled above (which controls
+  // the older week-filtering/card-lock enforcement): different blast radius,
+  // independent rollback. Default OFF — dark-ships with zero behavior change.
+  contentPageGateEnabled: process.env.CONTENT_PAGE_GATE_ENABLED === 'true',
   // Community level reconcile — fold the legacy CommunityMember.level tiers
   // (0/1500/2700/4200 in communityService.LEVEL_TIERS) onto the ONE canonical
   // points ladder (pointsService.levelForPoints, 0/150/400/900). Default OFF:

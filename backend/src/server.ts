@@ -1017,6 +1017,19 @@ async function ensurePodcastSchema() {
   }
 }
 
+// "Recommend a friend" onboarding step — one row per friend recommended. Model is
+// the schema contract; targeted sync creates the table if missing (boot has no
+// global sync).
+async function ensureFriendReferralSchema() {
+  try {
+    const { FriendReferral } = await import('./models');
+    await FriendReferral.sync();
+    console.log('[DB] FriendReferral schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] FriendReferral schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
 // Per-card student comments (Runtime workspace, newest-first). Model is the schema
 // contract; targeted sync creates the table if missing (boot has no global sync).
 async function ensureCardCommentsSchema() {
@@ -2198,6 +2211,8 @@ async function start(): Promise<void> {
   await ensureNetworkVideoSchema();
   // Podcast Library (Podcast random personalized mode) — catalog + per-enrollment listen ledger.
   await ensurePodcastSchema();
+  // "Recommend a friend" onboarding step — friend_referrals table.
+  await ensureFriendReferralSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).

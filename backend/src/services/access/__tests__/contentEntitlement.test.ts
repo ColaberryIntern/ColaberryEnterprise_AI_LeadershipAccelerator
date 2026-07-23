@@ -1,6 +1,6 @@
 // Mock every I/O dependency so the resolver runs with no DB. `env` is a mutable
 // object so each test can flip the paywall flag before invoking isFreePreviewTier.
-jest.mock('../../../config/env', () => ({ env: { contentPaidGateEnabled: false } }));
+jest.mock('../../../config/env', () => ({ env: { contentPaidGateEnabled: false, contentPageGateEnabled: false } }));
 jest.mock('../../../models', () => ({
   Enrollment: { findByPk: jest.fn() },
   Cohort: { findByPk: jest.fn() },
@@ -8,7 +8,7 @@ jest.mock('../../../models', () => ({
 jest.mock('../staffAccess', () => ({ isStaffEnrollment: jest.fn() }));
 jest.mock('../../subscriptionService', () => ({ activeCompEnrollmentIds: jest.fn() }));
 
-import { hasFullCurriculumAccess, isFreePreviewTier } from '../contentEntitlement';
+import { hasFullCurriculumAccess, isFreePreviewTier, resolveContentPageAccess } from '../contentEntitlement';
 import { env } from '../../../config/env';
 import { Enrollment, Cohort } from '../../../models';
 import { isStaffEnrollment } from '../staffAccess';
@@ -144,6 +144,59 @@ describe('isFreePreviewTier (async resolver)', () => {
     findEnrollment.mockRejectedValue(new Error('db down'));
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     expect(await isFreePreviewTier('e1')).toBe(false);
+    warnSpy.mockRestore();
+  });
+});
+
+describe('resolveContentPageAccess (page-level paywall resolver)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (env as any).contentPageGateEnabled = false;
+  });
+
+  it('flag OFF → { isStaff: false, hasFullAccess: true }, no I/O (dark-ship)', async () => {
+    expect(await resolveContentPageAccess('e1')).toEqual({ isStaff: false, hasFullAccess: true });
+    expect(findEnrollment).not.toHaveBeenCalled();
+  });
+
+  it('flag ON + paid → hasFullAccess true', async () => {
+    (env as any).contentPageGateEnabled = true;
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'paid', cohort_id: null });
+    findCohort.mockResolvedValue(null);
+    staffOf.mockResolvedValue(false);
+    compIdsOf.mockResolvedValue(new Set<string>());
+    expect(await resolveContentPageAccess('e1')).toEqual({ isStaff: false, hasFullAccess: true });
+  });
+
+  it('flag ON + unpaid, non-staff → hasFullAccess false', async () => {
+    (env as any).contentPageGateEnabled = true;
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', cohort_id: null });
+    findCohort.mockResolvedValue(null);
+    staffOf.mockResolvedValue(false);
+    compIdsOf.mockResolvedValue(new Set<string>());
+    expect(await resolveContentPageAccess('e1')).toEqual({ isStaff: false, hasFullAccess: false });
+  });
+
+  it('flag ON + staff → isStaff true, hasFullAccess true even when unpaid', async () => {
+    (env as any).contentPageGateEnabled = true;
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', cohort_id: null });
+    findCohort.mockResolvedValue(null);
+    staffOf.mockResolvedValue(true);
+    compIdsOf.mockResolvedValue(new Set<string>());
+    expect(await resolveContentPageAccess('e1')).toEqual({ isStaff: true, hasFullAccess: true });
+  });
+
+  it('flag ON + missing enrollment → fail open (hasFullAccess true)', async () => {
+    (env as any).contentPageGateEnabled = true;
+    findEnrollment.mockResolvedValue(null);
+    expect(await resolveContentPageAccess('nope')).toEqual({ isStaff: false, hasFullAccess: true });
+  });
+
+  it('flag ON + infra/DB error → fail OPEN (hasFullAccess true)', async () => {
+    (env as any).contentPageGateEnabled = true;
+    findEnrollment.mockRejectedValue(new Error('db down'));
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await resolveContentPageAccess('e1')).toEqual({ isStaff: false, hasFullAccess: true });
     warnSpy.mockRestore();
   });
 });

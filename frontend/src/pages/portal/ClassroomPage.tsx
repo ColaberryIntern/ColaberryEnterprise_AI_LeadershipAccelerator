@@ -4,13 +4,14 @@ import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
-import TodayFeedV2 from './today/TodayFeedV2';
-import SkillMeter from './SkillMeter';
 import { runtimeApi } from './runtime/runtimeApi';
 import '../../components/timeline/timeline.css';
 import PortalShell from './today/PortalShell';
 import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../services/pointsFx';
 import { filterCardsByQuery, tokenizeQuery } from '../../utils/classroomSearch';
+import { readViewSnapshot, restoreScroll, usePersistScrollOnScroll } from '../../hooks/useScrollRestore';
+import { PaywallScreen } from '../../components/paywall/PageGate';
+import { GATED_FEATURES } from '../../components/paywall/gatedFeatures';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -29,11 +30,10 @@ interface Feed {
   buckets: string[];
   cards: TimelineFeedCard[];
   progression?: Progression;
-  is_explorer?: boolean;   // free Explorer tier — Week 0 only, with an enroll upsell
+  is_explorer?: boolean;   // free Explorer tier — drives the enroll upsell banner
 }
 
-// Week 0 is the free "AI Preview" tier; the rest are the paid Accelerator weeks.
-const wkLabel = (w: number | null): string => (w === 0 ? 'Free Preview' : w != null ? `Week ${w}` : 'Classroom');
+const wkLabel = (w: number | null): string => (w != null ? `Week ${w}` : 'Classroom');
 
 const titleCase = (s: string): string => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
@@ -42,51 +42,11 @@ const titleCase = (s: string): string => s.replace(/_/g, ' ').replace(/\b\w/g, (
 // browser's own back button — returns the student to the same spot in the list,
 // instead of remounting fresh and resetting to the top of the default week.
 // Session-scoped (per browser tab); cleared naturally when the tab closes.
+// Mechanics (restoreScroll's rAF-poll, the live on-scroll persist) live in the
+// shared hooks/useScrollRestore — see there for why the persist must be live,
+// not an unmount cleanup.
 const VIEW_KEY = 'classroom-view';
-interface ViewSnapshot { week: number | null; scrollY: number }
-const readViewSnapshot = (): ViewSnapshot | null => {
-  try {
-    const raw = window.sessionStorage.getItem(VIEW_KEY);
-    return raw ? (JSON.parse(raw) as ViewSnapshot) : null;
-  } catch { return null; }
-};
-const writeViewSnapshot = (snap: ViewSnapshot): void => {
-  try { window.sessionStorage.setItem(VIEW_KEY, JSON.stringify(snap)); } catch { /* private mode / quota — non-fatal */ }
-};
-
-// Restore window scroll to targetY, but only once the feed is tall enough to
-// actually reach it. The feed's card thumbnails (video/podcast posters) load
-// AFTER the cards render, so right after a remount the document is short and a
-// naive window.scrollTo(0, targetY) clamps near the top — which is the "back
-// sends me to the top" bug. So we poll per animation frame until the document
-// can reach targetY (images have grown it back to the height it had when we
-// saved), then scroll once. We bail the moment the student scrolls themselves,
-// so we never fight them, and give up after a cap so a genuinely-shorter feed
-// (e.g. a card was completed/removed) doesn't spin.
-function restoreScroll(targetY: number): void {
-  if (!targetY || targetY <= 0) return;
-  let done = false;
-  const cleanup = () => {
-    window.removeEventListener('wheel', onUser);
-    window.removeEventListener('touchstart', onUser);
-  };
-  function onUser() { done = true; cleanup(); }
-  window.addEventListener('wheel', onUser, { passive: true });
-  window.addEventListener('touchstart', onUser, { passive: true });
-  const start = performance.now();
-  const tick = () => {
-    if (done) return;
-    const maxY = document.documentElement.scrollHeight - window.innerHeight;
-    if (maxY >= targetY - 4 || performance.now() - start > 3000) {
-      window.scrollTo(0, targetY);
-      done = true;
-      cleanup();
-    } else {
-      requestAnimationFrame(tick);
-    }
-  };
-  requestAnimationFrame(tick);
-}
+interface ClassroomExtra { week: number | null }
 
 /** ms until the next Thursday 10:00 (client-side schedule anchor until live sessions are wired). */
 function nextThursday(now: number): number {
@@ -102,7 +62,7 @@ function nextThursday(now: number): number {
 const ClassroomPage: React.FC = () => {
   const navigate = useNavigate();
   const [feed, setFeed] = useState<Feed | null>(null);
-  const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'error'>('loading');
+  const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'gated' | 'error'>('loading');
   const [week, setWeek] = useState<number | null>(null);
   // Store the selected CARD object (not just an id): the Week-0 never-ending feed
   // surfaces ambient cards (blogs/podcasts) that aren't in feed.cards, so an
@@ -120,7 +80,8 @@ const ClassroomPage: React.FC = () => {
       setFeed(res.data as Feed);
       setUiState('ready');
     } catch (err: any) {
-      setUiState(err?.response?.status === 404 ? 'disabled' : 'error');
+      const status = err?.response?.status;
+      setUiState(status === 404 ? 'disabled' : status === 402 ? 'gated' : 'error');
     }
   }, []);
 
@@ -137,7 +98,9 @@ const ClassroomPage: React.FC = () => {
 
   const weeks = useMemo(() => {
     const set = new Set<number>();
-    (feed?.cards || []).forEach((c) => { if (typeof c.week === 'number') set.add(c.week); });
+    // Week 0 (Free Preview) is the Today timeline's content, not Classroom's —
+    // Classroom starts at Week 1.
+    (feed?.cards || []).forEach((c) => { if (typeof c.week === 'number' && c.week > 0) set.add(c.week); });
     return Array.from(set).sort((a, b) => a - b);
   }, [feed]);
 
@@ -149,9 +112,9 @@ const ClassroomPage: React.FC = () => {
     if (!feed || weeks.length === 0) return;
     if (!restoredRef.current) {
       restoredRef.current = true;
-      const snap = readViewSnapshot();
-      if (snap && snap.week != null && weeks.includes(snap.week)) {
-        setWeek(snap.week);
+      const snap = readViewSnapshot<ClassroomExtra>(VIEW_KEY);
+      if (snap && snap.extra.week != null && weeks.includes(snap.extra.week)) {
+        setWeek(snap.extra.week);
         // Restore scroll once the feed is tall enough (its thumbnails have
         // loaded). restoreScroll waits for that, so it runs after App-level
         // ScrollToTop's reset AND after the images that give the page its height.
@@ -166,22 +129,9 @@ const ClassroomPage: React.FC = () => {
   }, [feed, weeks, week]);
 
   // Continuously remember the current scroll position (and week) so returning
-  // from the workspace can restore it. This MUST be done live, on scroll — NOT in
-  // an unmount cleanup: a useEffect cleanup is passive and runs AFTER React has
-  // already swapped the classroom DOM out for the workspace and ScrollToTop has
-  // zeroed the window, so window.scrollY reads ~0 there. (That was the "back
-  // always lands at the top" bug — every save recorded scrollY: 0.) A ref holds
-  // the latest week so each save tags the right one. Throttled to one write/frame.
-  const viewRef = useRef<number | null>(week);
-  viewRef.current = week;
-  useEffect(() => {
-    if (uiState !== 'ready') return;
-    let raf = 0;
-    const persist = () => { raf = 0; writeViewSnapshot({ week: viewRef.current, scrollY: window.scrollY }); };
-    const onScroll = () => { if (!raf) raf = requestAnimationFrame(persist); };
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => { window.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
-  }, [uiState]);
+  // from the workspace can restore it — see hooks/useScrollRestore for why this
+  // must be a live on-scroll persist, not an unmount cleanup.
+  usePersistScrollOnScroll<ClassroomExtra>(VIEW_KEY, uiState === 'ready', () => ({ week }));
 
   const weekCards = useMemo(() => {
     if (!feed) return [];
@@ -229,6 +179,11 @@ const ClassroomPage: React.FC = () => {
       <div style={{ marginTop: 12 }}><button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/curriculum')}>Go to Curriculum</button></div>
     </div></div></PortalShell>
   );
+  // Defensive: <PageGate> already blocks this route client-side for a gated
+  // user before this fetch ever fires — this only fires on a stale client
+  // cache, a direct API call, or a client bug, and renders the SAME visual as
+  // <PageGate> so there is one paywall screen, not two that could drift.
+  if (uiState === 'gated') return <PortalShell><PaywallScreen copy={GATED_FEATURES.classroom} /></PortalShell>;
   if (uiState === 'error' || !feed) return <PortalShell><div className="tl-de"><div className="tl-error">Couldn’t load the classroom. Please try again.</div></div></PortalShell>;
 
   const prog = feed.progression;
@@ -265,72 +220,56 @@ const ClassroomPage: React.FC = () => {
       {weeks.length > 1 && (
         <div className="tl-weeknav">
           <button type="button" className="tl-arrow" disabled={wkIdx <= 0} onClick={() => setWeek(weeks[wkIdx - 1])} aria-label="Previous week"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
-          <div className="tl-wkmid"><div className="tl-wklbl">{week === 0 ? 'Free Preview' : `Week ${week} of ${weeks[weeks.length - 1]}`}</div></div>
+          <div className="tl-wkmid"><div className="tl-wklbl">{`Week ${week} of ${weeks[weeks.length - 1]}`}</div></div>
           <button type="button" className="tl-arrow" disabled={wkIdx >= weeks.length - 1} onClick={() => setWeek(weeks[wkIdx + 1])} aria-label="Next week"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
         </div>
       )}
 
       <div className="tl-grid">
         <div className="tl-feedcol">
-          {/* Week 0 (Free Preview): a skill meter — one bar per foundational AI
-              skill the preview tags, filling as tagged activities complete. Paid
-              weeks keep the plain week-progress banner. */}
-          {week === 0 ? (
-            <SkillMeter cards={weekCards} />
-          ) : (
-            <div className="tl-card tl-banner tl-ac-berry">
-              <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
-              <div className="pr">
-                <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
-                <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
-                <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
-                <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
-              </div>
+          <div className="tl-card tl-banner tl-ac-berry">
+            <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
+            <div className="pr">
+              <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
+              <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
+              <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
+              <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
             </div>
-          )}
+          </div>
 
-          {/* Week 0 (Free Preview) IS the never-ending Today timeline — the same
-              engine as the Today tab. Paid weeks stay the finite, searchable week
-              feed. */}
-          {week === 0 ? (
-            <TodayFeedV2 fallbackCards={visibleCards} onOpen={openCard} onWorkspace={openCard} onComplete={completeCard} />
-          ) : (
+          {weekCards.length > 0 && (
             <>
-              {weekCards.length > 0 && (
-                <>
-                  <div className="tl-search">
-                    <svg className="tl-search-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-                    <input
-                      type="search"
-                      className="tl-search-input"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
-                      placeholder="Search this week — try “Prompt Lab”"
-                      aria-label="Search this week's cards"
-                      autoComplete="off"
-                    />
-                    {searching && (
-                      <button type="button" className="tl-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
-                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-                      </button>
-                    )}
-                  </div>
-                  {searching && (
-                    <div className="tl-search-count tl-small" role="status" aria-live="polite">
-                      {visibleCards.length} of {weekCards.length} {weekCards.length === 1 ? 'card' : 'cards'} match “{query.trim()}”
-                    </div>
-                  )}
-                </>
+              <div className="tl-search">
+                <svg className="tl-search-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" /><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                <input
+                  type="search"
+                  className="tl-search-input"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Escape') setQuery(''); }}
+                  placeholder="Search this week — try “Prompt Lab”"
+                  aria-label="Search this week's cards"
+                  autoComplete="off"
+                />
+                {searching && (
+                  <button type="button" className="tl-search-clear" onClick={() => setQuery('')} aria-label="Clear search">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+                  </button>
+                )}
+              </div>
+              {searching && (
+                <div className="tl-search-count tl-small" role="status" aria-live="polite">
+                  {visibleCards.length} of {weekCards.length} {weekCards.length === 1 ? 'card' : 'cards'} match “{query.trim()}”
+                </div>
               )}
-
-              {weekCards.length === 0
-                ? <div className="tl-empty">No cards here yet.</div>
-                : visibleCards.length === 0
-                  ? <div className="tl-empty">No cards match “{query.trim()}”. <button type="button" className="tl-btn sm primary" style={{ marginLeft: 8 }} onClick={() => setQuery('')}>Clear search</button></div>
-                  : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
             </>
           )}
+
+          {weekCards.length === 0
+            ? <div className="tl-empty">No cards here yet.</div>
+            : visibleCards.length === 0
+              ? <div className="tl-empty">No cards match “{query.trim()}”. <button type="button" className="tl-btn sm primary" style={{ marginLeft: 8 }} onClick={() => setQuery('')}>Clear search</button></div>
+              : <TimelineFeed cards={visibleCards} compactCompleted onOpen={openCard} onComplete={completeCard} onComments={openCard} onWorkspace={openCard} />}
         </div>
 
         <aside className="tl-side">

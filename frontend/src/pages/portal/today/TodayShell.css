@@ -139,6 +139,11 @@
 .te-navbtn.is-soon:hover{opacity:1;background:var(--sunken)}
 .te-navbtn .te-soon{margin-left:auto;font-size:10px;letter-spacing:.04em;text-transform:uppercase;background:var(--sunken);
   color:var(--muted);border:1px solid var(--border-sub);border-radius:var(--r-pill);padding:1px 8px;font-weight:700}
+.te-navbtn .te-navlock{margin-left:auto;flex:none;width:18px;height:18px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:rgba(251,40,50,.12);color:var(--cherry-deep)}
+.te-navbtn:hover .te-navlock{background:rgba(251,40,50,.2)}
+.te-shell.collapsed .te-navbtn .te-navlock{display:none}
 
 /* ── presence footer ── */
 .te-presence{margin-top:auto;padding:14px 12px 6px;border-top:1px solid var(--border)}
@@ -313,6 +318,27 @@
 .te-step .mt{font-size:13px;color:var(--muted);margin-top:3px;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .te-pts{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);
   background:rgba(91,166,60,.14);color:var(--leaf-text)}
+
+/* setup completion prompt (above the skills chart) + its modal */
+.te-setup-prompt{display:flex;align-items:center;gap:10px;width:100%;margin:24px 0 14px;padding:13px 18px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-16);box-shadow:var(--shadow-md);
+  cursor:pointer;font-family:inherit;text-align:left;transition:border-color .14s,box-shadow .14s}
+.te-setup-prompt:hover{border-color:var(--berry);box-shadow:var(--shadow-lg)}
+.te-setup-prompt .ic{flex:none;width:30px;height:30px;border-radius:50%;background:rgba(54,120,149,.12);color:var(--berry);
+  display:flex;align-items:center;justify-content:center;font-size:15px}
+.te-setup-prompt .t{flex:1;font-weight:700;font-size:14px;color:var(--strong)}
+.te-setup-prompt .go{color:var(--cherry);font-weight:700}
+.te-setup-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.te-setup-modal{width:100%;max-width:480px;max-height:86vh;overflow-y:auto;background:var(--surface);
+  border-radius:var(--r-16);box-shadow:var(--shadow-lg);padding:20px}
+.te-setup-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px}
+.te-setup-close{flex:none;width:28px;height:28px;border-radius:50%;border:none;background:var(--page);color:var(--muted);
+  font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.te-setup-close:hover{background:var(--sunken);color:var(--strong)}
+.te-input{padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-8);background:var(--surface);
+  color:var(--body);font-family:inherit;font-size:14px;min-width:0}
+.te-input:focus{outline:none;border-color:var(--berry)}
+.te-input:disabled{opacity:.6}
 .te-pts.earned{background:var(--leaf);color:#fff}
 
 /* buttons + chips */

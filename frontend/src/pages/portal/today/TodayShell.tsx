@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import './TodayShell.css';
 import {
   fetchPoints, fetchSchedule, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
-  fetchStreak, claimDailyStreak,
+  fetchStreak, claimDailyStreak, submitReferrals,
   levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
 } from '../../../services/onboardingApi';
 import PortalShell from './PortalShell';
@@ -24,6 +24,15 @@ import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
+import { readViewSnapshot, restoreScroll, usePersistScrollOnScroll } from '../../../hooks/useScrollRestore';
+import SkillMeter from '../SkillMeter';
+
+// Persist the Today feed's scroll position so leaving for a card's runtime
+// workspace and coming back — via its Back button OR the browser's own back
+// button — returns the student to the same spot instead of resetting to the
+// top. Same proven pattern as Classroom's 'classroom-view' key; see
+// hooks/useScrollRestore for the restore/persist mechanics.
+const TODAY_VIEW_KEY = 'today-view';
 
 const TodayShell: React.FC = () => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
@@ -32,6 +41,14 @@ const TodayShell: React.FC = () => {
   const [now, setNow] = useState<number>(() => Date.now());
   const [toast, setToast] = useState<string>('');
   const [showUpload, setShowUpload] = useState(false);
+  // The onboarding checklist ("Get set up") now lives in a modal off a small
+  // persistent completion prompt above the skills chart, instead of eating the
+  // top of the main column permanently — see the te-setup-modal render below.
+  const [showSetupModal, setShowSetupModal] = useState(false);
+  const openUpload = () => { setShowSetupModal(true); setShowUpload(true); };
+  const [showReferral, setShowReferral] = useState(false);
+  const [referralFriends, setReferralFriends] = useState([{ name: '', email: '' }]);
+  const [referralSubmitted, setReferralSubmitted] = useState(false);
   const [uploadName, setUploadName] = useState('');
   const [busy, setBusy] = useState(false);
   const fileRef = React.useRef<HTMLInputElement>(null);
@@ -65,6 +82,18 @@ const TodayShell: React.FC = () => {
     return () => window.clearInterval(id);
   }, []);
 
+  // Restore scroll once the feed has loaded (restoreScroll itself waits for the
+  // page to actually grow tall enough — thumbnails load after mount — so it's
+  // safe to call as soon as we have cards to render). Runs once.
+  const restoredScrollRef = React.useRef(false);
+  useEffect(() => {
+    if (restoredScrollRef.current || curriculum.length === 0) return;
+    restoredScrollRef.current = true;
+    const snap = readViewSnapshot<Record<string, never>>(TODAY_VIEW_KEY);
+    if (snap) restoreScroll(snap.scrollY || 0);
+  }, [curriculum]);
+  usePersistScrollOnScroll<Record<string, never>>(TODAY_VIEW_KEY, curriculum.length > 0, () => ({}));
+
   const flash = (msg: string) => { setToast(msg); window.setTimeout(() => setToast(''), 2600); };
 
   const total = points?.total ?? 0;
@@ -73,6 +102,7 @@ const TodayShell: React.FC = () => {
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
   const hasBackground = !!(profile && (profile.has_resume || profile.linkedin_url));
+  const hasReferral = !!profile?.has_referral;
   const rsvped = !!schedule?.my_rsvp;
   // Redesign flag (default ON while loading). firstName from the real profile —
   // never the raw email prefix.
@@ -129,6 +159,33 @@ const TodayShell: React.FC = () => {
     } catch { flash('Could not upload that right now'); } finally { setBusy(false); }
   };
 
+  // "Recommend a friend" — one or more friends, one submission, same
+  // capture-prevTotal/diff/celebrate pattern as the resume/LinkedIn upload above
+  // (per Ali's choice: reuse the existing points-HUD burst, no new celebration modal).
+  const addReferralRow = () => setReferralFriends((rows) => [...rows, { name: '', email: '' }]);
+  const updateReferralRow = (i: number, field: 'name' | 'email', value: string) =>
+    setReferralFriends((rows) => rows.map((r, idx) => (idx === i ? { ...r, [field]: value } : r)));
+  const removeReferralRow = (i: number) => setReferralFriends((rows) => (rows.length > 1 ? rows.filter((_, idx) => idx !== i) : rows));
+  const submitReferralFriends = async () => {
+    const valid = referralFriends
+      .map((r) => ({ name: r.name.trim(), email: r.email.trim() }))
+      .filter((r) => r.name && /\S+@\S+\.\S+/.test(r.email));
+    if (valid.length === 0 || busy) { flash('Add at least one friend\'s name and email'); return; }
+    setBusy(true);
+    const prevTotal = points?.total ?? 0;
+    try {
+      await submitReferrals(valid);
+      await loadAll();
+      try {
+        const fresh = await fetchPoints();
+        setPoints(fresh);
+        const gained = (fresh?.total ?? 0) - prevTotal;
+        if (gained > 0) emitPointsEarned(gained);
+      } catch { /* keep prior total */ }
+      setReferralSubmitted(true);
+    } catch { flash('Could not submit right now — please try again'); } finally { setBusy(false); }
+  };
+
   const claimedToday = !!streak?.claimed_today;
   const doClaimStreak = async () => {
     if (claimedToday || busy) return;
@@ -148,6 +205,7 @@ const TodayShell: React.FC = () => {
   const steps = [
     { key: 'account', title: 'Create your free account', done: true, meta: 'Welcome to Colaberry', pts: 0, action: null as null | (() => void) },
     { key: 'resume', title: 'Upload your resume or LinkedIn PDF', done: hasBackground, meta: 'Personalizes your experience in the background', pts: 25, action: !hasBackground ? () => setShowUpload((v) => !v) : null },
+    { key: 'referral', title: 'Recommend a friend', done: hasReferral, meta: 'Know someone who’d love this?', pts: 25, action: !hasReferral ? () => setShowReferral((v) => !v) : null },
   ];
 
   const setupRemaining = steps.filter((s) => !s.done).length;
@@ -183,7 +241,7 @@ const TodayShell: React.FC = () => {
             </p>
             <div className="ctas">
               {!hasBackground && (
-                <button className="te-btn cherry" type="button" onClick={() => setShowUpload(true)}>Upload résumé / LinkedIn</button>
+                <button className="te-btn cherry" type="button" onClick={openUpload}>Upload résumé / LinkedIn</button>
               )}
               <Link className="te-btn ghost" to="/portal/path">See your path</Link>
               <Link className="te-btn ghost" to="/portal/points">Break down my points</Link>
@@ -254,7 +312,7 @@ const TodayShell: React.FC = () => {
             <p>{hasBackground
               ? 'Thanks for sharing your background. Your program tailors itself quietly in the background as you engage — nothing else to do right now.'
               : "LinkedIn can't be imported by link, so export your LinkedIn profile to PDF (profile → More → Save to PDF) or grab your resume, and upload it. We tailor your experience from it in the background."}</p>
-            {!hasBackground && <button className="te-btn cherry" onClick={() => setShowUpload(true)}>Upload resume / LinkedIn</button>}
+            {!hasBackground && <button className="te-btn cherry" onClick={openUpload}>Upload resume / LinkedIn</button>}
           </div>
           )}
 
@@ -270,44 +328,108 @@ const TodayShell: React.FC = () => {
             </div>
           )}
 
-          {/* background upload — both resume and LinkedIn are uploads */}
-          {showUpload && (
-            <div className="te-card te-upload">
-              <div className="te-sec-title" style={{ margin: '0 0 4px' }}>Upload your background</div>
-              <p className="te-muted" style={{ margin: '0 0 14px' }}>
-                Two options, both uploads: your <b>resume</b>, or your <b>LinkedIn profile exported to PDF</b> (on LinkedIn:
-                your profile → More → Save to PDF). We can't read your LinkedIn from a link.
-              </p>
-              <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt,.md" style={{ display: 'none' }}
-                onChange={(e) => onFilePicked(e.target.files?.[0] || null)} />
-              <button className="te-drop" type="button" onClick={() => fileRef.current?.click()} disabled={busy}>
-                <span className="ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
-                <span className="t">{uploadName || 'Choose a file'}</span>
-                <span className="s">Resume or LinkedIn PDF · PDF, DOCX, or TXT</span>
-              </button>
-              <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-                <button className="te-btn ghost sm" onClick={() => setShowUpload(false)} disabled={busy}>Cancel</button>
+          {/* skills chart replaces the old permanent "Get set up" checklist — the
+              checklist now lives behind a small completion prompt (shown only
+              while steps remain) that opens it in a modal. */}
+          {setupRemaining > 0 && (
+            <button type="button" className="te-setup-prompt" onClick={() => setShowSetupModal(true)}>
+              <span className="ic">✦</span>
+              <span className="t">{setupDone} of {steps.length} set up · finish for +{steps.filter((s) => !s.done).reduce((sum, s) => sum + s.pts, 0)} pts</span>
+              <span className="go">→</span>
+            </button>
+          )}
+          <SkillMeter cards={curriculum} />
+
+          {showSetupModal && (
+            <div className="te-setup-backdrop" onClick={() => setShowSetupModal(false)}>
+              <div className="te-setup-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Get set up">
+                <div className="te-setup-modal-head">
+                  <div className="te-sec-title" style={{ margin: 0 }}>Get set up · earn your first points</div>
+                  <button type="button" className="te-setup-close" onClick={() => setShowSetupModal(false)} aria-label="Close">×</button>
+                </div>
+
+                <div className="te-queue">
+                  {steps.map((s) => (
+                    <button key={s.key} className={`te-step${s.done ? ' done' : ''}`} disabled={!s.action} onClick={s.action || undefined}>
+                      <span className="te-check">{s.done ? '✓' : ''}</span>
+                      <span className="b">
+                        <span className="tt">{s.title}</span>
+                        <span className="mt">
+                          {s.pts > 0 && <span className={`te-pts${s.done ? ' earned' : ''}`}>+{s.pts} pts</span>}
+                          {s.meta}
+                        </span>
+                      </span>
+                      {s.action && !s.done && <span style={{ color: 'var(--cherry)', fontWeight: 700 }}>→</span>}
+                    </button>
+                  ))}
+                </div>
+
+                {/* background upload — both resume and LinkedIn are uploads */}
+                {showUpload && (
+                  <div className="te-card te-upload" style={{ marginTop: 14 }}>
+                    <div className="te-sec-title" style={{ margin: '0 0 4px' }}>Upload your background</div>
+                    <p className="te-muted" style={{ margin: '0 0 14px' }}>
+                      Two options, both uploads: your <b>resume</b>, or your <b>LinkedIn profile exported to PDF</b> (on LinkedIn:
+                      your profile → More → Save to PDF). We can't read your LinkedIn from a link.
+                    </p>
+                    <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,.txt,.md" style={{ display: 'none' }}
+                      onChange={(e) => onFilePicked(e.target.files?.[0] || null)} />
+                    <button className="te-drop" type="button" onClick={() => fileRef.current?.click()} disabled={busy}>
+                      <span className="ic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none"><path d="M12 16V4m0 0L8 8m4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /><path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
+                      <span className="t">{uploadName || 'Choose a file'}</span>
+                      <span className="s">Resume or LinkedIn PDF · PDF, DOCX, or TXT</span>
+                    </button>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+                      <button className="te-btn ghost sm" onClick={() => setShowUpload(false)} disabled={busy}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* recommend a friend — add 1+, submit once, celebrate with the same HUD burst */}
+                {showReferral && (
+                  <div className="te-card te-upload" style={{ marginTop: 14 }}>
+                    {referralSubmitted ? (
+                      <div style={{ textAlign: 'center', padding: '8px 0' }}>
+                        <div className="te-check" style={{ background: 'var(--leaf)', borderColor: 'var(--leaf)', margin: '0 auto 10px' }}>✓</div>
+                        <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--strong)' }}>Thanks! +25 points</div>
+                        <div className="te-muted" style={{ marginTop: 4 }}>We'll let them know you sent them.</div>
+                        <button type="button" className="te-btn ghost sm" style={{ marginTop: 14 }}
+                          onClick={() => { setShowReferral(false); setReferralSubmitted(false); setReferralFriends([{ name: '', email: '' }]); }}>
+                          Close
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="te-sec-title" style={{ margin: '0 0 4px' }}>Recommend a friend</div>
+                        <p className="te-muted" style={{ margin: '0 0 14px' }}>
+                          Know someone who'd love this program? Add their name and email — we'll do the rest.
+                        </p>
+                        {referralFriends.map((f, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                            <input className="te-input" placeholder="Friend's name" value={f.name} disabled={busy}
+                              onChange={(e) => updateReferralRow(i, 'name', e.target.value)} style={{ flex: 1 }} />
+                            <input className="te-input" placeholder="Friend's email" type="email" value={f.email} disabled={busy}
+                              onChange={(e) => updateReferralRow(i, 'email', e.target.value)} style={{ flex: 1 }} />
+                            {referralFriends.length > 1 && (
+                              <button type="button" className="te-setup-close" aria-label="Remove" disabled={busy}
+                                onClick={() => removeReferralRow(i)}>×</button>
+                            )}
+                          </div>
+                        ))}
+                        <button type="button" className="te-btn ghost sm" onClick={addReferralRow} disabled={busy} style={{ marginTop: 4 }}>
+                          + Add another friend
+                        </button>
+                        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+                          <button className="te-btn cherry sm" onClick={submitReferralFriends} disabled={busy}>Submit</button>
+                          <button className="te-btn ghost sm" onClick={() => setShowReferral(false)} disabled={busy}>Cancel</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
-
-          {/* onboarding steps queue */}
-          <div className="te-sec-title">Get set up · earn your first points</div>
-          <div className="te-queue">
-            {steps.map((s) => (
-              <button key={s.key} className={`te-step${s.done ? ' done' : ''}`} disabled={!s.action} onClick={s.action || undefined}>
-                <span className="te-check">{s.done ? '✓' : ''}</span>
-                <span className="b">
-                  <span className="tt">{s.title}</span>
-                  <span className="mt">
-                    {s.pts > 0 && <span className={`te-pts${s.done ? ' earned' : ''}`}>+{s.pts} pts</span>}
-                    {s.meta}
-                  </span>
-                </span>
-                {s.action && !s.done && <span style={{ color: 'var(--cherry)', fontWeight: 700 }}>→</span>}
-              </button>
-            ))}
-          </div>
 
           {/* ── aggregated timeline — the big feed pulling from every page ── */}
           <div className="te-feed">

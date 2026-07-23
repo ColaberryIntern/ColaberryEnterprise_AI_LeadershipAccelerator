@@ -9,6 +9,7 @@ import { centralDateKey } from './centralDate';
 export const POINT_EVENTS: Record<string, number> = {
   account_created: 0,        // marker only — a free account starts at 0 points
   profile_completed: 25,
+  referral_submitted: 25,    // "recommend a friend" onboarding step — one award per enrollment regardless of friend count
   open_house_rsvp: 10,
   open_house_attended: 50,
   project_dna_completed: 40,

@@ -1,0 +1,36 @@
+/* PaywallScreen — built on the Design-E tokens defined in pages/portal/today/
+   TodayShell.css (loaded globally via PortalShell), so it reads as native to the
+   portal rather than a bolted-on generic modal. Echoes the existing per-card
+   locked-tile visual language (timeline.css .fcard.locked / .fc-lock) at page
+   scale: dimmed backdrop + a centered lock panel, just applied to a whole page. */
+
+.pg-loading{padding:60px 20px;text-align:center;color:var(--muted);font-size:14px}
+
+.pg-wrap{position:relative;min-height:calc(100vh - 160px);display:flex;align-items:center;justify-content:center;padding:20px}
+
+/* Decorative, non-interactive "ghost" cards behind the panel — the same
+   grayscale/dim treatment .fcard.locked .mthumb already uses, scaled up, so a
+   student who has seen a locked timeline card recognizes the grammar. */
+.pg-backdrop{position:absolute;inset:0;display:flex;gap:20px;padding:40px;overflow:hidden;pointer-events:none;filter:grayscale(.6) blur(1px) brightness(.85);opacity:.5}
+.pg-ghost{flex:1;min-width:0;border-radius:var(--r-16);background:linear-gradient(135deg,var(--berry),var(--muted));aspect-ratio:3/4;align-self:center}
+@media(max-width:900px){.pg-backdrop{display:none}}
+
+.pg-panel{position:relative;z-index:1;width:100%;max-width:460px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-16);box-shadow:var(--shadow-lg);padding:32px 30px;text-align:center}
+.pg-icon{position:relative;display:inline-flex;align-items:center;justify-content:center;width:58px;height:58px;border-radius:50%;
+  background:linear-gradient(135deg,var(--cherry),var(--cherry-deep));color:#fff;margin-bottom:14px;box-shadow:var(--shadow-md)}
+.pg-icon-lock{position:absolute;right:-4px;bottom:-4px;width:22px;height:22px;border-radius:50%;background:var(--surface);
+  border:2px solid var(--surface);color:var(--cherry-deep);display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow-md)}
+.pg-eyebrow{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--cherry-text);margin-bottom:8px}
+.pg-title{font-size:22px;font-weight:800;color:var(--strong);margin:0 0 10px;letter-spacing:-.01em}
+.pg-subtitle{font-size:14px;color:var(--muted);line-height:1.55;margin:0 0 20px}
+.pg-benefits{list-style:none;margin:0 0 24px;padding:0;text-align:left;display:flex;flex-direction:column;gap:11px}
+.pg-benefits li{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:var(--body);line-height:1.4}
+.pg-benefits li svg{flex:none;margin-top:2px;color:var(--leaf)}
+.pg-cta{display:inline-flex;align-items:center;justify-content:center;width:100%;padding:13px 18px;border-radius:var(--r-pill);
+  background:linear-gradient(135deg,var(--cherry),var(--cherry-deep));color:#fff;font-weight:700;font-size:15px;
+  text-decoration:none;box-shadow:var(--shadow-md);transition:transform .14s,box-shadow .14s}
+.pg-cta:hover{transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.pg-refresh{display:block;width:100%;margin-top:14px;background:none;border:none;color:var(--muted);font-size:12.5px;
+  cursor:pointer;font-family:inherit;text-decoration:underline;text-underline-offset:2px}
+.pg-refresh:hover{color:var(--berry)}

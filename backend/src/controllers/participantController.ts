@@ -17,9 +17,10 @@ import { getEnrollmentView, selectCohort, SelectCohortReason } from '../services
 import { z } from 'zod';
 import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
-import { isFreePreviewTier } from '../services/access/contentEntitlement';
+import { isFreePreviewTier, resolveContentPageAccess } from '../services/access/contentEntitlement';
 import { getUpcomingPublicEvents } from '../services/publicEventsService';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
+import { submitReferrals } from '../services/friendReferralService';
 import { getCheckinInfo } from '../services/sessionKitService';
 
 // PUBLIC (no auth): minimal, non-sensitive info for the pre-login check-in
@@ -50,6 +51,24 @@ export async function handleGetOnboardingProfile(req: Request, res: Response, ne
   try {
     const profile = await getOnboardingProfile(req.participant!.sub);
     res.json(profile);
+  } catch (err) { next(err); }
+}
+
+const SubmitReferralsSchema = z.object({
+  friends: z.array(z.object({
+    name: z.string().trim().min(1, 'name is required').max(200),
+    email: z.string().trim().email('a valid email is required').max(320),
+  })).min(1, 'add at least one friend').max(20, 'add at most 20 friends at a time'),
+});
+
+export async function handleSubmitReferrals(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = SubmitReferralsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid friends list' });
+    }
+    const result = await submitReferrals(req.participant!.sub, parsed.data.friends);
+    res.json(result);
   } catch (err) { next(err); }
 }
 
@@ -161,11 +180,19 @@ export async function handleClaimStreak(req: Request, res: Response, next: NextF
 
 export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
   try {
-    const schedule = await getOnboardingSchedule(req.participant!.sub);
-    // Free-preview status drives the enroll/pay conversion funnel on the portal
-    // (Today). Single source of truth = contentEntitlement.isFreePreviewTier
-    // (payment-keyed when CONTENT_PAID_GATE_ENABLED, else legacy explorer-only).
-    res.json({ ...schedule, is_explorer: await isFreePreviewTier(req.participant!.sub) });
+    const enrollmentId = req.participant!.sub;
+    const [schedule, isExplorer, pageAccess] = await Promise.all([
+      getOnboardingSchedule(enrollmentId),
+      // Free-preview status drives the enroll/pay conversion funnel on the portal
+      // (Today). Single source of truth = contentEntitlement.isFreePreviewTier
+      // (payment-keyed when CONTENT_PAID_GATE_ENABLED, else legacy explorer-only).
+      isFreePreviewTier(enrollmentId),
+      // Page-level paywall signals (<PageGate>, the nav lock badge) — a SEPARATE,
+      // independently-flagged predicate from is_explorer above; see
+      // contentEntitlement.resolveContentPageAccess.
+      resolveContentPageAccess(enrollmentId),
+    ]);
+    res.json({ ...schedule, is_explorer: isExplorer, is_staff: pageAccess.isStaff, has_full_access: pageAccess.hasFullAccess });
   } catch (err) { next(err); }
 }
 

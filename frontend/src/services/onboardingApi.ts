@@ -56,7 +56,9 @@ export interface OnboardingSchedule {
   next_open_house: OpenHouseView | null;
   my_rsvp: boolean;
   first_class: FirstClassView | null;
-  is_explorer?: boolean;   // free Explorer tier — drives the Today conversion funnel
+  is_explorer?: boolean;      // free Explorer tier — drives the Today conversion funnel
+  is_staff?: boolean;         // community_members.role === 'staff' — never gated by <PageGate>
+  has_full_access?: boolean;  // page-level paywall signal (separate flag from is_explorer) — see useEntitlement
 }
 
 export interface ResumeProfileFields {
@@ -71,6 +73,15 @@ export interface OnboardingProfileView {
   personalization?: ResumePersonalization;
   linkedin_url: string | null;
   has_resume: boolean;
+  has_referral: boolean;
+}
+
+export interface SubmitReferralsResult { count: number; points_awarded: number; }
+
+/** Submit 1+ friend recommendations (the "recommend a friend" onboarding step). */
+export async function submitReferrals(friends: Array<{ name: string; email: string }>): Promise<SubmitReferralsResult> {
+  const { data } = await portalApi.post<SubmitReferralsResult>('/api/portal/onboarding/referrals', { friends });
+  return data;
 }
 
 export interface FreeSignupResult {
