@@ -87,14 +87,20 @@ const COMPANY_NAV_GROUP: NavGroup = {
   ],
 };
 
-// "Management Portal" — a single link that opens the admin portal for employees
-// (staff with a management role). Shown only when useMgmtStatus().is_mgmt. Routes
-// to a landing that mints a scoped admin token then redirects into /admin.
+// "Employee" group — shown only when useMgmtStatus().is_mgmt (staff with a
+// management role). "Management Portal" routes to a landing that mints a scoped
+// admin token then redirects into /admin. "My Day" is an external link into
+// advisor.colaberry.ai (the separate AI Project Architect / day-job tool) so
+// employees can jump to their day-job task queue; it opens its own Google
+// sign-in, so we link the app root rather than a captured one-time OAuth URL.
 const MGMT_NAV_GROUP: NavGroup = {
   grp: 'Employee',
   items: [
     { label: 'Management Portal', to: '/portal/mgmt-enter', newTab: true, icon: (
       <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 4v5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+    ) },
+    { label: 'My Day', to: 'https://advisor.colaberry.ai', newTab: true, icon: (
+      <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" /><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
     ) },
   ],
 };

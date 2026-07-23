@@ -11192,3 +11192,12 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Dhee asked for a full end-to-end check on Swati's account after the second round of fixes, rather than relying on her to click through and report anything still broken.
   - Verification: 18/18 live HTTP checks against prod (see above) — this is the verification.
   - Notes: built in a third isolated worktree off `origin/main` (`docs/mgmt-e2e-verification`), read-only research (no worktree code changes, just used to `git show` route files). No mutating (POST/PUT/DELETE) calls were made against prod. Incidentally found `/tickets*` routes in `ticketRoutes.ts` are mounted with no `/api/admin` prefix and no `requireAdmin` guard (legacy, pre-existing, unrelated to this incident) — flagged to Dhee, not fixed here as it's out of scope for the Swati access issue. [[project_mgmt_role_bridge_architecture]]
+
+### Add "My Day" employee nav link to advisor.colaberry.ai (2026-07-23)
+- [x] Second item in the portal sidebar's "Employee" nav group, alongside Management Portal
+  - Date: 2026-07-23
+  - Session: CC-20260723-h9v2
+  - What changed: `frontend/src/pages/portal/today/PortalShell.tsx` — added a "My Day" entry to `MGMT_NAV_GROUP` (the "Employee" group, gated on `useMgmtStatus().is_mgmt`), rendered directly below "Management Portal". Opens `https://advisor.colaberry.ai` in a new tab via the existing `newTab` link path (plain `<a target="_blank">`, not a router `Link`), same pattern as the Management Portal item.
+  - Why: Dhee wants employees able to jump from the accelerator portal straight to their day-job task queue on advisor.colaberry.ai. Dhee originally pasted a captured Google OAuth redirect URL for this link; that URL carries a single-use `state`/continuation token tied to one browser session and would have 404/expired almost immediately for Dhee and never worked for any other employee. Confirmed with Dhee to link the stable app root instead, which triggers its own fresh Google sign-in per click. [[project_mgmt_role_bridge_architecture]]
+  - Verification: frontend `tsc --noEmit` clean on `PortalShell.tsx` (0 errors referencing the file; the only project errors are the pre-existing hoisted-TypeScript-4.9.5-vs-`@types/d3-dispatch` parse noise documented in memory, unrelated to this change).
+  - Notes: built in an isolated worktree off `origin/main` (`workstream/employee-my-day-nav`) — this session's own checkout (`workstream/chapter-quality-and-worker`) is ~451 commits behind `origin/main` and doesn't contain `PortalShell.tsx` at all.
