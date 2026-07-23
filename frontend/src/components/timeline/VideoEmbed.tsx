@@ -55,10 +55,6 @@ const addParam = (u: string, p: string) => u + (u.includes('?') ? '&' : '?') + p
 
 const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, autoplay, onWatchBeat, fallbackDurationS }) => {
   const [playing, setPlaying] = useState(!!autoplay);
-  // Podcasts start muted (browser autoplay policy + product default); the value is
-  // read once at mount and only ever changed by the student's own control, which
-  // persists it back for every podcast from here on — see podcastMutePreference.
-  const [podcastMuted] = useState(getPodcastMuted);
 
   // --- watch accumulation (refs so handlers/effects never go stale) ---
   const bufRef = useRef({ delta: 0, position: 0, duration: 0 });
@@ -217,7 +213,10 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
               src={source.embedUrl}
               controls
               autoPlay
-              muted={podcastMuted}
+              // Read fresh on every (re)mount — a new VideoEmbed instance mounts per
+              // drawer-open / per scroll-triggered preview, so a stale useState here
+              // would silently re-mute an episode the student already unmuted.
+              muted={getPodcastMuted()}
               onVolumeChange={(e) => setPodcastMuted(e.currentTarget.muted)}
               onTimeUpdate={mediaTimeUpdate('audio')}
               onPause={() => flushRef.current('audio')}
