@@ -1,9 +1,10 @@
 import {
-  normalizeEmails, displayNameFromEmail, registerManager, inviteMembers,
+  normalizeEmails, displayNameFromEmail, registerManager, inviteMembers, getRoster,
 } from '../orgService';
 import { Organization, OrgMember, Enrollment } from '../../models';
 import { createFreeAccount } from '../freeSignupService';
 import { sendOrgInviteEmail } from '../emailService';
+import { sequelize } from '../../config/database';
 
 // Hermetic: no DB, no real email, no real Sequelize instance.
 jest.mock('../../config/env', () => ({ env: { jwtSecret: 'test-secret', frontendUrl: 'http://localhost:3000' } }));
@@ -113,6 +114,55 @@ describe('orgService', () => {
       const out = await inviteMembers('org-1', 'enr-mgr', { emails: ['x@a.com', 'X@a.com', 'y@a.com'], team: null });
       expect(out).toHaveLength(2);                        // x@a.com + y@a.com
       expect(sendOrgInviteEmail as jest.Mock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('getRoster', () => {
+    it('attaches each member\'s canonical total points alongside readiness and builder XP', async () => {
+      (OrgMember.findAll as jest.Mock).mockResolvedValue([
+        { enrollment_id: 'enr-1', email: 'jordan@acme.com', team: 'Finance', enrollment: { full_name: 'Jordan Park' } },
+      ]);
+      (sequelize.query as jest.Mock).mockImplementation(async (sql: string) => {
+        if (sql.includes('student_level')) return [{ enrollment_id: 'enr-1', level_slug: 'developer', rank: 3, architect_readiness: 44 }];
+        if (sql.includes("stream='builder'")) return [{ enrollment_id: 'enr-1', xp: 160 }];
+        if (sql.includes("event_type='daily_streak'")) return [{ enrollment_id: 'enr-1', streak: 6 }];
+        if (sql.includes('student_points_events')) return [{ enrollment_id: 'enr-1', total: 530 }];
+        return [];
+      });
+
+      const roster = await getRoster('org-1');
+
+      expect(roster).toEqual([{
+        enrollment_id: 'enr-1',
+        name: 'Jordan Park',
+        team: 'Finance',
+        level: 'developer',
+        rank: 3,
+        readiness: 44,
+        builder_xp_week: 160,
+        streak: 6,
+        total_points: 530,
+      }]);
+    });
+
+    it('defaults total_points to 0 for members with no enrollment yet', async () => {
+      (OrgMember.findAll as jest.Mock).mockResolvedValue([
+        { enrollment_id: null, email: 'pending@acme.com', team: null, enrollment: null },
+      ]);
+
+      const roster = await getRoster('org-1');
+
+      expect(roster).toEqual([{
+        enrollment_id: '',
+        name: 'pending@acme.com',
+        team: null,
+        level: 'builder',
+        rank: 0,
+        readiness: 0,
+        builder_xp_week: 0,
+        streak: 0,
+        total_points: 0,
+      }]);
     });
   });
 });

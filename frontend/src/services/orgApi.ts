@@ -57,6 +57,7 @@ export interface OrgRosterMember {
   readiness: number;                  // 0..100
   builder_xp_week: number;
   streak: number;
+  total_points: number;               // canonical points-economy total, all streams/time
 }
 
 // ── Per-member drill-down ────────────────────────────────────────────────────
