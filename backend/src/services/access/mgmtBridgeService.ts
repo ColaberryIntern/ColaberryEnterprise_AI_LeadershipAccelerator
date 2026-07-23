@@ -27,6 +27,36 @@ async function loadMgmtRole(enrollmentId: string): Promise<string | null> {
   return member.mgmt_role;
 }
 
+export interface StaffPortalLink {
+  enrollmentId: string;
+  mgmtRole: string;
+}
+
+/**
+ * Find the staff/portal account linked to a legacy admin_users login, by email
+ * (email is not unique on enrollments — e.g. someone can hold a prior Explorer
+ * enrollment plus their staff one — so this resolves ALL enrollments for the
+ * email, then picks whichever one actually carries the staff CommunityMember
+ * row). Used by authenticateAdmin() to attach `portal_enrollment_id` to a
+ * DIRECT admin login so "AI Training" works without the portal->Management
+ * Portal round trip. Deliberately NOT used to set the `mgmt_role` JWT claim
+ * itself for direct logins — adminAllowedSections() treats `mgmt_role` as an
+ * override that NARROWS a session to that role's sections, so stamping it on
+ * a legacy full-admin login would silently shrink their access. This link is
+ * only ever consumed for "does a connected portal account exist" (the AI
+ * Training bridge), never for section-scoping.
+ */
+export async function loadStaffPortalLinkByEmail(email: string): Promise<StaffPortalLink | null> {
+  const enrollments = await Enrollment.findAll({ where: { email }, attributes: ['id'] });
+  if (enrollments.length === 0) return null;
+  const member = await CommunityMember.findOne({
+    where: { enrollment_id: enrollments.map((e) => e.id), role: 'staff' },
+    attributes: ['enrollment_id', 'mgmt_role'],
+  });
+  if (!member || !isMgmtRole(member.mgmt_role)) return null;
+  return { enrollmentId: member.enrollment_id, mgmtRole: member.mgmt_role as string };
+}
+
 /** Does this student's account carry a management role? Drives the "Management
  *  Portal" link visibility in the student portal. */
 export async function getMgmtStatus(enrollmentId: string): Promise<MgmtStatus> {

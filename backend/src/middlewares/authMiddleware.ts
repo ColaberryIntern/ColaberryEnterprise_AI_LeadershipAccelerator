@@ -11,6 +11,14 @@ export interface AuthPayload {
   // admin SECTIONS this login may reach (mgmtRoles.ts). Absent on legacy
   // admin_users logins, which keep full admin access.
   mgmt_role?: string;
+  // Present on a legacy admin_users login whose email matches a staff
+  // CommunityMember — the enrollment id to bridge into via "AI Training"
+  // (POST /api/admin/portal/enter). Deliberately separate from `mgmt_role`:
+  // this only marks "a connected portal account exists," it must NEVER feed
+  // adminAllowedSections() or it would narrow a legacy full admin's sections
+  // to that role's scope. On a bridge-minted token this is unset — `sub` IS
+  // the enrollment id there already (see mintMgmtAdminToken).
+  portal_enrollment_id?: string;
 }
 
 /**

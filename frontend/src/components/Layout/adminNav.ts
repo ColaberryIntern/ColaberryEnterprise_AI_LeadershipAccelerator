@@ -11,9 +11,11 @@
 // <Link> (mirrors the portal sidebar's identical NavItem.newTab pattern) — for
 // external destinations (My Day) or internal bridge-landing pages (AI Training)
 // where the current admin tab should stay put. `requiresMgmtBridge` hides the
-// link unless the logged-in identity is a bridge-minted staff account (has a
-// connected student/portal enrollment to bridge into) — a legacy full AdminUser
-// has no enrollment to send to, so the link would always 403 for them.
+// link unless AuthContext's `hasPortalAccount` is true — true for either a
+// bridge-minted staff session OR a direct admin_users login whose email is
+// linked to a staff CommunityMember (see mgmtBridgeService.loadStaffPortalLinkByEmail).
+// A legacy admin with no staff link at all has no enrollment to send to, so the
+// link would always 403 for them.
 export interface NavLink { path: string; label: string; icon: string; section?: string; newTab?: boolean; requiresMgmtBridge?: boolean; }
 export interface NavGroup { label: string | null; section: string; links: NavLink[]; }
 
