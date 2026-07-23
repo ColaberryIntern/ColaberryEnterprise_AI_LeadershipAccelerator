@@ -87,9 +87,11 @@ const TodayShell: React.FC = () => {
   // safe to call as soon as we have cards to render). Runs once.
   const restoredScrollRef = React.useRef(false);
   useEffect(() => {
+    console.log('[DEBUG restore effect]', { alreadyRestored: restoredScrollRef.current, curriculumLen: curriculum.length });
     if (restoredScrollRef.current || curriculum.length === 0) return;
     restoredScrollRef.current = true;
     const snap = readViewSnapshot<Record<string, never>>(TODAY_VIEW_KEY);
+    console.log('[DEBUG snap read]', snap);
     if (snap) restoreScroll(snap.scrollY || 0);
   }, [curriculum]);
   usePersistScrollOnScroll<Record<string, never>>(TODAY_VIEW_KEY, curriculum.length > 0, () => ({}));
