@@ -13,8 +13,11 @@ type CreatableResourceType = 'link' | 'recording' | 'recap' | 'note';
 // resolves which room this is (a normal room or the well-known library room)
 // and whether uploads are allowed (server-computed can_upload/can_upload_resource).
 
-const ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.rtf,.txt,.md,.csv,.png,.jpg,.jpeg,.webp';
-const ALLOWED_MIMES = new Set([
+// Exported so other upload entry points into this same feature (the Chat tab's
+// attach button in RoomPane) validate against the identical rule set the
+// dropzone enforces here, instead of a second copy that could drift.
+export const ACCEPT = '.pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.rtf,.txt,.md,.csv,.png,.jpg,.jpeg,.webp';
+export const ALLOWED_MIMES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint',
@@ -22,10 +25,10 @@ const ALLOWED_MIMES = new Set([
   'application/rtf', 'text/rtf', 'text/plain', 'text/markdown', 'text/csv',
   'image/png', 'image/jpeg', 'image/webp',
 ]);
-const ALLOWED_EXT = new Set(['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.rtf', '.txt', '.md', '.csv', '.png', '.jpg', '.jpeg', '.webp']);
-const MAX_SIZE = 50 * 1024 * 1024;
+export const ALLOWED_EXT = new Set(['.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.rtf', '.txt', '.md', '.csv', '.png', '.jpg', '.jpeg', '.webp']);
+export const MAX_SIZE = 50 * 1024 * 1024;
 
-function extOf(name: string): string {
+export function extOf(name: string): string {
   const i = name.lastIndexOf('.');
   return i === -1 ? '' : name.slice(i).toLowerCase();
 }

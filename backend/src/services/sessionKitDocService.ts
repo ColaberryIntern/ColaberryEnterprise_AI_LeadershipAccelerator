@@ -16,6 +16,7 @@ import { buildKitSpec } from './classKit/kitSpecDaySlides';
 import { renderKitHtml, modeForSlide } from './classKit/kitHtml';
 import { renderClassOutline } from './classKit/outlineHtml';
 import { mintKitToken } from './classKit/kitToken';
+import { getKitConfig } from './sessionKitConfigService';
 
 /**
  * Render the plain-language CLASS OUTLINE for a session — a one-page teaching plan
@@ -25,12 +26,14 @@ import { mintKitToken } from './classKit/kitToken';
 export async function renderSessionOutline(sessionId: string): Promise<string | null> {
   const kit = await buildSessionKit(sessionId);
   if (!kit) return null;
+  const config = await getKitConfig(sessionId);
   const spec = buildKitSpec({
     session: kit.session,
     cohortName: kit.cohort_name,
     checkinUrl: kit.checkin_url,
     qrSvg: kit.qr_svg,
     meetLink: kit.meeting_link,
+    config,
   });
   return renderClassOutline(spec);
 }
@@ -48,12 +51,14 @@ export async function renderSessionKitDoc(sessionId: string, mode: KitDocMode = 
   const kit = await buildSessionKit(sessionId);
   if (!kit) return null;
 
+  const config = await getKitConfig(sessionId);
   const spec = buildKitSpec({
     session: kit.session,
     cohortName: kit.cohort_name,
     checkinUrl: kit.checkin_url,
     qrSvg: kit.qr_svg,
     meetLink: kit.meeting_link,
+    config,
   });
 
   if (mode !== 'live') {
@@ -86,9 +91,11 @@ export async function renderSessionKitDoc(sessionId: string, mode: KitDocMode = 
 export async function renderSessionReadinessReport(sessionId: string): Promise<string | null> {
   const kit = await buildSessionKit(sessionId);
   if (!kit) return null;
+  const config = await getKitConfig(sessionId);
   const spec = buildKitSpec({
     session: kit.session, cohortName: kit.cohort_name,
     checkinUrl: kit.checkin_url, qrSvg: kit.qr_svg, meetLink: kit.meeting_link,
+    config,
   });
 
   const esc = (s: unknown) => String(s == null ? '' : s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as Record<string, string>)[c]);
@@ -99,7 +106,7 @@ export async function renderSessionReadinessReport(sessionId: string): Promise<s
   const checkpoints = count((s) => s.kind === 'checkpoint');
   const interactions = count((s) => s.kind === 'interaction');
   const diagrams = count((s) => !!s.diagram);
-  const evidence = slides.flatMap((s) => s.evidence || []);
+  const evidence = config.evidenceOverrides ?? slides.flatMap((s) => s.evidence || []);
   const hasMeet = !!kit.meeting_link;
 
   // Visual readiness: mode mix, visual page types, and the coding-prompt/lecture
@@ -155,6 +162,14 @@ export async function renderSessionReadinessReport(sessionId: string): Promise<s
   <div class="stat"><b>${storyPages}</b><span>hook/before-after</span></div>
   <div class="stat"><b>${theaterPolls}</b><span>Decision Theater</span></div>
 </div>
+<h2>Active configuration</h2>
+<ul>
+  <li>Story beats: ${config.storyBeats.enabled ? `on${config.storyBeats.max != null ? ` · capped at ${config.storyBeats.max}` : ''}${config.storyBeats.overrides ? ' · custom set' : ' · authored defaults'}` : 'off'}</li>
+  <li>Live Decision Theater: ${config.theaterEnabled ? 'on' : 'off (polls render as the normal inline poll)'}</li>
+  <li>Build Bay detail rows: ${config.buildBayDetail ? 'on' : 'off (prompt + rescue only)'}</li>
+  <li>Evidence sources: ${config.evidenceOverrides ? `custom (${config.evidenceOverrides.length})` : 'authored defaults'}</li>
+  <li>Change any of this from <b>Present ▾ → ⚙️ Customize</b> — it applies the next time this page or the deck is opened.</li>
+</ul>
 <h2>Readiness gates</h2>
 <ul>
   ${gate(slides.length >= 12, `Content depth — ${slides.length} slides (${teach} teaching)`)}

@@ -63,6 +63,11 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     // run_of_show[], outline[], generated_at }). Powers the admin timetable view;
     // the live deck re-derives content at render, so this is a durable record.
     `ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS kit_json JSONB`,
+    // Instructor-adjustable Class Kit overrides (story-beat count/content, Live
+    // Decision Theater on/off, Build Bay detail, evidence sources) — see
+    // classKit/kitConfig.ts. Read fresh on every deck/outline/readiness render,
+    // so there is no separate "rebuild" step: saving this is the rebuild.
+    `ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS kit_config_json JSONB`,
 
     // ---- attendance_records ----
     `CREATE TABLE IF NOT EXISTS attendance_records (

@@ -16,14 +16,21 @@ import {
   detectDayKind, parseWeek, buildMeta, toSegments,
   BUILDER_BROADCAST_PROMPTS, PROVE_FORMULA, STEP_EMOJIS, PHONE_RULES,
 } from './kitSpec';
+import { KitConfig, DEFAULT_KIT_CONFIG } from './kitConfig';
 
-/** Insert any authored "change of pace" story beats right after a segment's
- * own content. No-op when the week/day has none authored for that segment —
- * this is how the feature stays opt-in per class rather than forcing every
- * week to have one before it's actually written. */
-function pushStoryBeats(out: KitSlide[], beats: Record<string, StoryBeat[]> | undefined, segId: string, seg: KitSegment): void {
-  const list = beats?.[segId];
-  if (!list || !list.length) return;
+/** Insert story beats right after a segment's own content — the instructor's
+ * `config.storyBeats.overrides` (a full replacement set, filtered to this
+ * segment) when set, else the authored defaults for this day. No-op when
+ * neither has anything for this segment — story beats stay opt-in per class. */
+function pushStoryBeats(
+  out: KitSlide[], defaultBeats: Record<string, StoryBeat[]> | undefined,
+  segId: string, seg: KitSegment, config: KitConfig,
+): void {
+  if (!config.storyBeats.enabled) return;
+  const list = config.storyBeats.overrides
+    ? config.storyBeats.overrides.filter((b) => b.segment === segId)
+    : (defaultBeats?.[segId] || []);
+  if (!list.length) return;
   list.forEach((b, i) => {
     out.push(slide(seg, 900 + i, 'storybeat', {
       eyebrow: b.eyebrow, title: b.title, body: b.body, icon: b.icon, punch: b.punch, tone: b.tone,
@@ -32,9 +39,33 @@ function pushStoryBeats(out: KitSlide[], beats: Record<string, StoryBeat[]> | un
   });
 }
 
+/** Applies the deck-wide parts of KitConfig that don't need per-segment
+ * context: a total cap on story-beat slides, disabling Live Decision Theater
+ * (falls back to the normal compact inline poll), and hiding Build Bay's
+ * extra "you should see"/"stop when" rows. Runs once, after the day-specific
+ * builder has produced the full slide list. */
+function applyKitConfig(slides: KitSlide[], config: KitConfig): KitSlide[] {
+  let out = slides;
+  if (config.storyBeats.max != null) {
+    let seen = 0;
+    out = out.filter((s) => {
+      if (s.kind !== 'storybeat') return true;
+      seen += 1;
+      return seen <= config.storyBeats.max!;
+    });
+  }
+  if (!config.theaterEnabled) {
+    out = out.map((s) => (s.interaction?.theater ? { ...s, interaction: { ...s.interaction, theater: false } } : s));
+  }
+  if (!config.buildBayDetail) {
+    out = out.map((s) => (s.prompt ? { ...s, prompt: { ...s.prompt, expectedResult: undefined, stopCondition: undefined } } : s));
+  }
+  return out;
+}
+
 // -- Architecture Day (Monday) --------------------------------------------------
 
-function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
+function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitSlide[] {
   const wc = meta.week != null ? WEEK_CLASS_CONTENT.find((w) => w.week === meta.week) : undefined;
   const out: KitSlide[] = [...openingSlides(meta, segs)];
   if (!wc) return out;
@@ -58,6 +89,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     eyebrow: '🔮 Predict', title: 'Before we start — make your call', interaction: m.designChoice,
     presenterTip: 'Everyone scans the QR here. Read the prediction; do not reveal yet — it pays off later.',
   }));
+  pushStoryBeats(out, m.storyBeats, 'checkin', checkin, config);
 
   const prob = segById(segs, 'business-problem');
   out.push(slide(prob, 0, 'bullets', {
@@ -65,7 +97,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     presenterTip: 'This is the LinkedIn clip. Stay on the business stakes, not the syntax.',
   }));
   out.push(...teachToSlides(mteach, 'business-problem', prob));
-  pushStoryBeats(out, m.storyBeats, 'business-problem', prob);
+  pushStoryBeats(out, m.storyBeats, 'business-problem', prob, config);
 
   const arch = segById(segs, 'architecture');
   out.push(slide(arch, 0, 'architecture', {
@@ -75,7 +107,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     presenterTip: 'Walk the diagram node by node: components, the risky edges, the decisions. This is the evergreen lesson — take your time (≈20 min). Ask the room where the trust boundary is.',
   }));
   out.push(...teachToSlides(mteach, 'architecture', arch));
-  pushStoryBeats(out, m.storyBeats, 'architecture', arch);
+  pushStoryBeats(out, m.storyBeats, 'architecture', arch, config);
 
   const dec = segById(segs, 'deconstruct');
   out.push(slide(dec, 0, 'example', {
@@ -83,7 +115,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     presenterTip: 'Show the good and the broken. The failure is the breakdown clip.',
   }));
   out.push(...teachToSlides(mteach, 'deconstruct', dec));
-  pushStoryBeats(out, m.storyBeats, 'deconstruct', dec);
+  pushStoryBeats(out, m.storyBeats, 'deconstruct', dec, config);
 
   out.push(breakSlide(segById(segs, 'reset')));
 
@@ -117,7 +149,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
 
 // -- Build Day (Thursday) -------------------------------------------------------
 
-function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
+function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitSlide[] {
   const wc = meta.week != null ? WEEK_CLASS_CONTENT.find((w) => w.week === meta.week) : undefined;
   const out: KitSlide[] = [...openingSlides(meta, segs)];
   if (!wc) return out;
@@ -129,6 +161,9 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     eyebrow: '🎯 Result preview', title: 'What you are producing today', body: t.resultPreview,
     presenterTip: 'Show the finished result first. This is the cold open of the episode.',
   }));
+  // No default Build Day story beats are authored yet — this only fires when
+  // the instructor adds a custom one via Present ▾ → Customize.
+  pushStoryBeats(out, undefined, 'result-preview', preview, config);
 
   const readiness = segById(segs, 'readiness');
   out.push(slide(readiness, 0, 'segment', {
@@ -186,6 +221,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
       eyebrow: '🔧 Recover like an architect', title: 'Diagnose and fix', body: t.recovery,
       presenterTip: 'Narrate the diagnosis. This is where they learn architecture thinking, not just syntax.',
     }));
+    pushStoryBeats(out, undefined, 'failure', fail, config);
   }
 
   const demos = segById(segs, 'demos');
@@ -219,7 +255,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
 
 // -- Orientation ----------------------------------------------------------------
 
-function orientationSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
+function orientationSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitSlide[] {
   const out: KitSlide[] = [...openingSlides(meta, segs)];
 
   const welcome = segById(segs, 'welcome');
@@ -227,6 +263,7 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
     eyebrow: 'Welcome', title: 'Welcome to the Accelerator', body: ORIENTATION_PLAN.welcome,
     presenterTip: 'High energy. Everyone scans the QR and checks in before you start.',
   }));
+  pushStoryBeats(out, ORIENTATION_PLAN.storyBeats, 'welcome', welcome, config);
   out.push(slide(welcome, 1, 'interaction', {
     eyebrow: 'Warm-up', title: 'Where are you starting from?', interaction: ORIENTATION_PLAN.designChoice,
     presenterTip: 'Read the spread out loud. Sets up the “from user to builder” arc.',
@@ -240,7 +277,7 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[]): KitSlide[] {
       presenterTip: si === 0 ? 'Your hour, Ali. Quotes, data, the program promise.' : `Hand off to ${os.presenter}. Keep to ${os.minutes} minutes — the pace bar will tell you if you drift.`,
     }));
     out.push(...teachToSlides(ORIENTATION_TEACH, segIds[si], seg));
-    pushStoryBeats(out, ORIENTATION_PLAN.storyBeats, segIds[si], seg);
+    pushStoryBeats(out, ORIENTATION_PLAN.storyBeats, segIds[si], seg, config);
   });
 
   const close = segById(segs, 'setup');
@@ -280,6 +317,7 @@ function breakSlide(seg: KitSegment): KitSlide {
  */
 export function buildKitSpec(input: BuildKitSpecInput): KitSpec {
   const { session } = input;
+  const config = input.config || DEFAULT_KIT_CONFIG;
   const dayKind = detectDayKind(session.title, session.session_date);
   const week = dayKind === 'orientation' ? null : parseWeek(session.title);
   const meta = buildMeta(input, dayKind, week);
@@ -288,9 +326,10 @@ export function buildKitSpec(input: BuildKitSpecInput): KitSpec {
   const segments = toSegments(templates, meta.durationMin);
 
   let slides: KitSlide[];
-  if (dayKind === 'orientation') slides = orientationSlides(meta, segments);
-  else if (dayKind === 'build') slides = buildSlides(meta, segments);
-  else slides = architectureSlides(meta, segments);
+  if (dayKind === 'orientation') slides = orientationSlides(meta, segments, config);
+  else if (dayKind === 'build') slides = buildSlides(meta, segments, config);
+  else slides = architectureSlides(meta, segments, config);
+  slides = applyKitConfig(slides, config);
 
   return {
     meta,

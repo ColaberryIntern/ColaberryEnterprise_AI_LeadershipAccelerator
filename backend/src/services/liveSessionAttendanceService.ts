@@ -1,7 +1,7 @@
 import { Op } from 'sequelize';
 import { LiveSession, AttendanceRecord, Enrollment } from '../models';
 import { award } from './pointsService';
-import { convertTo24h } from './acceleratorService';
+import { classInstant } from './acceleratorService';
 import { recordPresenceEvent, formatDisplayName } from './sessionPresenceService';
 
 // Live Sessions build-out Phase 3 (Session CC-20260721-s7h4): student-initiated
@@ -30,7 +30,7 @@ export function computeAttendanceStatus(
   now: Date,
   graceMinutes: number = ATTENDANCE_GRACE_MINUTES
 ): 'present' | 'late' {
-  const start = new Date(`${sessionDate}T${convertTo24h(startTime)}:00`);
+  const start = classInstant(sessionDate, startTime);
   const cutoff = start.getTime() + graceMinutes * 60 * 1000;
   return now.getTime() <= cutoff ? 'present' : 'late';
 }
@@ -156,7 +156,7 @@ export async function finalizeSessionAttendance(
 ): Promise<number> {
   const session = await LiveSession.findByPk(sessionId);
   if (!session) return 0;
-  const end = new Date(`${session.session_date}T${convertTo24h(session.end_time)}:00`);
+  const end = classInstant(session.session_date, session.end_time);
   const leaveAt = now.getTime() < end.getTime() ? now : end;
 
   const rows = await AttendanceRecord.findAll({

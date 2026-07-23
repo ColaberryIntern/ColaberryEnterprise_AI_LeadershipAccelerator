@@ -4,6 +4,7 @@ import {
   Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail, Subscription,
 } from '../models';
 import { env } from '../config/env';
+import { centralWallClockToInstant } from './centralDate';
 
 // PaySimple dashboard base for the admin "open this payer in PaySimple" deep link.
 // Override with PAYSIMPLE_DASHBOARD_BASE if the account uses a different host.
@@ -390,12 +391,64 @@ export async function detectAbsentParticipants(sessionId: string) {
   return absent;
 }
 
+// Live class times are entered and stored as Central wall-clock ("18:30"), but
+// this runs in a UTC container — a naive `new Date(dateStr + "T" + timeStr)`
+// silently parses that wall-clock AS UTC, running the whole session lifecycle
+// (live/completed transitions, recap generation, reminder timing, join windows)
+// 5-6 hours off from the real Central class time. classInstant recovers the
+// true UTC instant via the shared DST-aware Central-time helper. Root-caused
+// 2026-07-23 (Session CC-20260723-t7n4): tonight's Orientation was auto-marked
+// 'completed' hours before its real 6:30pm CT start, blocking check-in.
+// Takes the RAW stored time string (e.g. "18:30:00") — normalizes via
+// convertTo24h internally so every caller gets the seconds-format fix for
+// free instead of having to remember to pre-convert.
+export function classInstant(sessionDate: string, rawTime: string): Date {
+  const naive = new Date(`${sessionDate}T${convertTo24h(rawTime)}:00Z`);
+  return centralWallClockToInstant(naive);
+}
+
+/** Pure: is `session` due to start within (now, cutoff]? Exported for testing. */
+export function isSessionUpcoming(
+  session: { session_date: string; start_time: string },
+  now: Date,
+  cutoff: Date,
+): boolean {
+  const sessionDateTime = classInstant(session.session_date, session.start_time);
+  return sessionDateTime > now && sessionDateTime <= cutoff;
+}
+
+/** Pure: should a still-'scheduled' session flip to 'live' at `now`? Exported for testing. */
+export function isSessionDueLive(
+  session: { session_date: string; start_time: string },
+  now: Date,
+): boolean {
+  const startTime = classInstant(session.session_date, session.start_time);
+  const fifteenMinBefore = new Date(startTime.getTime() - 15 * 60 * 1000);
+  // Upper bound guards against a session left 'scheduled' well past its own
+  // start (e.g. a manual status reset) being re-flagged live long after the
+  // fact once the day-window query below picks it up again the next day.
+  const sixHoursAfterStart = new Date(startTime.getTime() + 6 * 60 * 60 * 1000);
+  return now >= fifteenMinBefore && now < sixHoursAfterStart;
+}
+
+/** Pure: should a 'live' session flip to 'completed' at `now`? Exported for testing. */
+export function isSessionDueCompleted(
+  session: { session_date: string; end_time: string },
+  now: Date,
+): boolean {
+  const endTime = classInstant(session.session_date, session.end_time);
+  const thirtyMinAfterEnd = new Date(endTime.getTime() + 30 * 60 * 1000);
+  return now >= thirtyMinAfterEnd;
+}
+
 export async function getUpcomingSessions(hoursAhead: number) {
   const now = new Date();
   const cutoff = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
 
-  const todayStr = now.toISOString().split('T')[0];
-  const cutoffStr = cutoff.toISOString().split('T')[0];
+  // Widen the DB date-window by a day on each side to absorb the Central/UTC
+  // calendar-date skew — isSessionUpcoming() below does the precise comparison.
+  const todayStr = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const cutoffStr = new Date(cutoff.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const sessions = await LiveSession.findAll({
     where: {
@@ -407,26 +460,19 @@ export async function getUpcomingSessions(hoursAhead: number) {
     include: [{ model: Cohort, as: 'cohort' }],
   });
 
-  // Filter by actual time comparison
-  return sessions.filter((s) => {
-    const sessionDateTime = new Date(`${s.session_date}T${convertTo24h(s.start_time)}:00`);
-    return sessionDateTime > now && sessionDateTime <= cutoff;
-  });
+  return sessions.filter((s) => isSessionUpcoming(s, now, cutoff));
 }
 
 export async function getSessionsToMarkLive() {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
+  const yesterdayStr = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const sessions = await LiveSession.findAll({
-    where: { status: 'scheduled', session_date: todayStr },
+    where: { status: 'scheduled', session_date: { [Op.in]: [todayStr, yesterdayStr] } },
   });
 
-  return sessions.filter((s) => {
-    const startTime = new Date(`${s.session_date}T${convertTo24h(s.start_time)}:00`);
-    const fifteenMinBefore = new Date(startTime.getTime() - 15 * 60 * 1000);
-    return now >= fifteenMinBefore;
-  });
+  return sessions.filter((s) => isSessionDueLive(s, now));
 }
 
 export async function getSessionsToMarkCompleted() {
@@ -441,15 +487,17 @@ export async function getSessionsToMarkCompleted() {
     },
   });
 
-  return sessions.filter((s) => {
-    const endTime = new Date(`${s.session_date}T${convertTo24h(s.end_time)}:00`);
-    const thirtyMinAfterEnd = new Date(endTime.getTime() + 30 * 60 * 1000);
-    return now >= thirtyMinAfterEnd;
-  });
+  return sessions.filter((s) => isSessionDueCompleted(s, now));
 }
 
 export function convertTo24h(timeStr: string): string {
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  // Sequelize TIME columns (session start_time/end_time) come back as
+  // "HH:MM:SS" — the trailing seconds must be optional or every call falls
+  // through to the '10:00' default, silently discarding the real time.
+  // Found live 2026-07-23 (Session CC-20260723-t7n4): this masked bug meant
+  // getSessionsToMarkLive/Completed were evaluating every session against a
+  // hardcoded 10am Central instead of its real start/end time.
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
   if (!match) return '10:00';
   let hours = parseInt(match[1], 10);
   const minutes = match[2];

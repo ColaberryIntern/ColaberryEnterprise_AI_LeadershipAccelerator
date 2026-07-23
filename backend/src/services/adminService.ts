@@ -17,12 +17,20 @@ export async function authenticateAdmin(email: string, password: string): Promis
     throw new AppError('Invalid email or password', 401);
   }
 
+  // If this employee's email also has a connected staff/portal account, carry
+  // its enrollment id so "AI Training" works on a normal direct login too —
+  // not just via the portal->Management Portal bridge. Deliberately does NOT
+  // set `mgmt_role` here: that claim narrows adminAllowedSections() to a
+  // scoped role's sections, which would silently shrink this legacy full
+  // admin login's access. See loadStaffPortalLinkByEmail's docblock.
+  const { loadStaffPortalLinkByEmail } = await import('./access/mgmtBridgeService');
+  const portalLink = await loadStaffPortalLinkByEmail(admin.email);
+
+  const payload: Record<string, unknown> = { sub: admin.id, email: admin.email, role: admin.role };
+  if (portalLink) payload.portal_enrollment_id = portalLink.enrollmentId;
+
   const expiresIn = env.jwtExpiresIn;
-  const token = jwt.sign(
-    { sub: admin.id, email: admin.email, role: admin.role },
-    env.jwtSecret,
-    { expiresIn: expiresIn as unknown as number }
-  );
+  const token = jwt.sign(payload, env.jwtSecret, { expiresIn: expiresIn as unknown as number });
 
   return token;
 }
