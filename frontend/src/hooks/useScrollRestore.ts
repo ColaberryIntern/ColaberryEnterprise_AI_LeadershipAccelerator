@@ -51,7 +51,13 @@ export function restoreScroll(targetY: number): void {
     if (done) return;
     const maxY = document.documentElement.scrollHeight - window.innerHeight;
     if (maxY >= targetY - 4 || performance.now() - start > 3000) {
-      window.scrollTo(0, targetY);
+      // behavior:'instant' is required, not cosmetic: this app sets
+      // scroll-behavior:smooth on <html> globally, which makes the 2-argument
+      // scrollTo(x, y) form silently launch a multi-second ANIMATED scroll
+      // instead of jumping — so a restore to a deep position would sit at 0 for
+      // seconds before visibly arriving. The object form with 'instant'
+      // bypasses the CSS setting and jumps immediately, every time.
+      window.scrollTo({ top: targetY, left: 0, behavior: 'instant' });
       done = true;
       cleanup();
     } else {
