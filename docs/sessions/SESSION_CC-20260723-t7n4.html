@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260723-t7n4 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Thursday, July 23, 2026 at 9:05 AM</div>
+    <div><span class="sid">CC-20260723-t7n4</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Deck: teach-slide bullets render as a numbered card grid, the teaching punchline renders as a highlighted insight card, mermaid diagram captions render as a &quot;why it matters&quot; callout, architecture diagram captions are personalized per week from the actual business tension; Sessions admin: consolidated the duplicate Outline entry point, 12h CT time display, native time pickers on Edit (was freeform text, inconsistent create/edit formats), completed sessions can be reverted to scheduled</h2>
+          <span class="badge">2026-07-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/classKit/kitHtml.ts` (renamed `architectureHtml`→`cardGridHtml`, reused for `teach`/`architecture`/`buildmap` bullets instead of plain `&lt;ul&gt;`; added `teachLeadHtml()` insight-card wrapper for `TeachSlide.body`; `diagramHtml()` now wraps the caption as an icon+callout box), `backend/src/services/classKit/kitDeckStyles.ts` (`.kdiagram-cap` restyled as a bordered berry callout, new `.kteach-lead`/`.kteach-ico`), `backend/src/services/classKit/kitSpec.ts` (new `firstSentence()` helper; the architecture-slide `diagramCaption` is now `Walk it left to right. ${firstSentence(tension)}` instead of one generic line reused across all 12 weeks), `frontend/src/pages/admin/AdminAcceleratorPage.tsx` (removed the redundant &quot;📋 Outline&quot; button — title-click already opens it; added `formatClock12`/`formatTimeRange` and used it in the Time column; Edit modal Start/End Time switched from `type=&quot;text&quot;` free-form inputs to `type=&quot;time&quot;` native pickers, default form values changed from `&#39;10:00 AM&#39;` to `&#39;10:00&#39;` to match; added a &quot;↩ Reopen&quot; button on completed sessions to revert to `scheduled`, reusing the existing `handleStatusChange`/`PATCH .../sessions/:id` path — no backend change needed, `updateSession` already accepted `status`).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend + frontend full-project `tsc --noEmit` both clean (backend&#39;s pre-existing 267 `node_modules`-only errors unrelated, none touching `classKit/*`; frontend 0 errors). PR #716, all 4 CI checks green (Backend typecheck, Backend unit tests, Frontend typecheck, Secret scan + route-auth lint), admin-merged (branch protection requires 1 review; Dhee&#39;s explicit &quot;hands off... deploy&quot; instruction stood in for sign-off, consistent with the PR #700/#705 precedent this session). Deployed to prod (`docker compose -f docker-compose.production.yml up -d --build backend` then `--no-deps nginx`); verified live via `docker exec ... node -e` direct service call confirming the rendered deck HTML contains `kteach-lead`/`karch-item`/`kdiagram-cap-ico`, and the shipped frontend bundle (`main.dca63deb.js`) contains the &quot;Reopen&quot; string.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Dev deploy was attempted and abandoned, with a recovered near-miss.** The dev instance (`accelerator-dev-*` containers, worktree at `/opt/acc-composer` on the same prod host, project `accelerator-dev`, port 9999) turned out to be pinned to a detached-HEAD baseline (`eeec37da`, a cherry-pick of PR #713 onto an older commit) that predates the entire Class Kit / live-sessions feature — `backend/src/services/classKit/` doesn&#39;t exist in its tree at all, so this diff doesn&#39;t apply there without a much larger, riskier resync of a shared environment. While investigating, an exploratory `git checkout main -- .` (using the local, stale `main` ref) briefly reverted 7 rotated credential values in that host&#39;s uncommitted `.env.dev` (BASECAMP_ACCESS_TOKEN, GMAIL_CLIENT_ID/SECRET/REFRESH_TOKEN, OPENAI_API_KEY, DB_NAME, NODE_ENV) before being caught. Recovered by diffing `docker inspect accelerator-dev-backend`&#39;s actual launch env (the running container was never rebuilt, so it still held the correct values in memory) against the file and patching the 7 keys back; also removed ~92 stray untracked files the same accidental checkout had introduced. Verified zero remaining diff between the file and the running container, and confirmed the dev-backend container (which restarted independently around the same time, apparently from unrelated concurrent activity on the shared host) is running with the correct credentials. No dev service was rebuilt or disrupted by this session. Given the concurrent activity and the baseline mismatch, dev sync was intentionally left undone rather than forced — flagged to Dhee for a decision on whether/how dev should track main going forward. [[project_live_sessions_buildout]]</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>PR #730 merged to main, deployed to prod, and live-verified — the structural foundation for Dhee&#39;s &quot;greatest presentation setup ever&quot; ask, scoped to the highest-leverage additive pieces plus one flagship week rather than full content authoring across all 12 weeks</h2>
+          <span class="badge">2026-07-23</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**Presentation modes** — the deck auto-switches Teach/Story/Build per slide (`kitHtml.modeForSlide()`, driven by `data-mode` + `kitDeckScript.applyMode()`), replacing the old manual Compact toggle for coding slides. **Build Mode / &quot;Build Bay&quot;** (`kitBuildBay.ts`, new): dark navy, left-aligned, PROMPT N OF M + paste-target + Claude Code mode chip + the existing copy-ready prompt box + &quot;you should see&quot; / &quot;stop when&quot; / &quot;if you get stuck&quot; rows — all fields optional on the new `BuildBayMeta` (extends `ClassPrompt` in `classSessionPlan.ts`) so it degrades cleanly across the ~300 prompts authored before this model existed; Week 1&#39;s 4 real guided-build prompts got full metadata as the flagship. **Story Mode** (`kitStoryVisuals.ts`, new): `hook` (single-statement cold-open) and `beforeafter` (two-column transformation) slide kinds, code-rendered (no images — no asset pipeline exists, and adding a paid image-gen API was treated as a governance-boundary decision not made silently). **Phone prompt broadcast**: new `prompt` broadcast phase (`sessionLiveStateService.BroadcastState`/`CompanionState`, `sessionLiveController.handleSetBroadcast` validation) pushes the Build Bay prompt to student phones with a Copy button (`ClassCheckinPage.tsx`), so students stop reading prompts off the projected screen. **Live Decision Theater** (`kitTheater.ts`, new): full-screen poll for class-defining moments — voting badge, live &quot;N voted&quot; count with results hidden until reveal, instructor Lock/Reveal/Reopen controls, and a **server-enforced** vote lock (`sessionLiveStateService.recordPollResponse` now checks the broadcast&#39;s `question.theater.state` and throws `PollLockedError` — mapped to HTTP 409 — before any vote reaches the DB once locked; this is not just a client-side hide). Week 1&#39;s Monday CLAUDE.md poll flagged `theater: true` as the first instance. **Readiness report** extended with the mode mix, a &quot;no more than 2 text-heavy pages in a row&quot; streak check, and a count of prompts missing expected-result/stop-condition.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend + frontend `tsc --noEmit` both clean (267 pre-existing `node_modules`-only errors, none touching changed files; frontend 0). `jest src/services/classKit` 9/9 passing — but only after fixing two bugs the suite caught: (1) a literal backtick in a `kitDeckScript.ts` source comment broke the file&#39;s own giant template-literal-as-script-string (the file&#39;s header comment already warns about this exact footgun); (2) two `kitSpec.test.ts` assertions assumed Build Day always renders `prompt`/`failure`-kind slides, which stopped being true for Week 1 the moment PR #689 added deep teaching content for those segments months ago — both pre-existing, unrelated to this diff, discovered and fixed while testing this area. Broader backend jest sweep 428/429 passing (the 1 failure + 1 broken suite are pre-existing and untouched: `resumeIngestService` test timeout, `projectDnaService` Sequelize init issue). CI: PR #730 all 4 checks green including CI&#39;s own clean-environment jest run; admin-merged (branch protection review gate; Dhee&#39;s explicit deploy instruction stood in, consistent with this session&#39;s PR #700/#716 precedent). **Deployed to prod**, verified live via direct in-container service calls: Week 1 Monday deck shows 5 story-mode + 6 build-mode + 15 teach-mode slides (mode auto-detection working per-slide, not per-day — a couple of Monday&#39;s deep-teaching slides carry a hands-on prompt and correctly flip to Build Mode); Week 1 Thursday deck shows 12 build-mode slides with `kbb-row-result`/`kbb-row-stop` rows populated and the before/after grid present; readiness report shows all 3 new sections; nginx bundle (`main.f3735a9f.js`) contains the phone-side theater badge string. **Live-tested the vote-lock mechanism directly against `recordPollResponse`**: with `theater.state:&#39;voting&#39;` a vote attempt proceeded to the real INSERT (failed only on an unrelated FK from a fake test enrollment id, proving the lock check correctly let it through); with `theater.state:&#39;locked&#39;` the same call was rejected with `POLL_LOCKED` before touching the database. Test broadcast state cleaned up after.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Explicitly deferred** (communicated to Dhee, not built): full &quot;Visual Story Pack&quot; content authoring across Weeks 2-12 (Workplace Transformation / Customer Journey / System X-Ray / Failure Investigation / Future News archetypes) — infrastructure exists (`hook`/`beforeafter` kinds), content does not; Live Decision Theater **adaptive branching** (score-based auto-explanation depth, &quot;ask two students to explain opposing votes&quot;, belief-shift before/after comparison) — v1 ships open/lock/reveal only; additional poll archetypes (confidence-meter, choose-our-next-move, exit-poll) as authored content — the `Interaction` engine supports arbitrary framing, none authored beyond Week 1&#39;s one theater poll; real images/video/GIF assets and a managed visual-asset directory — deliberately not built, everything ships code-rendered (CSS/SVG/mermaid) to stay inside the deck&#39;s self-contained-HTML architecture and avoid introducing a paid external dependency without explicit sign-off; the literal &quot;72/28 browser-vs-VS-Code OS window split&quot; — the deck can only control its own internal layout, not resize the OS window or VS Code panes, so Build Mode&#39;s left-aligned layout targets looking right *at* that proportion rather than *creating* it. `kitSpec.ts` was split into `kitSpec.ts` (types + shared helpers, 322 lines) and `kitSpecDaySlides.ts` (day-specific slide builders + `buildKitSpec`, 284 lines) after it crossed the 500-line hard ceiling — 4 external callers (`renderClassKitSamples.ts`, `updateClassSessionContent.ts`, `sessionKitDocService.ts`, `kitSpec.test.ts`) updated to import `buildKitSpec` from the new file. [[project_live_sessions_buildout]]</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260723-t7n4</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
