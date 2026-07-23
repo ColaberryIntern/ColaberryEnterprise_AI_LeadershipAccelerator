@@ -242,6 +242,14 @@ export const ORIENTATION_PLAN: {
     proof: 'A screenshot of Claude Code responding to your first prompt in VS Code.',
   },
   storyBeats: {
+    welcome: [
+      {
+        icon: '🚪', tone: 'amber', eyebrow: 'Right now — the room you are in',
+        title: 'Two kinds of people walk into a room like this one',
+        body: 'One kind is here to collect information — another framework, another tool, another thing to half-remember by Friday. The other kind is here to leave different than they walked in: with a real system running, a habit of building instead of asking, and proof they can point to. Tonight does not decide which kind of person you are. Week 12 does. Tonight just decides whether you show up for it.',
+        punch: 'Nobody in this room is behind yet. That only becomes true if you decide it is.',
+      },
+    ],
     'big-picture': [
       {
         icon: '🗡️', tone: 'cherry', eyebrow: 'The story behind this room',
@@ -313,6 +321,14 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         caption: 'The unit of work just changed — from "what should I do" to "do it, and show me it worked."',
       },
       storyBeats: {
+        checkin: [
+          {
+            icon: '🧭', tone: 'violet', eyebrow: 'Right now — the room you are in',
+            title: 'You just made a prediction. Hold onto it — you will be wrong or right in about ten minutes, on purpose.',
+            body: 'Architecture Day is not a lecture with slides in the middle. It is a working session with theory bolted to both sides. Every prediction you make tonight, including the one you just tapped, gets tested against a real example before the class ends. That is not a gimmick — it is the fastest way anyone learns architecture: commit to a guess, then watch reality correct it.',
+            punch: 'Being wrong in the next two hours is the whole point. Being wrong in production next month is the thing we are training you to avoid.',
+          },
+        ],
         'business-problem': [
           {
             icon: '🎫', tone: 'berry', eyebrow: 'Change of pace — a real support ticket',

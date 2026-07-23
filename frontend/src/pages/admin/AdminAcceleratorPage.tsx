@@ -8,6 +8,7 @@ import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components
 import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
 import ClassKitModal from '../../components/admin/ClassKitModal';
+import KitConfigModal from '../../components/admin/KitConfigModal';
 
 interface Cohort {
   id: string;
@@ -124,6 +125,8 @@ function AdminAcceleratorPage() {
   const [kitSessionId, setKitSessionId] = useState<string | null>(null);
   // Session id whose Present dropdown menu is open, else null.
   const [presentMenu, setPresentMenu] = useState<string | null>(null);
+  // Session {id, title} whose Customize (Class Kit config) modal is open, else null.
+  const [customizeTarget, setCustomizeTarget] = useState<{ id: string; title: string } | null>(null);
   // Session id whose Class Details (curriculum/blueprint) modal is open, else null.
   // Cohort days-off (dates a class was skipped) shown as removable chips above the table.
   const [skippedDates, setSkippedDates] = useState<string[]>([]);
@@ -776,6 +779,8 @@ function AdminAcceleratorPage() {
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenKitDeck(s.id, 'rehearse'); }}>🎓 Rehearse (live off)</button>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleDownloadKit(s.id, s.title); }}>⬇️ Download standalone HTML</button>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenReadiness(s.id); }}>📋 Readiness report</button>
+                                <div className="dropdown-divider" />
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); setCustomizeTarget({ id: s.id, title: s.title }); }}>⚙️ Customize</button>
                               </div>
                             )}
                           </div>
@@ -1123,6 +1128,16 @@ function AdminAcceleratorPage() {
       {/* Class Kit — projector-friendly QR + start-class panel for a session */}
       {kitSessionId && (
         <ClassKitModal sessionId={kitSessionId} onClose={() => setKitSessionId(null)} />
+      )}
+
+      {/* Customize — instructor controls for story beats, Theater, Build Bay detail, evidence */}
+      {customizeTarget && (
+        <KitConfigModal
+          sessionId={customizeTarget.id}
+          sessionTitle={customizeTarget.title}
+          onClose={() => setCustomizeTarget(null)}
+          showToast={showToast}
+        />
       )}
 
       {/* Class Details — curriculum / week-blueprint for a session (opened from Title) */}

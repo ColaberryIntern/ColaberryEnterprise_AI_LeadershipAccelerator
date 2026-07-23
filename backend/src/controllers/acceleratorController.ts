@@ -13,6 +13,7 @@ import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingSe
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { buildSessionKit } from '../services/sessionKitService';
 import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, KitDocMode } from '../services/sessionKitDocService';
+import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -145,6 +146,25 @@ export async function handleGetSessionOutline(req: Request, res: Response, next:
     const html = await renderSessionOutline(req.params.id as string);
     if (!html) return res.status(404).json({ error: 'Session not found' });
     res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+// Instructor Class Kit overrides (story-beat count/content, Live Decision
+// Theater on/off, Build Bay detail, evidence sources) — see classKit/kitConfig.ts.
+// GET always returns a full merged config (defaults filled in); PUT saves a
+// full replace, not a patch — the Customize popup always submits the whole form.
+export async function handleGetSessionKitConfig(req: Request, res: Response, next: NextFunction) {
+  try {
+    const config = await getKitConfig(req.params.id as string);
+    res.json({ config });
+  } catch (err) { next(err); }
+}
+
+export async function handleSaveSessionKitConfig(req: Request, res: Response, next: NextFunction) {
+  try {
+    const config = await saveKitConfig(req.params.id as string, req.body?.config);
+    if (!config) return res.status(404).json({ error: 'Session not found' });
+    res.json({ config });
   } catch (err) { next(err); }
 }
 
