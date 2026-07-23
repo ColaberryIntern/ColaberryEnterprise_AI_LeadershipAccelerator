@@ -399,8 +399,11 @@ export async function detectAbsentParticipants(sessionId: string) {
 // true UTC instant via the shared DST-aware Central-time helper. Root-caused
 // 2026-07-23 (Session CC-20260723-t7n4): tonight's Orientation was auto-marked
 // 'completed' hours before its real 6:30pm CT start, blocking check-in.
-export function classInstant(sessionDate: string, time24h: string): Date {
-  const naive = new Date(`${sessionDate}T${time24h}:00Z`);
+// Takes the RAW stored time string (e.g. "18:30:00") — normalizes via
+// convertTo24h internally so every caller gets the seconds-format fix for
+// free instead of having to remember to pre-convert.
+export function classInstant(sessionDate: string, rawTime: string): Date {
+  const naive = new Date(`${sessionDate}T${convertTo24h(rawTime)}:00Z`);
   return centralWallClockToInstant(naive);
 }
 
@@ -410,7 +413,7 @@ export function isSessionUpcoming(
   now: Date,
   cutoff: Date,
 ): boolean {
-  const sessionDateTime = classInstant(session.session_date, convertTo24h(session.start_time));
+  const sessionDateTime = classInstant(session.session_date, session.start_time);
   return sessionDateTime > now && sessionDateTime <= cutoff;
 }
 
@@ -419,7 +422,7 @@ export function isSessionDueLive(
   session: { session_date: string; start_time: string },
   now: Date,
 ): boolean {
-  const startTime = classInstant(session.session_date, convertTo24h(session.start_time));
+  const startTime = classInstant(session.session_date, session.start_time);
   const fifteenMinBefore = new Date(startTime.getTime() - 15 * 60 * 1000);
   // Upper bound guards against a session left 'scheduled' well past its own
   // start (e.g. a manual status reset) being re-flagged live long after the
@@ -433,7 +436,7 @@ export function isSessionDueCompleted(
   session: { session_date: string; end_time: string },
   now: Date,
 ): boolean {
-  const endTime = classInstant(session.session_date, convertTo24h(session.end_time));
+  const endTime = classInstant(session.session_date, session.end_time);
   const thirtyMinAfterEnd = new Date(endTime.getTime() + 30 * 60 * 1000);
   return now >= thirtyMinAfterEnd;
 }
@@ -488,7 +491,13 @@ export async function getSessionsToMarkCompleted() {
 }
 
 export function convertTo24h(timeStr: string): string {
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  // Sequelize TIME columns (session start_time/end_time) come back as
+  // "HH:MM:SS" — the trailing seconds must be optional or every call falls
+  // through to the '10:00' default, silently discarding the real time.
+  // Found live 2026-07-23 (Session CC-20260723-t7n4): this masked bug meant
+  // getSessionsToMarkLive/Completed were evaluating every session against a
+  // hardcoded 10am Central instead of its real start/end time.
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
   if (!match) return '10:00';
   let hours = parseInt(match[1], 10);
   const minutes = match[2];
