@@ -2,10 +2,11 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './TodayShell.css';
 import {
-  fetchPoints, fetchSchedule, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
+  fetchPoints, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
   fetchStreak, claimDailyStreak, submitReferrals,
   levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
 } from '../../../services/onboardingApi';
+import { loadSchedule } from '../scheduleCache';
 import PortalShell from './PortalShell';
 import OpenOnPhone from './OpenOnPhone';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
@@ -63,24 +64,26 @@ const TodayShell: React.FC = () => {
   const { session: nextLiveSession } = useNextLiveSession();
 
   const loadAll = useCallback(async () => {
-    console.log('[DEBUG loadAll START]');
-    const tag = (name: string, p: Promise<any>) => p.then(
-      (v) => { console.log(`[DEBUG settled OK] ${name}`); return v; },
-      (e) => { console.log(`[DEBUG settled ERR] ${name}`, String(e)); throw e; },
-    );
+    // fetchSchedule (via the shared scheduleCache, not a raw direct call) —
+    // PortalShell's useEntitlement()/useIsExplorer() hooks (which wrap every
+    // page, including this one) ALSO need this same payload. Calling the raw
+    // fetchSchedule() here duplicated that request: two near-simultaneous GETs
+    // to the same endpoint, which on a loaded box can each take seconds,
+    // stalling this Promise.allSettled (and therefore curriculum, and
+    // therefore the scroll-restore effect below, which waits on curriculum)
+    // far longer than necessary for zero benefit — scheduleCache exists
+    // exactly to make two callers share one in-flight request.
     const [p, s, pr, cl, st] = await Promise.allSettled([
-      tag('fetchPoints', fetchPoints()), tag('fetchSchedule', fetchSchedule()), tag('fetchOnboardingProfile', fetchOnboardingProfile()), tag('classroom', portalApi.get('/api/portal/classroom')), tag('fetchStreak', fetchStreak()),
+      fetchPoints(), loadSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'), fetchStreak(),
     ]);
-    console.log('[DEBUG loadAll RESULTS]', { pStatus: p.status, sStatus: s.status, prStatus: pr.status, clStatus: cl.status, stStatus: st.status, clCardCount: cl.status === 'fulfilled' ? (cl.value.data?.cards || []).length : 'N/A', clReason: cl.status === 'rejected' ? String(cl.reason) : undefined });
     if (p.status === 'fulfilled') setPoints(p.value);
     if (s.status === 'fulfilled') setSchedule(s.value);
     if (pr.status === 'fulfilled') setProfile(pr.value);
     if (cl.status === 'fulfilled') setCurriculum(((cl.value.data?.cards as TimelineFeedCard[]) || []).sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || a.order - b.order));
     if (st.status === 'fulfilled') setStreak(st.value);
-    console.log('[DEBUG loadAll DONE]');
   }, []);
 
-  useEffect(() => { console.log('[DEBUG mount effect firing loadAll]'); loadAll(); }, [loadAll]);
+  useEffect(() => { loadAll(); }, [loadAll]);
   // Refetch the Today feed + status whenever points are earned (e.g. a quick-check
   // completed in the drawer) so the sidebar stays live without a navigation.
   useEffect(() => onPointsEarned(() => { void loadAll(); }), [loadAll]);
@@ -94,11 +97,9 @@ const TodayShell: React.FC = () => {
   // safe to call as soon as we have cards to render). Runs once.
   const restoredScrollRef = React.useRef(false);
   useEffect(() => {
-    console.log('[DEBUG restore effect]', { alreadyRestored: restoredScrollRef.current, curriculumLen: curriculum.length });
     if (restoredScrollRef.current || curriculum.length === 0) return;
     restoredScrollRef.current = true;
     const snap = readViewSnapshot<Record<string, never>>(TODAY_VIEW_KEY);
-    console.log('[DEBUG snap read]', snap);
     if (snap) restoreScroll(snap.scrollY || 0);
   }, [curriculum]);
   usePersistScrollOnScroll<Record<string, never>>(TODAY_VIEW_KEY, curriculum.length > 0, () => ({}));

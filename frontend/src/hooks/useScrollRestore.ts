@@ -37,25 +37,20 @@ export function writeViewSnapshot<T>(key: string, snap: ViewSnapshot<T>): void {
  * (e.g. a card was completed/removed) doesn't spin.
  */
 export function restoreScroll(targetY: number): void {
-  console.log('[DEBUG restoreScroll called]', { targetY });
   if (!targetY || targetY <= 0) return;
   let done = false;
   const cleanup = () => {
     window.removeEventListener('wheel', onUser);
     window.removeEventListener('touchstart', onUser);
   };
-  function onUser() { console.log('[DEBUG onUser fired — cancelling restore]'); done = true; cleanup(); }
+  function onUser() { done = true; cleanup(); }
   window.addEventListener('wheel', onUser, { passive: true });
   window.addEventListener('touchstart', onUser, { passive: true });
   const start = performance.now();
-  let tickCount = 0;
   const tick = () => {
-    tickCount++;
     if (done) return;
     const maxY = document.documentElement.scrollHeight - window.innerHeight;
-    if (tickCount <= 3 || tickCount % 20 === 0) console.log('[DEBUG tick]', { tickCount, maxY, targetY, elapsed: Math.round(performance.now() - start) });
     if (maxY >= targetY - 4 || performance.now() - start > 3000) {
-      console.log('[DEBUG FIRING scrollTo]', { targetY, maxY, elapsed: Math.round(performance.now() - start) });
       // behavior:'instant' is required, not cosmetic: this app sets
       // scroll-behavior:smooth on <html> globally, which makes the 2-argument
       // scrollTo(x, y) form silently launch a multi-second ANIMATED scroll
