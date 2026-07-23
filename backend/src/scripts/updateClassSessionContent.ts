@@ -19,7 +19,8 @@
  *   node dist/scripts/updateClassSessionContent.js <cohortId> --commit   # write
  */
 import { Cohort, LiveSession } from '../models';
-import { buildKitSpec, detectDayKind } from '../services/classKit/kitSpec';
+import { detectDayKind } from '../services/classKit/kitSpec';
+import { buildKitSpec } from '../services/classKit/kitSpecDaySlides';
 import { weekClassContent, ORIENTATION_PLAN, WEEK_CLASS_CONTENT } from '../data/classSessionPlan';
 
 interface Computed {

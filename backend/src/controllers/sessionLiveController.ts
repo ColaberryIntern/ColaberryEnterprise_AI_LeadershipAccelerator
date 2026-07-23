@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import {
   recordPulse, getLiveState, isValidPulseState,
-  setBroadcast, getCompanionState, recordPollResponse, sessionInCohort, BroadcastState,
+  setBroadcast, getCompanionState, recordPollResponse, sessionInCohort, BroadcastState, PollLockedError,
 } from '../services/sessionLiveStateService';
 
 // Resource-ownership guard for participant live endpoints: the caller must be in
@@ -50,8 +50,8 @@ export async function handleGetLiveState(req: Request, res: Response, next: Next
 export async function handleSetBroadcast(req: Request, res: Response, next: NextFunction) {
   try {
     const b = (req.body || {}) as Partial<BroadcastState>;
-    if (b.phase !== 'status' && b.phase !== 'question' && b.phase !== 'broadcast') {
-      return res.status(400).json({ error: 'phase must be status | question | broadcast' });
+    if (b.phase !== 'status' && b.phase !== 'question' && b.phase !== 'broadcast' && b.phase !== 'prompt') {
+      return res.status(400).json({ error: 'phase must be status | question | broadcast | prompt' });
     }
     // A question phase must carry a well-formed question (key + non-empty options)
     // so no phone/deck render can crash on a missing field.
@@ -61,6 +61,7 @@ export async function handleSetBroadcast(req: Request, res: Response, next: Next
       if (!q || typeof q.key !== 'string' || !q.key || !Array.isArray(q.options) || !q.options.length) {
         return res.status(400).json({ error: 'a question phase requires question.key and question.options[]' });
       }
+      const theaterState = q.theater && q.theater.state;
       question = {
         key: q.key,
         kind: q.kind === 'trivia' || q.kind === 'prediction' ? q.kind : 'poll',
@@ -68,6 +69,27 @@ export async function handleSetBroadcast(req: Request, res: Response, next: Next
         options: q.options.map((o) => String(o)),
         answer: typeof q.answer === 'number' ? q.answer : null,
         revealed: !!q.revealed,
+        theater: theaterState === 'voting' || theaterState === 'locked' || theaterState === 'revealed'
+          ? { state: theaterState } : undefined,
+      };
+    }
+    // A prompt phase (Build Mode, pushed to phones) needs the prompt text itself
+    // at minimum; the Build Bay metadata (paste target, mode, result, stop, rescue)
+    // is all optional so older content without it still broadcasts fine.
+    let prompt: BroadcastState['prompt'] = null;
+    if (b.phase === 'prompt') {
+      const p = b.prompt;
+      if (!p || typeof p.label !== 'string' || typeof p.prompt !== 'string' || !p.prompt) {
+        return res.status(400).json({ error: 'a prompt phase requires prompt.label and prompt.prompt' });
+      }
+      prompt = {
+        label: String(p.label),
+        prompt: String(p.prompt),
+        pasteWhere: p.pasteWhere ? String(p.pasteWhere) : undefined,
+        ccMode: p.ccMode ? String(p.ccMode) : undefined,
+        expectedResult: p.expectedResult ? String(p.expectedResult) : undefined,
+        stopCondition: p.stopCondition ? String(p.stopCondition) : undefined,
+        rescue: p.rescue ? String(p.rescue) : undefined,
       };
     }
     const state: BroadcastState = {
@@ -78,6 +100,7 @@ export async function handleSetBroadcast(req: Request, res: Response, next: Next
       phase: b.phase,
       question,
       broadcast_prompts: Array.isArray(b.broadcast_prompts) ? b.broadcast_prompts.map((p) => String(p)) : undefined,
+      prompt,
     };
     await setBroadcast(req.params.id as string, state);
     res.json({ success: true });
@@ -104,5 +127,8 @@ export async function handleRecordPollResponse(req: Request, res: Response, next
     if (await denyIfNotInCohort(req, res)) return;
     await recordPollResponse(req.params.id as string, req.participant!.sub, poll_key, choice);
     res.json({ success: true, choice });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (err instanceof PollLockedError) return res.status(409).json({ error: 'Voting is locked for this question' });
+    next(err);
+  }
 }

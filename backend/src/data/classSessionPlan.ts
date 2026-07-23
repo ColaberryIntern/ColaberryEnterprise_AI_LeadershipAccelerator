@@ -38,6 +38,10 @@ export interface Interaction {
   answer?: number;
   /** One line the instructor reads on reveal. */
   reveal?: string;
+  /** Render as a full-screen "Live Decision Theater" moment (voting badge, live
+   * count, locked vote, animated reveal) instead of the compact inline treatment.
+   * Use sparingly — a handful of times per class, for decisions worth stopping for. */
+  theater?: boolean;
 }
 
 export interface BuildCheckpoint {
@@ -46,7 +50,24 @@ export interface BuildCheckpoint {
   detail: string;
 }
 
-export interface ClassPrompt {
+/** Optional "Build Bay" metadata for a coding prompt. All fields are optional —
+ * a prompt with none of them still renders (generic paste target + a fallback
+ * rescue line), so this degrades gracefully on the hundreds of existing prompts
+ * authored before this model existed. Populate real values for flagship weeks. */
+export interface BuildBayMeta {
+  /** Where the prompt gets pasted. Defaults to "Claude Code" at render time. */
+  pasteWhere?: string;
+  /** e.g. "Plan Mode" | "Manual" | "Auto" — omitted (no chip) if not set. */
+  ccMode?: string;
+  /** "YOU SHOULD SEE" — omitted if not set. */
+  expectedResult?: string;
+  /** "STOP WHEN" — omitted if not set. */
+  stopCondition?: string;
+  /** "IF YOU GET STUCK" — falls back to a generic line at render time if not set. */
+  rescue?: string;
+}
+
+export interface ClassPrompt extends BuildBayMeta {
   label: string;
   /** The copy-ready Claude Code prompt the instructor pastes on screen. */
   prompt: string;
@@ -77,6 +98,9 @@ export interface WeekClassContent {
     trivia: Interaction;
     /** Open loop into Thursday. */
     thursdayTrailer: string;
+    /** Optional Story Mode cold-open — a single-statement full-screen visual hook
+     * shown before the business-problem beat. Omit for weeks without one authored. */
+    hook?: { headline: string; caption: string };
   };
 
   thursday: {
@@ -96,6 +120,9 @@ export interface WeekClassContent {
     recovery: string;
     /** Knowledge-check trivia. */
     trivia: Interaction;
+    /** Optional Story Mode before/after comparison, shown before the assignment
+     * brief as the transformation payoff. Omit for weeks without one authored. */
+    beforeAfter?: { label?: string; before: string[]; after: string[] };
   };
 
   /** Prove-it-by-Friday: the graded deliverable. */
@@ -228,6 +255,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         q: 'Your CLAUDE.md is getting long. What earns its place in it?',
         options: ['Everything Claude might ever need', 'Only rules that change how Claude behaves, testably', 'A copy of the README', 'Nothing — keep it empty'],
         reveal: 'A rule belongs in CLAUDE.md only if a change to it changes behavior. Aspirational prose is context bloat.',
+        theater: true,
       },
       trivia: {
         kind: 'trivia',
@@ -237,6 +265,10 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         reveal: 'Plan Mode is your seatbelt: Claude proposes the approach and waits for you before editing.',
       },
       thursdayTrailer: 'Thursday we make Claude follow your standards — we build the Workspace and a CLAUDE.md that actually steers it.',
+      hook: {
+        headline: 'You gave AI an answer to type. Now it can act.',
+        caption: 'The unit of work just changed — from "what should I do" to "do it, and show me it worked."',
+      },
     },
     thursday: {
       resultPreview: 'A committed Architect Workspace repo with a CLAUDE.md and a first change authored entirely through Claude Code.',
@@ -254,10 +286,34 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         { n: 3, label: 'Committed', detail: 'The change committed and pushed to your repo.' },
       ],
       prompts: [
-        { label: 'Explore', prompt: 'Explore this repo and summarize its structure, entry points, and conventions. Do not change anything yet.' },
-        { label: 'Author CLAUDE.md', prompt: 'Draft a CLAUDE.md for this project with specific, testable rules for naming, file size, and how to run the tests. Keep only rules that change behavior.' },
-        { label: 'Plan a change', prompt: 'In Plan Mode: propose how you would add a health-check endpoint that returns status and version. Show the plan; do not edit yet.' },
-        { label: 'Code + commit', prompt: 'Implement the approved plan, run the tests, then commit with a clear message.' },
+        {
+          label: 'Explore', prompt: 'Explore this repo and summarize its structure, entry points, and conventions. Do not change anything yet.',
+          pasteWhere: 'Claude Code, in your Architect Workspace repo', ccMode: 'Plan Mode',
+          expectedResult: 'A short written summary of the repo — folders, entry point, and any conventions Claude noticed. No files touched.',
+          stopCondition: 'Claude finishes the summary and stops (nothing to approve — it made no changes).',
+          rescue: 'Not sure the repo is open? Run `pwd` in the terminal first, or tap 🆘 I’m stuck.',
+        },
+        {
+          label: 'Author CLAUDE.md', prompt: 'Draft a CLAUDE.md for this project with specific, testable rules for naming, file size, and how to run the tests. Keep only rules that change behavior.',
+          pasteWhere: 'Claude Code', ccMode: 'Plan Mode',
+          expectedResult: 'A proposed CLAUDE.md draft with 3–5 specific rules — nothing vague like "write clean code."',
+          stopCondition: 'Claude shows the draft and asks whether to write the file.',
+          rescue: 'Rule sounds vague? Ask Claude "make that rule testable" before approving.',
+        },
+        {
+          label: 'Plan a change', prompt: 'In Plan Mode: propose how you would add a health-check endpoint that returns status and version. Show the plan; do not edit yet.',
+          pasteWhere: 'Claude Code', ccMode: 'Plan Mode',
+          expectedResult: 'A step-by-step plan for the health-check endpoint — file(s) to touch, the route, the response shape. No files changed.',
+          stopCondition: 'Claude proposes the plan and waits for your approval.',
+          rescue: 'Plan looks wrong? Just tell Claude what to change — Plan Mode is the seatbelt, revise before approving.',
+        },
+        {
+          label: 'Code + commit', prompt: 'Implement the approved plan, run the tests, then commit with a clear message.',
+          pasteWhere: 'Claude Code', ccMode: 'Auto',
+          expectedResult: 'The endpoint exists, tests pass, and a commit lands with a message describing the change.',
+          stopCondition: 'The terminal shows a successful commit hash.',
+          rescue: 'Tests failing? Paste the failing output back to Claude and ask it to fix it — do not skip the tests.',
+        },
       ],
       failureInjection: 'Give Claude a vague CLAUDE.md rule ("write clean code") and watch it get ignored on the next change.',
       recovery: 'An architect makes rules specific and testable: replace "write clean code" with "functions ≤ 50 lines; no any without a justification comment." Re-run — now the rule bites.',
@@ -267,6 +323,11 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         options: ['Keep going and hope', 'Run /compact to summarize and reclaim space', 'Close the terminal', 'Delete CLAUDE.md'],
         answer: 1,
         reveal: '/compact summarizes the session so far and frees the window without losing the thread.',
+      },
+      beforeAfter: {
+        label: 'The unit of work changed',
+        before: ['Ask AI a question', 'Read the answer', 'Copy it yourself', 'Paste it into 3–5 places', 'Run it manually and hope'],
+        after: ['State the objective', 'Claude explores + plans', 'You approve the plan', 'Claude edits, runs, and tests', 'You review a committed, working change'],
       },
     },
     assignment: {

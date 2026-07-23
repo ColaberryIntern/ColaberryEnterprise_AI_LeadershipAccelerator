@@ -208,6 +208,96 @@ pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transpa
 .kteach-lead p{font-size:clamp(15px,.6vw + .85vh,22px);line-height:1.5;color:var(--ink-2);font-weight:600}
 .kevidence{margin-top:2.4vh;font-size:clamp(11px,.7vh + .3vw,14px);color:var(--subtle);border-top:1px solid var(--line);padding-top:1vh;max-width:70ch}
 
+/* ================================================================
+   PRESENTATION MODES — Teach (default, white) / Story / Build.
+   Applied as body.mode-teach|mode-story|mode-build by kitDeckScript's
+   show(), driven by each slide's data-mode. Teach Mode needs no rules
+   here — it IS the base styling above.
+   ================================================================ */
+
+/* ---- Build Mode: dark, left-aligned, "do this now" coding surface ---- */
+body.mode-build .kslide.active{background:#0b1220}
+body.mode-build .kinner{margin:0;max-width:900px}
+body.mode-build .ktitle{color:#f4f8fb}
+body.mode-build .keyebrow{color:#7fd1e8}
+body.mode-build .kbody,body.mode-build ul.kpoints li{color:#b9c7d6}
+body.mode-build .kteach-lead{background:#101c2e;border-color:#233650}
+body.mode-build .kteach-lead p{color:#dbe6f0}
+body.mode-build .karch-item{background:#101c2e;border-color:#233650}
+body.mode-build .karch-item p{color:#dbe6f0}
+/* rail collapses to a thin status strip — icons only, no cards/questions/poll */
+body.mode-build #krail{width:64px;padding:10px 6px}
+body.mode-build .krail-head,body.mode-build .krail-stats,body.mode-build .kpoll,
+body.mode-build .kfeedback,body.mode-build .kq-head,body.mode-build .kq-list{display:none}
+body.mode-build .kpulse-grid{grid-template-columns:1fr;gap:6px}
+body.mode-build .kpulse{padding:6px 2px;text-align:center;border-left:none;border-top:3px solid transparent}
+body.mode-build .kpulse.here{border-top-color:var(--berry)} body.mode-build .kpulse.building{border-top-color:var(--amber)}
+body.mode-build .kpulse.stuck{border-top-color:var(--cherry)} body.mode-build .kpulse.finished{border-top-color:var(--leaf)}
+body.mode-build .kpulse span{display:none}
+body.mode-build .kpulse b{font-size:18px}
+body.rail-on.mode-build .kstage{right:64px}
+/* top toggles fade out of the way (still keyboard-reachable) */
+body.mode-build .ktoggles{opacity:.15}
+body.mode-build .ktoggles:hover{opacity:1}
+
+/* Build Bay chips + rows */
+.kbb-chips{display:flex;gap:10px;flex-wrap:wrap;margin:1.6vh 0 2vh}
+.kbb-chip{background:#16233a;border:1.5px solid #27405f;color:#9fd8ec;border-radius:999px;padding:.7vh 1.2vw;font-weight:800;font-size:clamp(11px,.4vw + .5vh,14px);letter-spacing:.3px}
+.kbb-chip b{color:#fff}
+.kbb-chip-n{background:#27405f}
+.kbb-chip-mode{background:#3a2a52;border-color:#5b3f86;color:#c9a8f0}
+.kbb-rows{margin-top:2.2vh;display:grid;gap:1.1vh;max-width:72ch}
+.kbb-row{display:flex;gap:10px;align-items:flex-start;padding:1.2vh 1.3vw;border-radius:12px;font-size:clamp(13px,.45vw + .65vh,17px)}
+.kbb-row-label{flex:none;font-weight:800;letter-spacing:.4px;white-space:nowrap}
+.kbb-row-result{background:#122a1d;border:1.5px solid #235c39;color:#bdeecb}
+.kbb-row-result .kbb-row-label{color:#5fd88a}
+.kbb-row-stop{background:#332108;border:1.5px solid #7a4e0a;color:#ffdca3}
+.kbb-row-stop .kbb-row-label{color:#e8920c}
+.kbb-row-rescue{background:#2a1418;border:1.5px solid #6b2530;color:#ffc2c9}
+.kbb-row-rescue .kbb-row-label{color:#ff8a94}
+
+/* ---- Story Mode: minimal chrome, single-statement/dramatic pages ---- */
+body.mode-story .kslide.active{background:#0f1115}
+body.mode-story .ktitle,body.mode-story .ktheater-q{color:#fff}
+body.mode-story #krail{display:none !important}
+body.mode-story.rail-on .kstage{right:0}
+body.mode-story .ktoggles{opacity:.2}
+body.mode-story .ktoggles:hover{opacity:1}
+
+.khook{text-align:center;max-width:900px;margin:0 auto}
+.khook-line{font-size:clamp(30px,3vw + 3vh,68px);font-weight:800;line-height:1.15;letter-spacing:-1px;color:#fff}
+.khook-cap{margin-top:2.4vh;font-size:clamp(16px,.8vw + 1vh,25px);color:#9fb4c9}
+
+.kba-grid{margin-top:2.6vh;display:grid;grid-template-columns:1fr 1fr;gap:1.6vw;max-width:920px}
+.kba-col{border-radius:16px;padding:2vh 1.6vw}
+.kba-before{background:#2a1418;border:1.5px solid #6b2530}
+.kba-after{background:#122a1d;border:1.5px solid #235c39}
+.kba-head{font-weight:800;letter-spacing:.5px;margin-bottom:1.4vh;font-size:clamp(13px,.5vw + .6vh,17px)}
+.kba-before .kba-head{color:#ff8a94} .kba-after .kba-head{color:#5fd88a}
+.kba-col ul{list-style:none;display:grid;gap:.9vh}
+.kba-col li{font-size:clamp(13px,.45vw + .65vh,17px);color:#dbe6f0;opacity:.92}
+@media(max-width:820px){.kba-grid{grid-template-columns:1fr}}
+
+/* ---- Live Decision Theater — full-screen poll, part of Story Mode ---- */
+.ktheater{text-align:center;max-width:900px;margin:0 auto}
+.ktheater-badge{display:inline-flex;align-items:center;gap:8px;background:#3a2a52;color:#c9a8f0;border-radius:999px;padding:.9vh 1.6vw;font-weight:800;letter-spacing:.5px;font-size:clamp(12px,.5vw + .5vh,15px)}
+.ktheater-badge.locked{background:#6b2530;color:#ffc2c9}
+.ktheater-badge.revealed{background:#235c39;color:#bdeecb}
+.ktheater-count{margin-top:1.6vh;font-size:clamp(15px,.6vw + .8vh,20px);color:#9fb4c9;font-weight:700}
+.ktheater-q{margin-top:2.4vh;font-size:clamp(24px,1.6vw + 1.6vh,44px);font-weight:800;line-height:1.2}
+.ktheater-tiles{margin-top:3vh;display:grid;gap:1.2vh;max-width:760px;margin-left:auto;margin-right:auto}
+.ktheater-tile{padding:2vh 1.6vw;border-radius:16px;background:#16233a;border:2px solid #27405f;color:#dbe6f0;
+  font-size:clamp(16px,.7vw + .9vh,24px);font-weight:700;position:relative;overflow:hidden;text-align:left;display:flex;justify-content:space-between}
+.ktheater-tile .fill{position:absolute;inset:0;background:#27405f;width:0%;transition:width .6s ease;z-index:0}
+.ktheater-tile .label,.ktheater-tile .pct{position:relative;z-index:1}
+.ktheater-tile.correct{border-color:var(--leaf)}
+.ktheater-tile.correct .fill{background:#1e4a2a}
+.ktheater-controls{margin-top:3vh;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.ktheater-btn{background:#27405f;color:#fff;border:none;border-radius:999px;padding:1.2vh 2vw;font-weight:800;cursor:pointer;font-size:clamp(13px,.5vw + .6vh,17px)}
+.ktheater-btn.primary{background:var(--cherry)}
+.ktheater-explain{margin-top:2.6vh;background:#101c2e;border:1.5px solid #233650;border-radius:14px;padding:1.8vh 1.8vw;
+  font-size:clamp(14px,.5vw + .8vh,19px);color:#dbe6f0;max-width:760px;margin-left:auto;margin-right:auto}
+
 #kqr-overlay{position:fixed;inset:0;z-index:80;background:rgba(15,20,25,.92);display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:20px}
 #kqr-overlay.show{display:flex}
 #kqr-overlay .box{background:#fff;border-radius:22px;padding:20px;box-shadow:var(--shadow);width:min(58vh,460px);height:min(58vh,460px)}
