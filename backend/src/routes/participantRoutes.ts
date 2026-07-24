@@ -3,6 +3,14 @@ import rateLimit from 'express-rate-limit';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { requireAdmin } from '../middlewares/authMiddleware';
+import { verifyKitToken } from '../services/classKit/kitToken';
+import {
+  handleRecordPulse, handleGetLiveState,
+  handleSetBroadcast, handleGetCompanionState, handleRecordPollResponse,
+} from '../controllers/sessionLiveController';
+import { requireBuildEntitlement } from '../middlewares/requireBuildEntitlement';
+import { requireContentEntitlement } from '../middlewares/requireContentEntitlement';
 import { requireOrgManager } from '../middlewares/orgAuth';
 import {
   handleOrgRegister, handleOrgInvites, handleOrgOverview,
@@ -19,11 +27,11 @@ import {
   handleGetSubscription, handleStartSubscriptionCheckout, handleCancelSubscription, handleConfirmCheckout,
   handleGetEnrollment, handleSelectEnrollmentCohort,
   handleGetOnboardingSchedule, handleRsvpOpenHouse, handleGetPublicEvents,
-  handleIngestBackground, handleGetOnboardingProfile,
+  handleIngestBackground, handleGetOnboardingProfile, handleSubmitReferrals,
   handleRequestMagicLink, handleVerifyMagicLink, handleGetProfile,
-  handleGetDashboard, handleGetSessions, handleGetSessionDetail,
+  handleGetDashboard, handleGetSessions, handleGetSessionDetail, handleGetNextSession, handleJoinSession, handleLeaveMeeting,
   handleGetSubmissions, handleCreateSubmission, handleUploadSubmission,
-  handleGetProgress,
+  handleGetProgress, handleGetCheckinInfo,
 } from '../controllers/participantController';
 import {
   handleGetCurriculum, handleGetModuleDetail, handleStartLesson,
@@ -51,13 +59,16 @@ import {
 import {
   handleOpenCard, handleMentor, handleNudge, handleReflection, handleEnsureContent, handleUploadCertificate, handleGetCertificate, handlePromptLab,
   handleComplete, handleReadiness, handleListNotes, handleCreateNote, handleDeleteNote,
-  handleWatchBeat, handleGetSurvey, handleSaveSurvey,
+  handleWatchBeat, handleBlogReadBeat, handleBlogCollect, handleBlogReader, handleDwellBeat, handleGetSurvey, handleSaveSurvey,
+  handleGetWeekReview, handleSaveReflectionSignals,
+  handleGetPeerWins, handleSubmitWin, handleCheerWin,
   handleGetAssessment, handleSubmitAssessment,
   handleUploadFieldGuide, handleGetFieldGuide, handleBuildArtifactUpload,
   handleArchitectState, handleArchitectAdvance, handleArchitectInterview,
   handleArchitectEvaluate, handleArchitectComplete, handleArchitectLedger,
 } from '../controllers/runtimeController';
 import { handleGetToday, handleTodayInteract } from '../controllers/todayController';
+import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
@@ -74,12 +85,24 @@ router.get('/api/portal/verify', handleVerifyMagicLink);
 // experience) and the phone-handoff exchange (public — no session yet).
 router.get('/api/portal/flags', handleGetPortalFlags);
 router.get('/api/portal/handoff/exchange', handleExchangeHandoff);
+// Public check-in landing info (no auth): a not-yet-logged-in student who scans
+// the Class Kit QR can see which class they're checking in to. No meeting link.
+router.get('/api/portal/sessions/:id/checkin-info', handleGetCheckinInfo);
 
 // Authenticated participant endpoints
 router.get('/api/portal/profile', requireParticipant, handleGetProfile);
 router.get('/api/portal/dashboard', requireParticipant, handleGetDashboard);
 router.get('/api/portal/podcasts', requireParticipant, listPodcastsPortal);
 // Timeline Engine — Classroom feed (flag-gated inside the controller; 404 -> legacy curriculum).
+// NOT wrapped in requireContentEntitlement: TodayShell also reads this endpoint
+// (Today renders Week 0 from the same feed), so a hard 402 here would break Today
+// for free-tier users too. The real week-1-12 content boundary already lives
+// inside getFeed() itself (services/timeline/timelineService.ts), which filters
+// to Week 0 only for free-tier enrollments via isFreePreviewTier — gated by the
+// existing CONTENT_PAID_GATE_ENABLED flag. requireContentEntitlement stays
+// mounted below on the Classroom-EXCLUSIVE week-detail/reveal routes, which
+// Today never calls, and <PageGate> blocks the Classroom page itself on the
+// frontend for a gated user in the common case.
 router.get('/api/portal/classroom', requireParticipant, handleGetClassroomFeed);
 router.post('/api/portal/classroom/cards/:cardId/complete', requireParticipant, handleCompleteCard);
 // Learning Runtime Intelligence (Phase 3) — consumes the published Timeline; never edits curriculum.
@@ -113,6 +136,13 @@ router.post('/api/portal/runtime/cards/:cardId/complete', requireParticipant, ha
 // Weekly feedback Survey — read the questions + saved answers, and store answers.
 router.get('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleGetSurvey);
 router.post('/api/portal/runtime/cards/:cardId/survey', requireParticipant, handleSaveSurvey);
+// Week in Review (reflection) — per-student review data + save the strategic signals.
+router.get('/api/portal/runtime/cards/:cardId/week-review', requireParticipant, handleGetWeekReview);
+router.post('/api/portal/runtime/cards/:cardId/week-review/signals', requireParticipant, handleSaveReflectionSignals);
+// Peer Wins (community_discussion) — the cohort's wins grid + post/edit your win + cheer a classmate's.
+router.get('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleGetPeerWins);
+router.post('/api/portal/runtime/cards/:cardId/peer-wins', requireParticipant, handleSubmitWin);
+router.post('/api/portal/runtime/cards/:cardId/peer-wins/:winId/cheer', requireParticipant, handleCheerWin);
 router.get('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleGetAssessment);
 router.post('/api/portal/runtime/cards/:cardId/assessment', requireParticipant, handleSubmitAssessment);
 // The Architect Time Machine (architect_mindset) — state/resume, validated stage
@@ -133,10 +163,37 @@ const watchBeatRateLimiter = rateLimit({
   message: { error: 'Too many watch beats — please slow down' },
 });
 router.post('/api/portal/runtime/cards/:cardId/watch', watchBeatRateLimiter, requireParticipant, handleWatchBeat);
+// Blog 2-minute read gate: continuous-dwell heartbeat + collect (ambient blogs, no card row).
+router.post('/api/portal/runtime/today/blog/:blogId/read', watchBeatRateLimiter, requireParticipant, handleBlogReadBeat);
+router.post('/api/portal/runtime/today/blog/:blogId/collect', requireParticipant, handleBlogCollect);
+// In-Workspace blog reader: the post's article fetched + sanitized server-side (the
+// training site sends X-Frame-Options: DENY, so it can't be iframed directly).
+router.get('/api/portal/runtime/today/blog/:blogId/reader', requireParticipant, handleBlogReader);
+// Generic dwell gate: heartbeat for passive-content types (intel/reflection/…).
+router.post('/api/portal/runtime/cards/:cardId/dwell', watchBeatRateLimiter, requireParticipant, handleDwellBeat);
 router.get('/api/portal/sessions', requireParticipant, handleGetSessions);
+router.get('/api/portal/next-session', requireParticipant, handleGetNextSession);
 router.get('/api/portal/sessions/:id', requireParticipant, handleGetSessionDetail);
+router.post('/api/portal/sessions/:id/join', requireParticipant, handleJoinSession);
+// Best-effort "left the Meet tab" beacon — see handleLeaveMeeting.
+router.post('/api/portal/sessions/:id/leave-meet', requireParticipant, handleLeaveMeeting);
 router.get('/api/portal/sessions/:id/chat', requireParticipant, handleGetSessionChat);
 router.post('/api/portal/sessions/:id/chat', requireParticipant, handlePostSessionChat);
+// Live class pulse: a student sets status from their phone (participant-auth); the
+// instructor Class Kit deck reads aggregate state via a session-scoped kit token
+// (baked into the admin-opened deck) OR an admin JWT.
+router.post('/api/portal/sessions/:id/pulse', requireParticipant, handleRecordPulse);
+router.post('/api/portal/sessions/:id/poll-response', requireParticipant, handleRecordPollResponse);
+// Phone companion: mirrors whatever the instructor deck is currently showing.
+router.get('/api/portal/sessions/:id/companion-state', requireParticipant, handleGetCompanionState);
+// Deck-authed via a session-scoped kit token (or admin JWT):
+const kitTokenOrAdmin = (req: import('express').Request, res: import('express').Response, next: import('express').NextFunction) => {
+  const t = typeof req.query.t === 'string' ? req.query.t : undefined;
+  if (verifyKitToken(t, req.params.id as string)) return next();
+  return requireAdmin(req, res, next);
+};
+router.get('/api/portal/sessions/:id/live-state', kitTokenOrAdmin, handleGetLiveState);
+router.post('/api/portal/sessions/:id/broadcast', kitTokenOrAdmin, handleSetBroadcast);
 router.get('/api/portal/submissions', requireParticipant, handleGetSubmissions);
 router.post('/api/portal/submissions', requireParticipant, handleCreateSubmission);
 router.post('/api/portal/submissions/:id/upload', requireParticipant, strategyPrepUpload.single('file'), handleUploadSubmission);
@@ -157,6 +214,7 @@ router.get('/api/portal/events', requireParticipant, handleGetPublicEvents); // 
 router.post('/api/portal/open-house/:id/rsvp', requireParticipant, handleRsvpOpenHouse);
 router.post('/api/portal/onboarding/ingest-background', requireParticipant, handleIngestBackground);
 router.get('/api/portal/onboarding/profile', requireParticipant, handleGetOnboardingProfile);
+router.post('/api/portal/onboarding/referrals', requireParticipant, handleSubmitReferrals);
 // "Open on your phone" — authed desktop mints a single-use QR handoff code.
 router.post('/api/portal/handoff', requireParticipant, handleCreateHandoff);
 
@@ -323,6 +381,19 @@ router.get('/api/portal/project-dna', requireParticipant, async (req, res) => {
   }
 });
 
+// Paid/entitlement gate (flag-gated, default OFF) on the build + evidence subsystem.
+// Scoped to the singular /api/portal/project subtree — that is the whole build/
+// evidence surface projectRoutes serves (setup, architect-build, compile, verify,
+// progression-evaluate, build-session, telemetry, capabilities, visual-review, ...).
+// requireParticipant is included here so req.participant is resolved BEFORE the gate
+// runs (projectRoutes' own per-route requireParticipant then re-runs harmlessly).
+// Deliberately NOT applied as `router.use(gate, projectRoutes)`: a path-less mount
+// would leak the participant gate onto the plural /api/portal/projects nav, the
+// /api/portal/onboarding route, and the /api/admin/governance/* admin endpoints this
+// same router also carries. Those stay open, as do learning + community mounts.
+// Inert unless BUILD_PAID_GATE_ENABLED=true (ships dark).
+router.use('/api/portal/project', requireParticipant, requireBuildEntitlement);
+
 // Project endpoints
 router.use(projectRoutes);
 
@@ -332,7 +403,11 @@ router.use(workspaceRoutes);
 // Student CB-System operating model (priority queue, Run My Day, decisions)
 router.use(studentOpsRoutes);
 
-// Persisted student projects read API (Project Backend P1, flag-gated)
+// Persisted student projects read API (Project Backend P1, flag-gated).
+// Path-scoped (plural /api/portal/projects) so it can never leak onto the
+// singular /api/portal/project build-gate mount above — same care as that
+// mount's own comment. Inert unless CONTENT_PAGE_GATE_ENABLED=true (ships dark).
+router.use('/api/portal/projects', requireParticipant, requireContentEntitlement('projects'));
 router.use(projectsPortalRoutes);
 
 // Mentor endpoints
@@ -465,7 +540,7 @@ import {
   ReportPostSchema, LeaderboardQuerySchema, NotificationIdParamSchema,
 } from '../schemas/communitySchemas';
 
-router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req, res) => {
+router.get('/api/portal/classroom/week/:weekNum', requireParticipant, requireContentEntitlement('classroom'), async (req, res) => {
   const parsed = GetWeekSchema.safeParse(req.params);
   if (!parsed.success) {
     res.status(400).json({ error: 'Week must be 1–12', details: parsed.error.flatten() });
@@ -480,7 +555,7 @@ router.get('/api/portal/classroom/week/:weekNum', requireParticipant, async (req
   }
 });
 
-router.post('/api/portal/classroom/week/:weekNum/reveal', requireParticipant, async (req, res) => {
+router.post('/api/portal/classroom/week/:weekNum/reveal', requireParticipant, requireContentEntitlement('classroom'), async (req, res) => {
   const weekParsed = GetWeekSchema.safeParse(req.params);
   const bodyParsed = RevealActivitySchema.safeParse(req.body);
   if (!weekParsed.success || !bodyParsed.success) {
@@ -841,9 +916,24 @@ router.patch('/api/portal/community/members/me', requireParticipant, async (req,
 
 router.get('/api/portal/community/members', requireParticipant, async (req, res) => {
   try {
-    const { listMembers } = await import('../services/communityService');
-    const members = await listMembers(req.participant!.sub);
-    res.json({ members });
+    const { listMembers, isMemberRole } = await import('../services/communityService');
+    // Safe integer parse — reject NaN/blank so a bad ?minLevel= never filters
+    // everyone out (typeof NaN === 'number' would slip past the service guard).
+    const num = (v: unknown): number | undefined => {
+      if (typeof v !== 'string' || v.trim() === '') return undefined;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : undefined;
+    };
+    const { search, role, minLevel, limit, offset } = req.query;
+    const page = await listMembers(req.participant!.sub, {
+      search: typeof search === 'string' ? search : undefined,
+      role: typeof role === 'string' && isMemberRole(role) ? role : undefined,
+      minLevel: num(minLevel),
+      limit: num(limit),
+      offset: num(offset),
+    });
+    // `members` preserved for existing callers; `total`/`has_more` are new.
+    res.json(page);
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
@@ -865,6 +955,22 @@ router.get('/api/portal/cohort/presence', requireParticipant, async (req, res) =
     const { getCohortPresence } = await import('../services/cohortPresenceService');
     const contacts = await getCohortPresence(req.participant!.sub, req.participant!.cohort_id);
     res.json({ contacts });
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Role-aware "People" panel for the right rail (flag-gated; default OFF). Flag OFF
+// returns { enabled:false } and the rail falls back to GET /api/portal/cohort/presence,
+// so merging/deploying changes nothing until PEOPLE_PANEL_ROLES_ENABLED=true. Flag ON
+// returns { enabled:true, ...panel } — staff get cross-cohort presence + classes +
+// businesses; students get their class + recently-active people outside it.
+router.get('/api/portal/people/panel', requireParticipant, async (req, res) => {
+  try {
+    if (!env.peoplePanelRolesEnabled) { res.json({ enabled: false }); return; }
+    const { getPeoplePanel } = await import('../services/peoplePanelService');
+    const panel = await getPeoplePanel(req.participant!.sub, req.participant!.cohort_id);
+    res.json({ enabled: true, ...panel });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
   }
@@ -980,6 +1086,28 @@ router.get('/api/portal/community/members/:memberId', requireParticipant, async 
     res.json({ profile });
   } catch (err: any) {
     res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// ── Management-portal bridge (employees only) ────────────────────────────────
+// Lets a staff member with a mgmt role open the admin portal from inside their
+// student session — no separate credentials.
+router.get('/api/portal/mgmt/status', requireParticipant, async (req, res) => {
+  try {
+    const { getMgmtStatus } = await import('../services/access/mgmtBridgeService');
+    res.json(await getMgmtStatus(req.participant!.sub));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+router.post('/api/portal/mgmt/enter', requireParticipant, async (req, res) => {
+  try {
+    const { mintMgmtAdminToken } = await import('../services/access/mgmtBridgeService');
+    const minted = await mintMgmtAdminToken(req.participant!.sub);
+    if (!minted) { res.status(403).json({ error: 'Not a management user' }); return; }
+    res.json(minted);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -1,9 +1,8 @@
 /**
  * Contract tests for the curriculum-type AI thumbnails: every type in the
  * registry has an authored thumbnail_url, every authored slug really exists in
- * the registry (so seedComponentAuthoring never reports `missing`), the shipped
- * static asset exists for each URL, and the overview authoring survived the
- * AI_THUMBNAILS merge intact.
+ * the registry (so seedComponentAuthoring never reports `missing`), and the
+ * shipped static asset exists for each URL.
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -44,12 +43,5 @@ describe('curriculum-type thumbnails', () => {
       .filter(([, fields]) => !fs.existsSync(path.join(PUBLIC_DIR, fields.thumbnail_url as string)))
       .map(([slug]) => slug);
     expect(broken).toEqual([]);
-  });
-
-  it('overview keeps its full authoring alongside the AI thumbnail', () => {
-    const overview = COMPONENT_AUTHORING.overview;
-    expect(overview.generation_prompt).toBeTruthy();
-    expect(overview.approved).toBe(true);
-    expect(overview.thumbnail_url).toBe('/thumbnails/curriculum-types/overview.jpg');
   });
 });

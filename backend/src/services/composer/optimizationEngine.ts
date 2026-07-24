@@ -9,6 +9,7 @@ import { PlanCard } from './types';
 import { ValidationResult, BlueprintLike } from './validationEngine';
 import { estimateEvidence } from './evidenceEngine';
 import { checkDependencies } from './dependencyEngine';
+import { coverageGaps } from './coverageGapEngine';
 
 export interface Recommendation {
   rank: number;
@@ -16,7 +17,9 @@ export interface Recommendation {
   severity: 'low' | 'medium' | 'high';
   title: string;
   why: string;
-  patch: { op: 'add' | 'insert_before' | 'remove' | 'reorder'; type?: string; before?: string; target?: string };
+  /** Machine-applicable action the UI applies WITHOUT an LLM regen.
+   *  `add_videos` → curate short videos for `competencies` (the gap ids). */
+  patch: { op: 'add' | 'insert_before' | 'remove' | 'reorder' | 'add_videos'; type?: string; before?: string; target?: string; competencies?: string[] };
 }
 
 const SEV_WEIGHT = { high: 3, medium: 2, low: 1 };
@@ -63,10 +66,17 @@ export function recommend(cards: PlanCard[], blueprint: BlueprintLike, validatio
     title: 'Add a Certification Exercise', why: 'Certification readiness is below target; a graded certification exercise directly advances it.',
     patch: { op: 'add', type: 'certification_exercise' } });
 
-  // 6. competency gaps vs blueprint
-  if (validation.competency_coverage < 0.75 && (blueprint.competencies || []).length) recs.push({ area: 'coverage', severity: 'medium', rank: 0,
-    title: 'Increase competency coverage', why: `Only ${Math.round(validation.competency_coverage * 100)}% of the blueprint competencies are covered; add a Deep Dive or Prompt Lab targeting the gap.`,
-    patch: { op: 'add', type: 'deep_dive' } });
+  // 6. competency gaps vs blueprint — the specific competencies taught by no card
+  //    AND no live/Academy session. Offer to fill them with curated short videos.
+  const gaps = coverageGaps(blueprint, cards);
+  if (gaps.length) {
+    const shown = gaps.slice(0, 4).map((g) => g.label).join(', ');
+    const more = gaps.length > 4 ? `, +${gaps.length - 4} more` : '';
+    recs.push({ area: 'coverage', severity: 'medium', rank: 0,
+      title: `Fill ${gaps.length} coverage gap${gaps.length > 1 ? 's' : ''} with short videos`,
+      why: `${shown}${more} ${gaps.length > 1 ? 'are' : 'is'} taught by no card or session. Curate 3–10 min videos to cover ${gaps.length > 1 ? 'them' : 'it'} within your video-time budget.`,
+      patch: { op: 'add_videos', competencies: gaps.map((g) => g.competency) } });
+  }
 
   return recs
     .sort((a, b) => SEV_WEIGHT[b.severity] - SEV_WEIGHT[a.severity])

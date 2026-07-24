@@ -7,6 +7,7 @@ import { z } from 'zod';
 import {
   listBlueprints, getBlueprint, createBlueprint, updateBlueprint, deleteBlueprint,
   generateForBlueprint, validateBlueprint, assessPlan,
+  curateVideoFill, applyVideoFill,
 } from '../services/composer/blueprintService';
 import { publishBlueprint } from '../services/composer/publishService';
 import { generateCurriculum, fillCard, approvedPalette, scaffoldPlan } from '../services/composer/composerAi';
@@ -36,6 +37,7 @@ const quickSchema = z.object({
   title: z.string().min(1), instruction: z.string().optional(), scope: scopeEnum.optional(),
   week: z.number().int().nullable().optional(), difficulty: z.string().optional(),
   competencies: z.array(z.string()).optional(), architect_domains: z.array(z.string()).optional(),
+  session_competencies: z.array(z.string()).optional(),
   learning_objectives: z.array(z.string()).optional(), purpose: z.string().optional(),
 });
 export async function handleQuickGenerate(req: Request, res: Response, next: NextFunction) {
@@ -90,6 +92,32 @@ export async function handleValidate(req: Request, res: Response, next: NextFunc
 }
 export async function handlePublish(req: Request, res: Response, next: NextFunction) {
   try { res.json(await publishBlueprint(String(req.params.id), req.query.force === 'true')); } catch (e) { fail(res, e, next); }
+}
+
+// ── coverage gap-fill: curate short videos (read-only) + non-destructive apply ─
+const curateSchema = z.object({ budget_minutes: z.number().int().positive().max(600).optional() });
+export async function handleCurateVideos(req: Request, res: Response, next: NextFunction) {
+  try {
+    const b = curateSchema.parse(req.body || {});
+    res.json(await curateVideoFill(String(req.params.id), { budgetMinutes: b.budget_minutes }));
+  } catch (e) { fail(res, e, next); }
+}
+
+const applyVideosSchema = z.object({
+  videos: z.array(z.object({
+    video_url: z.string().url(),
+    title: z.string().min(1),
+    channel: z.string().optional(),
+    duration_seconds: z.number().int().positive(),
+    competency: z.string().min(1),
+    competency_label: z.string().optional(),
+  })).min(1),
+});
+export async function handleApplyVideos(req: Request, res: Response, next: NextFunction) {
+  try {
+    const b = applyVideosSchema.parse(req.body || {});
+    res.json(await applyVideoFill(String(req.params.id), b.videos));
+  } catch (e) { fail(res, e, next); }
 }
 
 export { scaffoldPlan };

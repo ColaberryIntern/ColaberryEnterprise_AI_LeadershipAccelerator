@@ -57,8 +57,11 @@ const toOption = (c: any): EnrollmentCohortOption => ({
     : null,
 });
 
-/** True when the cohort is a real paid class (not the Explorer/prospect/demo bucket). */
-const isRealClassCohort = (c: any | null): boolean => !!c && !isNonPayingCohortName(c.name);
+/** True when the cohort is a real paid class students can enroll into — not the
+ *  Explorer/prospect/demo bucket, and not a private business/owner workspace
+ *  (cohort_type='business', which is invisible to students). */
+const isRealClassCohort = (c: any | null): boolean =>
+  !!c && !isNonPayingCohortName(c.name) && String(c.cohort_type ?? '').toLowerCase() !== 'business';
 
 /** Upcoming selectable cohorts: open, real paid classes, starting today or later. */
 async function listSelectableCohorts(now: Date): Promise<any[]> {

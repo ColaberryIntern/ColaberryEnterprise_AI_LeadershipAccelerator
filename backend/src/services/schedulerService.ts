@@ -29,6 +29,9 @@ import {
   getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
   detectAbsentParticipants, computeAllReadinessScores,
 } from './acceleratorService';
+import { finalizeSessionAttendance } from './liveSessionAttendanceService';
+import { generateSessionRecap } from './sessionRecapService';
+import { ensureSessionMeetLink } from './meetingService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 
 /**
@@ -1814,19 +1817,49 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
-  // AI News Flash intelligence pipeline — daily (03:15 America/Chicago). Fetches
-  // free AI-lab RSS feeds, dedup-upserts the library, and (when
-  // AI_NEWS_INGEST_ENABLED=true) materializes up to a dozen executive news cards.
-  // Idempotent + cost-gated; see aiNewsIngestionService.
+  // Daily content lifecycle (03:15 America/Chicago). AI News Flash: fetch free
+  // AI-lab RSS feeds, dedup-upsert the library, and (when AI_NEWS_INGEST_ENABLED
+  // =true) materialize up to AI_NEWS_MAX_PER_RUN fresh news cards (prod=3, code
+  // floor 1 → ~3 LLM calls/day). Then prune: archive any generated (*_pipeline)
+  // card older than 30 days out of the feed, so each generator holds a rolling
+  // ~30-day window and cost stays bounded. Idempotent + cost-gated; see
+  // aiNewsIngestionService + generatedContentRetention.
   cron.schedule(
     '15 3 * * *',
     () => {
       instrumentCronJob('AiNewsRefresh', async () => {
         const { refreshAiNews } = await import('./intel/aiNewsIngestionService');
-        await refreshAiNews({ maxCards: 12 });
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await refreshAiNews(); // maxCards defaults to AI_NEWS_MAX_PER_RUN (prod=3)
+        await pruneGeneratedContent(); // discard generated cards older than 30 days
       }).catch((err) => {
         console.error('[Scheduler] AI News refresh error:', err);
       });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Intelligence pipelines — the 9 generators beyond AI News Flash (arXiv research,
+  // tools, YouTube, quotes, eng-blogs, GitHub builds, MCP servers, Claude Code
+  // techniques, market intel). Daily 03:45 CT, staggered 30 min after AiNewsRefresh
+  // to spread LLM load. Each source self-registers via the sources barrel, is
+  // cost-gated by its own <SLUG>_INGEST_ENABLED flag (default OFF → ships dark),
+  // and is tracked per-source via instrumentCronJob(`Intel_<slug>`). Prune runs once
+  // after the loop (shared 30-day generated-content retention).
+  cron.schedule(
+    '45 3 * * *',
+    () => {
+      (async () => {
+        await import('./intel/sources'); // register all adapters (idempotent)
+        const { listIntelSources, runIntelPipeline } = await import('./intel/intelPipeline');
+        for (const src of listIntelSources()) {
+          await instrumentCronJob(`Intel_${src.slug}`, async () => {
+            await runIntelPipeline(src.slug);
+          }).catch((err) => console.error(`[Scheduler] Intel ${src.slug} error:`, err));
+        }
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await pruneGeneratedContent();
+      })().catch((err) => console.error('[Scheduler] Intel pipelines error:', err));
     },
     { timezone: 'America/Chicago' }
   );
@@ -2190,6 +2223,11 @@ export function startScheduler(): void {
       // 24-hour reminders
       const upcoming24h = await getUpcomingSessions(24);
       for (const session of upcoming24h) {
+        // Ensure a teaching Meet link exists before reminding (idempotent; retries
+        // each tick until it succeeds, so a transient Google failure self-heals).
+        await ensureSessionMeetLink(session).catch((err: any) =>
+          console.error(`[Scheduler] Meet link ensure failed for session ${session.id}:`, err.message)
+        );
         const dedupKey = `${session.id}-24h`;
         if (sentReminders.has(dedupKey)) continue; // Already sent this reminder
         const enrollments = await Enrollment.findAll({
@@ -2258,6 +2296,17 @@ export function startScheduler(): void {
       for (const session of toComplete) {
         await session.update({ status: 'completed' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as completed`);
+
+        // Generate the AI recap (best-effort) — surfaced to absentees in the Today
+        // "you missed it" replay card. (Wiring it into the recap email is a follow-up.)
+        await generateSessionRecap(session).catch((err: any) =>
+          console.error(`[Scheduler] Recap generation failed for session ${session.id}:`, err.message)
+        );
+
+        // Fill leave_time/duration for anyone who self-joined but never left.
+        await finalizeSessionAttendance(session.id).catch((err: any) =>
+          console.error(`[Scheduler] Attendance finalize failed for session ${session.id}:`, err.message)
+        );
 
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);

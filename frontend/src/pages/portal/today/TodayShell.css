@@ -139,6 +139,11 @@
 .te-navbtn.is-soon:hover{opacity:1;background:var(--sunken)}
 .te-navbtn .te-soon{margin-left:auto;font-size:10px;letter-spacing:.04em;text-transform:uppercase;background:var(--sunken);
   color:var(--muted);border:1px solid var(--border-sub);border-radius:var(--r-pill);padding:1px 8px;font-weight:700}
+.te-navbtn .te-navlock{margin-left:auto;flex:none;width:18px;height:18px;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;
+  background:rgba(251,40,50,.12);color:var(--cherry-deep)}
+.te-navbtn:hover .te-navlock{background:rgba(251,40,50,.2)}
+.te-shell.collapsed .te-navbtn .te-navlock{display:none}
 
 /* ── presence footer ── */
 .te-presence{margin-top:auto;padding:14px 12px 6px;border-top:1px solid var(--border)}
@@ -171,6 +176,12 @@
 .te-ct-back{width:28px;height:28px;flex:none;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--muted);display:flex;align-items:center;justify-content:center;cursor:pointer}
 .te-ct-back:hover{background:var(--sunken);color:var(--strong)}
 .te-ct-back svg{width:16px;height:16px}
+/* search field inside Find people (type to filter the cohort) */
+.te-ct-search-wrap{display:flex;align-items:center;gap:9px;margin:8px 12px 4px;background:var(--sunken);border:1px solid var(--border);border-radius:var(--r-pill);padding:8px 14px}
+.te-ct-search-wrap:focus-within{border-color:var(--berry)}
+.te-ct-search-wrap svg{width:16px;height:16px;flex:none;color:var(--muted)}
+.te-ct-search{flex:1;min-width:0;border:none;background:none;outline:none;font-family:inherit;font-size:14px;color:var(--body)}
+.te-ct-search::placeholder{color:var(--muted)}
 .te-ctrow-static{cursor:default}
 .te-ctrow-static:hover{background:none;color:var(--body)}
 .te-ct-add{margin-left:auto;flex:none;font-size:12px;font-weight:700;padding:4px 12px;border-radius:var(--r-pill);border:1px solid var(--border);background:var(--surface);color:var(--berry);cursor:pointer;font-family:inherit;transition:background .14s,color .14s}
@@ -263,7 +274,11 @@
 .te-page-h h1{font-size:30px;line-height:1.12;color:var(--strong);margin:0;font-weight:700;letter-spacing:-.01em}
 .te-page-h .sub{color:var(--muted);font-size:16px;margin-top:6px;max-width:720px}
 .te-grid{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:22px;align-items:start}
-@media(max-width:1080px){.te-grid{grid-template-columns:1fr}}
+/* The timeline (middle) is the priority and must not go skinny: drop the inner
+   340px aside early so the feed keeps its width. Shrink order overall: the right
+   rail (contacts) collapses first (≤1200), then the left nav (≤1000); the middle
+   feed never shrinks (always 1fr). */
+@media(max-width:1300px){.te-grid{grid-template-columns:1fr}}
 
 .te-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-16);box-shadow:var(--shadow-md)}
 .te-side .te-card{margin-bottom:16px}
@@ -303,6 +318,27 @@
 .te-step .mt{font-size:13px;color:var(--muted);margin-top:3px;display:flex;gap:9px;align-items:center;flex-wrap:wrap}
 .te-pts{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);
   background:rgba(91,166,60,.14);color:var(--leaf-text)}
+
+/* setup completion prompt (above the skills chart) + its modal */
+.te-setup-prompt{display:flex;align-items:center;gap:10px;width:100%;margin:24px 0 14px;padding:13px 18px;
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-16);box-shadow:var(--shadow-md);
+  cursor:pointer;font-family:inherit;text-align:left;transition:border-color .14s,box-shadow .14s}
+.te-setup-prompt:hover{border-color:var(--berry);box-shadow:var(--shadow-lg)}
+.te-setup-prompt .ic{flex:none;width:30px;height:30px;border-radius:50%;background:rgba(54,120,149,.12);color:var(--berry);
+  display:flex;align-items:center;justify-content:center;font-size:15px}
+.te-setup-prompt .t{flex:1;font-weight:700;font-size:14px;color:var(--strong)}
+.te-setup-prompt .go{color:var(--cherry);font-weight:700}
+.te-setup-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.4);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px}
+.te-setup-modal{width:100%;max-width:480px;max-height:86vh;overflow-y:auto;background:var(--surface);
+  border-radius:var(--r-16);box-shadow:var(--shadow-lg);padding:20px}
+.te-setup-modal-head{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:2px}
+.te-setup-close{flex:none;width:28px;height:28px;border-radius:50%;border:none;background:var(--page);color:var(--muted);
+  font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.te-setup-close:hover{background:var(--sunken);color:var(--strong)}
+.te-input{padding:9px 12px;border:1px solid var(--border);border-radius:var(--r-8);background:var(--surface);
+  color:var(--body);font-family:inherit;font-size:14px;min-width:0}
+.te-input:focus{outline:none;border-color:var(--berry)}
+.te-input:disabled{opacity:.6}
 .te-pts.earned{background:var(--leaf);color:#fff}
 
 /* buttons + chips */
@@ -333,6 +369,14 @@
 .te-count .seg span{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-top:3px;display:block}
 .te-quick{display:flex;flex-direction:column;gap:8px;margin-top:4px}
 .te-quick .te-btn{width:100%;justify-content:center}
+
+/* Next live class side-card — live pulse dot (mirrors PortalSessionDetailPage's
+   session-live-dot) + the "live now" row. Countdown reuses .te-count/.seg. */
+.te-shell .te-livedot{width:10px;height:10px;border-radius:50%;background:var(--leaf);flex:none;
+  animation:te-livedot-pulse 1.5s ease-in-out infinite}
+@keyframes te-livedot-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.te-shell .te-live-row{display:flex;align-items:center;gap:8px;margin:12px 0;font-size:13px;font-weight:700;color:var(--leaf-text)}
+@media(prefers-reduced-motion:reduce){.te-shell .te-livedot{animation:none}}
 
 /* your-day + daily-streak sidebar cards */
 .te-scard h3 svg{width:17px;height:17px;flex:none}
@@ -368,15 +412,23 @@
 /* ════════════════════════════════════════════════════════════════════════
    REDESIGN — command band (desktop), bottom tab bar (mobile), QR modal.
    ════════════════════════════════════════════════════════════════════════ */
-.te-band{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:26px;align-items:center;
+/* Flex + wrap (NOT a viewport media query) so the band responds to its OWN
+   width — the middle grid column, which the left nav + right contacts rail can
+   squeeze well below the viewport width. When the greeting can't sit beside the
+   ring cluster at its natural min-content width, the cluster drops to its own
+   full-width row instead of the heading collapsing and shattering mid-word. */
+.te-band{display:flex;flex-wrap:wrap;gap:18px 26px;align-items:center;
   background:var(--surface);border:1px solid var(--border);border-top:4px solid var(--cherry);
   border-radius:var(--r-24);box-shadow:var(--shadow-md);padding:22px 26px;margin-bottom:18px}
+/* greeting column grows to fill; keep default min-width:auto (do NOT set 0) so
+   its min-content is the wrap trigger and the <h2> never breaks within a word. */
+.te-band > div:first-child{flex:1 1 340px}
 .te-band .crumb{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--cherry-text);display:flex;align-items:center;gap:8px}
 .te-band h2{font-family:var(--logo);font-size:26px;line-height:1.12;color:var(--strong);margin:8px 0 4px;font-weight:700;letter-spacing:-.01em}
 .te-band .statline{color:var(--muted);font-size:14px;margin:0 0 14px}
 .te-band .statline b{color:var(--leaf-text)}
 .te-band .ctas{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.te-cluster{display:flex;gap:20px;align-items:center;padding-left:26px;border-left:1px solid var(--border-sub)}
+.te-cluster{display:flex;flex-wrap:wrap;gap:16px 20px;align-items:center;flex:0 1 auto}
 .te-ring{--p:0;--c:var(--berry);width:74px;height:74px;border-radius:50%;flex:none;display:grid;place-items:center;
   background:conic-gradient(var(--c) calc(var(--p)*1%),var(--sunken) 0);position:relative}
 .te-ring::before{content:"";position:absolute;inset:7px;border-radius:50%;background:var(--surface)}
@@ -471,9 +523,10 @@
   /* app bar: keep brand + theme + settings + avatar; drop the desktop rail + HUD */
   .te-rail,.te-hud{display:none}
   .te-top{padding:10px 14px;gap:10px}
-  /* command band stacks; the ring cluster wraps under the greeting */
-  .te-band{grid-template-columns:1fr;padding:18px;border-radius:var(--r-16)}
+  /* mobile polish — the band already wraps via flex at any width; here we just
+     tighten padding/type and give the stacked ring cluster a top divider. */
+  .te-band{padding:18px;border-radius:var(--r-16)}
   .te-band h2{font-size:22px}
-  .te-cluster{padding-left:0;border-left:none;border-top:1px solid var(--border-sub);padding-top:16px;flex-wrap:wrap;gap:16px}
+  .te-cluster{border-top:1px solid var(--border-sub);padding-top:16px;gap:16px}
   .te-tabbar{display:flex}
 }

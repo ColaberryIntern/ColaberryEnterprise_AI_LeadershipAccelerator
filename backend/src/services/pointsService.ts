@@ -1,4 +1,5 @@
 import StudentPointsEvent from '../models/StudentPointsEvent';
+import { centralDateKey } from './centralDate';
 
 /**
  * Canonical earn events + their default point values. Guests start at 0 and earn
@@ -8,6 +9,7 @@ import StudentPointsEvent from '../models/StudentPointsEvent';
 export const POINT_EVENTS: Record<string, number> = {
   account_created: 0,        // marker only — a free account starts at 0 points
   profile_completed: 25,
+  referral_submitted: 25,    // "recommend a friend" onboarding step — one award per enrollment regardless of friend count
   open_house_rsvp: 10,
   open_house_attended: 50,
   project_dna_completed: 40,
@@ -21,6 +23,7 @@ export const POINT_EVENTS: Record<string, number> = {
   evaluation_passed: 20,
   lesson_complete: 10,
   deep_dive_field_guide: 100,   // one-time bonus for uploading a Deep Dive Field Guide built in Claude Code
+  session_attended: 25,         // joining a live class session (once per session, present or late)
 };
 
 export interface AwardInput {
@@ -79,6 +82,33 @@ export async function revoke(enrollmentId: string, eventKey: string): Promise<{ 
 export async function hasAwarded(enrollmentId: string, eventKey: string): Promise<boolean> {
   const row = await StudentPointsEvent.findOne({ where: { enrollment_id: enrollmentId, event_key: eventKey } });
   return !!row;
+}
+
+/**
+ * Sum the points an enrollment has banked TODAY (Central day) across a set of
+ * event_types — the running category total a daily anti-cheat cap clamps
+ * against (see progression/dailyCap). `todayKey` is the caller's Central date
+ * key (from centralDateKey) so the day boundary matches the streak/HUD's notion
+ * of "today" everywhere. Rows are filtered to today in JS via the same
+ * central-date function rather than a tz-fragile SQL range. An empty type list
+ * short-circuits to 0 (no query).
+ */
+export async function sumPointsTodayByEventTypes(
+  enrollmentId: string,
+  eventTypes: string[],
+  todayKey: string,
+): Promise<number> {
+  if (eventTypes.length === 0) return 0;
+  const rows = await StudentPointsEvent.findAll({
+    where: { enrollment_id: enrollmentId, event_type: eventTypes },
+    attributes: ['points', 'created_at'],
+  });
+  let sum = 0;
+  for (const r of rows as any[]) {
+    const created = r.created_at instanceof Date ? r.created_at : new Date(r.created_at);
+    if (centralDateKey(created.getTime()) === todayKey) sum += r.points || 0;
+  }
+  return sum;
 }
 
 // ── Canonical level ladder (the ONE ladder; mirrors frontend onboardingApi.LEVELS).

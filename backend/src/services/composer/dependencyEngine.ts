@@ -1,20 +1,22 @@
 /**
  * dependencyEngine — prevents invalid curriculum. Some component types only make
  * sense once their prerequisites are present in the same plan (a Prompt Lab
- * needs the Overview + Video that set it up; a Mock Interview needs the Prompt
- * Lab it interviews on). Pure + deterministic; powers the dependency graph and
- * the pre-publish warnings.
+ * needs the Video that sets it up; a Mock Interview needs the Prompt Lab it
+ * interviews on). Pure + deterministic; powers the dependency graph and the
+ * pre-publish warnings.
+ *
+ * NOTE: 'overview' was a prereq of prompt_lab/deep_dive/implementation_task/
+ * project_task until the overview type was retired 2026-07-21; those prereqs
+ * were dropped so plans without an overview card still validate/publish.
  */
 import { PlanCard } from './types';
 
 /** type slug -> the type slugs that should appear earlier in the same plan. */
 export const DEP_MAP: Record<string, string[]> = {
-  prompt_lab: ['overview', 'video'],
+  prompt_lab: ['video'],
   prompt_challenge: ['prompt_lab'],
-  deep_dive: ['overview'],
   knowledge_check: ['video'],
-  implementation_task: ['overview', 'prompt_lab'],
-  project_task: ['overview'],
+  implementation_task: ['prompt_lab'],
   artifact_submission: ['implementation_task'],
   mock_interview: ['prompt_lab'],
   evaluation: ['knowledge_check'],

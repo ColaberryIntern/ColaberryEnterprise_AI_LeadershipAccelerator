@@ -1,8 +1,14 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { parseVideoUrl, videoThumbnail, isAudioUrl } from '../../utils/videoEmbed';
 import VideoEmbed from './VideoEmbed';
 import CardComments from './CardComments';
 import { toTitleCase } from '../../utils/titleCase';
+import portalApi from '../../utils/portalApi';
+import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
+
+// Server-derived watch state for a card (the video watch gate). watched_pct is
+// the ratcheted server total; the collect button unlocks when met.
+interface WatchState { watched_pct: number; required_pct: number | null; met: boolean; }
 
 // Community byline helpers — a card carrying `author` renders as a post (avatar +
 // name + level badge) instead of the generic curriculum header.
@@ -73,6 +79,8 @@ export const BAND: Record<string, Visual> = {
   announcement: { kind: 'reading', color: '#367895' },
   discussion: { kind: 'reading', color: '#367895' },
   community: { kind: 'reading', color: '#367895' },
+  peer_wins: { kind: 'reading', color: '#5BA63C' },   // Cohort Wins grid — green = growth/celebration
+
   study: { kind: 'reading', color: '#367895' },
   warmup: { kind: 'reading', color: '#2E6A86' },
   intel: { kind: 'reading', color: '#2E6A86' },   // Intelligence Pipeline types (news/research/tools/…)
@@ -171,6 +179,12 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const podcastAudio = card.type === 'podcast' && card.video?.url && isAudioUrl(card.video.url) ? card.video.url : null;
   const [playingInline, setPlayingInline] = useState(false);
   const inlineAudioRef = useRef<HTMLAudioElement | null>(null);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [inView, setInView] = useState(false);
+  // Points are NEVER collected on the tile — every points card opens the drawer,
+  // where the type's completion gate lives. The tile only PREVIEWS progress (the
+  // video watch %); the drawer owns the Collect button.
+  const [watch, setWatch] = useState<WatchState | null>(null); // video watch progress (on-card % preview)
   const toggleInline = () => {
     if (locked) return;
     if (!playingInline) { setPlayingInline(true); return; }
@@ -201,6 +215,29 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   const source = parseVideoUrl(card.video?.url);
   const playable = !!source;
   const [showComments, setShowComments] = useState(false);
+
+  // Watch gate: a real (anchored) video card that awards points and can be
+  // collected has to be watched to the required % before Collect unlocks. Ambient
+  // media (ref `provider:id`, no card row) and podcasts (no points) are never
+  // watch-gated on the tile. The % is server-derived — the inline preview emits
+  // watch beats as it plays and the server returns the ratcheted total.
+  const anchored = !card.id.includes(':');
+  const watchable = playable && !podcastAudio && anchored && pts > 0 && !!onComplete;
+
+  // Viewport autoplay: a media card (video OR podcast audio) starts playing while
+  // it is in view and stops when scrolled away — so only what you're looking at
+  // plays. Video is a muted, click-through preview; a podcast starts its episode.
+  useEffect(() => {
+    if (!((playable || !!podcastAudio) && !locked)) return;
+    const el = cardRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.55 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [playable, podcastAudio, locked]);
+  useEffect(() => {
+    if ((playable || !!podcastAudio) && !locked) setPlayingInline(inView);
+  }, [inView, playable, podcastAudio, locked]);
   const ownPoster =
     (card.image && card.image.trim()) ||
     card.video?.poster ||
@@ -266,9 +303,13 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       </div>
     </div>
   ) : playable && !podcastAudio && playingInline ? (
-    // The tile IS the player now (in-feed playback, no panel) — video embeds
-    // (YouTube/Vimeo/…) and direct files. Ending playback auto-completes.
-    // Direct audio episodes use the dedicated podcast tile below instead.
+    // Viewport autoplay PREVIEW: muted (autoplay ⇒ muted in VideoEmbed). Unlike the
+    // old click-through-to-drawer behaviour, the tile's own controls (native
+    // play/pause/mute/seek, revealed on hover) are directly usable right here — the
+    // footer "Open"/"Workspace" buttons are now the only ways to the side panel, and
+    // both stop this inline preview first so the drawer's own player is never
+    // competing with an unmuted tile playing underneath it. A muted scroll-by
+    // preview never marks the card complete — completion happens in the drawer.
     <div className={`mthumb playing${card.type === 'testimonial' ? ' testimonial' : ''}`}>
       <VideoEmbed
         source={source}
@@ -276,7 +317,10 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         poster={ownPoster || posterUrl}
         autoplay
         badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
-        onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
+        onEnded={() => setPlayingInline(false)}
+        onWatchBeat={watchable && !done
+          ? (beat) => { portalApi.post(`/api/portal/runtime/cards/${card.id}/watch`, beat).then((r) => setWatch(r.data)).catch(() => { /* best-effort */ }); }
+          : undefined}
       />
     </div>
   ) : podcastAudio ? (
@@ -311,7 +355,13 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           <audio
             ref={inlineAudioRef}
             style={{ width: '100%' }} src={podcastAudio} controls autoPlay
-            onEnded={() => { setPlayingInline(false); if (!done) onComplete?.(card); }}
+            // Read fresh on every (re)mount — this element is destroyed and recreated
+            // each time the tile scrolls out of and back into view, so a stale
+            // useState here would silently re-mute an episode the student already
+            // unmuted. See podcastMutePreference for the sticky cross-episode contract.
+            muted={getPodcastMuted()}
+            onVolumeChange={(e) => setPodcastMuted(e.currentTarget.muted)}
+            onEnded={() => setPlayingInline(false)}
           />
         </span>
       ) : (
@@ -325,8 +375,8 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
       type="button"
       className={`mthumb${done ? ' done' : ''}${card.type === 'testimonial' ? ' testimonial' : ''}${card.type === 'blog' ? ' blog' : ''}`}
       style={posterStyle}
-      onClick={() => !locked && (playable ? setPlayingInline(true) : onOpen?.(card))}
-      aria-label={playable ? `Play ${card.video?.title || card.title}` : `Open ${card.title}`}
+      onClick={() => !locked && onOpen?.(card)}
+      aria-label={`Open ${card.video?.title || card.title}`}
     >
       {watermark}
       {CLAUDE_CODE_TYPES.has(card.type) && <span className="mt-ribbon" style={{ background: 'linear-gradient(90deg,#D97757,#C4633A)' }}>Claude Code</span>}
@@ -347,7 +397,7 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
   );
 
   return (
-    <div className={`tl-card fcard${locked ? ' locked' : ''}${compact ? ' compact' : ''}`}>
+    <div ref={cardRef} className={`tl-card fcard${locked ? ' locked' : ''}${compact ? ' compact' : ''}`}>
       <div className="fc-head">
         {card.author
           ? (card.author.avatar_url
@@ -385,6 +435,19 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           )}
         </div>
         )}
+        {/* On-card watch progress — the video watch gate, shown right on the tile
+            (was drawer-only). Fills as the inline preview plays; turns green +
+            "points unlocked" at the required %. */}
+        {watchable && watch && watch.required_pct != null && !done && (
+          <div className="tc-watchrow" style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
+              <i style={{ display: 'block', height: '100%', width: `${Math.min(100, watch.watched_pct)}%`, background: watch.met ? '#5BA63C' : v.color, transition: 'width .4s ease' }} />
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', color: watch.met ? '#5BA63C' : 'var(--text-muted,#6B6B6B)' }}>
+              {watch.met ? '✓ Watched — points unlocked' : `Watched ${watch.watched_pct}% · reach ${watch.required_pct}%`}
+            </span>
+          </div>
+        )}
       </div>
       )}
       <div className="fc-foot">
@@ -396,9 +459,11 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
         <button type="button" className={`cmt${showComments ? ' liked' : ''}`} disabled={locked} onClick={() => !locked && setShowComments((s) => !s)}>
           <svg viewBox="0 0 24 24" fill="none"><path d="M21 12a8 8 0 0 1-11.5 7.2L4 20l1-4.5A8 8 0 1 1 21 12z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Comment
         </button>
-        {/* Quick shortcut into the full workspace (video + AI Mentor + comments). */}
+        {/* Quick shortcut into the full workspace (video + AI Mentor + comments).
+            Stops the tile's own inline preview first — same reason as "Open" below —
+            so an unmuted tile doesn't keep playing underneath the drawer's own player. */}
         {onWorkspace && !locked && (
-          <button type="button" className="cmt" onClick={() => onWorkspace(card)}>
+          <button type="button" className="cmt" onClick={() => { setPlayingInline(false); onWorkspace(card); }}>
             <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M8 20h8M12 17v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Workspace
           </button>
         )}
@@ -407,9 +472,20 @@ const TimelineCard: React.FC<Props> = ({ card, onOpen, onLike, onComplete, onWor
           ? <span className="pip done" style={{ fontSize: 13 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts</span>
           : locked
             ? <span className="pip lock" style={{ fontSize: 13 }} title={card.lock_reason || undefined}>{card.lock_reason || 'Unlocks later'}</span>
-            : <button type="button" className={`fc-cta ${v.kind === 'lab' ? 'cherry' : 'berry'}`} onClick={() => { setPlayingInline(false); onOpen?.(card); }}>
-                <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}
-              </button>}
+            : (
+              // Every card opens the drawer — points are only ever collected there,
+              // behind the type's completion gate. Points cards advertise the reward.
+              <button
+                type="button"
+                className={`fc-cta ${pts > 0 || v.kind === 'lab' ? 'cherry' : 'berry'}`}
+                onClick={() => { setPlayingInline(false); onOpen?.(card); }}
+                title={pts > 0 ? `Open to collect +${pts} pts` : undefined}
+              >
+                {pts > 0
+                  ? <><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.6 7.4H22l-6.2 4.6 2.4 7.4L12 16.9 5.8 21.4l2.4-7.4L2 9.4h7.4z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Collect +{pts} pts</>
+                  : <><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> {v.kind === 'lab' ? 'Start' : 'Open'}</>}
+              </button>
+            )}
       </div>
       {/* The class thread — toggled by the Comment button, shared with the workspace. Never for locked cards. */}
       {showComments && !locked && <div style={{ padding: '0 18px 14px' }}><CardComments cardId={card.id} /></div>}

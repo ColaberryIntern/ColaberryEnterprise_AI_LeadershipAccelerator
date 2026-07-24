@@ -20,6 +20,9 @@ jest.mock('../../models/CommunityComment', () => ({}));
 jest.mock('../../models/CommunityLike', () => ({}));
 jest.mock('../../models/CommunityPointsEvent', () => ({ create: jest.fn() }));
 jest.mock('../../models/CommunityNotification', () => ({}));
+// communityService now imports ContributionEvent (directory badges); mock it so
+// its real model.init() doesn't run against the mocked sequelize.
+jest.mock('../../models/ContributionEvent', () => ({ __esModule: true, default: { findAll: jest.fn() }, CATEGORY_META: {} }));
 // communityService also imports this (posts/comments award Community XP); mock it
 // so its real XpEvent model.init() doesn't run against the mocked sequelize.
 jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn() }));

@@ -178,6 +178,10 @@
 
 /* media: branded SVG thumbnail + video frame */
 .tl-de .mthumb{position:relative;border-radius:var(--r-12);overflow:hidden;width:100%;display:block;border:none;padding:0;aspect-ratio:16/9;text-align:left;cursor:pointer}
+/* Playing video preview: the tile itself no longer opens the drawer on click — its
+   own native player controls (play/pause/mute/seek) are the direct interaction,
+   surfaced by the browser on hover — so the whole-tile "click me" cursor is wrong here. */
+.tl-de .mthumb.playing{cursor:default}
 .tl-de .mthumb svg.bg{position:absolute;inset:0;width:100%;height:100%;display:block}
 .tl-de .mthumb .mt-chip{position:absolute;left:14px;top:13px;z-index:3;display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.92);color:#1A1A1A;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:5px 12px;border-radius:var(--r-pill)}
 .tl-de .mthumb .mt-chip .sw{width:8px;height:8px;border-radius:50%}

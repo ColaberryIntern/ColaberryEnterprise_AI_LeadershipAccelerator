@@ -1,14 +1,21 @@
 import { Op } from 'sequelize';
-import CommunityMember, { CommunityPresenceStatus } from '../models/CommunityMember';
+import CommunityMember, { CommunityPresenceStatus, CommunityMemberRole } from '../models/CommunityMember';
+import ContributionEvent, { CATEGORY_META, ContributionCategory } from '../models/ContributionEvent';
 import CommunityPost from '../models/CommunityPost';
 import CommunityComment from '../models/CommunityComment';
 import CommunityLike, { CommunityLikeableType } from '../models/CommunityLike';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityPointsEvent from '../models/CommunityPointsEvent';
 import { awardCommunityXp } from './progression/communityXpService';
-import { award, revoke, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
+import { award, revoke, hasAwarded, sumPointsTodayByEventTypes, getPointsSummary, getTotalsForEnrollments, levelForPoints } from './pointsService';
+import { centralDateKey } from './centralDate';
+import { applyDailyCap, COMMUNITY_CAP, COMMUNITY_EVENT_TYPES } from './progression/dailyCap';
 import CommunityNotification from '../models/CommunityNotification';
 import Enrollment from '../models/Enrollment';
+import Organization from '../models/Organization';
+import OrgMember from '../models/OrgMember';
+import { env } from '../config/env';
+import { activeCompEnrollmentIds } from './subscriptionService';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
 // Lite poll-presence (P0 per the approved design mockup — real-time websocket
@@ -47,6 +54,14 @@ const LEVEL_TIERS = [
 ] as const;
 
 export function levelFor(points: number): number {
+  // Reconcile (flag-gated, default OFF via COMMUNITY_LEVEL_USE_CANONICAL): defer
+  // to the ONE canonical points ladder so the community level uses the same
+  // 0/150/400/900 thresholds as the HUD/leaderboard, instead of the legacy
+  // 0/1500/2700/4200 tiers below. Fully reversible — flag OFF is byte-identical
+  // to the historical behavior.
+  if (env.communityLevelUseCanonical) {
+    return levelForPoints(points).level;
+  }
   return LEVEL_TIERS.reduce((acc, tier) => (points >= tier.min ? tier.level : acc), 1);
 }
 
@@ -73,6 +88,36 @@ async function awardContributionPoints(memberId: string, points: number): Promis
       member_id: memberId, points, outcome: 'failure', error_class: (err as any)?.error_class ?? 'Error',
     });
   }
+}
+
+// Anti-cheat community daily cap (POINTS_DAILY_CAPS_ENABLED, default OFF). Clamp
+// a canonical community points award (post/comment/like) so an enrollment's
+// community-category total can never exceed COMMUNITY_CAP in one Central day.
+// Governs the CANONICAL StudentPointsEvent ledger only — the one the HUD +
+// leaderboard read; the legacy CommunityMember.points column is intentionally
+// left alone. Flag OFF ⇒ returns the proposed amount unchanged (no query).
+async function clampCommunityAward(enrollmentId: string, proposed: number): Promise<number> {
+  if (!env.pointsDailyCapsEnabled) return proposed;
+  const already = await sumPointsTodayByEventTypes(
+    enrollmentId, [...COMMUNITY_EVENT_TYPES], centralDateKey(Date.now()),
+  );
+  return applyDailyCap({ alreadyAwardedToday: already, proposedAward: proposed, cap: COMMUNITY_CAP });
+}
+
+// The full "+5 for a post" reward bundle: legacy CommunityMember.points, the
+// canonical StudentPointsEvent (HUD + leaderboard, community-cap-clamped), and
+// the Community XP lane. Idempotent on the post's own event key
+// (`community_post:<postId>`), so granting it twice is a no-op — that key also
+// doubles as the post-quality gate's "already rewarded" marker, so the canonical
+// event is written even when the daily cap clamps the grant to 0. Used at BOTH
+// creation (gate OFF) and on the first peer like (gate ON), so whichever path
+// grants the reward, it is identical. Best-effort throughout (never fails the
+// post/like).
+async function awardPostReward(enrollmentId: string, memberId: string, postId: string): Promise<void> {
+  await awardContributionPoints(memberId, POINTS_PER_POST);
+  const points = await clampCommunityAward(enrollmentId, POINTS_PER_POST);
+  await award(enrollmentId, { eventType: 'community_post', eventKey: `community_post:${postId}`, points }).catch(() => {});
+  await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${postId}`, 'community:post').catch(() => {});
 }
 
 function log(level: 'info' | 'warn' | 'error', event: string, ctx: Record<string, unknown>): void {
@@ -270,6 +315,11 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
     category: input.category ?? null,
     mentioned_member_ids: mentionedIds,
     min_level: input.min_level ?? 0,
+    // Curriculum tether — only present on Community Ritual posts (service-derived).
+    program_id: input.program_id ?? null,
+    week: input.week ?? null,
+    source_card_id: input.source_card_id ?? null,
+    ritual_meta: input.ritual_meta ?? null,
   });
 
   // In-app notification per mention (REQ-C6) — one row per (recipient, post),
@@ -287,12 +337,17 @@ export async function createPost(enrollmentId: string, input: CreatePostInput): 
   }
 
   // Reward the author for contributing (Ali feedback 2026-07-20 — posting now
-  // earns points, not just likes-received).
-  await awardContributionPoints(member.id, POINTS_PER_POST);
-  // Canonical points (the ONE ledger — HUD total + unified leaderboard) + the
-  // Community lane of the Skill-XP lens. Best-effort; never breaks the post.
-  await award(enrollmentId, { eventType: 'community_post', eventKey: `community_post:${post.id}`, points: POINTS_PER_POST }).catch(() => {});
-  await awardCommunityXp(enrollmentId, POINTS_PER_POST, `cxp:post:${post.id}`, 'community:post').catch(() => {});
+  // earns points, not just likes-received): legacy points + the canonical ONE
+  // ledger (HUD + leaderboard) + the Community XP lane. Best-effort; never
+  // breaks the post.
+  //
+  // Post-quality gate (COMMUNITY_POST_QUALITY_GATE_ENABLED, default OFF): when
+  // ON, the +5 is WITHHELD at creation — a spam post that no peer engages with
+  // earns nothing — and released on the first peer like instead (see
+  // toggleLike). Flag OFF ⇒ the reward fires on creation exactly as before.
+  if (!env.communityPostQualityGateEnabled) {
+    await awardPostReward(enrollmentId, member.id, post.id);
+  }
 
   log('info', 'post_created', {
     post_id: post.id, member_id: member.id, cohort_id: cohortId, min_level: post.min_level, outcome: 'success',
@@ -574,9 +629,12 @@ export async function createComment(
 
   await post.increment('comment_count', { by: 1 });
 
-  // Reward the commenter for contributing (Ali feedback 2026-07-20).
+  // Reward the commenter for contributing (Ali feedback 2026-07-20). The
+  // canonical award is community-cap-clamped (POINTS_DAILY_CAPS_ENABLED); flag
+  // OFF ⇒ full POINTS_PER_COMMENT, byte-identical to today.
   await awardContributionPoints(member.id, POINTS_PER_COMMENT);
-  await award(enrollmentId, { eventType: 'community_comment', eventKey: `community_comment:${comment.id}`, points: POINTS_PER_COMMENT }).catch(() => {});
+  const commentPoints = await clampCommunityAward(enrollmentId, POINTS_PER_COMMENT);
+  await award(enrollmentId, { eventType: 'community_comment', eventKey: `community_comment:${comment.id}`, points: commentPoints }).catch(() => {});
   await awardCommunityXp(enrollmentId, POINTS_PER_COMMENT, `cxp:comment:${comment.id}`, 'community:comment').catch(() => {});
 
   // In-app "reply" notification (REQ-C6) — skip self-notifying when a member
@@ -742,13 +800,34 @@ export async function toggleLike(
     // the legacy +1, capped at 1 by the unique like row). Best-effort, matching
     // the createPost/createComment canonical-award pattern in this file.
     if (authorEnrollmentId) {
+      // Community-cap-clamped (POINTS_DAILY_CAPS_ENABLED); flag OFF ⇒ +1, byte-identical.
+      const likePoints = await clampCommunityAward(authorEnrollmentId, 1);
       await award(authorEnrollmentId, {
         eventType: 'community_like',
         eventKey: likeEventKey,
-        points: 1,
+        points: likePoints,
         metadata: { likeable_type: likeableType, likeable_id: likeableId, liker_member_id: member.id },
       }).catch(() => {});
     }
+
+    // Post-quality gate (COMMUNITY_POST_QUALITY_GATE_ENABLED, default OFF): a
+    // post's withheld +5 creation reward is released on the FIRST PEER like — a
+    // like from someone other than the author (authorMemberId !== member.id, so a
+    // self-like never triggers it). Idempotent: hasAwarded on the post's own
+    // event key means a second peer like or a re-like after unlike never
+    // double-releases. Only for post likes, never comment likes. Flag OFF ⇒ inert.
+    if (
+      env.communityPostQualityGateEnabled &&
+      likeableType === 'post' &&
+      authorMemberId !== member.id &&
+      authorEnrollmentId
+    ) {
+      const alreadyRewarded = await hasAwarded(authorEnrollmentId, `community_post:${likeableId}`);
+      if (!alreadyRewarded) {
+        await awardPostReward(authorEnrollmentId, authorMemberId, likeableId);
+      }
+    }
+
     if (post) await post.increment('like_count', { by: 1 });
     // Notify the author that someone liked their content (Ali feedback 2026-07-20).
     // Only on a real new like (created) and never for a self-like. The notify is a
@@ -843,28 +922,70 @@ export async function reportPost(enrollmentId: string, postId: string, reason?: 
 
 // ─── Member profiles + directory ────────────────────────────────────────
 
+// A member's earned recognition badges, surfaced on the directory + profile
+// drawer. Reuses the Rooms recognition ledger (ContributionEvent) — these are
+// the same badges getImpact() shows, not a parallel system.
+export interface MemberBadge {
+  category: ContributionCategory;
+  label: string;
+  emoji: string;
+  count: number;
+}
+
 export interface MemberProfile {
   id: string;
+  // Enrollment id — the DM + friend flows are enrollment-keyed (openDm,
+  // sendFriendRequest), and the profile drawer wires those buttons. Already
+  // client-exposed via the cohort presence API, so this is not a new leak.
+  enrollment_id: string;
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
   level: number;
   points: number;
+  role: CommunityMemberRole;
+  badges: MemberBadge[];
   presence: CommunityPresenceStatus;
   created_at: Date;
+}
+
+// Batch a set of enrollments -> their earned badges (grouped ContributionEvent
+// categories, count DESC). One query for the whole directory page rather than
+// getImpact() per member. Enrollments with no recognition get an empty array.
+async function badgesByEnrollment(enrollmentIds: string[]): Promise<Map<string, MemberBadge[]>> {
+  const out = new Map<string, MemberBadge[]>();
+  if (enrollmentIds.length === 0) return out;
+
+  const rows = await ContributionEvent.findAll({ where: { enrollment_id: enrollmentIds } });
+  const byEnr = new Map<string, Map<ContributionCategory, number>>();
+  for (const r of rows as any[]) {
+    const cats = byEnr.get(r.enrollment_id) ?? new Map<ContributionCategory, number>();
+    cats.set(r.category, (cats.get(r.category) ?? 0) + 1);
+    byEnr.set(r.enrollment_id, cats);
+  }
+  for (const [enr, cats] of byEnr) {
+    const badges = Array.from(cats.entries())
+      .map(([category, count]) => ({ category, label: CATEGORY_META[category].label, emoji: CATEGORY_META[category].emoji, count }))
+      .sort((a, b) => b.count - a.count);
+    out.set(enr, badges);
+  }
+  return out;
 }
 
 // points/level come from the ONE canonical ledger (StudentPointsEvent + the
 // LEVELS ladder), NOT the legacy CommunityMember.points column — so a member's
 // score/level here matches the top-right HUD everywhere.
-function toMemberProfile(member: CommunityMember, canonicalPoints: number): MemberProfile {
+function toMemberProfile(member: CommunityMember, canonicalPoints: number, badges: MemberBadge[] = []): MemberProfile {
   return {
     id: member.id,
+    enrollment_id: member.enrollment_id,
     display_name: member.display_name,
     avatar_url: member.avatar_url,
     bio: member.bio,
     level: levelForPoints(canonicalPoints).level,
     points: canonicalPoints,
+    role: member.role ?? 'student',
+    badges,
     presence: derivePresence(member.last_active_at),
     created_at: member.created_at,
   };
@@ -872,7 +993,8 @@ function toMemberProfile(member: CommunityMember, canonicalPoints: number): Memb
 
 export async function getMyProfile(enrollmentId: string): Promise<MemberProfile> {
   const [member, summary] = await Promise.all([getOrCreateMember(enrollmentId), getPointsSummary(enrollmentId)]);
-  return toMemberProfile(member, summary.total);
+  const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
+  return toMemberProfile(member, summary.total, badges);
 }
 
 // Cross-member lookups return NotFoundError uniformly whether the member
@@ -888,7 +1010,8 @@ export async function getMemberProfileById(enrollmentId: string, targetMemberId:
     throw notFoundError('Member not found');
   }
   const total = (await getPointsSummary(target.enrollment_id)).total;
-  return toMemberProfile(target, total);
+  const badges = (await badgesByEnrollment([target.enrollment_id])).get(target.enrollment_id) ?? [];
+  return toMemberProfile(target, total, badges);
 }
 
 export async function updateMyProfile(enrollmentId: string, input: UpdateProfileInput): Promise<MemberProfile> {
@@ -902,21 +1025,189 @@ export async function updateMyProfile(enrollmentId: string, input: UpdateProfile
   await member.update(updates);
   log('info', 'profile_updated', { member_id: member.id, fields: Object.keys(updates), outcome: 'success' });
   const total = (await getPointsSummary(enrollmentId)).total;
-  return toMemberProfile(member, total);
+  const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
+  return toMemberProfile(member, total, badges);
 }
 
-// Cohort-scoped directory — ordered by canonical points DESC. Points/level come
-// from the ONE ledger (batched), so this matches the leaderboard + HUD.
-export async function listMembers(enrollmentId: string): Promise<MemberProfile[]> {
+// Directory search/filter/pagination (People directory). search = name substring
+// (case-insensitive); role = exact role; minLevel filters on the CANONICAL level
+// (derived from points, so applied in JS after totals resolve). Pagination is
+// offset/limit over the points-sorted set — cohort-scale, so fetch-all-then-slice
+// is fine and keeps the canonical sort authoritative.
+export interface DirectoryQuery {
+  search?: string;
+  role?: CommunityMemberRole;
+  minLevel?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface DirectoryPage {
+  members: MemberProfile[];
+  total: number;
+  has_more: boolean;
+}
+
+const DIRECTORY_DEFAULT_LIMIT = 24;
+const DIRECTORY_MAX_LIMIT = 100;
+
+// Cohort-scoped directory — ordered by canonical points DESC. Points/level/badges
+// come from the ONE ledger + recognition (batched), so this matches the
+// leaderboard + HUD. `members` is always present; new callers read total/has_more.
+export async function listMembers(enrollmentId: string, query: DirectoryQuery = {}): Promise<DirectoryPage> {
   const cohortId = await resolveCohortId(enrollmentId);
 
+  const where: Record<string, unknown> = {};
+  if (query.role) where.role = query.role;
+  const search = query.search?.trim();
+  if (search) where.display_name = { [Op.iLike]: `%${search}%` };
+
   const members = await CommunityMember.findAll({
+    where,
     include: [{ model: Enrollment, as: 'enrollment', attributes: [], where: { cohort_id: cohortId } }],
   });
 
-  const totals = await getTotalsForEnrollments(members.map((m: any) => m.enrollment_id));
-  return members
-    .map((m: any) => ({ profile: toMemberProfile(m, totals.get(m.enrollment_id) ?? 0), pts: totals.get(m.enrollment_id) ?? 0 }))
-    .sort((a, b) => b.pts - a.pts || a.profile.display_name.localeCompare(b.profile.display_name))
-    .map((x) => x.profile);
+  const enrollmentIds = members.map((m: any) => m.enrollment_id);
+  const [totals, badges] = await Promise.all([
+    getTotalsForEnrollments(enrollmentIds),
+    badgesByEnrollment(enrollmentIds),
+  ]);
+
+  let ranked = members
+    .map((m: any) => {
+      const pts = totals.get(m.enrollment_id) ?? 0;
+      return { profile: toMemberProfile(m, pts, badges.get(m.enrollment_id) ?? []), pts };
+    })
+    .sort((a, b) => b.pts - a.pts || a.profile.display_name.localeCompare(b.profile.display_name));
+
+  if (typeof query.minLevel === 'number') {
+    ranked = ranked.filter((x) => x.profile.level >= (query.minLevel as number));
+  }
+
+  const total = ranked.length;
+  const offset = Math.max(0, query.offset ?? 0);
+  const limit = Math.min(DIRECTORY_MAX_LIMIT, Math.max(1, query.limit ?? DIRECTORY_DEFAULT_LIMIT));
+  const page = ranked.slice(offset, offset + limit).map((x) => x.profile);
+
+  return { members: page, total, has_more: offset + page.length < total };
+}
+
+// Admin-only: set a member's directory role. Idempotent — setting the same role
+// again is a no-op write. Validates the role against the allowed set so a bad
+// value never reaches the CHECK constraint. Returns the updated profile.
+const MEMBER_ROLES: readonly CommunityMemberRole[] = ['student', 'mentor', 'staff'];
+
+export function isMemberRole(value: string): value is CommunityMemberRole {
+  return (MEMBER_ROLES as readonly string[]).includes(value);
+}
+
+// Admin roster for the role-assignment screen: every community member (across
+// cohorts), name + email + current role, so an admin can find someone and
+// promote them. Name search (ILIKE), capped. Not cohort-scoped — this is an
+// admin-only surface (requireAdmin at the route).
+export interface AdminMemberRow {
+  id: string;
+  // The member's enrollment id — used to mint the read-only "View as" token.
+  enrollment_id: string | null;
+  display_name: string;
+  email: string | null;
+  role: CommunityMemberRole;
+  // Enrollment (sign-up) timestamp, ISO-8601, or null if the member has no
+  // linked enrollment. The admin roster is ordered newest-first by this.
+  signed_up_at: string | null;
+  // True when this member's enrollment holds an active comped ('Free Access')
+  // seat — full program access at $0, granted by an admin (not a paid plan).
+  free_access: boolean;
+  // Management-portal role (owner/admin/curriculum/revenue/admissions/support)
+  // for staff members, or null. Drives the Mgmt Role control on the roster.
+  mgmt_role: string | null;
+}
+
+export async function listMembersForAdmin(search?: string): Promise<AdminMemberRow[]> {
+  const where: Record<string, unknown> = {};
+  const q = search?.trim();
+  if (q) where.display_name = { [Op.iLike]: `%${q}%` };
+
+  // Order newest-first by sign-up (enrollment.created_at) DB-side so the 200-row
+  // cap keeps the most recent members, then re-sort in JS to make the final
+  // order deterministic and push null-enrollment rows last (Postgres would sort
+  // NULLs first under DESC).
+  const members = await CommunityMember.findAll({
+    where,
+    include: [{ model: Enrollment, as: 'enrollment', attributes: ['email', 'created_at'] }],
+    order: [[{ model: Enrollment, as: 'enrollment' }, 'created_at', 'DESC']],
+    limit: 200,
+  });
+
+  // Flag who currently holds a comped ('Free Access') seat — one batched query.
+  const compSet = await activeCompEnrollmentIds(
+    members.map((m: any) => m.enrollment_id).filter(Boolean),
+  );
+
+  const rows: AdminMemberRow[] = members.map((m: any) => ({
+    id: m.id,
+    enrollment_id: m.enrollment_id ?? null,
+    display_name: m.display_name,
+    email: m.enrollment?.email ?? null,
+    role: (m.role as CommunityMemberRole) ?? 'student',
+    signed_up_at: m.enrollment?.created_at ? new Date(m.enrollment.created_at).toISOString() : null,
+    free_access: m.enrollment_id ? compSet.has(m.enrollment_id) : false,
+    mgmt_role: m.mgmt_role ?? null,
+  }));
+
+  rows.sort((a, b) => (b.signed_up_at ?? '').localeCompare(a.signed_up_at ?? ''));
+  return rows;
+}
+
+/**
+ * Auto-roster sync: keep every org flagged `auto_staff_sync` in step with the
+ * community 'staff' role. Assigning staff adds the person as a member (idempotent
+ * on (org_id, email); it never downgrades an existing manager); un-assigning staff
+ * removes their member row. Manager rows are never touched by a role change.
+ * Best-effort — a sync failure must never fail the role change itself.
+ */
+async function syncStaffToAutoOrgs(enrollmentId: string, isStaff: boolean): Promise<void> {
+  try {
+    const orgs = await Organization.findAll({ where: { auto_staff_sync: true }, attributes: ['id'] });
+    if (!orgs.length) return;
+    const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['email'] });
+    const email = (enrollment as any)?.email;
+    if (!email) return;
+    for (const org of orgs) {
+      if (isStaff) {
+        await OrgMember.findOrCreate({
+          where: { org_id: org.id, email },
+          defaults: {
+            org_id: org.id, enrollment_id: enrollmentId, email,
+            role: 'member', invite_status: 'active', team: 'Staff', joined_at: new Date(),
+          } as any,
+        });
+      } else {
+        // Demoted from staff → drop them from the auto-roster (member rows only; a
+        // manager is never removed by a community role change).
+        await OrgMember.destroy({ where: { org_id: org.id, email, role: 'member' } });
+      }
+    }
+  } catch (err: any) {
+    log('warn', 'staff_org_sync_failed', {
+      enrollment_id: enrollmentId, is_staff: isStaff, outcome: 'failure', error_class: err?.error_class ?? 'Error',
+    });
+  }
+}
+
+export async function setMemberRole(targetMemberId: string, role: CommunityMemberRole): Promise<MemberProfile> {
+  if (!isMemberRole(role)) {
+    throw Object.assign(new Error(`Invalid role: ${role}`), { error_class: 'ValidationError' });
+  }
+  const member = await CommunityMember.findByPk(targetMemberId);
+  if (!member) {
+    throw notFoundError('Member not found');
+  }
+  await member.update({ role });
+  log('info', 'member_role_set', { member_id: member.id, role, outcome: 'success' });
+  // Keep auto_staff_sync org rosters in step with the staff role (best-effort).
+  await syncStaffToAutoOrgs(member.enrollment_id, role === 'staff');
+  const total = (await getPointsSummary(member.enrollment_id)).total;
+  const badges = (await badgesByEnrollment([member.enrollment_id])).get(member.enrollment_id) ?? [];
+  return toMemberProfile(member, total, badges);
 }

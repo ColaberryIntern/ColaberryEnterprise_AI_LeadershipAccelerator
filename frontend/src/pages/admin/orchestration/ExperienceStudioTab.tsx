@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../../../utils/api';
 import {
   Cmp, Cap, Recipe, STAGES, StageKey, usd, sampleFor, Row, studioCss,
@@ -70,7 +70,7 @@ const interactionName = (band?: string): string => {
   return 'Reading card';
 };
 
-const ExperienceStudioTab: React.FC = () => {
+const ExperienceStudioTab: React.FC<{ initialSlug?: string | null }> = ({ initialSlug }) => {
   const [list, setList] = useState<Cmp[]>([]);
   const [caps, setCaps] = useState<Cap[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -186,6 +186,17 @@ const ExperienceStudioTab: React.FC = () => {
       api.get(`/api/admin/components/${slug}/dependencies`).then((g) => setDepGraph(g.data)).catch(() => {});
     } catch { setError('Failed to open component'); }
   };
+
+  // Deep-link (?type=<slug>): once the library has loaded, auto-open the requested
+  // component exactly once. Guarded so it never re-opens on later renders or if the
+  // author navigates away and back within the same page load.
+  const didAutoOpen = useRef(false);
+  useEffect(() => {
+    if (didAutoOpen.current || !initialSlug || loading) return;
+    if (!list.some((c) => c.slug === initialSlug)) return;   // unknown slug → leave the library open
+    didAutoOpen.current = true;
+    open(initialSlug);
+  }, [initialSlug, loading, list, open]);
 
   const allDomains = useMemo(() => Array.from(new Set(list.flatMap((c) => c.architect_domains || []))).sort(), [list]);
   const allCategories = useMemo(() => Array.from(new Set(list.map((c) => c.category).filter(Boolean))).sort() as string[], [list]);

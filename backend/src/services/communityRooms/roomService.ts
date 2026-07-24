@@ -13,6 +13,7 @@ import {
   RoomShell,
   canModerate,
   canJoinMeeting,
+  canUploadResource,
 } from './roomEntitlementService';
 import { getMeetingProvider } from './meetingProvider';
 import { log, slugify, shortToken, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
@@ -50,6 +51,33 @@ export async function ensureRoomForSession(session: LiveSession): Promise<Commun
     await emitRoomEvent({ eventType: ROOM_EVENTS.RoomCreated, aggregateType: 'room', aggregateId: room.id });
     log('info', 'room_created_for_session', { room_id: room.id, session_id: session.id });
   }
+  return room;
+}
+
+// Global Library — a well-known, is_system public room whose room_resources
+// ARE the platform-wide file library. Reuses the existing public-room
+// entitlement path (isEligible short-circuits true for privacy:'public') so
+// "visible to everyone" costs no new schema/entitlement branches. Excluded
+// from normal browsing (see listRoomsForViewer) — reached only via its own
+// page + GET .../library.
+export const GLOBAL_LIBRARY_SLUG = 'global-library';
+
+export async function ensureGlobalLibraryRoom(): Promise<CommunityRoom> {
+  const [room, created] = await CommunityRoom.findOrCreate({
+    where: { slug: GLOBAL_LIBRARY_SLUG },
+    defaults: {
+      slug: GLOBAL_LIBRARY_SLUG,
+      name: 'Global Library',
+      category: 'library',
+      room_type: 'persistent',
+      privacy: 'public',
+      status: 'active',
+      topic: 'Shared documents for everyone in the program',
+      is_system: true,
+      created_by: 'system',
+    },
+  });
+  if (created) log('info', 'global_library_room_created', { room_id: room.id });
   return room;
 }
 
@@ -113,6 +141,7 @@ export interface RoomView {
   visibility: 'full' | 'shell';
   room: CommunityRoom | RoomShell;
   membership: RoomMembership | null;
+  can_upload_resource: boolean;
 }
 
 // Returns the viewer-appropriate projection of a room, or throws 404 when the
@@ -124,8 +153,8 @@ export async function getRoomForViewer(ctx: RoomAccessContext, roomId: string): 
   const membership = await getMembership(roomId, ctx.enrollmentId);
   const vis = roomVisibility(room, ctx, membership);
   if (vis === 'hidden') throw notFoundError('Room not found');
-  if (vis === 'shell') return { visibility: 'shell', room: toRoomShell(room), membership };
-  return { visibility: 'full', room, membership };
+  if (vis === 'shell') return { visibility: 'shell', room: toRoomShell(room), membership, can_upload_resource: false };
+  return { visibility: 'full', room, membership, can_upload_resource: canUploadResource(room, ctx, membership) };
 }
 
 export interface ListRoomsFilter {
@@ -139,7 +168,12 @@ export async function listRoomsForViewer(
   ctx: RoomAccessContext,
   filter: ListRoomsFilter = {},
 ): Promise<Array<{ visibility: 'full' | 'shell'; room: CommunityRoom | RoomShell }>> {
-  const where: Record<string, unknown> = { status: { [Op.in]: ['active', 'locked'] } };
+  const where: Record<string, unknown> = {
+    status: { [Op.in]: ['active', 'locked'] },
+    // The Global Library is reached via its own page + GET .../library, never
+    // through normal room browsing/rail.
+    slug: { [Op.ne]: GLOBAL_LIBRARY_SLUG },
+  };
   if (filter.category) where.category = filter.category;
   const rooms = await CommunityRoom.findAll({ where, order: [['created_at', 'DESC']], limit: 200 });
 

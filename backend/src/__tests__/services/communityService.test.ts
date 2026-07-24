@@ -14,13 +14,17 @@ jest.mock('../../models/CommunityComment', () => ({ findAll: jest.fn() }));
 // methods don't run (award/getPointsSummary/getTotalsForEnrollments/levelForPoints).
 jest.mock('../../services/pointsService', () => ({
   award: jest.fn(async () => ({ awarded: true, points: 0 })),
+  hasAwarded: jest.fn(async () => false),
+  sumPointsTodayByEventTypes: jest.fn(async () => 0),
   getPointsSummary: jest.fn(async () => ({ total: 0, events: [] })),
   getTotalsForEnrollments: jest.fn(async () => new Map()),
   levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
 }));
 jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => {}) }));
 
-import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence } from '../../services/communityService';
+import { createPost, listPosts, togglePin, getOrCreateMember, derivePresence, touchPresence, levelFor } from '../../services/communityService';
+import { env } from '../../config/env';
+import { levelForPoints, award } from '../../services/pointsService';
 import Enrollment from '../../models/Enrollment';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
@@ -137,6 +141,26 @@ describe('createPost', () => {
 
     expect(incrementMember).toHaveBeenCalledWith('points', { by: 5, where: { id: memberId } });
     expect(createPointsEvent).toHaveBeenCalledWith({ member_id: memberId, points: 5 });
+  });
+
+  it('post-quality gate ON: a new post is created but awards NO points (withheld until a peer likes it)', async () => {
+    (env as any).communityPostQualityGateEnabled = true;
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findOrCreateMember.mockResolvedValue([mockMember, false]);
+    createPostMock.mockResolvedValue({
+      id: 'post-gated', body: 'first post', media_urls: [], category: null, pinned: false,
+      like_count: 0, comment_count: 0, mentioned_member_ids: [], min_level: 0, created_at: new Date('2026-07-21'),
+    });
+
+    const result = await createPost(enrollmentId, { body: 'first post' });
+
+    expect(result.id).toBe('post-gated');
+    // No reward bundle on creation: legacy points withheld AND canonical community_post withheld.
+    expect(incrementMember).not.toHaveBeenCalled();
+    expect(createPointsEvent).not.toHaveBeenCalled();
+    expect(award).not.toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ eventType: 'community_post' }));
+
+    (env as any).communityPostQualityGateEnabled = false;
   });
 
   it('failure path: rejects a mention outside the author\'s cohort', async () => {
@@ -509,5 +533,35 @@ describe('touchPresence', () => {
     findByPkEnrollment.mockResolvedValue(null);
 
     await expect(touchPresence(enrollmentId)).rejects.toMatchObject({ error_class: 'NotFoundError' });
+  });
+});
+
+// COMMUNITY_LEVEL_USE_CANONICAL reconcile (Phase 3): levelFor either uses the
+// legacy 0/1500/2700/4200 tiers (flag OFF, default) or defers to the ONE
+// canonical points ladder (flag ON).
+describe('levelFor — canonical reconcile flag', () => {
+  afterEach(() => {
+    (env as any).communityLevelUseCanonical = false;
+    // restore the top-level mock default so later suites are unaffected
+    (levelForPoints as jest.Mock).mockReturnValue({ level: 1, name: 'Apprentice' });
+  });
+
+  it('OFF (default): uses the legacy 0/1500/2700/4200 tiers and never consults the canonical ladder', () => {
+    (env as any).communityLevelUseCanonical = false;
+    (levelForPoints as jest.Mock).mockClear();
+    expect(levelFor(0)).toBe(1);
+    expect(levelFor(1499)).toBe(1);
+    expect(levelFor(1500)).toBe(2);
+    expect(levelFor(2700)).toBe(3);
+    expect(levelFor(4200)).toBe(4);
+    expect(levelForPoints).not.toHaveBeenCalled();
+  });
+
+  it('ON: defers to the canonical points ladder (levelForPoints) instead of legacy tiers', () => {
+    (env as any).communityLevelUseCanonical = true;
+    (levelForPoints as jest.Mock).mockReturnValue({ level: 42, name: 'Sentinel' });
+    // legacy tiers would map 1500 -> 2; canonical deferral returns levelForPoints().level
+    expect(levelFor(1500)).toBe(42);
+    expect(levelForPoints).toHaveBeenCalledWith(1500);
   });
 });

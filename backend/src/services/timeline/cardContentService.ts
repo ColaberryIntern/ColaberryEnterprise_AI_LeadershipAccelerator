@@ -23,6 +23,26 @@ export interface CardContent {
   reflection?: string;
 }
 
+// Known acronyms kept uppercase when turning a competency slug into a topic label
+// (e.g. "claude_api" -> "Claude API", "mcp" -> "MCP", "ai_foundations" -> "AI Foundations").
+const TOPIC_ACRONYMS = new Set(['ai', 'api', 'mcp', 'ux', 'qa', 'ui', 'llm', 'ci', 'cd']);
+
+/**
+ * The week's SUBJECT as a human label for the "This Week — {topic}" kickoff title,
+ * derived from the blueprint's primary competency (competencies[0]). The blueprint
+ * `title` is the week's ROLE (Business Analyst, Software Engineer, …); the kickoff
+ * announcement should name what the week is ABOUT (Prompt Engineering), matching the
+ * body. Deterministic (no model paraphrase). Falls back to the role when there is no
+ * competency to read.
+ */
+export function weekTopicLabel(bp: { competencies?: string[]; title?: string | null } | null | undefined): string {
+  const slug = bp && Array.isArray(bp.competencies) ? bp.competencies[0] : undefined;
+  if (!slug) return (bp && bp.title) || '';
+  return String(slug).split('_').filter(Boolean)
+    .map((w) => (TOPIC_ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
 /** Build the generation variables from the card's own fields + any author-set per-card vars. */
 function buildVars(card: TimelineCard): Record<string, string> {
   const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
@@ -99,13 +119,12 @@ export async function generateCardContent(cardId: string, model = DEFAULT_MODEL)
     reflection: typeof parsed.reflection === 'string' ? parsed.reflection : undefined,
   };
 
-  // Roster-summary titles are DETERMINISTIC — the week's blueprint theme is the
-  // source of truth (synced from the Deep Dive), so the theme name never drifts
-  // when the model paraphrases against Claude-Code-flavored objectives. This also
-  // kills the "random title" bug (e.g. "Build Your AI Foundation").
+  // Roster-summary titles are DETERMINISTIC — no model paraphrase, so the name never
+  // drifts (this also kills the "random title" bug, e.g. "Build Your AI Foundation").
+  // The weekly ANNOUNCEMENT names the week's SUBJECT ("This Week — Prompt Engineering")
+  // so the title matches the body. (The 'overview' type was retired 2026-07-21.)
   if (bp?.title) {
-    if (card.type === 'announcement') content.title = `This Week — ${bp.title}`;
-    else if (card.type === 'overview') content.title = `Overview — ${bp.title}`;
+    if (card.type === 'announcement') content.title = `This Week — ${weekTopicLabel(bp)}`;
   }
 
   // Persist onto the shared card so every student sees EXACTLY this. Stamp

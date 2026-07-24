@@ -44,7 +44,6 @@ export default function FeedControlTab() {
   const [board, setBoard] = useState<Board | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [drawer, setDrawer] = useState<FCType | null>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
   const [dragOver, setDragOver] = useState<string | null>(null);
@@ -165,18 +164,26 @@ export default function FeedControlTab() {
     catch (e: any) { flash(e?.response?.data?.error || 'Delete failed'); }
   }, [loadPresets]);
 
-  const toggleSel = (slug: string) => setSelected((s) => { const n = new Set(s); n.has(slug) ? n.delete(slug) : n.add(slug); return n; });
+  // The checkbox on each card IS the in/out switch for the Today timeline:
+  // anchored types via today_eligible; ambient types via the policy rotation.
+  const inTimeline = (t: FCType) => t.feed_mode === 'ambient'
+    ? (board?.policy.ambientProviders || []).includes(t.slug)
+    : !!t.today_eligible;
+  const toggleInTimeline = (t: FCType) => {
+    if (t.feed_mode === 'ambient') {
+      const cur = board?.policy.ambientProviders || [];
+      savePolicy({ ambientProviders: cur.includes(t.slug) ? cur.filter((s) => s !== t.slug) : [...cur, t.slug] });
+    } else {
+      routeTypes([t.slug], { today_eligible: !t.today_eligible });
+    }
+  };
 
   const onDropLane = (surfaceId: string) => (e: React.DragEvent) => {
     e.preventDefault(); setDragOver(null);
     const slug = e.dataTransfer.getData('text/plain');
     if (!slug) return;
-    const slugs = selected.size && selected.has(slug) ? Array.from(selected) : [slug];
-    routeTypes(slugs, { home_surface: surfaceId, today_eligible: surfaceId === 'today' ? true : undefined });
-    setSelected(new Set());
+    routeTypes([slug], { home_surface: surfaceId, today_eligible: surfaceId === 'today' ? true : undefined });
   };
-
-  const selArr = useMemo(() => Array.from(selected), [selected]);
 
   if (loading) return <div className="fc-wrap"><div className="fc-note">Loading Feed Control…</div><style>{CSS}</style></div>;
   if (err) return <div className="fc-wrap"><div className="fc-note err">{err}</div><button className="fc-btn" onClick={load}>Retry</button><style>{CSS}</style></div>;
@@ -188,32 +195,18 @@ export default function FeedControlTab() {
       <div className="fc-head">
         <div>
           <h2 className="fc-h">Feed Control</h2>
-          <p className="fc-sub">Route curriculum types to surfaces and tune how often students see them. Drag a type between lanes, or select several and route them together.</p>
+          <p className="fc-sub"><b>Check a type to put it in the student's Today timeline; uncheck to take it out.</b> Drag a type between lanes to change which area it belongs to; use the ⚙ gear for cadence and frequency.</p>
         </div>
         <button className="fc-btn ghost" onClick={() => setPolicyOpen(true)}>⚙ Global Policy</button>
       </div>
 
       <div className={`fc-mode ${board.feedControlEnabled ? 'live' : 'preview'}`}>
         {board.feedControlEnabled ? (
-          <span><b className="fc-mode-b">● LIVE</b> Feed Control is ON — lane, In-Today, cadence, priority, caps and scheduling all govern the real student feed.</span>
+          <span><b className="fc-mode-b">● LIVE</b> Feed Control is ON — the <b>checkbox</b> (in/out of the timeline), lane, cadence, priority, caps and scheduling all govern the real student feed.</span>
         ) : (
-          <span><b className="fc-mode-b">◐ PREVIEW MODE</b> Two levers reach students right now: a type's <b>lane</b> and its <b>In-Today</b> toggle (both badged <Badge kind="live" />). Cadence, priority, caps, rotation and the Global Policy are <Badge kind="preview" /> — they change the simulator below, not the live feed, until Feed Control is switched on.</span>
+          <span><b className="fc-mode-b">◐ PREVIEW MODE</b> Two levers reach students right now: a type's <b>lane</b> and its <b>checkbox</b> (in/out of the timeline) (both badged <Badge kind="live" />). Cadence, priority, caps, rotation and the Global Policy are <Badge kind="preview" /> — they change the simulator below, not the live feed, until Feed Control is switched on.</span>
         )}
       </div>
-
-      {selArr.length > 0 && (
-        <div className="fc-bulk">
-          <b>{selArr.length} selected</b>
-          <span>Route to</span>
-          {board.lanes.map((l) => (
-            <button key={l.surface.id} className="fc-chip-btn" style={{ borderColor: l.surface.color, color: l.surface.color }}
-              onClick={() => { routeTypes(selArr, { home_surface: l.surface.id, today_eligible: l.surface.id === 'today' ? true : undefined }); setSelected(new Set()); }}>
-              {l.surface.label}
-            </button>
-          ))}
-          <button className="fc-btn ghost sm" onClick={() => setSelected(new Set())}>Clear</button>
-        </div>
-      )}
 
       <div className="fc-lanes">
         {board.lanes.map((lane) => (
@@ -233,23 +226,14 @@ export default function FeedControlTab() {
               {lane.types.map((t) => (
                 <div key={t.slug} draggable
                   onDragStart={(e) => e.dataTransfer.setData('text/plain', t.slug)}
-                  className={`fc-card ${selected.has(t.slug) ? 'sel' : ''}`}>
-                  <input type="checkbox" checked={selected.has(t.slug)} onChange={() => toggleSel(t.slug)} onClick={(e) => e.stopPropagation()} />
+                  className={`fc-card ${inTimeline(t) ? 'in' : 'out'}`}>
+                  <input type="checkbox" checked={inTimeline(t)} onChange={() => toggleInTimeline(t)} onClick={(e) => e.stopPropagation()}
+                    title={inTimeline(t) ? 'In the Today timeline — uncheck to take it out' : 'Not in the Today timeline — check to put it in'} />
                   <div className="fc-card-body" onClick={() => setDrawer(t)}>
                     <div className="fc-card-title">{t.student_label || t.label}</div>
                     <div className="fc-card-meta">
-                      <span className={`fc-tag ${t.feed_mode === 'ambient' ? 'amb' : 'anc'}`}>{t.feed_mode}</span>
-                      {t.feed_mode === 'ambient' ? (
-                        <button type="button" className="fc-today-tog amb"
-                          title="Ambient types rotate into Today via the Global Policy — preview-only until Feed Control is enabled"
-                          onClick={(e) => { e.stopPropagation(); setPolicyOpen(true); }}>⟳ rotates</button>
-                      ) : (
-                        <button type="button" className={`fc-today-tog ${t.today_eligible ? 'on' : 'off'}`}
-                          title={t.today_eligible ? 'In the Today feed (live) — click to take it out' : 'Not in the Today feed — click to put it in (live)'}
-                          onClick={(e) => { e.stopPropagation(); routeTypes([t.slug], { today_eligible: !t.today_eligible }); }}>
-                          {t.today_eligible ? '● In Today' : '○ Off'}
-                        </button>
-                      )}
+                      <span className={`fc-in-lbl ${inTimeline(t) ? 'on' : 'off'}`}>{inTimeline(t) ? 'in timeline' : 'out'}</span>
+                      <span className={`fc-tag ${t.feed_mode === 'ambient' ? 'amb' : 'anc'}`}>{t.feed_mode === 'ambient' ? 'rotates' : 'anchored'}</span>
                       <span className="fc-mut">{t.bucket}</span>
                       {t.cadence != null && <span className="fc-mut">cad {t.cadence}</span>}
                     </div>
@@ -459,6 +443,12 @@ const CSS = `
 .fc-empty{border:1px dashed var(--fc-bd);border-radius:9px;padding:14px;text-align:center;color:var(--fc-sub);font-size:12px}
 .fc-card{display:flex;align-items:flex-start;gap:8px;background:var(--fc-bg);border:1px solid var(--fc-bd);border-radius:10px;padding:9px 10px;cursor:grab}
 .fc-card.sel{border-color:var(--fc-acc);box-shadow:0 0 0 1px var(--fc-acc)}
+.fc-card.in{border-left:3px solid #15803d}
+.fc-card.out{opacity:.62}
+.fc-card input[type=checkbox]{width:16px;height:16px;margin-top:2px;cursor:pointer;flex:none;accent-color:#15803d}
+.fc-in-lbl{font-size:9.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;border-radius:5px;padding:1px 6px}
+.fc-in-lbl.on{background:#dcfce7;color:#15803d} .fc-in-lbl.off{background:#f1f5f9;color:#94a3b8}
+@media(prefers-color-scheme:dark){.fc-in-lbl.on{background:#14532d55;color:#86efac}.fc-in-lbl.off{background:#1e293b;color:#64748b}}
 .fc-card-body{flex:1;min-width:0}
 .fc-card-title{font-size:13.5px;font-weight:600;line-height:1.25}
 .fc-card-meta{display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap}

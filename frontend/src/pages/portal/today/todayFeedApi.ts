@@ -23,6 +23,7 @@ export interface TodayFeedItem {
   week: number | null;
   estimated_time: number | null;
   status: string | null;
+  points?: { learning?: number; builder?: number; community?: number } | null;
   interacted: boolean;
   author?: { name: string; avatar_url: string | null; level: number } | null;
 }
@@ -36,8 +37,12 @@ export interface TodayPage {
 export type TodayInteraction = 'open' | 'click' | 'complete' | 'dismiss';
 
 export const todayFeedApi = {
-  list: (cursor = 0, limit = 10): Promise<TodayPage> =>
-    portalApi.get('/api/portal/runtime/today', { params: { cursor, limit } }).then((r) => r.data as TodayPage),
+  // `seed` reshuffles the lineup per visit (stable within a visit). Generate one
+  // fresh at feed mount and pass the SAME value for every page in that session.
+  list: (cursor = 0, limit = 10, seed?: number): Promise<TodayPage> =>
+    portalApi
+      .get('/api/portal/runtime/today', { params: { cursor, limit, ...(seed != null ? { seed } : {}) }, timeout: 15000 })
+      .then((r) => r.data as TodayPage),
   interact: (cardRef: string, action: TodayInteraction): Promise<{ ok: true }> =>
     portalApi
       .post(`/api/portal/runtime/today/${encodeURIComponent(cardRef)}/interact`, { action })

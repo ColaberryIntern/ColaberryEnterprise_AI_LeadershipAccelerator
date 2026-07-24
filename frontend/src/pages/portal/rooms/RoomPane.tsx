@@ -2,8 +2,16 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchRoom, fetchRoomMessages, postRoomMessage, requestRoomAccess, joinVideoRoom,
   touchRoomPresence, deleteRoom, inviteToRoom, fetchPeople, verifyAnswer, myEnrollmentId,
-  RoomView, RoomMessage, RoomPerson,
+  fetchRoomBookings, uploadRoomFile, downloadRoomResource, RoomView, RoomMessage, RoomPerson, BookingCard,
 } from '../../../services/roomsApi';
+import RoomFilesPanel, { ACCEPT, ALLOWED_MIMES, ALLOWED_EXT, MAX_SIZE, extOf } from './RoomFilesPanel';
+
+// A chat-attached file's message content is always "📎 <title>" (see
+// handleAttachFile below) — strip the marker back off to recover the title
+// for both the download call and re-render.
+function fileTitleFromContent(content: string): string {
+  return content.replace(/^📎\s*/, '');
+}
 
 const CAT_EMOJI: Record<string, string> = {
   start_here: '👋', your_cohort: '🎓', build_together: '🛠️', career_cert: '💼',
@@ -58,6 +66,8 @@ const InviteModal: React.FC<{ roomId: string; onClose: () => void; onDone: () =>
   );
 };
 
+type RoomTab = 'chat' | 'files';
+
 const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () => void }> = ({ roomId, onDeleted, onChanged }) => {
   const [view, setView] = useState<RoomView | null | 'error'>(null);
   const [messages, setMessages] = useState<RoomMessage[] | null>(null);
@@ -65,16 +75,28 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
   const [draft, setDraft] = useState('');
   const [asking, setAsking] = useState(false);
   const [showInvite, setShowInvite] = useState(false);
+  const [paneTab, setPaneTab] = useState<RoomTab>('chat');
+  const [bookings, setBookings] = useState<BookingCard[] | undefined>(undefined);
+  const [attaching, setAttaching] = useState(false);
+  const [attachError, setAttachError] = useState('');
   const sinceRef = useRef<string | undefined>(undefined);
   const endRef = useRef<HTMLDivElement | null>(null);
 
   const loadRoom = useCallback(async () => {
     setMessages(null); sinceRef.current = undefined;
+    setPaneTab('chat'); setBookings(undefined);
     try { setView(await fetchRoom(roomId)); } catch { setView('error'); }
   }, [roomId]);
   useEffect(() => { loadRoom(); }, [loadRoom]);
 
   const canChat = view !== null && view !== 'error' && view.visibility === 'full';
+
+  // Lazily load this room's bookings the first time the Files tab opens, so the
+  // "by class" picker has data without adding a request to the default chat view.
+  useEffect(() => {
+    if (paneTab !== 'files' || bookings !== undefined || !canChat) return;
+    fetchRoomBookings(roomId).then(setBookings).catch(() => setBookings([]));
+  }, [paneTab, bookings, canChat, roomId]);
 
   const pollMessages = useCallback(async () => {
     const res = await fetchRoomMessages(roomId, sinceRef.current);
@@ -115,6 +137,33 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
       setMessages((prev) => [...(prev || []), msg]);
     } catch { setDraft(text); setAsking(wasAsking); }
   };
+
+  // Attach-from-chat: uploads through the same Docs & Files endpoint as the
+  // dedicated tab (so it shows up there too), then posts a message linking to
+  // the new resource — giving chat a real, downloadable attachment instead of
+  // someone typing a filename as plain text (the exact gap this closes).
+  const handleAttachFile = useCallback(async (file: File) => {
+    if (!ALLOWED_MIMES.has(file.type) && !ALLOWED_EXT.has(extOf(file.name))) {
+      setAttachError('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, PNG, JPG, WEBP');
+      return;
+    }
+    if (file.size > MAX_SIZE) { setAttachError('File must be under 50MB.'); return; }
+    setAttaching(true); setAttachError('');
+    try {
+      const resource = await uploadRoomFile(roomId, file);
+      const msg = await postRoomMessage(roomId, `📎 ${resource.title || file.name}`, undefined, resource.id);
+      sinceRef.current = msg.created_at;
+      setMessages((prev) => [...(prev || []), msg]);
+    } catch (e) {
+      const apiMsg = (e as { response?: { data?: { error?: string } } }).response?.data?.error;
+      setAttachError(apiMsg || 'Could not attach that file. Please try again.');
+    } finally { setAttaching(false); }
+  }, [roomId]);
+  const handleAttachInput = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleAttachFile(file);
+    e.target.value = '';
+  }, [handleAttachFile]);
 
   // Full refetch (not the incremental poll) — used after verifying an answer so
   // the question's new status + the answer badge show immediately.
@@ -197,41 +246,64 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
         {isOwner && !room.is_system && <button type="button" className="te-btn ghost sm rm-danger" onClick={doDelete}>Delete</button>}
       </div>
 
-      <div className="rm-chat">
-        <div className="rm-msgs">
-          {messages === null && <div className="rm-empty">Loading conversation…</div>}
-          {messages !== null && messages.length === 0 && <div className="rm-empty">No messages yet — say hello 👋</div>}
-          {messages?.map((m) => {
-            if (m.kind === 'system') {
-              return <div key={m.id} className="rm-sysmsg">{m.content}</div>;
-            }
-            const isQuestion = m.kind === 'question';
-            const isVerifiedAnswer = verifiedAnswerIds.has(m.id);
-            const canMarkAnswer = iHaveOpenQuestion && !!m.enrollment_id && m.enrollment_id !== myId && !isQuestion && !isVerifiedAnswer;
-            return (
-              <div key={m.id} className={`rm-msg${isQuestion ? ' is-q' : ''}${isVerifiedAnswer ? ' is-ans' : ''}`}>
-                <span className="cm-avatar sm">{initials(m.sender_name)}</span>
-                <div className="rm-msg-body">
-                  <div className="rm-msg-top">
-                    <span className="rm-msg-name">{m.sender_name}</span>
-                    {isQuestion && <span className={`rm-qchip${m.question_status === 'verified' ? ' done' : ''}`}>{m.question_status === 'verified' ? '✓ Answered' : '❓ Question'}</span>}
-                    {isVerifiedAnswer && <span className="rm-ansbadge">✓ Verified answer</span>}
-                    <span className="rm-msg-time">{timeAgo(m.created_at)}</span>
-                    {canMarkAnswer && <button type="button" className="rm-markans" onClick={() => doVerify(m.id)}>✓ Mark as answer</button>}
-                  </div>
-                  <div className="rm-msg-text">{m.content}</div>
-                </div>
-              </div>
-            );
-          })}
-          <div ref={endRef} />
-        </div>
-        <div className="rm-chatbar">
-          <button type="button" className={`rm-askbtn${asking ? ' on' : ''}`} onClick={() => setAsking((v) => !v)} title="Ask as a question so people can mark the answer" aria-pressed={asking}>❓</button>
-          <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder={asking ? 'Ask a question…' : `Message ${room.name}…`} maxLength={4000} />
-          <button type="button" className="te-btn cherry sm" onClick={send} disabled={!draft.trim()}>{asking ? 'Ask' : 'Send'}</button>
-        </div>
+      <div className="rm-tabs" role="tablist" aria-label="Room sections">
+        <button type="button" role="tab" aria-selected={paneTab === 'chat'} className={`rm-tab${paneTab === 'chat' ? ' active' : ''}`} onClick={() => setPaneTab('chat')}>Chat</button>
+        <button type="button" role="tab" aria-selected={paneTab === 'files'} className={`rm-tab${paneTab === 'files' ? ' active' : ''}`} onClick={() => setPaneTab('files')}>Docs &amp; Files</button>
       </div>
+
+      {paneTab === 'chat' && (
+        <div className="rm-chat">
+          <div className="rm-msgs">
+            {messages === null && <div className="rm-empty">Loading conversation…</div>}
+            {messages !== null && messages.length === 0 && <div className="rm-empty">No messages yet — say hello 👋</div>}
+            {messages?.map((m) => {
+              if (m.kind === 'system') {
+                return <div key={m.id} className="rm-sysmsg">{m.content}</div>;
+              }
+              const isQuestion = m.kind === 'question';
+              const isVerifiedAnswer = verifiedAnswerIds.has(m.id);
+              const canMarkAnswer = iHaveOpenQuestion && !!m.enrollment_id && m.enrollment_id !== myId && !isQuestion && !isVerifiedAnswer;
+              const resourceId = m.metadata?.resource_id;
+              return (
+                <div key={m.id} className={`rm-msg${isQuestion ? ' is-q' : ''}${isVerifiedAnswer ? ' is-ans' : ''}`}>
+                  <span className="cm-avatar sm">{initials(m.sender_name)}</span>
+                  <div className="rm-msg-body">
+                    <div className="rm-msg-top">
+                      <span className="rm-msg-name">{m.sender_name}</span>
+                      {isQuestion && <span className={`rm-qchip${m.question_status === 'verified' ? ' done' : ''}`}>{m.question_status === 'verified' ? '✓ Answered' : '❓ Question'}</span>}
+                      {isVerifiedAnswer && <span className="rm-ansbadge">✓ Verified answer</span>}
+                      <span className="rm-msg-time">{timeAgo(m.created_at)}</span>
+                      {canMarkAnswer && <button type="button" className="rm-markans" onClick={() => doVerify(m.id)}>✓ Mark as answer</button>}
+                    </div>
+                    <div className="rm-msg-text">
+                      {resourceId ? (
+                        <button type="button" className="rm-msg-file" onClick={() => downloadRoomResource(roomId, { id: resourceId, title: fileTitleFromContent(m.content) })}>
+                          📎 {fileTitleFromContent(m.content)}
+                        </button>
+                      ) : m.content}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={endRef} />
+          </div>
+          {attachError && <div className="rm-upload-error">{attachError}</div>}
+          <div className="rm-chatbar">
+            <button type="button" className={`rm-askbtn${asking ? ' on' : ''}`} onClick={() => setAsking((v) => !v)} title="Ask as a question so people can mark the answer" aria-pressed={asking}>❓</button>
+            {view.can_upload_resource && (
+              <>
+                <button type="button" className="rm-askbtn" onClick={() => document.getElementById('rm-chat-file-input')?.click()} title="Attach a file (added to this room's Docs & Files too)" aria-label="Attach a file" disabled={attaching}>{attaching ? '…' : '📎'}</button>
+                <input id="rm-chat-file-input" type="file" accept={ACCEPT} className="rm-file-input-hidden" onChange={handleAttachInput} />
+              </>
+            )}
+            <input value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') send(); }} placeholder={asking ? 'Ask a question…' : `Message ${room.name}…`} maxLength={4000} />
+            <button type="button" className="te-btn cherry sm" onClick={send} disabled={!draft.trim()}>{asking ? 'Ask' : 'Send'}</button>
+          </div>
+        </div>
+      )}
+
+      {paneTab === 'files' && <RoomFilesPanel roomId={roomId} canUpload={view.can_upload_resource} bookings={bookings} />}
 
       {showInvite && <InviteModal roomId={roomId} onClose={() => setShowInvite(false)} onDone={() => { loadRoom(); onChanged(); }} />}
     </div>

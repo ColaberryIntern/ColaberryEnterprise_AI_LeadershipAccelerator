@@ -33,6 +33,7 @@ import { resolvePrompt } from '../components/promptTesterService';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
 import { parseRssFeed, rankImportance, RssItem } from './rssParser';
+import { decideBootAction } from './aiNewsBootDecision';
 
 export const NEWS_TYPE_SLUG = 'ai_news_flash';
 
@@ -232,7 +233,9 @@ export async function refreshAiNews(opts: { dryRun?: boolean; maxCards?: number;
 
   const materializeOn = opts.force || process.env.AI_NEWS_INGEST_ENABLED === 'true';
   if (!opts.dryRun && materializeOn) {
-    const maxCards = opts.maxCards ?? 12;
+    // Cards per run = opts.maxCards, else AI_NEWS_MAX_PER_RUN, else 1 (code floor).
+    // Prod sets AI_NEWS_MAX_PER_RUN=3 via compose (~3 gpt-4o-mini calls/day).
+    const maxCards = opts.maxCards ?? Number(process.env.AI_NEWS_MAX_PER_RUN || 1);
     const pending = await AiNewsItem.findAll({
       where: { card_id: null as any },
       order: [['importance', 'DESC'], ['published_at', 'DESC']],
@@ -253,16 +256,55 @@ export async function refreshAiNews(opts: { dryRun?: boolean; maxCards?: number;
   return result;
 }
 
-/** Boot helper — populate a fresh environment once, non-blocking. Ingest only
- *  (no LLM at boot) unless AI_NEWS_INGEST_ENABLED is on. */
-export async function refreshAiNewsIfEmpty(): Promise<void> {
+/** How stale the newest generated news card may be before a boot triggers a
+ *  catch-up materialize. The daily cron fires every 24h; 20h leaves margin so a
+ *  redeploy landing between cron runs still recovers a dropped day without
+ *  double-firing (once a fresh card exists, later boots fall inside the window
+ *  and no-op). Overridable via AI_NEWS_CATCHUP_STALE_HOURS. */
+export const BOOT_CATCHUP_STALE_HOURS = Number(process.env.AI_NEWS_CATCHUP_STALE_HOURS || 20);
+
+/** Boot helper — populate a fresh env once, then (cost-gated) catch up a missed
+ *  daily run so a redeploy through the 03:15 cron window doesn't silently drop a
+ *  day's card. Non-blocking; idempotent (once a fresh card exists, subsequent
+ *  boots inside the staleness window no-op). Failure-safe: any error is logged
+ *  and swallowed so a boot never hangs on this. */
+export async function refreshAiNewsOnBoot(): Promise<void> {
   try {
-    const [rows]: any = await sequelize.query(`SELECT count(*)::int AS n FROM ai_news_items`);
-    const n = Array.isArray(rows) && rows[0] ? Number(rows[0].n) : NaN;
-    if (n === 0) {
-      console.log('[aiNews] ai_news_items is empty — running the initial ingest');
-      await refreshAiNews({ maxCards: 6 });
+    const [totalRows]: any = await sequelize.query(`SELECT count(*)::int AS n FROM ai_news_items`);
+    const total = Array.isArray(totalRows) && totalRows[0] ? Number(totalRows[0].n) : 0;
+
+    const [pendRows]: any = await sequelize.query(
+      `SELECT count(*)::int AS n FROM ai_news_items WHERE card_id IS NULL`
+    );
+    const pending = Array.isArray(pendRows) && pendRows[0] ? Number(pendRows[0].n) : 0;
+
+    const [ageRows]: any = await sequelize.query(
+      `SELECT EXTRACT(EPOCH FROM (NOW() - MAX(created_at))) / 3600.0 AS hours
+         FROM timeline_cards WHERE type = :slug`,
+      { replacements: { slug: NEWS_TYPE_SLUG } }
+    );
+    const rawHours = Array.isArray(ageRows) && ageRows[0] ? ageRows[0].hours : null;
+    const newestCardAgeHours = rawHours === null || rawHours === undefined ? null : Number(rawHours);
+
+    const decision = decideBootAction({
+      total,
+      pending,
+      newestCardAgeHours,
+      materializeEnabled: process.env.AI_NEWS_INGEST_ENABLED === 'true',
+      staleHours: BOOT_CATCHUP_STALE_HOURS,
+    });
+
+    if (decision.action === 'skip') {
+      console.log(`[aiNews] boot: no action (${decision.reason})`);
+      return;
     }
+    if (decision.action === 'initial') {
+      console.log('[aiNews] ai_news_items is empty — running the initial ingest');
+      await refreshAiNews({ maxCards: 1 });
+      return;
+    }
+    console.log(`[aiNews] boot catch-up (${decision.reason}, ${pending} pending) — materializing`);
+    await refreshAiNews(); // default maxCards = AI_NEWS_MAX_PER_RUN
   } catch (err: any) {
     console.warn('[aiNews] boot ingest skipped:', err?.message?.split('\n')[0]);
   }

@@ -20,6 +20,8 @@ import { recordCardEvidence } from './evidenceEngine';
 import { recomputeForEnrollment, getStudentCompetency } from './competencyEngine';
 import { evaluateForEnrollment, PromotionOutcome } from './promotionService';
 import { aggregateXp, XpTotals } from './scoring';
+import { getPointsSummary } from '../pointsService';
+import { computeBand, BandResult } from './bandLadder';
 
 const EVIDENCE_SOURCE_BY_TYPE: Record<string, EvidenceSource> = {
   prompt_lab: 'prompt_lab',
@@ -86,6 +88,13 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
   const { assertFieldGuideRequirement } = await import('../runtime/fieldGuideService');
   await assertFieldGuideRequirement(enrollmentId, card);
 
+  // Dwell gate: passive-content types (intel breakdowns, reflection, discussion,
+  // study, Q&A) award points but have no other criteria, so they require N
+  // continuous seconds with the content open (≥2 min, per type) before completion.
+  // No-op for every other type. Throws { status: 422, code: 'dwell_requirement' }.
+  const { assertDwellRequirement } = await import('../runtime/cardDwellService');
+  await assertDwellRequirement(enrollmentId, card);
+
   // Mark progress complete (idempotent).
   const [progress] = await TimelineCardProgress.findOrCreate({
     where: { card_id: cardId, enrollment_id: enrollmentId },
@@ -124,6 +133,30 @@ export interface ProgressionSummary {
   xp: XpTotals;
   competencies: Array<{ domain_id: string; confidence: number; evidence_count: number }>;
   level: { slug: string; rank: number; readiness: number };
+  // Canonical 5-band identity (AI Aware → AI Enabled → AI Builder → AI Architect).
+  // Additive: combines the learner's canonical points total (the HUD source) with
+  // their build-competency rank. A build promotion overrides points; without one,
+  // points cap at AI Enabled. See bandLadder.computeBand.
+  band: BandResult;
+}
+
+/**
+ * Lightweight canonical band for an enrollment — the HUD path. Reuses the points
+ * total the caller already fetched (getPointsSummary) so it needs only the
+ * StudentLevel row, then runs the SAME pure computeBand the full summary uses
+ * (single source of truth, no drift). Additive: read-only apart from the
+ * idempotent StudentLevel.findOrCreate that every learner already gets.
+ */
+export async function getBandForEnrollment(enrollmentId: string, pointsTotal: number): Promise<BandResult> {
+  const [level] = await StudentLevel.findOrCreate({
+    where: { enrollment_id: enrollmentId },
+    defaults: { enrollment_id: enrollmentId, level_slug: 'builder', rank: 0 },
+  });
+  return computeBand({
+    pointsTotal,
+    builderLevelSlug: level.level_slug,
+    builderRank: level.rank,
+  });
 }
 
 export async function getProgressionSummary(enrollmentId: string): Promise<ProgressionSummary> {
@@ -136,9 +169,19 @@ export async function getProgressionSummary(enrollmentId: string): Promise<Progr
     defaults: { enrollment_id: enrollmentId, level_slug: 'builder', rank: 0 },
   });
 
+  // Canonical points total — the SAME source the HUD/leaderboard use
+  // (StudentPointsEvent via pointsService), not XP. Feeds the free bands.
+  const pointsSummary = await getPointsSummary(enrollmentId);
+  const band = computeBand({
+    pointsTotal: pointsSummary.total,
+    builderLevelSlug: level.level_slug,
+    builderRank: level.rank,
+  });
+
   return {
     xp,
     competencies: comps.map((c) => ({ domain_id: c.domain_id, confidence: c.confidence, evidence_count: c.evidence_count })),
     level: { slug: level.level_slug, rank: level.rank, readiness: level.architect_readiness },
+    band,
   };
 }

@@ -2,6 +2,7 @@ import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
 export type CommunityPresenceStatus = 'online' | 'away' | 'offline';
+export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
 
 export interface CommunityMemberAttributes {
   id?: string;
@@ -11,6 +12,10 @@ export interface CommunityMemberAttributes {
   bio?: string | null;
   level?: number;
   points?: number;
+  role?: CommunityMemberRole;
+  // Management-portal role for staff (owner|admin|curriculum|revenue|admissions|
+  // support), or null for non-mgmt members. Gates admin sections via mgmtRoles.ts.
+  mgmt_role?: string | null;
   presence_status?: CommunityPresenceStatus;
   last_active_at?: Date | null;
   created_at?: Date;
@@ -25,6 +30,8 @@ class CommunityMember extends Model<CommunityMemberAttributes> implements Commun
   declare bio: string | null;
   declare level: number;
   declare points: number;
+  declare role: CommunityMemberRole;
+  declare mgmt_role: string | null;
   declare presence_status: CommunityPresenceStatus;
   declare last_active_at: Date | null;
   declare created_at: Date;
@@ -65,6 +72,20 @@ CommunityMember.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       defaultValue: 0,
+    },
+    role: {
+      // Admin-assigned directory role. VARCHAR + CHECK (not a PG enum) so widening
+      // the set later is a constraint swap, not an ALTER TYPE. See
+      // 20260721_add_community_member_role.sql / ensureCommunityMemberRoleSchema().
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'student',
+    },
+    mgmt_role: {
+      // Management-portal role (owner|admin|curriculum|revenue|admissions|support)
+      // or null. CHECK-constrained in ensureCommunityMemberRoleSchema().
+      type: DataTypes.STRING(20),
+      allowNull: true,
     },
     presence_status: {
       // 'online'/'away' are P2 (websocket presence layer, spec §6.A/§8) — the

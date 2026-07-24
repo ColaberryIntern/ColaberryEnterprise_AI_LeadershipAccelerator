@@ -18,6 +18,17 @@ export interface RtCard {
 }
 export interface RtOpen { card: RtCard; progress: { status: string; completed_at: string | null } }
 
+// In-Workspace blog reader payload (blogReaderService). ok:false ⇒ show the external link.
+export interface BlogReaderContent {
+  ok: boolean;
+  title: string | null;
+  body_html: string | null;
+  excerpt: string | null;
+  author: string | null;
+  featured_image: string | null;
+  source_url: string | null;
+}
+
 export interface SkillScore { key: string; label: string; score: number }
 export interface Readiness {
   progression: { xp: { learning: number; builder: number; community: number }; competencies: Array<{ domain_id: string; confidence: number; evidence_count: number }>; level: { slug: string; rank: number; readiness: number } };
@@ -40,6 +51,32 @@ export interface CardComment { id: string; body: string; author: string; mine: b
 export interface SurveyAnswerItem { question: string; rating: number | null; comment: string | null }
 export interface SurveyAnswers { items: SurveyAnswerItem[]; open: string | null }
 export interface SurveyView { questions: string[]; open_prompt: string | null; answers: SurveyAnswers | null }
+
+// ── Community Rituals (community_discussion) ─────────────────────────────────
+export interface RitualField {
+  key: string; label: string; placeholder?: string; required?: boolean;
+  kind: 'text' | 'textarea' | 'list' | 'link' | 'choice'; choices?: string[]; mono?: boolean; maxLength?: number;
+}
+export type RitualVariant = 'standard' | 'chips' | 'prompt' | 'qa' | 'debate' | 'before_after' | 'manifesto';
+export interface PublicRitual {
+  key: string; week: number; name: string; icon: string; accent: string;
+  ask: string; lead: string; postCta: string;
+  fields: RitualField[]; headlineField: string; variant: RitualVariant;
+  reaction: { emoji: string; label: string }; mechanic: { icon: string; caption: string };
+  beforeAfter: [string, string] | null;
+}
+export interface RitualTileMember { id: string; name: string; avatar_url: string | null; level: number; initials: string }
+export interface RitualTile {
+  id: string; member: RitualTileMember; headline: string;
+  values: Record<string, string | string[]>; link: string | null;
+  like_count: number; viewer_has_liked: boolean; is_mine: boolean; created_at: string;
+}
+export interface RitualWall {
+  card_id: string; week: number | null; title: string | null;
+  ritual: PublicRitual; wall: RitualTile[]; my_post: RitualTile | null; count: number;
+  split: { choices: string[]; counts: number[] } | null;
+}
+export type RitualValues = Record<string, string | string[]>;
 
 // ── Assessments: Knowledge Check (quiz) + Evaluation ─────────────────────────
 export type AssessmentKind = 'quiz' | 'evaluation';
@@ -112,8 +149,30 @@ export interface AmLedger { lessons_completed: number; decisions_recorded: numbe
 export interface AmGap { code: string; label: string }
 export interface AmStateView { scenario: AmScenario; progress: AmProgress; status: string; receipt: AmReceipt; gaps: AmGap[]; ledger: AmLedger }
 
+// Week in Review (reflection) — the per-student data behind the weekly reflection panel.
+export interface WrActivity {
+  card_id: string; type: string; label: string; title: string; bucket: string; phase: string;
+  minutes: number; completed: boolean; status: string; quiz_score: number | null;
+}
+export interface WrSkill { domain: string; label: string; beginning: number | null; current: number | null; delta: number | null; }
+export interface WrSignals { readiness: number | null; application: string | null; application_text: string | null; direction: string | null; note: string | null; }
+export interface WeekReview {
+  program_id: string | null; week: number | null; week_title: string | null;
+  stats: { total: number; completed: number; time_invested_min: number; points: number; growth_score: number };
+  activities: WrActivity[];
+  skills: WrSkill[];
+  evaluation: { score: number | null; passed: boolean | null; growth: number | null } | null;
+  survey: { avg_rating: number | null; open: string | null } | null;
+  signals: WrSignals | null;
+  generated_at: string;
+}
+export interface WrSignalsInput { readiness?: number | null; application?: string | null; application_text?: string | null; direction?: string | null; note?: string | null; }
+
 export const runtimeApi = {
   open: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}`).then((r) => r.data as RtOpen),
+  weekReview: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/week-review`).then((r) => r.data as WeekReview),
+  saveReflectionSignals: (cardId: string, body: WrSignalsInput) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/week-review/signals`, body).then((r) => r.data as WrSignals),
   architectState: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/architect/state`).then((r) => r.data as AmStateView),
   architectAdvance: (cardId: string, to: string, patch?: Partial<AmProgress>) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/architect/advance`, { to, patch }).then((r) => r.data as { state: string; saved: boolean }),
@@ -132,6 +191,18 @@ export const runtimeApi = {
   complete: (cardId: string, work?: string, reflection?: string) => portalApi.post(`/api/portal/runtime/cards/${cardId}/complete`, { work, reflection }).then((r) => r.data as { outcome: any; artifact: any; readiness: Readiness }),
   watch: (cardId: string, beat: { delta_s: number; position_s?: number | null; duration_s?: number | null; provider?: string | null }) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/watch`, beat).then((r) => r.data as { watched_pct: number; required_pct: number | null; met: boolean }),
+  // Blog 2-minute read gate (ambient blogs, keyed on blogId): heartbeat + collect.
+  blogRead: (blogId: string, beat: { delta_s: number }) =>
+    portalApi.post(`/api/portal/runtime/today/blog/${blogId}/read`, beat).then((r) => r.data as { read_s: number; required_s: number; met: boolean }),
+  blogCollect: (blogId: string) =>
+    portalApi.post(`/api/portal/runtime/today/blog/${blogId}/collect`, {}).then((r) => r.data as { points_awarded: number; already: boolean }),
+  // In-Workspace reader: the post's article fetched + sanitized server-side so it can be
+  // framed (the training site sends X-Frame-Options: DENY). ok:false ⇒ fall back to link.
+  blogReader: (blogId: string) =>
+    portalApi.get(`/api/portal/runtime/today/blog/${blogId}/reader`).then((r) => r.data as BlogReaderContent),
+  // Generic dwell gate (passive-content types): heartbeat while the card is open.
+  cardDwell: (cardId: string, beat: { delta_s: number }) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/dwell`, beat).then((r) => r.data as { dwell_s: number; required_s: number; met: boolean }),
   readiness: () => portalApi.get('/api/portal/runtime/readiness').then((r) => r.data as Readiness),
   saveNote: (cardId: string, body: string, kind = 'note') => portalApi.post('/api/portal/runtime/notebook', { card_id: cardId, kind, body }).then((r) => r.data),
   comments: (cardId: string) => portalApi.get(`/api/portal/classroom/cards/${cardId}/comments`).then((r) => r.data as { comments: CardComment[] }),
@@ -139,6 +210,12 @@ export const runtimeApi = {
   survey: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/survey`).then((r) => r.data as SurveyView),
   saveSurvey: (cardId: string, payload: { items: Array<{ index: number; rating: number | null; comment?: string | null }>; open?: string | null }) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/survey`, payload).then((r) => r.data as { saved: true; answers: SurveyAnswers; points_awarded: number }),
+  // Community Rituals: read the week's ritual + cohort wall, post/edit my answer, cheer a classmate's.
+  ritualWall: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/peer-wins`).then((r) => r.data as RitualWall),
+  postRitual: (cardId: string, values: RitualValues) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/peer-wins`, { values }).then((r) => r.data as { post: RitualTile; created: boolean }),
+  cheerRitual: (cardId: string, postId: string) =>
+    portalApi.post(`/api/portal/runtime/cards/${cardId}/peer-wins/${postId}/cheer`, {}).then((r) => r.data as { liked: boolean; like_count: number }),
   assessment: (cardId: string) => portalApi.get(`/api/portal/runtime/cards/${cardId}/assessment`).then((r) => r.data as AssessmentView),
   submitAssessment: (cardId: string, payload: AssessmentSubmit) =>
     portalApi.post(`/api/portal/runtime/cards/${cardId}/assessment`, payload).then((r) => r.data as AssessmentResult),

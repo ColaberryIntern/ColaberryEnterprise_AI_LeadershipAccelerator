@@ -92,6 +92,7 @@ export interface RosterMember {
   readiness: number; // 0..100
   builder_xp_week: number;
   streak: number;
+  total_points: number; // canonical points-economy total (student_points_events)
 }
 
 export interface MemberDetail {
@@ -321,10 +322,11 @@ export async function getRoster(orgId: string): Promise<RosterMember[]> {
       readiness: 0,
       builder_xp_week: 0,
       streak: 0,
+      total_points: 0,
     }));
   }
 
-  const [levels, xp, streaks] = await Promise.all([
+  const [levels, xp, streaks, points] = await Promise.all([
     selectRows<{ enrollment_id: string; level_slug: string; rank: number; architect_readiness: number }>(
       `SELECT enrollment_id, level_slug, rank, architect_readiness FROM student_level WHERE enrollment_id IN (:ids)`,
       { ids },
@@ -340,11 +342,20 @@ export async function getRoster(orgId: string): Promise<RosterMember[]> {
         WHERE event_type='daily_streak' AND enrollment_id IN (:ids) GROUP BY enrollment_id`,
       { ids },
     ),
+    // Canonical points-economy total (same ledger the HUD's "N pts" badge sums),
+    // all streams and all time — this is a person's ACTIVE standing, distinct
+    // from the builder-only weekly velocity above.
+    selectRows<{ enrollment_id: string; total: number }>(
+      `SELECT enrollment_id, COALESCE(SUM(points),0)::int AS total FROM student_points_events
+        WHERE enrollment_id IN (:ids) GROUP BY enrollment_id`,
+      { ids },
+    ),
   ]);
 
   const levelMap = new Map(levels.map((l) => [l.enrollment_id, l]));
   const xpMap = new Map(xp.map((x) => [x.enrollment_id, Number(x.xp)]));
   const streakMap = new Map(streaks.map((s) => [s.enrollment_id, Number(s.streak)]));
+  const pointsMap = new Map(points.map((p) => [p.enrollment_id, Number(p.total)]));
 
   return members.map((m) => {
     const enr: any = (m as any).enrollment;
@@ -358,6 +369,7 @@ export async function getRoster(orgId: string): Promise<RosterMember[]> {
       readiness: Math.round(Number(lvl?.architect_readiness ?? 0)),
       builder_xp_week: m.enrollment_id ? (xpMap.get(m.enrollment_id) ?? 0) : 0,
       streak: m.enrollment_id ? (streakMap.get(m.enrollment_id) ?? 0) : 0,
+      total_points: m.enrollment_id ? (pointsMap.get(m.enrollment_id) ?? 0) : 0,
     };
   });
 }
