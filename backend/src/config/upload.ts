@@ -102,3 +102,90 @@ export const fieldGuideUpload = multer({
   limits: { fileSize: MAX_FIELD_GUIDE_SIZE },
 });
 export { MAX_FIELD_GUIDE_SIZE };
+
+// ── Community media uploads — small images from a student's local computer ────
+// Disk storage on the persistent `uploads` volume (survives deploys); served
+// back by a public GET route keyed on the opaque UUID filename.
+const COMMUNITY_MEDIA_DIR = process.env.COMMUNITY_MEDIA_DIR || path.resolve('/app/uploads/community');
+try { fs.mkdirSync(COMMUNITY_MEDIA_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const COMMUNITY_MEDIA_MIMES: Record<string, string> = {
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+  'image/gif': '.gif',
+};
+const MAX_COMMUNITY_MEDIA_SIZE = 8 * 1024 * 1024; // 8MB — "not so big" images
+
+const communityMediaStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, COMMUNITY_MEDIA_DIR); },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || COMMUNITY_MEDIA_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+function communityMediaFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  if (COMMUNITY_MEDIA_MIMES[file.mimetype]) cb(null, true);
+  else cb(new Error('Upload an image — PNG, JPG, WEBP, or GIF.'));
+}
+export const communityMediaUpload = multer({
+  storage: communityMediaStorage,
+  fileFilter: communityMediaFilter,
+  limits: { fileSize: MAX_COMMUNITY_MEDIA_SIZE },
+});
+export { COMMUNITY_MEDIA_DIR, MAX_COMMUNITY_MEDIA_SIZE };
+
+// ── Room Resource uploads (Docs & Files) — documents attached to a Community
+// Room, one of its bookings, or the Global Library ──────────────────────────
+// Disk storage on the persistent `uploads` volume (survives deploys), same as
+// communityMediaUpload. Video is deliberately NOT supported here — it's
+// link-only (paste a Vimeo/YouTube/Drive/Meet URL via resource_type:
+// 'recording'), matching the org's existing ColaberryTV pattern.
+const ROOM_RESOURCE_DIR = process.env.ROOM_RESOURCE_DIR || path.resolve('/app/uploads/room-resources');
+try { fs.mkdirSync(ROOM_RESOURCE_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const ROOM_RESOURCE_MIMES: Record<string, string> = {
+  'application/pdf': '.pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation': '.pptx',
+  'application/vnd.ms-powerpoint': '.ppt',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'application/vnd.ms-excel': '.xls',
+  'application/rtf': '.rtf',
+  'text/rtf': '.rtf',
+  'text/plain': '.txt',
+  'text/markdown': '.md',
+  'text/csv': '.csv',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/webp': '.webp',
+};
+// Browsers frequently report application/octet-stream for .md/.txt (and
+// sometimes .csv) on Windows, so accept by extension too — a bare MIME check
+// would reject a plain CLAUDE.md upload, which is exactly what this feature
+// needs to support (see fieldGuideUpload's identical dual-check precedent).
+const ROOM_RESOURCE_EXT_FALLBACK = new Set([
+  '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx',
+  '.rtf', '.txt', '.md', '.csv', '.png', '.jpg', '.jpeg', '.webp',
+]);
+const MAX_ROOM_RESOURCE_SIZE = 50 * 1024 * 1024; // 50MB — matches strategyPrepUpload
+
+const roomResourceStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => { cb(null, ROOM_RESOURCE_DIR); },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase() || ROOM_RESOURCE_MIMES[file.mimetype] || '';
+    cb(null, `${crypto.randomUUID()}${ext}`);
+  },
+});
+function roomResourceFilter(_req: Express.Request, file: Express.Multer.File, cb: multer.FileFilterCallback): void {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ROOM_RESOURCE_MIMES[file.mimetype] || ROOM_RESOURCE_EXT_FALLBACK.has(ext)) cb(null, true);
+  else cb(new Error('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, PNG, JPG, WEBP'));
+}
+export const roomResourceUpload = multer({
+  storage: roomResourceStorage,
+  fileFilter: roomResourceFilter,
+  limits: { fileSize: MAX_ROOM_RESOURCE_SIZE },
+});
+export { ROOM_RESOURCE_DIR, MAX_ROOM_RESOURCE_SIZE };

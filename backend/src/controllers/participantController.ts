@@ -3,10 +3,13 @@ import {
   requestMagicLink, verifyMagicLink, getParticipantProfile,
   getParticipantDashboard, getParticipantSessions, getParticipantSessionDetail,
   getParticipantSubmissions, createParticipantSubmission, uploadParticipantSubmission,
-  getParticipantProgress,
+  getParticipantProgress, getNextLiveSession,
 } from '../services/participantService';
+import { joinLiveSession, leaveMeetingSession } from '../services/liveSessionAttendanceService';
 import { createFreeAccount } from '../services/freeSignupService';
 import { getPointsSummary } from '../services/pointsService';
+import { getBandForEnrollment } from '../services/progression/progressionService';
+import { env } from '../config/env';
 import { getStreak, claimStreak } from '../services/streakService';
 import { getPointsDrilldown } from '../services/pointsDrilldownService';
 import { getSubscription, startCheckout, cancelSubscription, confirmCheckout } from '../services/subscriptionService';
@@ -14,9 +17,23 @@ import { getEnrollmentView, selectCohort, SelectCohortReason } from '../services
 import { z } from 'zod';
 import type { SubscriptionPlan } from '../models/Subscription';
 import { getOnboardingSchedule, rsvpToOpenHouse } from '../services/openHouseService';
-import Enrollment from '../models/Enrollment';
+import { isFreePreviewTier, resolveContentPageAccess } from '../services/access/contentEntitlement';
 import { getUpcomingPublicEvents } from '../services/publicEventsService';
 import { ingestBackground, getOnboardingProfile } from '../services/resumeIngestService';
+import { submitReferrals } from '../services/friendReferralService';
+import { getCheckinInfo } from '../services/sessionKitService';
+
+// PUBLIC (no auth): minimal, non-sensitive info for the pre-login check-in
+// landing page a student reaches by scanning the Class Kit QR. Shows which
+// class they are about to check in to; the meeting link is NOT returned here
+// (revealed only after login + check-in). 404 if the session does not exist.
+export async function handleGetCheckinInfo(req: Request, res: Response, next: NextFunction) {
+  try {
+    const info = await getCheckinInfo(req.params.id as string);
+    if (!info) return res.status(404).json({ error: 'Session not found' });
+    res.json(info);
+  } catch (err) { next(err); }
+}
 
 export async function handleIngestBackground(req: Request, res: Response, next: NextFunction) {
   try {
@@ -37,10 +54,34 @@ export async function handleGetOnboardingProfile(req: Request, res: Response, ne
   } catch (err) { next(err); }
 }
 
+const SubmitReferralsSchema = z.object({
+  friends: z.array(z.object({
+    name: z.string().trim().min(1, 'name is required').max(200),
+    email: z.string().trim().email('a valid email is required').max(320),
+  })).min(1, 'add at least one friend').max(20, 'add at most 20 friends at a time'),
+});
+
+export async function handleSubmitReferrals(req: Request, res: Response, next: NextFunction) {
+  try {
+    const parsed = SubmitReferralsSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid friends list' });
+    }
+    const result = await submitReferrals(req.participant!.sub, parsed.data.friends);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
 export async function handleGetPoints(req: Request, res: Response, next: NextFunction) {
   try {
-    const summary = await getPointsSummary(req.participant!.sub);
-    res.json(summary);
+    const enrollmentId = req.participant!.sub;
+    const summary = await getPointsSummary(enrollmentId);
+    // Additive: attach the canonical 5-band identity + the runtime UI flag so the
+    // HUD can switch to the band ladder without a rebuild. Existing fields (total,
+    // events) are untouched; unknown fields are ignored by legacy clients, and the
+    // frontend only reads `band` when `fiveBandUiEnabled` is true.
+    const band = await getBandForEnrollment(enrollmentId, summary.total);
+    res.json({ ...summary, band, fiveBandUiEnabled: env.fiveBandUiEnabled });
   } catch (err) { next(err); }
 }
 
@@ -139,10 +180,19 @@ export async function handleClaimStreak(req: Request, res: Response, next: NextF
 
 export async function handleGetOnboardingSchedule(req: Request, res: Response, next: NextFunction) {
   try {
-    const schedule = await getOnboardingSchedule(req.participant!.sub);
-    // Explorer status drives the free-tier conversion funnel on the portal (Today).
-    const enr = await Enrollment.findByPk(req.participant!.sub, { attributes: ['enrollment_type'] });
-    res.json({ ...schedule, is_explorer: (enr as any)?.enrollment_type === 'explorer' });
+    const enrollmentId = req.participant!.sub;
+    const [schedule, isExplorer, pageAccess] = await Promise.all([
+      getOnboardingSchedule(enrollmentId),
+      // Free-preview status drives the enroll/pay conversion funnel on the portal
+      // (Today). Single source of truth = contentEntitlement.isFreePreviewTier
+      // (payment-keyed when CONTENT_PAID_GATE_ENABLED, else legacy explorer-only).
+      isFreePreviewTier(enrollmentId),
+      // Page-level paywall signals (<PageGate>, the nav lock badge) — a SEPARATE,
+      // independently-flagged predicate from is_explorer above; see
+      // contentEntitlement.resolveContentPageAccess.
+      resolveContentPageAccess(enrollmentId),
+    ]);
+    res.json({ ...schedule, is_explorer: isExplorer, is_staff: pageAccess.isStaff, has_full_access: pageAccess.hasFullAccess });
   } catch (err) { next(err); }
 }
 
@@ -216,6 +266,39 @@ export async function handleGetSessions(req: Request, res: Response, next: NextF
   try {
     const sessions = await getParticipantSessions(req.participant!.sub, req.participant!.cohort_id);
     res.json({ sessions });
+  } catch (err) { next(err); }
+}
+
+// Lean payload for the Today "Next live class" card (live_sessions-backed).
+export async function handleGetNextSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await getNextLiveSession(req.participant!.cohort_id);
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Student joined a live session — record attendance + award credit once.
+// `source` distinguishes the QR/classroom check-in from the portal's Join
+// Meeting click, purely for the instructor deck's presence ticker copy
+// ("entering the classroom" vs "entering the Virtual Building") — it has no
+// effect on attendance credit, which treats both the same.
+export async function handleJoinSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const source = req.body?.source === 'meet' ? 'meet' : 'classroom';
+    const result = await joinLiveSession(
+      req.participant!.sub, req.params.id as string, req.participant!.cohort_id, new Date(), source
+    );
+    if (!result) return res.status(404).json({ error: 'Session not found or not joinable' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Best-effort "left the Meet tab" signal (page-unload beacon from the portal).
+// Never 404s on a stale/already-ended session — the beacon may arrive late.
+export async function handleLeaveMeeting(req: Request, res: Response, next: NextFunction) {
+  try {
+    const ok = await leaveMeetingSession(req.participant!.sub, req.params.id as string, req.participant!.cohort_id);
+    res.json({ success: ok });
   } catch (err) { next(err); }
 }
 

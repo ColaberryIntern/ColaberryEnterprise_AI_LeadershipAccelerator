@@ -1,9 +1,11 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-// Links, files, recordings, recaps, and pins attached to a room (or one of its
-// bookings). Recaps store their body inline; links/files/recordings store a url.
-export type RoomResourceType = 'link' | 'file' | 'recording' | 'recap' | 'pin';
+// Links, files, recordings, recaps, notes, and pins attached to a room (or one
+// of its bookings). Recaps/notes store their body inline; links/recordings
+// store a url; files store mime_type/size_bytes/storage_key (the disk
+// filename, resolved server-side — never trust a client-supplied path).
+export type RoomResourceType = 'link' | 'file' | 'recording' | 'recap' | 'pin' | 'note';
 
 export interface RoomResourceAttributes {
   id?: string;
@@ -13,6 +15,9 @@ export interface RoomResourceAttributes {
   title?: string | null;
   url?: string | null;
   body?: string | null;
+  mime_type?: string | null;
+  size_bytes?: number | null;
+  storage_key?: string | null;
   created_by_enrollment_id?: string | null;
   is_pinned?: boolean;
   metadata?: Record<string, unknown>;
@@ -28,6 +33,9 @@ class RoomResource extends Model<RoomResourceAttributes> implements RoomResource
   declare title: string | null;
   declare url: string | null;
   declare body: string | null;
+  declare mime_type: string | null;
+  declare size_bytes: number | null;
+  declare storage_key: string | null;
   declare created_by_enrollment_id: string | null;
   declare is_pinned: boolean;
   declare metadata: Record<string, unknown>;
@@ -44,6 +52,9 @@ RoomResource.init(
     title: { type: DataTypes.STRING(255), allowNull: true },
     url: { type: DataTypes.STRING(1000), allowNull: true },
     body: { type: DataTypes.TEXT, allowNull: true },
+    mime_type: { type: DataTypes.STRING(120), allowNull: true },
+    size_bytes: { type: DataTypes.INTEGER, allowNull: true },
+    storage_key: { type: DataTypes.STRING(255), allowNull: true },
     created_by_enrollment_id: { type: DataTypes.UUID, allowNull: true },
     is_pinned: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },

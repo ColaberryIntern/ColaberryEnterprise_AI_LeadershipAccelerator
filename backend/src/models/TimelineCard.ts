@@ -59,6 +59,12 @@ export interface TimelineCardAttributes {
   program_id?: string | null;
   order?: number;
   metadata?: any;
+  // Feed Control plane (all nullable → fall back to type default, then policy).
+  feed_surface?: string | null;       // override the type's home_surface for this card
+  feed_cadence?: number | null;       // per-card Today cadence override
+  feed_frequency_cap?: number | null; // max times shown to one student
+  feed_cooldown_days?: number | null; // min days before it can reappear
+  pinned_until?: Date | null;         // boosted to the top while in the future
   created_at?: Date;
   updated_at?: Date;
 }
@@ -95,6 +101,11 @@ class TimelineCard extends Model<TimelineCardAttributes> implements TimelineCard
   declare program_id: string | null;
   declare order: number;
   declare metadata: any;
+  declare feed_surface: string | null;
+  declare feed_cadence: number | null;
+  declare feed_frequency_cap: number | null;
+  declare feed_cooldown_days: number | null;
+  declare pinned_until: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -132,6 +143,11 @@ TimelineCard.init(
     program_id: { type: DataTypes.UUID, allowNull: true },
     order: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
     metadata: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
+    feed_surface: { type: DataTypes.STRING(20), allowNull: true },
+    feed_cadence: { type: DataTypes.INTEGER, allowNull: true },
+    feed_frequency_cap: { type: DataTypes.INTEGER, allowNull: true },
+    feed_cooldown_days: { type: DataTypes.INTEGER, allowNull: true },
+    pinned_until: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   },

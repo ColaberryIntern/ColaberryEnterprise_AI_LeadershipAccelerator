@@ -70,11 +70,13 @@ export function videoThumbnail(source: VideoSource | null): string | null {
   return null;
 }
 
-/** Add autoplay to an iframe embed url in the provider's own dialect. */
-export function withAutoplay(source: VideoSource): string {
+/** Add autoplay (and, when asked, mute) to an iframe embed url in the provider's
+ *  own dialect. Browsers block autoplay WITH sound, so muted autoplay is the only
+ *  kind that reliably starts — each provider spells "muted" differently. */
+export function withAutoplay(source: VideoSource, muted = false): string {
   if (source.kind !== 'iframe') return source.embedUrl;
-  if (source.provider === 'youtube') return withParam(source.embedUrl, 'autoplay=1');
-  if (source.provider === 'vimeo') return withParam(source.embedUrl, 'autoplay=1');
-  if (source.provider === 'loom') return withParam(source.embedUrl, 'autoplay=1');
+  if (source.provider === 'youtube') return withParam(source.embedUrl, `autoplay=1${muted ? '&mute=1' : ''}`);
+  if (source.provider === 'vimeo') return withParam(source.embedUrl, `autoplay=1${muted ? '&muted=1' : ''}`);
+  if (source.provider === 'loom') return withParam(source.embedUrl, `autoplay=1${muted ? '&muted=1' : ''}`);
   return source.embedUrl;
 }

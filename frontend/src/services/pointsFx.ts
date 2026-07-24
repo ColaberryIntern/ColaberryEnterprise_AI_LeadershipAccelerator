@@ -36,6 +36,27 @@ export function onPointsEarned(cb: (detail: PointsEarnedDetail) => void): () => 
   return () => window.removeEventListener(POINTS_EVENT, handler);
 }
 
+// ── card-collected signal ──────────────────────────────────────────────────
+// A completed card should drop off the Today feed. Collect can happen on the tile
+// OR in the drawer; both fire this one signal (with the card's id) so the feed can
+// remove the row from whichever surface triggered it — no prop threading.
+export const CARD_COLLECTED_EVENT = 'te-card-collected';
+
+/** Signal that a card was collected/completed (its feed row should disappear). */
+export function emitCardCollected(cardId: string): void {
+  if (!cardId) return;
+  try {
+    window.dispatchEvent(new CustomEvent<{ cardId: string }>(CARD_COLLECTED_EVENT, { detail: { cardId } }));
+  } catch { /* non-DOM environment — ignore */ }
+}
+
+/** Subscribe to card-collected events; returns an unsubscribe function. */
+export function onCardCollected(cb: (cardId: string) => void): () => void {
+  const handler = (e: Event) => cb((e as CustomEvent<{ cardId: string }>).detail.cardId);
+  window.addEventListener(CARD_COLLECTED_EVENT, handler);
+  return () => window.removeEventListener(CARD_COLLECTED_EVENT, handler);
+}
+
 // ── sound preference (default ON; a mute toggle lives in Settings ▸ Preferences) ──
 const SOUND_KEY = 'te-sound';
 

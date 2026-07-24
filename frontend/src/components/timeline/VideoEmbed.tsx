@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { VideoSource, providerLabel, withAutoplay, isAudioUrl } from '../../utils/videoEmbed';
+import { getPodcastMuted, setPodcastMuted } from '../../utils/podcastMutePreference';
 
 /**
  * VideoEmbed — plays a lesson video in-app from any supported link (YouTube,
@@ -212,6 +213,11 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
               src={source.embedUrl}
               controls
               autoPlay
+              // Read fresh on every (re)mount — a new VideoEmbed instance mounts per
+              // drawer-open / per scroll-triggered preview, so a stale useState here
+              // would silently re-mute an episode the student already unmuted.
+              muted={getPodcastMuted()}
+              onVolumeChange={(e) => setPodcastMuted(e.currentTarget.muted)}
               onTimeUpdate={mediaTimeUpdate('audio')}
               onPause={() => flushRef.current('audio')}
               onEnded={mediaEnded('audio')}
@@ -227,6 +233,8 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
           src={source.embedUrl}
           controls
           autoPlay
+          muted={autoplay}
+          playsInline
           onTimeUpdate={mediaTimeUpdate('file')}
           onPause={() => flushRef.current('file')}
           onEnded={mediaEnded('file')}
@@ -240,8 +248,8 @@ const VideoEmbed: React.FC<Props> = ({ source, title, poster, onEnded, badge, au
   // iframe providers (youtube / vimeo / loom / wistia). YouTube gets the JS-API
   // origin param so its postMessage channel reports playback to this window.
   const iframeSrc = source.provider === 'youtube'
-    ? addParam(withAutoplay(source), `origin=${encodeURIComponent(window.location.origin)}`)
-    : withAutoplay(source);
+    ? addParam(withAutoplay(source, autoplay), `origin=${encodeURIComponent(window.location.origin)}`)
+    : withAutoplay(source, autoplay);
   return (
     <div className="tlv-frame">
       <iframe

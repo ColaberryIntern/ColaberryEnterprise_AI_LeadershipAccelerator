@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import PortalShell from '../today/PortalShell';
 import CompanyMomentumDashboard from '../../../components/capability/CompanyMomentumDashboard';
 import CompanyMemberDrilldown from './CompanyMemberDrilldown';
-import { card, h2, muted, sub, inputStyle, pillBtn, initials, lvlTone, prettyLevel } from './companyUi';
+import { card, h2, muted, sub, inputStyle, pillBtn, initials, lvlTone, prettyLevel, ptsTone } from './companyUi';
 import {
   getOrgOverview, getOrgRoster, getOrgFeed, getOrgMember, inviteMembers,
   OrgOverview, OrgRosterMember, OrgFeedItem, OrgMemberDetail,
@@ -196,7 +196,10 @@ const CompanyPage: React.FC = () => {
                       <div style={{ fontSize: 'var(--fs-body-sm)', fontWeight: 600, color: 'var(--text-strong)' }}>{mm.name}</div>
                       <div style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-subtle)' }}>{mm.team || 'Unassigned'} · {mm.readiness}% ready · +{mm.builder_xp_week} bXP/wk</div>
                     </div>
-                    <span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: lvlTone(mm.rank), padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>{prettyLevel(mm.level)}</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)', alignItems: 'flex-end' }}>
+                      <span style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: lvlTone(mm.rank), padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>{prettyLevel(mm.level)}</span>
+                      <span title="Active points (points-economy total, all streams)" style={{ fontSize: 'var(--fs-caption)', color: '#fff', background: ptsTone(mm.total_points), padding: '2px 10px', borderRadius: 'var(--radius-pill)', fontWeight: 700 }}>{mm.total_points.toLocaleString()} pts</span>
+                    </div>
                   </button>
                 ))}
               </div>

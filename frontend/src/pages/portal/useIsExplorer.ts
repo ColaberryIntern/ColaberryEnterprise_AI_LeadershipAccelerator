@@ -1,22 +1,22 @@
 import { useEffect, useState } from 'react';
-import { fetchSchedule } from '../../services/onboardingApi';
+import { loadSchedule, getCachedSchedule } from './scheduleCache';
 
 /**
  * True for a free Explorer (unenrolled prospect). Drives DEMO MODE across the
  * portal — Explorers can click around Projects but can't run prompts, mark done,
- * skip, or actually create a build. Cached module-wide so it fetches once.
+ * skip, or actually create a build. Backed by the shared scheduleCache so this
+ * and useEntitlement (which reads the same payload) fire one fetch, not two.
  */
-let cached: boolean | null = null;
-
 export function useIsExplorer(): boolean {
-  const [isExplorer, setIsExplorer] = useState<boolean>(cached ?? false);
+  const seed = getCachedSchedule();
+  const [isExplorer, setIsExplorer] = useState<boolean>(!!seed?.is_explorer);
   useEffect(() => {
-    if (cached !== null) { setIsExplorer(cached); return; }
+    if (seed) return;
     let alive = true;
-    fetchSchedule()
-      .then((s) => { cached = !!s.is_explorer; if (alive) setIsExplorer(cached); })
+    loadSchedule()
+      .then((s) => { if (alive) setIsExplorer(!!s.is_explorer); })
       .catch(() => { /* default: treat as enrolled (no demo lock) if unknown */ });
     return () => { alive = false; };
-  }, []);
+  }, [seed]);
   return isExplorer;
 }

@@ -29,6 +29,9 @@ import {
   getUpcomingSessions, getSessionsToMarkLive, getSessionsToMarkCompleted,
   detectAbsentParticipants, computeAllReadinessScores,
 } from './acceleratorService';
+import { finalizeSessionAttendance } from './liveSessionAttendanceService';
+import { generateSessionRecap } from './sessionRecapService';
+import { ensureSessionMeetLink } from './meetingService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 
 /**
@@ -1799,6 +1802,68 @@ export function startScheduler(): void {
     { timezone: 'America/Chicago' }
   );
 
+  // Feed Control — publish scheduled timeline cards whose release_date has arrived
+  // (every 15 min). Idempotent; a no-op unless a card is scheduled with a date.
+  cron.schedule(
+    '*/15 * * * *',
+    () => {
+      instrumentCronJob('FeedReleaseTick', async () => {
+        const { publishDueCards } = await import('./timeline/feedControlService');
+        await publishDueCards();
+      }).catch((err) => {
+        console.error('[Scheduler] Feed release tick error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Daily content lifecycle (03:15 America/Chicago). AI News Flash: fetch free
+  // AI-lab RSS feeds, dedup-upsert the library, and (when AI_NEWS_INGEST_ENABLED
+  // =true) materialize up to AI_NEWS_MAX_PER_RUN fresh news cards (prod=3, code
+  // floor 1 → ~3 LLM calls/day). Then prune: archive any generated (*_pipeline)
+  // card older than 30 days out of the feed, so each generator holds a rolling
+  // ~30-day window and cost stays bounded. Idempotent + cost-gated; see
+  // aiNewsIngestionService + generatedContentRetention.
+  cron.schedule(
+    '15 3 * * *',
+    () => {
+      instrumentCronJob('AiNewsRefresh', async () => {
+        const { refreshAiNews } = await import('./intel/aiNewsIngestionService');
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await refreshAiNews(); // maxCards defaults to AI_NEWS_MAX_PER_RUN (prod=3)
+        await pruneGeneratedContent(); // discard generated cards older than 30 days
+      }).catch((err) => {
+        console.error('[Scheduler] AI News refresh error:', err);
+      });
+    },
+    { timezone: 'America/Chicago' }
+  );
+
+  // Intelligence pipelines — the 9 generators beyond AI News Flash (arXiv research,
+  // tools, YouTube, quotes, eng-blogs, GitHub builds, MCP servers, Claude Code
+  // techniques, market intel). Daily 03:45 CT, staggered 30 min after AiNewsRefresh
+  // to spread LLM load. Each source self-registers via the sources barrel, is
+  // cost-gated by its own <SLUG>_INGEST_ENABLED flag (default OFF → ships dark),
+  // and is tracked per-source via instrumentCronJob(`Intel_<slug>`). Prune runs once
+  // after the loop (shared 30-day generated-content retention).
+  cron.schedule(
+    '45 3 * * *',
+    () => {
+      (async () => {
+        await import('./intel/sources'); // register all adapters (idempotent)
+        const { listIntelSources, runIntelPipeline } = await import('./intel/intelPipeline');
+        for (const src of listIntelSources()) {
+          await instrumentCronJob(`Intel_${src.slug}`, async () => {
+            await runIntelPipeline(src.slug);
+          }).catch((err) => console.error(`[Scheduler] Intel ${src.slug} error:`, err));
+        }
+        const { pruneGeneratedContent } = await import('./timeline/generatedContentRetention');
+        await pruneGeneratedContent();
+      })().catch((err) => console.error('[Scheduler] Intel pipelines error:', err));
+    },
+    { timezone: 'America/Chicago' }
+  );
+
   // Distill each active student's recent sessions into their evolving LearnerMemory
   // once nightly (02:15 America/Chicago) — the AI Mentor's "gets to know you over
   // weeks" engine. Idempotent per (enrollment, day); safe to re-run.
@@ -2158,6 +2223,11 @@ export function startScheduler(): void {
       // 24-hour reminders
       const upcoming24h = await getUpcomingSessions(24);
       for (const session of upcoming24h) {
+        // Ensure a teaching Meet link exists before reminding (idempotent; retries
+        // each tick until it succeeds, so a transient Google failure self-heals).
+        await ensureSessionMeetLink(session).catch((err: any) =>
+          console.error(`[Scheduler] Meet link ensure failed for session ${session.id}:`, err.message)
+        );
         const dedupKey = `${session.id}-24h`;
         if (sentReminders.has(dedupKey)) continue; // Already sent this reminder
         const enrollments = await Enrollment.findAll({
@@ -2226,6 +2296,17 @@ export function startScheduler(): void {
       for (const session of toComplete) {
         await session.update({ status: 'completed' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as completed`);
+
+        // Generate the AI recap (best-effort) — surfaced to absentees in the Today
+        // "you missed it" replay card. (Wiring it into the recap email is a follow-up.)
+        await generateSessionRecap(session).catch((err: any) =>
+          console.error(`[Scheduler] Recap generation failed for session ${session.id}:`, err.message)
+        );
+
+        // Fill leave_time/duration for anyone who self-joined but never left.
+        await finalizeSessionAttendance(session.id).catch((err: any) =>
+          console.error(`[Scheduler] Attendance finalize failed for session ${session.id}:`, err.message)
+        );
 
         // Post-completion: detect absences, send recap emails, recompute readiness
         const absentees = await detectAbsentParticipants(session.id);
@@ -2682,6 +2763,20 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] System health monitor: every 15 min (weekdays 7AM-6PM CT, Cory voice + email alerts)');
 
+  // ── Build-log -> social drafter (BC #9985689786, weekly, Mon 6AM CT = 11:00 UTC) ──
+  // Scans completed Tier-A build weeks and AI-drafts a #Colaberry post per
+  // project/week. Draft-only — never auto-posts (see buildLogDraftService.ts).
+  cron.schedule('0 11 * * 1', () => {
+    instrumentCronJob('BuildLogDraftGenerator', async () => {
+      const { generateBuildLogDraftsForCompletedWeeks } = require('./buildLogDraftService');
+      const result = await generateBuildLogDraftsForCompletedWeeks();
+      console.log(`[BuildLogDraft] scanned=${result.scanned} drafted=${result.drafted} skipped=${result.skipped} failed=${result.failed}`);
+    }).catch((err: any) => {
+      console.error('[Scheduler] Build-log draft generator error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Build-log social drafter: weekly Mon 6AM CT (11:00 UTC)');
+
   // ── Cold Outbound startup reactivation ──────────────────────────────
   // Cold Outbound reverts to draft on container restart — fix on startup
   (async () => {
@@ -2831,6 +2926,26 @@ export function startScheduler(): void {
     });
   });
   console.log('[Scheduler] Architect evaluation agent: weekly Saturday at 06:00 UTC');
+
+  // ── Community Digest (daily, 08:00 UTC) ──────────────────────────────────────
+  // Deduped per (member, date) via CommunityDigestLog — safe to re-run; a
+  // second fire the same day is a no-op for every member already sent.
+  cron.schedule('0 8 * * *', () => {
+    instrumentCronJob('CommunityDigest', async () => {
+      const { runDailyDigest } = await import('./communityDigestService');
+      const result = await runDailyDigest();
+      console.log(JSON.stringify({
+        level: 'info',
+        service: 'backend',
+        event: 'community_digest_batch_complete',
+        outcome: result.errors === 0 ? 'success' : 'partial',
+        context: result,
+      }));
+    }).catch((err: any) => {
+      console.error('[Scheduler] Community digest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Community digest: daily at 08:00 UTC');
 }
 
 // ---------------------------------------------------------------------------

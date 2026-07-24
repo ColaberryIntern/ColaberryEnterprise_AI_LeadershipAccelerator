@@ -5,6 +5,7 @@ import PodcastView from './PodcastView';
 import TimelineCardComment from './TimelineCardComment';
 import CardSurveyResponse from './CardSurveyResponse';
 import AssessmentAttempt from './AssessmentAttempt';
+import ReflectionEntry from './ReflectionEntry';
 import AdminUser from './AdminUser';
 import Lead from './Lead';
 import AutomationLog from './AutomationLog';
@@ -40,6 +41,7 @@ import UserCurriculumProfile from './UserCurriculumProfile';
 import SessionGate from './SessionGate';
 import MentorConversation from './MentorConversation';
 import SessionChatMessage from './SessionChatMessage';
+import SessionPulse from './SessionPulse';
 import SkillMastery from './SkillMastery';
 import PromptTemplate from './PromptTemplate';
 import SectionConfig from './SectionConfig';
@@ -154,6 +156,7 @@ import Project from './Project';
 import ProjectArtifact from './ProjectArtifact';
 import ShowcaseArtifact from './ShowcaseArtifact';
 import Artifact from './Artifact';
+import BuildLogDraft from './BuildLogDraft';
 import ProposedAgentAction from './ProposedAgentAction';
 import AgentWriteAudit from './AgentWriteAudit';
 import StrategicInitiative from './StrategicInitiative';
@@ -219,6 +222,7 @@ import InboxStyleProfile from './InboxStyleProfile';
 import InboxLearningEvent from './InboxLearningEvent';
 import InboxDigestLog from './InboxDigestLog';
 import InboxAuditLog from './InboxAuditLog';
+import CoraReplyLog from './CoraReplyLog';
 import InboxOpportunityScore from './InboxOpportunityScore';
 import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
 import InboxSurfacePreference from './InboxSurfacePreference';
@@ -283,6 +287,7 @@ import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
+import FriendReferral from './FriendReferral';
 import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
 import Subscription from './Subscription';
@@ -303,17 +308,22 @@ import CommunityLike from './CommunityLike';
 import CommunityPostReport from './CommunityPostReport';
 import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
 import CommunityPointsEvent from './CommunityPointsEvent';
+import CommunityNotification from './CommunityNotification';
+import CommunityDigestLog from './CommunityDigestLog';
 import CommunityEvent from './CommunityEvent';
 
 // Colaberry Commons — Community Rooms layer (rooms/bookings/rsvp/messages/outbox)
 import CommunityRoom from './CommunityRoom';
 import RoomMembership from './RoomMembership';
+import Friendship from './Friendship'; // portal Contacts rail friend graph
 import RoomBooking from './RoomBooking';
 import RoomBookingAttendee from './RoomBookingAttendee';
 import RoomMessage from './RoomMessage';
 import RoomResource from './RoomResource';
 import RoomOutboxEvent from './RoomOutboxEvent';
 import RoomReport from './RoomReport';
+import RoomPresence from './RoomPresence';
+import ContributionEvent from './ContributionEvent';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
@@ -769,6 +779,11 @@ ShowcaseArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' })
 Project.hasMany(Artifact, { foreignKey: 'project_id', as: 'artifacts', onDelete: 'CASCADE' });
 Artifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
 
+Project.hasMany(BuildLogDraft, { foreignKey: 'project_id', as: 'buildLogDrafts', onDelete: 'CASCADE' });
+BuildLogDraft.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+Artifact.hasOne(BuildLogDraft, { foreignKey: 'source_artifact_id', as: 'buildLogDraft' });
+BuildLogDraft.belongsTo(Artifact, { foreignKey: 'source_artifact_id', as: 'sourceArtifact' });
+
 ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
 
@@ -939,6 +954,8 @@ RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'st
 StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
 Enrollment.hasMany(StudentPointsEvent, { foreignKey: 'enrollment_id', as: 'pointsEvents', onDelete: 'CASCADE' });
 StudentPointsEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(FriendReferral, { foreignKey: 'enrollment_id', as: 'friendReferrals', onDelete: 'CASCADE' });
+FriendReferral.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 // Self-serve subscriptions (student billing).
 Enrollment.hasMany(Subscription, { foreignKey: 'enrollment_id', as: 'subscriptions', onDelete: 'CASCADE' });
@@ -1010,7 +1027,7 @@ OrgMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment',
 Enrollment.hasMany(OrgMember, { foreignKey: 'enrollment_id', as: 'orgMemberships' });
 
 export {
-  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, AdminUser, Lead, AutomationLog,
+  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
@@ -1024,6 +1041,7 @@ export {
   CurriculumModule, CurriculumLesson, LessonInstance,
   UserCurriculumProfile, SessionGate, MentorConversation,
   SessionChatMessage,
+  SessionPulse,
   SkillMastery,
   PromptTemplate,
   SectionConfig,
@@ -1108,6 +1126,7 @@ export {
   ProjectArtifact,
   ShowcaseArtifact,
   Artifact,
+  BuildLogDraft,
   ProposedAgentAction,
   AgentWriteAudit,
   StrategicInitiative,
@@ -1150,6 +1169,7 @@ export {
   InboxLearningEvent,
   InboxDigestLog,
   InboxAuditLog,
+  CoraReplyLog,
   InboxOpportunityScore,
   InboxFalseNegativeFeedback,
   InboxSurfacePreference,
@@ -1236,6 +1256,8 @@ export {
   CommunityPostReport,
   CommunityLeaderboardEntry,
   CommunityPointsEvent,
+  CommunityNotification,
+  CommunityDigestLog,
   CommunityEvent,
   // Colaberry Commons — Community Rooms layer
   CommunityRoom,
@@ -1246,7 +1268,10 @@ export {
   RoomResource,
   RoomOutboxEvent,
   RoomReport,
+  RoomPresence,
+  ContributionEvent,
   StudentPointsEvent,
+  FriendReferral,
   OpenHouseEvent,
   OnboardingProfile,
   Subscription,
@@ -1311,6 +1336,12 @@ CoraKbEntry.belongsTo(ResponsiblePerson, { foreignKey: 'primary_person_id', as: 
 
 // --- Community + Gamification associations (Epic 4) ---
 Enrollment.hasOne(CommunityMember, { foreignKey: 'enrollment_id', as: 'communityMember' });
+// Friendships — two FKs to Enrollment (requester + addressee), aliased both ways.
+// The service queries Friendship directly (no includes); these register the graph.
+Enrollment.hasMany(Friendship, { foreignKey: 'requester_id', as: 'sentFriendRequests' });
+Enrollment.hasMany(Friendship, { foreignKey: 'addressee_id', as: 'receivedFriendRequests' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'requester_id', as: 'requester' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'addressee_id', as: 'addressee' });
 CommunityMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 Cohort.hasMany(CommunityPost, { foreignKey: 'cohort_id', as: 'communityPosts' });
@@ -1342,6 +1373,13 @@ CommunityLeaderboardEntry.belongsTo(CommunityMember, { foreignKey: 'member_id', 
 
 CommunityMember.hasMany(CommunityPointsEvent, { foreignKey: 'member_id', as: 'pointsEvents' });
 CommunityPointsEvent.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
+CommunityMember.hasMany(CommunityNotification, { foreignKey: 'member_id', as: 'notifications' });
+CommunityNotification.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+CommunityNotification.belongsTo(CommunityMember, { foreignKey: 'actor_member_id', as: 'actor' });
+
+CommunityMember.hasMany(CommunityDigestLog, { foreignKey: 'member_id', as: 'digestLogs' });
+CommunityDigestLog.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
 
 Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
 CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });

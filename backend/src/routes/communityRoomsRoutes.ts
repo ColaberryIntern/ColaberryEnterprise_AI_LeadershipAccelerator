@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { env } from '../config/env';
 import { requireParticipant } from '../middlewares/participantAuth';
+import { attachCommunityStaffContext } from '../middlewares/communityRoomsStaffContext';
 import { requireAdmin } from '../middlewares/authMiddleware';
 import * as c from '../controllers/communityRoomsController';
 import * as admin from '../controllers/communityRoomsAdminController';
@@ -24,31 +25,50 @@ function flagGate(_req: Request, res: Response, next: NextFunction): void {
 const P = '/api/portal/community';
 const A = '/api/admin/community/rooms';
 
+// attachCommunityStaffContext resolves req.participant.isStaff (one DB lookup)
+// so ctxOf() can populate RoomAccessContext.isAdmin — previously hardcoded
+// false, which made every staff-only rule in this domain unenforceable.
+const participantChain = [flagGate, requireParticipant, attachCommunityStaffContext];
+
 // --- Participant surface ---
-router.get(`${P}/home`, flagGate, requireParticipant, c.getHome);
-router.get(`${P}/people`, flagGate, requireParticipant, c.getPeople);
-router.get(`${P}/events`, flagGate, requireParticipant, c.listEvents);
+router.get(`${P}/home`, ...participantChain, c.getHome);
+router.get(`${P}/people`, ...participantChain, c.getPeople);
+router.get(`${P}/events`, ...participantChain, c.listEvents);
+router.get(`${P}/impact`, ...participantChain, c.impact);
+router.get(`${P}/library`, ...participantChain, c.getLibrary);
 
-router.get(`${P}/rooms`, flagGate, requireParticipant, c.listRooms);
-router.post(`${P}/rooms`, flagGate, requireParticipant, c.createRoom);
-router.get(`${P}/rooms/:id`, flagGate, requireParticipant, c.getRoom);
-router.patch(`${P}/rooms/:id`, flagGate, requireParticipant, c.updateRoom);
-router.post(`${P}/rooms/:id/join`, flagGate, requireParticipant, c.joinRoom);
-router.post(`${P}/rooms/:id/request-access`, flagGate, requireParticipant, c.requestAccess);
-router.post(`${P}/rooms/:id/leave`, flagGate, requireParticipant, c.leaveRoom);
-router.patch(`${P}/rooms/:id/notification`, flagGate, requireParticipant, c.setNotificationPref);
-router.get(`${P}/rooms/:id/messages`, flagGate, requireParticipant, c.listMessages);
-router.post(`${P}/rooms/:id/messages`, flagGate, requireParticipant, c.postMessage);
-router.patch(`${P}/rooms/:id/messages/:messageId/question`, flagGate, requireParticipant, c.setQuestionStatus);
+router.get(`${P}/rooms`, ...participantChain, c.listRooms);
+router.post(`${P}/rooms`, ...participantChain, c.createRoom);
+router.get(`${P}/rooms/:id`, ...participantChain, c.getRoom);
+router.patch(`${P}/rooms/:id`, ...participantChain, c.updateRoom);
+router.post(`${P}/rooms/:id/join`, ...participantChain, c.joinRoom);
+router.post(`${P}/rooms/:id/join-video`, ...participantChain, c.joinVideoRoom);
+router.post(`${P}/rooms/:id/presence`, ...participantChain, c.roomPresence);
+router.post(`${P}/rooms/:id/invite`, ...participantChain, c.invite);
+router.delete(`${P}/rooms/:id`, ...participantChain, c.deleteRoom);
+router.post(`${P}/rooms/:id/request-access`, ...participantChain, c.requestAccess);
+router.post(`${P}/rooms/:id/leave`, ...participantChain, c.leaveRoom);
+router.patch(`${P}/rooms/:id/notification`, ...participantChain, c.setNotificationPref);
+router.get(`${P}/rooms/:id/messages`, ...participantChain, c.listMessages);
+router.post(`${P}/rooms/:id/messages`, ...participantChain, c.postMessage);
+router.patch(`${P}/rooms/:id/messages/:messageId/question`, ...participantChain, c.setQuestionStatus);
+router.post(`${P}/rooms/:id/messages/:messageId/verify-answer`, ...participantChain, c.verifyAnswer);
 
-router.post(`${P}/bookings`, flagGate, requireParticipant, c.createBooking);
-router.post(`${P}/bookings/:id/publish`, flagGate, requireParticipant, c.publishBooking);
-router.post(`${P}/bookings/:id/rsvp`, flagGate, requireParticipant, c.rsvpBooking);
-router.post(`${P}/bookings/:id/join`, flagGate, requireParticipant, c.joinBooking);
-router.post(`${P}/bookings/:id/complete`, flagGate, requireParticipant, c.completeBooking);
-router.post(`${P}/bookings/:id/cancel`, flagGate, requireParticipant, c.cancelBooking);
+router.get(`${P}/rooms/:id/bookings`, ...participantChain, c.listRoomBookings);
+router.get(`${P}/rooms/:id/resources`, ...participantChain, c.listResources);
+router.post(`${P}/rooms/:id/resources`, ...participantChain, c.createResource);
+router.post(`${P}/rooms/:id/resources/file`, ...participantChain, c.uploadResourceFile);
+router.delete(`${P}/rooms/:id/resources/:resourceId`, ...participantChain, c.deleteResource);
+router.get(`${P}/rooms/:id/resources/:resourceId/download`, ...participantChain, c.downloadResource);
 
-router.post(`${P}/moderation/reports`, flagGate, requireParticipant, c.report);
+router.post(`${P}/bookings`, ...participantChain, c.createBooking);
+router.post(`${P}/bookings/:id/publish`, ...participantChain, c.publishBooking);
+router.post(`${P}/bookings/:id/rsvp`, ...participantChain, c.rsvpBooking);
+router.post(`${P}/bookings/:id/join`, ...participantChain, c.joinBooking);
+router.post(`${P}/bookings/:id/complete`, ...participantChain, c.completeBooking);
+router.post(`${P}/bookings/:id/cancel`, ...participantChain, c.cancelBooking);
+
+router.post(`${P}/moderation/reports`, ...participantChain, c.report);
 
 // --- Admin surface ---
 router.get(`${A}/health`, flagGate, requireAdmin, admin.getHealth);

@@ -2,7 +2,10 @@ import { Router, Request, Response } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
-  handleGenerateMeetLink,
+  handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
+  handleGetSessionKit, handleGetSessionKitDoc, handleGetSessionOutline, handleGetSessionReadiness,
+  handleGetSessionKitConfig, handleSaveSessionKitConfig,
+  handleGenerateMeetLink, handleGenerateCohortMeetLinks,
   handleGetAttendance, handleMarkAttendance, handleUpdateAttendance,
   handleListEnrollmentSubmissions, handleListSessionSubmissions, handleCreateSubmission,
   handleUpdateSubmission, handleUploadSubmission,
@@ -12,6 +15,7 @@ import {
   handleListCohortEnrollments,
   handleSetPortalAccess,
   handleGetPortalLink,
+  handleGetViewAsToken,
   handleGetPersonHistory,
 } from '../../controllers/acceleratorController';
 import {
@@ -64,15 +68,54 @@ router.post('/api/admin/accelerator/quick-add-student', requireAdmin, async (req
   }
 });
 
+// Free Access (comped seat): grant/revoke a 100% discount on an enrollment —
+// full program access at $0, no staff role, normal student experience.
+router.post('/api/admin/accelerator/enrollments/:id/free-access', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { grantFreeAccess } = await import('../../services/subscriptionService');
+    await grantFreeAccess(req.params.id as string);
+    res.json({ success: true, free_access: true });
+  } catch (err: any) {
+    const status = err?.error_class === 'NotFoundError' ? 404 : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+router.delete('/api/admin/accelerator/enrollments/:id/free-access', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { revokeFreeAccess } = await import('../../services/subscriptionService');
+    const revoked = await revokeFreeAccess(req.params.id as string);
+    res.json({ success: true, free_access: false, revoked });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleCreateEnrollment);
 router.get('/api/admin/accelerator/cohorts/:cohortId/enrollments', requireAdmin, handleListCohortEnrollments);
 router.patch('/api/admin/accelerator/enrollments/:id/portal-access', requireAdmin, handleSetPortalAccess);
 router.get('/api/admin/accelerator/enrollments/:id/portal-link', requireAdmin, handleGetPortalLink);
+// Read-only "View as member" — mints a read_only participant token (server blocks all writes).
+router.get('/api/admin/accelerator/enrollments/:id/view-as-token', requireAdmin, handleGetViewAsToken);
 router.get('/api/admin/accelerator/enrollments/:id/history', requireAdmin, handleGetPersonHistory);
 router.get('/api/admin/accelerator/sessions/:id', requireAdmin, handleGetSession);
 router.patch('/api/admin/accelerator/sessions/:id', requireAdmin, handleUpdateSession);
 router.delete('/api/admin/accelerator/sessions/:id', requireAdmin, handleDeleteSession);
+// Schedule management: skip a session's day (push forward), un-skip a date, per-session curriculum
+router.post('/api/admin/accelerator/sessions/:id/skip', requireAdmin, handleSkipSession);
+router.post('/api/admin/accelerator/cohorts/:cohortId/unskip', requireAdmin, handleUnskipDate);
+router.get('/api/admin/accelerator/sessions/:id/curriculum', requireAdmin, handleGetSessionCurriculum);
 router.post('/api/admin/accelerator/sessions/:id/meet-link', requireAdmin, handleGenerateMeetLink);
+router.get('/api/admin/accelerator/sessions/:id/kit', requireAdmin, handleGetSessionKit);
+// Full interactive Class Kit teaching deck (HTML) — opened in a new tab to run the class.
+router.get('/api/admin/accelerator/sessions/:id/kit-doc', requireAdmin, handleGetSessionKitDoc);
+// Plain-language class outline (teaching plan) — review / prepare / print.
+router.get('/api/admin/accelerator/sessions/:id/outline', requireAdmin, handleGetSessionOutline);
+// Instructor readiness report (prep + source/evidence ledger).
+router.get('/api/admin/accelerator/sessions/:id/readiness', requireAdmin, handleGetSessionReadiness);
+// Instructor Class Kit overrides (story beats, Theater, Build Bay detail, evidence).
+router.get('/api/admin/accelerator/sessions/:id/kit-config', requireAdmin, handleGetSessionKitConfig);
+router.put('/api/admin/accelerator/sessions/:id/kit-config', requireAdmin, handleSaveSessionKitConfig);
+router.post('/api/admin/accelerator/cohorts/:cohortId/meet-links', requireAdmin, handleGenerateCohortMeetLinks);
 router.get('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleGetAttendance);
 router.post('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleMarkAttendance);
 router.get('/api/admin/accelerator/sessions/:id/submissions', requireAdmin, handleListSessionSubmissions);

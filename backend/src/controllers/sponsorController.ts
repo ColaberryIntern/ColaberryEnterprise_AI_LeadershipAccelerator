@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { z, ZodError } from 'zod';
 import { sequelize } from '../config/database';
 import { createLead } from '../services/leadService';
+import { requestSponsorPortalLink, verifySponsorPortalToken } from '../services/sponsorAuthService';
 import { Cohort, Enrollment } from '../models';
 // These four models are not (yet) re-exported from the models barrel, so they
 // are imported directly from their definition files. Importing the file runs
@@ -287,6 +288,56 @@ export async function handleRedeemSeat(
       res.status(error.statusCode).json({ error: error.message });
       return;
     }
+    next(error);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/*  Door B — sponsor portal login                                     */
+/*  POST /api/sponsor/request-link  (public, on leadRoutes)           */
+/*  GET  /api/sponsor/verify        (public, on leadRoutes)           */
+/* ------------------------------------------------------------------ */
+
+const requestLinkSchema = z.object({
+  email: z.string().trim().email('Invalid email address').max(255),
+});
+
+// Always a generic response — a nonexistent email or one with no sponsor
+// account must not be distinguishable from a real one (no enumeration).
+export async function handleRequestSponsorLink(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const { email } = requestLinkSchema.parse(req.body);
+    await requestSponsorPortalLink(email);
+    res.status(200).json({
+      message: 'If that email has a sponsor dashboard, we sent a login link to it.',
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      respondZodError(res, error);
+      return;
+    }
+    next(error);
+  }
+}
+
+export async function handleVerifySponsorToken(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const token = String(req.query.token || '');
+    const session = await verifySponsorPortalToken(token);
+    if (!session) {
+      res.status(401).json({ error: 'Invalid or expired link' });
+      return;
+    }
+    res.json(session);
+  } catch (error) {
     next(error);
   }
 }

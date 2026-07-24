@@ -17,6 +17,30 @@
 .points-root .pts-mut { color: var(--pr-mut); font-size: 13px; }
 .points-root .pts-empty { padding: 40px 0; text-align: center; }
 
+/* Locked-door upgrade card — free AI Enabled ceiling → "Become an AI Builder".
+   Calm and executive: a quiet surface with one authority-toned accent edge and a
+   single CTA. Deliberately not gamey (no glow, no burst). */
+.points-root .pts-upgrade {
+  display: flex; align-items: center; gap: 16px;
+  background: linear-gradient(180deg, #FFFFFF, #FBFAF8);
+  border: 1px solid var(--pr-line);
+  border-left: 3px solid #367895;   /* berry — authority, not alarm */
+  border-radius: 14px; padding: 16px 20px; margin-bottom: 16px;
+}
+.points-root .pts-upgrade-lock { width: 34px; height: 34px; flex: none; color: #367895; display: inline-flex; }
+.points-root .pts-upgrade-lock svg { width: 34px; height: 34px; }
+.points-root .pts-upgrade-body { flex: 1; min-width: 0; }
+.points-root .pts-upgrade-k {
+  display: block; font-size: 11px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--pr-mut); margin-bottom: 2px;
+}
+.points-root .pts-upgrade-h { font-size: 17px; font-weight: 800; color: var(--pr-ink); margin: 0 0 3px; }
+.points-root .pts-upgrade-p { font-size: 13px; color: var(--pr-mut); margin: 0; line-height: 1.5; }
+.points-root .pts-upgrade .te-btn { flex: none; text-decoration: none; }
+@media (max-width: 640px) {
+  .points-root .pts-upgrade { flex-direction: column; align-items: flex-start; }
+}
+
 /* Hero: where you are → where you're headed */
 .points-root .pts-hero {
   display: flex;
@@ -137,4 +161,54 @@
 @media (max-width: 640px) {
   .points-root .pts-hero { flex-direction: column; align-items: stretch; gap: 10px; }
   .points-root .pts-hero-arrow { transform: rotate(90deg); align-self: center; }
+}
+
+/* Level Journey — the whole ladder at a glance (AI Aware I → AI Architect).
+   A horizontal, scroll-on-mobile stepped track: passed rungs are checked/green,
+   the current rung is highlighted, build bands show a lock. */
+.points-root .pts-journey {
+  background: var(--pr-card);
+  border: 1px solid var(--pr-line);
+  border-radius: 14px;
+  padding: 18px 20px 20px;
+  margin-bottom: 16px;
+}
+.points-root .pts-journey-h { display: flex; flex-direction: column; gap: 3px; margin-bottom: 18px; }
+.points-root .pts-journey-h h3 { margin: 0; font-size: 15px; font-weight: 800; color: var(--pr-ink); }
+
+.points-root .pts-jtrack {
+  list-style: none; margin: 0; padding: 2px 0 4px;
+  display: flex; gap: 4px;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+.points-root .pts-jnode {
+  position: relative; flex: 1 0 110px; min-width: 110px;
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+}
+/* connector line coming in from the previous node (filled up to the current rung) */
+.points-root .pts-jnode + .pts-jnode::before {
+  content: ''; position: absolute; top: 18px; left: -52%; width: 100%; height: 3px;
+  background: var(--pr-line); z-index: 0; border-radius: 3px;
+}
+.points-root .pts-jnode.done::before,
+.points-root .pts-jnode.current::before { background: #5BA63C; }
+
+.points-root .pts-jdot {
+  position: relative; z-index: 1;
+  width: 38px; height: 38px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--pr-sunken); color: var(--pr-mut);
+  border: 2px solid var(--pr-line); font-weight: 800; font-size: 14px;
+}
+.points-root .pts-jdot svg { width: 18px; height: 18px; }
+.points-root .pts-jnode.done .pts-jdot { background: #5BA63C; border-color: #5BA63C; color: #fff; }
+.points-root .pts-jnode.current .pts-jdot { background: #FB2832; border-color: #FB2832; color: #fff; box-shadow: 0 0 0 4px rgba(251,40,50,.16); }
+.points-root .pts-jnode.build.todo .pts-jdot { border-style: dashed; }
+
+.points-root .pts-jname { margin-top: 9px; font-size: 12.5px; font-weight: 700; color: var(--pr-ink); line-height: 1.2; }
+.points-root .pts-jnode.todo .pts-jname { color: var(--pr-mut); }
+.points-root .pts-jdetail { font-size: 11px; color: var(--pr-mut); margin-top: 3px; }
+.points-root .pts-jhere {
+  margin-top: 6px; font-size: 9.5px; font-weight: 800; letter-spacing: .05em;
+  text-transform: uppercase; color: #FB2832;
 }

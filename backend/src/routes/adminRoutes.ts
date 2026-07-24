@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { auditMiddleware } from '../middlewares/auditMiddleware';
+import { requireSection } from '../middlewares/authMiddleware';
+import { mgmtSectionGate } from '../middlewares/mgmtSectionGate';
 import authRoutes from './admin/authRoutes';
 import cohortRoutes from './admin/cohortRoutes';
 import leadRoutes from './admin/leadRoutes';
@@ -12,6 +14,8 @@ import orchestrationRoutes from './admin/orchestrationRoutes';
 import timelineAdminRoutes from './admin/timelineAdminRoutes';
 import componentRoutes from './admin/componentRoutes';
 import composerRoutes from './admin/composerRoutes';
+import feedControlRoutes from './admin/feedControlRoutes';
+import intelRoutes from './admin/intelRoutes';
 import opsCenterRoutes from './admin/opsCenterRoutes';
 import workforceRoutes from './admin/workforceRoutes';
 import enterpriseIntelligenceRoutes from './admin/enterpriseIntelligenceRoutes';
@@ -78,11 +82,17 @@ import qrAnalyticsRoutes from './admin/qrAnalyticsRoutes';
 import mentorReviewRoutes from './admin/mentorReviewRoutes';
 import trustRoutes from './admin/trustRoutes';
 import communityModerationRoutes from './admin/communityModerationRoutes';
+import communityMemberRoutes from './admin/communityMemberRoutes';
 import podcastRoutes from './admin/podcastRoutes';
+import studentStoryRoutes from './admin/studentStoryRoutes';
 
 const router = Router();
 
 router.use(auditMiddleware);
+// RBAC: global section gate. Caps bridge-minted scoped mgmt roles (curriculum,
+// revenue, admissions, support) to their allowed sections by request path.
+// Legacy admins and owner pass untouched; runs before every admin sub-router.
+router.use(mgmtSectionGate);
 router.use(authRoutes);
 router.use(cohortRoutes);
 router.use(leadRoutes);
@@ -95,6 +105,8 @@ router.use(orchestrationRoutes);
 router.use(timelineAdminRoutes);
 router.use(componentRoutes);
 router.use(composerRoutes);
+router.use(feedControlRoutes);
+router.use(intelRoutes);
 router.use(opsCenterRoutes);
 router.use(workforceRoutes);
 router.use(enterpriseIntelligenceRoutes);
@@ -143,6 +155,11 @@ router.use(userJourneyMapsRoutes);
 router.use(roleRoutes);
 router.use(implementationStrategyRoutes);
 router.use(visitorAnalyticsRoutes);
+// RBAC: the Inbox & Content section is excluded for mgmt 'admin' (Kes) and every
+// scoped role — enforced server-side (not just hidden in the nav). Path-scoped so
+// it runs only for these prefixes, before each sub-router's own requireAdmin.
+router.use('/api/admin/inbox', requireSection('inbox_content'));
+router.use('/api/admin/content-queue', requireSection('inbox_content'));
 router.use(inboxRoutes);
 router.use(missedOpportunitiesRoutes);
 router.use(contentQueueRoutes);
@@ -162,5 +179,7 @@ router.use(qrAnalyticsRoutes);
 router.use(mentorReviewRoutes);
 router.use(trustRoutes);
 router.use(communityModerationRoutes);
+router.use(communityMemberRoutes);
+router.use(studentStoryRoutes);
 
 export default router;

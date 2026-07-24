@@ -1,7 +1,7 @@
-import { resolveEventPoints, award, getPointsSummary, hasAwarded, POINT_EVENTS } from '../pointsService';
-import { StudentPointsEvent } from '../../models';
+import { resolveEventPoints, award, revoke, getPointsSummary, hasAwarded, POINT_EVENTS } from '../pointsService';
+import StudentPointsEvent from '../../models/StudentPointsEvent';
 
-jest.mock('../../models', () => ({ StudentPointsEvent: { findOrCreate: jest.fn(), findAll: jest.fn(), findOne: jest.fn() } }));
+jest.mock('../../models/StudentPointsEvent', () => ({ __esModule: true, default: { findOrCreate: jest.fn(), findAll: jest.fn(), findOne: jest.fn(), destroy: jest.fn() } }));
 
 describe('pointsService', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -40,6 +40,22 @@ describe('pointsService', () => {
       await award('enr-1', { eventType: 'open_house_rsvp', eventKey: 'open_house_rsvp:evt-42' });
       const arg = (StudentPointsEvent.findOrCreate as jest.Mock).mock.calls[0][0];
       expect(arg.where.event_key).toBe('open_house_rsvp:evt-42');
+    });
+  });
+
+  describe('revoke', () => {
+    it('removes the matching event and reports it (an undone action, e.g. an unlike)', async () => {
+      (StudentPointsEvent.destroy as jest.Mock).mockResolvedValue(1);
+      const res = await revoke('enr-1', 'community_like:post:p1:m1');
+      expect(res).toEqual({ revoked: true });
+      const arg = (StudentPointsEvent.destroy as jest.Mock).mock.calls[0][0];
+      expect(arg.where).toEqual({ enrollment_id: 'enr-1', event_key: 'community_like:post:p1:m1' });
+    });
+
+    it('is idempotent: revoking an absent event removes nothing and reports revoked:false', async () => {
+      (StudentPointsEvent.destroy as jest.Mock).mockResolvedValue(0);
+      const res = await revoke('enr-1', 'community_like:post:p1:m1');
+      expect(res).toEqual({ revoked: false });
     });
   });
 

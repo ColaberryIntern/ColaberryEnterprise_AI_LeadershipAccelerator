@@ -6,16 +6,18 @@
  * idempotent via the (card_id, enrollment_id) unique constraint.
  */
 import { Op } from 'sequelize';
+import { ritualStudentLabel } from '../runtime/communityRituals';
 import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress, { TimelineCardStatus } from '../../models/TimelineCardProgress';
 import Enrollment from '../../models/Enrollment';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
-import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { resolve as resolveType } from './typeRegistry';
 import { selectTestimonialForEnrollment } from './networkVideoService';
 import { selectPodcastForEnrollment } from './podcastMediaService';
 import { selectBlogForEnrollment } from './blogMediaService';
 import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingService';
+import { isFreePreviewTier } from '../access/contentEntitlement';
+import { env } from '../../config/env';
 
 const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
@@ -155,7 +157,7 @@ export interface TimelineFeed {
   cohort_id: string | null;
   buckets: string[];
   cards: FeedCard[];
-  is_explorer?: boolean;   // true = free Explorer tier — drives the enroll upsell (content gate is EXPLORER_WEEK0_ONLY, off by default)
+  is_explorer?: boolean;   // true = free-preview tier (Week 0 only) — drives the enroll/pay upsell. Source: contentEntitlement.isFreePreviewTier (payment-keyed when CONTENT_PAID_GATE_ENABLED, else legacy explorer-only).
 }
 
 /**
@@ -205,15 +207,15 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return { cohort_id: null, buckets: [...BUCKET_ORDER], cards: [] };
   }
 
-  // Free lead-magnet gate: Explorers (unenrolled prospects) normally get ONLY the
-  // Week 0 "AI Preview" tier; paid enrollments see the full curriculum.
-  // LAUNCH POLICY (2026-07, temporary): anyone who signs up gets FULL free access,
-  // so Explorers see the same curriculum as paid. Re-enable the free-preview gate
-  // by setting EXPLORER_WEEK0_ONLY=true (then Explorers see Week 0 only again).
-  const isExplorer = (enrollment as any).enrollment_type === 'explorer';
-  const gateExplorersToWeek0 = process.env.EXPLORER_WEEK0_ONLY === 'true';
+  // Curriculum paywall: the free-preview tier sees ONLY the Week 0 "AI Preview";
+  // full members see all 12 weeks. The single source of truth for who is gated is
+  // contentEntitlement.isFreePreviewTier — which, with CONTENT_PAID_GATE_ENABLED on,
+  // keys on PAYMENT (paid/comp/staff/business) so guests AND enrolled-but-unpaid
+  // members are gated, and with the flag off preserves the legacy explorer-only
+  // Week-0 gate (honoring EXPLORER_WEEK0_ONLY) byte-for-byte.
+  const isFreeTier = await isFreePreviewTier(enrollmentId);
   const allCards = await getGlobalCards();
-  const cards = (isExplorer && gateExplorersToWeek0) ? allCards.filter((c) => c.week === 0) : allCards;
+  const cards = isFreeTier ? allCards.filter((c) => c.week === 0) : allCards;
 
   const progressRows = await TimelineCardProgress.findAll({
     where: { enrollment_id: enrollmentId, card_id: { [Op.in]: cards.map((c) => c.id) } },
@@ -238,21 +240,8 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   // The type's Studio thumbnail (AI banner) — every card's default image.
   const thumbBySlug = new Map(typeDefs.map((t) => [t.slug, (t.thumbnail_url || '').trim() || null]));
 
-  // The week's SECTION title from the Blueprint — the Overview card's display
-  // title, sourced straight from the blueprint (no week number, no generation
-  // step). Looked up once per program present among overview cards.
-  const sectionTitleByKey = new Map<string, string>();
-  const overviewPrograms = Array.from(new Set(
-    cards.filter((c) => c.type === 'overview' && (c as any).program_id).map((c) => (c as any).program_id as string),
-  ));
-  if (overviewPrograms.length) {
-    const bps = await CurriculumBlueprint.findAll({
-      where: { program_id: { [Op.in]: overviewPrograms } },
-      attributes: ['program_id', 'week', 'title'],
-      order: [['updated_at', 'ASC']],   // latest update wins on overwrite
-    });
-    for (const b of bps) sectionTitleByKey.set(`${(b as any).program_id}|${b.week}`, b.title);
-  }
+  // NOTE: the 'overview' card type (which surfaced the week's SECTION title as
+  // its week_title) was retired 2026-07-21, so week_title is always null now.
 
   const feedCards: FeedCard[] = cards.map((card) => {
     const def = resolveType(card.type);
@@ -278,7 +267,9 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     return {
       id: card.id,
       type: card.type,
-      student_label: def?.student_label || card.type,
+      // community_discussion cards show their WEEK'S ritual name (Roll Call, Cohort
+      // Wins, …) so each week's card reads as a distinct ritual on the tile.
+      student_label: ritualStudentLabel(card.type, card.week ?? null, def?.student_label || card.type),
       render_band: def?.render_band || 'overview',
       title: card.title,
       subtitle: card.subtitle,
@@ -301,7 +292,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
       blog: blogFromMetadata(card.metadata),
       capabilities: capsBySlug.get(card.type) || [],
       type_thumbnail: thumbBySlug.get(card.type) || null,
-      week_title: card.type === 'overview' ? (sectionTitleByKey.get(`${(card as any).program_id}|${card.week}`) || null) : null,
+      week_title: null,
     };
   });
 
@@ -358,7 +349,22 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
   // per-(week,bucket) so sorting by it alone interleaves sections (a reflect
   // card could surface above a learn card) — bucket-first keeps reflect last.
   const bIdx = (b: string) => { const i = BUCKET_ORDER.indexOf(b as any); return i < 0 ? BUCKET_ORDER.length : i; };
-  feedCards.sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order);
+  if (env.feedControlEnabled) {
+    // Feed Control: a live pin floats to the top of the feed; within each lane,
+    // higher `priority` rises. The week→bucket structure is otherwise preserved.
+    const now = Date.now();
+    const ctrl = new Map(cards.map((c) => [c.id, { priority: c.priority ?? 0, pinned: c.pinned_until ? new Date(c.pinned_until).getTime() > now : false }]));
+    const pin = (id: string) => (ctrl.get(id)?.pinned ? 1 : 0);
+    const pri = (id: string) => ctrl.get(id)?.priority ?? 0;
+    feedCards.sort((a, b) =>
+      pin(b.id) - pin(a.id)
+      || (a.week ?? 0) - (b.week ?? 0)
+      || bIdx(a.bucket) - bIdx(b.bucket)
+      || pri(b.id) - pri(a.id)
+      || a.order - b.order);
+  } else {
+    feedCards.sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order);
+  }
 
-  return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isExplorer };
+  return { cohort_id: enrollment.cohort_id, buckets: [...BUCKET_ORDER], cards: feedCards, is_explorer: isFreeTier };
 }

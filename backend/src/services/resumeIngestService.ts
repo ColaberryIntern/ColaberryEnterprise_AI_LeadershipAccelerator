@@ -1,5 +1,6 @@
 import { OnboardingProfile } from '../models';
 import type { ProjectDnaInput } from './projectDnaService';
+import { hasReferral } from './friendReferralService';
 
 const EXTRACTION_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const MAX_SOURCE_CHARS = 8000;
@@ -236,6 +237,19 @@ export async function ingestBackground(
     extracted: extraction ?? undefined,
   });
 
+  // Award the one-time "profile set up" points (+25) for a REAL resume/LinkedIn
+  // ingest — the "Upload your resume" setup step. Idempotent per enrollment
+  // (event_key 'profile_completed'). Gated on meaningful input so a stray short
+  // placeholder can never earn it. Best-effort — never fail the ingest.
+  if (resumeText.length > 40 || linkedinUrl) {
+    try {
+      const { award } = await import('./pointsService');
+      await award(enrollmentId, { eventType: 'profile_completed' });
+    } catch (err: any) {
+      console.warn('[Ingest] resume points award (non-fatal):', err?.message);
+    }
+  }
+
   return { ok: true, parsed: !!extraction, prefill: projectDna, profile, personalization, variables, linkedin_url: linkedinUrl || profile.linkedin_url || null };
 }
 
@@ -272,9 +286,13 @@ export async function getOnboardingProfile(enrollmentId: string): Promise<{
   personalization: PersonalizationPrefill;
   linkedin_url: string | null;
   has_resume: boolean;
+  has_referral: boolean;
 }> {
-  const row: any = await OnboardingProfile.findOne({ where: { enrollment_id: enrollmentId } });
-  if (!row) return { prefill: {}, profile: {}, personalization: {}, linkedin_url: null, has_resume: false };
+  const [row, referred] = await Promise.all([
+    OnboardingProfile.findOne({ where: { enrollment_id: enrollmentId } }) as Promise<any>,
+    hasReferral(enrollmentId),
+  ]);
+  if (!row) return { prefill: {}, profile: {}, personalization: {}, linkedin_url: null, has_resume: false, has_referral: referred };
   const p = (row.prefill && typeof row.prefill === 'object') ? row.prefill : {};
   return {
     prefill: p,
@@ -285,5 +303,6 @@ export async function getOnboardingProfile(enrollmentId: string): Promise<{
     // or an uploaded resume file (Settings), so the Today onboarding step and
     // the Settings badge agree.
     has_resume: !!(row.resume_text || row.resume_file_name),
+    has_referral: referred,
   };
 }

@@ -1,6 +1,8 @@
 import { Op } from 'sequelize';
 import CommunityRoom, { RoomCategory, RoomPrivacy } from '../../models/CommunityRoom';
 import RoomMembership from '../../models/RoomMembership';
+import RoomBooking from '../../models/RoomBooking';
+import RoomMessage from '../../models/RoomMessage';
 import LiveSession from '../../models/LiveSession';
 import { emitRoomEvent } from './roomOutboxService';
 import { ROOM_EVENTS } from './roomEvents';
@@ -10,8 +12,11 @@ import {
   toRoomShell,
   RoomShell,
   canModerate,
+  canJoinMeeting,
+  canUploadResource,
 } from './roomEntitlementService';
-import { log, slugify, shortToken, notFoundError, forbiddenError } from './roomShared';
+import { getMeetingProvider } from './meetingProvider';
+import { log, slugify, shortToken, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
 
 // Rooms CRUD + discovery + the official-session linkage. Entitlement decisions
 // are delegated to roomEntitlementService; this module never returns a room a
@@ -49,6 +54,33 @@ export async function ensureRoomForSession(session: LiveSession): Promise<Commun
   return room;
 }
 
+// Global Library — a well-known, is_system public room whose room_resources
+// ARE the platform-wide file library. Reuses the existing public-room
+// entitlement path (isEligible short-circuits true for privacy:'public') so
+// "visible to everyone" costs no new schema/entitlement branches. Excluded
+// from normal browsing (see listRoomsForViewer) — reached only via its own
+// page + GET .../library.
+export const GLOBAL_LIBRARY_SLUG = 'global-library';
+
+export async function ensureGlobalLibraryRoom(): Promise<CommunityRoom> {
+  const [room, created] = await CommunityRoom.findOrCreate({
+    where: { slug: GLOBAL_LIBRARY_SLUG },
+    defaults: {
+      slug: GLOBAL_LIBRARY_SLUG,
+      name: 'Global Library',
+      category: 'library',
+      room_type: 'persistent',
+      privacy: 'public',
+      status: 'active',
+      topic: 'Shared documents for everyone in the program',
+      is_system: true,
+      created_by: 'system',
+    },
+  });
+  if (created) log('info', 'global_library_room_created', { room_id: room.id });
+  return room;
+}
+
 export interface CreateRoomInput {
   name: string;
   category?: RoomCategory;
@@ -58,15 +90,21 @@ export interface CreateRoomInput {
   capacity?: number;
   linked_project_id?: string;
   linked_module_id?: string;
+  is_video?: boolean;
+  emoji?: string;
 }
 
 export async function createRoom(ctx: RoomAccessContext, input: CreateRoomInput): Promise<CommunityRoom> {
+  // Members create PRIVATE or COHORT rooms only — public rooms are system-seeded
+  // (the always-open defaults) or admin-created. Default + coerce to private.
+  let privacy: RoomPrivacy = input.privacy || 'private';
+  if (privacy === 'public' && !ctx.isAdmin) privacy = 'private';
   const room = await CommunityRoom.create({
     slug: slugify(input.name, shortToken()),
     name: input.name,
     category: input.category || 'social',
     room_type: 'persistent',
-    privacy: input.privacy || 'public',
+    privacy,
     status: 'active',
     description: input.description ?? null,
     topic: input.topic ?? null,
@@ -75,8 +113,13 @@ export async function createRoom(ctx: RoomAccessContext, input: CreateRoomInput)
     linked_cohort_id: ctx.cohortId ?? null,
     linked_project_id: input.linked_project_id ?? null,
     linked_module_id: input.linked_module_id ?? null,
+    // Video rooms are always-open: anyone eligible can jump into the same Meet
+    // anytime. The Meet link is minted lazily on first join (see joinVideoRoom).
+    is_video: input.is_video ?? false,
+    always_open: input.is_video ?? false,
     is_system: false,
     created_by: ctx.enrollmentId,
+    metadata: input.emoji ? { emoji: input.emoji } : {},
   });
   // Creator is the owner member.
   await RoomMembership.findOrCreate({
@@ -98,6 +141,7 @@ export interface RoomView {
   visibility: 'full' | 'shell';
   room: CommunityRoom | RoomShell;
   membership: RoomMembership | null;
+  can_upload_resource: boolean;
 }
 
 // Returns the viewer-appropriate projection of a room, or throws 404 when the
@@ -109,8 +153,8 @@ export async function getRoomForViewer(ctx: RoomAccessContext, roomId: string): 
   const membership = await getMembership(roomId, ctx.enrollmentId);
   const vis = roomVisibility(room, ctx, membership);
   if (vis === 'hidden') throw notFoundError('Room not found');
-  if (vis === 'shell') return { visibility: 'shell', room: toRoomShell(room), membership };
-  return { visibility: 'full', room, membership };
+  if (vis === 'shell') return { visibility: 'shell', room: toRoomShell(room), membership, can_upload_resource: false };
+  return { visibility: 'full', room, membership, can_upload_resource: canUploadResource(room, ctx, membership) };
 }
 
 export interface ListRoomsFilter {
@@ -124,7 +168,12 @@ export async function listRoomsForViewer(
   ctx: RoomAccessContext,
   filter: ListRoomsFilter = {},
 ): Promise<Array<{ visibility: 'full' | 'shell'; room: CommunityRoom | RoomShell }>> {
-  const where: Record<string, unknown> = { status: { [Op.in]: ['active', 'locked'] } };
+  const where: Record<string, unknown> = {
+    status: { [Op.in]: ['active', 'locked'] },
+    // The Global Library is reached via its own page + GET .../library, never
+    // through normal room browsing/rail.
+    slug: { [Op.ne]: GLOBAL_LIBRARY_SLUG },
+  };
   if (filter.category) where.category = filter.category;
   const rooms = await CommunityRoom.findAll({ where, order: [['created_at', 'DESC']], limit: 200 });
 
@@ -175,4 +224,63 @@ export async function updateRoom(
     await emitRoomEvent({ eventType: ROOM_EVENTS.RoomAccessChanged, aggregateType: 'room', aggregateId: room.id });
   }
   return room;
+}
+
+// Join an always-open video room. Entitlement is re-checked server-side EVERY
+// time; the Google Meet link is minted lazily on first join and then shared by
+// everyone who jumps in (that's what makes it a persistent "room").
+export async function joinVideoRoom(
+  ctx: RoomAccessContext,
+  roomId: string,
+): Promise<{ join_url: string | null }> {
+  const room = await CommunityRoom.findByPk(roomId);
+  if (!room) throw notFoundError('Room not found');
+  if (!room.is_video) throw validationError('This room is not a video room');
+  const membership = await getMembership(roomId, ctx.enrollmentId);
+  if (!canJoinMeeting(room, ctx, membership)) throw forbiddenError('You are not authorized to join this room');
+
+  if (room.meeting_link) return { join_url: room.meeting_link };
+
+  // First join provisions a persistent Meet link (1-year window; the link stays
+  // joinable). Best-effort — surface no link rather than error if Google is down.
+  const provider = getMeetingProvider('google_meet');
+  const now = new Date();
+  const end = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+  const result = await provider.createMeeting({
+    title: `Colaberry Rooms — ${room.name}`,
+    description: room.description || 'Always-open community video room',
+    startAt: now,
+    endAt: end,
+    timezone: 'America/Chicago',
+    requestId: `room-${room.id}`,
+  });
+  if (result.joinUrl) await room.update({ meeting_link: result.joinUrl });
+  log('info', 'video_room_join', { room_id: roomId, has_link: !!result.joinUrl });
+  return { join_url: result.joinUrl };
+}
+
+// Delete a room (owner or admin). Blocked when it has any upcoming sessions, and
+// never for the seeded default rooms. Hard-deletes the room + its data.
+export async function deleteRoom(ctx: RoomAccessContext, roomId: string): Promise<void> {
+  const room = await CommunityRoom.findByPk(roomId);
+  if (!room) throw notFoundError('Room not found');
+  if (room.is_system) throw forbiddenError('Default rooms cannot be deleted');
+  if (room.owner_enrollment_id !== ctx.enrollmentId && !ctx.isAdmin) {
+    throw forbiddenError('Only the room owner can delete it');
+  }
+  const upcoming = await RoomBooking.count({
+    where: {
+      room_id: roomId,
+      state: { [Op.in]: ['pending_approval', 'scheduled', 'lobby_open', 'live'] },
+      start_at: { [Op.gt]: new Date() },
+    },
+  });
+  if (upcoming > 0) throw conflictError('This room has upcoming sessions — cancel them first.');
+  await Promise.all([
+    RoomMembership.destroy({ where: { room_id: roomId } }),
+    RoomMessage.destroy({ where: { room_id: roomId } }),
+    RoomBooking.destroy({ where: { room_id: roomId } }),
+  ]);
+  await room.destroy();
+  log('info', 'room_deleted', { room_id: roomId, by: ctx.enrollmentId });
 }

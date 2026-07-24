@@ -37,9 +37,9 @@ describe('composeCardAttributes', () => {
   });
 
   it('lets author overrides win over registry defaults', () => {
-    const def = resolveOrThrow('overview');
+    const def = resolveOrThrow('deep_dive');
     const input: CreateCardInput = {
-      cohort_id: COHORT, type: 'overview',
+      cohort_id: COHORT, type: 'deep_dive',
       title: '  Week 1 kickoff  ', bucket: 'pre_class', week: 1,
       difficulty: 'stretch', estimated_time: 90,
       points: { learning: 5, builder: 0, community: 0 },
