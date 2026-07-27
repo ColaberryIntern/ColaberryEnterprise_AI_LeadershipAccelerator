@@ -50,19 +50,43 @@ export function signReadOnlyParticipantJwt(
 }
 
 export async function requestMagicLink(email: string): Promise<{ success: boolean; message: string }> {
-  // Deterministic: a person may hold several enrollments (e.g. a prior Explorer
-  // plus a paid seat). Always target the MOST RECENT active, portal-enabled one so
-  // the login link never lands on a stale enrollment (was a non-deterministic
-  // findOne, which could email a link into the wrong account).
-  const enrollment = await Enrollment.findOne({
-    where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: true },
-    order: [['created_at', 'DESC']],
-  });
+  const normalizedEmail = email.toLowerCase().trim();
+
+  // A person may hold several enrollments (e.g. a prior Explorer plus a paid
+  // seat). Resolution order matters, and "most recent" is NOT sufficient:
+  //
+  //   1. The STAFF-linked enrollment, if one exists. Staff hold their mgmt role
+  //      on one specific enrollment (the CommunityMember row is keyed on
+  //      enrollment_id, not email), and it is frequently the OLDER one. Picking
+  //      by recency logged staff into a stale enrollment with no "Management
+  //      Portal" link, making the portal->admin bridge unreachable. That bridge
+  //      is the only entry point, since admin->portal needs a session from it.
+  //   2. Otherwise the most recent active, portal-enabled enrollment, so the
+  //      link never lands on a stale seat (this replaced a non-deterministic
+  //      findOne that could email a link into an arbitrary account).
+  //
+  // Mirrors loadStaffPortalLinkByEmail, which the admin->portal direction
+  // already uses; both directions now agree on which enrollment "is" the user.
+  // Imported lazily: mgmtBridgeService imports signParticipantJwt from this
+  // module, so a top-level import would close a cycle.
+  const { loadStaffPortalLinkByEmail } = await import('./access/mgmtBridgeService');
+  const staffLink = await loadStaffPortalLinkByEmail(normalizedEmail);
+
+  const enrollment =
+    (staffLink
+      ? await Enrollment.findOne({
+          where: { id: staffLink.enrollmentId, status: 'active', portal_enabled: true },
+        })
+      : null)
+    ?? (await Enrollment.findOne({
+      where: { email: normalizedEmail, status: 'active', portal_enabled: true },
+      order: [['created_at', 'DESC']],
+    }));
 
   if (!enrollment) {
     // Check if enrollment exists but portal not enabled
     const pendingEnrollment = await Enrollment.findOne({
-      where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: false },
+      where: { email: normalizedEmail, status: 'active', portal_enabled: false },
       order: [['created_at', 'DESC']],
     });
     if (pendingEnrollment) {
