@@ -10,6 +10,7 @@ import { Card } from '../colaberry/components/core/Card';
 import { Button } from '../colaberry/components/core/Button';
 import { Badge } from '../colaberry/components/core/Badge';
 import { Input } from '../colaberry/components/core/Input';
+import { selectEnrollableCohorts, PUBLIC_COHORT_TYPES } from '../utils/cohortSelection';
 
 interface FormErrors {
   [key: string]: string;
@@ -82,11 +83,8 @@ function EnrollPage() {
     api
       .get('/api/cohorts')
       .then((res) => {
-        const today = new Date().toISOString().split('T')[0];
         const allCohorts = res.data.cohorts || [];
-        const openCohorts = allCohorts.filter(
-          (c: Cohort) => c.seats_taken < c.max_seats && c.start_date >= today
-        );
+        const openCohorts = selectEnrollableCohorts(allCohorts);
 
         if (allCohorts.length > 0 && openCohorts.length === 0) {
           console.warn('[EnrollPage] Cohorts exist but none pass filters:', {
@@ -96,8 +94,9 @@ function EnrollPage() {
               name: c.name,
               start_date: c.start_date,
               seats_remaining: c.max_seats - c.seats_taken,
-              pastDate: c.start_date < today,
               full: c.seats_taken >= c.max_seats,
+              cohort_type: c.cohort_type,
+              notPublic: !PUBLIC_COHORT_TYPES.includes(c.cohort_type as any),
             })),
           });
         }

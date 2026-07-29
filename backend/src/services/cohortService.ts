@@ -11,7 +11,11 @@ export async function listOpenCohorts() {
       // in the public/student cohort list.
       cohort_type: { [Op.ne]: 'business' },
     },
-    attributes: ['id', 'name', 'start_date', 'core_day', 'core_time', 'optional_lab_day', 'max_seats', 'seats_taken'],
+    // `cohort_type` is part of the public contract: callers use it to keep the
+    // remaining internal lanes (explorer prospect cohort, corporate sponsor
+    // cohorts, demo rows) out of public cohort pickers. The `business` exclusion
+    // above only covers private owner workspaces.
+    attributes: ['id', 'name', 'start_date', 'core_day', 'core_time', 'optional_lab_day', 'max_seats', 'seats_taken', 'cohort_type'],
     order: [['start_date', 'ASC']],
   });
 }
