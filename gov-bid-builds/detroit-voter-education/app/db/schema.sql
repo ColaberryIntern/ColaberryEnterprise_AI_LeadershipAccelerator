@@ -69,9 +69,31 @@ CREATE TABLE IF NOT EXISTS summaries (
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- STORY-011: hold-for-review workflow. status progresses pending_content ->
+-- pending_review (human submits authored summary_text) -> published (admin
+-- approves) or rejected (admin rejects, may be resubmitted). Nothing else in
+-- the codebase sets status='published' -- this is the whole approval gate.
+ALTER TABLE summaries ADD COLUMN IF NOT EXISTS authored_by  TEXT;
+ALTER TABLE summaries ADD COLUMN IF NOT EXISTS reviewed_by  TEXT;
+ALTER TABLE summaries ADD COLUMN IF NOT EXISTS reviewed_at  TIMESTAMPTZ;
+ALTER TABLE summaries ADD COLUMN IF NOT EXISTS review_notes TEXT;
+
+-- STORY-011: proof that an admin notification fired when a summary entered
+-- pending_review. channel is 'log_stub' in this build -- no real email/SMS
+-- provider is wired up (would need a new external dependency + real admin
+-- contact info, which is a decision for a human, not something to assume).
+CREATE TABLE IF NOT EXISTS admin_notifications (
+  id           SERIAL PRIMARY KEY,
+  summary_id   INTEGER NOT NULL REFERENCES summaries(id),
+  notified_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  channel      VARCHAR(30) NOT NULL DEFAULT 'log_stub',
+  payload      JSONB
+);
+
 CREATE INDEX IF NOT EXISTS idx_jurisdictions_zip ON jurisdictions(zip_code);
 CREATE INDEX IF NOT EXISTS idx_user_preferences_session ON user_preferences(session_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_session        ON audit_log(session_id);
 CREATE INDEX IF NOT EXISTS idx_feedback_session         ON feedback(session_id);
 CREATE INDEX IF NOT EXISTS idx_summaries_subject         ON summaries(subject_id);
 CREATE INDEX IF NOT EXISTS idx_summaries_status          ON summaries(status);
+CREATE INDEX IF NOT EXISTS idx_admin_notifications_summary ON admin_notifications(summary_id);
