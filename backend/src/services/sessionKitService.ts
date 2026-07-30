@@ -10,7 +10,7 @@
 // ============================================================================
 import QRCode from 'qrcode';
 import { env } from '../config/env';
-import { Cohort, Enrollment, LiveSession, CommunityRoom } from '../models';
+import { Cohort, CommunityRoom, Enrollment, LiveSession } from '../models';
 
 /**
  * Absolute app origin for building QR/deep-link URLs. Mirrors
@@ -83,26 +83,29 @@ export interface CheckinInfo {
 /**
  * Minimal, non-sensitive info for the public pre-login check-in landing page a
  * student reaches by scanning the Class Kit QR. Deliberately omits the meeting
- * link (the Meet is only revealed after the student logs in + checks in, via
- * the session's Colaberry Commons room). Returns null if the session does not
- * exist (→ 404). `room_id` is a bare UUID, not sensitive on its own — the
- * room's own cohort-membership check gates real access once the student
- * navigates there authenticated.
+ * link (the Meet is only revealed after the student logs in + checks in on the
+ * session detail page). room_id is just the linked Colaberry Commons room's id
+ * (the room's actual content stays gated behind auth + cohort entitlement, so
+ * exposing the id pre-login is safe) — lets "Open the live room" route into
+ * the room instead of the retired /portal/sessions/:id page. Returns null if
+ * the session does not exist (→ 404).
  */
 export async function getCheckinInfo(sessionId: string): Promise<CheckinInfo | null> {
   const session = await LiveSession.findByPk(sessionId, {
     attributes: ['title', 'session_date', 'start_time', 'cohort_id'],
-    include: [{ model: CommunityRoom, as: 'communityRoom', attributes: ['id'], required: false }],
   });
   if (!session) return null;
 
-  const cohort = await Cohort.findByPk(session.cohort_id, { attributes: ['name'] });
+  const [cohort, room] = await Promise.all([
+    Cohort.findByPk(session.cohort_id, { attributes: ['name'] }),
+    CommunityRoom.findOne({ where: { linked_live_session_id: sessionId }, attributes: ['id'] }),
+  ]);
 
   return {
     title: session.title,
     session_date: session.session_date,
     start_time: session.start_time,
     cohort_name: cohort?.name ?? '',
-    room_id: (session as any).communityRoom?.id ?? null,
+    room_id: room?.id ?? null,
   };
 }

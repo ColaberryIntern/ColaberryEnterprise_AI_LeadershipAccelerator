@@ -165,7 +165,7 @@ export interface NextLiveSession {
   meeting_link: string | null;
   meeting_provider: string | null;
   timezone: string | null; // cohort IANA zone (e.g. America/Chicago) for the time label
-  room_id: string | null; // linked Colaberry Commons room, when one exists
+  room_id: string | null; // linked Colaberry Commons room (the class's waiting room), if provisioned
 }
 /** The student's next scheduled/live class session, or null if none is upcoming. */
 export async function getNextSession(): Promise<NextLiveSession | null> {

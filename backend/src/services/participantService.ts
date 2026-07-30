@@ -276,6 +276,11 @@ export async function getNextLiveSession(cohortId: string) {
   const sessions = await LiveSession.findAll({
     where: { cohort_id: cohortId, status: { [Op.ne]: 'cancelled' } },
     order: [['session_number', 'ASC']],
+    // Same room linkage as getParticipantSessions below — lets the Today card
+    // and topbar pill route into the Colaberry Commons room (the class's
+    // waiting room) instead of the retired /portal/sessions/:id page. Left
+    // join: sessions predating the Community Rooms rollout legitimately have
+    // none.
     include: [{ model: CommunityRoom, as: 'communityRoom', attributes: ['id'], required: false }],
   });
   const next = selectNextLiveSession(sessions as any[]);
@@ -293,10 +298,10 @@ export async function getNextLiveSession(cohortId: string) {
       start_time: next.start_time,
       end_time: next.end_time,
       status: next.status, // 'scheduled' | 'live'
-      room_id: (next as any).communityRoom?.id ?? null,
       meeting_link: next.meeting_link,
       meeting_provider: (next as any).meeting_provider,
       timezone: (cohort as any)?.timezone || 'America/Chicago',
+      room_id: (next as any).communityRoom?.id ?? null,
     },
   };
 }
