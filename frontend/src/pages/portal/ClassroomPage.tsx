@@ -219,7 +219,7 @@ const ClassroomPage: React.FC = () => {
             <div style={{ fontWeight: 700 }}>You're on the free AI Preview</div>
             <div className="tl-small">Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live classes, the community, and your certification.</div>
           </div>
-          <button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/curriculum')}>Enroll to unlock →</button>
+          <button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/settings?tab=subscription')}>Enroll to unlock →</button>
         </div>
       )}
 
