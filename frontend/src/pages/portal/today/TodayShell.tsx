@@ -283,7 +283,7 @@ const TodayShell: React.FC = () => {
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Link className="te-btn cherry" to="/portal/curriculum">Enroll to unlock →</Link>
+            <Link className="te-btn cherry" to="/portal/settings?tab=subscription">Enroll to unlock →</Link>
             {oh && <button className="te-btn" style={{ color: '#fff', border: '1px solid rgba(255,255,255,.6)', background: 'rgba(255,255,255,.14)' }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd for the event" : 'RSVP for the event'}</button>}
           </div>
         </div>
