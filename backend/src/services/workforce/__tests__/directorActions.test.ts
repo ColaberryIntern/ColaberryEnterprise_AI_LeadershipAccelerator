@@ -10,6 +10,7 @@ jest.mock('../../ops/directors', () => ({ runDirectors: jest.fn(), rankRecommend
 jest.mock('../../../models/WorkforceTask', () => ({ __esModule: true, default: { findOne: jest.fn(), create: jest.fn() } }));
 jest.mock('../../../models/WorkforceMessage', () => ({ __esModule: true, default: { findOne: jest.fn(), create: jest.fn() } }));
 jest.mock('../../../models/AiAgent', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
+jest.mock('../../../models/ProposedAgentAction', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 jest.mock('../../openaiInstrumented', () => ({ getInstrumentedOpenAI: jest.fn() }));
 jest.mock('../workforceAgentRuntime', () => ({
   runDirectorWrite: jest.fn().mockResolvedValue({ ran: true, wrote: true, recordId: 'rec-1', costUsd: 0 }),
@@ -21,6 +22,7 @@ import { runDirectors, rankRecommendations } from '../../ops/directors';
 import WorkforceTask from '../../../models/WorkforceTask';
 import WorkforceMessage from '../../../models/WorkforceMessage';
 import AiAgent from '../../../models/AiAgent';
+import ProposedAgentAction from '../../../models/ProposedAgentAction';
 import { getInstrumentedOpenAI } from '../../openaiInstrumented';
 import { runDirectorWrite, runDirectorProposal } from '../workforceAgentRuntime';
 import {
@@ -38,6 +40,7 @@ const taskCreate = WorkforceTask.create as jest.Mock;
 const msgFindOne = WorkforceMessage.findOne as jest.Mock;
 const msgCreate = WorkforceMessage.create as jest.Mock;
 const agentFindAll = AiAgent.findAll as jest.Mock;
+const proposalFindOne = ProposedAgentAction.findOne as jest.Mock;
 const instrumented = getInstrumentedOpenAI as jest.Mock;
 const write = runDirectorWrite as jest.Mock;
 const proposal = runDirectorProposal as jest.Mock;
@@ -66,6 +69,7 @@ describe('runStudentSuccessDirector (domain-flag directors)', () => {
     expect(call.agentName).toBe('WorkforceStudentSuccessDirector');
     expect(call.operation).toBe('flag_student_success');
     expect(call.targetTable).toBe('workforce_tasks');
+    expect(call.ticket).toEqual({ title: rec().title, description: expect.stringContaining(rec().why), priority: 'high' });
 
     // Exercise the callbacks the runtime would call.
     taskFindOne.mockResolvedValue(null);
@@ -106,6 +110,7 @@ describe('runTechnologyDirector', () => {
     expect(write).toHaveBeenCalledTimes(1);
     const call = write.mock.calls[0][0];
     expect(call.operation).toBe('flag_agent_health_issue');
+    expect(call.ticket.priority).toBe('high');
     taskCreate.mockResolvedValue({ id: 'task-1' });
     await call.create();
     expect(taskCreate).toHaveBeenCalledWith(expect.objectContaining({ employee_slug: 'technology', priority: 'high' }));
@@ -128,6 +133,7 @@ describe('runResearchDirector', () => {
 
     const call = write.mock.calls[0][0];
     expect(call.targetTable).toBe('workforce_messages');
+    expect(call.ticket.priority).toBe('low');
     msgCreate.mockResolvedValue({ id: 'msg-1' });
     await call.create();
     expect(msgCreate).toHaveBeenCalledWith(expect.objectContaining({ from_slug: 'research', to_slug: 'curriculum' }));
@@ -160,6 +166,24 @@ describe('runMarketingDirector', () => {
     expect(built.actionType).toBe('propose_content_idea');
     expect(built.targetTable).toBe('proposed_agent_actions');
     expect(built.proposedChanges.content_idea).toBe('Headline: ...');
+    expect(built.ticket).toEqual({ title: expect.stringContaining('Collect unpaid tuition'), description: 'Headline: ...' });
+  });
+
+  it('idempotency: alreadyExists checks for a pending proposal on the same signal key', async () => {
+    runDirs.mockReturnValue([{ domain: 'finance', recommendations: [rec({ key: 'finance.collect', domain: 'finance' })] }]);
+    rank.mockReturnValue([rec({ key: 'finance.collect', domain: 'finance' })]);
+
+    await runMarketingDirector();
+    const call = proposal.mock.calls[0][0];
+
+    proposalFindOne.mockResolvedValue(null);
+    await expect(call.alreadyExists()).resolves.toBeNull();
+    expect(proposalFindOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: { agent_name: 'WorkforceMarketingDirector', target_id: 'finance.collect', status: 'pending' },
+    }));
+
+    proposalFindOne.mockResolvedValue({ id: 'existing-proposal-1' });
+    await expect(call.alreadyExists()).resolves.toBe('existing-proposal-1');
   });
 
   it('boundary: no ranked signal today is a no-op and never calls the LLM', async () => {

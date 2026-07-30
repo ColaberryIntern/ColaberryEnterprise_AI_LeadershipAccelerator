@@ -12,6 +12,7 @@ import { Op } from 'sequelize';
 import WorkforceTask from '../../models/WorkforceTask';
 import WorkforceMessage from '../../models/WorkforceMessage';
 import AiAgent from '../../models/AiAgent';
+import ProposedAgentAction from '../../models/ProposedAgentAction';
 import { gatherSignals } from '../ops/schoolSignals';
 import { runDirectors, rankRecommendations } from '../ops/directors';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
@@ -43,6 +44,7 @@ async function runDomainFlag(slug: string, agentName: string, domain: string): P
   const rec = dirs.find((d) => d.domain === domain)?.recommendations[0];
   if (!rec) return { ran: false, wrote: false, reason: 'no_signal_today', costUsd: 0 };
 
+  const description = `${rec.why} (${rec.evidence.join('; ')})`;
   return runDirectorWrite({
     slug,
     agentName,
@@ -53,7 +55,7 @@ async function runDomainFlag(slug: string, agentName: string, domain: string): P
       const task = await WorkforceTask.create({
         employee_slug: slug,
         title: rec.title,
-        description: `${rec.why} (${rec.evidence.join('; ')})`,
+        description,
         status: 'assigned',
         priority: rec.severity,
         approver: 'chief_of_staff',
@@ -61,6 +63,7 @@ async function runDomainFlag(slug: string, agentName: string, domain: string): P
       });
       return { id: task.id };
     },
+    ticket: { title: rec.title, description, priority: rec.severity },
   });
 }
 
@@ -87,6 +90,9 @@ export async function runTechnologyDirector(): Promise<DirectorRunResult> {
   if (!worst) return { ran: false, wrote: false, reason: 'no_signal_today', costUsd: 0 };
 
   const recKey = `agent_health.${worst.agent_name}`;
+  const title = `Investigate ${worst.agent_name} (${worst.error_count || 0} errors, status "${worst.status}")`;
+  const description = worst.last_error || 'Elevated error count with no captured error message.';
+  const priority = worst.status === 'error' ? 'high' : 'medium';
   return runDirectorWrite({
     slug,
     agentName,
@@ -96,15 +102,16 @@ export async function runTechnologyDirector(): Promise<DirectorRunResult> {
     create: async () => {
       const task = await WorkforceTask.create({
         employee_slug: slug,
-        title: `Investigate ${worst.agent_name} (${worst.error_count || 0} errors, status "${worst.status}")`,
-        description: worst.last_error || 'Elevated error count with no captured error message.',
+        title,
+        description,
         status: 'assigned',
-        priority: worst.status === 'error' ? 'high' : 'medium',
+        priority,
         approver: 'chief_of_staff',
         source_rec_key: recKey,
       });
       return { id: task.id };
     },
+    ticket: { title, description, priority },
   });
 }
 
@@ -119,6 +126,8 @@ export async function runResearchDirector(): Promise<DirectorRunResult> {
   if (top3.length === 0) return { ran: false, wrote: false, reason: 'no_signal_today', costUsd: 0 };
 
   const subject = `Weekly signal digest — ${isoWeekKey(new Date())}`;
+  const body = top3.map((r, i) => `${i + 1}. [${r.domain}] ${r.title} — ${r.why}`).join('\n');
+  const fullBody = `This week's top signals across the school:\n\n${body}`;
   return runDirectorWrite({
     slug,
     agentName,
@@ -129,15 +138,15 @@ export async function runResearchDirector(): Promise<DirectorRunResult> {
       return existing ? existing.id : null;
     },
     create: async () => {
-      const body = top3.map((r, i) => `${i + 1}. [${r.domain}] ${r.title} — ${r.why}`).join('\n');
       const msg = await WorkforceMessage.create({
         from_slug: slug,
         to_slug: 'curriculum',
         subject,
-        body: `This week's top signals across the school:\n\n${body}`,
+        body: fullBody,
       });
       return { id: msg.id };
     },
+    ticket: { title: subject, description: fullBody, priority: 'low' },
   });
 }
 
@@ -155,6 +164,15 @@ export async function runMarketingDirector(): Promise<DirectorRunResult> {
   return runDirectorProposal({
     slug,
     agentName,
+    // Marketing is the one manual-trigger, no-cron director — the most likely of all
+    // 10 to get clicked twice. Checked before build() so a double-click never spends
+    // a second LLM call or sends a second approval email for the same signal.
+    alreadyExists: async () => {
+      const existing = await ProposedAgentAction.findOne({
+        where: { agent_name: agentName, target_id: top.key, status: 'pending' },
+      });
+      return existing ? existing.id : null;
+    },
     build: async (agentId) => {
       const client = getInstrumentedOpenAI({ agent_id: agentId, workflow_id: 'workforce_marketing' });
       const res = await client.chat.completions.create({
@@ -179,6 +197,10 @@ export async function runMarketingDirector(): Promise<DirectorRunResult> {
         beforeState: {},
         reason: `Grounded in today's #1 ranked signal: ${top.title}`,
         confidence: 0.6,
+        ticket: {
+          title: `Content idea for review: ${top.title}`,
+          description: idea || '(no content generated)',
+        },
       };
     },
   });
