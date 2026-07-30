@@ -146,6 +146,12 @@ const ClassCheckinPage: React.FC = () => {
 
   const enterClass = () => navigate(`/portal/sessions/${sessionId}`);
 
+  // Carry the student's intent through sign-in. Without this the magic-link
+  // round trip lands them on /portal/today and their attendance is never
+  // recorded — the QR looks like it "did nothing". The value is re-validated
+  // server-side before it goes into the email, and again before we navigate.
+  const loginHref = `/portal/login?next=${encodeURIComponent(`/portal/class-checkin/${sessionId}`)}`;
+
   return (
     <div className="cbck-root">
       <style>{CBCK_CSS}</style>
@@ -188,8 +194,8 @@ const ClassCheckinPage: React.FC = () => {
                 <h1 className="cbck-title">{info.title}</h1>
                 <p className="cbck-meta">{formatDate(info.session_date)}{info.start_time ? ` · ${formatTime(info.start_time)}` : ''}</p>
                 <p className="cbck-text cbck-text-lead">Log in to check in for this class.</p>
-                <a className="cbck-btn" href="/portal/login">Log in to check in</a>
-                <p className="cbck-text cbck-text-sub">You&rsquo;ll sign in with your enrolled email, then return here to check in.</p>
+                <a className="cbck-btn" href={loginHref}>Log in to check in</a>
+                <p className="cbck-text cbck-text-sub">You&rsquo;ll sign in with your enrolled email, then come straight back here — your check-in finishes automatically.</p>
               </div>
             )}
 

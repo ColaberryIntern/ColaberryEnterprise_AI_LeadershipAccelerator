@@ -47,7 +47,7 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeatureCopy> = {
       'Full access to the Colaberry community and mentors',
     ],
     ctaLabel: 'Enroll to unlock →',
-    ctaTo: '/portal/curriculum',
+    ctaTo: '/portal/settings?tab=subscription',
   },
   projects: {
     key: 'projects',
@@ -61,7 +61,7 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeatureCopy> = {
       'Every completed build counts toward certification',
     ],
     ctaLabel: 'Enroll to start building →',
-    ctaTo: '/portal/curriculum',
+    ctaTo: '/portal/settings?tab=subscription',
   },
   'cert-prep': {
     key: 'cert-prep',
@@ -74,6 +74,6 @@ export const GATED_FEATURES: Record<GatedFeatureKey, GatedFeatureCopy> = {
       'Track your readiness as you progress',
     ],
     ctaLabel: 'Enroll to unlock →',
-    ctaTo: '/portal/curriculum',
+    ctaTo: '/portal/settings?tab=subscription',
   },
 };
