@@ -93,7 +93,7 @@ function evidenceHtml(slide: KitSlide): string {
 function diagramHtml(slide: KitSlide): string {
   if (!slide.diagram) return '';
   return (
-    '<div class="kdiagram">' +
+    '<div class="kdiagram" onclick="this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
     `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
     (slide.diagramCaption ? `<div class="kdiagram-cap"><span class="kdiagram-cap-ico">🧭</span><span>${esc(slide.diagramCaption)}</span></div>` : '') +
     '</div>'
