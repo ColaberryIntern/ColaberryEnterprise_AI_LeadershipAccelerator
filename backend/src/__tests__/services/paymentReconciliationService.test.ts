@@ -233,6 +233,17 @@ describe('runPaymentReconciliationSweep', () => {
     expect(mockGetCustomerById).not.toHaveBeenCalled();
   });
 
+  it('never treats a sub-$199 payment (e.g. the $50 Open House seat-hold deposit) as a completed payment', async () => {
+    mockListRecentPayments.mockResolvedValue([payment({ Amount: 50 }), payment({ Id: 2, Amount: 149 })]);
+
+    const result = await runPaymentReconciliationSweep();
+
+    expect(result.scanned).toBe(0);
+    expect(result.autoReconciled).toHaveLength(0);
+    expect(result.flagged).toHaveLength(0);
+    expect(mockGetCustomerById).not.toHaveBeenCalled();
+  });
+
   it('does not crash and reports an error when PaySimple itself is unreachable', async () => {
     mockListRecentPayments.mockRejectedValue(new Error('PaySimple API error 503: upstream unavailable'));
 
