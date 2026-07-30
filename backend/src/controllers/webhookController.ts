@@ -6,9 +6,22 @@ import { runEnrollmentAutomation } from '../services/automationService';
 import { activateByRef, isSubscriptionRef } from '../services/subscriptionService';
 
 export async function handlePaySimpleWebhook(req: Request, res: Response): Promise<void> {
-  // PaySimple sends signature in 'paysimple-hmac-sha256' header
+  // PaySimple sends signature in 'paysimple-hmac-sha256' header, computed over
+  // the EXACT bytes it sent. The route parses this body with express.raw()
+  // (not express.json()) specifically so req.body here is a Buffer of those
+  // original bytes -- re-serializing an already-parsed object via
+  // JSON.stringify(req.body) (the previous approach) essentially never
+  // reproduces byte-identical JSON (key order, spacing, and number formatting
+  // can all differ from the source), so verification failed on every real
+  // request. Found live 2026-07-30: a real student's subscription payment sat
+  // unactivated through 14 checkout attempts because every one of PaySimple's
+  // webhook calls was silently rejected right here. The Buffer.isBuffer
+  // branches below are defensive only (e.g. a misconfigured route or a test
+  // harness posting a pre-parsed object) -- the real fix is the route change.
   const signature = req.headers['paysimple-hmac-sha256'] as string | undefined;
-  const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
+  const rawBody = Buffer.isBuffer(req.body)
+    ? req.body.toString('utf8')
+    : (typeof req.body === 'string' ? req.body : JSON.stringify(req.body));
 
   // Verify webhook signature
   if (!verifyWebhookSignature(rawBody, signature)) {
@@ -18,7 +31,7 @@ export async function handlePaySimpleWebhook(req: Request, res: Response): Promi
   }
 
   try {
-    const event = req.body;
+    const event = Buffer.isBuffer(req.body) ? JSON.parse(rawBody) : req.body;
     const eventType = event.event_type;
 
     console.log(`[Webhook] PaySimple event received: ${eventType}`, {

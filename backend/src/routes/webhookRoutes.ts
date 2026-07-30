@@ -9,8 +9,13 @@ import { handleAdvisoryWebhook, handleAdvisoryWebhookHead } from '../controllers
 
 const router = Router();
 
-// PaySimple payment webhook — JSON body
-router.post('/api/webhook/paysimple', express.json(), handlePaySimpleWebhook);
+// PaySimple payment webhook — raw body required for HMAC-SHA256 signature
+// validation, same reasoning as the GitHub webhook below. express.json()
+// (the previous parser here) hands the handler an already-parsed object,
+// which can never be re-serialized back into byte-identical JSON for
+// signature verification -- found live 2026-07-30 rejecting 100% of real
+// PaySimple webhook calls.
+router.post('/api/webhook/paysimple', express.raw({ type: 'application/json' }), handlePaySimpleWebhook);
 
 // Mandrill webhook — uses URL-encoded body (mandrill_events=<JSON>)
 router.head('/api/webhook/mandrill', handleMandrillWebhookHead);
