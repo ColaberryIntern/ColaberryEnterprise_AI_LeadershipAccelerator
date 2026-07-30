@@ -8,19 +8,40 @@
 jest.spyOn(console, 'error').mockImplementation(() => undefined);
 jest.spyOn(console, 'log').mockImplementation(() => undefined);
 
+jest.mock('../../config/env', () => ({
+  env: { frontendUrl: 'https://enterprise.colaberry.ai', trainingWelcomeTokenTtlDays: 30, trainingWelcomeFromEmail: 'ali@colaberry.com' },
+}));
+
 jest.mock('../../models', () => ({
   __esModule: true,
-  Enrollment: { findOne: jest.fn(), findAll: jest.fn() },
+  Enrollment: { findOne: jest.fn(), findAll: jest.fn(), create: jest.fn() },
   Cohort: { increment: jest.fn() },
-  Lead: { findOne: jest.fn() },
+  Lead: { findOne: jest.fn(), findOrCreate: jest.fn() },
   Campaign: { findOne: jest.fn() },
 }));
 
-import { Enrollment, Cohort, Campaign } from '../../models';
-import { markEnrollmentPaid } from '../../services/enrollmentService';
+const mockGetOrCreateExplorerCohort = jest.fn();
+jest.mock('../../services/cohortService', () => ({
+  getOrCreateExplorerCohort: (...a: any[]) => mockGetOrCreateExplorerCohort(...a),
+}));
+
+const mockSendTrainingWelcome = jest.fn();
+jest.mock('../../services/emailService', () => ({
+  sendTrainingWelcome: (...a: any[]) => mockSendTrainingWelcome(...a),
+}));
+
+const mockLogCommunication = jest.fn();
+jest.mock('../../services/communicationLogService', () => ({
+  logCommunication: (...a: any[]) => mockLogCommunication(...a),
+}));
+
+import { Enrollment, Cohort, Campaign, Lead } from '../../models';
+import { markEnrollmentPaid, createExplorerEnrollment } from '../../services/enrollmentService';
 
 const enrFindOne = Enrollment.findOne as jest.Mock;
 const enrFindAll = Enrollment.findAll as jest.Mock;
+const enrCreate = Enrollment.create as jest.Mock;
+const leadFindOrCreate = Lead.findOrCreate as jest.Mock;
 const cohortIncrement = Cohort.increment as jest.Mock;
 const campaignFindOne = Campaign.findOne as jest.Mock;
 
@@ -41,6 +62,10 @@ beforeEach(() => {
   cohortIncrement.mockResolvedValue(undefined);
   campaignFindOne.mockResolvedValue(null); // no readiness campaign configured -> exitPaymentCampaign no-ops
   enrFindAll.mockResolvedValue([]); // no stray Explorer rows -> retireRedundantExplorerAccounts no-ops
+  mockGetOrCreateExplorerCohort.mockResolvedValue({ id: 'explorer-cohort-1' });
+  leadFindOrCreate.mockResolvedValue([{ id: 42 }]);
+  mockSendTrainingWelcome.mockResolvedValue({ sent: true, messageId: 'msg-1' });
+  mockLogCommunication.mockResolvedValue(undefined);
 });
 
 describe('markEnrollmentPaid', () => {
@@ -77,5 +102,57 @@ describe('markEnrollmentPaid', () => {
 
     expect(result).toBeNull();
     expect(cohortIncrement).not.toHaveBeenCalled();
+  });
+});
+
+describe('createExplorerEnrollment', () => {
+  it('stores company/title/company_size and a custom source label (regression for the /enroll free-signup path)', async () => {
+    enrFindOne.mockResolvedValue(null); // no existing enrollment for this email
+    enrCreate.mockResolvedValue({ id: 'enr-free-1', email: 'new@example.com' });
+
+    const result = await createExplorerEnrollment({
+      name: 'Jane Doe',
+      email: 'NEW@Example.com',
+      company: 'Acme Inc',
+      title: 'VP Data',
+      company_size: '50-249',
+      phone: '5551234567',
+      source: 'Free signup (/enroll)',
+    });
+
+    expect(result.created).toBe(true);
+    expect(result.cohort_id).toBe('explorer-cohort-1');
+    expect(enrCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        email: 'new@example.com',
+        company: 'Acme Inc',
+        title: 'VP Data',
+        company_size: '50-249',
+        enrollment_type: 'explorer',
+        portal_enabled: true,
+        notes: 'Free signup (/enroll)',
+      }),
+    );
+  });
+
+  it('defaults to the Open House source label and empty company when not provided (back-compat)', async () => {
+    enrFindOne.mockResolvedValue(null);
+    enrCreate.mockResolvedValue({ id: 'enr-oh-1', email: 'guest@example.com' });
+
+    await createExplorerEnrollment({ name: 'Guest', email: 'guest@example.com' });
+
+    expect(enrCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ company: '', notes: 'Open House Explorer' }),
+    );
+  });
+
+  it('is idempotent — an existing enrollment for the email is reused, not duplicated', async () => {
+    const existing = { id: 'enr-existing', email: 'again@example.com' };
+    enrFindOne.mockResolvedValue(existing);
+
+    const result = await createExplorerEnrollment({ name: 'Again', email: 'again@example.com' });
+
+    expect(result).toEqual({ enrollment: existing, created: false, cohort_id: 'explorer-cohort-1' });
+    expect(enrCreate).not.toHaveBeenCalled();
   });
 });

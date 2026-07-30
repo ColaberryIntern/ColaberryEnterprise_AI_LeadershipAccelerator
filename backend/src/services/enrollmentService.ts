@@ -246,7 +246,11 @@ export async function createExplorerEnrollment(input: {
   name: string;
   email: string;
   phone?: string;
+  company?: string;
+  title?: string;
+  company_size?: string;
   order_id?: string;
+  source?: string;
   utm_source?: string;
   utm_campaign?: string;
   page_url?: string;
@@ -265,10 +269,13 @@ export async function createExplorerEnrollment(input: {
     return { enrollment: existing, created: false, cohort_id: cohort.id };
   }
 
+  const source = input.source || 'Open House Explorer';
   const enrollment = await Enrollment.create({
     full_name: input.name.trim() || 'Open House Guest',
     email,
-    company: '',
+    company: input.company?.trim() || '',
+    title: input.title?.trim() || undefined,
+    company_size: input.company_size?.trim() || undefined,
     phone: input.phone || undefined,
     cohort_id: cohort.id,
     enrollment_type: 'explorer',
@@ -276,7 +283,7 @@ export async function createExplorerEnrollment(input: {
     payment_method: 'credit_card',
     status: 'active',
     portal_enabled: true,
-    notes: `Open House Explorer${input.order_id ? ` | eventbrite_order:${input.order_id}` : ''}`,
+    notes: `${source}${input.order_id ? ` | eventbrite_order:${input.order_id}` : ''}`,
   });
   // NOTE: intentionally does NOT increment cohort.seats_taken — Explorers are not
   // paying students and must never consume a paid seat.
