@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Draft Emails — Enrollment &amp; Access Fix — Review</title>
+<style>
+  :root {
+    --color-primary: #1a365d; --color-primary-light: #2b6cb0;
+    --color-success: #10b981; --color-success-bg: rgba(16,185,129,0.08);
+    --color-warning: #f59e0b; --color-warning-bg: rgba(245,158,11,0.08);
+    --color-bg: #ffffff; --color-bg-alt: #f7fafc; --color-text: #2d3748;
+    --color-text-light: #718096; --color-border: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: var(--color-text);
+    background: var(--color-bg-alt); font-size: 14px; line-height: 1.55; margin: 0; padding-bottom: 60px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 0 1.25rem; }
+  .doc-header { background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; padding: 1.6rem 0; margin-bottom: 1.25rem; }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin: 0 0 0.4rem; font-size: 1.4rem; }
+  .doc-header .subtitle { font-size: 0.88rem; opacity: 0.92; max-width: 850px; }
+
+  .group-label { font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--color-text-light); margin: 1.6rem 0 0.7rem; }
+  .group-note { font-size: 0.83rem; color: var(--color-text-light); margin: -0.3rem 0 0.9rem; }
+
+  .email-card { background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    margin-bottom: 1rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); overflow: hidden; }
+  .email-card.retry { border-left: 4px solid var(--color-warning); }
+  .email-card.confirm { border-left: 4px solid var(--color-success); }
+  .email-card-header { padding: 0.85rem 1.2rem; border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg-alt); display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 0.4rem; }
+  .email-card-header .who { font-weight: 600; font-size: 0.95rem; color: var(--color-primary); }
+  .email-card-header .thread { font-size: 0.75rem; color: var(--color-text-light); }
+  .email-card-body { padding: 1rem 1.2rem; }
+  .email-field { font-size: 0.78rem; color: var(--color-text-light); margin-bottom: 0.15rem; }
+  .email-subject { font-size: 0.9rem; font-weight: 600; margin: 0.2rem 0 0.9rem; }
+  .email-body { white-space: pre-wrap; font-size: 0.87rem; }
+  .pill { font-size: 0.65rem; padding: 0.15rem 0.5rem; border-radius: 3px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; }
+  .pill.confirm { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.retry { background: var(--color-warning-bg); color: var(--color-warning); }
+</style>
+</head>
+<body>
+<div class="doc-header"><div class="container">
+  <h1>Draft Emails — Enrollment &amp; Access Fix</h1>
+  <div class="subtitle">10 emails queued for approval. Nothing sends until you say go. Session CC-20260729-w4t8.</div>
+  <div class="subtitle" style="margin-top:0.5rem; background:rgba(245,158,11,0.18); padding:0.5rem 0.8rem; border-radius:4px; display:inline-block;">Corrected 2026-07-30 per Ali: class is Monday + Thursday 6:30&ndash;8:30 PM CST (both required); login goes through training.colaberry.com &rarr; Log In, not enterprise.colaberry.ai directly &mdash; validated end-to-end with a real screenshot. Million's email rewritten to point at Settings &rarr; Subscription, also screenshot-verified.</div>
+</div></div>
+
+<div class="container">
+
+  <div class="group-label">Cluster A — enrollment funnel retry (4)</div>
+  <div class="group-note">Root cause: the enrollment page listed zero open cohorts for 6 days. Confirmed live via real browser screenshots after a full container rebuild. You already sent each of these four a "we found it, fix is going out" holding reply — these are the confirm-it's-live follow-ups.</div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Chuks Eneh &lt;chukseneh@outlook.com&gt;</span><span class="thread">Re: Unable to access the Classroom and enrolment</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Unable to access the Classroom and enrolment — you're clear to enroll now</div>
+      <div class="email-body">Hi Chukwuemeka,
+
+The fix I mentioned is live. Our enrollment page is showing open cohorts again, so the enroll step will go through now.
+
+Please try enrolling again with chukseneh@outlook.com. If anything still blocks you, reply directly to this email and I will look at your account personally, no need to go through support again.
+
+For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
+
+Thank you again for your patience through this.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Jude Mofunanya &lt;jude.mofunanya@gmail.com&gt;</span><span class="thread">Issues with enrollment</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Issues with enrollment — you're clear to enroll now</div>
+      <div class="email-body">Hi Jude,
+
+The fix is live. Our enrollment page is listing open cohorts again, so the enroll step will complete now.
+
+Please try your original address, jude.mofunanya@gmail.com — you did not need the +2 alias, and I'd rather you not end up with two accounts. If you'd like me to remove the jude.mofunanya+2@gmail.com one now that it's not needed, just say so and I'll take care of it.
+
+For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
+
+Thanks for your patience.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Marione Nkerbu &lt;rogation2000.mn@gmail.com&gt;</span><span class="thread">Registration failing</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Registration failing — you're clear to register now</div>
+      <div class="email-body">Hi Marione,
+
+The fix is live. Our registration page is showing open cohorts again, so the form will submit successfully now.
+
+Please try registering again. If it still does not go through, reply here directly and I will check your account myself.
+
+For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
+
+Thanks for your patience.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Firas Baidhani &lt;firas.tx@gmail.com&gt;</span><span class="thread">Unable to enroll</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Unable to enroll — you're clear to enroll now</div>
+      <div class="email-body">Hi Firas,
+
+Sorry for the slow reply here. The issue was on our side, not your device — our enrollment page had stopped listing any open cohort, so the Enroll button could not go through for anyone. That's fixed now and confirmed live.
+
+Please try enrolling again. If it still doesn't go through, reply here directly and I'll check your account myself rather than routing you through support again.
+
+For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="group-label">Cluster B — paid, reconciled, access granted (5)</div>
+  <div class="group-note">Root cause: a confirmed payment never actually flipped portal_enabled (PR #771, now deployed). These 5 were additionally stuck because they paid through PaySimple's separately-hosted product page, which never reconciled automatically — verified against real PaySimple order-confirmation emails in your inbox, then manually activated. Login path tested end-to-end.</div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Mohsin Ali &lt;mohsinali43@gmail.com&gt;</span><span class="thread">Mohsin Ali Access: Your receipt from Colaberry Inc</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Your access is fixed — you're in</div>
+      <div class="email-body">Hi Mohsin,
+
+Sorry for the delay here. Your payment (order #N13022, $199) had gone through on our end, but a bug meant a confirmed payment wasn't actually unlocking classroom access. That's fixed now, and I've activated your account directly.
+
+Please sign in again — go to training.colaberry.com and click Log In, then enter mohsinali43@gmail.com to get your access link. You should have full access to Week 1 and beyond. On the QR check-in issue during class: we're still looking into that one separately and I'll follow up once it's resolved.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Abirahim Nur &lt;abdinur2468@gmail.com&gt;</span><span class="thread">I can't access my week 1 class work</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Your access is fixed — Week 1 is open</div>
+      <div class="email-body">Hi Abirahim,
+
+Your annual plan payment (order #N13015, $1,788) had gone through, but a bug on our side meant a confirmed payment wasn't actually unlocking the classroom. That's fixed now, and I've activated your account directly.
+
+Please sign in again — go to training.colaberry.com and click Log In, then enter abdinur2468@gmail.com to get your access link. Week 1 should be fully open now. Sorry for the run-around with the cache/browser troubleshooting earlier; the problem was never on your end.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Liza Ayele &lt;bfglz@yahoo.com&gt;</span><span class="thread">Unable to Access Classroom After Payment</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Your access is fixed</div>
+      <div class="email-body">Hi Liza,
+
+Your payment from July 22 (order #N12987, $199) had gone through, but a bug on our side meant a confirmed payment wasn't actually unlocking the classroom. That's fixed now, and I've activated your account directly.
+
+Please sign in again — go to training.colaberry.com and click Log In, then enter bfglz@yahoo.com to get your access link. You should have full access now. Sorry for the delay in getting this sorted.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Britania Okoduwa &lt;bitania3@gmail.com&gt;</span><span class="thread">Classroom restriction</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Classroom restriction — fixed</div>
+      <div class="email-body">Hi Britania,
+
+Your payment (order #N12994, $199) had gone through, but a bug on our side meant a confirmed payment wasn't actually unlocking the classroom — and separately, your account had gotten pointed at the wrong cohort, which I've also corrected. Both are fixed now and I've activated your account directly.
+
+Please sign in again — go to training.colaberry.com and click Log In, then enter bitania3@gmail.com to get your access link. You should be fully caught up with your peers now.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="email-card confirm">
+    <div class="email-card-header"><span class="who">Regina Asafor &lt;regina.asafor@gmail.com&gt;</span><span class="thread">I am being asked to enroll to unlock</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: I am being asked to enroll to unlock — fixed</div>
+      <div class="email-body">Hi Regina,
+
+Your payment (order #N12993, $199) had gone through, but a bug on our side meant a confirmed payment wasn't actually unlocking the curriculum. That's fixed now, and I've activated your account directly.
+
+Please sign in again — go to training.colaberry.com and click Log In, then enter regina.asafor@gmail.com to get your access link. The curriculum should be fully unlocked now.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="group-label">Not a confirmation — retry invite (1)</div>
+  <div class="group-note">No matching PaySimple order found for Million — consistent with his own email describing a failed checkout attempt. He has not actually paid, but his account already has portal_enabled=true on the real cohort, so he can log in today — he just needs to finish checkout from inside the portal. Exact path (Settings gear icon &rarr; Subscription tab &rarr; Choose Monthly/Annual) confirmed live via screenshot.</div>
+
+  <div class="email-card retry">
+    <div class="email-card-header"><span class="who">Million Abate &lt;millionabate19@gmail.com&gt;</span><span class="thread">Issues for payment and login to classroom</span><span class="pill retry">retry, not confirm</span></div>
+    <div class="email-card-body">
+      <div class="email-field">Subject</div>
+      <div class="email-subject">Re: Issues for payment and login to classroom — please try again</div>
+      <div class="email-body">Hi Million,
+
+I'm sorry this has dragged on, and sorry the Zoom room was unattended when you tried to get live help. Here's the real story: our checkout page was broken site-wide from July 24 to yesterday, so the "Could not start checkout" error you kept hitting was never something wrong with your $50 deposit or your device. That's fixed now.
+
+Please go to training.colaberry.com and click Log In, then enter millionabate19@gmail.com. Once you're in, click the gear icon (top right) to open Settings, then the Subscription tab — you'll see Free / Annual / Monthly plans there. Choose whichever works for you and complete payment through PaySimple; access unlocks the moment it clears.
+
+If you hit any issue at all this time, reply directly to this email and I will personally check it within the hour, not route you back through general support.
+
+Ali Muwwakkil
+Managing Director, AI Systems Architect
+Colaberry Inc.
+ali@colaberry.com | enterprise.colaberry.ai</div>
+    </div>
+  </div>
+
+  <div class="group-label" style="margin-top:2.2rem;">Verification evidence</div>
+  <div style="display:flex; gap:1rem; flex-wrap:wrap;">
+    <div style="flex:1; min-width:280px; border:1px solid var(--color-border); border-radius:6px; overflow:hidden; background:#0f172a; padding:8px;">
+      <img src="screenshots/2026-07-30-login-connector-verify/03-portal-login-result.png" style="width:100%; border-radius:3px; display:block;" alt="Check your email success screen">
+      <div style="color:#cbd5e1; font-size:0.72rem; padding:6px 4px 0;">training.colaberry.com &rarr; Log In &rarr; portal login &rarr; real access-link sent (Abirahim), not the "pending admin approval" rejection</div>
+    </div>
+    <div style="flex:1; min-width:280px; border:1px solid var(--color-border); border-radius:6px; overflow:hidden; background:#0f172a; padding:8px;">
+      <img src="screenshots/2026-07-30-settings-location/03-subscription-tab.png" style="width:100%; border-radius:3px; display:block;" alt="Settings Subscription tab">
+      <div style="color:#cbd5e1; font-size:0.72rem; padding:6px 4px 0;">Settings &rarr; Subscription tab: Free / Annual $149mo / Monthly $199mo, PaySimple checkout &mdash; this is where Million completes payment</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
