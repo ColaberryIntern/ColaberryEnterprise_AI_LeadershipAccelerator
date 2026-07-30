@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { Op } from 'sequelize';
 import { env } from '../config/env';
 import {
-  Enrollment, Cohort, LiveSession, AttendanceRecord, AssignmentSubmission, CommunityRoom,
+  Enrollment, Cohort, LiveSession, AttendanceRecord, AssignmentSubmission, CommunityRoom, CommunityMember,
 } from '../models';
 import { sendPortalMagicLink } from './emailService';
 import { safeNextPath } from '../utils/safeNextPath';
@@ -58,14 +58,23 @@ export function signReadOnlyParticipantJwt(
  * retire the stray Explorer row), and "most recent" would then route the
  * student's own login into the free-preview shadow account instead of their
  * real one -- silently hiding their paid access and any account credit tied
- * to the real row. Prefer, in order: non-explorer type, then paid over
- * pending, then most recently created. Exported for testing.
+ * to the real row. Prefer, in order: an enrollment flagged with a
+ * `mgmt_role` (2026-07-30 incident: a staff member's newer, unrelated paid
+ * duplicate silently outranked their real staff-flagged enrollment, hiding
+ * their own Management Portal access), then non-explorer type, then paid
+ * over pending, then most recently created. Exported for testing.
  */
-export function pickBestEnrollment<T extends { enrollment_type?: string | null; payment_status?: string | null; created_at?: Date | string | null }>(
+export function pickBestEnrollment<T extends {
+  enrollment_type?: string | null;
+  payment_status?: string | null;
+  created_at?: Date | string | null;
+  communityMember?: { mgmt_role?: string | null } | null;
+}>(
   candidates: T[],
 ): T | null {
   if (!candidates.length) return null;
-  const rank = (e: T): [number, number, number] => [
+  const rank = (e: T): [number, number, number, number] => [
+    e.communityMember?.mgmt_role ? 0 : 1,
     e.enrollment_type === 'explorer' ? 1 : 0,
     e.payment_status === 'paid' ? 0 : 1,
     -new Date(e.created_at ?? 0).getTime(),
@@ -95,12 +104,14 @@ export async function requestMagicLink(
   next?: unknown,
 ): Promise<{ success: boolean; message: string }> {
   // Deterministic: a person may hold several enrollments (e.g. a prior Explorer
-  // plus a paid seat). pickBestEnrollment prefers the real (non-explorer, paid)
-  // one over a merely-newer Explorer duplicate, so the login link never lands
-  // on the wrong account (was a non-deterministic findOne, then a recency-only
-  // ORDER BY that a newer Explorer row could still win).
+  // plus a paid seat). pickBestEnrollment prefers a mgmt_role-flagged staff
+  // enrollment first, then the real (non-explorer, paid) one over a
+  // merely-newer Explorer duplicate, so the login link never lands on the
+  // wrong account (was a non-deterministic findOne, then a recency-only
+  // ORDER BY that a newer Explorer or paid duplicate row could still win).
   const candidates = await Enrollment.findAll({
     where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: true },
+    include: [{ model: CommunityMember, as: 'communityMember', attributes: ['mgmt_role'] }],
   });
   const enrollment = pickBestEnrollment(candidates);
 
