@@ -49,15 +49,46 @@ export function signReadOnlyParticipantJwt(
   );
 }
 
+/**
+ * Pick the best of several active, portal-enabled enrollments for the same
+ * email. Recency alone is not a safe tiebreaker: the Open House flow can mint
+ * a fresh 'explorer' row for someone who already holds an older real seat
+ * (e.g. a manual PaySimple-side-channel reconciliation that didn't also
+ * retire the stray Explorer row), and "most recent" would then route the
+ * student's own login into the free-preview shadow account instead of their
+ * real one -- silently hiding their paid access and any account credit tied
+ * to the real row. Prefer, in order: non-explorer type, then paid over
+ * pending, then most recently created. Exported for testing.
+ */
+export function pickBestEnrollment<T extends { enrollment_type?: string | null; payment_status?: string | null; created_at?: Date | string | null }>(
+  candidates: T[],
+): T | null {
+  if (!candidates.length) return null;
+  const rank = (e: T): [number, number, number] => [
+    e.enrollment_type === 'explorer' ? 1 : 0,
+    e.payment_status === 'paid' ? 0 : 1,
+    -new Date(e.created_at ?? 0).getTime(),
+  ];
+  return [...candidates].sort((a, b) => {
+    const ra = rank(a);
+    const rb = rank(b);
+    for (let i = 0; i < ra.length; i++) {
+      if (ra[i] !== rb[i]) return ra[i] - rb[i];
+    }
+    return 0;
+  })[0];
+}
+
 export async function requestMagicLink(email: string): Promise<{ success: boolean; message: string }> {
   // Deterministic: a person may hold several enrollments (e.g. a prior Explorer
-  // plus a paid seat). Always target the MOST RECENT active, portal-enabled one so
-  // the login link never lands on a stale enrollment (was a non-deterministic
-  // findOne, which could email a link into the wrong account).
-  const enrollment = await Enrollment.findOne({
+  // plus a paid seat). pickBestEnrollment prefers the real (non-explorer, paid)
+  // one over a merely-newer Explorer duplicate, so the login link never lands
+  // on the wrong account (was a non-deterministic findOne, then a recency-only
+  // ORDER BY that a newer Explorer row could still win).
+  const candidates = await Enrollment.findAll({
     where: { email: email.toLowerCase().trim(), status: 'active', portal_enabled: true },
-    order: [['created_at', 'DESC']],
   });
+  const enrollment = pickBestEnrollment(candidates);
 
   if (!enrollment) {
     // Check if enrollment exists but portal not enabled
