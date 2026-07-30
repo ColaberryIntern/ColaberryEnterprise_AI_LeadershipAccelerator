@@ -6,6 +6,7 @@ import {
   Enrollment, Cohort, LiveSession, AttendanceRecord, AssignmentSubmission,
 } from '../models';
 import { sendPortalMagicLink } from './emailService';
+import { safeNextPath } from '../utils/safeNextPath';
 
 /**
  * Sign a 7-day participant session JWT. Shared by the magic-link verify flow
@@ -79,7 +80,20 @@ export function pickBestEnrollment<T extends { enrollment_type?: string | null; 
   })[0];
 }
 
-export async function requestMagicLink(email: string): Promise<{ success: boolean; message: string }> {
+/**
+ * Email a magic sign-in link.
+ *
+ * `next` carries the student's pre-login intent through the email round trip so
+ * the QR check-in flow can return them to the check-in page instead of dumping
+ * them on the dashboard. It is sanitized to a same-origin /portal/ path here —
+ * this string ends up inside an email we send, so an unvalidated value would be
+ * an open redirect with our branding on it. An unsafe or absent value simply
+ * yields a plain link to the default landing page (never an error).
+ */
+export async function requestMagicLink(
+  email: string,
+  next?: unknown,
+): Promise<{ success: boolean; message: string }> {
   // Deterministic: a person may hold several enrollments (e.g. a prior Explorer
   // plus a paid seat). pickBestEnrollment prefers the real (non-explorer, paid)
   // one over a merely-newer Explorer duplicate, so the login link never lands
@@ -97,6 +111,18 @@ export async function requestMagicLink(email: string): Promise<{ success: boolea
       order: [['created_at', 'DESC']],
     });
     if (pendingEnrollment) {
+      // Observable on purpose: a whole cohort silently blocked at the login
+      // screen is exactly the 2026-07-23 Orientation failure, and it produced
+      // no server-side signal at all. Log the identity, never the token.
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        service: 'backend',
+        event: 'portal_login_blocked',
+        outcome: 'failure',
+        error_class: 'PortalAccessDisabled',
+        context: { enrollment_id: pendingEnrollment.id, cohort_id: pendingEnrollment.cohort_id },
+      }));
       return { success: false, message: 'Your enrollment is pending admin approval for portal access. Please contact your program administrator.' };
     }
     // Generic message to prevent email enumeration
@@ -116,6 +142,7 @@ export async function requestMagicLink(email: string): Promise<{ success: boolea
     fullName: enrollment.full_name,
     token,
     cohortName: (await (await import("../models")).Cohort.findByPk(enrollment.cohort_id))?.name || "Accelerator Program",
+    next: safeNextPath(next) ?? undefined,
   });
 
   return { success: true, message: 'If an active enrollment exists for this email, a link has been sent.' };

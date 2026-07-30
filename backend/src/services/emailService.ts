@@ -1469,16 +1469,30 @@ interface PortalMagicLinkData {
   fullName: string;
   token: string;
   cohortName: string;
+  /**
+   * Optional same-origin portal path to land on after verifying, instead of the
+   * default dashboard — e.g. "/portal/class-checkin/<id>" so a student who
+   * scanned the class QR while signed out completes their check-in. Callers MUST
+   * pass a value already through safeNextPath(); this is not re-validated here.
+   */
+  next?: string;
 }
 
 export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<void> {
   if (!transporter) {
+    // NOTE: this returns success to the caller, so a misconfigured SMTP env
+    // shows the student "Check your email" for a mail that was never sent.
+    // Logged loudly here; fixing the silent-success contract is tracked
+    // separately (see the QR check-in audit, 2026-07-27).
     console.warn('[Email] SMTP not configured. Skipping magic link email to:', data.to);
     return;
   }
 
   const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
-  const magicLink = `${portalBaseUrl}/portal/verify?token=${data.token}`;
+  // `next` is already sanitized to a same-origin /portal/ path by safeNextPath()
+  // in participantService — encoded here so it survives as a single query value.
+  const nextParam = data.next ? `&next=${encodeURIComponent(data.next)}` : '';
+  const magicLink = `${portalBaseUrl}/portal/verify?token=${data.token}${nextParam}`;
 
   const r = await resolveEmailRecipient(
     data.to,
