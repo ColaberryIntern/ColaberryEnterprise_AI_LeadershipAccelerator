@@ -82,7 +82,10 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
           <Link
             className="te-btn cherry"
             style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
-            to={`/portal/sessions/${session.id}`}
+            // The session's Colaberry Commons room (chat + join-meeting) —
+            // not the retired /portal/sessions/:id detail page. Falls back
+            // to the old page only for the rare session with no room yet.
+            to={session.room_id ? `/portal/rooms/${session.room_id}` : `/portal/sessions/${session.id}`}
           >
             Open the classroom
           </Link>

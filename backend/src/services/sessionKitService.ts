@@ -10,7 +10,7 @@
 // ============================================================================
 import QRCode from 'qrcode';
 import { env } from '../config/env';
-import { Cohort, Enrollment, LiveSession } from '../models';
+import { Cohort, Enrollment, LiveSession, CommunityRoom } from '../models';
 
 /**
  * Absolute app origin for building QR/deep-link URLs. Mirrors
@@ -77,17 +77,22 @@ export interface CheckinInfo {
   session_date: string;
   start_time: string;
   cohort_name: string;
+  room_id: string | null;
 }
 
 /**
  * Minimal, non-sensitive info for the public pre-login check-in landing page a
  * student reaches by scanning the Class Kit QR. Deliberately omits the meeting
- * link (the Meet is only revealed after the student logs in + checks in on the
- * session detail page). Returns null if the session does not exist (→ 404).
+ * link (the Meet is only revealed after the student logs in + checks in, via
+ * the session's Colaberry Commons room). Returns null if the session does not
+ * exist (→ 404). `room_id` is a bare UUID, not sensitive on its own — the
+ * room's own cohort-membership check gates real access once the student
+ * navigates there authenticated.
  */
 export async function getCheckinInfo(sessionId: string): Promise<CheckinInfo | null> {
   const session = await LiveSession.findByPk(sessionId, {
     attributes: ['title', 'session_date', 'start_time', 'cohort_id'],
+    include: [{ model: CommunityRoom, as: 'communityRoom', attributes: ['id'], required: false }],
   });
   if (!session) return null;
 
@@ -98,5 +103,6 @@ export async function getCheckinInfo(sessionId: string): Promise<CheckinInfo | n
     session_date: session.session_date,
     start_time: session.start_time,
     cohort_name: cohort?.name ?? '',
+    room_id: (session as any).communityRoom?.id ?? null,
   };
 }

@@ -14,7 +14,7 @@ import { emitPointsEarned } from '../../services/pointsFx';
 // lands here. The route is PUBLIC — they may not be signed in yet:
 //   • Signed in  → we record attendance via joinSession() (idempotent), show a
 //     big "you're checked in" confirmation, fire the points burst if awarded,
-//     and offer "Enter the class" → the session detail page (Meet + class chat).
+//     and offer "Enter the class" → the session's Colaberry Commons room (Meet + class chat).
 //   • Signed out → we show the class name and send them to sign in.
 // Any info-load failure fails soft with a friendly retry message (never a crash).
 //
@@ -27,6 +27,7 @@ interface CheckinInfo {
   session_date: string;
   start_time: string;
   cohort_name: string;
+  room_id: string | null;
 }
 
 type Phase = 'loading' | 'load_error' | 'ready';
@@ -144,7 +145,10 @@ const ClassCheckinPage: React.FC = () => {
     doJoin();
   }, [phase, isAuthenticated, doJoin]);
 
-  const enterClass = () => navigate(`/portal/sessions/${sessionId}`);
+  // The session's Colaberry Commons room (Meet + class chat) — not the
+  // retired /portal/sessions/:id detail page. Falls back to the old page
+  // only for the rare session with no room yet.
+  const enterClass = () => navigate(info?.room_id ? `/portal/rooms/${info.room_id}` : `/portal/sessions/${sessionId}`);
 
   // Carry the student's intent through sign-in. Without this the magic-link
   // round trip lands them on /portal/today and their attendance is never

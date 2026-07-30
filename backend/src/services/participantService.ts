@@ -276,6 +276,7 @@ export async function getNextLiveSession(cohortId: string) {
   const sessions = await LiveSession.findAll({
     where: { cohort_id: cohortId, status: { [Op.ne]: 'cancelled' } },
     order: [['session_number', 'ASC']],
+    include: [{ model: CommunityRoom, as: 'communityRoom', attributes: ['id'], required: false }],
   });
   const next = selectNextLiveSession(sessions as any[]);
   if (!next) return { next_session: null };
@@ -292,6 +293,7 @@ export async function getNextLiveSession(cohortId: string) {
       start_time: next.start_time,
       end_time: next.end_time,
       status: next.status, // 'scheduled' | 'live'
+      room_id: (next as any).communityRoom?.id ?? null,
       meeting_link: next.meeting_link,
       meeting_provider: (next as any).meeting_provider,
       timezone: (cohort as any)?.timezone || 'America/Chicago',
