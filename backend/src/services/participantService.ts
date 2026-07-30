@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { Op } from 'sequelize';
 import { env } from '../config/env';
 import {
-  Enrollment, Cohort, LiveSession, AttendanceRecord, AssignmentSubmission, CommunityMember,
+  Enrollment, Cohort, LiveSession, AttendanceRecord, AssignmentSubmission, CommunityRoom, CommunityMember,
 } from '../models';
 import { sendPortalMagicLink } from './emailService';
 import { safeNextPath } from '../utils/safeNextPath';
@@ -303,6 +303,13 @@ export async function getParticipantSessions(enrollmentId: string, cohortId: str
   const sessions = await LiveSession.findAll({
     where: { cohort_id: cohortId, status: { [Op.ne]: 'cancelled' } },
     order: [['session_number', 'ASC']],
+    // The Colaberry Commons room linked to this session, if Community Rooms
+    // has provisioned one (ensureRoomForSession) — surfaced as room_id so
+    // callers (Schedule) can link into the room instead of the retired
+    // /portal/sessions/:id detail page. Left join: sessions predating the
+    // Community Rooms rollout, or created while the feature was disabled,
+    // legitimately have none.
+    include: [{ model: CommunityRoom, as: 'communityRoom', attributes: ['id'], required: false }],
   });
 
   const attendance = await AttendanceRecord.findAll({
@@ -323,6 +330,7 @@ export async function getParticipantSessions(enrollmentId: string, cohortId: str
     meeting_link: (s.status === 'scheduled' || s.status === 'live') ? s.meeting_link : null,
     recording_url: s.status === 'completed' ? s.recording_url : null,
     attendance_status: attendanceMap.get(s.id) || null,
+    room_id: (s as any).communityRoom?.id ?? null,
   }));
 }
 
