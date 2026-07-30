@@ -235,9 +235,19 @@ describe('runDirectorProposal', () => {
       created_by_id: 'WorkforceMarketingDirector',
       entity_type: 'proposed_agent_action',
       entity_id: 'proposal-1',
+      metadata: expect.objectContaining({ reply_token: expect.stringMatching(/^[0-9a-f]{8}$/) }),
     }));
     expect(sendApprovalEmail).toHaveBeenCalledTimes(1);
-    expect(sendApprovalEmail).toHaveBeenCalledWith(expect.objectContaining({ ticketId: 'ticket-1', title: 'Content idea for review: X' }));
+    expect(sendApprovalEmail).toHaveBeenCalledWith(expect.objectContaining({
+      ticketId: 'ticket-1',
+      title: 'Content idea for review: X',
+      replyToken: expect.stringMatching(/^[0-9a-f]{8}$/),
+    }));
+    // The exact same token must appear both on the stored ticket and in the email —
+    // otherwise a reply could never actually match.
+    const storedToken = createTicketMock.mock.calls[0][0].metadata.reply_token;
+    const emailedToken = sendApprovalEmail.mock.calls[0][0].replyToken;
+    expect(storedToken).toBe(emailedToken);
   });
 
   it('a ticket-mirroring failure does not undo the already-created proposal, and never attempts the email', async () => {

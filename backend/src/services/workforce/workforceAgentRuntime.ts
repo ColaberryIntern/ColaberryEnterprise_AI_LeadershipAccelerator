@@ -20,6 +20,7 @@
  * 'in_review' on the board — that's the recovery path; there is no retry
  * queue for this v1 notification side-channel.
  */
+import { randomBytes } from 'crypto';
 import AiAgent from '../../models/AiAgent';
 import { isKillSwitchActive } from '../launchSafety';
 import { isSafeModeActive } from '../systemControlService';
@@ -88,6 +89,11 @@ async function mirrorTicket(params: {
   traceId: string;
   notifyOnCreate?: boolean;
 }): Promise<string | undefined> {
+  // Generated up front (not after createTicket) so it can be stored on the ticket's own
+  // metadata at creation — the token, not the UUID, is what actually authorizes a reply;
+  // it's never rendered anywhere in the dashboard, only ever transmitted in the email below.
+  const replyToken = params.notifyOnCreate ? randomBytes(4).toString('hex') : undefined;
+
   let ticketId: string;
   try {
     const ticket = await createTicket({
@@ -101,7 +107,7 @@ async function mirrorTicket(params: {
       created_by_id: params.agentName,
       entity_type: params.entityType,
       entity_id: params.entityId,
-      metadata: { operation: params.operation, director_slug: params.slug },
+      metadata: { operation: params.operation, director_slug: params.slug, ...(replyToken ? { reply_token: replyToken } : {}) },
     });
     ticketId = ticket.id;
   } catch (err) {
@@ -109,10 +115,11 @@ async function mirrorTicket(params: {
     return undefined;
   }
 
-  if (params.notifyOnCreate) {
+  if (params.notifyOnCreate && replyToken) {
     try {
       await sendTicketApprovalEmail({
         ticketId,
+        replyToken,
         title: params.ticket.title,
         description: params.ticket.description,
         directorName: params.agentName,
