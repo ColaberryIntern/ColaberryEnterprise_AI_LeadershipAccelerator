@@ -1,24 +1,16 @@
 import React from 'react';
 import { SectionCard } from '../shell';
 import { TenureBucket, SubscriptionPlanKey } from '../../../services/subscriptionAnalyticsApi';
+import { PLAN_COLOR, PLAN_LABEL } from './format';
 
 interface Props {
   buckets: TenureBucket[];
 }
 
-// Fixed categorical order/color, never reassigned — same pair PlanBreakdownCard
-// uses. Comp is included for completeness even though it's usually a thin sliver.
+// Only plans that actually accrue tenure appear in the funnel's bars/legend —
+// deposit_holder/other never get a tenure anchor (see backend), so they'd
+// always render as an empty, meaningless legend entry.
 const PLAN_ORDER: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp'];
-const PLAN_COLOR: Record<SubscriptionPlanKey, string> = {
-  annual: '#15803d',
-  monthly: '#1f5fd0',
-  comp: 'var(--text-muted)',
-};
-const PLAN_SWATCH_LABEL: Record<SubscriptionPlanKey, string> = {
-  annual: 'Annual',
-  monthly: 'Monthly',
-  comp: 'Free Access',
-};
 
 /** Tenure funnel — a snapshot heatmap of how many current subscribers are how
  *  many months into their subscription, split by plan, with a retention %
@@ -40,7 +32,7 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
         {PLAN_ORDER.map((p) => (
           <span key={p} className="d-inline-flex align-items-center gap-1">
             <span style={{ width: 10, height: 10, borderRadius: 2, background: PLAN_COLOR[p], display: 'inline-block' }} />
-            {PLAN_SWATCH_LABEL[p]}
+            {PLAN_LABEL[p]}
           </span>
         ))}
       </div>
@@ -67,7 +59,7 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
                         background: PLAN_COLOR[p],
                         borderRadius: 4,
                       }}
-                      title={`${PLAN_SWATCH_LABEL[p]}: ${b.byPlan[p]}`}
+                      title={`${PLAN_LABEL[p]}: ${b.byPlan[p]}`}
                     />
                   ))}
                 </span>

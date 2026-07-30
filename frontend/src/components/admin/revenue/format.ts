@@ -26,8 +26,23 @@ export const timeAgo = (iso: string | null): string => {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-export const PLAN_LABEL: Record<'annual' | 'monthly' | 'comp', string> = {
+export type PlanKey = 'annual' | 'monthly' | 'comp' | 'deposit_holder' | 'other';
+
+export const PLAN_LABEL: Record<PlanKey, string> = {
   annual: 'Annual',
   monthly: 'Monthly',
   comp: 'Free Access',
+  deposit_holder: 'Deposit Holder',
+  other: 'Other',
+};
+
+// Fixed categorical color per plan, used everywhere a plan is shown (plan
+// breakdown, tenure funnel, attention list, upcoming renewals) so the same
+// person's subscription type reads as the same color across the page.
+export const PLAN_COLOR: Record<PlanKey, string> = {
+  annual: '#15803d',
+  monthly: '#1f5fd0',
+  comp: 'var(--text-muted)',
+  deposit_holder: '#b4302a',
+  other: '#8a6d3b',
 };

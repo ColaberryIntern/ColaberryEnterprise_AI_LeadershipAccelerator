@@ -4,13 +4,14 @@ import api from '../utils/api';
 // renewals, the tenure funnel, and the lapsed/failed "needs attention" list.
 // Mirrors the shape of backend/src/services/subscriptionAnalyticsService.ts.
 
-export type SubscriptionPlanKey = 'annual' | 'monthly' | 'comp';
+export type SubscriptionPlanKey = 'annual' | 'monthly' | 'comp' | 'deposit_holder' | 'other';
 
 export interface SubscriptionKpis {
   mrr: number;
   arr: number;
   activeSubscribers: number;
   compedSeats: number;
+  otherPaidCount: number;
   arpu: number;
 }
 
