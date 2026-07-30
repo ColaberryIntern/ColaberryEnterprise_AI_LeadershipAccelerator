@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { getRevenueDashboard } from '../services/revenueDashboardService';
 import { getRevenuePayments } from '../services/revenuePaymentsService';
 import { reconcileAppPayments } from '../services/appPaymentReconcileService';
+import { getSubscriptionAnalytics } from '../services/subscriptionAnalyticsService';
 
 export async function handleGetRevenueDashboard(
   _req: Request,
@@ -26,6 +27,21 @@ export async function handleGetRevenuePayments(
 ): Promise<void> {
   try {
     const data = await getRevenuePayments();
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Subscription analytics for /admin/revenue: MRR/ARR, plan mix, upcoming
+// renewals, the tenure funnel, and the lapsed/failed "needs attention" list.
+export async function handleGetSubscriptionAnalytics(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = await getSubscriptionAnalytics();
     res.json(data);
   } catch (error) {
     next(error);
