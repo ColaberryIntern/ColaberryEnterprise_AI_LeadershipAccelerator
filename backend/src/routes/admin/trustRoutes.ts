@@ -14,6 +14,9 @@ import {
   handleGetCostBreakdown,
   handleGetValue,
   handleGetRetention,
+  handleGetAgentRoster,
+  handleGetAgentDetail,
+  handleRunAgent,
 } from '../../controllers/trustController';
 
 const router = Router();
@@ -27,5 +30,8 @@ router.get('/api/admin/trust/cost-breakdown', requireAdmin, handleGetCostBreakdo
 router.get('/api/admin/trust/value', requireAdmin, handleGetValue);
 router.get('/api/admin/trust/retention', requireAdmin, handleGetRetention);
 router.get('/api/admin/trust/dimension/:key', requireAdmin, handleGetDimension);
+router.get('/api/admin/trust/agents', requireAdmin, handleGetAgentRoster);
+router.get('/api/admin/trust/agents/:slug', requireAdmin, handleGetAgentDetail);
+router.post('/api/admin/trust/agents/:slug/run', requireAdmin, handleRunAgent);
 
 export default router;

@@ -11,7 +11,10 @@ import {
   getDimensionDetail,
   getTrustActions,
   getCostBreakdown,
+  getAgentRoster,
+  getAgentDetail,
 } from '../services/trustMetricsService';
+import { runDirectorBySlug } from '../services/workforce/directorActions';
 import { getAiValue } from '../services/aiValueService';
 import { getRetentionReport } from '../services/retentionReportService';
 
@@ -108,5 +111,43 @@ export async function handleGetRetention(req: Request, res: Response): Promise<v
     res.json(await getRetentionReport(Number.isFinite(ttlMonths) ? ttlMonths : undefined));
   } catch (err) {
     fail(res, 'trust_retention', err);
+  }
+}
+
+export async function handleGetAgentRoster(_req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await getAgentRoster());
+  } catch (err) {
+    fail(res, 'trust_agent_roster', err);
+  }
+}
+
+export async function handleGetAgentDetail(req: Request, res: Response): Promise<void> {
+  try {
+    // `slug` is matched against a fixed director-slug whitelist (WORKFORCE_AGENT_NAME); unknown
+    // slugs return null (404). No injection surface — never interpolated into SQL.
+    const detail = await getAgentDetail(String(req.params.slug || ''));
+    if (!detail) {
+      res.status(404).json({ error: 'Unknown AI Workforce director' });
+      return;
+    }
+    res.json(detail);
+  } catch (err) {
+    fail(res, 'trust_agent_detail', err);
+  }
+}
+
+/** Manual "run now" — same gate (kill switch / safe mode / enabled) as the cron path;
+ *  this endpoint does not bypass anything, it just triggers the same runner on demand. */
+export async function handleRunAgent(req: Request, res: Response): Promise<void> {
+  try {
+    const result = await runDirectorBySlug(String(req.params.slug || ''));
+    if (!result) {
+      res.status(404).json({ error: 'Unknown AI Workforce director' });
+      return;
+    }
+    res.json(result);
+  } catch (err) {
+    fail(res, 'trust_agent_run', err);
   }
 }
