@@ -61,6 +61,19 @@ describe('pickBestEnrollment', () => {
   it('returns null for an empty candidate list', () => {
     expect(pickBestEnrollment([])).toBeNull();
   });
+
+  it('prefers a mgmt_role-flagged enrollment over a newer, paid, non-flagged duplicate (2026-07-30 incident)', () => {
+    const staffOwner = {
+      id: 'staff-owner', enrollment_type: 'standard', payment_status: 'pending',
+      created_at: '2026-03-30T00:00:00Z', communityMember: { mgmt_role: 'owner' },
+    };
+    const newerPaidDuplicate = {
+      id: 'newer-paid-duplicate', enrollment_type: 'standard', payment_status: 'paid',
+      created_at: '2026-07-23T00:00:00Z', communityMember: null,
+    };
+    expect(pickBestEnrollment([newerPaidDuplicate, staffOwner])?.id).toBe('staff-owner');
+    expect(pickBestEnrollment([staffOwner, newerPaidDuplicate])?.id).toBe('staff-owner');
+  });
 });
 
 describe('requestMagicLink', () => {
