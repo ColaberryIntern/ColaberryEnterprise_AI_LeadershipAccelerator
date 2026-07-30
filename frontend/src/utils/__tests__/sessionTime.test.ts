@@ -19,6 +19,12 @@ describe('parseSessionTimeToHHMM', () => {
     expect(parseSessionTimeToHHMM('9:00')).toBe('09:00');
   });
 
+  it('accepts the real stored "HH:MM:SS" shape (the missing-countdown break, 2026-07-30)', () => {
+    expect(parseSessionTimeToHHMM('18:30:00')).toBe('18:30');
+    expect(parseSessionTimeToHHMM('09:00:00')).toBe('09:00');
+    expect(parseSessionTimeToHHMM('1:00:00 PM')).toBe('13:00');
+  });
+
   it('returns null for empty/missing input (the original NaN-countdown break)', () => {
     expect(parseSessionTimeToHHMM('')).toBeNull();
     expect(parseSessionTimeToHHMM(null)).toBeNull();
