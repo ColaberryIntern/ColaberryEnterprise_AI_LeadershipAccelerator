@@ -5,6 +5,8 @@ import { fetchPoints, fetchSchedule, levelFor, bandHudNext, PointsSummary, Onboa
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
+import { useNextLiveSession } from './useNextLiveSession';
+import { parseSessionTimeToHHMM } from '../../../utils/sessionTime';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
 import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest, colorFor } from '../../../services/cohortPresenceApi';
@@ -141,6 +143,13 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
+  // Real per-session schedule (live_sessions), same source as the Today "Next
+  // live class" card and the Classroom sidebar — the topbar "Next class" pill
+  // used to derive its countdown purely from the cohort's first_class start
+  // date (midnight-anchored, no time-of-day), so it never reflected the actual
+  // next session's real start time. Falls back to that cohort-level countdown
+  // when there's no live session (e.g. Explorer/guest with none scheduled).
+  const { session: nextLiveSessionHud } = useNextLiveSession();
   // Points-earned FX: displayTotal counts UP to the real total; `fx` drives the
   // "+N" burst + a brief scale-pulse on the HUD when points land.
   const [displayTotal, setDisplayTotal] = useState(0);
@@ -313,7 +322,19 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
     : (lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level');
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
-  const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
+  const nextLiveSessionTargetMs = (() => {
+    if (!nextLiveSessionHud) return null;
+    if (nextLiveSessionHud.status === 'live') return now; // live now → 0d 0h
+    if (!nextLiveSessionHud.session_date) return null;
+    const hhmm = parseSessionTimeToHHMM(nextLiveSessionHud.start_time || '09:00');
+    if (!hhmm) return null;
+    const t = new Date(`${nextLiveSessionHud.session_date}T${hhmm}:00`).getTime();
+    return isNaN(t) ? null : t;
+  })();
+  const fcCd = countdown(
+    nextLiveSessionHud ? nextLiveSessionTargetMs : firstClassTargetMs(schedule?.first_class ?? null),
+    now,
+  );
   const cohortName = schedule?.first_class?.cohort_name || 'Your cohort';
   const active = location.pathname;
 
