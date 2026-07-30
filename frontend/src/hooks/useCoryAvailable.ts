@@ -22,6 +22,7 @@
  */
 import { useAdminUser } from './useAdminUser';
 import { useEffect, useState } from 'react';
+import { getParticipantToken } from '../utils/participantToken';
 
 const AUTHORIZED_EMAIL = 'ali@colaberry.com';
 const AUTHORIZED_ROLE = 'super_admin';
@@ -68,14 +69,14 @@ export function useCoryAvailable(): boolean {
   // its caller, which is correct: the predicate must reflect the current
   // token state at paint time.
   const [participantClaims, setParticipantClaims] = useState<JwtClaims | null>(() =>
-    decodeJwtClaims(localStorage.getItem('participant_token'))
+    decodeJwtClaims(getParticipantToken())
   );
 
   // Refresh once on mount in case the token was set between initial-state
   // computation and effect run (login flow can update localStorage after
   // initial mount). Cheap; no network.
   useEffect(() => {
-    setParticipantClaims(decodeJwtClaims(localStorage.getItem('participant_token')));
+    setParticipantClaims(decodeJwtClaims(getParticipantToken()));
   }, []);
 
   if (adminUser && isAuthorizedIdentity(adminUser)) return true;

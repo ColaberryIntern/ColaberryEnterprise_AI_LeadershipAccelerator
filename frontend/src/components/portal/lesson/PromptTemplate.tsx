@@ -13,6 +13,7 @@ import {
   scoreMatch,
 } from './promptTemplateUtils';
 import { buildFinalPrompt } from '../../../services/promptBuilder';
+import { getParticipantToken } from '../../../utils/participantToken';
 
 /* Human-friendly labels for known placeholder names */
 const FRIENDLY_LABELS: Record<string, string> = {
@@ -179,7 +180,7 @@ export default function PromptTemplate({ data, onPromptGenerated, conceptSnapsho
       const merged = { ...(learnerProfile?.personalization_context_json || {}), ...newValues };
       await updateLearnerProfile({ personalization_context_json: merged });
       // Also save as variables for workspace prompt inclusion
-      const tok = localStorage.getItem('participant_token');
+      const tok = getParticipantToken();
       if (tok) {
         fetch('/api/portal/curriculum/variables', {
           method: 'POST',

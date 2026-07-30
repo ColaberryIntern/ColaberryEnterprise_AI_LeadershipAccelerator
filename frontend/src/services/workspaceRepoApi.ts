@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getParticipantToken } from '../utils/participantToken';
 
 // Thin axios client for the per-student workspace repo endpoints (Part B).
 // Mirrors onboardingApi.ts / portalApi.ts: reads the participant JWT from the
@@ -30,8 +31,8 @@ const workspaceApi = axios.create({
 });
 
 workspaceApi.interceptors.request.use((config) => {
-  // Same key portalApi.ts uses — the participant session JWT.
-  const token = localStorage.getItem('participant_token');
+  // Same resolution portalApi.ts uses — the participant session JWT.
+  const token = getParticipantToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
