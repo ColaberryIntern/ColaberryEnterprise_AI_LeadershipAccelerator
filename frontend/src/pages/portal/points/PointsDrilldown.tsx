@@ -249,7 +249,7 @@ const PointsDrilldown: React.FC<{ showHistoryLink?: boolean }> = ({ showHistoryL
           <div className="pts-mut">No points yet — RSVP to the Open House and complete your setup to get started.</div>
         )}
         {showHistoryLink && (
-          <Link className="te-btn ghost sm" style={{ marginTop: 12 }} to="/portal/schedule?view=history">See your full points history on the schedule</Link>
+          <Link className="te-btn ghost sm" style={{ marginTop: 12 }} to="/portal/schedule">See your full points history on the schedule</Link>
         )}
       </div>
     </div>

@@ -144,6 +144,12 @@
 .sch-root .ptbadge{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:var(--r-pill);background:rgba(91,166,60,.14);color:var(--leaf-text);letter-spacing:.01em}
 .sch-root .ptbadge.earned{background:var(--leaf-action);color:#fff}
 
+/* Points-earned badge — icon + count, inline, wherever a day shows points
+   (month dot, week day-head, agenda day total). Overrides .mdot's column
+   layout (used for event titles) back to a row for this specific chip. */
+.sch-root .pts-badge{display:inline-flex;align-items:center;gap:4px}
+.sch-root .mdot.pts-badge{flex-direction:row}
+
 .sch-root .sch-empty{font-size:13px;color:var(--text-muted);padding:30px;text-align:center}
 
 /* ===== responsive ===== */

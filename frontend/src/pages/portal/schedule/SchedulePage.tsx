@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
 import portalApi from '../../../utils/portalApi';
 import { fetchSchedule, fetchPublicEvents, fetchPoints, OpenHouseView, FirstClassView, PointsEvent } from '../../../services/onboardingApi';
@@ -24,6 +24,7 @@ type SessionItem = {
   start_time: string | null;
   status: string;         // scheduled | live | completed | cancelled
   session_type: string;
+  room_id?: string | null; // linked Colaberry Commons room, when one exists
 };
 
 type EvKind = 'class' | 'event'; // class = cohort session, event = public open house
@@ -40,13 +41,11 @@ type SchedEvent = {
   sub: string;    // session_type or 'Open House'
 };
 type SchedMap = Record<string, SchedEvent[]>;
-type Mode = 'month' | 'week' | 'agenda' | 'history';
+type Mode = 'month' | 'week' | 'agenda';
 
 const DAY_MS = 7 * 864e5;
 
 const dkey = (d: Date): string => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-/** Inverse of dkey() — 'YYYY-M-D' -> local Date, for sorting/formatting the points-history list. */
-const dateFromKey = (k: string): Date => { const [y, m, d] = k.split('-').map(Number); return new Date(y, m, d); };
 const mondayOf = (d: Date): Date => { const x = new Date(d); x.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return x; };
 
 /** Parse a DATEONLY 'YYYY-MM-DD' as a LOCAL date (avoids a UTC off-by-one). */
@@ -107,7 +106,13 @@ function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstCl
       id: s.id, kind: 'class', title: `#${s.session_number} · ${s.title}`,
       time: fmtTime(s.start_time), hour: hourOf(s.start_time),
       state: stateForSession(s.status, d, today),
-      href: `/portal/sessions/${s.id}`, sub: (s.session_type || 'session').replace(/_/g, ' '),
+      // Sessions link into their Colaberry Commons room, not the retired
+      // /portal/sessions/:id detail page. A session only has a room once
+      // Community Rooms has provisioned one for it (ensureRoomForSession);
+      // until then the item renders as plain (unclickable) text rather than
+      // pointing at a dead route.
+      href: s.room_id ? `/portal/rooms/${s.room_id}` : undefined,
+      sub: (s.session_type || 'session').replace(/_/g, ' '),
     });
   }
   for (const e of events) {
@@ -168,6 +173,11 @@ const LiveIcon: React.FC = () => (
 );
 const TodoIcon: React.FC<{ w?: number; h?: number; stroke?: string }> = ({ w = 13, h = 13, stroke = 'currentColor' }) => (
   <svg width={w} height={h} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke={stroke} strokeWidth="2" /></svg>
+);
+// Points-earned marker — a filled star, so a day with points is recognizable
+// at a glance (not just another text chip) in every view.
+const PointsIcon: React.FC<{ w?: number; h?: number; fill?: string }> = ({ w = 11, h = 11, fill = '#3C7A26' }) => (
+  <svg width={w} height={h} viewBox="0 0 24 24" fill="none"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8L12 2.5z" fill={fill} /></svg>
 );
 
 const SchedulePage: React.FC = () => {
@@ -234,10 +244,7 @@ const SchedulePage: React.FC = () => {
     return diff >= 0 && diff < 26 ? diff + 1 : null;
   }, [anchorMon]);
 
-  const [searchParams] = useSearchParams();
-  // Deep-link from the Points page's "See your full points history on the
-  // schedule" link (?view=history) straight into the History tab.
-  const [mode, setMode] = useState<Mode>(() => (searchParams.get('view') === 'history' ? 'history' : 'month'));
+  const [mode, setMode] = useState<Mode>('month');
   const [cursor, setCursor] = useState<Date>(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
 
   const setView = useCallback((m: Mode): void => {
@@ -281,15 +288,6 @@ const SchedulePage: React.FC = () => {
 
   const isToday = useCallback((d: Date): boolean => dkey(d) === dkey(today), [today]);
 
-  // All-time points stats for the History view (independent of month/week cursor —
-  // this is the "full points history" the Points page's "See your full points
-  // history on the schedule" link promises).
-  const { totalPtsAllTime, activeDaysCount } = useMemo(() => {
-    const keys = Object.keys(pointsByDay);
-    const total = keys.reduce((n, k) => n + pointsByDay[k], 0);
-    return { totalPtsAllTime: total, activeDaysCount: keys.length };
-  }, [pointsByDay]);
-
   // ── MONTH ──
   const renderMonth = (): React.ReactNode => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
@@ -315,7 +313,11 @@ const SchedulePage: React.FC = () => {
         <div key={i} className={`mcell${out ? ' out' : ''}${isToday(d) ? ' today' : ''}`}>
           <div className="dn"><span>{d.getDate()}</span>{wk && d.getDay() === 1 ? <span className="wkn">W{wk}</span> : null}</div>
           {dots}{more}
-          {dayPts ? <div className="mdot" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26', fontWeight: 800 }} title={`${dayPts} points earned`}>+{dayPts} pts</div> : null}
+          {dayPts ? (
+            <div className="mdot pts-badge" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26', fontWeight: 800 }} title={`${dayPts} points earned`}>
+              <PointsIcon /><span>+{dayPts} pts</span>
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -348,7 +350,11 @@ const SchedulePage: React.FC = () => {
             return (
               <div key={i} className={`tg-dayhead${isToday(d) ? ' today' : ''}`}>
                 <div className="d">{dn}</div><div className="n">{d.getDate()}</div>
-                {dayPts ? <div style={{ fontSize: 10, fontWeight: 800, color: '#3C7A26' }} title={`${dayPts} points earned`}>+{dayPts} pts</div> : null}
+                {dayPts ? (
+                  <div className="pts-badge" style={{ fontSize: 10, fontWeight: 800, color: '#3C7A26', justifyContent: 'center' }} title={`${dayPts} points earned`}>
+                    <PointsIcon w={10} h={10} /><span>+{dayPts} pts</span>
+                  </div>
+                ) : null}
               </div>
             );
           })}
@@ -392,7 +398,11 @@ const SchedulePage: React.FC = () => {
         <div key={dkey(d)}>
           <div className="agenda-day">
             <div className="dh">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}{isToday(d) ? ' — Today' : ''}</div>
-            {dayPtsTotal ? <span className="ptbadge" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26' }}>+{dayPtsTotal} pts</span> : null}
+            {dayPtsTotal ? (
+              <span className="ptbadge pts-badge" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26' }}>
+                <PointsIcon /><span>+{dayPtsTotal} pts</span>
+              </span>
+            ) : null}
           </div>
           {pts.length ? (
             <div className="queue agenda-queue">
@@ -436,49 +446,6 @@ const SchedulePage: React.FC = () => {
     return <>{blocks}</>;
   };
 
-  // ── HISTORY (every day you've earned points, most recent first — not scoped
-  // to the month/week cursor, since the point is to see your whole streak) ──
-  const renderHistory = (): React.ReactNode => {
-    const days = Object.keys(pointsDetailByDay)
-      .map((k) => ({ key: k, date: dateFromKey(k), items: pointsDetailByDay[k] }))
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
-    if (!days.length) {
-      return <div className="sch-empty">No points earned yet. Complete lessons, attend classes, and stay active to start your streak.</div>;
-    }
-    return (
-      <>
-        {days.map(({ key, date, items }) => {
-          const dayTotal = items.reduce((n, p) => n + p.points, 0);
-          return (
-            <div key={key}>
-              <div className="agenda-day">
-                <div className="dh">
-                  {date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined })}
-                  {isToday(date) ? ' — Today' : ''}
-                </div>
-                <span className="ptbadge" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26' }}>+{dayTotal} pts</span>
-              </div>
-              <div className="queue agenda-queue">
-                {items.map((p, idx) => (
-                  <div key={idx} className="qtask done">
-                    <span className="qrank" style={{ color: '#3C7A26' }}>+{p.points}</span>
-                    <span className="qbody">
-                      <span className="qtitle">{p.label}</span>
-                      <span className="qmeta">
-                        <span className="chip learning"><span className="sw" style={{ background: '#5BA63C' }} />Points</span>
-                        {p.time ? <span className="ptbadge">{p.time}</span> : null}
-                      </span>
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </>
-    );
-  };
-
   return (
     <PortalShell>
       <div className="te-page-h">
@@ -493,33 +460,21 @@ const SchedulePage: React.FC = () => {
             <button className={mode === 'month' ? 'active' : ''} onClick={() => setView('month')} type="button">Month</button>
             <button className={mode === 'week' ? 'active' : ''} onClick={() => setView('week')} type="button">Week</button>
             <button className={mode === 'agenda' ? 'active' : ''} onClick={() => setView('agenda')} type="button">Agenda</button>
-            <button className={mode === 'history' ? 'active' : ''} onClick={() => setView('history')} type="button">History</button>
           </div>
-          {mode !== 'history' && (
-            <div className="navbtns">
-              <button className="navarrow" onClick={() => nav(-1)} aria-label="Previous" type="button">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-              <div className="periodlbl">{periodLabel}</div>
-              <button className="navarrow" onClick={() => nav(1)} aria-label="Next" type="button">
-                <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-              </button>
-              <button className="sch-btn ghost sm" onClick={goToday} type="button">Today</button>
-            </div>
-          )}
+          <div className="navbtns">
+            <button className="navarrow" onClick={() => nav(-1)} aria-label="Previous" type="button">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <div className="periodlbl">{periodLabel}</div>
+            <button className="navarrow" onClick={() => nav(1)} aria-label="Next" type="button">
+              <svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="sch-btn ghost sm" onClick={goToday} type="button">Today</button>
+          </div>
           <div className="ptsbank">
-            {mode === 'history' ? (
-              <>
-                <div className="ptchip"><span className="v">{totalPtsAllTime}</span><span className="l">Total points</span></div>
-                <div className="ptchip"><span className="v">{activeDaysCount}</span><span className="l">Active days</span></div>
-              </>
-            ) : (
-              <>
-                <div className="ptchip"><span className="v">{dayCount}</span><span className="l">Today</span></div>
-                <div className="ptchip"><span className="v">{periodCount}</span><span className="l">This period</span></div>
-                <div className="ptchip"><span className="v">{upcomingCount}</span><span className="l">Upcoming</span></div>
-              </>
-            )}
+            <div className="ptchip"><span className="v">{dayCount}</span><span className="l">Today</span></div>
+            <div className="ptchip"><span className="v">{periodCount}</span><span className="l">This period</span></div>
+            <div className="ptchip"><span className="v">{upcomingCount}</span><span className="l">Upcoming</span></div>
           </div>
         </div>
 
@@ -529,10 +484,10 @@ const SchedulePage: React.FC = () => {
           <div className="sch-empty">We couldn't load your schedule right now. Please try again shortly.</div>
         ) : (
           <>
-            {mode !== 'history' && totalItems === 0 && (
+            {totalItems === 0 && (
               <div className="sch-empty" style={{ marginBottom: 12 }}>No classes or events scheduled yet. Program events will appear here as they're published.</div>
             )}
-            <div>{mode === 'month' ? renderMonth() : mode === 'week' ? renderWeek() : mode === 'history' ? renderHistory() : renderAgenda()}</div>
+            <div>{mode === 'month' ? renderMonth() : mode === 'week' ? renderWeek() : renderAgenda()}</div>
           </>
         )}
 
@@ -542,6 +497,7 @@ const SchedulePage: React.FC = () => {
           <span style={{ marginLeft: 8, display: 'inline-flex', gap: 6, alignItems: 'center' }}><CheckIcon /> done</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><LiveIcon /> live</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><TodoIcon /> upcoming</span>
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><PointsIcon /> points earned that day</span>
         </div>
       </div>
     </PortalShell>
