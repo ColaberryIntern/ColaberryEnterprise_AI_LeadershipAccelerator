@@ -91,11 +91,26 @@ type EnrollmentMatch =
 /**
  * Resolve the one enrollment a PaySimple customer should reconcile against,
  * or explain why it can't be resolved automatically. Pure DB reads, no writes.
+ *
+ * `paymentId` guards against a real bug caught in the second dry run against
+ * production: matching by email alone can find a genuinely open, unpaid
+ * enrollment that just happens to share an email with an ALREADY-reconciled
+ * one -- e.g. a student's real seat gets paid under their main email, but
+ * their still-unpaid free-preview duplicate under the exact same email is
+ * "found" by a later run as if it were a fresh, legitimate match. Checking
+ * whether this specific payment id is already recorded anywhere closes that
+ * gap regardless of which row it landed on.
  */
 export async function findMatchingEnrollment(
   customer: PaySimpleCustomer,
   customerId: number,
+  paymentId: number,
 ): Promise<EnrollmentMatch> {
+  const alreadyUsed = await Enrollment.findOne({
+    where: { paysimple_payment_id: String(paymentId) },
+  });
+  if (alreadyUsed) return { kind: 'none' };
+
   const byCustomerId = await Enrollment.findOne({
     where: { paysimple_customer_id: String(customerId), status: 'active', payment_status: { [Op.ne]: 'paid' } },
   });
@@ -183,7 +198,7 @@ export async function runPaymentReconciliationSweep(
         continue;
       }
 
-      const match = await findMatchingEnrollment(customer, customerId);
+      const match = await findMatchingEnrollment(customer, customerId, payment.Id);
       const name = `${customer.FirstName || ''} ${customer.LastName || ''}`.trim();
 
       if (match.kind === 'none') continue; // no open enrollment at all for this identity -- not this system's concern
