@@ -1,11 +1,12 @@
 /**
  * Cora knowledge base — AI inbox agent for support@colaberry.com
  *
- * @deprecated Phase 1 (KB Ops): this static file is being replaced by the
- * `cora_kb_entries` Postgres table. Once the 20260706_add_kb_ops_tables.sql
- * migration is applied to production and the seed is verified, swap
- * `buildCoraSystemPrompt` calls in coraAgentService.ts to
- * `buildCoraSystemPromptFromDB` in kbService.ts and delete this file.
+ * @deprecated Phase 1 (KB Ops): this static file was replaced by the
+ * `cora_kb_entries` Postgres table. coraAgentService.ts now builds its system
+ * prompts via `buildPersonaSystemPromptFromDB` in coraPersonaRouter.ts
+ * (BC #10109319420 split this into a Cora/support and Cory/admissions
+ * variant). This file is kept only for the marketing-page-sync reference
+ * below — safe to delete once that sync need goes away too.
  *
  * Source of truth for:
  *  - Cora's system prompt (persona, tone, escalation rules)

@@ -7,8 +7,10 @@
  */
 
 jest.mock('../../kbService', () => ({
-  buildCoraSystemPromptFromDB: jest.fn().mockResolvedValue('system prompt'),
   getCourseBySlug: jest.fn().mockResolvedValue({ id: 'course-1' }),
+  listEntries: jest.fn().mockResolvedValue([]),
+  getActiveCohort: jest.fn().mockResolvedValue(null),
+  resolveMergeTags: jest.fn((template: string) => template),
 }));
 jest.mock('../inboxAuditService', () => ({ logAuditEvent: jest.fn() }));
 jest.mock('../../alertService', () => ({ emitAlert: jest.fn().mockResolvedValue({ id: 'alert-1' }) }));
