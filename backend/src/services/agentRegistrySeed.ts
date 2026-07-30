@@ -12,6 +12,9 @@ interface AgentSeedEntry {
   category: AiAgentCategory;
   description: string;
   config?: Record<string, any>;
+  // Only honored on first creation (see the findOrCreate loop below) — lets a
+  // seed entry ship disabled by default without resetting it on every restart.
+  enabled?: boolean;
 }
 
 const AGENT_REGISTRY: AgentSeedEntry[] = [
@@ -2056,6 +2059,123 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     category: 'accelerator',
     description:
       'Daily batch sync of GitHub activity for all active enrolled students. Fetches commits_last_7d, open_prs, total_stars, and contribution_graph_json for every enrollment with a connected repository. Per-student failures are isolated — one failure does not abort others. Webhook-triggered syncs handle real-time push events; this job is the fallback.',
+  },
+
+  // --- AI Workforce directors (orgRegistry.ts) — one tool + one action each,
+  // gated by workforceAgentRuntime.ts's hard kill-switch/safe-mode/enabled
+  // check (see docs/trust-audit/2026-07-30-ai-workforce-activation.md). Ship
+  // enabled: true — each is individually toggleable via the admin dashboard
+  // or ai_agents.enabled without a redeploy, and the global kill switch stops
+  // all of them at once. ---
+  {
+    agent_name: 'WorkforceStudentSuccessDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '0 6 * * *',
+    category: 'workforce_director',
+    description: 'Marcus Bell. Reads the daily at-risk-student signal and flags the top one as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCurriculumDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '10 6 * * *',
+    category: 'workforce_director',
+    description: 'Dr. Elena Vasquez. Reads the daily curriculum-quality signal and flags the top gap as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCareerDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '20 6 * * *',
+    category: 'workforce_director',
+    description: 'Jordan Ellis. Reads the daily employment-readiness signal and flags the gap as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCertificationDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '30 6 * * *',
+    category: 'workforce_director',
+    description: 'Nadia Farouk. Reads the daily certification pass-probability signal and flags the risk as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceFinanceDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '40 6 * * *',
+    category: 'workforce_director',
+    description: 'Grace Okoro. Reads the daily unpaid-tuition signal and flags collections as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceOperationsDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '*/15 * * * *',
+    category: 'workforce_director',
+    description: 'Ravi Kapoor. Reads the attendance signal and flags a WorkforceTask when it drops below threshold. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceCommunityDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '50 6 * * *',
+    category: 'workforce_director',
+    description: 'Diego Morales. Reads the portfolio-sharing signal and flags a WorkforceTask when artifacts lag active students. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceTechnologyDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '7,22,37,52 * * * *',
+    category: 'workforce_director',
+    description: 'Alex Kim. Reads the ai_agents registry for the worst unhealthy agent and flags it as a WorkforceTask. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceResearchDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'cron',
+    schedule: '0 7 * * 0',
+    category: 'workforce_director',
+    description: 'Dr. Kenji Watanabe. Weekly digest of the top 3 ranked school signals, sent as one WorkforceMessage to Curriculum. No LLM call.',
+    enabled: true,
+  },
+  {
+    agent_name: 'WorkforceMarketingDirector',
+    agent_type: 'workforce_director',
+    module: 'workforce',
+    source_file: 'backend/src/services/workforce/directorActions.ts',
+    trigger_type: 'on_demand',
+    schedule: '',
+    category: 'workforce_director',
+    description: 'Sofia Lindqvist. Manual-trigger only. Drafts ONE content idea (one gpt-4o-mini call) grounded in the top ranked signal and queues it in proposed_agent_actions for human review — never posts or sends.',
+    enabled: true,
   },
 ];
 

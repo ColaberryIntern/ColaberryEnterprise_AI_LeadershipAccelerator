@@ -227,6 +227,20 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Cory self-evolution cycle (every 6 hours, offset from strategic cycle)
   { agentName: 'CoryEvolutionCycle', hardcodedSchedule: '20 */6 * * *', runner: async () => { await runSelfEvolution(); return null as any; }, label: 'Cory self-evolution cycle' },
+
+  // AI Workforce directors (orgRegistry.ts) — one tool + one action each. All
+  // seed disabled (agentRegistrySeed.ts); each runner is a no-op via the
+  // workforceAgentRuntime gate until turned on. Marketing is deliberately NOT
+  // here — it is manual-trigger only, invoked from the admin dashboard.
+  { agentName: 'WorkforceStudentSuccessDirector', hardcodedSchedule: '0 6 * * *', runner: async () => { const { runStudentSuccessDirector } = await import('./workforce/directorActions'); return runStudentSuccessDirector(); }, label: 'AI Workforce: Student Success director' },
+  { agentName: 'WorkforceCurriculumDirector', hardcodedSchedule: '10 6 * * *', runner: async () => { const { runCurriculumDirector } = await import('./workforce/directorActions'); return runCurriculumDirector(); }, label: 'AI Workforce: Curriculum director' },
+  { agentName: 'WorkforceCareerDirector', hardcodedSchedule: '20 6 * * *', runner: async () => { const { runCareerDirector } = await import('./workforce/directorActions'); return runCareerDirector(); }, label: 'AI Workforce: Career director' },
+  { agentName: 'WorkforceCertificationDirector', hardcodedSchedule: '30 6 * * *', runner: async () => { const { runCertificationDirector } = await import('./workforce/directorActions'); return runCertificationDirector(); }, label: 'AI Workforce: Certification director' },
+  { agentName: 'WorkforceFinanceDirector', hardcodedSchedule: '40 6 * * *', runner: async () => { const { runFinanceDirector } = await import('./workforce/directorActions'); return runFinanceDirector(); }, label: 'AI Workforce: Finance director' },
+  { agentName: 'WorkforceOperationsDirector', hardcodedSchedule: '*/15 * * * *', runner: async () => { const { runOperationsDirector } = await import('./workforce/directorActions'); return runOperationsDirector(); }, label: 'AI Workforce: Operations director' },
+  { agentName: 'WorkforceCommunityDirector', hardcodedSchedule: '50 6 * * *', runner: async () => { const { runCommunityDirector } = await import('./workforce/directorActions'); return runCommunityDirector(); }, label: 'AI Workforce: Community director' },
+  { agentName: 'WorkforceTechnologyDirector', hardcodedSchedule: '7,22,37,52 * * * *', runner: async () => { const { runTechnologyDirector } = await import('./workforce/directorActions'); return runTechnologyDirector(); }, label: 'AI Workforce: Technology director' },
+  { agentName: 'WorkforceResearchDirector', hardcodedSchedule: '0 7 * * 0', runner: async () => { const { runResearchDirector } = await import('./workforce/directorActions'); return runResearchDirector(); }, label: 'AI Workforce: Research director (weekly)' },
 ];
 
 // Executive briefings use dynamic imports, registered separately
