@@ -14,7 +14,7 @@ import { PaywallScreen } from '../../components/paywall/PageGate';
 import { GATED_FEATURES } from '../../components/paywall/gatedFeatures';
 import { useNextLiveSession } from './today/useNextLiveSession';
 import { useCountdown } from '../../hooks/useCountdown';
-import { parseSessionTimeToHHMM, tzAbbrev } from '../../utils/sessionTime';
+import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTimeRange } from '../../utils/sessionTime';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -286,8 +286,8 @@ const ClassroomPage: React.FC = () => {
                 <b style={{ color: 'var(--text-body)' }}>Session {nextSession.session_number}</b> · {nextSession.title}
               </div>
               <div className="tl-small" style={{ marginBottom: 4 }}>
-                {nextSession.session_date} · {nextSession.start_time} - {nextSession.end_time}
-                {tzAbbrev(nextSession.timezone) && ` ${tzAbbrev(nextSession.timezone)}`}
+                {nextSession.session_date} · {formatSessionTimeRange(nextSession.start_time, nextSession.end_time)}
+                {tzAbbrev(nextSession.timezone, nextSession.session_date) && ` ${tzAbbrev(nextSession.timezone, nextSession.session_date)}`}
               </div>
               {nextSession.status === 'live'
                 ? <div className="tl-small" style={{ fontWeight: 700 }}>Live now</div>
