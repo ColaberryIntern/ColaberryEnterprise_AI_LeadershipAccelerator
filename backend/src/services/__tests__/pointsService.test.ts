@@ -1,4 +1,5 @@
-import { resolveEventPoints, award, revoke, getPointsSummary, hasAwarded, POINT_EVENTS } from '../pointsService';
+import { resolveEventPoints, award, revoke, getPointsSummary, hasAwarded, sumPointsTodayByEventTypes, POINT_EVENTS } from '../pointsService';
+import { centralDateKey } from '../centralDate';
 import StudentPointsEvent from '../../models/StudentPointsEvent';
 
 jest.mock('../../models/StudentPointsEvent', () => ({ __esModule: true, default: { findOrCreate: jest.fn(), findAll: jest.fn(), findOne: jest.fn(), destroy: jest.fn() } }));
@@ -69,20 +70,57 @@ describe('pointsService', () => {
   });
 
   describe('getPointsSummary', () => {
-    it('sums points across events and returns newest-first history', async () => {
+    // Mocked rows deliberately expose ONLY `createdAt` (camelCase) and not
+    // `created_at` — this is what a real Sequelize model instance actually
+    // returns (timestamps: true + underscored: true renames the DB COLUMN
+    // to created_at, but the JS attribute stays createdAt). A mock that
+    // instead set `created_at` directly would let a `r.created_at` bug in
+    // the mapping pass silently, which is exactly how this bug shipped.
+    it('sums points across events and returns newest-first history, preserving each event\'s real created_at', async () => {
       (StudentPointsEvent.findAll as jest.Mock).mockResolvedValue([
-        { event_type: 'open_house_attended', event_key: 'open_house_attended', points: 50, created_at: new Date('2026-07-01'), metadata: null },
-        { event_type: 'open_house_rsvp', event_key: 'open_house_rsvp:e1', points: 10, created_at: new Date('2026-06-30'), metadata: null },
+        { event_type: 'open_house_attended', event_key: 'open_house_attended', points: 50, createdAt: new Date('2026-07-01'), metadata: null },
+        { event_type: 'open_house_rsvp', event_key: 'open_house_rsvp:e1', points: 10, createdAt: new Date('2026-06-30'), metadata: null },
       ]);
       const res = await getPointsSummary('enr-1');
       expect(res.total).toBe(60);
       expect(res.events).toHaveLength(2);
+      // The regression this guards: created_at must carry the real date
+      // through, not silently come back undefined (which JSON.stringify
+      // would then drop from the API response entirely).
+      expect(res.events[0].created_at).toEqual(new Date('2026-07-01'));
+      expect(res.events[1].created_at).toEqual(new Date('2026-06-30'));
     });
 
     it('a brand-new guest has 0 points and no events', async () => {
       (StudentPointsEvent.findAll as jest.Mock).mockResolvedValue([]);
       const res = await getPointsSummary('enr-guest');
       expect(res).toEqual({ total: 0, events: [] });
+    });
+  });
+
+  // No prior test coverage existed for this function at all — its silent
+  // failure (every row's date lost to the same createdAt/created_at mismatch
+  // as getPointsSummary) meant the daily anti-cheat cap it feeds
+  // (progression/dailyCap) could never actually match "today" and so never
+  // clamped anything, with no test to catch it.
+  describe('sumPointsTodayByEventTypes', () => {
+    it('sums only today\'s points for the given event types, ignoring other days and other types', async () => {
+      const today = new Date();
+      const todayKey = centralDateKey(today.getTime());
+      const yesterday = new Date(today.getTime() - 2 * 24 * 60 * 60 * 1000); // comfortably a different Central day
+      (StudentPointsEvent.findAll as jest.Mock).mockResolvedValue([
+        { points: 10, createdAt: today },
+        { points: 15, createdAt: today },
+        { points: 100, createdAt: yesterday }, // wrong day — must not count
+      ]);
+      const sum = await sumPointsTodayByEventTypes('enr-1', ['card_complete'], todayKey);
+      expect(sum).toBe(25);
+    });
+
+    it('an empty event-type list short-circuits to 0 with no query', async () => {
+      const sum = await sumPointsTodayByEventTypes('enr-1', [], '2026-07-01');
+      expect(sum).toBe(0);
+      expect(StudentPointsEvent.findAll).not.toHaveBeenCalled();
     });
   });
 });
