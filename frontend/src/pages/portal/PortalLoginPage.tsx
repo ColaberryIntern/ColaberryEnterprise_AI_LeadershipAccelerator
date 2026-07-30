@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import { safeNextPath } from '../../utils/safeNextPath';
 
 // Participant Portal sign-in (magic-link request). Restyled onto the Colaberry
 // Design System ("Design E", BC 10031928327): Quicksand wordmark with the cherry
@@ -11,13 +13,22 @@ function PortalLoginPage() {
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [searchParams] = useSearchParams();
+
+  // Where to land after verifying, e.g. the class check-in page a student
+  // reached by scanning the room QR while signed out. Sanitized here and again
+  // server-side; an unsafe value is dropped and the default landing page wins.
+  const nextPath = safeNextPath(searchParams.get('next'));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      const res = await portalApi.post('/api/portal/request-link', { email });
+      const res = await portalApi.post('/api/portal/request-link', {
+        email,
+        ...(nextPath ? { next: nextPath } : {}),
+      });
       if (res.data.success === false) {
         setError(res.data.message || 'Unable to send access link.');
       } else {
