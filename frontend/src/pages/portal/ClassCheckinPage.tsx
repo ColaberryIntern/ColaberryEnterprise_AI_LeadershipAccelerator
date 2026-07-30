@@ -27,6 +27,7 @@ interface CheckinInfo {
   session_date: string;
   start_time: string;
   cohort_name: string;
+  room_id: string | null;
 }
 
 type Phase = 'loading' | 'load_error' | 'ready';

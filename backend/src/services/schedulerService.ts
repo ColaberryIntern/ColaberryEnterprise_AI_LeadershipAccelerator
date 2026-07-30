@@ -32,6 +32,7 @@ import {
 import { finalizeSessionAttendance } from './liveSessionAttendanceService';
 import { generateSessionRecap } from './sessionRecapService';
 import { ensureSessionMeetLink } from './meetingService';
+import { postLiveClassQrToRoom } from './liveClassQrService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 
 /**
@@ -2290,6 +2291,15 @@ export function startScheduler(): void {
       for (const session of toLive) {
         await session.update({ status: 'live' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as live`);
+
+        // Post the check-in QR into the session's Colaberry Commons waiting
+        // room (ensureRoomForSession provisions one per session) so a student
+        // already in the room sees it the moment class goes live. Best-effort
+        // and idempotent (marker) — a missing room or a cron re-run must never
+        // block/duplicate the status flip above.
+        await postLiveClassQrToRoom(session).catch((err: any) =>
+          console.error(`[Scheduler] Live-class QR post failed for session ${session.id}:`, err.message)
+        );
       }
 
       const toComplete = await getSessionsToMarkCompleted();
