@@ -33,10 +33,11 @@ Sorry for the delay here. Your payment (order #N13022, $199) had gone through
 on our end, but a bug meant a confirmed payment wasn't actually unlocking
 classroom access. That's fixed now, and I've activated your account directly.
 
-Please sign in again — go to training.colaberry.com and click Log In, then
-enter mohsinali43@gmail.com to get your access link. You should have full
-access to Week 1 and beyond. On the QR check-in issue during class: we're
-still looking into that one separately and I'll follow up once it's resolved.
+Please sign in again here: https://training.colaberry.com — click Log In
+(top right), then enter mohsinali43@gmail.com to get your access link. You
+should have full access to Week 1 and beyond. On the QR check-in issue
+during class: we're still looking into that one separately and I'll follow
+up once it's resolved.
 
 Ali Muwwakkil
 Managing Director, AI Systems Architect
@@ -56,10 +57,10 @@ Your annual plan payment (order #N13015, $1,788) had gone through, but a bug
 on our side meant a confirmed payment wasn't actually unlocking the
 classroom. That's fixed now, and I've activated your account directly.
 
-Please sign in again — go to training.colaberry.com and click Log In, then
-enter abdinur2468@gmail.com to get your access link. Week 1 should be fully
-open now. Sorry for the run-around with the cache/browser troubleshooting
-earlier; the problem was never on your end.
+Please sign in again here: https://training.colaberry.com — click Log In
+(top right), then enter abdinur2468@gmail.com to get your access link. Week
+1 should be fully open now. Sorry for the run-around with the cache/browser
+troubleshooting earlier; the problem was never on your end.
 
 Ali Muwwakkil
 Managing Director, AI Systems Architect
@@ -79,9 +80,9 @@ Your payment from July 22 (order #N12987, $199) had gone through, but a bug
 on our side meant a confirmed payment wasn't actually unlocking the
 classroom. That's fixed now, and I've activated your account directly.
 
-Please sign in again — go to training.colaberry.com and click Log In, then
-enter bfglz@yahoo.com to get your access link. You should have full access
-now. Sorry for the delay in getting this sorted.
+Please sign in again here: https://training.colaberry.com — click Log In
+(top right), then enter bfglz@yahoo.com to get your access link. You should
+have full access now. Sorry for the delay in getting this sorted.
 
 Ali Muwwakkil
 Managing Director, AI Systems Architect
@@ -102,9 +103,9 @@ meant a confirmed payment wasn't actually unlocking the classroom — and
 separately, your account had gotten pointed at the wrong cohort, which I've
 also corrected. Both are fixed now and I've activated your account directly.
 
-Please sign in again — go to training.colaberry.com and click Log In, then
-enter bitania3@gmail.com to get your access link. You should be fully
-caught up with your peers now.
+Please sign in again here: https://training.colaberry.com — click Log In
+(top right), then enter bitania3@gmail.com to get your access link. You
+should be fully caught up with your peers now.
 
 Ali Muwwakkil
 Managing Director, AI Systems Architect
@@ -124,9 +125,9 @@ Your payment (order #N12993, $199) had gone through, but a bug on our side
 meant a confirmed payment wasn't actually unlocking the curriculum. That's
 fixed now, and I've activated your account directly.
 
-Please sign in again — go to training.colaberry.com and click Log In, then
-enter regina.asafor@gmail.com to get your access link. The curriculum
-should be fully unlocked now.
+Please sign in again here: https://training.colaberry.com — click Log In
+(top right), then enter regina.asafor@gmail.com to get your access link.
+The curriculum should be fully unlocked now.
 
 Ali Muwwakkil
 Managing Director, AI Systems Architect
@@ -156,11 +157,11 @@ broken site-wide from July 24 to yesterday, so the "Could not start
 checkout" error you kept hitting was never something wrong with your $50
 deposit or your device. That's fixed now.
 
-Please go to training.colaberry.com and click Log In, then enter
-millionabate19@gmail.com. Once you're in, click the gear icon (top right) to
-open Settings, then the Subscription tab — you'll see Free / Annual / Monthly
-plans there. Choose whichever works for you and complete payment through
-PaySimple; access unlocks the moment it clears.
+Please sign in here: https://training.colaberry.com — click Log In (top
+right), then enter millionabate19@gmail.com. Once you're in, click the gear
+icon (top right) to open Settings, then the Subscription tab — you'll see
+Free / Annual / Monthly plans there. Choose whichever works for you and
+complete payment through PaySimple; access unlocks the moment it clears.
 
 If you hit any issue at all this time, reply directly to this email and I
 will personally check it within the hour, not route you back through general

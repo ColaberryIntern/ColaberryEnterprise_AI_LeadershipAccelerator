@@ -17,9 +17,11 @@ Hi Chukwuemeka,
 The fix I mentioned is live. Our enrollment page is showing open cohorts again, so
 the enroll step will go through now.
 
-Please try enrolling again with chukseneh@outlook.com. If anything still blocks
-you, reply directly to this email and I will look at your account personally,
-no need to go through support again.
+Please try enrolling again with chukseneh@outlook.com:
+https://enterprise.colaberry.ai/enroll
+
+If anything still blocks you, reply directly to this email and I will look at
+your account personally, no need to go through support again.
 
 For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
 
@@ -42,10 +44,12 @@ Hi Jude,
 The fix is live. Our enrollment page is listing open cohorts again, so the enroll
 step will complete now.
 
-Please try your original address, jude.mofunanya@gmail.com — you did not need
-the +2 alias, and I'd rather you not end up with two accounts. If you'd like me
-to remove the jude.mofunanya+2@gmail.com one now that it's not needed, just say
-so and I'll take care of it.
+Please try your original address, jude.mofunanya@gmail.com, here:
+https://enterprise.colaberry.ai/enroll
+
+You did not need the +2 alias, and I'd rather you not end up with two
+accounts. If you'd like me to remove the jude.mofunanya+2@gmail.com one now
+that it's not needed, just say so and I'll take care of it.
 
 For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
 
@@ -68,8 +72,11 @@ Hi Marione,
 The fix is live. Our registration page is showing open cohorts again, so the
 form will submit successfully now.
 
-Please try registering again. If it still does not go through, reply here
-directly and I will check your account myself.
+Please try registering again here:
+https://enterprise.colaberry.ai/enroll
+
+If it still does not go through, reply here directly and I will check your
+account myself.
 
 For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
 
@@ -93,8 +100,11 @@ Sorry for the slow reply here. The issue was on our side, not your device — ou
 enrollment page had stopped listing any open cohort, so the Enroll button could
 not go through for anyone. That's fixed now and confirmed live.
 
-Please try enrolling again. If it still doesn't go through, reply here directly
-and I'll check your account myself rather than routing you through support again.
+Please try enrolling again here:
+https://enterprise.colaberry.ai/enroll
+
+If it still doesn't go through, reply here directly and I'll check your
+account myself rather than routing you through support again.
 
 For reference, class meets Monday and Thursday, 6:30 to 8:30 PM CST.
 
