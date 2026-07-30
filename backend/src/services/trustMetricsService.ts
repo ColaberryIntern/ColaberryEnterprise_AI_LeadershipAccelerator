@@ -15,8 +15,11 @@ import AiAgentActivityLog from '../models/AiAgentActivityLog';
 import ChatConversation from '../models/ChatConversation';
 import AgentWriteAudit from '../models/AgentWriteAudit';
 import AiEvent from '../models/AiEvent';
+import AiAgent from '../models/AiAgent';
 import { isKillSwitchActive } from './launchSafety';
 import { isSafeModeActive } from './systemControlService';
+import { getAgentPermission } from './agentPermissionService';
+import { findEmployee, WORKFORCE_AGENT_NAME } from './workforce/orgRegistry';
 import {
   collectLiveSignals,
   evaluateAll,
@@ -306,5 +309,177 @@ export async function getObservabilityStatus(): Promise<ObservabilityStatus> {
     dimensions: OBSERVABILITY_DIMENSIONS,
     auditedGenerations24h: { value: audited, state: 'live' },
     note: '~58/60 LLM call sites now emit ai_events — TS services (PR #50) + cron scripts (PR #54). P1-2 substantially closed; remaining work is tool-call + retrieval observability (P1-6).',
+  };
+}
+
+// ---------------------------------------------------------------------------
+// AI Workforce drill-down (orgRegistry.ts directors) — per-agent status,
+// trigger, and 7-day cost. Extends the Trust Command Center rather than a
+// separate dashboard; reads the same ai_agents / ai_agent_activity_logs /
+// ai_events tables the rest of this file already reads.
+// ---------------------------------------------------------------------------
+
+/** Shared cost-aggregation over ai_events, grouped by agent_id — used by both getAgentRoster
+ *  (all workforce agents) and getAgentDetail (one agent). `days` is a fixed internal literal,
+ *  never user input, interpolated the same way dailyCounts() already does above. */
+async function agentCostRows(days: number, agentId?: string): Promise<{ agentId: string; costUsd: number; runs: number }[]> {
+  const where = agentId
+    ? `agent_id = :agentId AND created_at >= NOW() - INTERVAL '${days} days'`
+    : `agent_id IS NOT NULL AND created_at >= NOW() - INTERVAL '${days} days'`;
+  return (await sequelize.query(
+    `SELECT agent_id AS "agentId", COALESCE(SUM(cost_usd), 0)::float AS "costUsd", COUNT(*)::int AS "runs"
+     FROM ai_events WHERE ${where} GROUP BY 1`,
+    { type: QueryTypes.SELECT, replacements: agentId ? { agentId } : {} }
+  )) as { agentId: string; costUsd: number; runs: number }[];
+}
+
+interface LastActivityRow { agentId: string; action: string; result: string; createdAt: Date | string; }
+
+/** One most-recent activity row per agent in a single query (DISTINCT ON), instead of
+ *  one AiAgentActivityLog.findOne() per director — avoids an N+1 on a 30s poll. */
+async function lastActivityByAgentId(agentIds: string[]): Promise<Map<string, LastActivityRow>> {
+  if (agentIds.length === 0) return new Map();
+  const rows = (await sequelize.query(
+    `SELECT DISTINCT ON (agent_id) agent_id AS "agentId", action, result, created_at AS "createdAt"
+     FROM ai_agent_activity_logs
+     WHERE agent_id = ANY(:agentIds)
+     ORDER BY agent_id, created_at DESC`,
+    { type: QueryTypes.SELECT, replacements: { agentIds } }
+  )) as LastActivityRow[];
+  return new Map(rows.map((r) => [r.agentId, r]));
+}
+
+export interface AgentRosterRow {
+  slug: string;
+  agentName: string;
+  name: string;
+  role: string;
+  avatar: string;
+  enabled: boolean;
+  status: string;
+  triggerType: string | null;
+  schedule: string | null;
+  lastAction: { action: string; result: string; at: string | null } | null;
+  cost7d: number;
+  runs7d: number;
+}
+
+/** One row per AI Workforce director: live status, trigger, last action, 7-day cost. */
+export async function getAgentRoster(): Promise<{ rows: AgentRosterRow[] }> {
+  let rows: AgentRosterRow[] = [];
+  try {
+    const slugs = Object.keys(WORKFORCE_AGENT_NAME);
+    const agentNames = Object.values(WORKFORCE_AGENT_NAME);
+    const agents = await AiAgent.findAll({ where: { agent_name: { [Op.in]: agentNames } } });
+    const agentByName = new Map(agents.map((a) => [a.agent_name, a]));
+
+    const [costRows, lastByAgentId] = await Promise.all([
+      agentCostRows(7),
+      lastActivityByAgentId(agents.map((a) => a.id)),
+    ]);
+    const costByAgentId = new Map(costRows.map((r) => [r.agentId, r]));
+
+    rows = slugs.map((slug) => {
+      const employee = findEmployee(slug)!;
+      const agentName = WORKFORCE_AGENT_NAME[slug];
+      const agent = agentByName.get(agentName);
+      if (!agent) {
+        return {
+          slug, agentName, name: employee.name, role: employee.role, avatar: employee.avatar,
+          enabled: false, status: 'not_registered', triggerType: null, schedule: null,
+          lastAction: null, cost7d: 0, runs7d: 0,
+        };
+      }
+      const last = lastByAgentId.get(agent.id);
+      const c = costByAgentId.get(agent.id);
+      return {
+        slug, agentName, name: employee.name, role: employee.role, avatar: employee.avatar,
+        enabled: agent.enabled, status: agent.status,
+        triggerType: agent.trigger_type || null, schedule: agent.schedule || null,
+        lastAction: last ? { action: last.action, result: last.result, at: last.createdAt ? new Date(last.createdAt).toISOString() : null } : null,
+        cost7d: Math.round((c?.costUsd || 0) * 10000) / 10000,
+        runs7d: c?.runs || 0,
+      };
+    });
+  } catch (err) {
+    structuredError('agent_roster_query', err);
+  }
+  return { rows };
+}
+
+export interface AgentGoalsDimension { key: string; label: string; score: number; source: 'live' | 'fixed'; evidence: string; }
+export interface AgentDetail {
+  slug: string;
+  agentName: string;
+  name: string;
+  role: string;
+  mission: string;
+  enabled: boolean;
+  status: string;
+  tier: string;
+  triggerType: string | null;
+  schedule: string | null;
+  killSwitchActive: boolean | null;
+  safeModeActive: boolean | null;
+  goals: AgentGoalsDimension[];
+  goalsOverall: number;
+  recentActivity: Array<{ action: string; result: string; reason: string | null; at: string | null; traceId: string | null }>;
+  cost7d: number;
+}
+
+/** Drill-down for one director: tier, live kill-switch/safe-mode state, a GOALS-scored
+ *  signal grounded in that agent's own recent activity, and the raw activity log (L3). */
+export async function getAgentDetail(slug: string): Promise<AgentDetail | null> {
+  const agentName = WORKFORCE_AGENT_NAME[slug];
+  const employee = findEmployee(slug);
+  if (!agentName || !employee) return null;
+
+  const agent = await AiAgent.findOne({ where: { agent_name: agentName } });
+  if (!agent) return null;
+
+  const permission = getAgentPermission(agentName);
+
+  // Independent reads — run in parallel rather than as 4 sequential round-trips.
+  const [recent, killSwitch, safeMode, costRows] = await Promise.all([
+    AiAgentActivityLog.findAll({ where: { agent_id: agent.id }, order: [['created_at', 'DESC']], limit: 20 }),
+    isKillSwitchActive().catch(() => null),
+    isSafeModeActive().catch(() => null),
+    agentCostRows(7, agent.id).catch((err) => {
+      structuredError('agent_detail_cost_query', err);
+      return [] as { agentId: string; costUsd: number; runs: number }[];
+    }),
+  ]);
+  const cost7d = Math.round((costRows[0]?.costUsd || 0) * 10000) / 10000;
+
+  const withTrace = recent.filter((r) => r.trace_id).length;
+  const failed = recent.filter((r) => r.result === 'failed').length;
+  const observabilityScore = recent.length ? Math.max(1, Math.round((withTrace / recent.length) * 5)) : 3;
+  const solidScore = recent.length ? Math.max(1, 5 - Math.round((failed / recent.length) * 4)) : 5;
+  const availabilityScore = !agent.enabled ? 1 : agent.trigger_type === 'on_demand' ? 5 : recent.length > 0 ? 5 : 2;
+
+  // governance/lexicon are 'fixed' — structurally guaranteed by the code (tier + the hard
+  // runtime gate; the domain mapping), not measured from this agent's own recent behavior.
+  // Tagging them distinctly from the 'live' scores keeps the file's own live/baseline/
+  // placeholder honesty invariant intact at the per-agent level too.
+  const goals: AgentGoalsDimension[] = [
+    { key: 'governance', label: 'Governance', score: 5, source: 'fixed', evidence: `Tier ${permission.tier}, scoped to ${permission.allowedTables.join(', ') || '(proposal queue only)'}. Kill switch / safe mode / enabled are hard-checked before every write (workforceAgentRuntime.ts), independent of the repo-wide abac_enforcement shadow default — code-verified by workforceAgentRuntime.test.ts.` },
+    { key: 'observability', label: 'Observability', score: observabilityScore, source: 'live', evidence: `${withTrace}/${recent.length} of the last ${recent.length} logged actions carry a trace_id.` },
+    { key: 'availability', label: 'Availability', score: availabilityScore, source: 'live', evidence: agent.enabled ? `Enabled · trigger ${agent.trigger_type || 'unknown'}${agent.schedule ? ` (${agent.schedule})` : ''}.` : 'Disabled — will not run until enabled.' },
+    { key: 'lexicon', label: 'Lexicon', score: 4, source: 'fixed', evidence: `Domain fixed at build time to "${employee.ops_domain || employee.department}", matching orgRegistry.ts — structurally guaranteed, not dynamically re-validated each run.` },
+    { key: 'solid', label: 'Solid', score: solidScore, source: 'live', evidence: `${failed}/${recent.length} of the last ${recent.length} logged actions failed.` },
+  ];
+  const goalsOverall = Math.round((goals.reduce((s, g) => s + g.score, 0) / goals.length) * 10) / 10;
+
+  return {
+    slug, agentName, name: employee.name, role: employee.role, mission: employee.mission,
+    enabled: agent.enabled, status: agent.status, tier: permission.tier,
+    triggerType: agent.trigger_type || null, schedule: agent.schedule || null,
+    killSwitchActive: killSwitch, safeModeActive: safeMode,
+    goals, goalsOverall,
+    recentActivity: recent.map((r) => ({
+      action: r.action, result: r.result, reason: r.reason || null,
+      at: r.created_at?.toISOString() || null, traceId: r.trace_id || null,
+    })),
+    cost7d,
   };
 }

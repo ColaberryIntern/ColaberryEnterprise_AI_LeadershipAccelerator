@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useMentorContext } from '../../../contexts/MentorContext';
 import { buildFinalPrompt } from '../../../services/promptBuilder';
 import { CorySpark } from '../CoryMark';
+import { getParticipantToken } from '../../../utils/participantToken';
 
 interface RequiredArtifact {
   name: string;
@@ -96,7 +97,7 @@ export default function ImplementationTask({ data, lessonId, onSubmit, onArtifac
 
   // Fetch orchestration context on mount
   useEffect(() => {
-    const token = localStorage.getItem('participant_token');
+    const token = getParticipantToken();
     if (!token || !lessonId) return;
     fetch(`/api/portal/curriculum/lessons/${lessonId}/orchestration-context`, {
       headers: { 'Authorization': `Bearer ${token}` },
@@ -155,7 +156,7 @@ export default function ImplementationTask({ data, lessonId, onSubmit, onArtifac
   const [researchBrief, setResearchBrief] = useState<string | null>(initialTaskData?.research_brief || null);
 
   const saveProgress = useCallback((extra: Record<string, any> = {}) => {
-    const token = localStorage.getItem('participant_token');
+    const token = getParticipantToken();
     if (!token) return;
     const taskData = {
       briefing_received: briefingReceived, uploads, grading: gradingResults, completed: taskCompleted,
@@ -237,7 +238,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
 
   const handleNotebookUpload = async (file: File) => {
     setNotebookUploading(true);
-    const token = localStorage.getItem('participant_token');
+    const token = getParticipantToken();
     if (!token) { setNotebookUploading(false); return; }
     try {
       const formData = new FormData();
@@ -263,7 +264,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
 
   const handleFileUpload = async (artifactIndex: number, file: File) => {
     setUploading(artifactIndex);
-    const token = localStorage.getItem('participant_token');
+    const token = getParticipantToken();
     if (!token) { setUploading(null); return; }
     try {
       const createRes = await fetch('/api/portal/submissions', {
@@ -295,7 +296,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
 
   const handleSubmitForReview = async () => {
     setGrading(true);
-    const token = localStorage.getItem('participant_token');
+    const token = getParticipantToken();
     if (!token) { setGrading(false); return; }
     try {
       const artifactData = uploads.map(u => {
@@ -334,7 +335,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
       setGradingResults([]);
       setRetryCount(prev => prev + 1);
     }
-    const token = localStorage.getItem('participant_token');
+    const token = getParticipantToken();
     if (!token) { setSimulating(false); return; }
     const currentRetry = isRetry ? retryCount + 1 : retryCount;
     try {
@@ -618,7 +619,7 @@ Format the task breakdown as a clear numbered list with [HUMAN] or [AI-ASSISTED]
                         color: '#fff', borderRadius: 8, fontSize: 12, fontWeight: 600, border: 'none',
                       }}
                       onClick={async () => {
-                        const tok = localStorage.getItem('participant_token');
+                        const tok = getParticipantToken();
                         // Fetch mentor briefing + fresh variables in parallel
                         let mentorBriefing = '';
                         let freshVars: Record<string, string> = orchContext?.resolvedVariables || {};

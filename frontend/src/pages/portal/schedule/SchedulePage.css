@@ -104,16 +104,16 @@
 /* month grid */
 .sch-root .monthgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 .sch-root .moh{font-size:12px;font-weight:700;color:var(--text-muted);text-align:center;text-transform:uppercase;letter-spacing:.05em;padding-bottom:4px}
-.sch-root .mcell{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-12);padding:8px;min-height:108px;display:flex;flex-direction:column;gap:5px}
+.sch-root .mcell{background:var(--surface-page);border:1px solid var(--border-default);border-radius:var(--r-12);padding:8px;min-height:124px;display:flex;flex-direction:column;gap:5px}
 .sch-root .mcell.out{background:var(--surface-subtle);opacity:.55}
 .sch-root .mcell.today{box-shadow:inset 0 0 0 2px var(--cherry);border-color:transparent}
 .sch-root .mcell .dn{font-size:13px;font-weight:700;color:var(--text-strong);display:flex;justify-content:space-between;align-items:center}
 .sch-root .mcell .dn .wkn{font-size:10px;color:var(--text-muted);font-weight:700}
-.sch-root .mdot{display:flex;align-items:center;gap:6px;font-size:11px;padding:4px 7px;border-radius:6px;cursor:pointer;border-left:3px solid;line-height:1.25;background:var(--surface-sunken)}
-.sch-root .mdot b{font-weight:700;color:var(--text-strong);font-size:11px}
+.sch-root .mdot{display:flex;flex-direction:column;align-items:flex-start;gap:2px;font-size:11px;padding:4px 7px;border-radius:6px;cursor:pointer;border-left:3px solid;line-height:1.25;background:var(--surface-sunken)}
+.sch-root .mdot b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;font-weight:700;color:var(--text-strong);font-size:11px}
 .sch-root .mdot.learning{border-color:var(--dv-learning)} .sch-root .mdot.project{border-color:var(--dv-project2)} .sch-root .mdot.internship{border-color:var(--dv-internship)} .sch-root .mdot.cert{border-color:var(--dv-cert)} .sch-root .mdot.event{border-color:var(--dv-event)}
 .sch-root .mdot.done{opacity:.6} .sch-root .mdot.done b{text-decoration:line-through} .sch-root .mdot.lock{opacity:.5}
-.sch-root .mdot .mp{margin-left:auto;font-family:var(--mono);font-size:9px;color:var(--leaf-text);font-weight:700}
+.sch-root .mdot .mp{font-family:var(--mono);font-size:9px;color:var(--leaf-text);font-weight:700}
 .sch-root .mmore{font-size:10px;color:var(--text-muted)}
 
 /* schedule entry chip in week/agenda */
