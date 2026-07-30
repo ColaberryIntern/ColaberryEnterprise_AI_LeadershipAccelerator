@@ -1742,6 +1742,7 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
 
 export async function sendTicketApprovalEmail(data: {
   ticketId: string;
+  replyToken: string;
   title: string;
   description?: string;
   directorName: string;
@@ -1790,8 +1791,18 @@ export async function sendTicketApprovalEmail(data: {
 </html>
   `.trim();
 
+  // reply.colaberry.ai is the only Mandrill-inbound-routed domain colaberry.com mail
+  // actually reaches — colaberry.com addresses (where Ali's real inbox lives) are plain
+  // Google Workspace mailboxes Mandrill has no visibility into. The ticket ID + a random
+  // per-ticket token live in the reply address's local part: the ID routes the reply back
+  // to this exact ticket without needing Message-ID/In-Reply-To correlation, and the token
+  // (only ever sent in this email, never rendered in the dashboard) is what actually
+  // authorizes the reply — the ticket UUID alone is visible to any admin on the board.
+  const replyToAddr = `ticket-${data.ticketId}-${data.replyToken}@${env.mandrillInboundDomain}`;
+
   const info = await guardedSendMail({
     from: `"Colaberry AI Workforce" <${env.emailFrom}>`,
+    replyTo: `"Colaberry AI Workforce" <${replyToAddr}>`,
     to: r.to,
     subject: r.subject,
     html,
@@ -1800,6 +1811,31 @@ export async function sendTicketApprovalEmail(data: {
   });
 
   console.log(`[Email] Ticket approval email sent to: ${r.to} | ticket: ${data.ticketId} | msgId: ${info.messageId}`);
+}
+
+/** Brief plain-text confirmation that an email-reply approve/reject registered — closes
+ *  the loop so a reply never silently no-ops without the sender knowing. */
+export async function sendTicketReplyConfirmation(data: {
+  to: string;
+  ticketNumber: number;
+  title: string;
+  outcome: 'done' | 'cancelled' | 'commented';
+}): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping ticket reply confirmation.');
+    return;
+  }
+  const outcomeText = data.outcome === 'done' ? 'approved and marked done' : data.outcome === 'cancelled' ? 'rejected and cancelled' : 'recorded as a comment (no status change)';
+  const text = `Got it — ticket #${data.ticketNumber} ("${data.title}") ${outcomeText}.\n\n— Colaberry AI Workforce`;
+  const r = await resolveEmailRecipient(data.to, `Re: [Approval needed] ${data.title}`);
+  const info = await guardedSendMail({
+    from: `"Colaberry AI Workforce" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    text,
+    headers: emailHeaders('ai-workforce-ticket-reply-confirmation'),
+  });
+  console.log(`[Email] Ticket reply confirmation sent to: ${r.to} | ticket #${data.ticketNumber} | msgId: ${info.messageId}`);
 }
 
 // ─── Executive Briefing Email ─────────────────────────────────────────────

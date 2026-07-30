@@ -9,6 +9,7 @@ import { logCommunication } from '../services/communicationLogService';
 import { respondAsLead } from '../services/testing/campaignSimulator';
 import { processOptOut } from '../services/unsubscribeEnforcementService';
 import ScheduledEmail from '../models/ScheduledEmail';
+import { handleTicketReplyEmail } from '../services/workforce/ticketReplyService';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -53,7 +54,12 @@ function verifyMandrillSignature(
     .update(signedData)
     .digest('base64');
 
-  return hash === expectedSignature;
+  // Constant-time comparison — a plain === leaks timing information proportional to how
+  // many leading bytes match, a real (if narrow) side channel for a signature check.
+  const hashBuf = Buffer.from(hash);
+  const expectedBuf = Buffer.from(expectedSignature || '');
+  if (hashBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(hashBuf, expectedBuf);
 }
 
 /** Handle Mandrill webhook events (open, click, bounce, unsub) */
@@ -180,10 +186,34 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       return;
     }
 
-    // Signature verification — skip for inbound since Mandrill's route validation
-    // test does not include the correct signature. Inbound emails are already
-    // authenticated by Mandrill's MX routing (only Mandrill can deliver to our
-    // inbound domain). The outbound webhook retains strict signature checking.
+    // Signature verification. NOTE: env.mandrillWebhookUrl is hardcoded in production to
+    // the OUTBOUND tracking-events URL (.../api/webhook/mandrill) — reusing it here would
+    // make every real inbound signature fail, since Mandrill signs against the exact URL
+    // it posted to. Derive this route's own URL instead (append '/inbound' to the outbound
+    // base when the override is set, matching how the two routes are actually related;
+    // otherwise reconstruct per-request exactly like the outbound handler's own fallback).
+    const webhookKey = env.mandrillWebhookKey || '';
+    let signatureValid = true;
+    if (webhookKey) {
+      const signature = req.headers['x-mandrill-signature'] as string || '';
+      const inboundWebhookUrl = env.mandrillWebhookUrl
+        ? `${env.mandrillWebhookUrl}/inbound`
+        : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+      signatureValid = verifyMandrillSignature(webhookKey, inboundWebhookUrl, req.body, signature);
+      if (!signatureValid) {
+        console.warn(`[MandrillInbound] Signature mismatch — url: ${inboundWebhookUrl}`);
+      }
+    } else {
+      // No webhook key configured — the SAME fail-open behavior verifyMandrillSignature()
+      // itself already has (matches the existing outbound-handler convention), but for the
+      // ticket-reply path specifically that means auth degrades to sender-email + reply-
+      // token only. Loud on purpose, since production is confirmed to have the key set —
+      // this firing there would mean the config regressed, not routine dev behavior.
+      console.warn('[MandrillInbound] MANDRILL_WEBHOOK_KEY not configured — inbound signature verification is disabled');
+    }
+    // Enforcement is scoped to the NEW ticket-reply path only (see the `ticket-<id>@`
+    // branch below) — the pre-existing Lead-reply path below keeps its current
+    // (unverified) behavior unchanged; hardening that is a separate piece of work.
 
     let processed = 0;
     let skipped = 0;
@@ -204,6 +234,32 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       if (!fromEmail) { skipped++; continue; }
 
       console.log(`[MandrillInbound] Email reply from ${fromEmail}: ${subject}`);
+
+      // AI Workforce ticket-approval replies: routed via a ticket-<id>-<token>@ subaddress
+      // on the Mandrill-inbound domain, so the ticket ID is read directly off the recipient
+      // address — no thread/Message-ID correlation needed, and no dependency on the Lead
+      // pipeline below at all. The token is a per-ticket random value only ever transmitted
+      // in the actual approval email (never rendered in the dashboard UI) — required in
+      // addition to the sender allowlist so knowing a ticket's UUID alone (visible to any
+      // admin who can browse the Tickets board, a broader set than who may approve) isn't
+      // enough to construct a working reply address.
+      const toLocalPart = String(msg.email || '').split('@')[0] || '';
+      const ticketMatch = toLocalPart.match(/^ticket-([0-9a-f-]{36})-([0-9a-f]{8})$/i);
+      if (ticketMatch) {
+        if (!signatureValid) {
+          console.error(`[MandrillInbound] REJECTED ticket-reply for ${ticketMatch[1]} — invalid Mandrill signature`);
+          skipped++;
+          continue;
+        }
+        try {
+          const result = await handleTicketReplyEmail({ ticketId: ticketMatch[1], replyToken: ticketMatch[2], fromEmail, rawBody: body });
+          console.log(`[MandrillInbound] Ticket reply for ${ticketMatch[1]}: ${result.reason}`);
+        } catch (err: any) {
+          console.error(`[MandrillInbound] Ticket reply handling failed for ${ticketMatch[1]}:`, err.message);
+        }
+        processed++;
+        continue;
+      }
 
       // Find lead by email
       const lead = await Lead.findOne({ where: { email: fromEmail } });
