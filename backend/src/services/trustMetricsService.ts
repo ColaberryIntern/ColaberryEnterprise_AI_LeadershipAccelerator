@@ -339,10 +339,15 @@ interface LastActivityRow { agentId: string; action: string; result: string; cre
  *  one AiAgentActivityLog.findOne() per director — avoids an N+1 on a 30s poll. */
 async function lastActivityByAgentId(agentIds: string[]): Promise<Map<string, LastActivityRow>> {
   if (agentIds.length === 0) return new Map();
+  // Sequelize's named-replacement array substitution renders `(v1, v2, ...)` for a list
+  // replacement — that's correct for `IN (:agentIds)` but syntactically invalid after
+  // `ANY(`, which expects a single array/subquery expression, not a comma list (this
+  // shipped as `ANY(:agentIds)` and threw "syntax error at or near \",\"" on every poll
+  // in production — getAgentRoster()'s catch silently degraded it to an empty roster).
   const rows = (await sequelize.query(
     `SELECT DISTINCT ON (agent_id) agent_id AS "agentId", action, result, created_at AS "createdAt"
      FROM ai_agent_activity_logs
-     WHERE agent_id = ANY(:agentIds)
+     WHERE agent_id IN (:agentIds)
      ORDER BY agent_id, created_at DESC`,
     { type: QueryTypes.SELECT, replacements: { agentIds } }
   )) as LastActivityRow[];

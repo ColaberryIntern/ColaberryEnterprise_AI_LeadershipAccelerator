@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ResponsiveContainer,
   LineChart,
@@ -202,6 +203,13 @@ function DetailDrawer({ kind, detail, cost, value, agent, agentRunning, loading,
                 <span className="badge border text-muted">tier: {agent.tier}</span>
                 <span className="badge border text-muted">{agent.triggerType === 'on_demand' ? 'manual trigger' : `${agent.triggerType || 'unknown'}${agent.schedule ? ` · ${agent.schedule}` : ''}`}</span>
               </div>
+              {/* The board's source filter isn't scoped per-director (backend has no
+                  created_by_id filter yet) — link honestly to the full AI Workforce
+                  slice rather than promise a per-director view that doesn't exist;
+                  each ticket still shows its own director's badge on the board. */}
+              <Link to="/admin/tickets?source=ai_workforce" className="small d-inline-block mb-2">
+                View AI Workforce tickets <span aria-hidden="true">&rsaquo;</span>
+              </Link>
               <div className="d-flex align-items-baseline gap-2 mb-1">
                 <span className={`display-6 fw-bold text-${bandColor(agentGoalsBand(agent.goalsOverall))}`}>{agent.goalsOverall}</span>
                 <span className="text-muted">/ 5 GOALS</span>

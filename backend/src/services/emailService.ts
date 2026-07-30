@@ -1734,6 +1734,74 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
   console.log(`[Email] Alert email sent to: ${r.to} | type: ${alert.type} | msgId: ${info.messageId}`);
 }
 
+// ─── AI Workforce Ticket Approval Email ────────────────────────────────────
+// Fires ONLY when an AI Workforce director's action needs a human decision
+// before it can proceed (today: the Marketing director's content-idea
+// proposal) — never for the 9 directors that work independently. Deep-links
+// straight to the ticket so the recipient can act without hunting for it.
+
+export async function sendTicketApprovalEmail(data: {
+  ticketId: string;
+  title: string;
+  description?: string;
+  directorName: string;
+}): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping ticket approval email for ticket:', data.ticketId);
+    return;
+  }
+
+  const to = await getAdminRecipients();
+  // Title/description originate from LLM output (the Marketing director's content
+  // idea) constrained only by a prompt instruction, not guaranteed plain text —
+  // escape before interpolating, same as this file's other user/model-sourced fields.
+  const safeTitle = escapeHtml(data.title);
+  const safeDescription = data.description ? escapeHtml(data.description).replace(/\n/g, '<br>') : '';
+  const subject = `[Approval needed] ${safeTitle}`;
+  const r = await resolveEmailRecipient(to, subject);
+  const ticketUrl = `${env.frontendUrl}/admin/tickets?open=${encodeURIComponent(data.ticketId)}`;
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 22px; }
+    .alert-bar { background: #d69e2e; color: #fff; padding: 12px 20px; border-radius: 6px; font-weight: 600; font-size: 16px; margin-bottom: 16px; }
+    .detail { background: #f7fafc; border-left: 4px solid #d69e2e; padding: 14px 18px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+    .meta { font-size: 13px; color: #718096; margin-top: 8px; }
+    .cta { display: inline-block; margin-top: 20px; padding: 10px 20px; background: #2b6cb0; color: #fff !important; border-radius: 6px; font-weight: 600; text-decoration: none; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+  </style>
+</head>
+<body>
+  <div class="alert-bar">AI Workforce — approval needed</div>
+  <h1>${safeTitle}</h1>
+  ${safeDescription ? `<div class="detail">${safeDescription}</div>` : ''}
+  <div class="meta"><strong>Raised by:</strong> ${escapeHtml(data.directorName)}</div>
+  <p><a href="${ticketUrl}" class="cta">Review the ticket</a></p>
+  <p style="font-size: 13px; color: #718096;">Nothing has been published or sent. This director works independently on everything else — you're only hearing from it because this one action needs a decision first.</p>
+  <div class="footer">
+    <p>Colaberry AI Workforce</p>
+  </div>
+</body>
+</html>
+  `.trim();
+
+  const info = await guardedSendMail({
+    from: `"Colaberry AI Workforce" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('ai-workforce-ticket-approval'),
+  });
+
+  console.log(`[Email] Ticket approval email sent to: ${r.to} | ticket: ${data.ticketId} | msgId: ${info.messageId}`);
+}
+
 // ─── Executive Briefing Email ─────────────────────────────────────────────
 
 import type { ExecutiveBriefingData } from './executiveBriefingService';
