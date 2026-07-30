@@ -1,6 +1,11 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { handleGetRevenueDashboard, handleGetRevenuePayments, handleReconcileAppPayments } from '../../controllers/adminRevenueController';
+import {
+  handleGetRevenueDashboard,
+  handleGetRevenuePayments,
+  handleGetSubscriptionAnalytics,
+  handleReconcileAppPayments,
+} from '../../controllers/adminRevenueController';
 import {
   handleGetSettings,
   handleUpdateSettings,
@@ -13,6 +18,8 @@ const router = Router();
 router.get('/api/admin/revenue/dashboard', requireAdmin, handleGetRevenueDashboard);
 // Unified payments feed for the rebuilt /admin/revenue page
 router.get('/api/admin/revenue/payments', requireAdmin, handleGetRevenuePayments);
+// Subscription analytics (MRR/ARR, plan mix, tenure funnel, needs-attention list)
+router.get('/api/admin/revenue/subscriptions', requireAdmin, handleGetSubscriptionAnalytics);
 // Heal missed-webhook membership payments (app-scoped; our customers only). Idempotent.
 router.post('/api/admin/revenue/reconcile', requireAdmin, handleReconcileAppPayments);
 
