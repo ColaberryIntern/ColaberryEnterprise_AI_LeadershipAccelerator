@@ -24,7 +24,10 @@ export default function SubscriptionKpiRow({ kpis }: Props) {
           value={kpis.activeSubscribers}
           icon="group-line"
           tone="success"
-          hint={kpis.compedSeats > 0 ? `+${kpis.compedSeats} comped seat${kpis.compedSeats === 1 ? '' : 's'}` : 'Paying, not comped'}
+          hint={[
+            kpis.compedSeats > 0 ? `+${kpis.compedSeats} comped` : null,
+            kpis.otherPaidCount > 0 ? `+${kpis.otherPaidCount} other-paid` : null,
+          ].filter(Boolean).join(' · ') || 'Paying, not comped'}
         />
       </div>
       <div className="col-6 col-lg-3">

@@ -2,7 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { SectionCard, StatusBadge } from '../shell';
 import { UpcomingPayment } from '../../../services/subscriptionAnalyticsApi';
-import { PLAN_LABEL, fmtDate, money } from './format';
+import { fmtDate, money } from './format';
+import PlanTag from './PlanTag';
 
 interface Props {
   payments: UpcomingPayment[];
@@ -22,12 +23,12 @@ export default function UpcomingPaymentsCard({ payments, limit = 12 }: Props) {
   return (
     <SectionCard
       title="Upcoming renewals"
-      subtitle="Next payment due, soonest first — renewal is a manual checkout, not an auto-charge."
+      subtitle="Due within 45 days, soonest first — renewal is a manual checkout, not an auto-charge. Free Access never renews, so it's excluded."
       icon="calendar-check-line"
       padded={false}
     >
       {shown.length === 0 ? (
-        <p className="text-muted small px-3 py-3 mb-0">No active subscriptions with an upcoming renewal date.</p>
+        <p className="text-muted small px-3 py-3 mb-0">No renewals due in the next 45 days.</p>
       ) : (
         <div className="table-responsive">
           <table className="table table-hover align-middle mb-0">
@@ -43,7 +44,7 @@ export default function UpcomingPaymentsCard({ payments, limit = 12 }: Props) {
                     <div className="fw-medium">{p.payer_name}</div>
                     <div className="small text-muted"><code>{p.payer_email}</code></div>
                   </td>
-                  <td className="small text-muted">{PLAN_LABEL[p.plan]}</td>
+                  <td><PlanTag plan={p.plan} /></td>
                   <td className="small text-nowrap">
                     {fmtDate(p.due_date)} <StatusBadge label={`${p.in_days}d`} tone={urgencyTone(p.in_days)} />
                   </td>

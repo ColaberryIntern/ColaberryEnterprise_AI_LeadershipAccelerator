@@ -2,7 +2,8 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { SectionCard, StatusBadge } from '../shell';
 import { AttentionRow } from '../../../services/subscriptionAnalyticsApi';
-import { PLAN_LABEL, fmtDate } from './format';
+import { fmtDate } from './format';
+import PlanTag from './PlanTag';
 
 interface Props {
   rows: AttentionRow[];
@@ -49,7 +50,7 @@ export default function AttentionPanel({ rows }: Props) {
                   <div className="fw-medium">{r.payer_name}</div>
                   <div className="small text-muted"><code>{r.payer_email}</code></div>
                 </td>
-                <td className="small text-muted">{PLAN_LABEL[r.plan]}</td>
+                <td><PlanTag plan={r.plan} /></td>
                 <td><StatusBadge label={KIND_LABEL[r.kind]} tone="danger" /></td>
                 <td className="small text-muted text-nowrap">{fmtDate(r.reference_date)}</td>
                 <td className="text-end small text-nowrap" style={{ fontVariantNumeric: 'tabular-nums' }}>
