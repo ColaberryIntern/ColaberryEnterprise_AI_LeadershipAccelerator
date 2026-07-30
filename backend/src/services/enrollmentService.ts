@@ -103,6 +103,10 @@ export async function markEnrollmentPaid(
   if (enrollment.payment_status === 'paid') return enrollment;
 
   enrollment.payment_status = 'paid';
+  // Confirmed payment is the self-serve grant condition — without this, requestMagicLink
+  // (participantService) keeps rejecting the paid student with "pending admin approval"
+  // forever, since it gates strictly on portal_enabled, not payment_status.
+  enrollment.portal_enabled = true;
   if (paymentDetails) {
     enrollment.paysimple_payment_id = String(paymentDetails.paymentId);
     enrollment.amount_paid = paymentDetails.amount;
