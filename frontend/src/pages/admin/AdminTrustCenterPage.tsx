@@ -72,6 +72,24 @@ interface CostBreakdown { windowDays: number; totalUsd: number; rows: CostRow[];
 interface ValueRow { workflowId: string; events: number; minutes: number; valueUsd: number; }
 interface AiValue { windowDays: number; hourlyRateUsd: number; hoursSaved: number; valueUsd: number; costUsd: number; netUsd: number; roiMultiple: number | null; estimate: boolean; rows: ValueRow[]; }
 
+interface AgentRosterRow {
+  slug: string; agentName: string; name: string; role: string; avatar: string;
+  enabled: boolean; status: string; triggerType: string | null; schedule: string | null;
+  lastAction: { action: string; result: string; at: string | null } | null;
+  cost7d: number; runs7d: number;
+}
+interface AgentGoalsDimension { key: string; label: string; score: number; source: 'live' | 'fixed'; evidence: string; }
+interface AgentDetail {
+  slug: string; agentName: string; name: string; role: string; mission: string;
+  enabled: boolean; status: string; tier: string;
+  triggerType: string | null; schedule: string | null;
+  killSwitchActive: boolean | null; safeModeActive: boolean | null;
+  goals: AgentGoalsDimension[]; goalsOverall: number;
+  recentActivity: Array<{ action: string; result: string; reason: string | null; at: string | null; traceId: string | null }>;
+  cost7d: number;
+}
+interface DirectorRunResult { ran: boolean; wrote: boolean; reason?: string; recordId?: string; costUsd: number; }
+
 // Brand chart palette (replaces hardcoded berry-style hex). One token per series.
 const CHART_GENERATIONS = 'var(--chart-1)';
 const CHART_CONVERSATIONS = 'var(--chart-3)';
@@ -132,14 +150,30 @@ function ScoreBar({ d, onClick }: { d: DimensionScore; onClick?: () => void }) {
   return <div className="mb-2" title={d.evidence || undefined}>{inner}</div>;
 }
 
-function DetailDrawer({ kind, detail, cost, value, loading, onClose, onOpenDimension }: {
-  kind: 'dimension' | 'cost' | 'value' | null;
+// Strips common honorifics before taking initials, so "Dr. Elena Vasquez" -> "EV", not "DE".
+const NAME_HONORIFICS = /^(dr|mr|mrs|ms|prof)\.?$/i;
+function initials(name: string): string {
+  const parts = name.split(/\s+/).filter((p) => p && !NAME_HONORIFICS.test(p));
+  return parts.map((p) => p[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function agentGoalsBand(score: number): 'red' | 'amber' | 'green' {
+  if (score >= 4) return 'green';
+  if (score >= 2.5) return 'amber';
+  return 'red';
+}
+
+function DetailDrawer({ kind, detail, cost, value, agent, agentRunning, loading, onClose, onOpenDimension, onRunAgent }: {
+  kind: 'dimension' | 'cost' | 'value' | 'agent' | null;
   detail: DimensionDetail | null;
   cost: CostBreakdown | null;
   value: AiValue | null;
+  agent: AgentDetail | null;
+  agentRunning: boolean;
   loading: boolean;
   onClose: () => void;
   onOpenDimension: (key: string) => void;
+  onRunAgent: (slug: string) => void;
 }) {
   if (!kind) return null;
   return (
@@ -149,11 +183,69 @@ function DetailDrawer({ kind, detail, cost, value, loading, onClose, onOpenDimen
         style={{ position: 'fixed', top: 0, right: 0, height: '100vh', width: 'min(480px, 94vw)', zIndex: 1046, overflowY: 'auto', borderRadius: 0 }}>
         <div className="card-body">
           <div className="d-flex justify-content-between align-items-start mb-3">
-            <h2 className="h5 mb-0">{kind === 'cost' ? 'AI cost by workflow · 30 days' : kind === 'value' ? 'AI value by workflow · 30 days' : detail ? `${detail.label} · breakdown` : 'Detail'}</h2>
+            <h2 className="h5 mb-0">
+              {kind === 'cost' ? 'AI cost by workflow · 30 days'
+                : kind === 'value' ? 'AI value by workflow · 30 days'
+                : kind === 'agent' ? (agent ? `${agent.name} · ${agent.role}` : 'AI Workforce director')
+                : detail ? `${detail.label} · breakdown` : 'Detail'}
+            </h2>
             <button type="button" className="btn-close" aria-label="Close" onClick={onClose} />
           </div>
 
           {loading && <div className="text-muted">Loading…</div>}
+
+          {!loading && kind === 'agent' && agent && (
+            <>
+              <p className="text-muted small mb-2">{agent.mission}</p>
+              <div className="d-flex align-items-center gap-2 mb-2 flex-wrap">
+                <span className={`badge ${agent.enabled ? 'bg-success' : 'bg-secondary'}`}>{agent.enabled ? 'enabled' : 'disabled'}</span>
+                <span className="badge border text-muted">tier: {agent.tier}</span>
+                <span className="badge border text-muted">{agent.triggerType === 'on_demand' ? 'manual trigger' : `${agent.triggerType || 'unknown'}${agent.schedule ? ` · ${agent.schedule}` : ''}`}</span>
+              </div>
+              <div className="d-flex align-items-baseline gap-2 mb-1">
+                <span className={`display-6 fw-bold text-${bandColor(agentGoalsBand(agent.goalsOverall))}`}>{agent.goalsOverall}</span>
+                <span className="text-muted">/ 5 GOALS</span>
+                <span className="text-muted small ms-auto">${agent.cost7d} · 7d cost</span>
+              </div>
+              <div className="list-group list-group-flush mb-3">
+                {agent.goals.map((g) => (
+                  <div key={g.key} className="list-group-item px-0">
+                    <div className="d-flex justify-content-between align-items-start gap-2">
+                      <span className="fw-semibold small">
+                        {g.label}
+                        <StateBadge state={g.source === 'live' ? 'live' : 'baseline'} />
+                      </span>
+                      <span className={`badge bg-${critColor(g.score >= 4 ? 'met' : g.score >= 2.5 ? 'partial' : 'open')}-subtle text-${critColor(g.score >= 4 ? 'met' : g.score >= 2.5 ? 'partial' : 'open')}-emphasis`}>{g.score} / 5</span>
+                    </div>
+                    <div className="small text-muted mt-1">{g.evidence}</div>
+                  </div>
+                ))}
+                <div className="text-muted" style={{ fontSize: '0.7rem' }}>
+                  <span className="badge rounded-pill bg-success-subtle text-success-emphasis" style={{ fontSize: '0.65rem' }}>live</span> = measured from this agent's own recent activity ·{' '}
+                  <span className="badge rounded-pill bg-secondary-subtle text-secondary-emphasis" style={{ fontSize: '0.65rem' }}>baseline</span> = structurally fixed by the code, not re-measured each run.
+                </div>
+              </div>
+              <div className="d-flex justify-content-between align-items-center mb-2">
+                <span className="text-muted small text-uppercase">Recent activity (raw log)</span>
+                <button type="button" className="btn btn-sm btn-outline-primary" disabled={agentRunning} onClick={() => onRunAgent(agent.slug)}>
+                  {agentRunning ? 'Running…' : 'Run now'}
+                </button>
+              </div>
+              <div className="list-group list-group-flush">
+                {agent.recentActivity.length === 0 && <div className="small text-muted">No logged actions yet.</div>}
+                {agent.recentActivity.map((a, i) => (
+                  <div key={`${a.traceId || i}-${a.at || i}`} className="list-group-item px-0 small">
+                    <div className="d-flex justify-content-between">
+                      <span className="fw-semibold">{a.action}</span>
+                      <span className={`badge bg-${a.result === 'success' ? 'success' : a.result === 'skipped' ? 'secondary' : 'danger'}-subtle text-${a.result === 'success' ? 'success' : a.result === 'skipped' ? 'secondary' : 'danger'}-emphasis`}>{a.result}</span>
+                    </div>
+                    {a.reason && <div className="text-muted">{a.reason}</div>}
+                    <div className="text-muted" style={{ fontSize: '0.7rem' }}>{a.at ? new Date(a.at).toLocaleString() : '—'}{a.traceId ? ` · trace ${a.traceId.slice(0, 8)}` : ''}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
 
           {!loading && kind === 'dimension' && detail && (
             <>
@@ -244,13 +336,16 @@ function AdminTrustCenterPage() {
   const [observability, setObservability] = useState<Observability | null>(null);
   const [actions, setActions] = useState<OpenAction[]>([]);
   const [value, setValue] = useState<AiValue | null>(null);
+  const [agentRoster, setAgentRoster] = useState<AgentRosterRow[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Drill-down drawer state
-  const [drawerKind, setDrawerKind] = useState<'dimension' | 'cost' | 'value' | null>(null);
+  const [drawerKind, setDrawerKind] = useState<'dimension' | 'cost' | 'value' | 'agent' | null>(null);
   const [detail, setDetail] = useState<DimensionDetail | null>(null);
   const [cost, setCost] = useState<CostBreakdown | null>(null);
+  const [agentDetail, setAgentDetail] = useState<AgentDetail | null>(null);
+  const [agentRunning, setAgentRunning] = useState(false);
   const [drawerLoading, setDrawerLoading] = useState(false);
 
   // One-shot poll-failure guard: the 30s poll must surface a failure AT MOST ONCE,
@@ -292,6 +387,15 @@ function AdminTrustCenterPage() {
         }
       } finally {
         if (active) setLoading(false);
+      }
+
+      // Isolated from the Promise.all above on purpose: this is the newest, least-proven
+      // endpoint, and a failure here must not block the 6 established trust metrics.
+      try {
+        const ar = await api.get<{ rows: AgentRosterRow[] }>('/api/admin/trust/agents');
+        if (active) setAgentRoster(ar.data.rows || []);
+      } catch {
+        // Leave the last-known roster in place; the next 30s tick retries independently.
       }
     };
     load();
@@ -350,6 +454,39 @@ function AdminTrustCenterPage() {
 
   // value is already loaded on mount; opening the drawer just shows its by-workflow breakdown.
   const openValue = () => setDrawerKind('value');
+
+  const openAgent = async (slug: string) => {
+    setDrawerKind('agent');
+    setAgentDetail(null);
+    setDrawerLoading(true);
+    try {
+      const r = await api.get<AgentDetail>(`/api/admin/trust/agents/${slug}`);
+      setAgentDetail(r.data);
+    } catch {
+      setAgentDetail(null);
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  const runAgent = async (slug: string) => {
+    setAgentRunning(true);
+    try {
+      await api.post<DirectorRunResult>(`/api/admin/trust/agents/${slug}/run`);
+      // Re-pull this director's detail + the roster row so the drawer and the
+      // list reflect what just happened, without waiting for the next 30s poll.
+      const [detailRes, rosterRes] = await Promise.all([
+        api.get<AgentDetail>(`/api/admin/trust/agents/${slug}`),
+        api.get<{ rows: AgentRosterRow[] }>('/api/admin/trust/agents'),
+      ]);
+      setAgentDetail(detailRes.data);
+      setAgentRoster(rosterRes.data.rows || []);
+    } catch {
+      // Leave the last-known detail in place; the poll or drawer reopen will retry.
+    } finally {
+      setAgentRunning(false);
+    }
+  };
 
   const closeDrawer = () => setDrawerKind(null);
 
@@ -509,6 +646,67 @@ function AdminTrustCenterPage() {
         )}
       </div>
 
+      {/* AI Workforce — one row per director: status, trigger, last action, 7-day cost */}
+      {agentRoster && (
+        <SectionCard title="AI Workforce" icon="team-line" className="mt-3">
+          <p className="text-muted small mb-3">
+            10 directors, one tool + one action each, gated by a hard kill switch / safe mode / enabled check
+            (<code>workforceAgentRuntime.ts</code>) independent of the repo-wide shadow-mode default.
+            Click a director for the GOALS-scored breakdown and raw activity log.
+          </p>
+          <div className="table-responsive">
+            <table className="table table-sm align-middle mb-0">
+              <thead>
+                <tr className="small text-muted text-uppercase">
+                  <th>Director</th>
+                  <th>Status</th>
+                  <th>Trigger</th>
+                  <th>Last action</th>
+                  <th className="text-end">7d cost</th>
+                  <th className="text-end">7d runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {agentRoster.map((r) => (
+                  <tr key={r.slug} style={{ cursor: 'pointer' }} onClick={() => openAgent(r.slug)}>
+                    <td>
+                      <div className="d-flex align-items-center gap-2">
+                        <span
+                          className="d-inline-flex align-items-center justify-content-center rounded-circle text-white fw-bold flex-shrink-0"
+                          style={{ width: 28, height: 28, fontSize: '0.7rem', backgroundColor: r.avatar }}
+                          aria-hidden="true"
+                        >
+                          {initials(r.name)}
+                        </span>
+                        <div>
+                          <div className="fw-semibold small">{r.name}</div>
+                          <div className="text-muted" style={{ fontSize: '0.72rem' }}>{r.role}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      {r.status === 'not_registered'
+                        ? <span className="badge bg-secondary">not seeded</span>
+                        : <span className={`badge ${r.enabled ? 'bg-success' : 'bg-secondary'}`}>{r.enabled ? 'active' : 'disabled'}</span>}
+                    </td>
+                    <td className="small text-muted">
+                      {r.triggerType === 'on_demand' ? 'manual' : r.triggerType ? `${r.triggerType}${r.schedule ? ` · ${r.schedule}` : ''}` : '—'}
+                    </td>
+                    <td className="small">
+                      {r.lastAction
+                        ? <span title={r.lastAction.at ? new Date(r.lastAction.at).toLocaleString() : undefined}>{r.lastAction.action} <span className="text-muted">({r.lastAction.result})</span></span>
+                        : <span className="text-muted">no runs yet</span>}
+                    </td>
+                    <td className="text-end small">${r.cost7d}</td>
+                    <td className="text-end small">{r.runs7d}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </SectionCard>
+      )}
+
       {/* Activity trend */}
       {activity && activity.trend.length > 0 && (
         <SectionCard title="AI activity — last 7 days" icon="line-chart-line" className="mt-3">
@@ -532,9 +730,12 @@ function AdminTrustCenterPage() {
         detail={detail}
         cost={cost}
         value={value}
+        agent={agentDetail}
+        agentRunning={agentRunning}
         loading={drawerLoading}
         onClose={closeDrawer}
         onOpenDimension={openDimension}
+        onRunAgent={runAgent}
       />
     </>
   );

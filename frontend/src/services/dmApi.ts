@@ -1,4 +1,5 @@
 import portalApi from '../utils/portalApi';
+import { getParticipantToken } from '../utils/participantToken';
 
 // 1:1 direct messages. Talks to /api/portal/dm/* (a DM is a 2-person private
 // room server-side; this client only ever sees a roomId + messages).
@@ -57,7 +58,7 @@ export async function markDmRead(roomId: string): Promise<void> {
 /** My enrollment id (from the participant JWT) — to render my own bubbles. */
 export function myEnrollmentId(): string | null {
   try {
-    const t = localStorage.getItem('participant_token');
+    const t = getParticipantToken();
     if (!t) return null;
     const payload = JSON.parse(atob(t.split('.')[1] || ''));
     return payload?.sub ?? null;

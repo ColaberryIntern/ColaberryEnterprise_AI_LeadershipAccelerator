@@ -1,4 +1,5 @@
 import portalApi from '../utils/portalApi';
+import { getParticipantToken } from '../utils/participantToken';
 import type { Band } from './bandLadder';
 
 // Re-export the pure 5-band mirror so callers have one import surface for the
@@ -187,7 +188,7 @@ export async function joinSession(sessionId: string, source: 'classroom' | 'meet
  * unloading — this is a proxy signal for the deck's ticker, not a reliable
  * presence system (no real Google Meet join/leave webhook is available to us). */
 export function leaveMeetingBeacon(sessionId: string): void {
-  const token = localStorage.getItem('participant_token');
+  const token = getParticipantToken();
   if (!token) return;
   const base = process.env.REACT_APP_API_URL || '';
   fetch(`${base}/api/portal/sessions/${sessionId}/leave-meet`, {

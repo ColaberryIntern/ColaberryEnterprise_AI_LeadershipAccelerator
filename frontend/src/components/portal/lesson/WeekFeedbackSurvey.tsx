@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getParticipantToken } from '../../../utils/participantToken';
 
 interface SurveyQuestion {
   key: string;
@@ -53,7 +54,7 @@ export default function WeekFeedbackSurvey({
     setSubmitting(true);
     setError(null);
     try {
-      const token = localStorage.getItem('participant_token');
+      const token = getParticipantToken();
       const res = await fetch(`/api/portal/curriculum/lessons/${lessonId}/survey`, {
         method: 'POST',
         headers: {

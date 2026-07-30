@@ -5,13 +5,15 @@ import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 /**
  * Landing for admin "View as member" (read-only). The read_only participant JWT
  * arrives in the URL HASH (`#t=...`) — kept out of query strings / server logs /
- * referrers. We store it as the participant session (the server enforces
- * read-only), scrub it from the address bar, and drop into the member's Today.
- * The global ReadOnlyBanner then shows the read-only notice.
+ * referrers. We store it via loginAsViewer (sessionStorage, tab-scoped — see
+ * VIEW_AS_TOKEN_KEY in utils/participantToken.ts) so this preview can never
+ * clobber the admin's own real session in another tab, scrub it from the
+ * address bar, and drop into the member's Today. The global ReadOnlyBanner
+ * then shows the read-only notice.
  */
 export default function PortalViewAsPage() {
   const navigate = useNavigate();
-  const { login } = useParticipantAuth();
+  const { loginAsViewer } = useParticipantAuth();
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -27,11 +29,11 @@ export default function PortalViewAsPage() {
     const nextMatch = hash.match(/(?:^#|&)next=([^&]+)/);
     const nextRaw = nextMatch ? decodeURIComponent(nextMatch[1]) : '';
     const dest = /^\/portal\/[^/]/.test(nextRaw) ? nextRaw : '/portal/today';
-    login(token);
+    loginAsViewer(token);
     // Scrub the token from the URL/history, then land on the destination.
     try { window.history.replaceState(null, '', dest); } catch { /* non-fatal */ }
     navigate(dest, { replace: true });
-  }, [login, navigate]);
+  }, [loginAsViewer, navigate]);
 
   return (
     <div className="min-vh-100 d-flex align-items-center justify-content-center" style={{ background: 'var(--color-bg-alt)' }}>
