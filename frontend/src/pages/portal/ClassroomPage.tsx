@@ -12,6 +12,9 @@ import { filterCardsByQuery, tokenizeQuery } from '../../utils/classroomSearch';
 import { readViewSnapshot, restoreScroll, usePersistScrollOnScroll } from '../../hooks/useScrollRestore';
 import { PaywallScreen } from '../../components/paywall/PageGate';
 import { GATED_FEATURES } from '../../components/paywall/gatedFeatures';
+import { useNextLiveSession } from './today/useNextLiveSession';
+import { useCountdown } from '../../hooks/useCountdown';
+import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTimeRange } from '../../utils/sessionTime';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -48,17 +51,6 @@ const titleCase = (s: string): string => s.replace(/_/g, ' ').replace(/\b\w/g, (
 const VIEW_KEY = 'classroom-view';
 interface ClassroomExtra { week: number | null }
 
-/** ms until the next Thursday 10:00 (client-side schedule anchor until live sessions are wired). */
-function nextThursday(now: number): number {
-  const d = new Date(now);
-  let add = (4 - d.getDay() + 7) % 7;
-  if (add === 0 && d.getHours() >= 10) add = 7;
-  const t = new Date(d);
-  t.setDate(d.getDate() + add);
-  t.setHours(10, 0, 0, 0);
-  return Math.max(0, t.getTime() - now);
-}
-
 const ClassroomPage: React.FC = () => {
   const navigate = useNavigate();
   const [feed, setFeed] = useState<Feed | null>(null);
@@ -69,7 +61,17 @@ const ClassroomPage: React.FC = () => {
   // id→feed.cards lookup would fail to open them.
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
   const [query, setQuery] = useState<string>('');
-  const [now, setNow] = useState<number>(() => (typeof performance !== 'undefined' ? Date.now() : 0));
+  // Real "Next live class" data — the same live_sessions-backed source (and
+  // hooks) the Today shell uses via NextLiveClassCard, not a hardcoded
+  // "next Thursday 10am" schedule guess.
+  const { session: nextSession } = useNextLiveSession();
+  const nextSessionTarget = (!nextSession || nextSession.status === 'live' || !nextSession.session_date)
+    ? null
+    : (() => {
+        const hhmm = parseSessionTimeToHHMM(nextSession.start_time || '09:00');
+        return hhmm ? `${nextSession.session_date}T${hhmm}:00` : null;
+      })();
+  const liveCd = useCountdown(nextSessionTarget);
 
   const load = useCallback(async () => {
     try {
@@ -91,10 +93,6 @@ const ClassroomPage: React.FC = () => {
   // update live, without waiting for a navigation. The quick-check panel updates
   // the HUD via this same event but does not itself refetch the feed.
   useEffect(() => onPointsEarned(() => { void load(); }), [load]);
-  useEffect(() => {
-    const t = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(t);
-  }, []);
 
   const weeks = useMemo(() => {
     const set = new Set<number>();
@@ -199,8 +197,6 @@ const ClassroomPage: React.FC = () => {
   const prog = feed.progression;
   const readinessPct = prog ? Math.round(prog.level.readiness * 100) : 0;
   const wkIdx = week != null ? weeks.indexOf(week) : -1;
-  const diff = nextThursday(now);
-  const cd = { d: Math.floor(diff / 864e5), h: Math.floor((diff % 864e5) / 36e5), m: Math.floor((diff % 36e5) / 6e4), s: Math.floor((diff % 6e4) / 1e3) };
   const seg = (n: number, l: string) => <div className="cd-seg"><b>{String(n).padStart(2, '0')}</b><span>{l}</span></div>;
 
   return (
@@ -223,7 +219,7 @@ const ClassroomPage: React.FC = () => {
             <div style={{ fontWeight: 700 }}>You're on the free AI Preview</div>
             <div className="tl-small">Enroll in the AI Systems Architect Accelerator to unlock all 12 weeks, the live classes, the community, and your certification.</div>
           </div>
-          <button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/curriculum')}>Enroll to unlock →</button>
+          <button type="button" className="tl-btn primary sm" onClick={() => navigate('/portal/settings?tab=subscription')}>Enroll to unlock →</button>
         </div>
       )}
 
@@ -283,11 +279,21 @@ const ClassroomPage: React.FC = () => {
         </div>
 
         <aside className="tl-side">
-          <div className="tl-card side-card tl-ac-cherry">
-            <h3><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" strokeWidth="2" /><path d="M12 9v4l2.5 2M9 2h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Next live class</h3>
-            <div className="tl-small" style={{ marginBottom: 4 }}><b style={{ color: 'var(--text-body)' }}>Build Day</b> · Thursday 10:00 AM</div>
-            <div className="countdown">{seg(cd.d, 'Days')}{seg(cd.h, 'Hrs')}{seg(cd.m, 'Min')}{seg(cd.s, 'Sec')}</div>
-          </div>
+          {nextSession && (
+            <div className="tl-card side-card tl-ac-cherry">
+              <h3><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="8" stroke="currentColor" strokeWidth="2" /><path d="M12 9v4l2.5 2M9 2h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg> Next live class</h3>
+              <div className="tl-small" style={{ marginBottom: 4 }}>
+                <b style={{ color: 'var(--text-body)' }}>Session {nextSession.session_number}</b> · {nextSession.title}
+              </div>
+              <div className="tl-small" style={{ marginBottom: 4 }}>
+                {nextSession.session_date} · {formatSessionTimeRange(nextSession.start_time, nextSession.end_time)}
+                {tzAbbrev(nextSession.timezone, nextSession.session_date) && ` ${tzAbbrev(nextSession.timezone, nextSession.session_date)}`}
+              </div>
+              {nextSession.status === 'live'
+                ? <div className="tl-small" style={{ fontWeight: 700 }}>Live now</div>
+                : liveCd && <div className="countdown">{seg(liveCd.days, 'Days')}{seg(liveCd.hours, 'Hrs')}{seg(liveCd.minutes, 'Min')}{seg(liveCd.seconds, 'Sec')}</div>}
+            </div>
+          )}
 
           {prog && (
             <div className="tl-card side-card tl-ac-leaf">

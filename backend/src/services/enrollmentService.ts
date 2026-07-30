@@ -217,7 +217,17 @@ export async function createAdminEnrollment(data: {
     payment_status: 'paid',
     payment_method: 'invoice',
     status: 'active',
-    portal_enabled: false,
+    // Portal access ON at creation. This was `false`, which meant every student
+    // an admin rostered manually hit "Your enrollment is pending admin approval
+    // for portal access" on the login screen and could not get in — only the
+    // /quick-add-student route flipped it on afterwards. Found live when the
+    // 2026-07-23 Orientation cohort could not check in via the class QR, and
+    // independently confirmed 2026-07-30 when 9 real paying Open House seat-hold
+    // depositors turned out silently locked out the same way for two weeks.
+    // An admin who wants a rostered-but-locked-out student can still revoke via
+    // setPortalAccess(); the safe default is the one that matches the admin's
+    // intent when they add a paid student to a cohort.
+    portal_enabled: true,
     notes: data.notes || 'Manually added by admin',
   });
 

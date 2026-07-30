@@ -227,11 +227,19 @@ export async function handleFreeSignup(req: Request, res: Response, next: NextFu
   } catch (err) { next(err); }
 }
 
+// `next` is the optional post-login destination (the QR check-in page). It is
+// accepted loosely here and sanitized in requestMagicLink via safeNextPath —
+// a malformed value must degrade to "no redirect", never 400 the sign-in.
+const RequestMagicLinkSchema = z.object({
+  email: z.string().trim().min(1, 'Email is required').max(320),
+  next: z.string().max(512).optional(),
+});
+
 export async function handleRequestMagicLink(req: Request, res: Response, next: NextFunction) {
   try {
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    const result = await requestMagicLink(email);
+    const parsed = RequestMagicLinkSchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: 'Email is required' });
+    const result = await requestMagicLink(parsed.data.email, parsed.data.next);
     res.json(result);
   } catch (err) { next(err); }
 }

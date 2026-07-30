@@ -2,6 +2,7 @@
 // identity, daily streak). Extracted so PortalShell and the individual pages
 // (Today / Path / Schedule) can all use them without a circular import.
 import { OnboardingSchedule } from '../../../services/onboardingApi';
+import { getParticipantToken } from '../../../utils/participantToken';
 
 // ── Central Time (CST/CDT) formatting. Program times are canonical Central, so
 // every viewer sees the same time regardless of their own timezone. ──
@@ -44,7 +45,7 @@ export function centralParts(v: string | Date): { y: number; mo: number; d: numb
 
 export function readParticipant(): { email: string; initials: string } {
   try {
-    const t = localStorage.getItem('participant_token');
+    const t = getParticipantToken();
     if (!t) return { email: '', initials: 'YOU' };
     const p = JSON.parse(atob(t.split('.')[1] || ''));
     const email: string = p.email || '';
