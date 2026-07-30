@@ -36,6 +36,20 @@ import {
 const SETTLED_STATUSES = new Set(['Settled', 'Posted']);
 const RECONCILABLE_STATUSES = new Set(['Settled', 'Posted', 'Authorized']);
 
+/**
+ * The cheapest real, full-tuition-shaped charge in the current pricing model
+ * is the $199/mo Monthly plan (Annual is $1,788 upfront). A $50 charge is
+ * always the Open House seat-hold deposit, not a completed payment -- found
+ * live in the first dry run against production (2026-07-30): 19 of 28
+ * would-be auto-reconciliations were $50 deposits, which would have
+ * incorrectly marked pending-balance students as fully paid. Anything below
+ * this line is silently skipped, not flagged -- a $50 deposit alone is the
+ * normal, expected state for most Open House attendees, not an anomaly, and
+ * flagging every one of them would be exactly the notification noise this
+ * job exists to avoid.
+ */
+const MINIMUM_FULL_PAYMENT_AMOUNT = 199;
+
 export interface AutoReconciledEntry {
   enrollmentId: string;
   name: string;
@@ -149,7 +163,9 @@ export async function runPaymentReconciliationSweep(
     return result;
   }
 
-  const relevant = payments.filter((p) => p.CustomerId && RECONCILABLE_STATUSES.has(p.Status));
+  const relevant = payments.filter((p) =>
+    p.CustomerId && RECONCILABLE_STATUSES.has(p.Status) && p.Amount >= MINIMUM_FULL_PAYMENT_AMOUNT
+  );
   result.scanned = relevant.length;
 
   const customerCache = new Map<number, PaySimpleCustomer | null>();
