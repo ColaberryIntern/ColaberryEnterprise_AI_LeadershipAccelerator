@@ -53,67 +53,92 @@ function enrollment(overrides: Partial<any> = {}) {
   };
 }
 
+/**
+ * `Enrollment.findOne` serves two different questions inside
+ * findMatchingEnrollment: "has this exact payment id already been recorded
+ * anywhere?" (checked first) and "is a customer_id already linked?" (checked
+ * second). A single `mockResolvedValue` can't distinguish them, so tests
+ * route on the `where` clause instead. Defaults to "payment not used yet,
+ * no customer_id link" -- the common case -- overridable per test.
+ */
+function setupFindOne({ alreadyUsedBy = null as any, byCustomerId = null as any } = {}) {
+  mockEnrFindOne.mockImplementation(({ where }: any) => {
+    if (where.paysimple_payment_id) return Promise.resolve(alreadyUsedBy);
+    if (where.paysimple_customer_id) return Promise.resolve(byCustomerId);
+    return Promise.resolve(null);
+  });
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockCohortIncrement.mockResolvedValue(undefined);
+  setupFindOne();
 });
 
 describe('findMatchingEnrollment', () => {
   it('matches by an already-linked paysimple_customer_id first', async () => {
     const enr = enrollment();
-    mockEnrFindOne.mockResolvedValue(enr);
+    setupFindOne({ byCustomerId: enr });
 
-    const result = await findMatchingEnrollment(customer(), 111);
+    const result = await findMatchingEnrollment(customer(), 111, 999);
 
     expect(result).toEqual({ kind: 'match', enrollment: enr, matchType: 'customer_id' });
     expect(mockEnrFindAll).not.toHaveBeenCalled();
   });
 
   it('falls back to an exact email match when no customer_id link exists', async () => {
-    mockEnrFindOne.mockResolvedValue(null);
     const enr = enrollment();
     mockEnrFindAll.mockResolvedValue([enr]);
 
-    const result = await findMatchingEnrollment(customer(), 111);
+    const result = await findMatchingEnrollment(customer(), 111, 999);
 
     expect(result).toEqual({ kind: 'match', enrollment: enr, matchType: 'email' });
   });
 
   it('prefers a non-explorer candidate when the email matches more than one open enrollment', async () => {
-    mockEnrFindOne.mockResolvedValue(null);
     const explorerDup = enrollment({ id: 'explorer-dup', enrollment_type: 'explorer' });
     const real = enrollment({ id: 'real', enrollment_type: 'standard' });
     mockEnrFindAll.mockResolvedValue([explorerDup, real]);
 
-    const result = await findMatchingEnrollment(customer(), 111);
+    const result = await findMatchingEnrollment(customer(), 111, 999);
 
     expect(result).toEqual({ kind: 'match', enrollment: real, matchType: 'email' });
   });
 
   it('reports ambiguous when email matches more than one open standard enrollment', async () => {
-    mockEnrFindOne.mockResolvedValue(null);
     const a = enrollment({ id: 'a' });
     const b = enrollment({ id: 'b' });
     mockEnrFindAll.mockResolvedValue([a, b]);
 
-    const result = await findMatchingEnrollment(customer(), 111);
+    const result = await findMatchingEnrollment(customer(), 111, 999);
 
     expect(result.kind).toBe('ambiguous');
   });
 
   it('reports none when nothing matches', async () => {
-    mockEnrFindOne.mockResolvedValue(null);
     mockEnrFindAll.mockResolvedValue([]);
 
-    const result = await findMatchingEnrollment(customer(), 111);
+    const result = await findMatchingEnrollment(customer(), 111, 999);
 
     expect(result).toEqual({ kind: 'none' });
   });
 
   it('reports none for a customer with no email and no customer_id link', async () => {
-    mockEnrFindOne.mockResolvedValue(null);
+    const result = await findMatchingEnrollment(customer({ Email: '' }), 111, 999);
 
-    const result = await findMatchingEnrollment(customer({ Email: '' }), 111);
+    expect(result).toEqual({ kind: 'none' });
+    expect(mockEnrFindAll).not.toHaveBeenCalled();
+  });
+
+  it('reports none when this exact payment id is already recorded on ANY enrollment, even a different one than an email match would find', async () => {
+    // Regression: a student's real seat gets paid under their main email;
+    // their still-unpaid Explorer duplicate happens to share that email. A
+    // later run must not treat the duplicate as a fresh, legitimate match
+    // for the same payment.
+    const alreadyReconciledElsewhere = enrollment({ id: 'the-real-paid-row', payment_status: 'paid' });
+    setupFindOne({ alreadyUsedBy: alreadyReconciledElsewhere });
+
+    const result = await findMatchingEnrollment(customer(), 111, 999);
 
     expect(result).toEqual({ kind: 'none' });
     expect(mockEnrFindAll).not.toHaveBeenCalled();
@@ -159,7 +184,6 @@ describe('runPaymentReconciliationSweep', () => {
   it('auto-reconciles a high-confidence settled email match', async () => {
     mockListRecentPayments.mockResolvedValue([payment()]);
     mockGetCustomerById.mockResolvedValue(customer());
-    mockEnrFindOne.mockResolvedValue(null);
     const enr = enrollment();
     mockEnrFindAll.mockResolvedValue([enr]);
     mockEnrFindByPk.mockResolvedValue(enr);
@@ -174,7 +198,6 @@ describe('runPaymentReconciliationSweep', () => {
   it('flags rather than applies an Authorized (not yet settled) payment with no prior customer_id link', async () => {
     mockListRecentPayments.mockResolvedValue([payment({ Status: 'Authorized' })]);
     mockGetCustomerById.mockResolvedValue(customer());
-    mockEnrFindOne.mockResolvedValue(null);
     mockEnrFindAll.mockResolvedValue([enrollment()]);
 
     const result = await runPaymentReconciliationSweep();
@@ -189,7 +212,7 @@ describe('runPaymentReconciliationSweep', () => {
     mockListRecentPayments.mockResolvedValue([payment({ Status: 'Authorized' })]);
     mockGetCustomerById.mockResolvedValue(customer());
     const enr = enrollment();
-    mockEnrFindOne.mockResolvedValue(enr);
+    setupFindOne({ byCustomerId: enr });
     mockEnrFindByPk.mockResolvedValue(enr);
 
     const result = await runPaymentReconciliationSweep();
@@ -201,7 +224,6 @@ describe('runPaymentReconciliationSweep', () => {
   it('flags ambiguous email matches without writing anything', async () => {
     mockListRecentPayments.mockResolvedValue([payment()]);
     mockGetCustomerById.mockResolvedValue(customer());
-    mockEnrFindOne.mockResolvedValue(null);
     mockEnrFindAll.mockResolvedValue([enrollment({ id: 'a' }), enrollment({ id: 'b' })]);
 
     const result = await runPaymentReconciliationSweep();
@@ -214,7 +236,6 @@ describe('runPaymentReconciliationSweep', () => {
   it('skips a payment with no matching enrollment at all, without erroring', async () => {
     mockListRecentPayments.mockResolvedValue([payment()]);
     mockGetCustomerById.mockResolvedValue(customer());
-    mockEnrFindOne.mockResolvedValue(null);
     mockEnrFindAll.mockResolvedValue([]);
 
     const result = await runPaymentReconciliationSweep();
@@ -222,6 +243,21 @@ describe('runPaymentReconciliationSweep', () => {
     expect(result.autoReconciled).toHaveLength(0);
     expect(result.flagged).toHaveLength(0);
     expect(result.errors).toHaveLength(0);
+  });
+
+  it('skips a payment already reconciled onto a different enrollment than an email match would find (no duplicate seat)', async () => {
+    mockListRecentPayments.mockResolvedValue([payment()]);
+    mockGetCustomerById.mockResolvedValue(customer());
+    setupFindOne({ alreadyUsedBy: enrollment({ id: 'the-real-row', payment_status: 'paid' }) });
+    // Would otherwise "find" this still-unpaid duplicate via the email lookup.
+    mockEnrFindAll.mockResolvedValue([enrollment({ id: 'stray-duplicate' })]);
+
+    const result = await runPaymentReconciliationSweep();
+
+    expect(result.autoReconciled).toHaveLength(0);
+    expect(result.flagged).toHaveLength(0);
+    expect(mockCohortIncrement).not.toHaveBeenCalled();
+    expect(mockEnrFindAll).not.toHaveBeenCalled();
   });
 
   it('ignores Failed/Voided payments entirely', async () => {
@@ -259,7 +295,6 @@ describe('runPaymentReconciliationSweep', () => {
     mockGetCustomerById
       .mockRejectedValueOnce(new Error('customer lookup failed'))
       .mockResolvedValueOnce(customer());
-    mockEnrFindOne.mockResolvedValue(null);
     const enr = enrollment();
     mockEnrFindAll.mockResolvedValue([enr]);
     mockEnrFindByPk.mockResolvedValue(enr);
@@ -273,7 +308,6 @@ describe('runPaymentReconciliationSweep', () => {
   it('dry run reports what it would do without writing anything', async () => {
     mockListRecentPayments.mockResolvedValue([payment()]);
     mockGetCustomerById.mockResolvedValue(customer());
-    mockEnrFindOne.mockResolvedValue(null);
     const enr = enrollment();
     mockEnrFindAll.mockResolvedValue([enr]);
 
