@@ -175,11 +175,13 @@ export type AiAgentType =
   // Dynamic (created by AI COO)
   | 'dynamic'
   // Department super agents
-  | 'super_agent';
+  | 'super_agent'
+  // AI Workforce directors (orgRegistry.ts) — one tool + one action each
+  | 'workforce_director';
 
 export type AiAgentStatus = 'idle' | 'running' | 'paused' | 'error';
 export type AiAgentTriggerType = 'cron' | 'on_demand' | 'event_driven';
-export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting' | 'dept_strategy' | 'security_ops' | 'dept_super';
+export type AiAgentCategory = 'outbound' | 'behavioral' | 'maintenance' | 'ai_ops' | 'accelerator' | 'autonomous' | 'strategic' | 'memory' | 'meta' | 'security' | 'website_intelligence' | 'admissions' | 'admissions_ops' | 'curriculum' | 'operations' | 'executive' | 'alumni' | 'partnerships' | 'student_success' | 'governance_ops' | 'openclaw' | 'reporting' | 'dept_strategy' | 'security_ops' | 'dept_super' | 'workforce_director';
 
 interface AiAgentAttributes {
   id?: string;

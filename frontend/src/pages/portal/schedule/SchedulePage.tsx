@@ -291,7 +291,7 @@ const SchedulePage: React.FC = () => {
       const dots = evs.slice(0, 3).map((ev) => renderItem(
         ev, `mdot ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`,
         <>
-          <b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</b>
+          <b>{ev.title}</b>
           {ev.time ? <span className="mp">{ev.time}</span> : null}
         </>,
       ));

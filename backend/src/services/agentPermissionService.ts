@@ -63,6 +63,21 @@ const AGENT_PERMISSIONS: Record<string, AgentPermission> = {
   AdmissionsSMSAgent: { tier: 'communication', allowedTables: ['admissions_action_logs', 'communication_logs'], allowedOperations: ['send_sms'], requiresEvaluateSend: true },
   AdmissionsSynthflowCallAgent: { tier: 'communication', allowedTables: ['call_contact_logs', 'admissions_action_logs', 'communication_logs'], allowedOperations: ['synthflow_call'], requiresEvaluateSend: true },
   AdmissionsEmailAgent: { tier: 'communication', allowedTables: ['admissions_action_logs', 'communication_logs'], allowedOperations: ['send_email'], requiresEvaluateSend: true },
+
+  // AI Workforce directors (orgRegistry.ts) — one tool + one action each.
+  // 9 write_with_audit: internal task/message queue only, a human still has to
+  // act on the resulting row. Marketing is the sole outward-facing director,
+  // kept at suggest_only so a human reviews every content idea before it ships.
+  WorkforceStudentSuccessDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_student_success'], requiresEvaluateSend: false },
+  WorkforceCurriculumDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_curriculum'], requiresEvaluateSend: false },
+  WorkforceCareerDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_career'], requiresEvaluateSend: false },
+  WorkforceCertificationDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_certification'], requiresEvaluateSend: false },
+  WorkforceFinanceDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_finance'], requiresEvaluateSend: false },
+  WorkforceOperationsDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_operations'], requiresEvaluateSend: false },
+  WorkforceCommunityDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_community'], requiresEvaluateSend: false },
+  WorkforceTechnologyDirector: { tier: 'write_with_audit', allowedTables: ['workforce_tasks'], allowedOperations: ['flag_agent_health_issue'], requiresEvaluateSend: false },
+  WorkforceResearchDirector: { tier: 'write_with_audit', allowedTables: ['workforce_messages'], allowedOperations: ['surface_insight'], requiresEvaluateSend: false },
+  WorkforceMarketingDirector: { tier: 'suggest_only', allowedTables: ['proposed_agent_actions'], allowedOperations: ['propose_content_idea'], requiresEvaluateSend: false },
 };
 
 // Default permission for unclassified agents — restrict to suggest_only

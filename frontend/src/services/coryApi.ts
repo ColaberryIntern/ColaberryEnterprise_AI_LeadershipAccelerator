@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getParticipantToken } from '../utils/participantToken';
 
 const API_BASE = '/api/admin/intelligence/cory';
 
@@ -15,7 +16,7 @@ api.interceptors.request.use((config) => {
   // ali@colaberry.com or has role super_admin. This unblocks Cory on the
   // portal (which authenticates via participant_token only). The fallback
   // doesn't loosen anything — the gate predicate is identical on both sides.
-  const token = localStorage.getItem('admin_token') || localStorage.getItem('participant_token');
+  const token = localStorage.getItem('admin_token') || getParticipantToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

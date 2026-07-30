@@ -65,3 +65,19 @@ const BY_SLUG = new Map(AI_ORG.map((e) => [e.slug, e]));
 export const findEmployee = (slug: string): AiEmployee | undefined => BY_SLUG.get(slug);
 export const directors = (): AiEmployee[] => AI_ORG.filter((e) => e.supervisor === 'chief_of_staff');
 export const chiefOfStaff = (): AiEmployee => BY_SLUG.get('chief_of_staff')!;
+
+/** Each director's org slug -> its `ai_agents.agent_name` (the same name used by
+ *  directorActions.ts, agentPermissionService.ts, agentRegistrySeed.ts, and
+ *  aiOpsScheduler.ts). Single source for the Trust Center's slug <-> agent lookup. */
+export const WORKFORCE_AGENT_NAME: Record<string, string> = {
+  student_success: 'WorkforceStudentSuccessDirector',
+  curriculum: 'WorkforceCurriculumDirector',
+  career: 'WorkforceCareerDirector',
+  certification: 'WorkforceCertificationDirector',
+  finance: 'WorkforceFinanceDirector',
+  operations: 'WorkforceOperationsDirector',
+  community: 'WorkforceCommunityDirector',
+  technology: 'WorkforceTechnologyDirector',
+  research: 'WorkforceResearchDirector',
+  marketing: 'WorkforceMarketingDirector',
+};

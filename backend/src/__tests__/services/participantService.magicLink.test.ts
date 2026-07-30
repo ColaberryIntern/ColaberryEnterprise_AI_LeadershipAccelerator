@@ -29,6 +29,7 @@ import { Enrollment, Cohort } from '../../models';
 import { pickBestEnrollment, requestMagicLink } from '../../services/participantService';
 
 const enrFindAll = Enrollment.findAll as jest.Mock;
+const enrFindOne = Enrollment.findOne as jest.Mock;
 const cohortFindByPk = Cohort.findByPk as jest.Mock;
 
 beforeEach(() => {
@@ -83,4 +84,63 @@ describe('requestMagicLink', () => {
     expect(explorer.update).not.toHaveBeenCalled();
     expect(mockSendPortalMagicLink).toHaveBeenCalledWith(expect.objectContaining({ to: 'student@example.com' }));
   });
+});
+
+/**
+ * `next` threading — the QR check-in flow. A student who scans the class QR
+ * while signed out must come back to the check-in page after verifying, or
+ * their attendance is silently never recorded (the 2026-07-23 Orientation bug).
+ * The value reaches us from a query string, so unsafe input must be dropped,
+ * not echoed into the email we send.
+ */
+describe('post-login destination (next)', () => {
+  const enrollmentFixture = () => ({
+    id: 'e1', email: 'a@b.com', full_name: 'A B', cohort_id: 'c1',
+    enrollment_type: 'standard', payment_status: 'paid', created_at: '2026-07-01T00:00:00Z',
+    update: jest.fn().mockResolvedValue(undefined),
+  });
+
+  it('forwards a safe check-in path to the email builder', async () => {
+    enrFindAll.mockResolvedValue([enrollmentFixture()]);
+    await requestMagicLink('a@b.com', '/portal/class-checkin/sess-1');
+    expect(mockSendPortalMagicLink.mock.calls[0][0].next).toBe('/portal/class-checkin/sess-1');
+  });
+
+  it.each([
+    ['an off-origin absolute URL', 'https://evil.com/portal/today'],
+    ['a protocol-relative URL', '//evil.com'],
+    ['a non-portal path', '/admin/accelerator'],
+    ['a non-string', { next: 1 }],
+  ])('drops %s rather than emailing it', async (_label, bad) => {
+    enrFindAll.mockResolvedValue([enrollmentFixture()]);
+    await requestMagicLink('a@b.com', bad as unknown);
+    expect(mockSendPortalMagicLink.mock.calls[0][0].next).toBeUndefined();
+  });
+
+  it('omits next entirely when none is supplied (unchanged default)', async () => {
+    enrFindAll.mockResolvedValue([enrollmentFixture()]);
+    await requestMagicLink('a@b.com');
+    expect(mockSendPortalMagicLink.mock.calls[0][0].next).toBeUndefined();
+  });
+});
+
+/**
+ * Blocked-login path. Manually rostered students used to be created with
+ * portal_enabled=false and hit this branch with no server-side signal at all —
+ * a whole cohort locked out silently. The rejection must stay observable.
+ */
+it('logs a classified warning when the enrollment exists but portal access is off', async () => {
+  const warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  enrFindAll.mockResolvedValue([]);
+  enrFindOne.mockResolvedValue({ id: 'e-blocked', cohort_id: 'c-jul26' });
+
+  const res = await requestMagicLink('blocked@x.com');
+
+  expect(res.success).toBe(false);
+  expect(mockSendPortalMagicLink).not.toHaveBeenCalled();
+  const logged = JSON.parse(warn.mock.calls[0][0] as string);
+  expect(logged.event).toBe('portal_login_blocked');
+  expect(logged.error_class).toBe('PortalAccessDisabled');
+  expect(logged.context.enrollment_id).toBe('e-blocked');
+  warn.mockRestore();
 });

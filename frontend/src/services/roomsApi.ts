@@ -1,4 +1,5 @@
 import portalApi from '../utils/portalApi';
+import { getParticipantToken } from '../utils/participantToken';
 
 // Client for the Community Rooms backend (/api/portal/community/rooms|bookings|
 // events|home|people). Mirrors communityApi.ts — goes through portalApi so the
@@ -67,7 +68,7 @@ export interface RoomListItem {
 // The viewer's enrollment id, decoded from the participant JWT (for owner checks).
 export function myEnrollmentId(): string {
   try {
-    const t = localStorage.getItem('participant_token') || '';
+    const t = getParticipantToken() || '';
     return JSON.parse(atob(t.split('.')[1] || '')).sub || '';
   } catch { return ''; }
 }
