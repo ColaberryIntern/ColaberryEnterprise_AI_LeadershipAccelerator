@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCountdown } from '../../../hooks/useCountdown';
-import { parseSessionTimeToHHMM, tzAbbrev } from '../../../utils/sessionTime';
+import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTimeRange } from '../../../utils/sessionTime';
 import { NextLiveSession, joinSession } from '../../../services/onboardingApi';
 import { emitPointsEarned } from '../../../services/pointsFx';
 
@@ -47,8 +47,8 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
         <b style={{ color: 'var(--strong)' }}>Session {session.session_number}</b> · {session.title}
       </div>
       <div className="te-muted" style={{ marginTop: 2 }}>
-        {session.session_date} · {session.start_time} - {session.end_time}
-        {tzAbbrev(session.timezone) && ` ${tzAbbrev(session.timezone)}`}
+        {session.session_date} · {formatSessionTimeRange(session.start_time, session.end_time)}
+        {tzAbbrev(session.timezone, session.session_date) && ` ${tzAbbrev(session.timezone, session.session_date)}`}
       </div>
 
       {isLive ? (

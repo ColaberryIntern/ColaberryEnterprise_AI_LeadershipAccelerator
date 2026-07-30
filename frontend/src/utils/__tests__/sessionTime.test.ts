@@ -1,4 +1,4 @@
-import { parseSessionTimeToHHMM, tzAbbrev } from '../sessionTime';
+import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTime, formatSessionTimeRange } from '../sessionTime';
 
 describe('parseSessionTimeToHHMM', () => {
   it('converts 12-hour PM to 24-hour', () => {
@@ -34,19 +34,64 @@ describe('parseSessionTimeToHHMM', () => {
 });
 
 describe('tzAbbrev', () => {
-  it('maps the Central program zone to CT (fixes the hardcoded-ET mislabel)', () => {
-    expect(tzAbbrev('America/Chicago')).toBe('CT');
+  it('returns the DST-correct label for Central time (CDT in summer, CST in winter)', () => {
+    expect(tzAbbrev('America/Chicago', '2026-07-30')).toBe('CDT');
+    expect(tzAbbrev('America/Chicago', '2026-01-15')).toBe('CST');
   });
 
-  it('maps the other US zones', () => {
-    expect(tzAbbrev('America/New_York')).toBe('ET');
-    expect(tzAbbrev('America/Denver')).toBe('MT');
-    expect(tzAbbrev('America/Los_Angeles')).toBe('PT');
+  it('maps the other US zones with DST awareness', () => {
+    expect(tzAbbrev('America/New_York', '2026-07-30')).toBe('EDT');
+    expect(tzAbbrev('America/Denver', '2026-01-15')).toBe('MST');
+    expect(tzAbbrev('America/Los_Angeles', '2026-07-30')).toBe('PDT');
   });
 
-  it('returns "" for unknown/missing zone so no misleading suffix is shown', () => {
-    expect(tzAbbrev('Europe/London')).toBe('');
+  it('defaults to today when no date is given', () => {
+    expect(tzAbbrev('America/Chicago')).toMatch(/^C[SD]T$/);
+  });
+
+  it('returns "" for unsupported/unknown/missing zone so no misleading suffix is shown', () => {
+    expect(tzAbbrev('Europe/London', '2026-07-30')).toBe('');
     expect(tzAbbrev(null)).toBe('');
     expect(tzAbbrev(undefined)).toBe('');
+  });
+});
+
+describe('formatSessionTime', () => {
+  it('converts 24-hour HH:MM:SS to a 12-hour clock time', () => {
+    expect(formatSessionTime('18:30:00')).toBe('6:30 PM');
+  });
+
+  it('converts 24-hour HH:MM to a 12-hour clock time', () => {
+    expect(formatSessionTime('09:00')).toBe('9:00 AM');
+  });
+
+  it('returns null for empty/malformed input', () => {
+    expect(formatSessionTime('garbage')).toBeNull();
+    expect(formatSessionTime(null)).toBeNull();
+    expect(formatSessionTime(undefined)).toBeNull();
+  });
+});
+
+describe('formatSessionTimeRange', () => {
+  it('collapses a shared PM suffix (the reported Next-live-class case)', () => {
+    expect(formatSessionTimeRange('18:30:00', '20:30:00')).toBe('6:30 - 8:30 PM');
+  });
+
+  it('collapses a shared AM suffix', () => {
+    expect(formatSessionTimeRange('09:00', '11:00')).toBe('9:00 - 11:00 AM');
+  });
+
+  it('keeps both suffixes when the range crosses noon', () => {
+    expect(formatSessionTimeRange('11:30:00', '13:30:00')).toBe('11:30 AM - 1:30 PM');
+  });
+
+  it('renders midnight as 12 AM and noon as 12 PM', () => {
+    expect(formatSessionTimeRange('00:00:00', '01:00:00')).toBe('12:00 - 1:00 AM');
+    expect(formatSessionTimeRange('12:00:00', '13:00:00')).toBe('12:00 - 1:00 PM');
+  });
+
+  it('falls back to the raw strings when either side is unparseable', () => {
+    expect(formatSessionTimeRange('garbage', '20:30:00')).toBe('garbage - 20:30:00');
+    expect(formatSessionTimeRange(null, undefined)).toBe('');
   });
 });
