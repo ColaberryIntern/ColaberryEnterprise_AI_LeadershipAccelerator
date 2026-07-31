@@ -997,16 +997,14 @@ export async function getMyProfile(enrollmentId: string): Promise<MemberProfile>
   return toMemberProfile(member, summary.total, badges);
 }
 
-// Cross-member lookups return NotFoundError uniformly whether the member
-// doesn't exist OR belongs to a different cohort — avoids leaking cross-cohort
-// member existence (per-student data isolation, root CLAUDE.md security rules).
+// Platform-wide member lookup (not cohort-scoped) — any signed-in participant
+// can view any other member's profile, matching the fully-open People
+// directory below and the cross-cohort friend requests in friendshipService.ts.
 export async function getMemberProfileById(enrollmentId: string, targetMemberId: string): Promise<MemberProfile> {
-  const cohortId = await resolveCohortId(enrollmentId);
-
   const target = await CommunityMember.findByPk(targetMemberId, {
     include: [{ model: Enrollment, as: 'enrollment', attributes: ['cohort_id'] }],
   });
-  if (!target || (target as any).enrollment?.cohort_id !== cohortId) {
+  if (!target) {
     throw notFoundError('Member not found');
   }
   const total = (await getPointsSummary(target.enrollment_id)).total;
@@ -1051,12 +1049,11 @@ export interface DirectoryPage {
 const DIRECTORY_DEFAULT_LIMIT = 24;
 const DIRECTORY_MAX_LIMIT = 100;
 
-// Cohort-scoped directory — ordered by canonical points DESC. Points/level/badges
-// come from the ONE ledger + recognition (batched), so this matches the
-// leaderboard + HUD. `members` is always present; new callers read total/has_more.
+// Platform-wide directory (not cohort-scoped) — ordered by canonical points
+// DESC. Points/level/badges come from the ONE ledger + recognition (batched),
+// so this matches the leaderboard + HUD. `members` is always present; new
+// callers read total/has_more.
 export async function listMembers(enrollmentId: string, query: DirectoryQuery = {}): Promise<DirectoryPage> {
-  const cohortId = await resolveCohortId(enrollmentId);
-
   const where: Record<string, unknown> = {};
   if (query.role) where.role = query.role;
   const search = query.search?.trim();
@@ -1064,7 +1061,7 @@ export async function listMembers(enrollmentId: string, query: DirectoryQuery = 
 
   const members = await CommunityMember.findAll({
     where,
-    include: [{ model: Enrollment, as: 'enrollment', attributes: [], where: { cohort_id: cohortId } }],
+    include: [{ model: Enrollment, as: 'enrollment', attributes: [] }],
   });
 
   const enrollmentIds = members.map((m: any) => m.enrollment_id);

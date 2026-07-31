@@ -12,11 +12,13 @@ const PRESENCE_LABEL: Record<string, string> = {
 
 /**
  * Slide-in member profile (Design E). Opens on avatar/name clicks anywhere in
- * the feed, the People directory, or the contacts rail. Cohort privacy is
- * preserved server-side: a member in another cohort resolves to 404, which
- * surfaces here as "not available". Message opens a 1:1 DM (via the shared
- * `te-open-dm` bridge → ChatDock in PortalShell); Connect sends a friend
- * request. Both are enrollment-keyed (profile.enrollment_id).
+ * the feed, the People directory, or the contacts rail. Profile lookups are
+ * platform-wide (not cohort-scoped) — "not available" here means the member
+ * genuinely doesn't exist. Message opens a 1:1 DM (via the shared `te-open-dm`
+ * bridge → ChatDock in PortalShell) — still cohort-scoped for students in
+ * dmService.ts, so a cross-cohort Message attempt surfaces PortalShell's error
+ * toast. Connect sends a friend request and works cross-cohort for everyone.
+ * Both are enrollment-keyed (profile.enrollment_id).
  */
 const MemberProfileDrawer: React.FC<{
   memberId: string | null;
