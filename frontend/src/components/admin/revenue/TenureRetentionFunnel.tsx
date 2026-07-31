@@ -17,16 +17,22 @@ interface Props {
 // always render as an empty, meaningless legend entry.
 const PLAN_ORDER: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp'];
 
+const monthSubtitle = (month: number): string =>
+  `Subscribers currently in their ${month === 5 ? '5th month or later' : `${ORDINAL[month]} month`}, sorted by next payment date.`;
+
 /** Tenure funnel — a snapshot heatmap of how many current subscribers are how
  *  many months into their subscription, split by plan, with a retention %
  *  against the bucket above. Explorer (free trial, no subscription yet) sits
  *  at the top; higher tenure buckets get thinner as people churn out. This is
  *  a headcount-ratio snapshot, not per-person cohort tracking across time —
  *  the subscription model is too new for a full acquisition-month matrix to
- *  carry enough data yet. Every bucket drills down into its roster. */
+ *  carry enough data yet. Clicking a bucket's label/track drills into
+ *  everyone in that month; clicking one of its colored plan segments narrows
+ *  further to just that plan within that month. */
 export default function TenureRetentionFunnel({ buckets }: Props) {
   const [showExplorers, setShowExplorers] = useState(false);
   const [monthDrill, setMonthDrill] = useState<{ month: number; label: string } | null>(null);
+  const [segmentDrill, setSegmentDrill] = useState<{ month: number; plan: SubscriptionPlanKey; label: string } | null>(null);
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
 
   return (
@@ -49,13 +55,13 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
         // buckets[0] is always "Explorer"; buckets[1..5] are Month 1..5+ (1-based month index = i).
         const isExplorer = i === 0;
         const monthIndex = i; // i=1 -> Month 1 ... i=5 -> Month 5+
-        const onClick = isExplorer ? () => setShowExplorers(true) : () => setMonthDrill({ month: monthIndex, label: b.label });
+        const onRowClick = isExplorer ? () => setShowExplorers(true) : () => setMonthDrill({ month: monthIndex, label: b.label });
         return (
           <div
             key={b.label}
             className="d-flex align-items-center gap-3 my-2"
             style={{ fontSize: 13, cursor: 'pointer' }}
-            onClick={onClick}
+            onClick={onRowClick}
             role="button"
             title={`View all ${b.count} in ${b.label}`}
           >
@@ -72,6 +78,14 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
                   {PLAN_ORDER.filter((p) => b.byPlan[p] > 0).map((p) => (
                     <span
                       key={p}
+                      onClick={
+                        isExplorer
+                          ? undefined
+                          : (e) => {
+                              e.stopPropagation();
+                              setSegmentDrill({ month: monthIndex, plan: p, label: `${PLAN_LABEL[p]} · ${b.label}` });
+                            }
+                      }
                       style={{
                         display: 'block',
                         height: '100%',
@@ -79,7 +93,7 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
                         background: PLAN_COLOR[p],
                         borderRadius: 4,
                       }}
-                      title={`${PLAN_LABEL[p]}: ${b.byPlan[p]}`}
+                      title={`${PLAN_LABEL[p]}: ${b.byPlan[p]} — click to filter to just ${PLAN_LABEL[p]}`}
                     />
                   ))}
                 </span>
@@ -97,9 +111,20 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
       {monthDrill && (
         <MemberRosterModal
           title={monthDrill.label}
-          subtitle={`Subscribers currently in their ${monthDrill.month === 5 ? '5th month or later' : `${ORDINAL[monthDrill.month]} month`}, sorted by next payment date.`}
+          subtitle={monthSubtitle(monthDrill.month)}
           fetcher={() => getTenureBucketRoster(monthDrill.month)}
           onClose={() => setMonthDrill(null)}
+        />
+      )}
+      {segmentDrill && (
+        <MemberRosterModal
+          title={segmentDrill.label}
+          subtitle={`${PLAN_LABEL[segmentDrill.plan]} subscribers only, within this tenure month, sorted by next payment date.`}
+          fetcher={async () => {
+            const monthRoster = await getTenureBucketRoster(segmentDrill.month);
+            return monthRoster.filter((r) => r.plan === segmentDrill.plan);
+          }}
+          onClose={() => setSegmentDrill(null)}
         />
       )}
     </SectionCard>
