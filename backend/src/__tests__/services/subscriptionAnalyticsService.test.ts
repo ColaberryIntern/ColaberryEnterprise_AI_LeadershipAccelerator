@@ -18,6 +18,7 @@ import {
   getTenureBucketRoster,
   getPlanRoster,
   getDepositHolderRoster,
+  getStaffRoster,
   SubscriptionAnalytics,
 } from '../../services/subscriptionAnalyticsService';
 
@@ -27,6 +28,7 @@ type Row = {
   email: string | null;
   amount_paid: string | null;
   enrollment_created_at: string | null;
+  is_staff: boolean;
   sub_id: string | null;
   plan: 'annual' | 'monthly' | 'comp' | null;
   sub_status: 'pending' | 'active' | 'canceled' | 'failed' | null;
@@ -45,6 +47,7 @@ const row = (overrides: Partial<Row>): Row => ({
   email: 'test@example.com',
   amount_paid: '199.00',
   enrollment_created_at: new Date(NOW - 10 * DAY_MS).toISOString(),
+  is_staff: false,
   sub_id: 'sub-1',
   plan: 'monthly',
   sub_status: 'active',
@@ -62,6 +65,7 @@ const noSubRow = (overrides: Partial<Row>): Row => ({
   email: 'nosub@example.com',
   amount_paid: null,
   enrollment_created_at: null,
+  is_staff: false,
   sub_id: null,
   plan: null,
   sub_status: null,
@@ -73,10 +77,15 @@ const noSubRow = (overrides: Partial<Row>): Row => ({
 });
 
 /** Wire the two-query mock: member rows first, explorer/deposit counts second. */
-function mockRows(memberRows: Row[], explorerCounts = { free_trial: 0, deposit_holders: 0, deposit_cents: 0 }): void {
+function mockRows(
+  memberRows: Row[],
+  explorerCounts: { free_trial: number; deposit_holders: number; deposit_cents: number; staff?: number } = {
+    free_trial: 0, deposit_holders: 0, deposit_cents: 0,
+  }
+): void {
   mockQuery.mockImplementation((sql: string) => {
     if (sql.includes('FROM enrollments e') && sql.includes('LEFT JOIN subscriptions')) return Promise.resolve(memberRows);
-    if (sql.includes("enrollment_type = 'explorer'")) return Promise.resolve([explorerCounts]);
+    if (sql.includes("enrollment_type = 'explorer'")) return Promise.resolve([{ staff: 0, ...explorerCounts }]);
     throw new Error(`Unexpected query: ${sql}`);
   });
 }
@@ -119,7 +128,7 @@ describe('getSubscriptionAnalytics', () => {
     mockRows([]);
     const result = await getSubscriptionAnalytics(NOW);
 
-    expect(result.kpis).toEqual({ mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, arpu: 0 });
+    expect(result.kpis).toEqual({ mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, staffCount: 0, arpu: 0 });
     expect(result.upcomingPayments).toEqual([]);
     expect(result.attention).toEqual([]);
     expect(result.tenureFunnel[0].count).toBe(0);
@@ -273,6 +282,43 @@ describe('getSubscriptionAnalytics', () => {
     expect(byLabel.get('Month 1')!.count).toBe(1);
     expect(byLabel.get('Month 1')!.byPlan.monthly).toBe(1);
   });
+
+  it('classifies a comped seat held by a real team member as Staff, not Free Access', async () => {
+    mockRows([
+      row({ enrollment_id: 'enr-staff-comp', plan: 'comp', amount_cents: 0, is_staff: true }),
+    ]);
+    const result = await getSubscriptionAnalytics(NOW);
+    expect(result.kpis.staffCount).toBe(1);
+    expect(result.kpis.compedSeats).toBe(0);
+    const byPlan = Object.fromEntries(result.planBreakdown.map((p) => [p.plan, p]));
+    expect(byPlan.staff.count).toBe(1);
+    expect(byPlan.comp.count).toBe(0); // the comp bucket is always shown, but this staff member isn't in it
+  });
+
+  it('never anchors a staff member into the tenure funnel, and never flags them for upcoming/lapsed/failed attention', async () => {
+    mockRows([
+      row({
+        enrollment_id: 'enr-staff-lapsed-shaped', is_staff: true, plan: 'monthly',
+        current_period_end: new Date(NOW - 5 * DAY_MS).toISOString(), // would be "lapsed" if not staff
+      }),
+    ]);
+    const result = await getSubscriptionAnalytics(NOW);
+    expect(result.attention).toEqual([]);
+    expect(result.upcomingPayments).toEqual([]);
+    const byLabel = new Map(result.tenureFunnel.map((b) => [b.label, b]));
+    expect(byLabel.get('Month 1')!.count).toBe(0);
+  });
+
+  it('adds explorer-shaped staff (internal test/onboarding signups) into staffCount via fetchExplorerCounts, on top of any staff already found among paying members', async () => {
+    mockRows(
+      [row({ enrollment_id: 'enr-staff-paying', is_staff: true, plan: 'monthly' })],
+      { free_trial: 5, deposit_holders: 0, deposit_cents: 0, staff: 2 }
+    );
+    const result = await getSubscriptionAnalytics(NOW);
+    expect(result.kpis.staffCount).toBe(3); // 1 from paying members + 2 explorer-shaped
+    const byPlan = Object.fromEntries(result.planBreakdown.map((p) => [p.plan, p]));
+    expect(byPlan.staff.count).toBe(3);
+  });
 });
 
 describe('getTenureBucketRoster', () => {
@@ -357,5 +403,26 @@ describe('getDepositHolderRoster', () => {
     expect(roster[0]).toEqual(expect.objectContaining({
       enrollment_id: 'enr-dep', plan: 'deposit_holder', monthly_amount: 50, next_payment_date: null,
     }));
+  });
+});
+
+describe('getStaffRoster', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('returns real Colaberry team members, labeled staff with no monthly amount or next payment date', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FROM enrollments e') && sql.includes('cm.mgmt_role')) {
+        return Promise.resolve([
+          { enrollment_id: 'enr-vivek', full_name: 'Vivek', email: 'vivek@colaberry.com', created_at: new Date(NOW - 400 * DAY_MS).toISOString() },
+        ]);
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    const roster = await getStaffRoster();
+    expect(roster).toEqual([
+      expect.objectContaining({ enrollment_id: 'enr-vivek', plan: 'staff', monthly_amount: 0, next_payment_date: null }),
+    ]);
   });
 });

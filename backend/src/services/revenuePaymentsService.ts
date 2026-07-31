@@ -62,7 +62,7 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
            FROM subscriptions WHERE enrollment_id = e.id
            ORDER BY (status = 'active') DESC, created_at DESC LIMIT 1
        ) s ON true
-      WHERE e.payment_status = 'paid' AND e.amount_paid > 0`,
+      WHERE e.payment_status = 'paid' AND e.amount_paid > 0 AND e.status = 'active'`,
     { type: QueryTypes.SELECT }
   )) as any[];
 

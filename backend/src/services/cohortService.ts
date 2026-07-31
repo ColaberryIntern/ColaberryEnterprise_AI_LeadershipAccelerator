@@ -153,8 +153,13 @@ export async function getDashboardStats() {
   //     membership payment). Count deposits still 'available'; an 'applied' one is
   //     already folded into the membership charge, so this can't double-count.
   // Replaces the old count * $4,500 estimate.
+  // status: 'active' excludes withdrawn duplicate rows (see
+  // duplicateAccountSweepService) — a merged-away loser row keeps its
+  // amount_paid/payment_status='paid' for history, so without this filter the
+  // same real dollar gets counted twice (confirmed live: Martin Mungai and
+  // Ikenna Nzeribe's $1,788 each, 2026-07-31).
   const membershipRevenue =
-    (await Enrollment.sum('amount_paid', { where: { payment_status: 'paid' } as any })) || 0;
+    (await Enrollment.sum('amount_paid', { where: { payment_status: 'paid', status: 'active' } as any })) || 0;
   const depositCents =
     (await AccountCredit.sum('amount_cents', { where: { status: 'available' } as any })) || 0;
   const collectedRevenue = membershipRevenue + depositCents / 100;
