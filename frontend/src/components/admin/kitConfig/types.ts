@@ -211,6 +211,28 @@ export function moveItemOnDrop<T>(
   return [...rest.slice(0, insertAt), movedItem, ...rest.slice(insertAt)];
 }
 
+/** Which array indices are beyond a category's `max` cap — for the Timeline
+ * Builder's "over cap" badge. Teach/Prompts/Interactions cap by slicing the
+ * raw resolved array directly (`kitSpecDaySlides.ts`'s `resolveTeachSlides`/
+ * `resolveInteractions`: `list.slice(0, max)`), so raw array position IS the
+ * real cap order for them. Story Beats is the one exception: the backend
+ * (`applyKitConfig`) caps by counting story-beat SLIDES in chronological
+ * run-of-show order (across every segment, in show order), not by the raw
+ * override-array order — so this needs its own chronological-order pass,
+ * or the badge would flag the wrong item as the one that won't render. */
+export function chronologicalOverCapIndices<T>(
+  items: T[], getSegment: (item: T) => string, segments: { id: string; startMin: number }[], max: number | null,
+): Set<number> {
+  if (max == null) return new Set();
+  const startMinBySegment = new Map(segments.map((s) => [s.id, s.startMin]));
+  const chronological = items
+    .map((it, i) => ({ it, i }))
+    .sort((a, b) => (startMinBySegment.get(getSegment(a.it)) ?? 0) - (startMinBySegment.get(getSegment(b.it)) ?? 0));
+  const overCap = new Set<number>();
+  chronological.forEach((x, pos) => { if (pos >= max) overCap.add(x.i); });
+  return overCap;
+}
+
 /** Category status, used to render the left-rail badge — one shared mental
  * model across every count+override category. */
 export type CategoryStatus = 'off' | 'custom' | 'capped' | 'default';

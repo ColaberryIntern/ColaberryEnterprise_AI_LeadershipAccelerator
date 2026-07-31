@@ -8,7 +8,8 @@ import { SortableContext, verticalListSortingStrategy, useSortable, sortableKeyb
 import { CSS } from '@dnd-kit/utilities';
 import {
   CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionPlacement,
-  CheckpointLandmark, BreakLandmark, TimelineSegment, CategoryKey, resolveTimelineList, moveItemOnDrop, SEGMENT_OPTIONS,
+  CheckpointLandmark, BreakLandmark, TimelineSegment, CategoryKey, resolveTimelineList, moveItemOnDrop,
+  chronologicalOverCapIndices, SEGMENT_OPTIONS,
 } from './types';
 
 /**
@@ -65,9 +66,9 @@ const TimelineCard: React.FC<{ id: string; capped?: boolean; onClick: () => void
  * drag/drop/cap-badge machinery serves Lessons/Prompts/Questions/Story Beats
  * without four near-duplicate implementations. */
 function SegmentTrack<T>({
-  icon, label, items, max, segments, getSegment, setSegment, renderCard, onChange, onCardClick, emptyNote,
+  icon, label, items, isCapped, segments, getSegment, setSegment, renderCard, onChange, onCardClick, emptyNote,
 }: {
-  icon: string; label: string; items: T[]; max: number | null; segments: TimelineSegment[];
+  icon: string; label: string; items: T[]; isCapped: (index: number) => boolean; segments: TimelineSegment[];
   getSegment: (item: T) => string; setSegment: (item: T, seg: string) => T;
   renderCard: (item: T) => React.ReactNode;
   onChange: (next: T[]) => void; onCardClick: () => void; emptyNote: string;
@@ -124,7 +125,7 @@ function SegmentTrack<T>({
               {!segItems.length ? null : (
                 <SortableContext items={segItems.map((x) => `card::${x.i}`)} strategy={verticalListSortingStrategy}>
                   {segItems.map((x) => (
-                    <TimelineCard key={`card::${x.i}`} id={`card::${x.i}`} capped={max != null && x.i >= max} onClick={onCardClick}>
+                    <TimelineCard key={`card::${x.i}`} id={`card::${x.i}`} capped={isCapped(x.i)} onClick={onCardClick}>
                       {renderCard(x.it)}
                     </TimelineCard>
                   ))}
@@ -168,11 +169,17 @@ interface Props {
   onChangeInteractions: (next: CountAndOverride<InteractionPlacement>) => void;
   onJumpToCategory: (key: CategoryKey) => void;
   onGenerateQuestion: (segment: string, instruction?: string) => Promise<InteractionPlacement>;
+  /** False when this week's guided-build already renders from Lessons (deep-
+   * teaching content) — mirrors PromptsPanel's own `appliesToThisSession`
+   * prop exactly, so the Timeline Builder doesn't let a drag on the Claude
+   * Code track look consequential when it currently has no visible effect. */
+  promptsApplyHere: boolean;
 }
 
 const TimelineBuilderPanel: React.FC<Props> = ({
   dayKind, segments, checkpoints, breakSegment, storyBeats, teach, prompts, interactions,
   onChangeStoryBeats, onChangeTeach, onChangePrompts, onChangeInteractions, onJumpToCategory, onGenerateQuestion,
+  promptsApplyHere,
 }) => {
   const [addingFor, setAddingFor] = useState<string | null>(null);
 
@@ -180,6 +187,7 @@ const TimelineBuilderPanel: React.FC<Props> = ({
   const promptItems = resolveTimelineList(prompts.config, prompts.defaults);
   const interactionItems = resolveTimelineList(interactions.config, interactions.defaults);
   const storyBeatItems = resolveTimelineList(storyBeats.config, storyBeats.defaults);
+  const storyBeatOverCap = chronologicalOverCapIndices(storyBeatItems, (b) => b.segment, segments, storyBeats.config.max);
 
   const addQuestionAt = async (segmentId: string) => {
     setAddingFor(segmentId);
@@ -236,7 +244,7 @@ const TimelineBuilderPanel: React.FC<Props> = ({
           )}
 
           <SegmentTrack
-            icon="📖" label="Lessons" items={teachItems} max={teach.config.max} segments={segments}
+            icon="📖" label="Lessons" items={teachItems} isCapped={(i) => teach.config.max != null && i >= teach.config.max} segments={segments}
             getSegment={(s) => s.segment} setSegment={(s, seg) => ({ ...s, segment: seg })}
             renderCard={(s) => <><div className="fw-semibold text-truncate">{s.title}</div><div className="text-muted text-truncate" style={{ fontSize: '.72rem' }}>{s.eyebrow}</div></>}
             onChange={(next) => onChangeTeach({ ...teach.config, overrides: next })}
@@ -251,19 +259,27 @@ const TimelineBuilderPanel: React.FC<Props> = ({
             // this track only ever shows the 'guided-build' lane, and drag
             // support is reorder-only, never cross-lane (there's nowhere
             // else for a prompt to conceptually go).
-            <SegmentTrack
-              icon="⌨️" label="Claude Code" items={promptItems} max={prompts.config.max}
-              segments={segments.filter((s) => s.id === 'guided-build')}
-              getSegment={() => 'guided-build'} setSegment={(p) => p}
-              renderCard={(p) => <div className="fw-semibold text-truncate">{p.label}</div>}
-              onChange={(next) => onChangePrompts({ ...prompts.config, overrides: next })}
-              onCardClick={() => onJumpToCategory('prompts')}
-              emptyNote={prompts.config.enabled ? 'No Claude Code examples authored yet — see the Claude Code Examples tab.' : 'Claude Code Examples are off for this class.'}
-            />
+            <>
+              {!promptsApplyHere && (
+                <div className="alert alert-info small py-2 px-3 my-2">
+                  This week's guided build already renders from <strong>Lessons</strong> — the Claude Code track below
+                  won't change what's on screen until Lessons is turned off for this class.
+                </div>
+              )}
+              <SegmentTrack
+                icon="⌨️" label="Claude Code" items={promptItems} isCapped={(i) => prompts.config.max != null && i >= prompts.config.max}
+                segments={segments.filter((s) => s.id === 'guided-build')}
+                getSegment={() => 'guided-build'} setSegment={(p) => p}
+                renderCard={(p) => <div className="fw-semibold text-truncate">{p.label}</div>}
+                onChange={(next) => onChangePrompts({ ...prompts.config, overrides: next })}
+                onCardClick={() => onJumpToCategory('prompts')}
+                emptyNote={prompts.config.enabled ? 'No Claude Code examples authored yet — see the Claude Code Examples tab.' : 'Claude Code Examples are off for this class.'}
+              />
+            </>
           )}
 
           <SegmentTrack
-            icon="🗳️" label="Questions" items={interactionItems} max={interactions.config.max} segments={segments}
+            icon="🗳️" label="Questions" items={interactionItems} isCapped={(i) => interactions.config.max != null && i >= interactions.config.max} segments={segments}
             getSegment={(q) => q.segment} setSegment={(q, seg) => ({ ...q, segment: seg })}
             renderCard={(q) => <><div className="fw-semibold text-truncate">{q.q || '(untitled)'}</div><div className="text-muted" style={{ fontSize: '.7rem' }}>{q.kind}</div></>}
             onChange={(next) => onChangeInteractions({ ...interactions.config, overrides: next })}
@@ -289,7 +305,7 @@ const TimelineBuilderPanel: React.FC<Props> = ({
           )}
 
           <SegmentTrack
-            icon="🎭" label="Story Beats" items={storyBeatItems} max={storyBeats.config.max} segments={segments}
+            icon="🎭" label="Story Beats" items={storyBeatItems} isCapped={(i) => storyBeatOverCap.has(i)} segments={segments}
             getSegment={(b) => b.segment} setSegment={(b, seg) => ({ ...b, segment: seg })}
             renderCard={(b) => <><div className="fw-semibold text-truncate">{b.icon} {b.title}</div></>}
             onChange={(next) => onChangeStoryBeats({ ...storyBeats.config, overrides: next })}

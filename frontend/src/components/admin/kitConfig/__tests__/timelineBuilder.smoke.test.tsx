@@ -111,7 +111,7 @@ describe('TimelineBuilderPanel smoke render', () => {
         prompts={{ config: { enabled: true, max: null, overrides: [promptItem] }, defaults: [] }}
         interactions={{ config: { enabled: true, max: null, overrides: [questionItem] }, defaults: [] }}
         onChangeStoryBeats={noop} onChangeTeach={noop} onChangePrompts={noop} onChangeInteractions={noop}
-        onJumpToCategory={noop} onGenerateQuestion={noopAsync}
+        onJumpToCategory={noop} onGenerateQuestion={noopAsync} promptsApplyHere={true}
       />,
     );
     expect(html).toContain('Readiness check');
@@ -134,7 +134,7 @@ describe('TimelineBuilderPanel smoke render', () => {
         prompts={{ config: { enabled: true, max: null, overrides: [] }, defaults: [] }}
         interactions={{ config: { enabled: true, max: null, overrides: [strandedQuestion] }, defaults: [] }}
         onChangeStoryBeats={noop} onChangeTeach={noop} onChangePrompts={noop} onChangeInteractions={noop}
-        onJumpToCategory={noop} onGenerateQuestion={noopAsync}
+        onJumpToCategory={noop} onGenerateQuestion={noopAsync} promptsApplyHere={true}
       />,
     );
     expect(html).toContain('Stranded in the break?');
@@ -153,7 +153,7 @@ describe('TimelineBuilderPanel smoke render', () => {
         prompts={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
         interactions={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
         onChangeStoryBeats={noop} onChangeTeach={noop} onChangePrompts={noop} onChangeInteractions={noop}
-        onJumpToCategory={noop} onGenerateQuestion={noopAsync}
+        onJumpToCategory={noop} onGenerateQuestion={noopAsync} promptsApplyHere={true}
       />,
     );
     expect(html).not.toContain('⌨️ Claude Code');
@@ -170,11 +170,74 @@ describe('TimelineBuilderPanel smoke render', () => {
         prompts={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
         interactions={{ config: { enabled: true, max: 1, overrides: many }, defaults: [] }}
         onChangeStoryBeats={noop} onChangeTeach={noop} onChangePrompts={noop} onChangeInteractions={noop}
-        onJumpToCategory={noop} onGenerateQuestion={noopAsync}
+        onJumpToCategory={noop} onGenerateQuestion={noopAsync} promptsApplyHere={true}
       />,
     );
     expect(html).toContain('Quick check?');
     expect(html).toContain('Second question?');
     expect(html).toContain('over cap');
+  });
+
+  it('caps Story Beats by CHRONOLOGICAL run-of-show order, not raw array order (matches applyKitConfig\'s post-hoc counting, not a plain array slice)', () => {
+    // Authored in the "wrong" order for a naive raw-index cap: the beat tagged
+    // to the LATER segment ('guided-build', startMin 20) comes FIRST in the
+    // array, and the beat tagged to the EARLIER segment ('build-map', startMin
+    // 10) comes second. A raw-array-order cap of 1 would flag the 2nd array
+    // entry — but the backend counts in show order, so it's actually the
+    // 'guided-build' beat (which airs later) that gets dropped.
+    const laterBeat: StoryBeatOverride = { segment: 'guided-build', icon: '🔧', eyebrow: '', title: 'Later in the show', tone: 'berry' };
+    const earlierBeat: StoryBeatOverride = { segment: 'build-map', icon: '🗺️', eyebrow: '', title: 'Earlier in the show', tone: 'leaf' };
+    const html = renderToStaticMarkup(
+      <TimelineBuilderPanel
+        dayKind="build" segments={segments} checkpoints={[]} breakSegment={null}
+        storyBeats={{ config: { enabled: true, max: 1, overrides: [laterBeat, earlierBeat] }, defaults: [] }}
+        teach={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
+        prompts={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
+        interactions={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
+        onChangeStoryBeats={noop} onChangeTeach={noop} onChangePrompts={noop} onChangeInteractions={noop}
+        onJumpToCategory={noop} onGenerateQuestion={noopAsync} promptsApplyHere={true}
+      />,
+    );
+    // Both still render (capping is display-only), but "over cap" must sit
+    // inside the SAME card as "Later in the show" (the one the real deck
+    // would actually drop — it airs later in the show), not "Earlier in the
+    // show" (2nd in the array, but chronologically 1st).
+    const laterIdx = html.indexOf('Later in the show');
+    const earlierIdx = html.indexOf('Earlier in the show');
+    expect(laterIdx).toBeGreaterThan(-1);
+    expect(earlierIdx).toBeGreaterThan(-1);
+    expect(html.slice(laterIdx, laterIdx + 150)).toContain('over cap');
+    expect(html.slice(earlierIdx, earlierIdx + 150)).not.toContain('over cap');
+  });
+
+  it('shows the "won\'t change what\'s on screen" warning on the Claude Code track when Lessons already covers guided-build (mirrors PromptsPanel\'s own appliesToThisSession)', () => {
+    const html = renderToStaticMarkup(
+      <TimelineBuilderPanel
+        dayKind="build" segments={segments} checkpoints={[]} breakSegment={null}
+        storyBeats={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
+        teach={{ config: { enabled: true, max: null, overrides: [teachItem] }, defaults: [] }}
+        prompts={{ config: { enabled: true, max: null, overrides: [promptItem] }, defaults: [] }}
+        interactions={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
+        onChangeStoryBeats={noop} onChangeTeach={noop} onChangePrompts={noop} onChangeInteractions={noop}
+        onJumpToCategory={noop} onGenerateQuestion={noopAsync} promptsApplyHere={false}
+      />,
+    );
+    expect(html).toContain('already renders from');
+    expect(html).toContain('A prompt');
+  });
+
+  it('does not show the Claude Code warning when Lessons is off / does not cover guided-build', () => {
+    const html = renderToStaticMarkup(
+      <TimelineBuilderPanel
+        dayKind="build" segments={segments} checkpoints={[]} breakSegment={null}
+        storyBeats={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
+        teach={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
+        prompts={{ config: { enabled: true, max: null, overrides: [promptItem] }, defaults: [] }}
+        interactions={{ config: { enabled: true, max: null, overrides: null }, defaults: [] }}
+        onChangeStoryBeats={noop} onChangeTeach={noop} onChangePrompts={noop} onChangeInteractions={noop}
+        onJumpToCategory={noop} onGenerateQuestion={noopAsync} promptsApplyHere={true}
+      />,
+    );
+    expect(html).not.toContain('already renders from');
   });
 });

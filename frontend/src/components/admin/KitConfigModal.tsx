@@ -173,7 +173,8 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
                       onChangePrompts={(next) => setConfig({ ...config, prompts: next })}
                       onChangeInteractions={(next) => setConfig({ ...config, interactions: next })}
                       onJumpToCategory={setActive}
-                      onGenerateQuestion={generateQuestion} />
+                      onGenerateQuestion={generateQuestion}
+                      promptsApplyHere={promptsApplyHere} />
                   )}
                   {active === 'storyBeats' && (
                     <StoryBeatsPanel config={config.storyBeats} defaults={defaults.storyBeats}
