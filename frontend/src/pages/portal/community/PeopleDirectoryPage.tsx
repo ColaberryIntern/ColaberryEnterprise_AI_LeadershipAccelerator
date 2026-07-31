@@ -20,10 +20,10 @@ const ROLE_FILTERS: { key: CommunityMemberRole | 'all'; label: string }[] = [
 
 /**
  * People directory (Feature #3) — a dedicated, browsable, searchable roster of
- * every member on the platform (not cohort-scoped — role/badges still come from
- * the backend at /api/portal/community/members). Clicking a card opens the
- * shared MemberProfileDrawer (which now wires Message + Connect); Connect works
- * cross-cohort, Message stays cohort-scoped for students (dmService.ts).
+ * the viewer's cohort (staff/mgmt see every member on the platform instead —
+ * see communityService.ts's listMembers). Role/badges come from the backend
+ * (/api/portal/community/members). Clicking a card opens the shared
+ * MemberProfileDrawer (which now wires Message + Connect).
  */
 const PeopleDirectoryPage: React.FC = () => {
   const [members, setMembers] = useState<CommunityMemberProfile[]>([]);
@@ -66,7 +66,7 @@ const PeopleDirectoryPage: React.FC = () => {
       <div className="cm-people">
         <header className="cm-people-head">
           <h1>People</h1>
-          <p>{total} {total === 1 ? 'person' : 'people'} on the platform</p>
+          <p>{total} {total === 1 ? 'person' : 'people'} in your cohort</p>
         </header>
 
         <div className="cm-people-controls">
