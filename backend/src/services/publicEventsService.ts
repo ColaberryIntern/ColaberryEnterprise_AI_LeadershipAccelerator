@@ -40,6 +40,10 @@ const PUBLIC_EVENT_LIKE: string[] = [
 const FETCH_WINDOW_DAYS = 180;
 const FETCH_LIMIT = 100;
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
+// Keep an event visible through its "Join Room" live window (30 min before
+// start through 30 min after) instead of dropping it the instant start_at
+// passes — otherwise the join button would vanish mid-session.
+const JOIN_ROOM_GRACE_MS = 30 * 60 * 1000;
 
 interface CcppEventRow {
   EventId: string;
@@ -131,11 +135,12 @@ async function fetchFromCcpp(): Promise<OpenHouseView[]> {
       .request()
       .input('days', sql.Int, FETCH_WINDOW_DAYS)
       .input('lim', sql.Int, FETCH_LIMIT)
+      .input('graceMin', sql.Int, JOIN_ROOM_GRACE_MS / 60000)
       .query<CcppEventRow>(`
         SELECT TOP (@lim) EventId, Name, Description, URL, StartDate, EndDate
         FROM EventBrite_Events
         WHERE Status = 'live'
-          AND StartDate > GETUTCDATE()
+          AND StartDate > DATEADD(minute, -@graceMin, GETUTCDATE())
           AND StartDate <= DATEADD(day, @days, GETUTCDATE())
           AND (${allowlist})
         ORDER BY StartDate ASC
@@ -153,9 +158,10 @@ async function fetchFromPostgres(): Promise<OpenHouseView[]> {
     where: { status: 'scheduled' },
     order: [['starts_at', 'ASC']],
   });
-  // Future-only, so getNextPublicEvent()[0] is always an upcoming event (CCPP's
-  // SQL already filters future; this keeps the fallback consistent).
-  return rows.filter((e) => new Date(e.starts_at).getTime() > now).map((e) => ({
+  // Future (or still within the Join Room grace period), so getNextPublicEvent()[0]
+  // stays populated through an event's live window (CCPP's SQL applies the same
+  // grace period; this keeps the fallback consistent).
+  return rows.filter((e) => new Date(e.starts_at).getTime() > now - JOIN_ROOM_GRACE_MS).map((e) => ({
     id: e.id,
     title: e.title,
     description: e.description,
