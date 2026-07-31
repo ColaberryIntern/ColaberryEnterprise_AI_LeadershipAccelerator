@@ -131,3 +131,30 @@ describe('ticket-reply routing', () => {
     expect(ticketReplyMock).not.toHaveBeenCalled();
   });
 });
+
+describe('Lead-reply signature enforcement (P0-7 hardening)', () => {
+  // Previously an invalid Mandrill signature was rejected only on the ticket-<id>@ path;
+  // ordinary Lead-reply mail (auto-unsubscribe, AI auto-reply send, voice call to Ali) was
+  // processed even when the signature check failed. These prove the whole request is now
+  // rejected before ANY inbound event is processed, regardless of which path it would take.
+  it('an invalid signature on non-ticket-addressed mail is rejected before the Lead pipeline runs', async () => {
+    const body = { mandrill_events: ticketReplyEvent({ email: 'someone@reply.colaberry.ai' }) };
+    const { req, res } = mockReqRes(body, 'not-a-real-signature');
+
+    await handleMandrillInbound(req, res);
+
+    expect(leadFindOne).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it('a valid signature on non-ticket-addressed mail still reaches the Lead pipeline', async () => {
+    const body = { mandrill_events: ticketReplyEvent({ email: 'someone@reply.colaberry.ai' }) };
+    const signature = realMandrillSignature(INBOUND_URL, body);
+    const { req, res } = mockReqRes(body, signature);
+
+    await handleMandrillInbound(req, res);
+
+    expect(leadFindOne).toHaveBeenCalledWith({ where: { email: 'ali@colaberry.com' } });
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+});

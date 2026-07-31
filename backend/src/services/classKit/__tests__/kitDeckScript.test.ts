@@ -59,10 +59,11 @@ function makeLocalStorage() {
 }
 
 /** Boots one deckScript() instance in a fresh sandbox and returns test hooks. */
-function bootDeck() {
+function bootDeck(opts: { slideCount?: number } = {}) {
   const elementIds = [
     'kprogress', 'kcounter', 'knotes', 'kstart', 'kpaceclock', 'kpaceseg',
     'kpacestatus', 'kpacenow', 'kqr-overlay', 'kraillive', 'ktoast',
+    'kprev', 'knext',
   ];
   const elements: Record<string, ReturnType<typeof makeEl>> = {};
   elementIds.forEach((id) => {
@@ -70,15 +71,16 @@ function bootDeck() {
   });
   const body = makeEl();
 
-  const slideEl = makeEl({
+  const slideCount = opts.slideCount ?? 1;
+  const slideEls = Array.from({ length: slideCount }, () => makeEl({
     getAttribute: (name: string) =>
       ({ 'data-segstart': '0', 'data-segend': '200', 'data-seglabel': 'Test segment' } as Record<string, string>)[name] ?? null,
-  });
+  }));
 
   const document = {
     body,
     getElementById: (id: string) => elements[id] || null,
-    querySelectorAll: (sel: string) => (sel === '.kslide' ? [slideEl] : []),
+    querySelectorAll: (sel: string) => (sel === '.kslide' ? slideEls : []),
     querySelector: () => null,
     addEventListener: () => {},
   };
@@ -91,7 +93,7 @@ function bootDeck() {
       __KIT__: {
         segments: [],
         totalMinutes: 120,
-        slides: [{ id: 's0', title: 'Slide 0', segment_label: 'Test', phase: 'x' }],
+        slides: Array.from({ length: slideCount }, (_, n) => ({ id: 's' + n, title: 'Slide ' + n, segment_label: 'Test', phase: 'x' })),
         live: { enabled: false },
         meta: { sessionId: 'test-session' },
       },
@@ -124,6 +126,8 @@ function bootDeck() {
     },
     tick: () => intervalFns[0](),
     clickStart: () => elements.kstart._listeners.click[0](),
+    clickNext: () => elements.knext._listeners.click[0]({ stopPropagation: () => {} }),
+    clickPrev: () => elements.kprev._listeners.click[0]({ stopPropagation: () => {} }),
   };
 }
 
@@ -182,5 +186,49 @@ describe('Class Kit deck pace clock', () => {
     deck.clickStart(); // confirmed reset -> back to not-started
     expect(deck.elements.kstart.textContent).toBe('Start class');
     expect(deck.elements.kpaceclock.textContent).toBe('00:00');
+  });
+});
+
+describe('Class Kit deck slide navigation', () => {
+  // Regression: a whole-page click used to fire next()/prev() (a 28%-of-
+  // screen-width left/right split bound to a document click listener), so an
+  // ordinary click on the slide body turned the page. Dedicated buttons
+  // replace that entirely — clicking the slide body must do nothing now.
+  it('advances and retreats only via the dedicated kprev/knext buttons', () => {
+    const deck = bootDeck({ slideCount: 3 });
+    expect(deck.elements.kcounter.textContent).toBe('1 / 3');
+
+    deck.clickNext();
+    expect(deck.elements.kcounter.textContent).toBe('2 / 3');
+
+    deck.clickNext();
+    expect(deck.elements.kcounter.textContent).toBe('3 / 3');
+
+    deck.clickPrev();
+    expect(deck.elements.kcounter.textContent).toBe('2 / 3');
+  });
+
+  it('disables kprev on the first slide and knext on the last slide', () => {
+    const deck = bootDeck({ slideCount: 3 });
+    expect(deck.elements.kprev.disabled).toBe(true);
+    expect(deck.elements.knext.disabled).toBe(false);
+
+    deck.clickNext();
+    expect(deck.elements.kprev.disabled).toBe(false);
+    expect(deck.elements.knext.disabled).toBe(false);
+
+    deck.clickNext();
+    expect(deck.elements.kprev.disabled).toBe(false);
+    expect(deck.elements.knext.disabled).toBe(true);
+  });
+
+  it('does not overshoot past the first or last slide', () => {
+    const deck = bootDeck({ slideCount: 2 });
+    deck.clickPrev(); // already on slide 1 — must clamp, not go negative
+    expect(deck.elements.kcounter.textContent).toBe('1 / 2');
+
+    deck.clickNext();
+    deck.clickNext(); // already on the last slide — must clamp
+    expect(deck.elements.kcounter.textContent).toBe('2 / 2');
   });
 });

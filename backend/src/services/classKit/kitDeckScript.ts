@@ -31,6 +31,9 @@ export function deckScript(): string {
   var elProgress = document.getElementById('kprogress');
   var elCounter = document.getElementById('kcounter');
   var elNotes = document.getElementById('knotes');
+  var elPrev = document.getElementById('kprev');
+  var elNext = document.getElementById('knext');
+  var elStage = document.querySelector('.kstage');
 
   function pad(n){ n = Math.floor(n); return (n < 10 ? '0' : '') + n; }
   function fmtMMSS(ms){ var s = Math.max(0, Math.floor(ms/1000)); return pad(s/60) + ':' + pad(s%60); }
@@ -48,6 +51,8 @@ export function deckScript(): string {
     for (var k = 0; k < slides.length; k++){ slides[k].classList.toggle('active', k === i); }
     elProgress.style.width = ((i + 1) / slides.length * 100) + '%';
     elCounter.textContent = (i + 1) + ' / ' + slides.length;
+    if (elPrev) elPrev.disabled = (i === 0);
+    if (elNext) elNext.disabled = (i === slides.length - 1);
     applyMode();
     var sm = (K.slides || [])[i];
     if (sm && sm.question && sm.question.theater && !theaterState[sm.id]) theaterState[sm.id] = 'voting';
@@ -61,6 +66,26 @@ export function deckScript(): string {
   }
   function next(){ show(i + 1); }
   function prev(){ show(i - 1); }
+
+  // Dedicated nav buttons — the only click-driven way to change slides now.
+  // A whole-page click used to fire next()/prev() (a 28%-of-screen-width
+  // left/right split bound to document click), which turned the page on
+  // ordinary clicks meant for reading or pointing at content. Buttons +
+  // keyboard + swipe replace that entirely.
+  if (elPrev) elPrev.addEventListener('click', function(e){ e.stopPropagation(); prev(); });
+  if (elNext) elNext.addEventListener('click', function(e){ e.stopPropagation(); next(); });
+
+  // Touch swipe on the slide stage — useful on the phone-companion / Rehearse view.
+  var touchStartX = null;
+  if (elStage){
+    elStage.addEventListener('touchstart', function(e){ touchStartX = e.changedTouches[0].clientX; }, { passive: true });
+    elStage.addEventListener('touchend', function(e){
+      if (touchStartX === null) return;
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(dx) > 60){ if (dx < 0) next(); else prev(); }
+      touchStartX = null;
+    }, { passive: true });
+  }
 
   // Small persistent QR for latecomers — only past the cover slide, and only
   // once the instructor has actually started class (see kitDeckStyles.ts
@@ -382,9 +407,6 @@ export function deckScript(): string {
       return;
     }
     if (e.target.closest('#klateqr')){ e.stopPropagation(); toggleQR(); return; }
-    if (e.target.closest('#kpace, #krail, #knotes, .ktoggles, #kqr-overlay, button, a')) return;
-    // click zones: right = next, left = prev
-    if (e.clientX > window.innerWidth * 0.28) next(); else prev();
   });
 
   // ---- presenter notes ----

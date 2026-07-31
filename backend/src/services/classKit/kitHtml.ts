@@ -340,6 +340,9 @@ export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): strin
 </div>
 <button id="kfocus-exit" title="Exit Focus mode (V)">Exit focus ✕</button>
 
+<button id="kprev" class="knav left" type="button" aria-label="Previous slide">‹</button>
+<button id="knext" class="knav right" type="button" aria-label="Next slide">›</button>
+
 <div class="kstage">
 ${slidesHtml}
 </div>
@@ -384,7 +387,7 @@ ${slidesHtml}
 </div>
 
 <div id="kcounter">1 / ${spec.slides.length}</div>
-<div id="khint">→ next · N notes · C compact · Q qr · M mark · S start</div>
+<div id="khint">‹› or click the arrows · N notes · C compact · Q qr · M mark · S start</div>
 
 <script>window.__KIT__ = ${JSON.stringify(data).replace(/</g, '\\u003c')};</script>
 <script>${deckScript()}</script>

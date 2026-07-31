@@ -28,6 +28,7 @@ import {
   type DimensionDetail,
   type OpenAction,
 } from './trustRubric';
+import { getInpactGoalsEstimate } from './trustInpactGoalsService';
 
 type MetricState = 'live' | 'baseline' | 'placeholder';
 
@@ -39,6 +40,11 @@ export interface DimensionScore {
   evidence?: string; // why this score — closed gaps (with PR) + what remains. Powers the drill-down.
 }
 
+// TBI_COMPLIANCE_PROGRAM.md §2.4 — the Tier-1 production gate. Single source of truth; the
+// frontend banner reads productionGateMet rather than hardcoding these numbers itself.
+export const INPACT_PRODUCTION_GATE_PCT = 86;
+export const GOALS_PRODUCTION_GATE = 21;
+
 export interface TrustOverview {
   compositeTrustScore: number; // 0-100
   band: 'red' | 'amber' | 'green';
@@ -47,6 +53,9 @@ export interface TrustOverview {
   dimensions: DimensionScore[];
   inpactEstimatePct: number;
   goalsEstimate: number; // /25
+  inpactGoalsSource: string; // provenance of the estimate above — always surface this, never imply "live"
+  inpactGoalsScoredSystems: number; // how many Tier-1 systems the estimate is averaged over
+  productionGateMet: boolean; // INPACT >= INPACT_PRODUCTION_GATE_PCT && GOALS >= GOALS_PRODUCTION_GATE
   baselineSource: string;
 }
 
@@ -131,16 +140,36 @@ export async function getTrustOverview(): Promise<TrustOverview> {
     state: d.state,
     evidence: d.summary,
   }));
+
+  // INPACT/GOALS: averaged from the AI System Registry (docs/ai-governance/ai-systems-registry.csv)
+  // rather than hardcoded. Still a desk estimate per-system — TBI_COMPLIANCE_PROGRAM.md §4.1's
+  // evidence-cited scoring SOP has not run for any system yet — but now traceable and auditable
+  // instead of two unexplained literals.
+  let inpactEstimatePct = 0;
+  let goalsEstimate = 0;
+  let inpactGoalsSource = 'registry unavailable';
+  let inpactGoalsScoredSystems = 0;
+  try {
+    const est = getInpactGoalsEstimate();
+    inpactEstimatePct = est.inpactEstimatePct;
+    goalsEstimate = est.goalsEstimate;
+    inpactGoalsSource = est.registrySource;
+    inpactGoalsScoredSystems = est.scoredSystemCount;
+  } catch (err) {
+    structuredError('trust_inpact_goals_read', err);
+  }
+
   return {
     compositeTrustScore: composite,
     band: bandFor(composite),
     maturityLevel: composite >= 50 ? 'Level 3 of 5 — Developing' : 'Level 2 of 5 — Emerging / Pilot',
     recommendation: composite >= 80 ? 'GO' : 'GO WITH CONDITIONS',
     dimensions,
-    // INPACT/GOALS remain conservative desk estimates (the full cross-functional INPACT assessment
-    // is a separate exercise). P/T and G/O lifted by the kill-switch gating + cost/trace/events now live.
-    inpactEstimatePct: 53,
-    goalsEstimate: 15,
+    inpactEstimatePct,
+    goalsEstimate,
+    inpactGoalsSource,
+    inpactGoalsScoredSystems,
+    productionGateMet: inpactEstimatePct >= INPACT_PRODUCTION_GATE_PCT && goalsEstimate >= GOALS_PRODUCTION_GATE,
     baselineSource: RUBRIC_SOURCE,
   };
 }

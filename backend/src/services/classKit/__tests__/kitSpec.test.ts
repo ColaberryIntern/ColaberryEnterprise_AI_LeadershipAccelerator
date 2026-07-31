@@ -4,6 +4,7 @@ import * as path from 'path';
 import { detectDayKind, BuildKitSpecInput } from '../kitSpec';
 import { buildKitSpec } from '../kitSpecDaySlides';
 import { renderKitHtml } from '../kitHtml';
+import { DEFAULT_KIT_CONFIG, KitConfig } from '../kitConfig';
 
 /**
  * Unit tests for the Class Kit spec builder + HTML renderer. Also emits three
@@ -94,6 +95,93 @@ describe('buildKitSpec', () => {
   });
 });
 
+describe('buildKitSpec — KitConfig wiring', () => {
+  const week1ThursdaySession: BuildKitSpecInput['session'] = {
+    id: 's-thu', session_number: 3, title: 'Week 1: Business Analyst',
+    session_date: '2026-07-30', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+  };
+  const week1MondaySession: BuildKitSpecInput['session'] = {
+    id: 's-mon', session_number: 2, title: 'Week 1: Business Analyst',
+    session_date: '2026-07-27', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+  };
+
+  it('teach.enabled:false removes deep-teaching slides and the guided-build falls back to plain prompts', async () => {
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, teach: { enabled: false, max: null, overrides: null } };
+    const spec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config });
+    expect(spec.slides.some((s) => s.kind === 'teach')).toBe(false);
+    // Week 1's guided-build normally renders via deep-teach; disabling teach
+    // should engage the plain-prompts fallback instead of losing the segment.
+    expect(spec.slides.some((s) => s.kind === 'prompt')).toBe(true);
+  });
+
+  it('teach.max caps the number of deep-teaching slides shown', async () => {
+    const unconfigured = buildKitSpec(await inputFor(week1ThursdaySession));
+    const teachCount = unconfigured.slides.filter((s) => s.kind === 'teach').length;
+    expect(teachCount).toBeGreaterThan(1);
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, teach: { enabled: true, max: 1, overrides: null } };
+    const capped = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config });
+    expect(capped.slides.filter((s) => s.kind === 'teach').length).toBe(1);
+  });
+
+  it('teach.overrides fully replaces the authored deep-teaching content', async () => {
+    const customTeach = [{ segment: 'guided-build', eyebrow: '🧪 Custom', title: 'Custom checkpoint', body: 'A custom step.' }];
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, teach: { enabled: true, max: null, overrides: customTeach } };
+    const spec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config });
+    expect(spec.slides.some((s) => s.title === 'Custom checkpoint')).toBe(true);
+    expect(spec.slides.some((s) => s.title === 'Everyone at the same starting line')).toBe(false);
+  });
+
+  it('prompts.overrides only takes effect once teach is disabled (the fallback path)', async () => {
+    const customPrompts = [{ label: 'Custom prompt', prompt: 'Do the custom thing.' }];
+    const config: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      teach: { enabled: false, max: null, overrides: null },
+      prompts: { enabled: true, max: null, overrides: customPrompts },
+    };
+    const spec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config });
+    expect(spec.slides.some((s) => s.prompt?.label === 'Custom prompt')).toBe(true);
+  });
+
+  it('prompts.enabled:false suppresses the fallback prompt slides entirely', async () => {
+    const config: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      teach: { enabled: false, max: null, overrides: null },
+      prompts: { enabled: false, max: null, overrides: null },
+    };
+    const spec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config });
+    expect(spec.slides.some((s) => s.kind === 'prompt')).toBe(false);
+  });
+
+  it('disabling an interaction slot removes that slide; an override replaces its content', async () => {
+    const disabledConfig: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      interactions: { ...DEFAULT_KIT_CONFIG.interactions, thursdayTrivia: { enabled: false, override: null } },
+    };
+    const disabledSpec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config: disabledConfig });
+    expect(disabledSpec.slides.some((s) => s.eyebrow === '🧠 Warm-up')).toBe(false);
+
+    const overrideConfig: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      interactions: {
+        ...DEFAULT_KIT_CONFIG.interactions,
+        thursdayTrivia: { enabled: true, override: { kind: 'trivia', q: 'Custom trivia?', options: ['A', 'B'], answer: 0 } },
+      },
+    };
+    const overrideSpec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config: overrideConfig });
+    expect(overrideSpec.slides.some((s) => s.interaction?.q === 'Custom trivia?')).toBe(true);
+  });
+
+  it('disabling the Monday poll removes both its predict and reveal slides', async () => {
+    const config: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      interactions: { ...DEFAULT_KIT_CONFIG.interactions, mondayPoll: { enabled: false, override: null } },
+    };
+    const spec = buildKitSpec({ ...(await inputFor(week1MondaySession)), config });
+    expect(spec.slides.some((s) => s.eyebrow === '🔮 Predict')).toBe(false);
+    expect(spec.slides.some((s) => s.eyebrow === '🧭 Architecture challenge')).toBe(false);
+  });
+});
+
 describe('renderKitHtml', () => {
   it('produces a self-contained document and escapes text', async () => {
     const spec = buildKitSpec(await inputFor({
@@ -107,6 +195,11 @@ describe('renderKitHtml', () => {
     expect(html).toContain('id="krail"'); // pulse rail present
     expect(html).toContain('<svg'); // inline QR
     expect(html).not.toContain('<script>alert'); // sanity
+    // Dedicated nav buttons exist, and the old whole-page click-to-advance
+    // fallback (a click anywhere past 28% of screen width) is gone.
+    expect(html).toContain('id="kprev"');
+    expect(html).toContain('id="knext"');
+    expect(html).not.toContain('window.innerWidth * 0.28');
   });
 
   it('emits the three sample decks to the scratchpad', async () => {
