@@ -47,6 +47,10 @@ RUN npx playwright install --with-deps chromium
 # commit invalidates from here down, not the installs above.
 COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/frontend/src/pages ./frontend/src/pages
+# Static data the running backend reads directly off disk (not compiled/bundled) —
+# trustInpactGoalsService.ts reads this at runtime. Copied straight from the build
+# context (not --from=builder) since it needs no build step.
+COPY docs/ai-governance/ai-systems-registry.csv ./docs/ai-governance/ai-systems-registry.csv
 RUN mkdir -p /app/uploads/strategy-prep /data/screenshots /data/browser-profiles
 
 ENV NODE_ENV=production

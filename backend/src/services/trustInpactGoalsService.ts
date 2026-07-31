@@ -52,9 +52,26 @@ function parseGoals(raw: string): number | null {
 
 let cached: { mtimeMs: number; value: InpactGoalsEstimate } | null = null;
 
+// __dirname's depth relative to the repo root differs between environments: locally, both
+// backend/src/services/*.ts and backend/dist/services/*.js sit 3 levels under repo root. In
+// the prod/dev Docker image (backend/Dockerfile), backend/dist is flattened to /app/dist while
+// docs/ai-governance is copied to /app/docs/ai-governance — only 2 levels apart there. Trying
+// both candidates, first-match-wins, is more robust than hardcoding one and re-breaking this
+// every time the Docker layout or local build output shifts.
+function resolveRegistryPath(): string {
+  const candidates = [
+    path.resolve(__dirname, '../../../docs/ai-governance/ai-systems-registry.csv'), // local (source or dist)
+    path.resolve(__dirname, '../../docs/ai-governance/ai-systems-registry.csv'), // Docker image
+  ];
+  for (const p of candidates) {
+    if (fs.existsSync(p)) return p;
+  }
+  return candidates[0]; // none found — fall through so the resulting ENOENT names a real path
+}
+
 /** Reads and averages the registry. Cached per file mtime — the registry changes only when someone edits it. */
 export function getInpactGoalsEstimate(): InpactGoalsEstimate {
-  const csvPath = path.resolve(__dirname, '../../../docs/ai-governance/ai-systems-registry.csv');
+  const csvPath = resolveRegistryPath();
   const stat = fs.statSync(csvPath);
   if (cached && cached.mtimeMs === stat.mtimeMs) return cached.value;
 
