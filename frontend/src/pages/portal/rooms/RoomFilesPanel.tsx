@@ -122,8 +122,8 @@ const RoomFilesPanel: React.FC<{ roomId: string; canUpload: boolean; bookings?: 
               <option key={b.id} value={b.id}>{b.title}{b.start_at ? ` — ${fmtCentralDateTime(b.start_at)}` : ''}</option>
             ))}
           </select>
-          {selectedBooking?.related_live_session_id && (
-            <Link to={`/portal/sessions/${selectedBooking.related_live_session_id}`} className="rm-files-recap-link">
+          {selectedBooking?.related_room_id && (
+            <Link to={`/portal/rooms/${selectedBooking.related_room_id}`} className="rm-files-recap-link">
               ▶ View class recap &amp; recording
             </Link>
           )}

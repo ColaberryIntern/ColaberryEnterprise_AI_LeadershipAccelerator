@@ -1,5 +1,6 @@
 import { Cohort, LiveSession } from '../models';
 import { AppError } from '../utils/AppError';
+import { env } from '../config/env';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -162,6 +163,19 @@ export async function generateSessionsFromCohort(cohortId: string): Promise<Gene
       session_type: sessionType,
       status: 'scheduled',
     } as any);
+
+    // Bulk generation is a separate code path from acceleratorService.createSession
+    // (used for one-off/admin session creates), which already does this — this was
+    // the actual gap that left every real, bulk-generated session without a
+    // Colaberry Commons room. Same flag-gated, best-effort, non-fatal pattern.
+    if (env.communityRoomsEnabled) {
+      try {
+        const { ensureRoomForSession } = await import('./communityRooms/roomService');
+        await ensureRoomForSession(session);
+      } catch (err: any) {
+        console.warn('[CommunityRooms] ensureRoomForSession failed (non-fatal):', err?.message);
+      }
+    }
 
     sessions.push(session);
     console.log(

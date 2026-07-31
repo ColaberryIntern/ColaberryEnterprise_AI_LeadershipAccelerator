@@ -16,7 +16,7 @@ import {
   canUploadResource,
 } from './roomEntitlementService';
 import { getMeetingProvider } from './meetingProvider';
-import { log, slugify, shortToken, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
+import { log, slugify, shortToken, truncated, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
 
 // Rooms CRUD + discovery + the official-session linkage. Entitlement decisions
 // are delegated to roomEntitlementService; this module never returns a room a
@@ -35,12 +35,12 @@ export async function ensureRoomForSession(session: LiveSession): Promise<Commun
     where: { linked_live_session_id: session.id },
     defaults: {
       slug: `session-${session.id}`,
-      name: session.title || `Session ${session.session_number}`,
+      name: truncated(session.title, 200) || `Session ${session.session_number}`,
       category: 'your_cohort',
       room_type: 'scheduled',
       privacy: 'cohort',
       status: 'active',
-      topic: session.description || null,
+      topic: truncated(session.description, 255),
       linked_cohort_id: session.cohort_id,
       linked_live_session_id: session.id,
       is_system: true,
