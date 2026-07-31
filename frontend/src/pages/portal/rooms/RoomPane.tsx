@@ -9,6 +9,7 @@ import { fetchClassSessionDetail, ClassSessionInfo, joinSession } from '../../..
 import { emitPointsEarned } from '../../../services/pointsFx';
 import { useCountdown } from '../../../hooks/useCountdown';
 import { parseSessionTimeToHHMM, formatSessionTimeRange } from '../../../utils/sessionTime';
+import RoomRecordingsPanel from './RoomRecordingsPanel';
 
 // A chat-attached file's message content is always "📎 <title>" (see
 // handleAttachFile below) — strip the marker back off to recover the title
@@ -137,7 +138,7 @@ const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
   );
 };
 
-type RoomTab = 'chat' | 'files';
+type RoomTab = 'chat' | 'files' | 'recordings';
 
 const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () => void }> = ({ roomId, onDeleted, onChanged }) => {
   const [view, setView] = useState<RoomView | null | 'error'>(null);
@@ -322,6 +323,7 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
       <div className="rm-tabs" role="tablist" aria-label="Room sections">
         <button type="button" role="tab" aria-selected={paneTab === 'chat'} className={`rm-tab${paneTab === 'chat' ? ' active' : ''}`} onClick={() => setPaneTab('chat')}>Chat</button>
         <button type="button" role="tab" aria-selected={paneTab === 'files'} className={`rm-tab${paneTab === 'files' ? ' active' : ''}`} onClick={() => setPaneTab('files')}>Docs &amp; Files</button>
+        <button type="button" role="tab" aria-selected={paneTab === 'recordings'} className={`rm-tab${paneTab === 'recordings' ? ' active' : ''}`} onClick={() => setPaneTab('recordings')}>Recordings</button>
       </div>
 
       {paneTab === 'chat' && (
@@ -377,6 +379,7 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
       )}
 
       {paneTab === 'files' && <RoomFilesPanel roomId={roomId} canUpload={view.can_upload_resource} bookings={bookings} />}
+      {paneTab === 'recordings' && <RoomRecordingsPanel roomId={roomId} />}
 
       {showInvite && <InviteModal roomId={roomId} onClose={() => setShowInvite(false)} onDone={() => { loadRoom(); onChanged(); }} />}
     </div>

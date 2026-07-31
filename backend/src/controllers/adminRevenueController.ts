@@ -2,7 +2,13 @@ import { Request, Response, NextFunction } from 'express';
 import { getRevenueDashboard } from '../services/revenueDashboardService';
 import { getRevenuePayments } from '../services/revenuePaymentsService';
 import { reconcileAppPayments } from '../services/appPaymentReconcileService';
-import { getSubscriptionAnalytics, getTenureBucketRoster } from '../services/subscriptionAnalyticsService';
+import {
+  getSubscriptionAnalytics,
+  getTenureBucketRoster,
+  getPlanRoster,
+  getDepositHolderRoster,
+  SubscriptionPlanKey,
+} from '../services/subscriptionAnalyticsService';
 import { getExplorerRoster } from '../services/explorerRosterService';
 
 export async function handleGetRevenueDashboard(
@@ -77,6 +83,28 @@ export async function handleGetTenureBucketRoster(
       return;
     }
     const data = await getTenureBucketRoster(month);
+    res.json({ members: data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+const KNOWN_PLANS: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp', 'deposit_holder', 'other'];
+
+// Drill-down roster for one plan category ("just the Annual people", etc.),
+// across every tenure month — behind each row of "Subscribers by plan".
+export async function handleGetPlanRoster(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const plan = req.params.plan as SubscriptionPlanKey;
+    if (!KNOWN_PLANS.includes(plan)) {
+      res.status(400).json({ error: `plan must be one of ${KNOWN_PLANS.join(', ')}` });
+      return;
+    }
+    const data = plan === 'deposit_holder' ? await getDepositHolderRoster() : await getPlanRoster(plan);
     res.json({ members: data });
   } catch (error) {
     next(error);

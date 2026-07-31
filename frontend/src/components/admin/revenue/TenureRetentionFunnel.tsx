@@ -4,6 +4,9 @@ import { TenureBucket, SubscriptionPlanKey } from '../../../services/subscriptio
 import { PLAN_COLOR, PLAN_LABEL } from './format';
 import ExplorerRosterModal from './ExplorerRosterModal';
 import MemberRosterModal from './MemberRosterModal';
+import { getTenureBucketRoster } from '../../../services/subscriptionAnalyticsApi';
+
+const ORDINAL: Record<number, string> = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
 
 interface Props {
   buckets: TenureBucket[];
@@ -93,8 +96,9 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
       {showExplorers && <ExplorerRosterModal onClose={() => setShowExplorers(false)} />}
       {monthDrill && (
         <MemberRosterModal
-          monthIndex={monthDrill.month}
-          bucketLabel={monthDrill.label}
+          title={monthDrill.label}
+          subtitle={`Subscribers currently in their ${monthDrill.month === 5 ? '5th month or later' : `${ORDINAL[monthDrill.month]} month`}, sorted by next payment date.`}
+          fetcher={() => getTenureBucketRoster(monthDrill.month)}
           onClose={() => setMonthDrill(null)}
         />
       )}
