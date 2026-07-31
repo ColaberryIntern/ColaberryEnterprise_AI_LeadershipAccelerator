@@ -74,9 +74,11 @@ const TodayShell: React.FC = () => {
   const hasBackground = !!(profile && (profile.has_resume || profile.linkedin_url));
   const rsvped = !!schedule?.my_rsvp;
 
-  // The real registration lives on Eventbrite; RSVP here records it + awards
-  // points, then sends the student to Eventbrite to secure their seat.
-  const EVENTBRITE_OPEN_HOUSE_URL = 'https://www.eventbrite.com/e/colaberry-ai-systems-architect-accelerator-open-house-tickets-1992498063344';
+  // The real registration lives wherever the event is actually hosted (usually
+  // Eventbrite) — `oh.registration_url` is that event's own link, not a
+  // hardcoded one, since different events (Open House, Financial Literacy
+  // Workshop, etc.) each have their own page. RSVP here records it + awards
+  // points, then sends the student to that page to secure their seat.
   const doRsvp = async () => {
     if (!oh || busy) return;
     setBusy(true);
@@ -86,8 +88,17 @@ const TodayShell: React.FC = () => {
       emitPointsEarned(r.awarded ? (r.points ?? 0) : 0);
       flash(r.awarded ? `RSVP confirmed — +${r.points} points` : 'You are already RSVP\'d');
     } catch { flash('Could not RSVP right now'); } finally { setBusy(false); }
-    window.open(EVENTBRITE_OPEN_HOUSE_URL, '_blank', 'noopener');
+    if (oh.registration_url) window.open(oh.registration_url, '_blank', 'noopener');
   };
+
+  // "Join Room" — only meaningful once the event actually has a direct meeting
+  // link (most external CCPP events don't; registration_url is the RSVP page,
+  // meeting_link is the day-of join link when one exists). Live window is
+  // 30 min before start through 30 min after start.
+  const JOIN_ROOM_WINDOW_MS = 30 * 60 * 1000;
+  const ohStartMs = oh ? new Date(oh.starts_at).getTime() : null;
+  const canJoinRoom = !!(oh?.meeting_link && ohStartMs != null && now >= ohStartMs - JOIN_ROOM_WINDOW_MS && now <= ohStartMs + JOIN_ROOM_WINDOW_MS);
+  const joinRoomNotYetOpen = !!(oh?.meeting_link && ohStartMs != null && now < ohStartMs - JOIN_ROOM_WINDOW_MS);
 
   // Resume / LinkedIn are BOTH uploads. LinkedIn can't be scraped from a link,
   // so the user exports their LinkedIn profile to PDF (profile → More → Save to
@@ -311,6 +322,17 @@ const TodayShell: React.FC = () => {
                 <div className="te-stat"><span className="lab">{oh.title}</span></div>
                 <div className="te-muted">{fmtCentralDateTime(oh.starts_at)}</div>
                 <button className="te-btn berry sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd" : 'RSVP to the open house'}</button>
+                {oh.meeting_link && (
+                  <button
+                    className="te-btn leaf sm"
+                    style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                    onClick={() => window.open(oh.meeting_link as string, '_blank', 'noopener')}
+                    disabled={!canJoinRoom}
+                    title={joinRoomNotYetOpen ? 'Opens 30 minutes before the session starts' : (!canJoinRoom ? 'Join window has closed' : undefined)}
+                  >
+                    {canJoinRoom ? 'Join Room' : (joinRoomNotYetOpen ? 'Join Room · opens soon' : 'Join Room · closed')}
+                  </button>
+                )}
               </>
             ) : <div className="te-muted">No open house scheduled yet — check back soon.</div>}
           </div>
