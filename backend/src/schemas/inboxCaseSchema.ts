@@ -77,3 +77,75 @@ export const reopenCaseSchema = z.object({
 });
 
 export const actionTypeEnum = z.enum(ACTION_TYPES);
+
+// ---- AI assessment structured output (Phase 3: Assess/Teach/Ask) ----
+// Validates the model's JSON response before it is trusted for anything.
+// An invalid/malformed response never reaches the case record — the caller
+// falls back to a safe, deterministic assessment instead.
+
+const evidenceRefSchema = z.object({
+  item_id: z.string(),
+  source_type: z.string(),
+  quote: z.string().optional(),
+});
+
+const timelineEntrySchema = z.object({
+  occurred_at: z.string(),
+  summary: z.string(),
+  evidence: z.array(evidenceRefSchema).default([]),
+});
+
+export const caseAssessmentOutputSchema = z.object({
+  objective: z.string().min(1),
+  current_state: z.string().min(1),
+  summary: z.string().min(1),
+  timeline: z.array(timelineEntrySchema).default([]),
+  confirmed_facts: z.array(z.object({ statement: z.string(), evidence: z.array(evidenceRefSchema).default([]) })).default([]),
+  assumptions: z
+    .array(z.object({ statement: z.string(), confidence: z.number().min(0).max(100), evidence: z.array(evidenceRefSchema).default([]) }))
+    .default([]),
+  contradictions: z.array(z.object({ statement: z.string(), evidence: z.array(evidenceRefSchema).default([]) })).default([]),
+  root_cause_assessment: z.string().nullable().default(null),
+  impact: z.string().default(''),
+  people_involved: z.array(z.object({ name: z.string(), role: z.string() })).default([]),
+  current_owner: z.string().nullable().default(null),
+  commitments_made: z
+    .array(z.object({ statement: z.string(), owner: z.string(), evidence: z.array(evidenceRefSchema).default([]) }))
+    .default([]),
+  deadlines: z
+    .array(z.object({ description: z.string(), due_at: z.string().nullable().default(null), evidence: z.array(evidenceRefSchema).default([]) }))
+    .default([]),
+  blockers: z.array(z.string()).default([]),
+  missing_information: z.array(z.string()).default([]),
+  decisions_required: z.array(z.string()).default([]),
+  recommended_next_actions: z.array(z.string()).default([]),
+  confidence: z.number().min(0).max(100),
+  // Consolidated, case-level questions — never one per email. Each must be
+  // answerable with a short list of choices plus a free-text write-in.
+  questions: z
+    .array(
+      z.object({
+        question: z.string().min(1),
+        why_required: z.string().min(1),
+        choices: z.array(z.object({ label: z.string(), consequence: z.string() })).default([]),
+        recommended_answer: z.string().nullable().default(null),
+      })
+    )
+    .default([]),
+  teaching_brief: z.object({
+    what_is_happening: z.string(),
+    why_it_matters: z.string(),
+    what_ali_is_deciding: z.string(),
+    root_cause: z.string().nullable().default(null),
+    confirmed_vs_inferred: z.string(),
+    risk_of_acting: z.string(),
+    risk_of_delaying: z.string(),
+    recommended_decision: z.string(),
+    rationale: z.string(),
+  }),
+});
+export type CaseAssessmentOutput = z.infer<typeof caseAssessmentOutputSchema>;
+
+export const assessCaseSchema = z.object({
+  requested_by: z.string().max(100).default('admin'),
+});

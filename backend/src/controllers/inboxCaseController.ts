@@ -1,9 +1,10 @@
 import { Request, Response } from 'express';
 import InboxCase from '../models/InboxCase';
 import InboxCaseEvent from '../models/InboxCaseEvent';
-import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema } from '../schemas/inboxCaseSchema';
+import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema } from '../schemas/inboxCaseSchema';
 import { discoverCases } from '../services/inboxCase/caseDiscoveryService';
 import { getCaseWithChildren } from '../services/inboxCase/caseRepository';
+import { runAssessment } from '../services/inboxCase/caseAssessmentService';
 import InboxCaseItem from '../models/InboxCaseItem';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
 import { randomUUID } from 'crypto';
@@ -98,6 +99,28 @@ export async function handleUpdateCaseItem(req: Request, res: Response) {
   });
 
   res.json({ item: item.toJSON() });
+}
+
+export async function handleAssessCase(req: Request, res: Response) {
+  const paramsParsed = caseIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) return res.status(400).json({ error: 'ValidationError', details: paramsParsed.error.issues });
+  const bodyParsed = assessCaseSchema.safeParse(req.body || {});
+  if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
+
+  try {
+    const result = await runAssessment(paramsParsed.data.caseId, bodyParsed.data.requested_by);
+    res.json({
+      assessment: result.assessment,
+      teaching_brief: result.teachingBrief,
+      questions_created: result.questionsCreated,
+      used_fallback: result.usedFallback,
+    });
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    if (err?.name === 'InvalidCaseTransitionError') return res.status(409).json({ error: err.name, message: err.message });
+    console.error('[InboxCase] AssessCase error:', err?.message);
+    res.status(500).json({ error: 'AssessmentFailedError', message: err?.message });
+  }
 }
 
 export async function handleGetCaseAudit(req: Request, res: Response) {

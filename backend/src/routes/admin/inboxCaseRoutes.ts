@@ -5,6 +5,7 @@ import {
   handleListCases,
   handleGetCase,
   handleUpdateCaseItem,
+  handleAssessCase,
   handleGetCaseAudit,
   handleCaseStats,
 } from '../../controllers/inboxCaseController';
@@ -31,6 +32,7 @@ router.post('/api/admin/inbox/cases/discover', requireAdmin, handleDiscoverCase)
 router.get('/api/admin/inbox/cases', requireAdmin, handleListCases);
 router.get('/api/admin/inbox/case-stats', requireAdmin, handleCaseStats);
 router.get('/api/admin/inbox/cases/:caseId', requireAdmin, handleGetCase);
+router.post('/api/admin/inbox/cases/:caseId/assess', requireAdmin, handleAssessCase);
 router.patch('/api/admin/inbox/cases/:caseId/items/:itemId', requireAdmin, handleUpdateCaseItem);
 router.get('/api/admin/inbox/cases/:caseId/audit', requireAdmin, handleGetCaseAudit);
 
