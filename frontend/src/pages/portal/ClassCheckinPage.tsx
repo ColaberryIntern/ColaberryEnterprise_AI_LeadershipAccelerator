@@ -145,10 +145,12 @@ const ClassCheckinPage: React.FC = () => {
     doJoin();
   }, [phase, isAuthenticated, doJoin]);
 
-  // The session's Colaberry Commons room (Meet + class chat) — not the
-  // retired /portal/sessions/:id detail page. Falls back to the old page
-  // only for the rare session with no room yet.
-  const enterClass = () => navigate(info?.room_id ? `/portal/rooms/${info.room_id}` : `/portal/sessions/${sessionId}`);
+  // The session's Colaberry Commons room (Meet + class chat). Falls back to
+  // Today (never the retired /portal/sessions/:id page, removed in Phase 4
+  // of the waiting-room plan) for the rare session with no room yet — the
+  // student is already checked in either way, so Today's own Next-live-class
+  // card picks up from there.
+  const enterClass = () => navigate(info?.room_id ? `/portal/rooms/${info.room_id}` : '/portal/today');
 
   // Carry the student's intent through sign-in. Without this the magic-link
   // round trip lands them on /portal/today and their attendance is never

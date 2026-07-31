@@ -79,16 +79,20 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
               <div className="seg"><b>{cd.seconds}</b><span>sec</span></div>
             </div>
           )}
-          <Link
-            className="te-btn cherry"
-            style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
-            // The session's Colaberry Commons room (chat + join-meeting) —
-            // not the retired /portal/sessions/:id detail page. Falls back
-            // to the old page only for the rare session with no room yet.
-            to={session.room_id ? `/portal/rooms/${session.room_id}` : `/portal/sessions/${session.id}`}
-          >
-            Open the classroom
-          </Link>
+          {/* The session's Colaberry Commons room (chat + join-meeting).
+              ensureRoomForSession provisions one for every real session, but
+              a session predating that rollout could legitimately have none —
+              hide the button rather than link to the retired session-detail
+              page (removed in Phase 4 of the waiting-room plan). */}
+          {session.room_id && (
+            <Link
+              className="te-btn cherry"
+              style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
+              to={`/portal/rooms/${session.room_id}`}
+            >
+              Open the classroom
+            </Link>
+          )}
         </>
       )}
     </div>

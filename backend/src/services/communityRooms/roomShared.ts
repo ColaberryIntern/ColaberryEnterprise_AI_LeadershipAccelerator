@@ -37,3 +37,13 @@ export function slugify(input: string, suffix?: string): string {
 export function shortToken(): string {
   return Date.now().toString(36).slice(-4) + Math.floor(Math.random() * 1_679_616).toString(36).padStart(4, '0');
 }
+
+// A source field can be longer than the capped VARCHAR column it's being
+// mapped into (e.g. LiveSession.description is TEXT, unbounded, but
+// CommunityRoom.topic is VARCHAR(255)) — truncate rather than let the insert
+// fail. Found live in production: 25 of 30 real sessions had a description
+// over 255 chars, so ensureRoomForSession had silently never succeeded for them.
+export function truncated(value: string | null | undefined, maxLength: number): string | null {
+  if (!value) return null;
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}

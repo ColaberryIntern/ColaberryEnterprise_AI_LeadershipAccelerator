@@ -16,7 +16,6 @@ import PageGate from '../components/paywall/PageGate';
 import RuntimeWorkspace from '../pages/portal/runtime/RuntimeWorkspace';
 import PortalLessonPage from '../pages/portal/PortalLessonPage';
 import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
-import PortalSessionDetailPage from '../pages/portal/PortalSessionDetailPage';
 import PortalAssignmentsPage from '../pages/portal/PortalAssignmentsPage';
 import PortalProgressPage from '../pages/portal/PortalProgressPage';
 import TodayShell from '../pages/portal/today/TodayShell';
@@ -87,7 +86,12 @@ const portalRoutes = (
         <Route path="/portal/classroom/week/:weekNum" element={<ClassroomWeekPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
         <Route path="/portal/sessions" element={<PortalSessionsPage />} />
-        <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
+        {/* Retired: the class waiting room is now the session's Colaberry
+            Commons room (see NextLiveClassCard/ClassroomPage/etc, which all
+            link to /portal/rooms/:room_id directly). Redirect rather than
+            delete the route outright, in case an old bookmark or email link
+            still points here — matches the /portal/curriculum precedent above. */}
+        <Route path="/portal/sessions/:id" element={<Navigate to="/portal/sessions" replace />} />
         <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
         <Route path="/portal/progress" element={<PortalProgressPage />} />
       </Route>

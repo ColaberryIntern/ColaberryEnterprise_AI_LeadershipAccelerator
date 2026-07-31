@@ -13,6 +13,7 @@ import * as messages from '../services/communityRooms/roomMessageService';
 import * as moderation from '../services/communityRooms/roomModerationService';
 import * as recognition from '../services/communityRooms/roomRecognitionService';
 import * as resourceSvc from '../services/communityRooms/roomResourceService';
+import { resolveRelatedRoomIds } from '../services/communityRooms/relatedRoomResolver';
 import { derivePresence } from '../services/communityService';
 import { hereCounts, touchRoomPresence } from '../services/communityRooms/roomPresenceService';
 import { roomResourceUpload, ROOM_RESOURCE_DIR, ROOM_RECORDING_DIR } from '../config/upload';
@@ -306,7 +307,19 @@ export async function getHome(req: Request, res: Response): Promise<void> {
 export async function listRoomBookings(req: Request, res: Response): Promise<void> {
   try {
     const rows = await bookings.listBookingsForRoom(ctxOf(req), String(req.params.id));
-    res.json({ bookings: rows.map((b) => ({ ...bookingCard(b), related_live_session_id: b.related_live_session_id })) });
+    // related_live_session_id -> the linked class's own Colaberry Commons
+    // room, so a booking's "View class recap" link can route there instead
+    // of the retired /portal/sessions/:id page.
+    const roomBySessionId = await resolveRelatedRoomIds(
+      rows.map((b) => b.related_live_session_id).filter((id): id is string => !!id),
+    );
+    res.json({
+      bookings: rows.map((b) => ({
+        ...bookingCard(b),
+        related_live_session_id: b.related_live_session_id,
+        related_room_id: b.related_live_session_id ? roomBySessionId.get(b.related_live_session_id) ?? null : null,
+      })),
+    });
   } catch (err) { fail(res, err); }
 }
 

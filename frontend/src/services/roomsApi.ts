@@ -104,6 +104,7 @@ export interface BookingCard {
   host_enrollment_id: string | null;
   emoji?: string;
   related_live_session_id?: string | null;
+  related_room_id?: string | null;
 }
 
 export interface RoomsHome {
