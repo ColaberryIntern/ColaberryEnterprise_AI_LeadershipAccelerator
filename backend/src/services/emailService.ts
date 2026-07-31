@@ -78,6 +78,116 @@ function emailHeaders(tag: string) {
   };
 }
 
+/* ── Training signup welcome (training.colaberry.com registrants) ───────────
+ * Branded, transactional welcome sent by enterprise.colaberry.ai but styled +
+ * addressed as the Colaberry Training team. Carries a one-click portal magic
+ * link so a fresh registrant lands straight in their portal. From-address is a
+ * Mandrill-verified colaberry.com sender (see env.trainingWelcomeFromEmail).
+ */
+export interface TrainingWelcomeData {
+  to: string;
+  fullName: string;
+  portalLink: string;
+}
+
+function escapeHtml(s: string): string {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
+  const firstName = (data.fullName || '').trim().split(/\s+/)[0] || 'there';
+  const name = escapeHtml(firstName);
+  const link = data.portalLink;
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Welcome to Colaberry</title>
+</head>
+<body style="margin:0; padding:0; background:#f7fafc;">
+  <div style="display:none; max-height:0; overflow:hidden; opacity:0;">Your seat is ready — step inside your Colaberry portal and get started.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f7fafc; padding:24px 0;">
+    <tr><td align="center">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px; width:100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden; font-family:'Segoe UI', system-ui, -apple-system, sans-serif;">
+        <!-- Header band -->
+        <tr><td style="background:#1a365d; padding:28px 32px;">
+          <div style="color:#ffffff; font-size:20px; font-weight:700; letter-spacing:0.3px;">Colaberry</div>
+          <div style="color:#90cdf4; font-size:13px; font-weight:500; margin-top:2px;">AI Training &amp; Career Acceleration</div>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:32px;">
+          <h1 style="margin:0 0 16px; color:#1a365d; font-size:24px; font-weight:700; line-height:1.25;">You're in, ${name}. Welcome to Colaberry.</h1>
+          <p style="margin:0 0 16px; color:#2d3748; font-size:16px; line-height:1.6;">
+            You just took the first real step toward building with AI, not just reading about it. Your seat is reserved and your learning portal is ready right now.
+          </p>
+          <p style="margin:0 0 20px; color:#2d3748; font-size:16px; line-height:1.6;">
+            Inside, you'll find everything you need to hit the ground running:
+          </p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 24px;">
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; Your program roadmap and what to expect week one</td></tr>
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; Hands-on projects you'll build and keep for your portfolio</td></tr>
+            <tr><td style="padding:8px 0; color:#2d3748; font-size:15px; line-height:1.5;"><span style="color:#38a169; font-weight:700;">&#10003;</span>&nbsp; A clear path from where you are to a real AI-ready role</td></tr>
+          </table>
+          <!-- CTA -->
+          <table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 24px;">
+            <tr><td style="border-radius:6px; background:#e53e3e;">
+              <a href="${link}" style="display:inline-block; padding:14px 32px; color:#ffffff; font-size:16px; font-weight:600; text-decoration:none; border-radius:6px;">Access Your Portal &rarr;</a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 8px; color:#718096; font-size:13px; line-height:1.5;">
+            Button not working? Copy and paste this secure link into your browser:
+          </p>
+          <p style="margin:0 0 20px; font-size:13px; line-height:1.5; word-break:break-all;">
+            <a href="${link}" style="color:#2b6cb0;">${escapeHtml(link)}</a>
+          </p>
+          <p style="margin:0; color:#718096; font-size:13px; line-height:1.5;">
+            This sign-in link is unique to you and stays active for the next 30 days. We can't wait to see what you build.
+          </p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 32px; border-top:1px solid #e2e8f0; background:#f7fafc;">
+          <div style="color:#1a365d; font-size:14px; font-weight:600;">The Colaberry Training Team</div>
+          <div style="color:#718096; font-size:12px; line-height:1.5; margin-top:4px;">
+            Colaberry &bull; AI Training, Architecture &amp; Career Acceleration<br>
+            You received this because you registered at training.colaberry.com.
+          </div>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+  `.trim();
+}
+
+export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ sent: boolean; messageId?: string }> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping training welcome to:', data.to);
+    return { sent: false };
+  }
+  const subject = 'Welcome to Colaberry — your AI journey starts now';
+  const r = await resolveEmailRecipient(data.to, subject);
+  const html = buildTrainingWelcomeHtml(data);
+  const fromHeader = `"${env.trainingWelcomeFromName}" <${env.trainingWelcomeFromEmail}>`;
+  const info = await transporter.sendMail({
+    from: fromHeader,
+    replyTo: fromHeader,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('training-welcome'),
+  });
+  console.log(`[Email] Training welcome sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  return { sent: true, messageId: info.messageId };
+}
+
 interface EnrollmentConfirmationData {
   to: string;
   fullName: string;
@@ -1080,6 +1190,13 @@ function buildDigestHtml(data: DigestData): string {
 }
 // --- Accelerator Session Emails ---
 
+// Seeded materials_json entries are `{ title, type }` with no `url` — render
+// those as plain text instead of an `href="undefined"` link.
+function renderMaterialLi(m: any): string {
+  const label = m.title || m.url || 'Untitled material';
+  return m.url ? `<li><a href="${m.url}">${label}</a></li>` : `<li>${label}</li>`;
+}
+
 interface SessionReminderData {
   to: string;
   fullName: string;
@@ -1117,10 +1234,10 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
   console.log(`[Email] Session reminder sent to: ${r.to} | msgId: ${info.messageId}`);
 }
 
-function buildSessionReminderHtml(data: SessionReminderData): string {
+export function buildSessionReminderHtml(data: SessionReminderData): string {
   const urgencyLabel = data.isOneHour ? 'Starting in 1 Hour' : 'Tomorrow';
   const materialsHtml = data.materialsJson?.length
-    ? `<h2>Session Materials</h2><ul>${data.materialsJson.map((m: any) => `<li><a href="${m.url}">${m.title || m.url}</a></li>`).join('')}</ul>`
+    ? `<h2>Session Materials</h2><ul>${data.materialsJson.map(renderMaterialLi).join('')}</ul>`
     : '';
 
   return `
@@ -1203,9 +1320,9 @@ export async function sendMissedSessionEmail(data: MissedSessionData): Promise<v
   console.log(`[Email] Missed session email sent to: ${r.to} | msgId: ${info.messageId}`);
 }
 
-function buildMissedSessionHtml(data: MissedSessionData): string {
+export function buildMissedSessionHtml(data: MissedSessionData): string {
   const materialsHtml = data.materialsJson?.length
-    ? `<h2>Session Materials</h2><ul>${data.materialsJson.map((m: any) => `<li><a href="${m.url}">${m.title || m.url}</a></li>`).join('')}</ul>`
+    ? `<h2>Session Materials</h2><ul>${data.materialsJson.map(renderMaterialLi).join('')}</ul>`
     : '';
 
   const warningHtml = data.consecutiveMisses >= 2
@@ -1746,4 +1863,82 @@ export async function sendCurriculumImpactDigest(
   console.log(
     `[Email] Curriculum impact digest sent to: ${r.to} | items: ${items.length} | msgId: ${info.messageId}`,
   );
+}
+
+// --- Sponsor (Employer) Magic Link Email ---
+
+interface SponsorMagicLinkData {
+  to: string;
+  managerName: string;
+  organizationName: string;
+  token: string;
+}
+
+function buildSponsorMagicLinkHtml(data: SponsorMagicLinkData, magicLink: string): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color: #2d3748; line-height: 1.6; max-width: 600px; margin: 0 auto; padding: 20px; }
+    h1 { color: #1a365d; font-size: 24px; }
+    .highlight { background: #f7fafc; border-left: 4px solid #1a365d; padding: 16px 20px; margin: 16px 0; border-radius: 0 8px 8px 0; }
+    .cta { display: inline-block; background: #1a365d; color: #ffffff; padding: 14px 28px; border-radius: 6px; text-decoration: none; font-weight: 600; margin: 16px 0; }
+    .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #e2e8f0; font-size: 14px; color: #718096; }
+    .notice { font-size: 13px; color: #718096; margin-top: 12px; }
+  </style>
+</head>
+<body>
+  <h1>Access Your Employer Dashboard</h1>
+
+  <p>Dear ${data.managerName},</p>
+
+  <p>You requested access to the <strong>${data.organizationName}</strong> employer dashboard. Click the button below to sign in:</p>
+
+  <p><a href="${magicLink}" class="cta">Access My Dashboard</a></p>
+
+  <div class="highlight">
+    <strong>Your dashboard includes:</strong><br>
+    &bull; Your team roster and seat management<br>
+    &bull; Team readiness and progress<br>
+    &bull; Billing and checkout
+  </div>
+
+  <p class="notice">This link expires in 30 days. If you did not request this link, you can safely ignore this email.</p>
+
+  <div class="footer">
+    <p>Colaberry Enterprise AI Division<br>
+    AI Leadership | Architecture | Implementation | Advisory</p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+
+export async function sendSponsorMagicLink(data: SponsorMagicLinkData): Promise<void> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping sponsor magic link email to:', data.to);
+    return;
+  }
+
+  const portalBaseUrl = env.frontendUrl || 'https://enterprise.colaberry.ai';
+  const magicLink = `${portalBaseUrl}/sponsor/dashboard?token=${data.token}`;
+
+  const r = await resolveEmailRecipient(
+    data.to,
+    `[Accelerator] Your Employer Portal Access Link`
+  );
+  const html = buildSponsorMagicLinkHtml(data, magicLink);
+  const info = await transporter.sendMail({
+    from: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    replyTo: `"Colaberry Enterprise AI" <${env.emailFrom}>`,
+    to: r.to,
+    subject: r.subject,
+    html,
+    text: htmlToPlainText(html),
+    headers: emailHeaders('accelerator-sponsor-magic-link'),
+  });
+
+  console.log(`[Email] Sponsor magic link sent to: ${r.to} | msgId: ${info.messageId}`);
 }
