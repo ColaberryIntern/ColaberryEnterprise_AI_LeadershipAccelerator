@@ -124,6 +124,7 @@ body.compact .kcover-grid, body.rail-on .kcover-grid{grid-template-columns:1fr}
   display:flex;align-items:center;gap:16px;padding:0 16px;border-top:3px solid var(--cherry)}
 #kpace .kstart{background:var(--cherry);color:#fff;border:none;border-radius:9px;padding:10px 18px;font-weight:800;cursor:pointer;font-size:14px;white-space:nowrap;letter-spacing:.4px}
 #kpace .kstart.running{background:#22303f;color:#9fb4c9}
+#kpace .kstart.ended{background:var(--amber);color:#1a1a1a}
 .kpace-clock{font-family:"Cascadia Mono",Consolas,monospace;font-size:20px;font-weight:700;white-space:nowrap}
 .kpace-seg{font-size:13px;color:#9fb4c9;min-width:0}
 .kpace-seg b{color:#fff;font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -132,6 +133,7 @@ body.compact .kcover-grid, body.rail-on .kcover-grid{grid-template-columns:1fr}
 .kpace-status.behind{background:rgba(229,18,29,.28);color:#ffb0b0}
 .kpace-status.ahead{background:rgba(54,120,149,.3);color:#9fd8ec}
 .kpace-status.idle{background:#22303f;color:#9fb4c9}
+.kpace-status.ended{background:rgba(255,176,0,.25);color:#ffd27a}
 .kpace-timeline{flex:none;width:min(28vw,340px);height:12px;border-radius:6px;background:#22303f;position:relative;overflow:hidden;display:flex}
 .kpace-timeline .seg{height:100%;border-right:1px solid #111a24}
 .kpace-timeline .now{position:absolute;top:-3px;bottom:-3px;width:3px;background:#fff;box-shadow:0 0 6px rgba(255,255,255,.7)}
