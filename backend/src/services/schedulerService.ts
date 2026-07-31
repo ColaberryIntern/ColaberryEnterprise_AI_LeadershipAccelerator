@@ -21,6 +21,7 @@ import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
 import { sendSmsViaGhl, addContactNote, syncLeadToGhl } from './ghlService';
 import { logCommunication } from './communicationLogService';
+import { logEmailConversationToGhl } from './ghlConversationLogService';
 import { buildUnsubscribeUrl } from './unsubscribeTokenService';
 import type { CampaignChannel } from '../models/ScheduledEmail';
 import {
@@ -929,11 +930,13 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
     // Fix bare URLs (not inside href) — strip trailing punctuation
     .replace(/(https?:\/\/(?:enterprise|advisor)\.colaberry\.ai\/[^\s"<>]*?)[.,;:!?)]+(?=[\s<"']|$)/gi, '$1');
   let campaignType = '';
+  let campaignName = '';
 
   if (action.campaign_id) {
-    const campaign = await Campaign.findByPk(action.campaign_id, { attributes: ['channel', 'type', 'settings'] });
+    const campaign = await Campaign.findByPk(action.campaign_id, { attributes: ['name', 'channel', 'type', 'settings'] });
     if (campaign) {
       campaignType = campaign.type || '';
+      campaignName = (campaign as any).name || '';
       // Auto-inject campaign tracking into all site links
       emailBody = injectCampaignTracking(
         emailBody,
@@ -1073,7 +1076,9 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
   // Record interaction outcome for ICP intelligence
   await recordActionOutcome(action, 'sent');
 
-  // Unified communication log
+  // Unified communication log, then (fire-and-forget — must never delay or
+  // block the send that already happened) mirror it into the lead's GHL
+  // Conversations feed so admissions/sales sees it without leaving GHL.
   logCommunication({
     lead_id: action.lead_id,
     campaign_id: action.campaign_id || null,
@@ -1093,7 +1098,16 @@ async function processEmailAction(action: InstanceType<typeof ScheduledEmail>): 
       ai_generated: action.ai_generated || false,
       ...(mcMetadata.trigger ? { trigger: mcMetadata.trigger } : {}),
     },
-  }).catch((err) => console.warn('[Scheduler] Comm log failed:', err.message));
+  })
+    .then((commLog) => logEmailConversationToGhl({
+      leadId: action.lead_id,
+      communicationLogId: commLog.id,
+      subject: action.subject,
+      htmlBody: html,
+      campaignName: campaignName || undefined,
+      sentAt: new Date(),
+    }))
+    .catch((err) => console.warn('[Scheduler] Comm log / GHL conversation log failed:', err.message));
 
   console.log(`[Scheduler] Email sent to ${action.to_email}: ${action.subject} (AI: ${action.ai_generated || false})`);
 
