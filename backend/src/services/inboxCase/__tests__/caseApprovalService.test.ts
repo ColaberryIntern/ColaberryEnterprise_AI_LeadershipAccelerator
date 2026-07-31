@@ -42,6 +42,15 @@ const fakeInboxCaseEvent = makeFakeModel();
 jest.mock('../../../models/InboxCase', () => ({ __esModule: true, default: fakeInboxCase }));
 jest.mock('../../../models/InboxCaseAction', () => ({ __esModule: true, default: fakeInboxCaseAction }));
 jest.mock('../../../models/InboxCaseEvent', () => ({ __esModule: true, default: fakeInboxCaseEvent }));
+// caseRepository (used by caseApprovalService for getCaseOrThrow) now syncs
+// the Tickets board on every transition. caseTicketService transitively
+// imports the full models barrel (`../models`) via ticketService.ts, which
+// would poison every other model mock in this file — stub it out entirely.
+jest.mock('../caseTicketService', () => ({
+  ensureCaseTicket: jest.fn(async () => {}),
+  syncTicketForCase: jest.fn(async () => {}),
+  postCaseProgressNote: jest.fn(async () => {}),
+}));
 
 import { approveAction, rejectAction, approveLowRiskActions, ActionNotFoundError } from '../caseApprovalService';
 import { InvalidActionTransitionError } from '../actionStateMachine';

@@ -123,6 +123,10 @@ export interface CaseDetail {
   items: InboxCaseItemRecord[];
   questions: InboxCaseQuestionRecord[];
   actions: InboxCaseActionRecord[];
+  // The Tickets-board ticket tracking this case's work — every case gets
+  // one, walked through backlog/todo/in_progress/in_review/done as the case
+  // progresses (Ali: "All work should be done in a ticket by the agents").
+  ticket_id: string | null;
 }
 
 export interface DiscoveredCaseSummary {

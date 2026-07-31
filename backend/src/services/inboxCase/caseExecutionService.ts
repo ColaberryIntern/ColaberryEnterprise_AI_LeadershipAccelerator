@@ -4,6 +4,7 @@ import { ActionStatus } from '../../types/inboxCase';
 import { ACTION_EXECUTORS, ClassifiedExecutionError } from './caseActionExecutors';
 import { logCaseEvent } from './caseEventLog';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
+import { postCaseProgressNote } from './caseTicketService';
 
 // Durable-outbox action executor (root directive section 12). The pattern:
 // persist -> approve -> lock (EXECUTING) -> idempotency-check -> execute ONE
@@ -203,6 +204,12 @@ export async function executeApprovedActions(caseId: string, requestedBy: string
       details: { succeeded, failed, skipped },
     });
   }
+
+  await postCaseProgressNote(
+    caseId,
+    `Execution run: ${succeeded} succeeded, ${failed} failed, ${skipped} skipped (blocked by a failed dependency).` +
+      (failed > 0 ? ' At least one action failed — needs your attention before this case can close.' : '')
+  );
 
   return { executed: succeeded + failed, succeeded, failed, skipped };
 }
