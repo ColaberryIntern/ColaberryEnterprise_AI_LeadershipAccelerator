@@ -10,12 +10,23 @@
  * every other category is read directly from the source data.
  */
 import {
-  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ClassPrompt, StoryBeat, DayKind,
+  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ClassPrompt, StoryBeat, DayKind, BuildCheckpoint,
 } from '../../data/classSessionPlan';
 import { teachSlidesFor, ORIENTATION_TEACH, TeachSlide, EvidenceClaim } from '../../data/classTeachContent';
 import { detectDayKind, parseWeek, BuildKitSpecInput, KitSessionInput } from './kitSpec';
 import { buildKitSpec, defaultInteractionsFor, defaultOpeningFor, DefaultOpening } from './kitSpecDaySlides';
 import { DEFAULT_KIT_CONFIG, StoryBeatOverride, InteractionPlacement } from './kitConfig';
+import { runOfShowFor } from './runOfShow';
+
+/** A checkpoint pin at its real render position — `segment` is hardcoded to
+ * `'build-map'` here to mirror the literal segment kitSpecDaySlides.ts's
+ * own buildSlides() attaches checkpoint slides to (not carried on
+ * BuildCheckpoint itself, which has no segment field). */
+export interface CheckpointLandmark extends BuildCheckpoint { segment: string }
+/** The templated "Reset" break window — identical every week (fixed show
+ * timing, not per-session authored content); null for Orientation, which
+ * has no break in its run-of-show template. */
+export interface BreakLandmark { segment: string; startMin: number; endMin: number; label: string }
 
 export interface KitConfigDefaults {
   dayKind: DayKind;
@@ -31,6 +42,12 @@ export interface KitConfigDefaults {
   evidence: EvidenceClaim[];
   /** The authored default opening content (cold-open/hook/result-preview). */
   opening: DefaultOpening;
+  /** Read-only timeline landmarks (Phase 4/5) — never part of KitConfig,
+   * never editable, never persisted. Checkpoints only populate on Build Day;
+   * breakSegment is null for Orientation (no 'break' segment in its
+   * run-of-show template). */
+  checkpoints: CheckpointLandmark[];
+  breakSegment: BreakLandmark | null;
 }
 
 function flattenStoryBeats(map: Record<string, StoryBeat[]> | undefined): StoryBeatOverride[] {
@@ -65,5 +82,14 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
   const defaultSpec = buildKitSpec(input);
   const evidence = defaultSpec.slides.flatMap((s) => s.evidence || []);
 
-  return { dayKind, week, teach, prompts, interactions, storyBeats, evidence, opening };
+  // Mirrors kitSpecDaySlides.ts's own buildSlides() call site, which
+  // attaches every checkpoint slide to the 'build-map' segment.
+  const checkpoints: CheckpointLandmark[] =
+    dayKind === 'build' && wc ? wc.thursday.checkpoints.map((cp) => ({ ...cp, segment: 'build-map' })) : [];
+  const breakTemplate = runOfShowFor(dayKind).find((s) => s.mode === 'break');
+  const breakSegment: BreakLandmark | null = breakTemplate
+    ? { segment: breakTemplate.id, startMin: breakTemplate.startMin, endMin: breakTemplate.endMin, label: breakTemplate.label }
+    : null;
+
+  return { dayKind, week, teach, prompts, interactions, storyBeats, evidence, opening, checkpoints, breakSegment };
 }

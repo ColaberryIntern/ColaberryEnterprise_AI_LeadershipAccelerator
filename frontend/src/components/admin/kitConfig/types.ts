@@ -96,6 +96,12 @@ export interface CountAndOverride<T> {
   enabled: boolean; max: number | null; overrides: T[] | null;
 }
 
+/** Read-only timeline landmarks (Phase 4/5) — never editable, never part of
+ * KitConfig. Mirrors backend/src/services/classKit/kitConfigDefaults.ts's
+ * CheckpointLandmark/BreakLandmark. */
+export interface CheckpointLandmark { n: number; label: string; detail: string; segment: string }
+export interface BreakLandmark { segment: string; startMin: number; endMin: number; label: string }
+
 /** A single fixed moment (not a list) — enabled:false removes it entirely;
  * override replaces its content wholesale. */
 export interface Slot<T> {
@@ -130,6 +136,8 @@ export interface KitConfigDefaults {
   storyBeats: StoryBeatOverride[];
   evidence: EvidenceOverride[];
   opening: { coldOpen: OpeningCopy | null; hook: HookCopy | null; resultPreview: OpeningCopy | null };
+  checkpoints: CheckpointLandmark[];
+  breakSegment: BreakLandmark | null;
 }
 
 export const blankBeat = (): StoryBeatOverride => ({ segment: 'business-problem', icon: '💡', eyebrow: '', title: '', body: '', punch: '', tone: 'berry' });

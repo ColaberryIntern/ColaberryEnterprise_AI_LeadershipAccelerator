@@ -13,6 +13,10 @@ const orientation: KitSessionInput = {
   id: 's-orient', session_number: 1, title: 'Orientation',
   session_date: '2026-07-23', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
 };
+const week2Thursday: KitSessionInput = {
+  id: 's-w2-thu', session_number: 3, title: 'Week 2: Agent Skills',
+  session_date: '2026-08-06', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+};
 
 describe('getKitConfigDefaults', () => {
   it('resolves Build Day defaults: teach slides, prompts, thursday trivia, and evidence', () => {
@@ -30,6 +34,11 @@ describe('getKitConfigDefaults', () => {
     expect(d.opening.coldOpen).toBeNull();
     expect(d.opening.hook).toBeNull();
     expect(d.opening.resultPreview?.title).toBe('What you are producing today');
+    // Phase 4: read-only checkpoint/break landmarks, Build Day only.
+    expect(d.checkpoints.length).toBe(5); // Week 1 authors CP0..CP4 (5 entries)
+    expect(d.checkpoints.every((cp) => cp.segment === 'build-map')).toBe(true);
+    expect(d.checkpoints[0]).toEqual(expect.objectContaining({ n: 0, label: 'CLAUDE.md ready', segment: 'build-map' }));
+    expect(d.breakSegment).toEqual({ segment: 'reset', startMin: 75, endMin: 85, label: 'Reset' });
   });
 
   it('resolves Architecture Day defaults: the Monday poll/trivia, story beats, and opening content', () => {
@@ -43,6 +52,10 @@ describe('getKitConfigDefaults', () => {
     expect(d.opening.coldOpen?.title).toBe('By Thursday, this will exist');
     expect(d.opening.hook).not.toBeNull(); // Week 1 has an authored hook
     expect(d.opening.resultPreview).toBeNull(); // Thursday-only
+    // Phase 4: checkpoints are Build-Day-only content; Architecture Day still
+    // gets its own break landmark (a different 'reset' window than Build Day's).
+    expect(d.checkpoints).toEqual([]);
+    expect(d.breakSegment).toEqual({ segment: 'reset', startMin: 60, endMin: 65, label: 'Reset' });
   });
 
   it('resolves Orientation defaults without a week number, and no opening content (Monday/Thursday-only)', () => {
@@ -55,5 +68,16 @@ describe('getKitConfigDefaults', () => {
     expect(d.opening.coldOpen).toBeNull();
     expect(d.opening.hook).toBeNull();
     expect(d.opening.resultPreview).toBeNull();
+    // Phase 4: Orientation's run-of-show template has no 'break' segment and
+    // no checkpoints are ever authored for it.
+    expect(d.checkpoints).toEqual([]);
+    expect(d.breakSegment).toBeNull();
+  });
+
+  it('resolves checkpoint count per week (not hardcoded to Week 1\'s 5) — Week 2 authors 4 (n:0..3)', () => {
+    const d = getKitConfigDefaults(week2Thursday);
+    expect(d.checkpoints.length).toBe(4);
+    expect(d.checkpoints.map((cp) => cp.n)).toEqual([0, 1, 2, 3]);
+    expect(d.checkpoints.every((cp) => cp.segment === 'build-map')).toBe(true);
   });
 });
