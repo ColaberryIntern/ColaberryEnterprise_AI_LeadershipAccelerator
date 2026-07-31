@@ -190,18 +190,6 @@ const TodayShell: React.FC = () => {
             {!hasBackground && <button className="te-btn cherry" onClick={() => setShowUpload(true)}>Upload resume / LinkedIn</button>}
           </div>
 
-          {/* open house strip */}
-          {oh && (
-            <div className="te-oh">
-              <span className="ic">◷</span>
-              <div className="body">
-                <div className="t">{oh.title}</div>
-                <div className="w">{fmtCentralDateTime(oh.starts_at)} {ohCd && <>· <span className="cd">{ohCd.d}d {ohCd.h}h {ohCd.m}m {ohCd.s}s</span></>}</div>
-              </div>
-              <button className="te-btn berry sm" onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd" : 'RSVP (+10)'}</button>
-            </div>
-          )}
-
           {/* background upload — both resume and LinkedIn are uploads */}
           {showUpload && (
             <div className="te-card te-upload">
