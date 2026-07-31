@@ -138,6 +138,19 @@ export interface HostedPaymentLink {
   payment_link: string;
 }
 
+// PaySimple rejects item.name over 50 chars (validation error, not a 5xx —
+// found live 2026-07-31 when a student's credit-applied checkout ("Monthly
+// plan (-$50 credit)") pushed the combined name to 54 chars and PaySimple
+// returned a 400 for every one of the 25 students with an unapplied credit).
+const MAX_ITEM_NAME_LENGTH = 50;
+
+function clampItemName(name: string): string {
+  if (name.length <= MAX_ITEM_NAME_LENGTH) return name;
+  const truncated = name.slice(0, MAX_ITEM_NAME_LENGTH);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return lastSpace > 30 ? truncated.slice(0, lastSpace) : truncated;
+}
+
 export async function createPaymentLink(params: {
   externalId: string;
   cohortName: string;
@@ -161,7 +174,7 @@ export async function createPaymentLink(params: {
     item: {
       price: amount,
       allow_price_entry: false,
-      name: `AI Leadership Accelerator - ${params.cohortName}`,
+      name: clampItemName(`AI Leadership Accelerator - ${params.cohortName}`),
       description: isTestMode()
         ? `TEST MODE - Colaberry Enterprise AI Leadership Accelerator enrollment (original: $${params.amount})`
         : 'Colaberry Enterprise AI Leadership Accelerator enrollment',
