@@ -7,7 +7,7 @@ import {
   StudentPanel,
 } from '../peoplePanelService';
 import { Enrollment, Cohort, CommunityMember, Sponsor } from '../../models';
-import { isStaffEnrollment } from '../access/staffAccess';
+import { isStaffOrMgmt } from '../access/staffAccess';
 
 // Models are mocked (no DB). derivePresence is mocked with a faithful copy of the real
 // staleness thresholds (communityService: online <=90s, away <=10min, else offline) so
@@ -20,7 +20,7 @@ jest.mock('../../models', () => ({
   Sponsor: { findAll: jest.fn() },
   SponsorSeat: {},
 }));
-jest.mock('../access/staffAccess', () => ({ isStaffEnrollment: jest.fn() }));
+jest.mock('../access/staffAccess', () => ({ isStaffOrMgmt: jest.fn() }));
 jest.mock('../communityService', () => ({
   derivePresence: (last: Date | null, now: Date = new Date()) => {
     if (!last) return 'offline';
@@ -66,7 +66,6 @@ function memberRow(opts: {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  (CommunityMember.findOne as jest.Mock).mockResolvedValue(null); // mgmt_role lookup
 });
 
 describe('pure helpers', () => {
@@ -99,7 +98,7 @@ describe('pure helpers', () => {
 
 describe('getPeoplePanel — staff viewer', () => {
   beforeEach(() => {
-    (isStaffEnrollment as jest.Mock).mockResolvedValue(true);
+    (isStaffOrMgmt as jest.Mock).mockResolvedValue(true);
   });
 
   it('returns cross-cohort online (online-first then most-recent) + classes + businesses', async () => {
@@ -140,9 +139,8 @@ describe('getPeoplePanel — staff viewer', () => {
     expect(panel.businesses).toEqual([{ sponsor_id: 's1', company: 'Acme', seats: 2, online: 1 }]);
   });
 
-  it('treats a non-null mgmt_role as staff even when isStaffEnrollment is false', async () => {
-    (isStaffEnrollment as jest.Mock).mockResolvedValue(false);
-    (CommunityMember.findOne as jest.Mock).mockResolvedValue({ mgmt_role: 'admissions' });
+  it('resolves the staff panel whenever isStaffOrMgmt is true (e.g. a non-null mgmt_role)', async () => {
+    (isStaffOrMgmt as jest.Mock).mockResolvedValue(true);
     (CommunityMember.findAll as jest.Mock).mockResolvedValue([]);
     (Cohort.findAll as jest.Mock).mockResolvedValue([]);
     (Enrollment.findAll as jest.Mock).mockResolvedValue([]);
@@ -166,7 +164,7 @@ describe('getPeoplePanel — staff viewer', () => {
 
 describe('getPeoplePanel — student viewer', () => {
   beforeEach(() => {
-    (isStaffEnrollment as jest.Mock).mockResolvedValue(false);
+    (isStaffOrMgmt as jest.Mock).mockResolvedValue(false);
   });
 
   it('returns cohort-mates (online-first then name) + top-10 outside-cohort active', async () => {

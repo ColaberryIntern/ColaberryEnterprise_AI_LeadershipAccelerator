@@ -221,14 +221,21 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const openChatTarget = useCallback((t: DmTarget) => {
     setChats((prev) => (prev.some((x) => x.roomId === t.roomId) ? prev : [...prev, t]));
   }, []);
+  // Surfaces a failed DM-open (e.g. "You can only message people in your cohort")
+  // instead of swallowing it — a click that silently does nothing looks broken.
+  const [dmError, setDmError] = useState('');
+  const flashDmError = useCallback((err: any) => {
+    setDmError(err?.response?.data?.error || 'Could not open that conversation.');
+    window.setTimeout(() => setDmError(''), 3200);
+  }, []);
   const openChat = useCallback((c: CohortContact) => {
-    openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(() => { /* non-fatal */ });
-  }, [openChatTarget]);
+    openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(flashDmError);
+  }, [openChatTarget, flashDmError]);
   // People-panel rows carry only enrollmentId + name; derive the colour the same way
   // the cohort rail does so the same person is always the same colour.
   const openPerson = useCallback((enrollmentId: string, name: string) => {
-    openDm(enrollmentId).then((roomId) => openChatTarget({ roomId, name, color: colorFor(enrollmentId) })).catch(() => { /* non-fatal */ });
-  }, [openChatTarget]);
+    openDm(enrollmentId).then((roomId) => openChatTarget({ roomId, name, color: colorFor(enrollmentId) })).catch(flashDmError);
+  }, [openChatTarget, flashDmError]);
 
   // Bridge: other surfaces (e.g. the community member profile drawer) open a DM
   // by dispatching a `te-open-dm` CustomEvent { enrollmentId, name, color? } —
@@ -240,11 +247,11 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
       if (!detail?.enrollmentId) return;
       openDm(detail.enrollmentId)
         .then((roomId) => openChatTarget({ roomId, name: detail.name ?? 'Direct message', color: detail.color ?? colorFor(detail.enrollmentId!) }))
-        .catch(() => { /* non-fatal */ });
+        .catch(flashDmError);
     };
     window.addEventListener('te-open-dm', onOpenDm as EventListener);
     return () => window.removeEventListener('te-open-dm', onOpenDm as EventListener);
-  }, [openChatTarget]);
+  }, [openChatTarget, flashDmError]);
 
   const load = useCallback(async () => {
     const [p, s] = await Promise.allSettled([fetchPoints(), fetchSchedule()]);
@@ -569,6 +576,8 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
           ))}
         </div>
       )}
+
+      {dmError && <div className="te-toast">{dmError}</div>}
 
       {/* ── bottom tab bar (mobile only via CSS) — nav reachable on phones ── */}
       <nav className="te-tabbar">

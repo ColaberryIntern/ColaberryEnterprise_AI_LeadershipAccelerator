@@ -1,7 +1,7 @@
 import { Op, fn, col } from 'sequelize';
 import { Enrollment, Cohort, CommunityMember, Sponsor, SponsorSeat } from '../models';
 import { derivePresence } from './communityService';
-import { isStaffEnrollment } from './access/staffAccess';
+import { isStaffOrMgmt } from './access/staffAccess';
 
 // Role-aware "People" right-rail panel (flag-gated at the route; see
 // PEOPLE_PANEL_ROLES_ENABLED). Presence is the SAME signal the Community tab and the
@@ -161,17 +161,10 @@ async function fetchRecentlyActive(now: Date, cap: number): Promise<RecentRow[]>
   return (rows as any[]).map(toRecentRow(now));
 }
 
-// STAFF = admin community role 'staff' (via isStaffEnrollment) OR any non-null
-// mgmt_role. Both lookups run in parallel and each fails safe to "not staff", so a DB
-// blip yields the strictly smaller, cohort-scoped student view rather than leaking a
-// cross-cohort staff view.
-async function resolveIsStaff(enrollmentId: string): Promise<boolean> {
-  const [staffRole, member] = await Promise.all([
-    isStaffEnrollment(enrollmentId),
-    CommunityMember.findOne({ where: { enrollment_id: enrollmentId }, attributes: ['mgmt_role'] }).catch(() => null),
-  ]);
-  return staffRole || !!(member as any)?.mgmt_role;
-}
+// STAFF = admin community role 'staff' OR any non-null mgmt_role, via the shared
+// isStaffOrMgmt (fails safe to "not staff"), so a DB blip yields the strictly
+// smaller, cohort-scoped student view rather than leaking a cross-cohort staff view.
+const resolveIsStaff = isStaffOrMgmt;
 
 // All cohorts with a live member count (active enrollments) + online count. Member
 // counts come from ONE grouped query (not N per-cohort). Ordered online-first, then

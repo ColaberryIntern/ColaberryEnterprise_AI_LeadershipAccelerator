@@ -5,6 +5,7 @@ import Enrollment from '../../models/Enrollment';
 import RoomMessage from '../../models/RoomMessage';
 import { RoomAccessContext } from './roomEntitlementService';
 import { postMessage, listMessages } from './roomMessageService';
+import { isStaffOrMgmt } from '../access/staffAccess';
 
 // 1:1 direct messages, modelled as a 2-person private CommunityRoom
 // (room_type 'dm') so they reuse the persisted RoomMessage layer — messages
@@ -21,21 +22,27 @@ export class DmError extends Error {
   }
 }
 
-async function assertSameCohort(otherId: string, myCohortId: string | null | undefined): Promise<void> {
-  if (!myCohortId) throw new DmError('You are not in a cohort yet');
+// Cohort-scoped for students; staff/mgmt bypass it — the role-aware People panel
+// (peoplePanelService) deliberately surfaces staff's "online" list across ALL
+// cohorts, so staff must be able to open a DM with anyone shown there, not just
+// their own cohort. Without this, clicking a cross-cohort name in that panel
+// threw a DmError that the frontend then silently swallowed.
+async function assertSameCohort(me: string, otherId: string, myCohortId: string | null | undefined): Promise<void> {
   const other = await Enrollment.findByPk(otherId);
-  if (!other || other.cohort_id !== myCohortId) {
-    throw new DmError('You can only message people in your cohort');
-  }
+  if (!other) throw new DmError('That person is no longer available');
+  if (myCohortId && other.cohort_id === myCohortId) return;
+  if (await isStaffOrMgmt(me)) return;
+  throw new DmError(myCohortId ? 'You can only message people in your cohort' : 'You are not in a cohort yet');
 }
 
 /**
  * Find-or-create the canonical DM room for {me, otherId} and ensure both are
- * active members. Returns the room id the chat dock talks to. Cohort-scoped.
+ * active members. Returns the room id the chat dock talks to. Cohort-scoped for
+ * students; staff/mgmt can reach across cohorts (see `assertSameCohort`).
  */
 export async function openDm(me: string, otherId: string, myCohortId: string | null | undefined): Promise<{ roomId: string }> {
   if (!otherId || otherId === me) throw new DmError('Invalid recipient');
-  await assertSameCohort(otherId, myCohortId);
+  await assertSameCohort(me, otherId, myCohortId);
 
   const [a, b] = [me, otherId].sort();
   const slug = `dm-${a}-${b}`; // "dm-" + two UUIDs = 75 chars, fits VARCHAR(140)

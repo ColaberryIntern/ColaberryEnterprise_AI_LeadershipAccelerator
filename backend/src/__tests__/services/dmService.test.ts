@@ -8,6 +8,7 @@ jest.mock('../../models/RoomMembership', () => ({ findOrCreate: jest.fn(), findA
 jest.mock('../../models/RoomMessage', () => ({ findOne: jest.fn() }));
 jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
 jest.mock('../../services/communityRooms/roomMessageService', () => ({ postMessage: jest.fn(), listMessages: jest.fn() }));
+jest.mock('../../services/access/staffAccess', () => ({ isStaffOrMgmt: jest.fn() }));
 
 import { openDm, sendDmMessage, listDmMessages, listConversations, markDmRead } from '../../services/communityRooms/dmService';
 import CommunityRoom from '../../models/CommunityRoom';
@@ -15,6 +16,7 @@ import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
 import Enrollment from '../../models/Enrollment';
 import { postMessage, listMessages } from '../../services/communityRooms/roomMessageService';
+import { isStaffOrMgmt } from '../../services/access/staffAccess';
 
 const findOrCreateRoom = CommunityRoom.findOrCreate as jest.Mock;
 const findByPkRoom = CommunityRoom.findByPk as jest.Mock;
@@ -26,6 +28,7 @@ const findOneMsg = RoomMessage.findOne as jest.Mock;
 const findByPkEnroll = Enrollment.findByPk as jest.Mock;
 const postMock = postMessage as jest.Mock;
 const listMock = listMessages as jest.Mock;
+const isStaffOrMgmtMock = isStaffOrMgmt as jest.Mock;
 
 const me = '11111111-1111-1111-1111-111111111111';
 const other = '22222222-2222-2222-2222-222222222222';
@@ -38,6 +41,7 @@ beforeEach(() => {
   findByPkEnroll.mockResolvedValue({ id: other, cohort_id: cohort }); // same cohort
   findOrCreateRoom.mockResolvedValue([{ id: 'room-1' }, true]);
   findOrCreateMember.mockResolvedValue([{}, true]);
+  isStaffOrMgmtMock.mockResolvedValue(false);
 });
 
 describe('openDm', () => {
@@ -70,6 +74,24 @@ describe('openDm', () => {
     findByPkEnroll.mockResolvedValue({ id: other, cohort_id: 'OTHER-COHORT' });
     await expect(openDm(me, other, cohort)).rejects.toMatchObject({ name: 'DmError' });
     expect(findOrCreateRoom).not.toHaveBeenCalled();
+  });
+
+  it('rejects when the caller has no cohort and is not staff/mgmt', async () => {
+    await expect(openDm(me, other, null)).rejects.toMatchObject({ name: 'DmError', message: 'You are not in a cohort yet' });
+    expect(findOrCreateRoom).not.toHaveBeenCalled();
+  });
+
+  it('staff/mgmt bypasses the cohort check and can DM a person in a different cohort', async () => {
+    findByPkEnroll.mockResolvedValue({ id: other, cohort_id: 'OTHER-COHORT' });
+    isStaffOrMgmtMock.mockResolvedValue(true);
+    const r = await openDm(me, other, cohort);
+    expect(r).toEqual({ roomId: 'room-1' });
+  });
+
+  it('staff/mgmt with no cohort of their own can still DM', async () => {
+    isStaffOrMgmtMock.mockResolvedValue(true);
+    const r = await openDm(me, other, null);
+    expect(r).toEqual({ roomId: 'room-1' });
   });
 });
 
