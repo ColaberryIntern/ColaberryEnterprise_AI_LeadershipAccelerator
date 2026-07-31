@@ -36,6 +36,7 @@ jest.mock('../../services/pointsService', () => ({
   levelForPoints: jest.fn(() => ({ level: 1, name: 'Apprentice' })),
 }));
 jest.mock('../../services/progression/communityXpService', () => ({ awardCommunityXp: jest.fn(async () => {}) }));
+jest.mock('../../services/access/staffAccess', () => ({ isStaffOrMgmt: jest.fn() }));
 // Recognition badges surfaced on the directory/profile come from ContributionEvent.
 jest.mock('../../models/ContributionEvent', () => ({
   __esModule: true,
@@ -66,10 +67,12 @@ import CommunityPointsEvent from '../../models/CommunityPointsEvent';
 import CommunityNotification from '../../models/CommunityNotification';
 import { award, revoke, hasAwarded } from '../../services/pointsService';
 import { env } from '../../config/env';
+import { isStaffOrMgmt } from '../../services/access/staffAccess';
 
 const awardCanonical = award as jest.Mock;
 const revokeCanonical = revoke as jest.Mock;
 const hasAwardedMock = hasAwarded as jest.Mock;
+const isStaffOrMgmtMock = isStaffOrMgmt as jest.Mock;
 const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
 const findOrCreateMember = CommunityMember.findOrCreate as jest.Mock;
 const findAllMembers = CommunityMember.findAll as jest.Mock;
@@ -88,6 +91,7 @@ const createNotification = CommunityNotification.create as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  isStaffOrMgmtMock.mockResolvedValue(false);
 });
 
 const enrollmentId = '11111111-1111-1111-1111-111111111111';
@@ -689,7 +693,8 @@ describe('member profiles + directory', () => {
     expect(profile.id).toBe(memberId);
   });
 
-  it('getMemberProfileById happy path: returns a member\'s profile regardless of cohort', async () => {
+  it('getMemberProfileById happy path: returns a same-cohort member\'s profile', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findByPkMember.mockResolvedValue({
       id: otherMemberId, display_name: 'Grace Hopper', avatar_url: null, bio: null, level: 1, points: 0,
       created_at: new Date(), enrollment: { cohort_id: cohortId },
@@ -700,7 +705,20 @@ describe('member profiles + directory', () => {
     expect(profile.id).toBe(otherMemberId);
   });
 
-  it('getMemberProfileById happy path: a cross-cohort member also resolves (platform-wide, not cohort-scoped)', async () => {
+  it('getMemberProfileById failure path: a cross-cohort member is NotFoundError for a regular student', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findByPkMember.mockResolvedValue({
+      id: otherMemberId, display_name: 'Someone Else', enrollment: { cohort_id: 'different-cohort' },
+    });
+
+    await expect(getMemberProfileById(enrollmentId, otherMemberId)).rejects.toMatchObject({
+      error_class: 'NotFoundError',
+    });
+  });
+
+  it('getMemberProfileById staff/mgmt bypass: a cross-cohort member resolves for staff', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    isStaffOrMgmtMock.mockResolvedValue(true);
     findByPkMember.mockResolvedValue({
       id: otherMemberId, display_name: 'Someone Else', avatar_url: null, bio: null, level: 1, points: 0,
       created_at: new Date(), enrollment: { cohort_id: 'different-cohort' },
@@ -712,6 +730,7 @@ describe('member profiles + directory', () => {
   });
 
   it('getMemberProfileById failure path: a nonexistent member is NotFoundError', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
     findByPkMember.mockResolvedValue(null);
 
     await expect(getMemberProfileById(enrollmentId, otherMemberId)).rejects.toMatchObject({
@@ -729,7 +748,20 @@ describe('member profiles + directory', () => {
     expect(memberToUpdate.update).toHaveBeenCalledWith({ bio: 'Building AI systems.' });
   });
 
-  it('listMembers happy path: platform-wide, no cohort filter (sorted by canonical points in JS)', async () => {
+  it('listMembers happy path: scopes the directory to the caller\'s cohort (sorted by canonical points in JS)', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    findAllMembers.mockResolvedValue([]);
+
+    const page = await listMembers(enrollmentId);
+
+    const callArgs = findAllMembers.mock.calls[0][0];
+    expect(callArgs.include[0].where).toEqual({ cohort_id: cohortId });
+    expect(page).toEqual({ members: [], total: 0, has_more: false });
+  });
+
+  it('listMembers staff/mgmt bypass: no cohort filter, platform-wide directory', async () => {
+    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+    isStaffOrMgmtMock.mockResolvedValue(true);
     findAllMembers.mockResolvedValue([]);
 
     const page = await listMembers(enrollmentId);
