@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import express from 'express';
-import { handlePaySimpleWebhook } from '../controllers/webhookController';
+import { handlePaySimpleWebhook, handleZoomWebhook } from '../controllers/webhookController';
 import { handleMandrillWebhook, handleMandrillWebhookHead, handleMandrillInbound } from '../controllers/mandrillWebhookController';
 import { handleGhlSmsReply } from '../controllers/ghlWebhookController';
 import { handleSynthflowCallComplete } from '../controllers/synthflowWebhookController';
@@ -28,6 +28,14 @@ const router = Router();
 // is left as-is; PaySimple's is not, so this route now captures the raw
 // body unconditionally regardless of what Content-Type (if any) arrives.
 router.post('/api/webhook/paysimple', express.raw({ type: () => true }), handlePaySimpleWebhook);
+
+// Zoom webhook (recording.completed + the one-time endpoint.url_validation
+// handshake) — raw body required for the same HMAC-signature reasons as
+// PaySimple above, and type: () => true from day one rather than
+// 'application/json': the PaySimple incident above (found live, twice) is
+// exactly the failure mode of assuming a webhook sender's Content-Type is
+// reliable. No reason to re-discover that live for Zoom too.
+router.post('/api/webhook/zoom', express.raw({ type: () => true }), handleZoomWebhook);
 
 // Mandrill webhook — uses URL-encoded body (mandrill_events=<JSON>)
 router.head('/api/webhook/mandrill', handleMandrillWebhookHead);

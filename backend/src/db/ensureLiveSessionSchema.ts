@@ -68,6 +68,13 @@ export async function ensureLiveSessionSchema(): Promise<void> {
     // classKit/kitConfig.ts. Read fresh on every deck/outline/readiness render,
     // so there is no separate "rebuild" step: saving this is the rebuild.
     `ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS kit_config_json JSONB`,
+    // Zoom Cloud Recording migration (replaces Google Meet as the meeting
+    // provider) — the stable numeric Zoom meeting ID, set at meeting-creation
+    // time so recording.completed webhooks and the backfill sweep can find
+    // this session by exact match instead of Drive's old timestamp-proximity
+    // guess. Deliberately not storing the Zoom instance UUID (can contain
+    // '/'/'+' requiring double URL-encoding) — the numeric ID is enough.
+    `ALTER TABLE live_sessions ADD COLUMN IF NOT EXISTS zoom_meeting_id VARCHAR(50)`,
 
     // ---- attendance_records ----
     `CREATE TABLE IF NOT EXISTS attendance_records (
