@@ -2370,18 +2370,16 @@ export function startScheduler(): void {
 
   // Session Recordings — poll Drive for a completed session's Meet recording
   // and ingest it into that session's Room as a downloadable resource.
-  // PILOT GATE: scoped to the July 2026 cohort only while this feature is
-  // being validated (per the staged rollout plan) — widen RECORDING_PILOT_COHORT_IDS
-  // (or remove the filter) once proven. Bounded retry: only sessions completed
-  // in the last 7 days are considered, then we give up automatically and fall
-  // back to the existing manual PATCH .../sessions/:id { recording_url } path.
-  const RECORDING_PILOT_COHORT_IDS = ['1f1d86f4-6da5-4767-a250-cd8310570bea'];
+  // Proven on the July 2026 pilot cohort (per the staged rollout plan) and
+  // widened to every cohort going forward — no more cohort_id filter.
+  // Bounded retry: only sessions completed in the last 7 days are considered,
+  // then we give up automatically and fall back to the existing manual
+  // PATCH .../sessions/:id { recording_url } path.
   cron.schedule('12,42 * * * *', () => {
     instrumentCronJob('SessionRecordingIngest', async () => {
       const candidates = await LiveSession.findAll({
         where: {
           status: 'completed',
-          cohort_id: { [Op.in]: RECORDING_PILOT_COHORT_IDS },
           session_date: { [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) },
         },
       });

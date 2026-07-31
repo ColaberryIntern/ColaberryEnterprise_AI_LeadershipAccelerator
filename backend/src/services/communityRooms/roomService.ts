@@ -173,6 +173,16 @@ export async function listRoomsForViewer(
     // The Global Library is reached via its own page + GET .../library, never
     // through normal room browsing/rail.
     slug: { [Op.ne]: GLOBAL_LIBRARY_SLUG },
+    // Exclude two room_types that don't belong in the general browse rail:
+    // 'dm' (1:1 direct messages — reached via the People panel/chat dock,
+    // dmService.ts, never by browsing; every DM ever opened was piling up
+    // here forever, all sharing the hardcoded name "Direct message") and
+    // 'scheduled' (a real class's own Colaberry Commons room — reached via
+    // Today/Classroom/Schedule/the topbar pill, or the organized cohort view
+    // at /portal/sessions, not by scrolling a flat room list). Neither
+    // exclusion affects direct navigation to a specific room by id — that
+    // goes through getRoomForViewer, not this listing.
+    room_type: { [Op.notIn]: ['dm', 'scheduled'] },
   };
   if (filter.category) where.category = filter.category;
   const rooms = await CommunityRoom.findAll({ where, order: [['created_at', 'DESC']], limit: 200 });
