@@ -4,6 +4,7 @@ import {
   handleGetRevenueDashboard,
   handleGetRevenuePayments,
   handleGetSubscriptionAnalytics,
+  handleGetExplorerRoster,
   handleReconcileAppPayments,
 } from '../../controllers/adminRevenueController';
 import {
@@ -20,6 +21,8 @@ router.get('/api/admin/revenue/dashboard', requireAdmin, handleGetRevenueDashboa
 router.get('/api/admin/revenue/payments', requireAdmin, handleGetRevenuePayments);
 // Subscription analytics (MRR/ARR, plan mix, tenure funnel, needs-attention list)
 router.get('/api/admin/revenue/subscriptions', requireAdmin, handleGetSubscriptionAnalytics);
+// Explorer drill-down roster (behind the tenure funnel's "Explorer" bucket)
+router.get('/api/admin/revenue/explorers', requireAdmin, handleGetExplorerRoster);
 // Heal missed-webhook membership payments (app-scoped; our customers only). Idempotent.
 router.post('/api/admin/revenue/reconcile', requireAdmin, handleReconcileAppPayments);
 

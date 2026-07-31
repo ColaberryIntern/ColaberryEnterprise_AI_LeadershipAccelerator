@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { SectionCard } from '../shell';
 import { TenureBucket, SubscriptionPlanKey } from '../../../services/subscriptionAnalyticsApi';
 import { PLAN_COLOR, PLAN_LABEL } from './format';
+import ExplorerRosterModal from './ExplorerRosterModal';
 
 interface Props {
   buckets: TenureBucket[];
@@ -12,14 +13,20 @@ interface Props {
 // always render as an empty, meaningless legend entry.
 const PLAN_ORDER: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp'];
 
+// Only this bucket has a drill-down roster today (see explorerRosterService) —
+// it's the largest, most actionable group for re-engagement campaigns. Paying
+// buckets are already reachable via the Attention/Upcoming lists elsewhere.
+const DRILLABLE_LABEL = 'Explorer';
+
 /** Tenure funnel — a snapshot heatmap of how many current subscribers are how
  *  many months into their subscription, split by plan, with a retention %
- *  against the bucket above. Free Trial (Explorers, no subscription yet) sits
+ *  against the bucket above. Explorer (free trial, no subscription yet) sits
  *  at the top; higher tenure buckets get thinner as people churn out. This is
  *  a headcount-ratio snapshot, not per-person cohort tracking across time —
  *  the subscription model is too new for a full acquisition-month matrix to
  *  carry enough data yet. */
 export default function TenureRetentionFunnel({ buckets }: Props) {
+  const [showExplorers, setShowExplorers] = useState(false);
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
 
   return (
@@ -39,9 +46,19 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
 
       {buckets.map((b) => {
         const widthPct = Math.max(b.count > 0 ? 4 : 0, Math.round((b.count / maxCount) * 100));
+        const drillable = b.label === DRILLABLE_LABEL;
         return (
-          <div key={b.label} className="d-flex align-items-center gap-3 my-2" style={{ fontSize: 13 }}>
-            <span style={{ width: 84, color: 'var(--bs-secondary-color)' }}>{b.label}</span>
+          <div
+            key={b.label}
+            className="d-flex align-items-center gap-3 my-2"
+            style={{ fontSize: 13, cursor: drillable ? 'pointer' : undefined }}
+            onClick={drillable ? () => setShowExplorers(true) : undefined}
+            role={drillable ? 'button' : undefined}
+            title={drillable ? `View all ${b.count} Explorers` : undefined}
+          >
+            <span style={{ width: 84, color: drillable ? 'var(--red-600, #c0392b)' : 'var(--bs-secondary-color)', textDecoration: drillable ? 'underline' : undefined }}>
+              {b.label}
+            </span>
             <span
               className="flex-grow-1 d-flex"
               style={{ height: 16, borderRadius: 4, background: 'var(--bs-tertiary-bg)', overflow: 'hidden' }}
@@ -72,6 +89,8 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
           </div>
         );
       })}
+
+      {showExplorers && <ExplorerRosterModal onClose={() => setShowExplorers(false)} />}
     </SectionCard>
   );
 }
