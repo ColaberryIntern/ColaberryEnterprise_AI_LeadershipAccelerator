@@ -17,6 +17,7 @@ import {
 import { runDirectorBySlug } from '../services/workforce/directorActions';
 import { getAiValue } from '../services/aiValueService';
 import { getRetentionReport } from '../services/retentionReportService';
+import { enforceRetention } from '../services/retentionEnforcementService';
 
 function fail(res: Response, event: string, err: unknown): void {
   const errorClass = err instanceof Error ? err.constructor.name : 'UnknownError';
@@ -111,6 +112,17 @@ export async function handleGetRetention(req: Request, res: Response): Promise<v
     res.json(await getRetentionReport(Number.isFinite(ttlMonths) ? ttlMonths : undefined));
   } catch (err) {
     fail(res, 'trust_retention', err);
+  }
+}
+
+/** LIVE enforcement — deletes/anonymizes rows. Admin-gated POST, deliberate action, no scheduled auto-trigger yet. */
+export async function handleEnforceRetention(req: Request, res: Response): Promise<void> {
+  try {
+    const raw = req.query.ttlMonths;
+    const ttlMonths = raw != null ? Number(raw) : undefined;
+    res.json(await enforceRetention(Number.isFinite(ttlMonths) ? ttlMonths : undefined));
+  } catch (err) {
+    fail(res, 'trust_retention_enforce', err);
   }
 }
 

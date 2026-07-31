@@ -186,34 +186,40 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       return;
     }
 
-    // Signature verification. NOTE: env.mandrillWebhookUrl is hardcoded in production to
-    // the OUTBOUND tracking-events URL (.../api/webhook/mandrill) — reusing it here would
-    // make every real inbound signature fail, since Mandrill signs against the exact URL
-    // it posted to. Derive this route's own URL instead (append '/inbound' to the outbound
-    // base when the override is set, matching how the two routes are actually related;
-    // otherwise reconstruct per-request exactly like the outbound handler's own fallback).
+    // Signature verification — REJECT the whole request on mismatch when a webhook key is
+    // configured, matching the outbound handler's convention (handleMandrillWebhook above).
+    // Previously this only rejected the ticket-<id>@ reply path; the Lead-reply path below —
+    // which can trigger an AI-generated auto-reply send, an auto-unsubscribe, and a voice
+    // call to Ali — accepted unverified inbound events. The Mandrill URL-verification
+    // HEAD/ping (no `mandrill_events` body) already short-circuits above this point, so
+    // promoting to a full-request reject doesn't reintroduce the false-positive that
+    // originally motivated scoping enforcement down to just the ticket path.
+    // NOTE: env.mandrillWebhookUrl is hardcoded in production to the OUTBOUND tracking-events
+    // URL (.../api/webhook/mandrill) — reusing it here would make every real inbound
+    // signature fail, since Mandrill signs against the exact URL it posted to. Derive this
+    // route's own URL instead (append '/inbound' to the outbound base when the override is
+    // set; otherwise reconstruct per-request exactly like the outbound handler's fallback).
     const webhookKey = env.mandrillWebhookKey || '';
-    let signatureValid = true;
     if (webhookKey) {
       const signature = req.headers['x-mandrill-signature'] as string || '';
       const inboundWebhookUrl = env.mandrillWebhookUrl
         ? `${env.mandrillWebhookUrl}/inbound`
         : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
-      signatureValid = verifyMandrillSignature(webhookKey, inboundWebhookUrl, req.body, signature);
-      if (!signatureValid) {
-        console.warn(`[MandrillInbound] Signature mismatch — url: ${inboundWebhookUrl}`);
+      const isValid = verifyMandrillSignature(webhookKey, inboundWebhookUrl, req.body, signature);
+      if (!isValid) {
+        console.warn(
+          `[MandrillInbound] Signature mismatch — rejecting. url: ${inboundWebhookUrl}. ` +
+          `If this is a false rejection behind a proxy, verify MANDRILL_WEBHOOK_URL matches the exact public inbound URL.`
+        );
+        res.status(401).json({ error: 'Invalid webhook signature' });
+        return;
       }
     } else {
-      // No webhook key configured — the SAME fail-open behavior verifyMandrillSignature()
-      // itself already has (matches the existing outbound-handler convention), but for the
-      // ticket-reply path specifically that means auth degrades to sender-email + reply-
-      // token only. Loud on purpose, since production is confirmed to have the key set —
-      // this firing there would mean the config regressed, not routine dev behavior.
+      // No webhook key configured — auth degrades to sender-email (+ reply-token on the
+      // ticket path) only. Loud on purpose: production is confirmed to have the key set, so
+      // this firing there means the config regressed, not routine dev behavior.
       console.warn('[MandrillInbound] MANDRILL_WEBHOOK_KEY not configured — inbound signature verification is disabled');
     }
-    // Enforcement is scoped to the NEW ticket-reply path only (see the `ticket-<id>@`
-    // branch below) — the pre-existing Lead-reply path below keeps its current
-    // (unverified) behavior unchanged; hardening that is a separate piece of work.
 
     let processed = 0;
     let skipped = 0;
@@ -246,11 +252,6 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       const toLocalPart = String(msg.email || '').split('@')[0] || '';
       const ticketMatch = toLocalPart.match(/^ticket-([0-9a-f-]{36})-([0-9a-f]{8})$/i);
       if (ticketMatch) {
-        if (!signatureValid) {
-          console.error(`[MandrillInbound] REJECTED ticket-reply for ${ticketMatch[1]} — invalid Mandrill signature`);
-          skipped++;
-          continue;
-        }
         try {
           const result = await handleTicketReplyEmail({ ticketId: ticketMatch[1], replyToken: ticketMatch[2], fromEmail, rawBody: body });
           console.log(`[MandrillInbound] Ticket reply for ${ticketMatch[1]}: ${result.reason}`);

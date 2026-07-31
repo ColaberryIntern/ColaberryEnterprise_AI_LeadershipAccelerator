@@ -33,6 +33,9 @@ interface Overview {
   dimensions: DimensionScore[];
   inpactEstimatePct: number;
   goalsEstimate: number;
+  inpactGoalsSource: string;
+  inpactGoalsScoredSystems: number;
+  productionGateMet: boolean;
   baselineSource: string;
 }
 interface Activity {
@@ -535,7 +538,12 @@ function AdminTrustCenterPage() {
                   {overview.compositeTrustScore}
                 </div>
                 <div className="text-muted small">/ 100</div>
-                <div className="mt-2 small">INPACT ≈ {overview.inpactEstimatePct}% · GOALS ≈ {overview.goalsEstimate}/25</div>
+                <div className="mt-2 small">
+                  INPACT ≈ {overview.inpactEstimatePct}% · GOALS ≈ {overview.goalsEstimate}/25
+                </div>
+                <div className="small text-muted" title={overview.inpactGoalsSource}>
+                  desk estimate, {overview.inpactGoalsScoredSystems} Tier-1 systems — not yet council-scored
+                </div>
               </div>
             </SectionCard>
           </div>
@@ -544,7 +552,13 @@ function AdminTrustCenterPage() {
               <div className="text-muted small text-uppercase">Executive recommendation</div>
               <div className="fs-5 fw-bold text-danger">{overview.recommendation}</div>
               <div className="small text-muted">{overview.maturityLevel}</div>
-              <div className="small mt-2">Production gate (INPACT ≥ 86%, GOALS ≥ 21/25) <span className="fw-semibold text-danger">not met</span>.</div>
+              <div className="small mt-2">
+                Production gate (INPACT ≥ 86%, GOALS ≥ 21/25){' '}
+                <span className={`fw-semibold text-${overview.productionGateMet ? 'success' : 'danger'}`}>
+                  {overview.productionGateMet ? 'met' : 'not met'}
+                </span>
+                .
+              </div>
             </SectionCard>
           </div>
           <div className="col-md-5">
