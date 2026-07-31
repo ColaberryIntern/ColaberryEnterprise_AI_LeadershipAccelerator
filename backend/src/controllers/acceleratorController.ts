@@ -15,6 +15,8 @@ import { buildSessionKit } from '../services/sessionKitService';
 import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, KitDocMode } from '../services/sessionKitDocService';
 import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
 import { getKitConfigDefaults } from '../services/classKit/kitConfigDefaults';
+import { generateQuestion, rewriteTeach, rewriteStoryBeats, rewritePrompts } from '../services/classKit/kitConfigAi';
+import { weekBlueprint } from '../data/weekBlueprints';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -173,6 +175,81 @@ export async function handleSaveSessionKitConfig(req: Request, res: Response, ne
     const config = await saveKitConfig(req.params.id as string, req.body?.config);
     if (!config) return res.status(404).json({ error: 'Session not found' });
     res.json({ config });
+  } catch (err) { next(err); }
+}
+
+// Shared grounding context for every AI-generate/rewrite action: the week's
+// blueprint purpose/objectives + the resolved Lessons text, joined into one
+// summary string. Used by both handleGenerateInteraction and
+// handleRewriteCategory so the two never drift apart on what "grounded in
+// the week's real content" means.
+async function loadGroundingContext(sessionId: string) {
+  const session = await LiveSession.findByPk(sessionId);
+  if (!session) return null;
+  const defaults = getKitConfigDefaults({
+    id: session.id, session_number: session.session_number, title: session.title,
+    session_date: session.session_date, start_time: session.start_time,
+    end_time: session.end_time, status: session.status,
+  });
+  const bp = defaults.week != null ? weekBlueprint(defaults.week) : undefined;
+  const contentSummary = [
+    bp?.purpose,
+    (bp?.learning_objectives || []).join('; '),
+    ...defaults.teach.map((t) => `${t.title}: ${t.body || ''}`),
+  ].filter(Boolean).join('\n');
+  return { session, contentSummary };
+}
+
+// AI-generate one survey question, grounded in the session's real week
+// content — the "+ Add question" flow's default population. Always returns
+// a usable question (falls back to a deterministic scaffold with or without
+// an OpenAI key, or on any generation failure) so the button never dead-ends.
+export async function handleGenerateInteraction(req: Request, res: Response, next: NextFunction) {
+  try {
+    const segment = req.body?.segment;
+    if (typeof segment !== 'string' || !segment.trim()) {
+      return res.status(400).json({ error: 'segment is required' });
+    }
+    const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction : undefined;
+
+    const ctx = await loadGroundingContext(req.params.id as string);
+    if (!ctx) return res.status(404).json({ error: 'Session not found' });
+
+    const result = await generateQuestion({ segment, weekTitle: ctx.session.title, contentSummary: ctx.contentSummary, instruction });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+const REWRITE_HANDLERS = { teach: rewriteTeach, storyBeats: rewriteStoryBeats, prompts: rewritePrompts } as const;
+type RewriteCategory = keyof typeof REWRITE_HANDLERS;
+
+// AI-rewrite an entire Lessons/Story Beats/Claude Code Examples list from a
+// one-line instruction, grounded in the session's real week content — "write
+// my own" means "type an instruction, get a draft, then edit it normally."
+// Always returns a usable list (falls back to the CURRENT list unchanged
+// with or without an OpenAI key, or on any generation failure).
+export async function handleRewriteCategory(req: Request, res: Response, next: NextFunction) {
+  try {
+    const category = req.body?.category;
+    if (typeof category !== 'string' || !(category in REWRITE_HANDLERS)) {
+      return res.status(400).json({ error: 'category must be one of: ' + Object.keys(REWRITE_HANDLERS).join(', ') });
+    }
+    const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction : '';
+    const currentItems = Array.isArray(req.body?.currentItems) ? req.body.currentItems : [];
+
+    const ctx = await loadGroundingContext(req.params.id as string);
+    if (!ctx) return res.status(404).json({ error: 'Session not found' });
+
+    // Cast erases which of the three differently-typed rewrite* functions this
+    // is — safe only because none of them read fields off `currentItems`
+    // (each treats it as opaque: JSON.stringify'd into the prompt, or returned
+    // verbatim as the scaffold fallback). A future rewrite* that reads a field
+    // off individual items would need a real per-category dispatch instead.
+    const rewrite = REWRITE_HANDLERS[category as RewriteCategory];
+    const result = await (rewrite as (input: { weekTitle: string; contentSummary: string; currentItems: unknown[]; instruction: string }) => Promise<unknown>)({
+      weekTitle: ctx.session.title, contentSummary: ctx.contentSummary, currentItems, instruction,
+    });
+    res.json(result);
   } catch (err) { next(err); }
 }
 

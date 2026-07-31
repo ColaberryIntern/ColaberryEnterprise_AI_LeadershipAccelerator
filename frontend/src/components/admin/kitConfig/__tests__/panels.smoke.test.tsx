@@ -4,8 +4,9 @@ import StoryBeatsPanel from '../StoryBeatsPanel';
 import TeachPanel from '../TeachPanel';
 import PromptsPanel from '../PromptsPanel';
 import InteractionsPanel from '../InteractionsPanel';
+import OpeningPanel from '../OpeningPanel';
 import EvidencePanel from '../EvidencePanel';
-import { CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionSlot, EvidenceOverride } from '../types';
+import { CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionPlacement, EvidenceOverride, KitConfig, KitConfigDefaults, seedOverrides, blankBeat } from '../types';
 
 /**
  * Render-only smoke tests for the Customize modal panels — no
@@ -19,42 +20,91 @@ const storyBeat: StoryBeatOverride = { segment: 'business-problem', icon: '🎫'
 const teachSlide: TeachSlideOverride = { segment: 'guided-build', eyebrow: '📄 Step', title: 'A lesson', body: 'Lesson body.', bullets: ['One', 'Two'], code: { label: 'Do it', code: 'Prompt text.' }, script: 'Say this.' };
 const prompt: PromptOverride = { label: 'Governance gate', prompt: 'Read CLAUDE.md.', pasteWhere: 'Claude Code', ccMode: 'Plan Mode', expectedResult: 'A summary.', stopCondition: 'It stops.', rescue: 'Ask a mentor.' };
 const evidence: EvidenceOverride = { claim: 'A claim.', publisher: 'Publisher', sourceTitle: 'Title', publicationDate: '2026', sourceType: 'research', note: '' };
-const slotOff: InteractionSlot = { enabled: false, override: null };
-const slotOn: InteractionSlot = { enabled: true, override: null };
+const question: InteractionPlacement = { segment: 'checkin', kind: 'poll', eyebrow: '🔮 Predict', title: 'Make your call', q: 'Pick one?', options: ['A', 'B'], answer: null, reveal: 'Reveal.', theater: true, presenterTip: '' };
 
 const noop = () => {};
+const noopAsync = async () => question;
+const noopRewriteBeats = async () => [storyBeat];
+const noopRewriteTeach = async () => [teachSlide];
+const noopRewritePrompts = async () => [prompt];
+
+describe('seedOverrides', () => {
+  it('seeds from a real copy of the authored defaults when any exist (Phase 3\'s core fix)', () => {
+    const seeded = seedOverrides([storyBeat], blankBeat);
+    expect(seeded).toEqual([storyBeat]);
+    expect(seeded[0]).not.toBe(storyBeat); // a copy, not the same reference
+  });
+
+  it('falls back to one blank item only when there are no defaults to copy', () => {
+    const seeded = seedOverrides([] as StoryBeatOverride[], blankBeat);
+    expect(seeded).toEqual([blankBeat()]);
+  });
+
+  it('mutating a seeded copy does not affect the original defaults array', () => {
+    const defaults = [storyBeat];
+    const seeded = seedOverrides(defaults, blankBeat);
+    seeded[0].title = 'Mutated';
+    expect(defaults[0].title).toBe('A real story');
+  });
+});
 
 describe('KitConfig panel smoke rendering', () => {
   it('StoryBeatsPanel renders in defaults and custom modes', () => {
     const base: CountAndOverride<StoryBeatOverride> = { enabled: true, max: null, overrides: null };
-    const html1 = renderToStaticMarkup(<StoryBeatsPanel config={base} defaults={[storyBeat]} onChange={noop} />);
+    const html1 = renderToStaticMarkup(<StoryBeatsPanel config={base} defaults={[storyBeat]} onRewrite={noopRewriteBeats} onChange={noop} />);
     expect(html1).toContain('Story Beats');
     expect(html1).toContain('A real story');
     const custom: CountAndOverride<StoryBeatOverride> = { enabled: true, max: 2, overrides: [storyBeat] };
-    const html2 = renderToStaticMarkup(<StoryBeatsPanel config={custom} defaults={[storyBeat]} onChange={noop} />);
+    const html2 = renderToStaticMarkup(<StoryBeatsPanel config={custom} defaults={[storyBeat]} onRewrite={noopRewriteBeats} onChange={noop} />);
     expect(html2).toContain('Remove');
     expect(html2).toContain('will show');
+    expect(html2).toContain('AI rewrite');
   });
 
   it('StoryBeatsPanel renders the disabled/empty-defaults state without throwing', () => {
     const off: CountAndOverride<StoryBeatOverride> = { enabled: false, max: null, overrides: null };
-    expect(() => renderToStaticMarkup(<StoryBeatsPanel config={off} defaults={[]} onChange={noop} />)).not.toThrow();
+    expect(() => renderToStaticMarkup(<StoryBeatsPanel config={off} defaults={[]} onRewrite={noopRewriteBeats} onChange={noop} />)).not.toThrow();
   });
 
   it('TeachPanel renders in defaults and custom modes', () => {
     const base: CountAndOverride<TeachSlideOverride> = { enabled: true, max: null, overrides: null };
-    const html1 = renderToStaticMarkup(<TeachPanel config={base} defaults={[teachSlide]} dayLabel="Build Day (Thursday)" onChange={noop} />);
+    const html1 = renderToStaticMarkup(<TeachPanel config={base} defaults={[teachSlide]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />);
     expect(html1).toContain('A lesson');
     const custom: CountAndOverride<TeachSlideOverride> = { enabled: true, max: null, overrides: [teachSlide] };
-    const html2 = renderToStaticMarkup(<TeachPanel config={custom} defaults={[]} dayLabel="Build Day (Thursday)" onChange={noop} />);
+    const html2 = renderToStaticMarkup(<TeachPanel config={custom} defaults={[]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />);
     expect(html2).toContain('+ Add lesson slide');
+    expect(html2).toContain('AI rewrite');
+  });
+
+  it('TeachPanel/StoryBeatsPanel/PromptsPanel do not throw on real authored-default shapes missing optional fields (seedOverrides copies these verbatim into the custom editor)', () => {
+    // Real authored TeachSlide/StoryBeat/ClassPrompt content genuinely omits
+    // bullets/body/punch/ccMode/etc — confirmed against classTeachContent.ts
+    // and classTeachWeeks.ts, where a real share of slides have no `bullets`
+    // key at all. seedOverrides copies these objects as-is into the "write
+    // my own" editor, so the panel's field reads must survive the gap, not
+    // assume the frontend's Override types' fields are always present.
+    const bareSlide = { segment: 'guided-build', eyebrow: '', title: 'Bare slide' } as TeachSlideOverride;
+    expect(() => renderToStaticMarkup(
+      <TeachPanel config={{ enabled: true, max: null, overrides: [bareSlide] }} defaults={[]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />,
+    )).not.toThrow();
+
+    const bareBeat = { segment: 'business-problem', icon: '💡', eyebrow: '', title: 'Bare beat', tone: 'berry' } as StoryBeatOverride;
+    expect(() => renderToStaticMarkup(
+      <StoryBeatsPanel config={{ enabled: true, max: null, overrides: [bareBeat] }} defaults={[]} onRewrite={noopRewriteBeats} onChange={noop} />,
+    )).not.toThrow();
+
+    const barePrompt = { label: 'Bare prompt', prompt: 'Do the thing.' } as PromptOverride;
+    expect(() => renderToStaticMarkup(
+      <PromptsPanel config={{ enabled: true, max: null, overrides: [barePrompt] }} defaults={[]} buildBayDetail={true} onToggleDetail={noop}
+        appliesToThisSession={true} dayKind="build" onRewrite={noopRewritePrompts} onChange={noop} />,
+    )).not.toThrow();
   });
 
   it('PromptsPanel shows the Lessons-precedence note when this week has deep-teach content', () => {
     const base: CountAndOverride<PromptOverride> = { enabled: true, max: null, overrides: null };
     const html = renderToStaticMarkup(
       <PromptsPanel config={base} defaults={[prompt]} buildBayDetail={true} onToggleDetail={noop}
-        appliesToThisSession={false} dayKind="build" onChange={noop} />,
+        appliesToThisSession={false} dayKind="build" onRewrite={noopRewritePrompts} onChange={noop} />,
     );
     expect(html).toContain('already renders from');
     expect(html).toContain('Governance gate');
@@ -64,19 +114,52 @@ describe('KitConfig panel smoke rendering', () => {
     const base: CountAndOverride<PromptOverride> = { enabled: true, max: null, overrides: null };
     const html = renderToStaticMarkup(
       <PromptsPanel config={base} defaults={[]} buildBayDetail={true} onToggleDetail={noop}
-        appliesToThisSession={false} dayKind="architecture" onChange={noop} />,
+        appliesToThisSession={false} dayKind="architecture" onRewrite={noopRewritePrompts} onChange={noop} />,
     );
     expect(html).toContain('only apply to Build Day');
   });
 
-  it('InteractionsPanel renders the relevant slots per dayKind without throwing', () => {
-    const interactions = { mondayPoll: slotOn, mondayTrivia: slotOn, thursdayTrivia: slotOff };
-    const defaults = { mondayPoll: { kind: 'poll' as const, q: 'Pick one?', options: ['A', 'B'], answer: null, reveal: 'Reveal.', theater: true }, mondayTrivia: null, thursdayTrivia: null };
+  it('InteractionsPanel renders authored defaults without throwing', () => {
+    const base: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: null };
     const html = renderToStaticMarkup(
-      <InteractionsPanel interactions={interactions} defaults={defaults} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} />,
+      <InteractionsPanel config={base} defaults={[question]} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
     );
     expect(html).toContain('Pick one?');
     expect(html).toContain('Live Decision Theater');
+  });
+
+  it('InteractionsPanel renders the custom editable list with the AI-generate control', () => {
+    const custom: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [question] };
+    const html = renderToStaticMarkup(
+      <InteractionsPanel config={custom} defaults={[]} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+    );
+    expect(html).toContain('AI-generate a question');
+    expect(html).toContain('Remove');
+  });
+
+  it('InteractionsPanel does not throw on a question missing every optional field (a real AI-generated/authored shape)', () => {
+    // eyebrow/title/answer/reveal/theater/presenterTip all omitted — proves the
+    // panel's reads fall back safely instead of rendering an uncontrolled input.
+    const minimal: InteractionPlacement = { segment: 'checkin', kind: 'poll', q: 'Bare-minimum question?', options: ['A', 'B'] };
+    const custom: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [minimal] };
+    expect(() => renderToStaticMarkup(
+      <InteractionsPanel config={custom} defaults={[]} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+    )).not.toThrow();
+    const defaultsHtml = renderToStaticMarkup(
+      <InteractionsPanel config={{ enabled: true, max: null, overrides: null }} defaults={[minimal]} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+    );
+    expect(defaultsHtml).toContain('Bare-minimum question?');
+  });
+
+  it('InteractionsPanel only offers this session\'s own day-kind segments as placement targets', () => {
+    const custom: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [] };
+    const html = renderToStaticMarkup(
+      <InteractionsPanel config={custom} defaults={[]} theaterEnabled={true} dayKind="build" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+    );
+    // Build Day segments present, Architecture-Day-only segments absent.
+    expect(html).toContain('Readiness check');
+    expect(html).not.toContain('Cold open');
+    expect(html).not.toContain('Architecture challenge');
   });
 
   it('EvidencePanel renders in defaults and custom modes', () => {
@@ -84,5 +167,54 @@ describe('KitConfig panel smoke rendering', () => {
     expect(html1).toContain('A claim.');
     const html2 = renderToStaticMarkup(<EvidencePanel overrides={[evidence]} defaults={[]} onChange={noop} />);
     expect(html2).toContain('+ Add source');
+  });
+
+  it('OpeningPanel renders cold-open + hook for Architecture Day', () => {
+    const opening: KitConfig['opening'] = {
+      coldOpen: { enabled: true, override: null }, hook: { enabled: true, override: null }, resultPreview: { enabled: true, override: null },
+    };
+    const defaults: KitConfigDefaults['opening'] = {
+      coldOpen: { title: 'By Thursday, this will exist', body: 'Payoff.' },
+      hook: { headline: 'Custom headline', caption: 'Custom caption.' },
+      resultPreview: null,
+    };
+    const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="architecture" onChange={noop} />);
+    expect(html).toContain('Cold Open');
+    expect(html).toContain('By Thursday, this will exist');
+    expect(html).toContain('Story Mode Hook');
+    expect(html).toContain('Custom headline');
+    expect(html).not.toContain('Result Preview');
+  });
+
+  it('OpeningPanel renders only Result Preview for Build Day', () => {
+    const opening: KitConfig['opening'] = {
+      coldOpen: { enabled: true, override: null }, hook: { enabled: true, override: null }, resultPreview: { enabled: true, override: null },
+    };
+    const defaults: KitConfigDefaults['opening'] = {
+      coldOpen: null, hook: null, resultPreview: { title: 'What you are producing today', body: 'Body.' },
+    };
+    const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="build" onChange={noop} />);
+    expect(html).toContain('Result Preview');
+    expect(html).toContain('What you are producing today');
+    expect(html).not.toContain('Cold Open');
+    expect(html).not.toContain('Story Mode Hook');
+  });
+
+  it('OpeningPanel shows a not-yet-configurable note for Orientation (not wired into the deck builder)', () => {
+    const opening: KitConfig['opening'] = {
+      coldOpen: { enabled: true, override: null }, hook: { enabled: true, override: null }, resultPreview: { enabled: true, override: null },
+    };
+    const defaults: KitConfigDefaults['opening'] = { coldOpen: null, hook: null, resultPreview: null };
+    const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="orientation" onChange={noop} />);
+    expect(html).toContain('not yet configurable');
+  });
+
+  it('OpeningPanel: disabling a slot shows the Off status', () => {
+    const opening: KitConfig['opening'] = {
+      coldOpen: { enabled: false, override: null }, hook: { enabled: true, override: null }, resultPreview: { enabled: true, override: null },
+    };
+    const defaults: KitConfigDefaults['opening'] = { coldOpen: { title: 'T', body: 'B' }, hook: null, resultPreview: null };
+    const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="architecture" onChange={noop} />);
+    expect(html).toContain('Off');
   });
 });

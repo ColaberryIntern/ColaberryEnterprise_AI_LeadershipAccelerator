@@ -1,6 +1,6 @@
 import React from 'react';
-import { CountAndOverride, PromptOverride, blankPrompt } from './types';
-import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote } from './shared';
+import { CountAndOverride, PromptOverride, blankPrompt, seedOverrides } from './types';
+import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote, AiRewriteBar } from './shared';
 
 interface Props {
   config: CountAndOverride<PromptOverride>;
@@ -12,16 +12,18 @@ interface Props {
    * effect, so we say so instead of leaving it a silent no-op. */
   appliesToThisSession: boolean;
   dayKind: 'orientation' | 'architecture' | 'build';
+  onRewrite: (currentItems: PromptOverride[], instruction: string) => Promise<PromptOverride[]>;
   onChange: (next: CountAndOverride<PromptOverride>) => void;
 }
 
-const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onToggleDetail, appliesToThisSession, dayKind, onChange }) => {
+const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onToggleDetail, appliesToThisSession, dayKind, onRewrite, onChange }) => {
   const usingCustom = config.overrides != null;
   const prompts = config.overrides ?? [];
 
   const update = (i: number, patch: Partial<PromptOverride>) => onChange({ ...config, overrides: prompts.map((p, idx) => (idx === i ? { ...p, ...patch } : p)) });
   const add = () => onChange({ ...config, overrides: [...prompts, blankPrompt()] });
   const remove = (i: number) => onChange({ ...config, overrides: prompts.filter((_, idx) => idx !== i) });
+  const rewrite = async (instruction: string) => onChange({ ...config, overrides: await onRewrite(prompts.length ? prompts : defaults, instruction) });
 
   if (dayKind !== 'build') {
     return <EmptyDefaultsNote>Claude Code examples only apply to Build Day (Thursday) sessions.</EmptyDefaultsNote>;
@@ -57,7 +59,7 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
       {config.enabled && (
         <>
           <ContentModeSwitch id="cfg-prompts-custom" usingCustom={usingCustom} itemNoun="prompts"
-            onSwitch={(custom) => onChange({ ...config, overrides: custom ? [blankPrompt()] : null })} />
+            onSwitch={(custom) => onChange({ ...config, overrides: custom ? seedOverrides(defaults, blankPrompt) : null })} />
           {!usingCustom ? (
             defaults.length === 0 ? (
               <EmptyDefaultsNote>No fallback prompts are authored for this week.</EmptyDefaultsNote>
@@ -68,6 +70,7 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
             )
           ) : (
             <>
+              <AiRewriteBar itemNoun="Claude Code examples" onRewrite={rewrite} />
               {prompts.map((p, i) => (
                 <OverrideCard key={i} index={i} onRemove={() => remove(i)}>
                   <div className="row g-2 mb-2">
@@ -77,7 +80,7 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
                     </div>
                     <div className="col-6">
                       <label className="form-label small">Claude Code mode</label>
-                      <select className="form-select form-select-sm" value={p.ccMode} onChange={(e) => update(i, { ccMode: e.target.value })}>
+                      <select className="form-select form-select-sm" value={p.ccMode ?? 'Plan Mode'} onChange={(e) => update(i, { ccMode: e.target.value })}>
                         <option>Manual</option><option>Plan Mode</option><option>Auto</option>
                       </select>
                     </div>
@@ -85,11 +88,11 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
                   <label className="form-label small">Prompt</label>
                   <textarea className="form-control form-control-sm mb-2" rows={3} value={p.prompt} onChange={(e) => update(i, { prompt: e.target.value })} />
                   <label className="form-label small">You should see (optional)</label>
-                  <input className="form-control form-control-sm mb-2" value={p.expectedResult} onChange={(e) => update(i, { expectedResult: e.target.value })} />
+                  <input className="form-control form-control-sm mb-2" value={p.expectedResult ?? ''} onChange={(e) => update(i, { expectedResult: e.target.value })} />
                   <label className="form-label small">Stop when (optional)</label>
-                  <input className="form-control form-control-sm mb-2" value={p.stopCondition} onChange={(e) => update(i, { stopCondition: e.target.value })} />
+                  <input className="form-control form-control-sm mb-2" value={p.stopCondition ?? ''} onChange={(e) => update(i, { stopCondition: e.target.value })} />
                   <label className="form-label small">If stuck (optional)</label>
-                  <input className="form-control form-control-sm" value={p.rescue} onChange={(e) => update(i, { rescue: e.target.value })} />
+                  <input className="form-control form-control-sm" value={p.rescue ?? ''} onChange={(e) => update(i, { rescue: e.target.value })} />
                 </OverrideCard>
               ))}
               <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add prompt</button>
