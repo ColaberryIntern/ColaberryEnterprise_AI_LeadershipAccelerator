@@ -7,6 +7,7 @@ import {
   getTenureBucketRoster,
   getPlanRoster,
   getDepositHolderRoster,
+  getStaffRoster,
   SubscriptionPlanKey,
 } from '../services/subscriptionAnalyticsService';
 import { getExplorerRoster } from '../services/explorerRosterService';
@@ -89,7 +90,7 @@ export async function handleGetTenureBucketRoster(
   }
 }
 
-const KNOWN_PLANS: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp', 'deposit_holder', 'other'];
+const KNOWN_PLANS: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp', 'deposit_holder', 'other', 'staff'];
 
 // Drill-down roster for one plan category ("just the Annual people", etc.),
 // across every tenure month — behind each row of "Subscribers by plan".
@@ -104,7 +105,10 @@ export async function handleGetPlanRoster(
       res.status(400).json({ error: `plan must be one of ${KNOWN_PLANS.join(', ')}` });
       return;
     }
-    const data = plan === 'deposit_holder' ? await getDepositHolderRoster() : await getPlanRoster(plan);
+    const data =
+      plan === 'deposit_holder' ? await getDepositHolderRoster()
+      : plan === 'staff' ? await getStaffRoster()
+      : await getPlanRoster(plan);
     res.json({ members: data });
   } catch (error) {
     next(error);

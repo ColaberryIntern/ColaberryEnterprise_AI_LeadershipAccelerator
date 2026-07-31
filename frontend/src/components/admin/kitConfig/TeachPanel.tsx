@@ -1,21 +1,23 @@
 import React from 'react';
-import { CountAndOverride, TeachSlideOverride, SEGMENT_OPTIONS, blankTeach } from './types';
-import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote } from './shared';
+import { CountAndOverride, TeachSlideOverride, SEGMENT_OPTIONS, blankTeach, seedOverrides } from './types';
+import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote, AiRewriteBar } from './shared';
 
 interface Props {
   config: CountAndOverride<TeachSlideOverride>;
   defaults: TeachSlideOverride[];
   dayLabel: string;
+  onRewrite: (currentItems: TeachSlideOverride[], instruction: string) => Promise<TeachSlideOverride[]>;
   onChange: (next: CountAndOverride<TeachSlideOverride>) => void;
 }
 
-const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onChange }) => {
+const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onRewrite, onChange }) => {
   const usingCustom = config.overrides != null;
   const slides = config.overrides ?? [];
 
   const update = (i: number, patch: Partial<TeachSlideOverride>) => onChange({ ...config, overrides: slides.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) });
   const add = () => onChange({ ...config, overrides: [...slides, blankTeach()] });
   const remove = (i: number) => onChange({ ...config, overrides: slides.filter((_, idx) => idx !== i) });
+  const rewrite = async (instruction: string) => onChange({ ...config, overrides: await onRewrite(slides.length ? slides : defaults, instruction) });
 
   return (
     <>
@@ -32,7 +34,7 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onChange }) =
       {config.enabled && (
         <>
           <ContentModeSwitch id="cfg-teach-custom" usingCustom={usingCustom} itemNoun="lessons"
-            onSwitch={(custom) => onChange({ ...config, overrides: custom ? [blankTeach()] : null })} />
+            onSwitch={(custom) => onChange({ ...config, overrides: custom ? seedOverrides(defaults, blankTeach) : null })} />
           {!usingCustom ? (
             defaults.length === 0 ? (
               <EmptyDefaultsNote>No deep-teaching content is authored for {dayLabel} yet.</EmptyDefaultsNote>
@@ -44,6 +46,7 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onChange }) =
             )
           ) : (
             <>
+              <AiRewriteBar itemNoun="Lessons" onRewrite={rewrite} />
               {slides.map((s, i) => (
                 <OverrideCard key={i} index={i} onRemove={() => remove(i)}>
                   <div className="row g-2 mb-2">
@@ -65,9 +68,9 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onChange }) =
                   <label className="form-label small">Title</label>
                   <input className="form-control form-control-sm mb-2" value={s.title} onChange={(e) => update(i, { title: e.target.value })} />
                   <label className="form-label small">Body</label>
-                  <textarea className="form-control form-control-sm mb-2" rows={3} value={s.body} onChange={(e) => update(i, { body: e.target.value })} />
+                  <textarea className="form-control form-control-sm mb-2" rows={3} value={s.body ?? ''} onChange={(e) => update(i, { body: e.target.value })} />
                   <label className="form-label small">Bullets (one per line, optional)</label>
-                  <textarea className="form-control form-control-sm mb-2" rows={2} value={s.bullets.join('\n')}
+                  <textarea className="form-control form-control-sm mb-2" rows={2} value={(s.bullets ?? []).join('\n')}
                     onChange={(e) => update(i, { bullets: e.target.value.split('\n').filter((l) => l.trim().length > 0) })} />
                   <div className="row g-2 mb-2">
                     <div className="col-4">
@@ -82,7 +85,7 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onChange }) =
                     </div>
                   </div>
                   <label className="form-label small">Instructor script (optional — what to say/do)</label>
-                  <input className="form-control form-control-sm" value={s.script} onChange={(e) => update(i, { script: e.target.value })} />
+                  <input className="form-control form-control-sm" value={s.script ?? ''} onChange={(e) => update(i, { script: e.target.value })} />
                 </OverrideCard>
               ))}
               <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add lesson slide</button>

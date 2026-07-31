@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { CategoryStatus, Tone } from './types';
 
 /** Small status pill shown on the left-rail nav item and each panel header —
@@ -97,3 +97,36 @@ export const OverrideCard: React.FC<{ index: number; onRemove: () => void; child
 export const EmptyDefaultsNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
   <p className="text-muted small fst-italic mb-2">{children}</p>
 );
+
+/** "Write my own" now means: type an instruction, get an AI-regenerated
+ * draft (grounded in this week's real content), then edit it normally —
+ * not hand-typing every field from a blank template. Shared across Lessons/
+ * Story Beats/Claude Code Examples so the pattern (and the loading/error
+ * handling) is identical everywhere it appears. `onRewrite` always resolves
+ * (the backend falls back to the current list unchanged on any failure),
+ * so this component has no error state of its own to show. */
+export const AiRewriteBar: React.FC<{
+  itemNoun: string;
+  onRewrite: (instruction: string) => Promise<void>;
+}> = ({ itemNoun, onRewrite }) => {
+  const [instruction, setInstruction] = useState('');
+  const [busy, setBusy] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    try { await onRewrite(instruction.trim()); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="rounded-3 border bg-light p-3 mb-3">
+      <label className="form-label small fw-medium">Rewrite the {itemNoun} with AI (optional instruction)</label>
+      <div className="d-flex gap-2">
+        <input className="form-control form-control-sm" value={instruction} onChange={(e) => setInstruction(e.target.value)}
+          placeholder="e.g. make this week's Lessons focus more on error handling" disabled={busy} />
+        <button className="btn btn-primary btn-sm text-nowrap" disabled={busy} onClick={go}>
+          {busy ? 'Rewriting…' : '✨ AI rewrite'}
+        </button>
+      </div>
+      <div className="text-muted small mt-1">Grounded in this week's real content. Replaces the list below — review and edit after.</div>
+    </div>
+  );
+};

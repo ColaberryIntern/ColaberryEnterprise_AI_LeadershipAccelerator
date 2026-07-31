@@ -10,12 +10,29 @@
  * every other category is read directly from the source data.
  */
 import {
-  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ClassPrompt, Interaction, StoryBeat, DayKind,
+  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ClassPrompt, StoryBeat, DayKind, BuildCheckpoint,
 } from '../../data/classSessionPlan';
 import { teachSlidesFor, ORIENTATION_TEACH, TeachSlide, EvidenceClaim } from '../../data/classTeachContent';
 import { detectDayKind, parseWeek, BuildKitSpecInput, KitSessionInput } from './kitSpec';
-import { buildKitSpec } from './kitSpecDaySlides';
-import { DEFAULT_KIT_CONFIG, StoryBeatOverride } from './kitConfig';
+import { buildKitSpec, defaultInteractionsFor, defaultOpeningFor, DefaultOpening } from './kitSpecDaySlides';
+import { DEFAULT_KIT_CONFIG, StoryBeatOverride, InteractionPlacement } from './kitConfig';
+import { SegmentMode } from './runOfShow';
+
+/** A checkpoint pin at its real render position — `segment` is hardcoded to
+ * `'build-map'` here to mirror the literal segment kitSpecDaySlides.ts's
+ * own buildSlides() attaches checkpoint slides to (not carried on
+ * BuildCheckpoint itself, which has no segment field). */
+export interface CheckpointLandmark extends BuildCheckpoint { segment: string }
+/** The templated "Reset" break window — identical every week (fixed show
+ * timing, not per-session authored content); null for Orientation, which
+ * has no break in its run-of-show template. */
+export interface BreakLandmark { segment: string; startMin: number; endMin: number; label: string }
+/** One run-of-show lane for the Timeline Builder (Phase 5) — scaled to this
+ * SESSION's actual duration (not the raw 120-min template), by deriving it
+ * from the already-built default spec's slides rather than recomputing the
+ * scale separately, so the timeline's lane widths can never drift from what
+ * the deck itself renders. */
+export interface TimelineSegment { id: string; label: string; startMin: number; endMin: number; mode: SegmentMode }
 
 export interface KitConfigDefaults {
   dayKind: DayKind;
@@ -24,13 +41,22 @@ export interface KitConfigDefaults {
   teach: TeachSlide[];
   /** Build Bay prompts — only non-empty on Build Day. */
   prompts: ClassPrompt[];
-  interactions: {
-    mondayPoll: Interaction | null;
-    mondayTrivia: Interaction | null;
-    thursdayTrivia: Interaction | null;
-  };
+  /** Survey questions (polls + trivia) — an ordinary segment-taggable list,
+   * the same shape config.interactions.overrides uses. */
+  interactions: InteractionPlacement[];
   storyBeats: StoryBeatOverride[];
   evidence: EvidenceClaim[];
+  /** The authored default opening content (cold-open/hook/result-preview). */
+  opening: DefaultOpening;
+  /** Read-only timeline landmarks (Phase 4/5) — never part of KitConfig,
+   * never editable, never persisted. Checkpoints only populate on Build Day;
+   * breakSegment is null for Orientation (no 'break' segment in its
+   * run-of-show template). */
+  checkpoints: CheckpointLandmark[];
+  breakSegment: BreakLandmark | null;
+  /** Every real run-of-show lane for this session's day-kind, in show order,
+   * scaled to this session's actual duration. */
+  segments: TimelineSegment[];
 }
 
 function flattenStoryBeats(map: Record<string, StoryBeat[]> | undefined): StoryBeatOverride[] {
@@ -50,11 +76,8 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
 
   const prompts = dayKind === 'build' && wc ? wc.thursday.prompts : [];
 
-  const interactions = {
-    mondayPoll: dayKind === 'architecture' && wc ? wc.monday.designChoice : dayKind === 'orientation' ? ORIENTATION_PLAN.designChoice : null,
-    mondayTrivia: dayKind === 'architecture' && wc ? wc.monday.trivia : null,
-    thursdayTrivia: dayKind === 'build' && wc ? wc.thursday.trivia : dayKind === 'orientation' ? ORIENTATION_PLAN.trivia : null,
-  };
+  const interactions = defaultInteractionsFor(week, dayKind);
+  const opening = defaultOpeningFor(week, dayKind);
 
   const storyBeats = flattenStoryBeats(
     dayKind === 'orientation' ? ORIENTATION_PLAN.storyBeats
@@ -68,5 +91,28 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
   const defaultSpec = buildKitSpec(input);
   const evidence = defaultSpec.slides.flatMap((s) => s.evidence || []);
 
-  return { dayKind, week, teach, prompts, interactions, storyBeats, evidence };
+  // Mirrors kitSpecDaySlides.ts's own buildSlides() call site, which
+  // attaches every checkpoint slide to the 'build-map' segment.
+  const checkpoints: CheckpointLandmark[] =
+    dayKind === 'build' && wc ? wc.thursday.checkpoints.map((cp) => ({ ...cp, segment: 'build-map' })) : [];
+
+  // Derived from the already-built defaultSpec's own slides (first-seen
+  // order), already scaled to this session's actual duration by buildKitSpec
+  // itself — not re-derived from runOfShowFor's raw 120-min templates, so
+  // these lane widths (and breakSegment's window below) can never drift from
+  // what the deck itself renders for this exact session.
+  const segMap = new Map<string, TimelineSegment>();
+  defaultSpec.slides.forEach((s) => {
+    if (!segMap.has(s.segmentId)) {
+      segMap.set(s.segmentId, { id: s.segmentId, label: s.segmentLabel, startMin: s.segStartMin, endMin: s.segEndMin, mode: s.mode });
+    }
+  });
+  const segments = Array.from(segMap.values());
+
+  const breakSeg = segments.find((s) => s.mode === 'break');
+  const breakSegment: BreakLandmark | null = breakSeg
+    ? { segment: breakSeg.id, startMin: breakSeg.startMin, endMin: breakSeg.endMin, label: breakSeg.label }
+    : null;
+
+  return { dayKind, week, teach, prompts, interactions, storyBeats, evidence, opening, checkpoints, breakSegment, segments };
 }

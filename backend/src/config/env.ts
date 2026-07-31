@@ -105,6 +105,16 @@ export const env = {
   // Discover its id with `node backend/src/scripts/discoverFamilyCalendar.js`.
   googleFamilyCalendarId: process.env.GOOGLE_FAMILY_CALENDAR_ID || '',
 
+  // Zoom (Server-to-Server OAuth app) — replaces Google Meet as the class
+  // video/recording provider; see zoomService.ts. zoomHostEmail is the Zoom
+  // user every class meeting is created under (the account with Cloud
+  // Recording + auto_recording enabled), not the app's own identity.
+  zoomAccountId: process.env.ZOOM_ACCOUNT_ID || '',
+  zoomClientId: process.env.ZOOM_CLIENT_ID || '',
+  zoomClientSecret: process.env.ZOOM_CLIENT_SECRET || '',
+  zoomWebhookSecretToken: process.env.ZOOM_WEBHOOK_SECRET_TOKEN || '',
+  zoomHostEmail: process.env.ZOOM_HOST_EMAIL || '',
+
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
   enableVoiceCallForOverview: process.env.ENABLE_VOICE_CALL_FOR_OVERVIEW === 'true',

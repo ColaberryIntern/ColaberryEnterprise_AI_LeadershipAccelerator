@@ -56,4 +56,13 @@ describe('getRevenuePayments — plan labeling', () => {
     const { transactions } = await getRevenuePayments();
     expect(transactions[0].plan).toBeNull();
   });
+
+  it('excludes withdrawn (duplicate-resolved) enrollments from the memberships query', async () => {
+    mockQueries();
+    await getRevenuePayments();
+    const membershipsSql = mockQuery.mock.calls.find(
+      (c) => (c[0] as string).includes('FROM enrollments e') && (c[0] as string).includes('LEFT JOIN LATERAL')
+    )![0] as string;
+    expect(membershipsSql).toContain("e.status = 'active'");
+  });
 });

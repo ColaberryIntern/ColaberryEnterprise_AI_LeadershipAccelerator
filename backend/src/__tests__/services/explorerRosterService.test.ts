@@ -71,4 +71,15 @@ describe('getExplorerRoster', () => {
 
     expect(mockGetTotals).toHaveBeenCalledWith(['enr-x']);
   });
+
+  it('queries only active, non-staff explorers (excludes withdrawn duplicates and internal staff signups)', async () => {
+    mockQuery.mockResolvedValue([]);
+    mockGetTotals.mockResolvedValue(new Map());
+
+    await getExplorerRoster();
+
+    const sql = mockQuery.mock.calls[0][0] as string;
+    expect(sql).toContain("e.status = 'active'");
+    expect(sql).toContain('cm.mgmt_role'); // IS_STAFF_SQL is inlined into the WHERE clause
+  });
 });

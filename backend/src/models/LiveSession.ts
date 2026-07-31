@@ -13,6 +13,7 @@ export interface LiveSessionAttributes {
   session_type: 'core' | 'lab';
   meeting_link?: string;
   meeting_provider?: string;
+  zoom_meeting_id?: string;
   status: 'scheduled' | 'live' | 'completed' | 'cancelled';
   recording_url?: string;
   materials_json?: any;
@@ -44,6 +45,7 @@ class LiveSession extends Model<LiveSessionAttributes> implements LiveSessionAtt
   declare session_type: 'core' | 'lab';
   declare meeting_link: string;
   declare meeting_provider: string;
+  declare zoom_meeting_id: string;
   declare status: 'scheduled' | 'live' | 'completed' | 'cancelled';
   declare recording_url: string;
   declare materials_json: any;
@@ -112,6 +114,10 @@ LiveSession.init(
       type: DataTypes.STRING(50),
       allowNull: true,
       defaultValue: 'google_meet',
+    },
+    zoom_meeting_id: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
     },
     status: {
       type: DataTypes.ENUM('scheduled', 'live', 'completed', 'cancelled'),
