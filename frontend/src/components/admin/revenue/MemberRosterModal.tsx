@@ -1,19 +1,28 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getTenureBucketRoster, TenureRosterRow } from '../../../services/subscriptionAnalyticsApi';
+import { TenureRosterRow } from '../../../services/subscriptionAnalyticsApi';
 import { money, fmtDate } from './format';
 import PlanTag from './PlanTag';
 
 interface Props {
-  monthIndex: number; // 1-based; 5 means "Month 5+"
-  bucketLabel: string;
+  title: string;
+  subtitle: string;
+  fetcher: () => Promise<TenureRosterRow[]>;
   onClose: () => void;
 }
 
-/** Drill-down roster behind a paying-member tenure bucket ("Month 1", "Month
- *  2", ... "Month 5+") — mirrors ExplorerRosterModal's pattern, but for
- *  members who've already converted to a plan. */
-export default function MemberRosterModal({ monthIndex, bucketLabel, onClose }: Props) {
+const amountLabel = (r: TenureRosterRow): string => {
+  if (r.plan === 'annual' || r.plan === 'monthly') return `${money(r.monthly_amount)}/mo`;
+  if (r.plan === 'deposit_holder') return `${money(r.monthly_amount)} held`;
+  return '—';
+};
+
+/** Generic drill-down roster — behind a tenure-month bucket ("Month 1", ...)
+ *  or a plan-breakdown row ("Annual", "Monthly", ...). The caller supplies
+ *  what to fetch and how to describe it; this just renders the list, sorted
+ *  by next payment date descending (server-side), searchable by name/email,
+ *  each row linking to the Person 360 drawer for full drill-through. */
+export default function MemberRosterModal({ title, subtitle, fetcher, onClose }: Props) {
   const [rows, setRows] = useState<TenureRosterRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,14 +32,14 @@ export default function MemberRosterModal({ monthIndex, bucketLabel, onClose }: 
     setLoading(true);
     setError(null);
     try {
-      const data = await getTenureBucketRoster(monthIndex);
+      const data = await fetcher();
       setRows(data);
     } catch (err: any) {
       setError(err?.response?.data?.error || 'Failed to load members');
     } finally {
       setLoading(false);
     }
-  }, [monthIndex]);
+  }, [fetcher]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -52,15 +61,15 @@ export default function MemberRosterModal({ monthIndex, bucketLabel, onClose }: 
       style={{ backgroundColor: 'rgba(0,0,0,0.55)' }}
       role="dialog"
       aria-modal="true"
-      aria-label={`${bucketLabel} roster`}
+      aria-label={`${title} roster`}
       onClick={onClose}
     >
       <div className="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" onClick={(e) => e.stopPropagation()}>
         <div className="modal-content border-0 shadow">
           <div className="modal-header">
             <div>
-              <h6 className="modal-title fw-semibold mb-0">{bucketLabel} ({rows.length})</h6>
-              <p className="small text-muted mb-0">Subscribers currently {monthIndex === 5 ? 'in their 5th month or later' : `in their ${monthIndex === 1 ? '1st' : monthIndex === 2 ? '2nd' : monthIndex === 3 ? '3rd' : '4th'} month`}.</p>
+              <h6 className="modal-title fw-semibold mb-0">{title} ({rows.length})</h6>
+              <p className="small text-muted mb-0">{subtitle}</p>
             </div>
             <button className="btn-close" onClick={onClose} aria-label="Close" />
           </div>
@@ -89,12 +98,12 @@ export default function MemberRosterModal({ monthIndex, bucketLabel, onClose }: 
                 <table className="table table-hover align-middle mb-0">
                   <thead className="table-light">
                     <tr>
-                      <th>Member</th><th>Plan</th><th className="text-end">Amount</th><th>Member since</th><th></th>
+                      <th>Member</th><th>Plan</th><th className="text-end">Amount</th><th>Member since</th><th>Next payment</th><th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.length === 0 ? (
-                      <tr><td colSpan={5} className="text-center text-muted py-4">No members match that search.</td></tr>
+                      <tr><td colSpan={6} className="text-center text-muted py-4">No members match that search.</td></tr>
                     ) : filtered.map((r) => (
                       <tr key={r.enrollment_id}>
                         <td>
@@ -103,9 +112,10 @@ export default function MemberRosterModal({ monthIndex, bucketLabel, onClose }: 
                         </td>
                         <td><PlanTag plan={r.plan} /></td>
                         <td className="text-end fw-semibold" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                          {r.plan === 'comp' ? '—' : `${money(r.monthly_amount)}/mo`}
+                          {amountLabel(r)}
                         </td>
                         <td className="small text-muted text-nowrap">{fmtDate(r.member_since)}</td>
+                        <td className="small text-muted text-nowrap">{r.next_payment_date ? fmtDate(r.next_payment_date) : '—'}</td>
                         <td className="text-end">
                           <Link
                             to={`/admin/accelerator?enrollment=${r.enrollment_id}&name=${encodeURIComponent(r.payer_name)}`}

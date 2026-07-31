@@ -6,6 +6,7 @@ import {
   handleGetSubscriptionAnalytics,
   handleGetExplorerRoster,
   handleGetTenureBucketRoster,
+  handleGetPlanRoster,
   handleReconcileAppPayments,
 } from '../../controllers/adminRevenueController';
 import {
@@ -26,6 +27,8 @@ router.get('/api/admin/revenue/subscriptions', requireAdmin, handleGetSubscripti
 router.get('/api/admin/revenue/explorers', requireAdmin, handleGetExplorerRoster);
 // Drill-down roster for one tenure bucket (1..5, 5 = "Month 5+")
 router.get('/api/admin/revenue/tenure/:month', requireAdmin, handleGetTenureBucketRoster);
+// Drill-down roster for one plan category (behind each "Subscribers by plan" row)
+router.get('/api/admin/revenue/plan/:plan', requireAdmin, handleGetPlanRoster);
 // Heal missed-webhook membership payments (app-scoped; our customers only). Idempotent.
 router.post('/api/admin/revenue/reconcile', requireAdmin, handleReconcileAppPayments);
 
