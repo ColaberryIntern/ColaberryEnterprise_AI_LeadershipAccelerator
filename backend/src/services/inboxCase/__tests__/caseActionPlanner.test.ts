@@ -1,4 +1,22 @@
 import { randomUUID } from 'crypto';
+import { Op } from 'sequelize';
+
+// Mirrors testHelpers/fakeModel.ts's Op-symbol handling (Op.ne/Op.in/Op.notIn)
+// — this file keeps its own lightweight copy rather than importing the
+// shared helper so the fixture shapes above stay local and easy to read.
+function matchesWhere(row: any, where: any): boolean {
+  if (!where) return true;
+  for (const [key, value] of Object.entries(where)) {
+    if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+      const symbolKeys = Object.getOwnPropertySymbols(value as object);
+      if (symbolKeys.includes(Op.ne)) { if (row[key] === (value as any)[Op.ne]) return false; continue; }
+      if (symbolKeys.includes(Op.in)) { if (!(value as any)[Op.in].includes(row[key])) return false; continue; }
+      if (symbolKeys.includes(Op.notIn)) { if ((value as any)[Op.notIn].includes(row[key])) return false; continue; }
+    }
+    if (row[key] !== value) return false;
+  }
+  return true;
+}
 
 function makeFakeModel() {
   const rows = new Map<string, any>();
@@ -25,12 +43,15 @@ function makeFakeModel() {
       return rows.get(id) || null;
     },
     async findOne({ where }: any) {
-      return Array.from(rows.values()).find((r) => Object.entries(where || {}).every(([k, v]) => r[k] === v)) || null;
+      return Array.from(rows.values()).find((r) => matchesWhere(r, where)) || null;
     },
     async findAll({ where }: any = {}) {
-      const all = Array.from(rows.values());
-      if (!where) return all;
-      return all.filter((r) => Object.entries(where).every(([k, v]) => r[k] === v));
+      return Array.from(rows.values()).filter((r) => matchesWhere(r, where));
+    },
+    async update(patch: any, { where }: any = {}) {
+      const matched = Array.from(rows.values()).filter((r) => matchesWhere(r, where));
+      for (const r of matched) Object.assign(r, patch);
+      return [matched.length];
     },
   };
 }
@@ -39,11 +60,13 @@ const fakeInboxCase = makeFakeModel();
 const fakeInboxCaseItem = makeFakeModel();
 const fakeInboxCaseAction = makeFakeModel();
 const fakeInboxCaseEvent = makeFakeModel();
+const fakeInboxCaseQuestion = makeFakeModel();
 
 jest.mock('../../../models/InboxCase', () => ({ __esModule: true, default: fakeInboxCase }));
 jest.mock('../../../models/InboxCaseItem', () => ({ __esModule: true, default: fakeInboxCaseItem }));
 jest.mock('../../../models/InboxCaseAction', () => ({ __esModule: true, default: fakeInboxCaseAction }));
 jest.mock('../../../models/InboxCaseEvent', () => ({ __esModule: true, default: fakeInboxCaseEvent }));
+jest.mock('../../../models/InboxCaseQuestion', () => ({ __esModule: true, default: fakeInboxCaseQuestion }));
 
 // caseRepository (used here for getCaseOrThrow/transitionCase) now syncs the
 // Tickets board on every transition. caseTicketService transitively imports
@@ -62,7 +85,24 @@ beforeEach(() => {
   fakeInboxCaseItem.rows.clear();
   fakeInboxCaseAction.rows.clear();
   fakeInboxCaseEvent.rows.clear();
+  fakeInboxCaseQuestion.rows.clear();
 });
+
+async function seedAnsweredQuestion(caseId: string, overrides: Partial<any> = {}) {
+  return fakeInboxCaseQuestion.create({
+    case_id: caseId,
+    question: 'What is the payment schedule for the new AI course?',
+    why_required: 'Customer is blocked on enrolling without it.',
+    choices: [],
+    recommended_answer: null,
+    blocks_action_ids: [],
+    status: 'ANSWERED',
+    answer: '$500/month for 6 months, first payment due at enrollment.',
+    answered_by: 'ali@colaberry.com',
+    answered_at: new Date(),
+    ...overrides,
+  });
+}
 
 async function seedCase(overrides: Partial<any> = {}) {
   return fakeInboxCase.create({
@@ -224,6 +264,50 @@ describe('generatePlan — secret redaction hardening (Phase 7 break/harden find
     const reply = actions.find((a) => a.action_type === 'EMAIL_SEND');
     expect(reply.preview).not.toContain('hunter2');
     expect(reply.payload.body).not.toContain('hunter2');
+  });
+});
+
+describe('generatePlan — answered-question reply content (bug fix: plan ignored answered blocking questions)', () => {
+  it('drafts a reply using the answered blocking question even when the assessment had no recommended next actions', async () => {
+    const c = await seedCase({
+      teaching_brief: null,
+      recommendation: null,
+      assessment: { recommended_next_actions: [], commitments_made: [], missing_information: ['payment schedule'] },
+    });
+    await seedEmailItem(c.id);
+    await seedAnsweredQuestion(c.id);
+
+    const result = await generatePlan(c.id, 'ali@colaberry.com');
+
+    expect(result.actionsCreated).toBeGreaterThan(0);
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    const reply = actions.find((a) => a.action_type === 'EMAIL_SEND');
+    expect(reply).toBeDefined();
+    expect(reply.payload.body).toContain('$500/month for 6 months');
+  });
+});
+
+describe('generatePlan — zero-action dead-end fix (bug: case stranded in AWAITING_APPROVAL with nothing to approve)', () => {
+  it('auto-dispositions untouched non-excluded items to NO_ACTION when the plan produces zero actions', async () => {
+    const c = await seedCase({ assessment: { recommended_next_actions: [], commitments_made: [], missing_information: [] } });
+    const bcItem = await seedBasecampItem(c.id); // BASECAMP_COMMENT is gated on recommended_next_actions — stays actionless here
+
+    const result = await generatePlan(c.id, 'ali@colaberry.com');
+
+    expect(result.actionsCreated).toBe(0);
+    const updated = await fakeInboxCaseItem.findByPk(bcItem.id);
+    expect(updated.disposition).toBe('NO_ACTION');
+    expect(c.state).toBe('AWAITING_APPROVAL');
+  });
+
+  it('leaves EXCLUDED items alone — they never needed a disposition in the first place', async () => {
+    const c = await seedCase({ assessment: { recommended_next_actions: [], commitments_made: [], missing_information: [] } });
+    const excluded = await seedBasecampItem(c.id, { inclusion_status: 'EXCLUDED' });
+
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const updated = await fakeInboxCaseItem.findByPk(excluded.id);
+    expect(updated.disposition).toBeNull();
   });
 });
 
