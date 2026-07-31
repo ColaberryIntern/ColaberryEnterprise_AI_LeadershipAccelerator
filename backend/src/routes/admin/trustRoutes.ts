@@ -14,6 +14,7 @@ import {
   handleGetCostBreakdown,
   handleGetValue,
   handleGetRetention,
+  handleEnforceRetention,
   handleGetAgentRoster,
   handleGetAgentDetail,
   handleRunAgent,
@@ -29,6 +30,7 @@ router.get('/api/admin/trust/actions', requireAdmin, handleGetActions);
 router.get('/api/admin/trust/cost-breakdown', requireAdmin, handleGetCostBreakdown);
 router.get('/api/admin/trust/value', requireAdmin, handleGetValue);
 router.get('/api/admin/trust/retention', requireAdmin, handleGetRetention);
+router.post('/api/admin/trust/retention/enforce', requireAdmin, handleEnforceRetention);
 router.get('/api/admin/trust/dimension/:key', requireAdmin, handleGetDimension);
 router.get('/api/admin/trust/agents', requireAdmin, handleGetAgentRoster);
 router.get('/api/admin/trust/agents/:slug', requireAdmin, handleGetAgentDetail);
