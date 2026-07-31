@@ -14,6 +14,7 @@ interface SessionItem {
   meeting_link?: string;
   recording_url?: string;
   attendance_status?: string;
+  room_id?: string | null;
 }
 
 const statusBadge: Record<string, string> = {
@@ -79,7 +80,7 @@ function PortalSessionsPage() {
                         {session.session_type === 'lab' && <span className="badge bg-warning text-dark">Lab</span>}
                       </div>
                       <h6 className="fw-semibold mb-1">
-                        <Link to={`/portal/sessions/${session.id}`} className="text-decoration-none" style={{ color: '#FB2832' }}>
+                        <Link to={session.room_id ? `/portal/rooms/${session.room_id}` : `/portal/sessions/${session.id}`} className="text-decoration-none" style={{ color: '#FB2832' }}>
                           {session.title}
                         </Link>
                       </h6>
@@ -109,7 +110,7 @@ function PortalSessionsPage() {
                         </a>
                       )}
                       <Link
-                        to={`/portal/sessions/${session.id}`}
+                        to={session.room_id ? `/portal/rooms/${session.room_id}` : `/portal/sessions/${session.id}`}
                         className="btn btn-outline-secondary btn-sm"
                       >
                         Details
