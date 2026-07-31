@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../../components/admin/shell';
 import { TrustSignal } from '../../../components/admin/shell/trust';
+import InboxResolveWorkPage from './InboxResolveWorkPage';
 import InboxDecisionsPage from './InboxDecisionsPage';
 import InboxDraftApprovalPage from './InboxDraftApprovalPage';
 import InboxRuleBuilderPage from './InboxRuleBuilderPage';
@@ -20,6 +22,14 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
+  {
+    id: 'resolve',
+    label: 'Resolve Work',
+    icon: 'radar-line',
+    tone: 'primary',
+    component: InboxResolveWorkPage,
+    help: 'Resolve a business matter end to end — everything involving a person, company, or initiative, across email and Basecamp — as one case instead of triaging each email one by one. Discover related work, get a plain-language assessment, answer only the questions that block resolution, then approve and execute the plan.',
+  },
   {
     id: 'decisions',
     label: 'Decisions',
@@ -71,7 +81,16 @@ const TABS: TabDef[] = [
 ];
 
 export default function InboxCOSPage() {
-  const [activeTab, setActiveTab] = useState('decisions');
+  // Deep-linkable via ?tab=<id> — e.g. the digest-action email redirect
+  // (controllers/inboxController.ts::handleDigestAction) sends
+  // /admin/inbox?tab=decisions&emailId=... Falls back to "resolve" (the
+  // default tab) when absent or invalid rather than silently landing on
+  // whatever tab happens to be first in the array.
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState(
+    requestedTab && TABS.some(t => t.id === requestedTab) ? requestedTab : 'resolve'
+  );
   const tab = TABS.find(t => t.id === activeTab) || TABS[0];
   const ActiveComponent = tab.component;
 
@@ -123,6 +142,7 @@ export default function InboxCOSPage() {
             <button
               type="button"
               role="tab"
+              data-testid={`inbox-tab-${t.id}`}
               aria-selected={activeTab === t.id}
               className={`nav-link${activeTab === t.id ? ' active' : ''}`}
               onClick={() => setActiveTab(t.id)}

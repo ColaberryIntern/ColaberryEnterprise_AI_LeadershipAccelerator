@@ -36,6 +36,7 @@ import { seedAllCampaigns } from './seeds/seedAllCampaigns';
 import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
+import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -2194,6 +2195,8 @@ async function start(): Promise<void> {
   await ensurePointsSchema();
   // Live Sessions build-out: 5 live-session tables (idempotent DDL, sync is disabled).
   await ensureLiveSessionSchema();
+  // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
+  await ensureInboxCaseSchema();
 
   await ensureCommunityMemberRoleSchema();
   // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
