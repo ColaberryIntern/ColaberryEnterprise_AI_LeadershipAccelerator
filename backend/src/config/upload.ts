@@ -189,3 +189,17 @@ export const roomResourceUpload = multer({
   limits: { fileSize: MAX_ROOM_RESOURCE_SIZE },
 });
 export { ROOM_RESOURCE_DIR, MAX_ROOM_RESOURCE_SIZE };
+
+// ── Room Recording storage — Session Recordings, hosted on our own disk ────
+// Deliberately separate from ROOM_RESOURCE_DIR: recordings are far larger
+// (a 2-hour class can be a multi-hundred-MB video) and get here via the
+// server-side Drive ingestion pipeline (sessionRecordingService), never via
+// a browser multipart upload — so there's no multer instance below, just the
+// shared directory + size cap the ingestion service writes into and the
+// download route reads from.
+const ROOM_RECORDING_DIR = process.env.ROOM_RECORDING_DIR || path.resolve('/app/uploads/room-recordings');
+try { fs.mkdirSync(ROOM_RECORDING_DIR, { recursive: true }); } catch { /* created lazily on first write */ }
+
+const MAX_ROOM_RECORDING_SIZE = Number(process.env.MAX_ROOM_RECORDING_SIZE_BYTES) || 4 * 1024 * 1024 * 1024; // 4GB
+
+export { ROOM_RECORDING_DIR, MAX_ROOM_RECORDING_SIZE };

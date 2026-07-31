@@ -310,6 +310,10 @@ export interface RoomResource {
   body: string | null;
   mime_type: string | null;
   size_bytes: number | null;
+  // Present when this resource is a server-hosted file (uploaded doc, or an
+  // auto-ingested recording) — absent for a plain link/note/recap. Only used
+  // to decide "download button vs external link"; never used to build a path.
+  storage_key: string | null;
   created_by_enrollment_id: string | null;
   is_pinned: boolean;
   created_at: string;

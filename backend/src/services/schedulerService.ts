@@ -34,6 +34,8 @@ import { generateSessionRecap } from './sessionRecapService';
 import { ensureSessionMeetLink } from './meetingService';
 import { postLiveClassQrToRoom } from './liveClassQrService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
+import LiveSession from '../models/LiveSession';
+import { ingestRecordingForSession } from './sessionRecordingService';
 
 /**
  * Instrumentation wrapper for cron jobs.
@@ -2365,6 +2367,42 @@ export function startScheduler(): void {
   console.log('[Scheduler] Accelerator: session reminders every 30 min (24h + 1h before)');
   console.log('[Scheduler] Accelerator: session lifecycle (live/completed) every 5 min');
   console.log('[Scheduler] Accelerator: post-session absence detection + readiness recompute');
+
+  // Session Recordings — poll Drive for a completed session's Meet recording
+  // and ingest it into that session's Room as a downloadable resource.
+  // PILOT GATE: scoped to the July 2026 cohort only while this feature is
+  // being validated (per the staged rollout plan) — widen RECORDING_PILOT_COHORT_IDS
+  // (or remove the filter) once proven. Bounded retry: only sessions completed
+  // in the last 7 days are considered, then we give up automatically and fall
+  // back to the existing manual PATCH .../sessions/:id { recording_url } path.
+  const RECORDING_PILOT_COHORT_IDS = ['1f1d86f4-6da5-4767-a250-cd8310570bea'];
+  cron.schedule('12,42 * * * *', () => {
+    instrumentCronJob('SessionRecordingIngest', async () => {
+      const candidates = await LiveSession.findAll({
+        where: {
+          status: 'completed',
+          cohort_id: { [Op.in]: RECORDING_PILOT_COHORT_IDS },
+          session_date: { [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) },
+        },
+      });
+      // One at a time — a multi-hundred-MB stream-to-disk download alongside
+      // every other cron in this same 512MB-heap process is not something to
+      // run concurrently.
+      for (const session of candidates) {
+        try {
+          const result = await ingestRecordingForSession(session);
+          if (result.status === 'ingested') {
+            console.log(`[Scheduler] Recording ingested for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for session ${session.id}:`, err.message);
+        }
+      }
+    }).catch((err: any) => {
+      console.error('[Scheduler] Session recording ingest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Accelerator: session recording ingestion every 30 min (pilot cohort only)');
 
   // ── Alumni Lifecycle Processor (daily 6 AM CT / 11 UTC) ──────────────
   const { detectInactiveLeads, detectReengagementComplete } = require('./campaignLifecycleService');
