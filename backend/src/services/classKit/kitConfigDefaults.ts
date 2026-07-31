@@ -16,7 +16,7 @@ import { teachSlidesFor, ORIENTATION_TEACH, TeachSlide, EvidenceClaim } from '..
 import { detectDayKind, parseWeek, BuildKitSpecInput, KitSessionInput } from './kitSpec';
 import { buildKitSpec, defaultInteractionsFor, defaultOpeningFor, DefaultOpening } from './kitSpecDaySlides';
 import { DEFAULT_KIT_CONFIG, StoryBeatOverride, InteractionPlacement } from './kitConfig';
-import { runOfShowFor } from './runOfShow';
+import { SegmentMode } from './runOfShow';
 
 /** A checkpoint pin at its real render position — `segment` is hardcoded to
  * `'build-map'` here to mirror the literal segment kitSpecDaySlides.ts's
@@ -27,6 +27,12 @@ export interface CheckpointLandmark extends BuildCheckpoint { segment: string }
  * timing, not per-session authored content); null for Orientation, which
  * has no break in its run-of-show template. */
 export interface BreakLandmark { segment: string; startMin: number; endMin: number; label: string }
+/** One run-of-show lane for the Timeline Builder (Phase 5) — scaled to this
+ * SESSION's actual duration (not the raw 120-min template), by deriving it
+ * from the already-built default spec's slides rather than recomputing the
+ * scale separately, so the timeline's lane widths can never drift from what
+ * the deck itself renders. */
+export interface TimelineSegment { id: string; label: string; startMin: number; endMin: number; mode: SegmentMode }
 
 export interface KitConfigDefaults {
   dayKind: DayKind;
@@ -48,6 +54,9 @@ export interface KitConfigDefaults {
    * run-of-show template). */
   checkpoints: CheckpointLandmark[];
   breakSegment: BreakLandmark | null;
+  /** Every real run-of-show lane for this session's day-kind, in show order,
+   * scaled to this session's actual duration. */
+  segments: TimelineSegment[];
 }
 
 function flattenStoryBeats(map: Record<string, StoryBeat[]> | undefined): StoryBeatOverride[] {
@@ -86,10 +95,24 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
   // attaches every checkpoint slide to the 'build-map' segment.
   const checkpoints: CheckpointLandmark[] =
     dayKind === 'build' && wc ? wc.thursday.checkpoints.map((cp) => ({ ...cp, segment: 'build-map' })) : [];
-  const breakTemplate = runOfShowFor(dayKind).find((s) => s.mode === 'break');
-  const breakSegment: BreakLandmark | null = breakTemplate
-    ? { segment: breakTemplate.id, startMin: breakTemplate.startMin, endMin: breakTemplate.endMin, label: breakTemplate.label }
+
+  // Derived from the already-built defaultSpec's own slides (first-seen
+  // order), already scaled to this session's actual duration by buildKitSpec
+  // itself — not re-derived from runOfShowFor's raw 120-min templates, so
+  // these lane widths (and breakSegment's window below) can never drift from
+  // what the deck itself renders for this exact session.
+  const segMap = new Map<string, TimelineSegment>();
+  defaultSpec.slides.forEach((s) => {
+    if (!segMap.has(s.segmentId)) {
+      segMap.set(s.segmentId, { id: s.segmentId, label: s.segmentLabel, startMin: s.segStartMin, endMin: s.segEndMin, mode: s.mode });
+    }
+  });
+  const segments = Array.from(segMap.values());
+
+  const breakSeg = segments.find((s) => s.mode === 'break');
+  const breakSegment: BreakLandmark | null = breakSeg
+    ? { segment: breakSeg.id, startMin: breakSeg.startMin, endMin: breakSeg.endMin, label: breakSeg.label }
     : null;
 
-  return { dayKind, week, teach, prompts, interactions, storyBeats, evidence, opening, checkpoints, breakSegment };
+  return { dayKind, week, teach, prompts, interactions, storyBeats, evidence, opening, checkpoints, breakSegment, segments };
 }

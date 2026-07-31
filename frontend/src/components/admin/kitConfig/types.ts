@@ -101,6 +101,9 @@ export interface CountAndOverride<T> {
  * CheckpointLandmark/BreakLandmark. */
 export interface CheckpointLandmark { n: number; label: string; detail: string; segment: string }
 export interface BreakLandmark { segment: string; startMin: number; endMin: number; label: string }
+/** One run-of-show lane for the Timeline Builder — scaled to this session's
+ * actual duration, in show order. Mirrors kitConfigDefaults.ts's TimelineSegment. */
+export interface TimelineSegment { id: string; label: string; startMin: number; endMin: number; mode: string }
 
 /** A single fixed moment (not a list) — enabled:false removes it entirely;
  * override replaces its content wholesale. */
@@ -138,6 +141,7 @@ export interface KitConfigDefaults {
   opening: { coldOpen: OpeningCopy | null; hook: HookCopy | null; resultPreview: OpeningCopy | null };
   checkpoints: CheckpointLandmark[];
   breakSegment: BreakLandmark | null;
+  segments: TimelineSegment[];
 }
 
 export const blankBeat = (): StoryBeatOverride => ({ segment: 'business-problem', icon: '💡', eyebrow: '', title: '', body: '', punch: '', tone: 'berry' });
@@ -157,7 +161,55 @@ export function seedOverrides<T>(defaults: T[], blank: () => T): T[] {
   return defaults.length ? defaults.map((d) => ({ ...d })) : [blank()];
 }
 
-export type CategoryKey = 'storyBeats' | 'teach' | 'prompts' | 'interactions' | 'opening' | 'evidence';
+export type CategoryKey = 'timeline' | 'storyBeats' | 'teach' | 'prompts' | 'interactions' | 'opening' | 'evidence';
+
+/** What the Timeline Builder (Phase 5) drags/reorders: the UNCAPPED resolved
+ * list for a segment-taggable category (enabled:false → empty; overrides ??
+ * defaults). Deliberately does NOT apply `max` here — capping is display-only
+ * (a "won't render at this count" badge) in the timeline, never applied to
+ * the array that a drag writes back, so dragging a beyond-cap item can never
+ * silently truncate real content out of `overrides`. */
+export function resolveTimelineList<T>(cfg: CountAndOverride<T>, defaults: T[]): T[] {
+  if (!cfg.enabled) return [];
+  return cfg.overrides ?? defaults;
+}
+
+/** Pure drag-drop reducer shared by every Timeline Builder track: removes the
+ * dragged item, then reinserts it either right before the "over" item's
+ * current position (dropped on/near a card — this covers both same-segment
+ * reorder and cross-segment moves-to-a-specific-spot), or after the last
+ * item currently in the target segment (dropped on a lane's empty area).
+ * `overId`/`activeId` are `card::<index>` for a card or `lane::<segmentId>`
+ * for a lane's own droppable background — see TimelineBuilderPanel.tsx. */
+export function moveItemOnDrop<T>(
+  items: T[], activeIndex: number, overIdRaw: string,
+  getSegment: (item: T) => string, setSegment: (item: T, segment: string) => T,
+): T[] {
+  const activeItem = items[activeIndex];
+  if (!activeItem) return items;
+  const rest = items.filter((_, i) => i !== activeIndex);
+
+  let toSegment: string;
+  let insertAt: number;
+  if (overIdRaw.startsWith('lane::')) {
+    toSegment = overIdRaw.slice('lane::'.length);
+    let lastIdxInSegment = -1;
+    rest.forEach((it, i) => { if (getSegment(it) === toSegment) lastIdxInSegment = i; });
+    insertAt = lastIdxInSegment === -1 ? rest.length : lastIdxInSegment + 1;
+  } else if (overIdRaw.startsWith('card::')) {
+    const overIndex = Number(overIdRaw.slice('card::'.length));
+    const overItem = items[overIndex];
+    if (!overItem || overIndex === activeIndex) return items;
+    toSegment = getSegment(overItem);
+    insertAt = rest.indexOf(overItem);
+    if (insertAt === -1) insertAt = rest.length;
+  } else {
+    return items;
+  }
+
+  const movedItem = setSegment(activeItem, toSegment);
+  return [...rest.slice(0, insertAt), movedItem, ...rest.slice(insertAt)];
+}
 
 /** Category status, used to render the left-rail badge — one shared mental
  * model across every count+override category. */
