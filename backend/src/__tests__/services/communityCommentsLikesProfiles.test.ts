@@ -689,8 +689,7 @@ describe('member profiles + directory', () => {
     expect(profile.id).toBe(memberId);
   });
 
-  it('getMemberProfileById happy path: returns a same-cohort member\'s profile', async () => {
-    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+  it('getMemberProfileById happy path: returns a member\'s profile regardless of cohort', async () => {
     findByPkMember.mockResolvedValue({
       id: otherMemberId, display_name: 'Grace Hopper', avatar_url: null, bio: null, level: 1, points: 0,
       created_at: new Date(), enrollment: { cohort_id: cohortId },
@@ -701,11 +700,19 @@ describe('member profiles + directory', () => {
     expect(profile.id).toBe(otherMemberId);
   });
 
-  it('getMemberProfileById failure path: a cross-cohort member is NotFoundError, not leaked', async () => {
-    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+  it('getMemberProfileById happy path: a cross-cohort member also resolves (platform-wide, not cohort-scoped)', async () => {
     findByPkMember.mockResolvedValue({
-      id: otherMemberId, display_name: 'Someone Else', enrollment: { cohort_id: 'different-cohort' },
+      id: otherMemberId, display_name: 'Someone Else', avatar_url: null, bio: null, level: 1, points: 0,
+      created_at: new Date(), enrollment: { cohort_id: 'different-cohort' },
     });
+
+    const profile = await getMemberProfileById(enrollmentId, otherMemberId);
+
+    expect(profile.id).toBe(otherMemberId);
+  });
+
+  it('getMemberProfileById failure path: a nonexistent member is NotFoundError', async () => {
+    findByPkMember.mockResolvedValue(null);
 
     await expect(getMemberProfileById(enrollmentId, otherMemberId)).rejects.toMatchObject({
       error_class: 'NotFoundError',
@@ -722,14 +729,13 @@ describe('member profiles + directory', () => {
     expect(memberToUpdate.update).toHaveBeenCalledWith({ bio: 'Building AI systems.' });
   });
 
-  it('listMembers happy path: scopes the directory to the caller\'s cohort (sorted by canonical points in JS)', async () => {
-    findByPkEnrollment.mockResolvedValue(mockEnrollment);
+  it('listMembers happy path: platform-wide, no cohort filter (sorted by canonical points in JS)', async () => {
     findAllMembers.mockResolvedValue([]);
 
     const page = await listMembers(enrollmentId);
 
     const callArgs = findAllMembers.mock.calls[0][0];
-    expect(callArgs.include[0].where).toEqual({ cohort_id: cohortId });
+    expect(callArgs.include[0].where).toBeUndefined();
     expect(page).toEqual({ members: [], total: 0, has_more: false });
   });
 

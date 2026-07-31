@@ -1,23 +1,16 @@
 import { Op } from 'sequelize';
 import Friendship, { FriendshipStatus } from '../models/Friendship';
-import Enrollment from '../models/Enrollment';
 
 // Per-person status the directory/rail shows for someone else, from my POV.
 export type DirectoryStatus = 'friend' | 'requested' | 'incoming' | 'none';
 
-// A user-facing validation problem (self-request, cross-cohort, no such
-// request) — routes translate this to HTTP 400.
+// A user-facing validation problem (self-request, no such request) — routes
+// translate this to HTTP 400.
 export class FriendRequestError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'FriendRequestError';
   }
-}
-
-async function sameCohort(a: string, b: string): Promise<boolean> {
-  const [ea, eb] = await Promise.all([Enrollment.findByPk(a), Enrollment.findByPk(b)]);
-  if (!ea || !eb) return false;
-  return !!ea.cohort_id && ea.cohort_id === eb.cohort_id;
 }
 
 // Best-effort in-app notification — never fails the friendship action.
@@ -31,13 +24,12 @@ async function notify(recipient: string, actor: string, type: 'friend_request' |
 /**
  * Send a friend request (or auto-accept the reverse if they already asked me).
  * Idempotent: re-sending an existing request is a no-op that returns the
- * current state. Cohort-scoped for v1.
+ * current state. Cross-cohort, by design — unlike DMs (still cohort-scoped
+ * for students in dmService.ts), a connection itself carries no messaging
+ * capability on its own, so there's no privacy boundary to enforce here.
  */
 export async function sendFriendRequest(me: string, targetId: string): Promise<{ status: 'requested' | 'friend' }> {
   if (!targetId || targetId === me) throw new FriendRequestError('Invalid target');
-  if (!(await sameCohort(me, targetId))) {
-    throw new FriendRequestError('You can only connect with people in your cohort');
-  }
 
   // They already asked me → accepting makes us friends immediately.
   const reverse = await Friendship.findOne({ where: { requester_id: targetId, addressee_id: me } });
