@@ -6,9 +6,9 @@
  * there is no circular dependency between the two.
  */
 import {
-  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS, StoryBeat,
+  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS, StoryBeat, Interaction,
 } from '../../data/classSessionPlan';
-import { teachSlidesFor, ORIENTATION_TEACH } from '../../data/classTeachContent';
+import { teachSlidesFor, ORIENTATION_TEACH, TeachSlide } from '../../data/classTeachContent';
 import { runOfShowFor } from './runOfShow';
 import {
   KitMeta, KitSegment, KitSlide, KitSpec, BuildKitSpecInput,
@@ -16,7 +16,7 @@ import {
   detectDayKind, parseWeek, buildMeta, toSegments,
   BUILDER_BROADCAST_PROMPTS, PROVE_FORMULA, STEP_EMOJIS, PHONE_RULES,
 } from './kitSpec';
-import { KitConfig, DEFAULT_KIT_CONFIG } from './kitConfig';
+import { KitConfig, DEFAULT_KIT_CONFIG, InteractionSlot } from './kitConfig';
 
 /** Insert story beats right after a segment's own content — the instructor's
  * `config.storyBeats.overrides` (a full replacement set, filtered to this
@@ -37,6 +37,23 @@ function pushStoryBeats(
       presenterTip: 'Change of pace — tell the story, let it land, then move on. Do not over-explain it.',
     }));
   });
+}
+
+/** Resolve the deep-teaching ("Lessons") slides for whichever day this session
+ * is: config.teach.enabled:false hides them all; overrides fully replaces the
+ * authored/generated set (`teachSlidesFor`); max caps the count, in order. */
+function resolveTeachSlides(base: TeachSlide[], config: KitConfig): TeachSlide[] {
+  if (!config.teach.enabled) return [];
+  const list = config.teach.overrides ?? base;
+  return config.teach.max != null ? list.slice(0, config.teach.max) : list;
+}
+
+/** Resolve one of the three fixed interaction slots ("survey questions").
+ * Returns null when the instructor has turned that slot off — callers must
+ * skip pushing the slide entirely in that case. */
+function resolveInteraction(defaultInt: Interaction, slot: InteractionSlot): Interaction | null {
+  if (!slot.enabled) return null;
+  return slot.override ?? defaultInt;
 }
 
 /** Applies the deck-wide parts of KitConfig that don't need per-segment
@@ -70,7 +87,9 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   const out: KitSlide[] = [...openingSlides(meta, segs)];
   if (!wc) return out;
   const m = wc.monday;
-  const mteach = teachSlidesFor(meta.week, 'monday'); // deep teaching slides, inserted per segment
+  const mteach = resolveTeachSlides(teachSlidesFor(meta.week, 'monday'), config); // deep teaching slides, inserted per segment
+  const mondayPoll = resolveInteraction(m.designChoice, config.interactions.mondayPoll);
+  const mondayTrivia = resolveInteraction(m.trivia, config.interactions.mondayTrivia);
 
   const cold = segById(segs, 'cold-open');
   if (m.hook) {
@@ -85,10 +104,12 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   }));
 
   const checkin = segById(segs, 'checkin');
-  out.push(slide(checkin, 0, 'interaction', {
-    eyebrow: '🔮 Predict', title: 'Before we start — make your call', interaction: m.designChoice,
-    presenterTip: 'Everyone scans the QR here. Read the prediction; do not reveal yet — it pays off later.',
-  }));
+  if (mondayPoll) {
+    out.push(slide(checkin, 0, 'interaction', {
+      eyebrow: '🔮 Predict', title: 'Before we start — make your call', interaction: mondayPoll,
+      presenterTip: 'Everyone scans the QR here. Read the prediction; do not reveal yet — it pays off later.',
+    }));
+  }
   pushStoryBeats(out, m.storyBeats, 'checkin', checkin, config);
 
   const prob = segById(segs, 'business-problem');
@@ -127,16 +148,20 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   out.push(...teachToSlides(mteach, 'micro-build', micro));
 
   const chal = segById(segs, 'challenge');
-  out.push(slide(chal, 0, 'interaction', {
-    eyebrow: '🧭 Architecture challenge', title: 'Choose the design', interaction: m.designChoice,
-    presenterTip: 'Now reveal. Tie their Monday prediction to the right architecture.',
-  }));
+  if (mondayPoll) {
+    out.push(slide(chal, 0, 'interaction', {
+      eyebrow: '🧭 Architecture challenge', title: 'Choose the design', interaction: mondayPoll,
+      presenterTip: 'Now reveal. Tie their Monday prediction to the right architecture.',
+    }));
+  }
 
   const triv = segById(segs, 'trivia');
-  out.push(slide(triv, 0, 'interaction', {
-    eyebrow: '🧠 Knowledge check', title: 'Quick check', interaction: m.trivia,
-    presenterTip: 'Fast. Reveal, one line of why, move on.',
-  }));
+  if (mondayTrivia) {
+    out.push(slide(triv, 0, 'interaction', {
+      eyebrow: '🧠 Knowledge check', title: 'Quick check', interaction: mondayTrivia,
+      presenterTip: 'Fast. Reveal, one line of why, move on.',
+    }));
+  }
 
   const trailer = segById(segs, 'trailer');
   out.push(slide(trailer, 0, 'cta', {
@@ -154,7 +179,8 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
   const out: KitSlide[] = [...openingSlides(meta, segs)];
   if (!wc) return out;
   const t = wc.thursday;
-  const tteach = teachSlidesFor(meta.week, 'thursday'); // deep teaching slides, inserted per segment
+  const tteach = resolveTeachSlides(teachSlidesFor(meta.week, 'thursday'), config); // deep teaching slides, inserted per segment
+  const thursdayTrivia = resolveInteraction(t.trivia, config.interactions.thursdayTrivia);
 
   const preview = segById(segs, 'result-preview');
   out.push(slide(preview, 0, 'segment', {
@@ -170,10 +196,12 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
     eyebrow: '✅ Readiness check', title: 'You are ready to build if…', body: t.readinessCheck,
     presenterTip: 'Ask the room to tap “I’m here”. Anyone not set up goes to the rescue branch.',
   }));
-  out.push(slide(readiness, 1, 'interaction', {
-    eyebrow: '🧠 Warm-up', title: 'Quick check', interaction: t.trivia,
-    presenterTip: 'One trivia to confirm last week landed before we build on it.',
-  }));
+  if (thursdayTrivia) {
+    out.push(slide(readiness, 1, 'interaction', {
+      eyebrow: '🧠 Warm-up', title: 'Quick check', interaction: thursdayTrivia,
+      presenterTip: 'One trivia to confirm last week landed before we build on it.',
+    }));
+  }
 
   const map = segById(segs, 'build-map');
   out.push(slide(map, 0, 'buildmap', {
@@ -190,16 +218,20 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
     }));
   });
 
-  // Guided build: the deep teaching steps when authored, else the plain prompt beats.
+  // Guided build: the deep teaching steps when authored, else the plain prompt
+  // beats — `config.prompts` only affects this fallback path (a week WITH
+  // deep teach content carries its prompts inside `teach` overrides instead).
   const guided = segById(segs, 'guided-build');
   const gbTeach = teachToSlides(tteach, 'guided-build', guided);
   if (gbTeach.length) {
     out.push(...gbTeach);
-  } else {
-    t.prompts.forEach((p, i) => {
+  } else if (config.prompts.enabled) {
+    const promptList = config.prompts.overrides ?? t.prompts;
+    const cappedPrompts = config.prompts.max != null ? promptList.slice(0, config.prompts.max) : promptList;
+    cappedPrompts.forEach((p, i) => {
       out.push(slide(guided, i, 'prompt', {
         eyebrow: `⌨️ Guided build · prompt ${i + 1}`, title: p.label, prompt: p,
-        promptOf: `PROMPT ${i + 1} OF ${t.prompts.length}`,
+        promptOf: `PROMPT ${i + 1} OF ${cappedPrompts.length}`,
         presenterTip: 'Paste on screen, narrate the decision (not every character), run it, show the result.',
       }));
     });

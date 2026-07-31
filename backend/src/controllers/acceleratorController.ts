@@ -14,6 +14,7 @@ import { getEnrollmentHistory } from '../services/personHistoryService';
 import { buildSessionKit } from '../services/sessionKitService';
 import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, KitDocMode } from '../services/sessionKitDocService';
 import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
+import { getKitConfigDefaults } from '../services/classKit/kitConfigDefaults';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -155,8 +156,15 @@ export async function handleGetSessionOutline(req: Request, res: Response, next:
 // full replace, not a patch — the Customize popup always submits the whole form.
 export async function handleGetSessionKitConfig(req: Request, res: Response, next: NextFunction) {
   try {
+    const session = await LiveSession.findByPk(req.params.id as string);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
     const config = await getKitConfig(req.params.id as string);
-    res.json({ config });
+    const defaults = getKitConfigDefaults({
+      id: session.id, session_number: session.session_number, title: session.title,
+      session_date: session.session_date, start_time: session.start_time,
+      end_time: session.end_time, status: session.status,
+    });
+    res.json({ config, defaults });
   } catch (err) { next(err); }
 }
 
