@@ -71,6 +71,16 @@ jest.mock('../sources/basecampCaseSource', () => ({
   basecampCaseSource: { provider: 'basecamp', isConfigured: () => true, findCandidates: jest.fn() },
 }));
 
+// caseRepository (used here for openCase/transitionCase) now syncs the
+// Tickets board on every case-open/transition. caseTicketService
+// transitively imports the full models barrel via ticketService.ts, which
+// would poison every other model mock in this file — stub it out entirely.
+jest.mock('../caseTicketService', () => ({
+  ensureCaseTicket: jest.fn(async () => {}),
+  syncTicketForCase: jest.fn(async () => {}),
+  postCaseProgressNote: jest.fn(async () => {}),
+}));
+
 import { discoverCases } from '../caseDiscoveryService';
 import { gmailColaberryCaseSource } from '../sources/gmailCaseSource';
 import { basecampCaseSource } from '../sources/basecampCaseSource';

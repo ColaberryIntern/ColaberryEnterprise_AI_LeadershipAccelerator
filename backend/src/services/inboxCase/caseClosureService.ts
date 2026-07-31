@@ -4,6 +4,7 @@ import InboxCaseAction from '../../models/InboxCaseAction';
 import InboxCaseEvent from '../../models/InboxCaseEvent';
 import { logCaseEvent } from './caseEventLog';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
+import { postCaseProgressNote } from './caseTicketService';
 
 // Closure guard (root directive section 9). Blocks closure and returns
 // EXACTLY what remains — never a generic "cannot close" with no
@@ -127,6 +128,10 @@ export async function closeCase(caseId: string, closedBy: string): Promise<Close
       details: { blockers: guard.blockers },
       correlation_id: caseRow.correlation_id,
     });
+    await postCaseProgressNote(
+      caseId,
+      `Close blocked — ${guard.blockers.length} item(s) still remaining: ${guard.blockers.map((b) => b.detail).join(' | ')}`
+    );
     return { closed: false, blockers: guard.blockers };
   }
 
@@ -149,6 +154,8 @@ export async function closeCase(caseId: string, closedBy: string): Promise<Close
       correlation_id: caseRow.correlation_id,
     });
   }
+
+  await postCaseProgressNote(caseId, `Case closed by ${closedBy}. All closure conditions met.`);
 
   return { closed: true, blockers: [] };
 }

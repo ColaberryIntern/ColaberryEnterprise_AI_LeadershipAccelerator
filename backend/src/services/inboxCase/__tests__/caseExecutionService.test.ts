@@ -34,6 +34,16 @@ jest.mock('../caseActionExecutors', () => ({
   },
 }));
 
+// caseRepository (used here for getCaseOrThrow/transitionCase) now syncs the
+// Tickets board on every transition. caseTicketService transitively imports
+// the full models barrel via ticketService.ts, which would poison every
+// other model mock in this file — stub it out entirely.
+jest.mock('../caseTicketService', () => ({
+  ensureCaseTicket: jest.fn(async () => {}),
+  syncTicketForCase: jest.fn(async () => {}),
+  postCaseProgressNote: jest.fn(async () => {}),
+}));
+
 import { executeApprovedActions, reconcileStuckActions } from '../caseExecutionService';
 
 beforeEach(() => {
