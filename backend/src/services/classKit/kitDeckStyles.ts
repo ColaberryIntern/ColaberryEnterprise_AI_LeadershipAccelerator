@@ -29,6 +29,20 @@ button{font-family:inherit}
 #kcounter{position:fixed;bottom:calc(var(--pace-h) + 10px);right:16px;z-index:40;font-size:12px;color:var(--subtle);font-weight:700;letter-spacing:1px}
 #khint{position:fixed;bottom:calc(var(--pace-h) + 10px);left:16px;z-index:40;font-size:11px;color:#b8b0aa}
 
+/* Dedicated prev/next nav buttons — the only click-driven way to change
+   slides (a whole-page click used to do this; that turned the page on
+   ordinary clicks meant for reading, see kitDeckScript.ts's history). */
+.knav{position:fixed;top:50%;transform:translateY(-50%);width:54px;height:88px;border-radius:16px;
+  border:1.5px solid var(--line);background:rgba(255,255,255,.93);box-shadow:var(--shadow);z-index:55;
+  color:var(--cherry-deep);display:grid;place-items:center;cursor:pointer;opacity:.64;
+  transition:opacity .2s,transform .2s,background .2s}
+.knav:hover,.knav:focus-visible{opacity:1;background:#fff;transform:translateY(-50%) scale(1.04);outline:3px solid rgba(229,18,29,.18)}
+.knav:disabled{opacity:.14;cursor:default;transform:translateY(-50%)}
+.knav.left{left:16px}.knav.right{right:16px}
+.knav{font-size:30px;line-height:1;font-weight:700}
+body.rail-on .knav.right{right:calc(var(--rail-w) + 16px)}
+@media(max-width:900px){.knav{width:42px;height:68px;border-radius:13px;font-size:24px}.knav.left{left:6px}.knav.right{right:6px}}
+
 /* ---------- slides ---------- */
 .kstage{position:absolute;inset:0;bottom:var(--pace-h);right:0;overflow:hidden}
 body.rail-on .kstage{right:var(--rail-w)}
@@ -219,7 +233,7 @@ body.idle .ktoggles{opacity:0;pointer-events:none}
 .ktoggle.on{background:var(--cherry);color:#fff}
 
 /* Focus / Video mode — hide ALL chrome for a clean recording (presentation scene). */
-body.focus .ktoggles,body.focus #krail,body.focus #kpace,body.focus #kcounter,body.focus #khint,body.focus #knotes{display:none !important}
+body.focus .ktoggles,body.focus #krail,body.focus #kpace,body.focus #kcounter,body.focus #khint,body.focus #knotes,body.focus .knav{display:none !important}
 body.focus .kstage{inset:0 !important}
 #kfocus-exit{position:fixed;top:12px;right:16px;z-index:61;display:none;background:rgba(17,26,36,.8);color:#fff;border:0;border-radius:999px;padding:8px 16px;font-weight:700;font-size:12px;cursor:pointer;opacity:.5;transition:opacity .3s}
 #kfocus-exit:hover{opacity:1}
