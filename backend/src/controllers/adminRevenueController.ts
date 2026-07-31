@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { getRevenueDashboard } from '../services/revenueDashboardService';
 import { getRevenuePayments } from '../services/revenuePaymentsService';
 import { reconcileAppPayments } from '../services/appPaymentReconcileService';
-import { getSubscriptionAnalytics } from '../services/subscriptionAnalyticsService';
+import { getSubscriptionAnalytics, getTenureBucketRoster } from '../services/subscriptionAnalyticsService';
 import { getExplorerRoster } from '../services/explorerRosterService';
 
 export async function handleGetRevenueDashboard(
@@ -59,6 +59,25 @@ export async function handleGetExplorerRoster(
   try {
     const data = await getExplorerRoster();
     res.json({ explorers: data });
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Drill-down roster for one Month-N tenure bucket (1-based; 5 means "Month 5+").
+export async function handleGetTenureBucketRoster(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const month = Number(req.params.month);
+    if (!Number.isInteger(month) || month < 1 || month > 5) {
+      res.status(400).json({ error: 'month must be an integer between 1 and 5' });
+      return;
+    }
+    const data = await getTenureBucketRoster(month);
+    res.json({ members: data });
   } catch (error) {
     next(error);
   }

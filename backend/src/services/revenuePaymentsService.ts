@@ -1,5 +1,6 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import { inferPlanFromAmountPaid } from './planInference';
 
 /* ------------------------------------------------------------------ */
 /*  Revenue payments — the unified "all payments" view                 */
@@ -58,7 +59,8 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
        FROM enrollments e
        LEFT JOIN LATERAL (
          SELECT plan, status, paysimple_payment_id, started_at
-           FROM subscriptions WHERE enrollment_id = e.id ORDER BY created_at DESC LIMIT 1
+           FROM subscriptions WHERE enrollment_id = e.id
+           ORDER BY (status = 'active') DESC, created_at DESC LIMIT 1
        ) s ON true
       WHERE e.payment_status = 'paid' AND e.amount_paid > 0`,
     { type: QueryTypes.SELECT }
@@ -87,13 +89,19 @@ export async function getRevenuePayments(): Promise<{ summary: RevenueSummary; t
   const tx: RevenueTransaction[] = [];
 
   for (const m of memberships) {
+    // Most subscription rows in production never make it past 'pending' (a
+    // known missed-webhook activation gap — see subscriptionAnalyticsService),
+    // so a real paid membership frequently has no subscription row to label it
+    // at all. Fall back to guessing the plan from the amount actually charged
+    // rather than leaving it blank.
+    const plan = cap(m.plan) || (inferPlanFromAmountPaid(Number(m.amount)) ? cap(inferPlanFromAmountPaid(Number(m.amount))) : null);
     tx.push({
       id: `mem-${m.enrollment_id}`,
       date: m.date ? new Date(m.date).toISOString() : null,
       payer_name: m.full_name || m.email || '—',
       payer_email: m.email || '',
       type: 'membership',
-      plan: cap(m.plan),
+      plan,
       amount: Number(m.amount),
       status: m.sub_status === 'active' ? 'active' : 'settled',
       paysimple_payment_id: m.pid || null,

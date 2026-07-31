@@ -13,13 +13,14 @@ jest.mock('../../config/database', () => ({
   sequelize: { query: mockQuery },
 }));
 
-import { getSubscriptionAnalytics, SubscriptionAnalytics } from '../../services/subscriptionAnalyticsService';
+import { getSubscriptionAnalytics, getTenureBucketRoster, SubscriptionAnalytics } from '../../services/subscriptionAnalyticsService';
 
 type Row = {
   enrollment_id: string;
   full_name: string | null;
   email: string | null;
   amount_paid: string | null;
+  enrollment_created_at: string | null;
   sub_id: string | null;
   plan: 'annual' | 'monthly' | 'comp' | null;
   sub_status: 'pending' | 'active' | 'canceled' | 'failed' | null;
@@ -37,6 +38,7 @@ const row = (overrides: Partial<Row>): Row => ({
   full_name: 'Test Student',
   email: 'test@example.com',
   amount_paid: '199.00',
+  enrollment_created_at: new Date(NOW - 10 * DAY_MS).toISOString(),
   sub_id: 'sub-1',
   plan: 'monthly',
   sub_status: 'active',
@@ -53,6 +55,7 @@ const noSubRow = (overrides: Partial<Row>): Row => ({
   full_name: 'No Sub Student',
   email: 'nosub@example.com',
   amount_paid: null,
+  enrollment_created_at: null,
   sub_id: null,
   plan: null,
   sub_status: null,
@@ -102,7 +105,7 @@ describe('getSubscriptionAnalytics', () => {
     expect(byPlan.deposit_holder.amount).toBe(100); // $50 x 2
 
     expect(result.tenureFunnel[0]).toEqual(
-      expect.objectContaining({ label: 'Free Trial', count: 3, retentionPct: null })
+      expect.objectContaining({ label: 'Explorer', count: 3, retentionPct: null })
     );
   });
 
@@ -232,9 +235,64 @@ describe('getSubscriptionAnalytics', () => {
     const result = await getSubscriptionAnalytics(NOW);
     const byLabel = new Map(result.tenureFunnel.map((b) => [b.label, b]));
 
-    expect(byLabel.get('Free Trial')!.count).toBe(2);
+    expect(byLabel.get('Explorer')!.count).toBe(2);
     expect(byLabel.get('Month 1')!.count).toBe(1);
     expect(byLabel.get('Month 2')!.count).toBe(1);
     expect(byLabel.get('Month 5+')!.count).toBe(1);
+  });
+
+  it('anchors tenure on the enrollment\'s own created_at when there is no subscription row at all (plan inferred from amount_paid)', async () => {
+    mockRows([
+      noSubRow({ amount_paid: '199.00', enrollment_created_at: new Date(NOW - 20 * DAY_MS).toISOString() }),
+    ]);
+    const result = await getSubscriptionAnalytics(NOW);
+    const byLabel = new Map(result.tenureFunnel.map((b) => [b.label, b]));
+    expect(byLabel.get('Month 1')!.count).toBe(1);
+    expect(byLabel.get('Month 1')!.byPlan.monthly).toBe(1);
+  });
+
+  it('includes a member whose only subscription row is stuck pending in the tenure funnel (the "20 vs 34" bug: plan-classified members were being silently dropped from every tenure bucket)', async () => {
+    mockRows([
+      row({
+        enrollment_id: 'enr-pending-tenure',
+        plan: 'monthly',
+        sub_status: 'pending', // never activated (missed webhook) — but still has a real sub_created_at
+        current_period_end: null,
+        started_at: null,
+        sub_created_at: new Date(NOW - 5 * DAY_MS).toISOString(),
+      }),
+    ]);
+    const result = await getSubscriptionAnalytics(NOW);
+    const byLabel = new Map(result.tenureFunnel.map((b) => [b.label, b]));
+    expect(byLabel.get('Month 1')!.count).toBe(1);
+    expect(byLabel.get('Month 1')!.byPlan.monthly).toBe(1);
+  });
+});
+
+describe('getTenureBucketRoster', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('returns only the members anchored in the requested month, sorted oldest-member-first', async () => {
+    mockRows([
+      row({ enrollment_id: 'enr-m1-a', started_at: new Date(NOW - 20 * DAY_MS).toISOString() }),
+      row({ enrollment_id: 'enr-m1-b', started_at: new Date(NOW - 5 * DAY_MS).toISOString() }),
+      row({ enrollment_id: 'enr-m2', started_at: new Date(NOW - 35 * DAY_MS).toISOString() }),
+    ]);
+    const roster = await getTenureBucketRoster(1, NOW);
+    expect(roster.map((r) => r.enrollment_id)).toEqual(['enr-m1-a', 'enr-m1-b']);
+  });
+
+  it('maps oneBasedMonth=5 to the "Month 5+" tail bucket', async () => {
+    mockRows([row({ enrollment_id: 'enr-old', started_at: new Date(NOW - 400 * DAY_MS).toISOString() })]);
+    const roster = await getTenureBucketRoster(5, NOW);
+    expect(roster.map((r) => r.enrollment_id)).toEqual(['enr-old']);
+  });
+
+  it('excludes Explorers, Deposit Holders, and Other (unanchored) members', async () => {
+    mockRows([noSubRow({ amount_paid: null })]); // classifies as 'other' — no anchor
+    const roster = await getTenureBucketRoster(1, NOW);
+    expect(roster).toEqual([]);
   });
 });
