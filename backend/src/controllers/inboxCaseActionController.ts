@@ -6,15 +6,12 @@ import { logCaseEvent } from '../services/inboxCase/caseEventLog';
 import { reopenCase } from '../services/inboxCase/caseRepository';
 import { generatePlan } from '../services/inboxCase/caseActionPlanner';
 import { approveAction, rejectAction, approveLowRiskActions } from '../services/inboxCase/caseApprovalService';
+import { executeApprovedActions } from '../services/inboxCase/caseExecutionService';
+import { verifyCase } from '../services/inboxCase/caseVerificationService';
+import { closeCase } from '../services/inboxCase/caseClosureService';
 
 // Plan/Approve/Execute/Verify/Close/Reopen handlers for the Inbox Intel —
-// Case Resolution Engine. Answer/Plan/Approve/Reject/Approve-low-risk/Reopen
-// are fully implemented (Phases 3-4). Execute/Verify/Close land in Phase 5
-// — those three still return 501 with an explicit "not yet implemented"
-// body rather than a silent no-op, so a caller can never mistake "not
-// built" for "succeeded with nothing to do."
-
-const NOT_YET_IMPLEMENTED = (phase: string) => ({ error: 'NotYetImplemented', message: `This endpoint lands in ${phase} of the Inbox Intel build.` });
+// Case Resolution Engine. All handlers are now implemented (Phases 3-5).
 
 export async function handleAnswerQuestion(req: Request, res: Response) {
   const paramsParsed = caseQuestionParamSchema.safeParse(req.params);
@@ -120,13 +117,31 @@ export async function handleApproveLowRiskActions(req: Request, res: Response) {
 export async function handleExecuteCase(req: Request, res: Response) {
   const parsed = caseIdParamSchema.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
-  res.status(501).json(NOT_YET_IMPLEMENTED('Phase 5 (action executor)'));
+
+  try {
+    const result = await executeApprovedActions(parsed.data.caseId, (req as any).admin?.email || 'admin');
+    res.json(result);
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    if (err?.name === 'InvalidCaseTransitionError') return res.status(409).json({ error: err.name, message: err.message });
+    console.error('[InboxCase] ExecuteCase error:', err?.message);
+    res.status(500).json({ error: 'ExecutionFailedError', message: err?.message });
+  }
 }
 
 export async function handleVerifyCase(req: Request, res: Response) {
   const parsed = caseIdParamSchema.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
-  res.status(501).json(NOT_YET_IMPLEMENTED('Phase 5 (verification)'));
+
+  try {
+    const result = await verifyCase(parsed.data.caseId, (req as any).admin?.email || 'admin');
+    res.json(result);
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    if (err?.name === 'InvalidCaseTransitionError') return res.status(409).json({ error: err.name, message: err.message });
+    console.error('[InboxCase] VerifyCase error:', err?.message);
+    res.status(500).json({ error: 'VerificationFailedError', message: err?.message });
+  }
 }
 
 export async function handleCloseCase(req: Request, res: Response) {
@@ -134,7 +149,18 @@ export async function handleCloseCase(req: Request, res: Response) {
   if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
   const bodyParsed = closeCaseSchema.safeParse(req.body);
   if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
-  res.status(501).json(NOT_YET_IMPLEMENTED('Phase 5 (closure guard)'));
+
+  try {
+    const result = await closeCase(parsed.data.caseId, bodyParsed.data.closed_by);
+    if (!result.closed) {
+      return res.status(409).json({ error: 'ClosureBlockedError', blockers: result.blockers });
+    }
+    res.json({ closed: true });
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    console.error('[InboxCase] CloseCase error:', err?.message);
+    res.status(500).json({ error: 'InternalError', message: err?.message });
+  }
 }
 
 export async function handleReopenCase(req: Request, res: Response) {

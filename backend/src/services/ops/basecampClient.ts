@@ -69,4 +69,26 @@ export async function bcPost<T>(urlOrPath: string, body: unknown): Promise<T> {
   return (await r.json()) as T;
 }
 
+// PUT — updates to an existing recording (e.g. todo due-date/assignee
+// changes, marking a todo complete via the completion sub-resource). Added
+// for the Inbox Intel Case Resolution Engine's action executor; shares the
+// same auth/retry/backoff as bcGet/bcPost rather than a second client.
+export async function bcPut<T>(urlOrPath: string, body?: unknown): Promise<T | null> {
+  const u = urlOrPath.startsWith('http') ? urlOrPath : `${BC_API}${urlOrPath}`;
+  const r = await bcSend(() =>
+    fetch(u, {
+      method: 'PUT',
+      headers: bcHeaders(getBcToken(), { 'Content-Type': 'application/json' }),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }),
+  );
+  if (!r.ok) {
+    const errBody = await r.text().catch(() => '');
+    throw new Error(`BC PUT ${u} -> ${r.status} ${errBody.slice(0, 200)}`);
+  }
+  // Basecamp returns 204 No Content for several PUT endpoints (e.g. todo completion).
+  if (r.status === 204) return null;
+  return (await r.json()) as T;
+}
+
 export const BC_BASE_URL = BC_API;

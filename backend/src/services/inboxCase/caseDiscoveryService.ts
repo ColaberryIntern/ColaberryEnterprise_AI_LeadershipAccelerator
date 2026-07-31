@@ -293,7 +293,17 @@ export async function discoverCases(input: DiscoverCasesInput): Promise<Discover
           inclusion_status: inclusionStatus,
           disposition: null,
           disposition_reason: null,
-          snapshot: item.snapshot,
+          // thread_id/message_id/in_reply_to exist only on the transient
+          // RawCandidateItem used for grouping — persist them into the
+          // snapshot so a later reply action (Phase 5 executor) can thread
+          // correctly. Losing these at persistence time would silently
+          // break In-Reply-To/References headers on every proposed reply.
+          snapshot: {
+            ...item.snapshot,
+            thread_id: item.thread_id,
+            message_id: item.message_id,
+            in_reply_to: item.in_reply_to,
+          },
           source_hash: item.sourceHash,
         } as any);
 
