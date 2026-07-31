@@ -234,6 +234,24 @@ describe('buildKitSpec — KitConfig wiring', () => {
     const overrideSpec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config: overrideConfig });
     expect(overrideSpec.slides.some((s) => s.title === 'Custom preview' && s.body === 'Custom body.')).toBe(true);
   });
+
+  it('opening.hook override adds a hook to a week that has no authored one (Week 2 has none; only Week 1 does)', async () => {
+    const week2MondaySession: BuildKitSpecInput['session'] = {
+      id: 's-wk2-mon', session_number: 4, title: 'Week 2: Something',
+      session_date: '2026-08-03', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    };
+    const baseline = buildKitSpec(await inputFor(week2MondaySession));
+    expect(baseline.slides.some((s) => s.kind === 'hook')).toBe(false); // confirms Week 2 truly has none by default
+
+    const config: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      opening: { ...DEFAULT_KIT_CONFIG.opening, hook: { enabled: true, override: { headline: 'Added hook', caption: 'Added caption.' } } },
+    };
+    const withHook = buildKitSpec({ ...(await inputFor(week2MondaySession)), config });
+    const hookSlide = withHook.slides.find((s) => s.kind === 'hook');
+    expect(hookSlide?.title).toBe('Added hook');
+    expect(hookSlide?.body).toBe('Added caption.');
+  });
 });
 
 describe('renderKitHtml', () => {
