@@ -195,6 +195,11 @@ describe('renderKitHtml', () => {
     expect(html).toContain('id="krail"'); // pulse rail present
     expect(html).toContain('<svg'); // inline QR
     expect(html).not.toContain('<script>alert'); // sanity
+    // Dedicated nav buttons exist, and the old whole-page click-to-advance
+    // fallback (a click anywhere past 28% of screen width) is gone.
+    expect(html).toContain('id="kprev"');
+    expect(html).toContain('id="knext"');
+    expect(html).not.toContain('window.innerWidth * 0.28');
   });
 
   it('emits the three sample decks to the scratchpad', async () => {
