@@ -224,6 +224,12 @@ const RoomsPage: React.FC = () => {
           <h1 style={{ margin: 0 }}>Rooms</h1>
           <span className="rm-stat online"><b>{totalHere}</b> here now</span>
           <span style={{ flex: 1 }} />
+          {/* Class rooms no longer appear in the rail below (they're reached
+              directly from Today/Classroom/Schedule/the topbar pill) — this is
+              the one organized, chronological, completed-vs-upcoming view of
+              them, reusing the existing Sessions page rather than duplicating
+              it here. */}
+          <button type="button" className="te-btn ghost sm" onClick={() => navigate('/portal/sessions')}>Your classes →</button>
           <button type="button" className="te-btn ghost sm" onClick={() => setModal('new')}>+ New room</button>
           <button type="button" className="te-btn cherry sm" onClick={() => setModal('book')}>+ Book a session</button>
         </div>
