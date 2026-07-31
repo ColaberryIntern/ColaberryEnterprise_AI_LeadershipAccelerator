@@ -61,3 +61,18 @@ export async function getSubscriptionAnalytics(): Promise<SubscriptionAnalytics>
   const { data } = await api.get('/api/admin/revenue/subscriptions');
   return data;
 }
+
+export interface TenureRosterRow {
+  enrollment_id: string;
+  payer_name: string;
+  payer_email: string;
+  plan: SubscriptionPlanKey;
+  monthly_amount: number;
+  member_since: string | null;
+}
+
+/** Drill-down roster for one Month-N tenure bucket. month is 1-based; 5 means "Month 5+". */
+export async function getTenureBucketRoster(month: number): Promise<TenureRosterRow[]> {
+  const { data } = await api.get(`/api/admin/revenue/tenure/${month}`);
+  return data.members;
+}

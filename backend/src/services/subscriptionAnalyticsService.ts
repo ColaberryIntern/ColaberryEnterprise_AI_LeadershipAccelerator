@@ -1,5 +1,6 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
+import { inferPlanFromAmountPaid } from './planInference';
 
 /* ------------------------------------------------------------------ */
 /*  Subscription analytics — the recurring-revenue lens for            */
@@ -49,7 +50,7 @@ export interface UpcomingPayment {
 }
 
 export interface TenureBucket {
-  label: string; // 'Free Trial' | 'Month 1' | 'Month 2' | ... | 'Month 5+'
+  label: string; // 'Explorer' | 'Month 1' | 'Month 2' | ... | 'Month 5+'
   count: number;
   byPlan: Record<SubscriptionPlanKey, number>;
   retentionPct: number | null; // vs. previous bucket; null for the first bucket
@@ -73,11 +74,21 @@ export interface SubscriptionAnalytics {
   attention: AttentionRow[];
 }
 
+export interface TenureRosterRow {
+  enrollment_id: string;
+  payer_name: string;
+  payer_email: string;
+  plan: SubscriptionPlanKey;
+  monthly_amount: number;
+  member_since: string | null;
+}
+
 interface MemberRow {
   enrollment_id: string;
   full_name: string | null;
   email: string | null;
   amount_paid: string | null; // numeric from PG comes back as string
+  enrollment_created_at: string | null; // last-resort tenure anchor when there's no subscription row at all
   sub_id: string | null;
   plan: 'annual' | 'monthly' | 'comp' | null;
   sub_status: 'pending' | 'active' | 'canceled' | 'failed' | null;
@@ -85,6 +96,21 @@ interface MemberRow {
   started_at: string | null;
   current_period_end: string | null;
   sub_created_at: string | null;
+}
+
+/** One enrollment's fully-resolved membership state — computed once, shared by
+ *  the summary view (getSubscriptionAnalytics) and the per-bucket drill-down
+ *  (getTenureBucketRoster) so they can never drift apart on what counts. */
+interface ClassifiedMember {
+  enrollmentId: string;
+  payerName: string;
+  payerEmail: string;
+  plan: SubscriptionPlanKey;
+  monthlyAmount: number;
+  best: MemberRow | null;
+  newest: MemberRow | null;
+  memberSince: string | null; // ISO — the anchor date backing tenureBucketIndex
+  tenureBucketIndex: number | null; // 0-based Month-1..Month-5+ index; null = not anchorable
 }
 
 const PLAN_LABELS: Record<SubscriptionPlanKey, string> = {
@@ -99,34 +125,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const MONTH_MS = 30 * DAY_MS; // bucketing granularity only — display, not billing math
 const TENURE_BUCKET_COUNT = 5; // Month 1..4, then a "Month 5+" tail
 const UPCOMING_HORIZON_DAYS = 45; // "upcoming" means soon, not "any future date"
-const AMOUNT_MATCH_TOLERANCE = 30; // dollars — for inferring plan from amount_paid alone
-
-// Nominal per-term charge for each self-serve plan (subscriptionService.PLANS).
-const KNOWN_TERM_AMOUNTS: Array<{ amount: number; plan: 'annual' | 'monthly' }> = [
-  { amount: 1788, plan: 'annual' },
-  { amount: 199, plan: 'monthly' },
-];
 
 const monthlyEquivalent = (plan: 'annual' | 'monthly', amount: number): number =>
   plan === 'annual' ? amount / 12 : amount;
 
-/** Best-effort plan guess from the enrollment's own amount_paid, for the
- *  minority of paying members with no subscription row at all. */
-function inferPlanFromAmountPaid(amountPaid: number | null): 'annual' | 'monthly' | null {
-  if (amountPaid == null) return null;
-  let best: { plan: 'annual' | 'monthly'; diff: number } | null = null;
-  for (const k of KNOWN_TERM_AMOUNTS) {
-    const diff = Math.abs(amountPaid - k.amount);
-    if (!best || diff < best.diff) best = { plan: k.plan, diff };
-  }
-  return best && best.diff <= AMOUNT_MATCH_TOLERANCE ? best.plan : null;
-}
+const emptyPlanCounts = (): Record<SubscriptionPlanKey, number> => ({
+  annual: 0, monthly: 0, comp: 0, deposit_holder: 0, other: 0,
+});
 
 /** The one subscription row (if any) that best represents this enrollment's
  *  current plan/cycle: prefer an active row, else a row that at least has a
  *  real current_period_end (was activated at some point, later canceled),
- *  else the newest non-failed row, else the newest row overall (so a
- *  fully-failed history still surfaces for the "failed" attention check). */
+ *  else the newest non-failed row, else null (every row failed — no usable
+ *  "current" plan; the caller falls back to amount_paid). */
 function pickBestSubscription(rows: MemberRow[]): MemberRow | null {
   const real = rows.filter((r) => r.sub_id != null);
   if (real.length === 0) return null;
@@ -134,13 +145,13 @@ function pickBestSubscription(rows: MemberRow[]): MemberRow | null {
     real.find((r) => r.sub_status === 'active') ||
     real.find((r) => r.current_period_end != null) ||
     real.find((r) => r.sub_status !== 'failed') ||
-    null // every row is failed — no usable "current" plan; fall back to amount_paid
+    null
   );
 }
 
 async function fetchPayingMembers(): Promise<MemberRow[]> {
   return (await sequelize.query(
-    `SELECT e.id AS enrollment_id, e.full_name, e.email, e.amount_paid,
+    `SELECT e.id AS enrollment_id, e.full_name, e.email, e.amount_paid, e.created_at AS enrollment_created_at,
             s.id AS sub_id, s.plan, s.status AS sub_status, s.amount_cents,
             s.started_at, s.current_period_end, s.created_at AS sub_created_at
        FROM enrollments e
@@ -153,7 +164,7 @@ async function fetchPayingMembers(): Promise<MemberRow[]> {
 
 /** Explorers still in their free trial, split by whether they've paid the $50
  *  Open House "hold your spot" deposit — a real, if small, dollar commitment
- *  that deserves its own bucket rather than being invisible inside "Free Trial". */
+ *  that deserves its own bucket rather than being invisible inside "Explorer". */
 async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolders: number; depositTotal: number }> {
   const rows = (await sequelize.query(
     `SELECT
@@ -173,20 +184,74 @@ async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolder
   return { freeTrial: r.free_trial, depositHolders: r.deposit_holders, depositTotal: r.deposit_cents / 100 };
 }
 
-export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Promise<SubscriptionAnalytics> {
-  const rows = await fetchPayingMembers();
+function classifyMember(enrollmentId: string, memberRows: MemberRow[], nowMs: number): ClassifiedMember {
+  const first = memberRows[0];
+  const payerName = first.full_name || first.email || '—';
+  const payerEmail = first.email || '';
+  const amountPaid = first.amount_paid != null ? Number(first.amount_paid) : null;
+  const best = pickBestSubscription(memberRows);
+  const newest = memberRows.find((r) => r.sub_id != null) || null;
 
+  let plan: SubscriptionPlanKey;
+  let monthlyAmount = 0;
+  if (best) {
+    plan = best.plan as SubscriptionPlanKey;
+    monthlyAmount = plan === 'comp' ? 0 : monthlyEquivalent(plan as 'annual' | 'monthly', (best.amount_cents || 0) / 100);
+  } else {
+    const inferred = inferPlanFromAmountPaid(amountPaid);
+    if (inferred) {
+      plan = inferred;
+      monthlyAmount = monthlyEquivalent(inferred, amountPaid as number);
+    } else {
+      plan = 'other';
+    }
+  }
+
+  // Tenure anchor: any real, dated signal counts here — NOT gated on
+  // best.sub_status === 'active'. Most subscription rows in production are
+  // stuck 'pending' (the missed-webhook gap), so requiring 'active' silently
+  // dropped genuinely paying members from every tenure bucket even though
+  // they were correctly counted in the plan breakdown above — the exact
+  // "20 vs 34" mismatch Ali caught. Falls back to the enrollment's own
+  // created_at when there's no subscription row at all (plan inferred purely
+  // from amount_paid) — still a real, if less precise, "since when" signal.
+  let memberSince: string | null = null;
+  let tenureBucketIndex: number | null = null;
+  if (plan !== 'other') {
+    const anchorSource = best?.started_at || best?.sub_created_at || first.enrollment_created_at;
+    if (anchorSource) {
+      const startedMs = new Date(anchorSource).getTime();
+      if (Number.isFinite(startedMs) && startedMs > 0) {
+        memberSince = new Date(startedMs).toISOString();
+        const monthsElapsed = Math.floor((nowMs - startedMs) / MONTH_MS);
+        tenureBucketIndex = Math.min(Math.max(monthsElapsed, 0), TENURE_BUCKET_COUNT - 1);
+      }
+    }
+  }
+
+  return { enrollmentId, payerName, payerEmail, plan, monthlyAmount, best, newest, memberSince, tenureBucketIndex };
+}
+
+async function classifyAllMembers(nowMs: number): Promise<ClassifiedMember[]> {
+  const rows = await fetchPayingMembers();
   const byEnrollment = new Map<string, MemberRow[]>();
   for (const r of rows) {
     const list = byEnrollment.get(r.enrollment_id);
     if (list) list.push(r);
     else byEnrollment.set(r.enrollment_id, [r]);
   }
+  return Array.from(byEnrollment.entries()).map(([id, memberRows]) => classifyMember(id, memberRows, nowMs));
+}
+
+/** Bucket label for a 1-based tenure month index (1..TENURE_BUCKET_COUNT). */
+function monthLabel(oneBased: number): string {
+  return oneBased === TENURE_BUCKET_COUNT ? `Month ${oneBased}+` : `Month ${oneBased}`;
+}
+
+export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Promise<SubscriptionAnalytics> {
+  const members = await classifyAllMembers(nowMs);
 
   const kpis: SubscriptionKpis = { mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, arpu: 0 };
-  const emptyPlanCounts = (): Record<SubscriptionPlanKey, number> => ({
-    annual: 0, monthly: 0, comp: 0, deposit_holder: 0, other: 0,
-  });
   const planCounts: Record<SubscriptionPlanKey, { count: number; amount: number }> = {
     annual: { count: 0, amount: 0 },
     monthly: { count: 0, amount: 0 },
@@ -196,29 +261,13 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
   };
   const upcomingPayments: UpcomingPayment[] = [];
   const attention: AttentionRow[] = [];
-  const tenureAnchor = new Map<string, { startedMs: number; plan: SubscriptionPlanKey }>();
+  const bucketCounts: Array<{ count: number; byPlan: Record<SubscriptionPlanKey, number> }> = Array.from(
+    { length: TENURE_BUCKET_COUNT },
+    () => ({ count: 0, byPlan: emptyPlanCounts() })
+  );
 
-  for (const [enrollmentId, memberRows] of byEnrollment) {
-    const first = memberRows[0];
-    const payerName = first.full_name || first.email || '—';
-    const payerEmail = first.email || '';
-    const amountPaid = first.amount_paid != null ? Number(first.amount_paid) : null;
-    const best = pickBestSubscription(memberRows);
-
-    let plan: SubscriptionPlanKey;
-    let monthlyAmount = 0;
-    if (best) {
-      plan = best.plan as SubscriptionPlanKey;
-      monthlyAmount = plan === 'comp' ? 0 : monthlyEquivalent(plan as 'annual' | 'monthly', (best.amount_cents || 0) / 100);
-    } else {
-      const inferred = inferPlanFromAmountPaid(amountPaid);
-      if (inferred) {
-        plan = inferred;
-        monthlyAmount = monthlyEquivalent(inferred, amountPaid as number);
-      } else {
-        plan = 'other';
-      }
-    }
+  for (const m of members) {
+    const { enrollmentId, payerName, payerEmail, plan, monthlyAmount, best, newest } = m;
 
     planCounts[plan].count += 1;
     if (plan === 'annual' || plan === 'monthly') {
@@ -238,23 +287,13 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
       const inDays = Math.ceil((dueMs - nowMs) / DAY_MS);
       if (best.sub_status === 'active' && dueMs >= nowMs && inDays <= UPCOMING_HORIZON_DAYS) {
         upcomingPayments.push({
-          enrollment_id: enrollmentId,
-          payer_name: payerName,
-          payer_email: payerEmail,
-          plan,
-          amount: (best.amount_cents || 0) / 100,
-          due_date: new Date(dueMs).toISOString(),
-          in_days: inDays,
+          enrollment_id: enrollmentId, payer_name: payerName, payer_email: payerEmail, plan,
+          amount: (best.amount_cents || 0) / 100, due_date: new Date(dueMs).toISOString(), in_days: inDays,
         });
       } else if (best.sub_status === 'active' && dueMs < nowMs) {
         attention.push({
-          enrollment_id: enrollmentId,
-          payer_name: payerName,
-          payer_email: payerEmail,
-          kind: 'lapsed',
-          plan,
-          reference_date: new Date(dueMs).toISOString(),
-          days_overdue: Math.floor((nowMs - dueMs) / DAY_MS),
+          enrollment_id: enrollmentId, payer_name: payerName, payer_email: payerEmail, kind: 'lapsed', plan,
+          reference_date: new Date(dueMs).toISOString(), days_overdue: Math.floor((nowMs - dueMs) / DAY_MS),
         });
       }
     }
@@ -262,26 +301,17 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
     // Failed-attempt detection: the newest subscription row is a failed
     // checkout and nothing else about this enrollment counts as a real,
     // currently-active plan (best would be that active row instead, if one existed).
-    const newest = memberRows.find((r) => r.sub_id != null) || null;
     if (newest && newest.sub_status === 'failed' && (!best || best.sub_status !== 'active')) {
       attention.push({
-        enrollment_id: enrollmentId,
-        payer_name: payerName,
-        payer_email: payerEmail,
-        kind: 'failed',
+        enrollment_id: enrollmentId, payer_name: payerName, payer_email: payerEmail, kind: 'failed',
         plan: (newest.plan as SubscriptionPlanKey) || 'other',
-        reference_date: new Date(newest.sub_created_at as string).toISOString(),
-        days_overdue: 0,
+        reference_date: new Date(newest.sub_created_at as string).toISOString(), days_overdue: 0,
       });
     }
 
-    // Tenure anchor: only for people with a real, activated subscription —
-    // (deposit holders/other/pending-only members have no reliable start date).
-    if (best && best.sub_status === 'active' && plan !== 'other') {
-      const startedMs = new Date(best.started_at || best.sub_created_at || 0).getTime();
-      if (Number.isFinite(startedMs) && startedMs > 0) {
-        tenureAnchor.set(enrollmentId, { startedMs, plan });
-      }
+    if (m.tenureBucketIndex !== null) {
+      bucketCounts[m.tenureBucketIndex].count += 1;
+      bucketCounts[m.tenureBucketIndex].byPlan[plan] += 1;
     }
   }
 
@@ -294,10 +324,7 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
   const planOrder: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp', 'deposit_holder'];
   if (planCounts.other.count > 0) planOrder.push('other'); // only surface if it's real, never hidden
   const planBreakdown: PlanBreakdownRow[] = planOrder.map((plan) => ({
-    plan,
-    label: PLAN_LABELS[plan],
-    count: planCounts[plan].count,
-    amount: planCounts[plan].amount,
+    plan, label: PLAN_LABELS[plan], count: planCounts[plan].count, amount: planCounts[plan].amount,
   }));
 
   upcomingPayments.sort((a, b) => new Date(a.due_date).getTime() - new Date(b.due_date).getTime());
@@ -307,32 +334,38 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
     return new Date(b.reference_date).getTime() - new Date(a.reference_date).getTime();
   });
 
-  // Tenure funnel: bucket every activated subscriber by months since their
-  // tenure anchor. Free Trial = Explorers with no deposit and no subscription.
+  // Tenure funnel: bucket every anchorable member by months since their tenure
+  // anchor. Explorer = free-trial signups with no deposit and no subscription.
   // retentionPct is a snapshot ratio (this bucket's headcount vs. the bucket
   // above it, right now) — not per-person cohort tracking across time, since
   // the subscription model only launched recently and there isn't enough
   // history yet for a true cohort-retention curve.
   const buckets: TenureBucket[] = [];
-  const bucketCounts: Array<{ count: number; byPlan: Record<SubscriptionPlanKey, number> }> = Array.from(
-    { length: TENURE_BUCKET_COUNT },
-    () => ({ count: 0, byPlan: emptyPlanCounts() })
-  );
-
-  for (const { startedMs, plan } of tenureAnchor.values()) {
-    const monthsElapsed = Math.floor((nowMs - startedMs) / MONTH_MS);
-    const bucketIndex = Math.min(Math.max(monthsElapsed, 0), TENURE_BUCKET_COUNT - 1);
-    bucketCounts[bucketIndex].count += 1;
-    bucketCounts[bucketIndex].byPlan[plan] += 1;
-  }
-
-  buckets.push({ label: 'Free Trial', count: freeTrialCount, byPlan: emptyPlanCounts(), retentionPct: null });
+  buckets.push({ label: 'Explorer', count: freeTrialCount, byPlan: emptyPlanCounts(), retentionPct: null });
   bucketCounts.forEach((b, i) => {
-    const label = i === TENURE_BUCKET_COUNT - 1 ? `Month ${i + 1}+` : `Month ${i + 1}`;
     const prev = buckets[buckets.length - 1];
     const retentionPct = prev.count > 0 ? Math.round((b.count / prev.count) * 100) : null;
-    buckets.push({ label, count: b.count, byPlan: b.byPlan, retentionPct });
+    buckets.push({ label: monthLabel(i + 1), count: b.count, byPlan: b.byPlan, retentionPct });
   });
 
   return { kpis, planBreakdown, upcomingPayments, tenureFunnel: buckets, attention };
+}
+
+/** Drill-down roster for one Month-N tenure bucket (1-based; TENURE_BUCKET_COUNT
+ *  means "Month N+"). Shares classifyAllMembers with getSubscriptionAnalytics so
+ *  a bucket's roster length always matches its displayed count exactly. */
+export async function getTenureBucketRoster(oneBasedMonth: number, nowMs: number = Date.now()): Promise<TenureRosterRow[]> {
+  const targetIndex = Math.min(Math.max(oneBasedMonth, 1), TENURE_BUCKET_COUNT) - 1;
+  const members = await classifyAllMembers(nowMs);
+  return members
+    .filter((m) => m.tenureBucketIndex === targetIndex)
+    .map((m) => ({
+      enrollment_id: m.enrollmentId,
+      payer_name: m.payerName,
+      payer_email: m.payerEmail,
+      plan: m.plan,
+      monthly_amount: m.monthlyAmount,
+      member_since: m.memberSince,
+    }))
+    .sort((a, b) => new Date(a.member_since || 0).getTime() - new Date(b.member_since || 0).getTime());
 }

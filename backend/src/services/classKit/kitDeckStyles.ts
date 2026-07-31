@@ -124,6 +124,7 @@ body.compact .kcover-grid, body.rail-on .kcover-grid{grid-template-columns:1fr}
   display:flex;align-items:center;gap:16px;padding:0 16px;border-top:3px solid var(--cherry)}
 #kpace .kstart{background:var(--cherry);color:#fff;border:none;border-radius:9px;padding:10px 18px;font-weight:800;cursor:pointer;font-size:14px;white-space:nowrap;letter-spacing:.4px}
 #kpace .kstart.running{background:#22303f;color:#9fb4c9}
+#kpace .kstart.ended{background:var(--amber);color:#1a1a1a}
 .kpace-clock{font-family:"Cascadia Mono",Consolas,monospace;font-size:20px;font-weight:700;white-space:nowrap}
 .kpace-seg{font-size:13px;color:#9fb4c9;min-width:0}
 .kpace-seg b{color:#fff;font-size:14px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -132,6 +133,7 @@ body.compact .kcover-grid, body.rail-on .kcover-grid{grid-template-columns:1fr}
 .kpace-status.behind{background:rgba(229,18,29,.28);color:#ffb0b0}
 .kpace-status.ahead{background:rgba(54,120,149,.3);color:#9fd8ec}
 .kpace-status.idle{background:#22303f;color:#9fb4c9}
+.kpace-status.ended{background:rgba(255,176,0,.25);color:#ffd27a}
 .kpace-timeline{flex:none;width:min(28vw,340px);height:12px;border-radius:6px;background:#22303f;position:relative;overflow:hidden;display:flex}
 .kpace-timeline .seg{height:100%;border-right:1px solid #111a24}
 .kpace-timeline .now{position:absolute;top:-3px;bottom:-3px;width:3px;background:#fff;box-shadow:0 0 6px rgba(255,255,255,.7)}
@@ -225,13 +227,19 @@ body.focus #kfocus-exit{display:block}
 body.focus.idle #kfocus-exit{opacity:0}
 
 /* Mermaid diagrams + diagram slide */
-.kdiagram{margin-top:2.4vh;display:flex;flex-direction:column;align-items:center}
+.kdiagram{margin-top:2.4vh;display:flex;flex-direction:column;align-items:center;cursor:zoom-in;position:relative}
+.kdiagram::after{content:"⛶ click to zoom";position:absolute;top:0;right:0;font-size:11px;color:#94a3b8;background:#fff;border:1px solid var(--line);border-radius:8px;padding:2px 8px;opacity:.75}
 pre.mermaid{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:2vh 2vw;margin:0 auto;max-width:100%;overflow:auto;box-shadow:var(--shadow);
   font-family:"Cascadia Mono",Consolas,monospace;font-size:12px;color:#94a3b8;line-height:1.4}
 pre.mermaid svg{max-width:100%;height:auto}
 pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transparent}
 .kdiagram-cap{margin-top:1.6vh;display:flex;gap:10px;align-items:flex-start;font-size:clamp(13px,.9vw,16px);color:#1a4a5c;font-weight:600;text-align:left;max-width:64ch;background:#eef7fa;border:1.5px solid var(--berry);border-radius:12px;padding:1.3vh 1.4vw}
 .kdiagram-cap-ico{flex:none;font-size:1.15em;line-height:1}
+.kdiagram--full{cursor:zoom-out;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4vh 4vw;margin:0}
+.kdiagram--full::after{content:"⛶ click to close";top:2vh;right:2vw;background:rgba(255,255,255,.9)}
+.kdiagram--full pre.mermaid{max-width:92vw;max-height:82vh}
+.kdiagram--full pre.mermaid svg{max-width:92vw;max-height:78vh}
+.kdiagram--full .kdiagram-cap{max-width:80ch}
 
 /* teach-slide "lead with the conclusion" insight card */
 .kteach-lead{margin-top:2.2vh;display:flex;gap:12px;align-items:flex-start;max-width:68ch;

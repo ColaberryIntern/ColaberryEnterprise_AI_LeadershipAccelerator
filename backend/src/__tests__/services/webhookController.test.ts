@@ -31,11 +31,17 @@ jest.mock('../../services/automationService', () => ({
   runEnrollmentAutomation: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../services/subscriptionService', () => ({
+  activateByRef: jest.fn(),
+  isSubscriptionRef: jest.fn().mockReturnValue(false),
+}));
+
 import { handlePaySimpleWebhook } from '../../controllers/webhookController';
 import { verifyWebhookSignature } from '../../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed } from '../../services/enrollmentService';
 import { Cohort, EnrollmentLead } from '../../models';
 import { runEnrollmentAutomation } from '../../services/automationService';
+import { activateByRef, isSubscriptionRef } from '../../services/subscriptionService';
 
 function mockRequest(body: any, headers: Record<string, string> = {}): Partial<Request> {
   return { body, headers };
@@ -294,6 +300,69 @@ describe('handlePaySimpleWebhook', () => {
     expect(res.json).toHaveBeenCalledWith({ received: true });
     // EnrollmentLead should NOT be created when enrollment not found
     expect(EnrollmentLead.findOrCreate).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The real request shape. The route parses the body with express.raw()
+   * specifically so req.body is a Buffer of PaySimple's exact original
+   * bytes — signature verification MUST be computed over that Buffer, not
+   * a JSON.stringify() of an already-parsed object (which can never
+   * reproduce byte-identical JSON: key order, spacing, and number
+   * formatting can all differ from the source). This was the actual
+   * production bug, found live 2026-07-30: every real webhook call was
+   * silently rejected here, so no self-serve subscription payment ever
+   * activated automatically.
+   */
+  describe('real Buffer request body (as express.raw() actually delivers it)', () => {
+    it('verifies the signature against the raw buffer bytes, not a re-serialized object', async () => {
+      (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+      (markEnrollmentPaid as jest.Mock).mockResolvedValue(MOCK_ENROLLMENT);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue(MOCK_COHORT);
+
+      // Deliberately formatted differently than JSON.stringify(PAYMENT_CREATED_EVENT)
+      // would produce (extra whitespace) — proving the exact bytes are what get hashed.
+      const rawJson = '{\n  "event_type": "payment_created",\n  "data": {\n    "order_external_id": "CB-42620872-1710700000000",\n    "payment_id": 29124495,\n    "amount": 4500\n  }\n}';
+      const buf = Buffer.from(rawJson, 'utf8');
+      const req = mockRequest(buf, { 'paysimple-hmac-sha256': 'sig' });
+      const res = mockResponse();
+
+      await handlePaySimpleWebhook(req as Request, res as Response);
+
+      expect(verifyWebhookSignature).toHaveBeenCalledWith(rawJson, 'sig');
+      expect(markEnrollmentPaid).toHaveBeenCalledWith('CB-42620872-1710700000000', { paymentId: 29124495, amount: 4500 });
+    });
+
+    it('activates a subscription (SUB- ref) parsed from a real Buffer body', async () => {
+      (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+      (isSubscriptionRef as jest.Mock).mockReturnValue(true);
+      (activateByRef as jest.Mock).mockResolvedValue({ id: 'sub-1', plan: 'monthly', enrollment_id: 'enroll-123' });
+
+      const event = {
+        event_type: 'payment_created',
+        data: { order_external_id: 'SUB-abc123-ms7r1cx7', payment_id: 555, amount: 199 },
+      };
+      const buf = Buffer.from(JSON.stringify(event), 'utf8');
+      const req = mockRequest(buf, { 'paysimple-hmac-sha256': 'sig' });
+      const res = mockResponse();
+
+      await handlePaySimpleWebhook(req as Request, res as Response);
+
+      expect(activateByRef).toHaveBeenCalledWith('SUB-abc123-ms7r1cx7', { paymentId: 555, amount: 199 });
+      expect(res.json).toHaveBeenCalledWith({ received: true });
+    });
+
+    it('rejects an invalid signature computed over a real Buffer body (no false positive from the fix)', async () => {
+      (verifyWebhookSignature as jest.Mock).mockReturnValue(false);
+
+      const buf = Buffer.from(JSON.stringify(PAYMENT_CREATED_EVENT), 'utf8');
+      const req = mockRequest(buf, { 'paysimple-hmac-sha256': 'bad-sig' });
+      const res = mockResponse();
+
+      await handlePaySimpleWebhook(req as Request, res as Response);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(markEnrollmentPaid).not.toHaveBeenCalled();
+    });
   });
 
   it('idempotency: duplicate payment returns early without triggering automation again', async () => {

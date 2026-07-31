@@ -9,8 +9,25 @@ import { handleAdvisoryWebhook, handleAdvisoryWebhookHead } from '../controllers
 
 const router = Router();
 
-// PaySimple payment webhook — JSON body
-router.post('/api/webhook/paysimple', express.json(), handlePaySimpleWebhook);
+// PaySimple payment webhook — raw body required for HMAC-SHA256 signature
+// validation, same reasoning as the GitHub webhook below. express.json()
+// (the previous parser here) hands the handler an already-parsed object,
+// which can never be re-serialized back into byte-identical JSON for
+// signature verification -- found live 2026-07-30 rejecting 100% of real
+// PaySimple webhook calls.
+//
+// type: () => true (not 'application/json' as used below for GitHub) --
+// found live 2026-07-31 that this route's Content-Type matcher was itself
+// the second bug: PaySimple's real webhook calls don't reliably arrive with
+// an exact 'application/json' Content-Type, so express.raw()'s type filter
+// silently skipped raw-body capture, req.body fell through to Express's
+// default '{}', and every real call failed signature verification again --
+// this time with a *different* underlying cause than the original
+// JSON.stringify(req.body) bug, but the identical-looking symptom. GitHub's
+// webhook sender is reliable about its Content-Type so its narrower matcher
+// is left as-is; PaySimple's is not, so this route now captures the raw
+// body unconditionally regardless of what Content-Type (if any) arrives.
+router.post('/api/webhook/paysimple', express.raw({ type: () => true }), handlePaySimpleWebhook);
 
 // Mandrill webhook — uses URL-encoded body (mandrill_events=<JSON>)
 router.head('/api/webhook/mandrill', handleMandrillWebhookHead);
