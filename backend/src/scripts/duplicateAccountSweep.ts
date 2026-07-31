@@ -1,9 +1,12 @@
 /**
- * Scheduled backstop for the duplicate-account point-shadowing bug found
- * repeatedly by hand overnight 2026-07-30/31 (see duplicateAccountSweepService.ts
- * for the full root-cause writeup). Finds students whose real, active account
- * shows fewer points than a duplicate under the same email, and merges the
- * safe cases automatically.
+ * Scheduled backstop for the duplicate-account bugs found repeatedly by hand
+ * overnight 2026-07-30/31 (see duplicateAccountSweepService.ts for the full
+ * root-cause writeup). Runs two independent detectors: students whose real,
+ * active account shows fewer points than a duplicate under the same email
+ * (point shadowing), and students with an active duplicate in a *different*
+ * cohort, which silently fails live-session check-in regardless of points
+ * (Britiana Akhile and 4 others). Merges the safe cases automatically and
+ * corrects attendance history when the pattern is unambiguous.
  *
  * Runs inside the backend container (has direct DB access already, no
  * host/container env-bridging needed):
@@ -38,6 +41,24 @@ function renderReport(result: SweepResult): { html: string; text: string } {
     ? result.shadowed.map((s) => ({ name: s.name, email: s.email, winnerPoints: s.winnerPoints, shadowRows: s.shadowRows.map((r) => `${r.id} (${r.points}pts)`).join(', ') }))
     : [];
 
+  const crossCohortMerged = result.crossCohortMerges.flatMap((m) =>
+    m.merged.map((row) => ({ name: m.name, email: m.email, dupeId: row.dupeId, pointsMoved: row.pointsMoved, creditsMoved: row.creditsMoved })),
+  );
+  const crossCohortAttendance = result.crossCohortMerges
+    .filter((m) => m.attendanceCorrected > 0)
+    .map((m) => ({ name: m.name, email: m.email, sessionsExcused: m.attendanceCorrected }));
+  const crossCohortFlagged = result.crossCohortMerges.flatMap((m) => [
+    ...m.flaggedCollision.map((id) => ({ name: m.name, email: m.email, dupeId: id, reason: 'event_key collision -- needs manual review' })),
+    ...m.flaggedRealPayment.map((id) => ({ name: m.name, email: m.email, dupeId: id, reason: 'duplicate holds a real paid Subscription -- needs manual review' })),
+    ...m.flaggedStaffAccount.map((id) => ({ name: m.name, email: m.email, dupeId: id, reason: 'a non-winning row is a real staff/admin account -- entire email skipped, needs a manual decision' })),
+    ...(m.attendanceFlaggedForReview > 0
+      ? [{ name: m.name, email: m.email, dupeId: '(attendance)', reason: `${m.attendanceFlaggedForReview} absent session(s) left uncorrected -- mixed history, ask the student before excusing` }]
+      : []),
+  ]);
+  const wouldMergeCrossCohort = DRY
+    ? result.crossCohort.map((c) => ({ name: c.name, email: c.email, otherRows: c.otherRows.map((r) => `${r.id} (cohort ${r.cohortId})`).join(', ') }))
+    : [];
+
   const rows = (label: string, entries: any[], cols: string[]) =>
     entries.length === 0
       ? ''
@@ -49,17 +70,29 @@ function renderReport(result: SweepResult): { html: string; text: string } {
     </table>`;
 
   const html = `<div style="font-family:arial,sans-serif;font-size:14px;color:#2d3748">
-<p>Duplicate-account point-shadowing sweep${DRY ? ' (DRY RUN, nothing written)' : ''}. Checked ${result.scanned} email(s) with multiple active enrollments.</p>
+<p>Duplicate-account sweep${DRY ? ' (DRY RUN, nothing written)' : ''}. Checked ${result.scanned} email(s) with multiple active enrollments.</p>
+<h2 style="font-size:15px;margin-top:20px">Point shadowing</h2>
 ${rows(DRY ? 'Would merge' : 'Merged', DRY ? wouldMerge : merged, DRY ? ['name', 'email', 'winnerPoints', 'shadowRows'] : ['name', 'email', 'shadowId', 'pointsMoved', 'creditsMoved'])}
 ${rows('Needs manual review', flagged, ['name', 'email', 'shadowId', 'reason'])}
+<h2 style="font-size:15px;margin-top:20px">Cross-cohort (check-in failure risk)</h2>
+${rows(DRY ? 'Would merge' : 'Merged', DRY ? wouldMergeCrossCohort : crossCohortMerged, DRY ? ['name', 'email', 'otherRows'] : ['name', 'email', 'dupeId', 'pointsMoved', 'creditsMoved'])}
+${rows('Attendance corrected to excused', crossCohortAttendance, ['name', 'email', 'sessionsExcused'])}
+${rows('Needs manual review', crossCohortFlagged, ['name', 'email', 'dupeId', 'reason'])}
 </div>`;
 
   const text = [
-    `Duplicate-account point-shadowing sweep${DRY ? ' (DRY RUN)' : ''}. Checked ${result.scanned} email(s) with multiple active enrollments.`,
+    `Duplicate-account sweep${DRY ? ' (DRY RUN)' : ''}. Checked ${result.scanned} email(s) with multiple active enrollments.`,
+    `\n-- Point shadowing --`,
     DRY
-      ? wouldMerge.length ? `\nWould merge (${wouldMerge.length}):\n` + wouldMerge.map((e) => `  ${e.name} <${e.email}> winner=${e.winnerPoints}pts, shadow=${e.shadowRows}`).join('\n') : ''
-      : merged.length ? `\nMerged (${merged.length}):\n` + merged.map((e) => `  ${e.name} <${e.email}> +${e.pointsMoved}pts +${e.creditsMoved} credit rows (from ${e.shadowId})`).join('\n') : '',
-    flagged.length ? `\nNeeds manual review (${flagged.length}):\n` + flagged.map((e) => `  ${e.name} <${e.email}> (${e.shadowId}) -- ${e.reason}`).join('\n') : '',
+      ? wouldMerge.length ? `Would merge (${wouldMerge.length}):\n` + wouldMerge.map((e) => `  ${e.name} <${e.email}> winner=${e.winnerPoints}pts, shadow=${e.shadowRows}`).join('\n') : ''
+      : merged.length ? `Merged (${merged.length}):\n` + merged.map((e) => `  ${e.name} <${e.email}> +${e.pointsMoved}pts +${e.creditsMoved} credit rows (from ${e.shadowId})`).join('\n') : '',
+    flagged.length ? `Needs manual review (${flagged.length}):\n` + flagged.map((e) => `  ${e.name} <${e.email}> (${e.shadowId}) -- ${e.reason}`).join('\n') : '',
+    `\n-- Cross-cohort (check-in failure risk) --`,
+    DRY
+      ? wouldMergeCrossCohort.length ? `Would merge (${wouldMergeCrossCohort.length}):\n` + wouldMergeCrossCohort.map((e) => `  ${e.name} <${e.email}> other rows: ${e.otherRows}`).join('\n') : ''
+      : crossCohortMerged.length ? `Merged (${crossCohortMerged.length}):\n` + crossCohortMerged.map((e) => `  ${e.name} <${e.email}> +${e.pointsMoved}pts +${e.creditsMoved} credit rows (from ${e.dupeId})`).join('\n') : '',
+    crossCohortAttendance.length ? `Attendance corrected to excused (${crossCohortAttendance.length}):\n` + crossCohortAttendance.map((e) => `  ${e.name} <${e.email}> ${e.sessionsExcused} session(s)`).join('\n') : '',
+    crossCohortFlagged.length ? `Needs manual review (${crossCohortFlagged.length}):\n` + crossCohortFlagged.map((e) => `  ${e.name} <${e.email}> (${e.dupeId}) -- ${e.reason}`).join('\n') : '',
   ]
     .filter(Boolean)
     .join('\n');
@@ -78,12 +111,18 @@ async function sendReport(result: SweepResult): Promise<void> {
     port: 587,
     auth: { user: 'ali@colaberry.com', pass: env.mandrillApiKey },
   });
-  const mergedCount = result.merges.reduce((n, m) => n + m.merged.length, 0);
-  const flaggedCount = result.merges.reduce((n, m) => n + m.flaggedCollision.length + m.flaggedRealPayment.length, 0);
+  const mergedCount = result.merges.reduce((n, m) => n + m.merged.length, 0) + result.crossCohortMerges.reduce((n, m) => n + m.merged.length, 0);
+  const flaggedCount =
+    result.merges.reduce((n, m) => n + m.flaggedCollision.length + m.flaggedRealPayment.length, 0) +
+    result.crossCohortMerges.reduce(
+      (n, m) => n + m.flaggedCollision.length + m.flaggedRealPayment.length + m.flaggedStaffAccount.length + (m.attendanceFlaggedForReview > 0 ? 1 : 0),
+      0,
+    );
+  const wouldMergeCount = result.shadowed.length + result.crossCohort.length;
   await transport.sendMail({
     from: '"Colaberry Enterprise AI" <ali@colaberry.com>',
     to: 'ali@colaberry.com',
-    subject: `[Duplicate Account Sweep] ${DRY ? result.shadowed.length + ' would merge' : mergedCount + ' merged'}, ${flaggedCount} need review${DRY ? ' (DRY RUN)' : ''}`,
+    subject: `[Duplicate Account Sweep] ${DRY ? wouldMergeCount + ' would merge' : mergedCount + ' merged'}, ${flaggedCount} need review${DRY ? ' (DRY RUN)' : ''}`,
     html,
     text,
     headers: { 'X-MC-Track': 'none' },
@@ -94,8 +133,14 @@ async function main(): Promise<void> {
   await sequelize.authenticate();
   const result = await runDuplicateAccountSweep({ dryRun: DRY });
 
-  const mergedCount = result.merges.reduce((n, m) => n + m.merged.length, 0);
-  const flaggedCount = result.merges.reduce((n, m) => n + m.flaggedCollision.length + m.flaggedRealPayment.length, 0);
+  const mergedCount = result.merges.reduce((n, m) => n + m.merged.length, 0) + result.crossCohortMerges.reduce((n, m) => n + m.merged.length, 0);
+  const flaggedCount =
+    result.merges.reduce((n, m) => n + m.flaggedCollision.length + m.flaggedRealPayment.length, 0) +
+    result.crossCohortMerges.reduce(
+      (n, m) => n + m.flaggedCollision.length + m.flaggedRealPayment.length + m.flaggedStaffAccount.length + (m.attendanceFlaggedForReview > 0 ? 1 : 0),
+      0,
+    );
+  const attendanceCorrectedCount = result.crossCohortMerges.reduce((n, m) => n + m.attendanceCorrected, 0);
 
   console.log(
     JSON.stringify({
@@ -103,12 +148,14 @@ async function main(): Promise<void> {
       dry_run: DRY,
       scanned: result.scanned,
       shadowed_found: result.shadowed.length,
+      cross_cohort_found: result.crossCohort.length,
       merged: mergedCount,
       flagged: flaggedCount,
+      attendance_sessions_corrected: attendanceCorrectedCount,
     }),
   );
 
-  const hasSomethingToReport = DRY ? result.shadowed.length > 0 : mergedCount > 0 || flaggedCount > 0;
+  const hasSomethingToReport = DRY ? result.shadowed.length + result.crossCohort.length > 0 : mergedCount > 0 || flaggedCount > 0;
   if (hasSomethingToReport) {
     await sendReport(result);
   }

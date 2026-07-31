@@ -1,11 +1,15 @@
 /**
  * Regression suite for the duplicate-account point-shadowing bug found and
  * manually fixed 5 times overnight (2026-07-30/31: Sonya Parker, Britiana
- * Akhile, Martin Mungai, Marcus Zeno, Jude Mofunanya). Locks in the
- * detection query and the conservative merge rules (skip on event_key
- * collision, skip on a real Subscription payment) so a future change can't
- * silently reintroduce blind auto-merging of ambiguous or financially real
- * cases.
+ * Akhile, Martin Mungai, Marcus Zeno, Jude Mofunanya), and the related
+ * cross-cohort check-in-failure bug (Britiana Akhile, Kepha Ohanga,
+ * Eyerusalem Weldemichael, Firas Baidhani, Franck Kafando; ram@colaberry.com
+ * deliberately left unmerged). Locks in both detection queries and the
+ * conservative merge rules (skip on event_key collision, skip on a real
+ * Subscription payment, skip an entire cross-cohort case if a non-winning
+ * row is a real staff account, only correct attendance when the whole
+ * history is absent) so a future change can't silently reintroduce blind
+ * auto-merging of ambiguous, financially real, or staff-provisioned cases.
  */
 
 jest.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -14,22 +18,32 @@ jest.spyOn(console, 'log').mockImplementation(() => undefined);
 jest.mock('../../models', () => ({
   __esModule: true,
   Enrollment: { findAll: jest.fn(), update: jest.fn() },
-  CommunityMember: {},
+  CommunityMember: { findAll: jest.fn() },
   StudentPointsEvent: { findAll: jest.fn(), sum: jest.fn(), update: jest.fn() },
   AccountCredit: { update: jest.fn() },
   Subscription: { findAll: jest.fn() },
+  AttendanceRecord: { findAll: jest.fn(), update: jest.fn() },
 }));
 
-import { Enrollment, StudentPointsEvent, AccountCredit, Subscription } from '../../models';
-import { findShadowedAccounts, mergeShadowedAccount, runDuplicateAccountSweep } from '../../services/duplicateAccountSweepService';
+import { Enrollment, CommunityMember, StudentPointsEvent, AccountCredit, Subscription, AttendanceRecord } from '../../models';
+import {
+  findShadowedAccounts,
+  mergeShadowedAccount,
+  findCrossCohortDuplicates,
+  mergeCrossCohortDuplicate,
+  runDuplicateAccountSweep,
+} from '../../services/duplicateAccountSweepService';
 
 const enrFindAll = Enrollment.findAll as jest.Mock;
 const enrUpdate = Enrollment.update as jest.Mock;
+const staffFindAll = CommunityMember.findAll as jest.Mock;
 const eventsFindAll = StudentPointsEvent.findAll as jest.Mock;
 const eventsSum = StudentPointsEvent.sum as jest.Mock;
 const eventsUpdate = StudentPointsEvent.update as jest.Mock;
 const creditsUpdate = AccountCredit.update as jest.Mock;
 const subsFindAll = Subscription.findAll as jest.Mock;
+const attendanceFindAll = AttendanceRecord.findAll as jest.Mock;
+const attendanceUpdate = AttendanceRecord.update as jest.Mock;
 
 function enr(id: string, email: string, overrides: Partial<any> = {}) {
   return {
@@ -38,6 +52,7 @@ function enr(id: string, email: string, overrides: Partial<any> = {}) {
     full_name: 'Test Student',
     enrollment_type: 'standard',
     payment_status: 'paid',
+    cohort_id: 'cohort-real',
     created_at: '2026-07-01T00:00:00Z',
     ...overrides,
   };
@@ -49,6 +64,9 @@ beforeEach(() => {
   creditsUpdate.mockResolvedValue([0]);
   enrUpdate.mockResolvedValue([1]);
   subsFindAll.mockResolvedValue([]);
+  staffFindAll.mockResolvedValue([]);
+  attendanceFindAll.mockResolvedValue([]);
+  attendanceUpdate.mockResolvedValue([0]);
 });
 
 describe('findShadowedAccounts', () => {
@@ -148,6 +166,125 @@ describe('mergeShadowedAccount', () => {
   });
 });
 
+describe('findCrossCohortDuplicates', () => {
+  it('flags an email whose active rows span two different cohorts', async () => {
+    const real = enr('real-id', 'britiana@example.com', { cohort_id: 'cohort-real', created_at: '2026-07-01T00:00:00Z' });
+    const dupe = enr('dupe-id', 'britiana@example.com', {
+      enrollment_type: 'explorer',
+      payment_status: 'pending',
+      cohort_id: 'cohort-explorer',
+      created_at: '2026-06-01T00:00:00Z',
+    });
+    enrFindAll.mockResolvedValue([real, dupe]);
+
+    const result = await findCrossCohortDuplicates();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].winnerId).toBe('real-id');
+    expect(result[0].otherRows).toEqual([{ id: 'dupe-id', cohortId: 'cohort-explorer' }]);
+  });
+
+  it('does not flag duplicates that share the same cohort', async () => {
+    const real = enr('real-id', 'ok@example.com', { cohort_id: 'cohort-real' });
+    const dupe = enr('dupe-id', 'ok@example.com', { enrollment_type: 'explorer', payment_status: 'pending', cohort_id: 'cohort-real' });
+    enrFindAll.mockResolvedValue([real, dupe]);
+
+    const result = await findCrossCohortDuplicates();
+
+    expect(result).toHaveLength(0);
+  });
+
+  it('ignores emails with only one active enrollment row', async () => {
+    enrFindAll.mockResolvedValue([enr('only-id', 'single@example.com')]);
+
+    const result = await findCrossCohortDuplicates();
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('mergeCrossCohortDuplicate', () => {
+  const entry = {
+    email: 'britiana@example.com',
+    name: 'Britiana Akhile',
+    winnerId: 'real-id',
+    otherRows: [{ id: 'dupe-id', cohortId: 'cohort-explorer' }],
+  };
+
+  it('merges the duplicate and corrects attendance to excused when the whole history is absent', async () => {
+    eventsFindAll.mockImplementation(({ where }: any) => Promise.resolve(where.enrollment_id === entry.winnerId ? [] : [{ event_key: 'card:1' }]));
+    eventsUpdate.mockResolvedValue([1]);
+    attendanceFindAll.mockResolvedValue([
+      { enrollment_id: 'real-id', session_id: 's1', status: 'absent' },
+      { enrollment_id: 'real-id', session_id: 's2', status: 'absent' },
+    ]);
+
+    const outcome = await mergeCrossCohortDuplicate(entry);
+
+    expect(outcome.flaggedStaffAccount).toEqual([]);
+    expect(outcome.merged).toEqual([{ dupeId: 'dupe-id', pointsMoved: 1, creditsMoved: 0, withdrawn: true }]);
+    expect(enrUpdate).toHaveBeenCalledWith({ status: 'withdrawn' }, { where: { id: 'dupe-id' } });
+    expect(attendanceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'excused', marked_by: 'admin' }),
+      { where: { enrollment_id: 'real-id' } },
+    );
+    expect(outcome.attendanceCorrected).toBe(2);
+    expect(outcome.attendanceFlaggedForReview).toBe(0);
+  });
+
+  it('leaves attendance untouched and reports it when the history is mixed (some sessions genuinely attended)', async () => {
+    eventsFindAll.mockImplementation(({ where }: any) => Promise.resolve(where.enrollment_id === entry.winnerId ? [] : []));
+    attendanceFindAll.mockResolvedValue([
+      { enrollment_id: 'real-id', session_id: 's1', status: 'late' },
+      { enrollment_id: 'real-id', session_id: 's2', status: 'absent' },
+    ]);
+
+    const outcome = await mergeCrossCohortDuplicate(entry);
+
+    expect(outcome.merged).toHaveLength(1); // the duplicate itself still merges fine
+    expect(attendanceUpdate).not.toHaveBeenCalled();
+    expect(outcome.attendanceCorrected).toBe(0);
+    expect(outcome.attendanceFlaggedForReview).toBe(1);
+  });
+
+  it('skips the entire email and writes nothing when a non-winning row is a real staff account', async () => {
+    staffFindAll.mockResolvedValue([{ enrollment_id: 'dupe-id', mgmt_role: 'owner' }]);
+
+    const outcome = await mergeCrossCohortDuplicate(entry);
+
+    expect(outcome.flaggedStaffAccount).toEqual(['dupe-id']);
+    expect(outcome.merged).toEqual([]);
+    expect(eventsUpdate).not.toHaveBeenCalled();
+    expect(enrUpdate).not.toHaveBeenCalled();
+    expect(attendanceFindAll).not.toHaveBeenCalled();
+    expect(attendanceUpdate).not.toHaveBeenCalled();
+  });
+
+  it('does not correct attendance when a collision leaves a wrong-cohort row still active (not fully resolved)', async () => {
+    eventsFindAll.mockImplementation(({ where }: any) =>
+      Promise.resolve(where.enrollment_id === entry.winnerId ? [{ event_key: 'daily_streak:2026-07-29' }] : [{ event_key: 'daily_streak:2026-07-29' }]),
+    );
+
+    const outcome = await mergeCrossCohortDuplicate(entry);
+
+    expect(outcome.flaggedCollision).toEqual(['dupe-id']);
+    expect(outcome.merged).toEqual([]);
+    expect(enrUpdate).not.toHaveBeenCalled();
+    expect(attendanceFindAll).not.toHaveBeenCalled(); // never reached -- the risky row is still live
+  });
+
+  it('does not correct attendance when a real Subscription payment leaves a wrong-cohort row still active', async () => {
+    eventsFindAll.mockImplementation(() => Promise.resolve([]));
+    subsFindAll.mockResolvedValue([{ status: 'active', paysimple_payment_id: '155192015' }]);
+
+    const outcome = await mergeCrossCohortDuplicate(entry);
+
+    expect(outcome.flaggedRealPayment).toEqual(['dupe-id']);
+    expect(enrUpdate).not.toHaveBeenCalled();
+    expect(attendanceFindAll).not.toHaveBeenCalled();
+  });
+});
+
 describe('runDuplicateAccountSweep', () => {
   it('dry run finds shadowed accounts but writes nothing', async () => {
     const real = enr('real-id', 'jude@example.com');
@@ -160,6 +297,7 @@ describe('runDuplicateAccountSweep', () => {
     expect(result.scanned).toBe(1);
     expect(result.shadowed).toHaveLength(1);
     expect(result.merges).toEqual([]);
+    expect(result.crossCohortMerges).toEqual([]);
     expect(eventsUpdate).not.toHaveBeenCalled();
     expect(enrUpdate).not.toHaveBeenCalled();
   });
@@ -180,13 +318,29 @@ describe('runDuplicateAccountSweep', () => {
     expect(enrUpdate).toHaveBeenCalledWith({ status: 'withdrawn' }, { where: { id: 'dupe-id' } });
   });
 
-  it('a clean roster with no shadowing produces no merges and no writes', async () => {
+  it('a clean roster with no shadowing or cross-cohort duplicates produces no merges and no writes', async () => {
     enrFindAll.mockResolvedValue([enr('only-id', 'clean@example.com')]);
 
     const result = await runDuplicateAccountSweep({ dryRun: false });
 
     expect(result.scanned).toBe(0);
     expect(result.merges).toEqual([]);
+    expect(result.crossCohortMerges).toEqual([]);
     expect(eventsUpdate).not.toHaveBeenCalled();
+  });
+
+  it('counts an email flagged by both detectors only once in scanned', async () => {
+    // Same email, points-shadowed AND cross-cohort at once (the common real shape).
+    const real = enr('real-id', 'both@example.com', { cohort_id: 'cohort-real' });
+    const dupe = enr('dupe-id', 'both@example.com', { enrollment_type: 'explorer', payment_status: 'pending', cohort_id: 'cohort-explorer' });
+    enrFindAll.mockResolvedValue([real, dupe]);
+    eventsSum.mockImplementation(({ where }: any) => Promise.resolve(where.enrollment_id === 'real-id' ? 0 : 5));
+    eventsFindAll.mockImplementation(() => Promise.resolve([]));
+
+    const result = await runDuplicateAccountSweep({ dryRun: true });
+
+    expect(result.shadowed).toHaveLength(1);
+    expect(result.crossCohort).toHaveLength(1);
+    expect(result.scanned).toBe(1); // deduped, not 2
   });
 });
