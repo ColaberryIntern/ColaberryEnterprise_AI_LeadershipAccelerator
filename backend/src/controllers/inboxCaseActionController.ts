@@ -4,15 +4,15 @@ import InboxCaseQuestion from '../models/InboxCaseQuestion';
 import { caseQuestionParamSchema, caseIdParamSchema, caseActionParamSchema, answerQuestionSchema, approveActionSchema, rejectActionSchema, approveLowRiskSchema, closeCaseSchema, reopenCaseSchema } from '../schemas/inboxCaseSchema';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
 import { reopenCase } from '../services/inboxCase/caseRepository';
+import { generatePlan } from '../services/inboxCase/caseActionPlanner';
+import { approveAction, rejectAction, approveLowRiskActions } from '../services/inboxCase/caseApprovalService';
 
 // Plan/Approve/Execute/Verify/Close/Reopen handlers for the Inbox Intel —
-// Case Resolution Engine. handleAnswerQuestion is fully implemented (Phase
-// 3 lands the question-generation side that populates rows this consumes).
-// The remaining handlers are implemented incrementally as their backing
-// services land (action planner: Phase 4, executor/closure guard: Phase 5)
-// — each currently returns 501 with an explicit "not yet implemented" body
-// rather than a silent no-op, so a caller can never mistake "not built" for
-// "succeeded with nothing to do."
+// Case Resolution Engine. Answer/Plan/Approve/Reject/Approve-low-risk/Reopen
+// are fully implemented (Phases 3-4). Execute/Verify/Close land in Phase 5
+// — those three still return 501 with an explicit "not yet implemented"
+// body rather than a silent no-op, so a caller can never mistake "not
+// built" for "succeeded with nothing to do."
 
 const NOT_YET_IMPLEMENTED = (phase: string) => ({ error: 'NotYetImplemented', message: `This endpoint lands in ${phase} of the Inbox Intel build.` });
 
@@ -55,7 +55,16 @@ export async function handleAnswerQuestion(req: Request, res: Response) {
 export async function handleGeneratePlan(req: Request, res: Response) {
   const parsed = caseIdParamSchema.safeParse(req.params);
   if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
-  res.status(501).json(NOT_YET_IMPLEMENTED('Phase 4 (action planner)'));
+
+  try {
+    const result = await generatePlan(parsed.data.caseId, (req as any).admin?.email || 'admin');
+    res.json({ actions_created: result.actionsCreated, action_ids: result.actionIds });
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    if (err?.name === 'InvalidCaseTransitionError') return res.status(409).json({ error: err.name, message: err.message });
+    console.error('[InboxCase] GeneratePlan error:', err?.message);
+    res.status(500).json({ error: 'PlanGenerationFailedError', message: err?.message });
+  }
 }
 
 export async function handleApproveAction(req: Request, res: Response) {
@@ -63,7 +72,16 @@ export async function handleApproveAction(req: Request, res: Response) {
   if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
   const bodyParsed = approveActionSchema.safeParse(req.body);
   if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
-  res.status(501).json(NOT_YET_IMPLEMENTED('Phase 4 (approval controls)'));
+
+  try {
+    const action = await approveAction(parsed.data.caseId, parsed.data.actionId, bodyParsed.data.approved_by, bodyParsed.data.edited_payload);
+    res.json({ action: action.toJSON() });
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    if (err?.name === 'InvalidActionTransitionError') return res.status(409).json({ error: err.name, message: err.message });
+    console.error('[InboxCase] ApproveAction error:', err?.message);
+    res.status(500).json({ error: 'InternalError', message: err?.message });
+  }
 }
 
 export async function handleRejectAction(req: Request, res: Response) {
@@ -71,7 +89,16 @@ export async function handleRejectAction(req: Request, res: Response) {
   if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
   const bodyParsed = rejectActionSchema.safeParse(req.body);
   if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
-  res.status(501).json(NOT_YET_IMPLEMENTED('Phase 4 (approval controls)'));
+
+  try {
+    const action = await rejectAction(parsed.data.caseId, parsed.data.actionId, bodyParsed.data.rejected_by, bodyParsed.data.reason);
+    res.json({ action: action.toJSON() });
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    if (err?.name === 'InvalidActionTransitionError') return res.status(409).json({ error: err.name, message: err.message });
+    console.error('[InboxCase] RejectAction error:', err?.message);
+    res.status(500).json({ error: 'InternalError', message: err?.message });
+  }
 }
 
 export async function handleApproveLowRiskActions(req: Request, res: Response) {
@@ -79,7 +106,15 @@ export async function handleApproveLowRiskActions(req: Request, res: Response) {
   if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
   const bodyParsed = approveLowRiskSchema.safeParse(req.body);
   if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
-  res.status(501).json(NOT_YET_IMPLEMENTED('Phase 4 (approval controls)'));
+
+  try {
+    const result = await approveLowRiskActions(parsed.data.caseId, bodyParsed.data.approved_by);
+    res.json({ approved: result.approved, skipped_high_risk_or_individual: result.skippedHighRiskOrIndividual });
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    console.error('[InboxCase] ApproveLowRiskActions error:', err?.message);
+    res.status(500).json({ error: 'InternalError', message: err?.message });
+  }
 }
 
 export async function handleExecuteCase(req: Request, res: Response) {

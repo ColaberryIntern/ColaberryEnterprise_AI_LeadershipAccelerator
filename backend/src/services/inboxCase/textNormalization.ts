@@ -47,6 +47,13 @@ export function computeSourceHash(provider: string, sourceId: string): string {
   return createHash('sha256').update(`${provider}::${sourceId}`).digest('hex');
 }
 
+// Stable dedup key for InboxCaseAction.idempotency_key — regenerating a plan
+// (or retrying Execute) for the same logical action target never inserts or
+// re-runs a second row for the same side effect.
+export function computeIdempotencyKey(parts: string[]): string {
+  return createHash('sha256').update(parts.join('::')).digest('hex');
+}
+
 // Extracts Basecamp URLs and bare recording IDs referenced in free text
 // (email bodies). Basecamp URLs take the shape
 // https://3.basecamp.com/<account>/buckets/<project>/<type>/<id> or the API
