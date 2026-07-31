@@ -3,6 +3,7 @@ import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
 import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
+import { pickBestEnrollment } from './participantService';
 
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
   const cohort = await Cohort.findByPk(cohortId);
@@ -272,11 +273,30 @@ export async function createExplorerEnrollment(input: {
   const cohort = await getOrCreateExplorerCohort();
   if (!cohort) throw new AppError('No cohort available to place the Explorer under', 409);
 
-  // Idempotent: reuse any existing enrollment for this email in the cohort —
-  // including a real paid student — so we never duplicate or downgrade anyone.
-  const existing = await Enrollment.findOne({ where: { email, cohort_id: cohort.id } });
+  // Idempotent: reuse any existing ACTIVE enrollment for this email across
+  // EVERY cohort, not just the Explorer one -- including a real paid student
+  // -- so we never duplicate or downgrade anyone. This used to check only
+  // `cohort_id: cohort.id` (the Explorer cohort itself), which meant anyone
+  // who already had a real seat in a *different* cohort got a brand-new
+  // duplicate Explorer row every time this ran (a repeat Open House RSVP
+  // through the live registration endpoint, or a resynced Eventbrite batch
+  // row) -- the query never even looked at their real enrollment. That
+  // duplicate then silently shadowed the student's real points/attendance
+  // (`pickBestEnrollment`'s recency tiebreak could make the new, empty
+  // duplicate outrank their real account at login) or, if the duplicate
+  // landed in a different cohort than the one their live sessions belong to,
+  // caused live-session check-in to fail outright with no useful error.
+  // Found live 2026-07-31 across 8+ real students (Sonya Parker, Britiana
+  // Akhile, Martin Mungai, Marcus Zeno, and others) before being traced back
+  // to this exact query scope -- every one of those was a symptom, this is
+  // the actual source. `pickBestEnrollment` picks the same canonical account
+  // the real login flow would, so a caller who already has multiple active
+  // rows (a pre-existing duplicate from before this fix) still gets routed
+  // to their real one, not an arbitrary match.
+  const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });
+  const existing = pickBestEnrollment(existingCandidates);
   if (existing) {
-    return { enrollment: existing, created: false, cohort_id: cohort.id };
+    return { enrollment: existing, created: false, cohort_id: existing.cohort_id };
   }
 
   const source = input.source || 'Open House Explorer';
