@@ -173,6 +173,26 @@ export async function getNextSession(): Promise<NextLiveSession | null> {
   return data.next_session ?? null;
 }
 
+// ── A specific class session's detail — used by a Colaberry Commons room to
+// render its class banner (countdown / live+join / recap) when the room is
+// linked to an official class via CommunityRoom.linked_live_session_id. Same
+// backing endpoint PortalSessionDetailPage uses. ──────────────────────────────
+export interface ClassSessionInfo {
+  id: string;
+  session_number: number;
+  title: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  meeting_link: string | null;
+  recording_url: string | null;
+}
+export async function fetchClassSessionDetail(sessionId: string): Promise<ClassSessionInfo> {
+  const { data } = await portalApi.get<{ session: ClassSessionInfo }>(`/api/portal/sessions/${sessionId}`);
+  return data.session;
+}
+
 // ── Join a live session (records attendance + awards session_attended once) ───
 export interface JoinSessionResult { ok: true; status: 'present' | 'late'; awarded: boolean; points: number; }
 /** Record attendance for a live session. Idempotent — safe to call on every join
