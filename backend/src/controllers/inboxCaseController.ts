@@ -4,6 +4,7 @@ import InboxCaseEvent from '../models/InboxCaseEvent';
 import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema } from '../schemas/inboxCaseSchema';
 import { discoverCases } from '../services/inboxCase/caseDiscoveryService';
 import { getCaseWithChildren } from '../services/inboxCase/caseRepository';
+import { getCaseTicketId } from '../services/inboxCase/caseTicketService';
 import { runAssessment } from '../services/inboxCase/caseAssessmentService';
 import InboxCaseItem from '../models/InboxCaseItem';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
@@ -61,11 +62,13 @@ export async function handleGetCase(req: Request, res: Response) {
 
   try {
     const { case: found, items, questions, actions } = await getCaseWithChildren(parsed.data.caseId);
+    const ticketId = await getCaseTicketId(parsed.data.caseId);
     res.json({
       case: found.toJSON(),
       items: items.map((i) => i.toJSON()),
       questions: questions.map((q) => q.toJSON()),
       actions: actions.map((a) => a.toJSON()),
+      ticket_id: ticketId,
     });
   } catch (err: any) {
     if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });

@@ -112,6 +112,11 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
         <h2 className="mb-0 fs-5" ref={headingRef} tabIndex={-1}>{c.title}</h2>
         <span className="badge bg-primary">{c.state.replace(/_/g, ' ')}</span>
         {c.reopen_count > 0 && <span className="badge bg-warning text-dark">Reopened ×{c.reopen_count}</span>}
+        {detail.ticket_id && (
+          <a href={`/admin/tickets?open=${detail.ticket_id}`} className="btn btn-sm btn-outline-secondary ms-auto" target="_blank" rel="noreferrer">
+            <i className="ri-ticket-2-line" aria-hidden="true" /> View Ticket
+          </a>
+        )}
       </div>
 
       <div className="row g-3">

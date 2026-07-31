@@ -93,7 +93,7 @@ export function extractBasecampReferences(text: string | null | undefined): Base
 // never alone push a candidate past the auto-include threshold, per root
 // directive section 5 ("Do not use semantic similarity as the only reason
 // to include or archive an item.").
-const STOPWORDS = new Set([
+export const STOPWORDS = new Set([
   'the', 'a', 'an', 'and', 'or', 'of', 'to', 'in', 'on', 'for', 'is', 'are', 'was', 'were',
   'this', 'that', 'with', 'as', 'at', 'by', 'from', 'it', 'be', 'we', 'you', 'i', 'your', 'our',
 ]);

@@ -6,6 +6,7 @@ import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment
 import { computeIdempotencyKey } from './textNormalization';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { logCaseEvent } from './caseEventLog';
+import { postCaseProgressNote } from './caseTicketService';
 import { redactSecretLikePatterns } from './promptSafety';
 import { redactSensitive } from '../../utils/piiRedaction';
 
@@ -181,6 +182,13 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
     event_type: 'plan_generated',
     details: { requested_by: requestedBy, actions_created: createdIds.length },
   });
+
+  await postCaseProgressNote(
+    caseId,
+    createdIds.length > 0
+      ? `Plan generated: ${createdIds.length} action(s) proposed (${archiveProposals.length} archive, ${createdIds.length - archiveProposals.length} other). Awaiting your approval.`
+      : `Plan generated: no actions were needed for this case.`
+  );
 
   return { actionsCreated: createdIds.length, actionIds: createdIds };
 }

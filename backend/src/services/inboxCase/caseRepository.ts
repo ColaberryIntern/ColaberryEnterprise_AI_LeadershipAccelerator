@@ -6,6 +6,7 @@ import InboxCaseAction from '../../models/InboxCaseAction';
 import { CaseMode, CaseState } from '../../types/inboxCase';
 import { assertTransition, assertReopen } from './caseStateMachine';
 import { logCaseEvent } from './caseEventLog';
+import { ensureCaseTicket, syncTicketForCase } from './caseTicketService';
 
 // Thin persistence + transition-safe mutation layer shared by every case
 // service/controller. Nothing here talks to Gmail/Basecamp/AI — this is
@@ -43,6 +44,10 @@ export async function openCase(input: OpenCaseInput): Promise<InboxCase> {
     details: { mode: input.mode, query: input.normalized_query },
     correlation_id,
   });
+
+  // Best-effort — a ticket-board sync failure must never block opening a
+  // case. Ali: "All work should be done in a ticket by the agents."
+  await ensureCaseTicket(created.id, input.title, input.mode, input.opened_by);
 
   return created;
 }
@@ -96,7 +101,33 @@ export async function transitionCase(caseId: string, to: CaseState, opts: Transi
     correlation_id: found.correlation_id,
   });
 
+  // Best-effort — keeps the Tickets board in sync with every case state
+  // change, from whichever service triggered it, without each of those
+  // services needing to know tickets exist at all.
+  await syncTicketForCase(caseId, to);
+
   return found;
+}
+
+// Answering an individual question (inboxCaseActionController.ts::handleAnswerQuestion)
+// never itself decides case state — it only ever updates the question. Without
+// this check, the LAST open question being answered would leave the case
+// stuck in NEEDS_ALI forever (nothing else re-evaluates "are there still
+// blocking questions?"), so the case would never surface a Plan step and any
+// Close attempt would fail with no visible next action. Call this right
+// after marking a question ANSWERED.
+export async function maybeAdvanceFromNeedsAli(caseId: string, actorId: string): Promise<void> {
+  const found = await getCaseOrThrow(caseId);
+  if (found.state !== 'NEEDS_ALI') return;
+
+  const stillOpen = await InboxCaseQuestion.count({ where: { case_id: caseId, status: 'OPEN' } });
+  if (stillOpen > 0) return;
+
+  await transitionCase(caseId, 'READY_TO_PLAN', {
+    actor_type: 'system',
+    actor_id: actorId,
+    event_type: 'case_ready_to_plan_after_last_question_answered',
+  });
 }
 
 export async function reopenCase(caseId: string, opts: TransitionOptions & { reason: string }): Promise<InboxCase> {
@@ -121,6 +152,11 @@ export async function reopenCase(caseId: string, opts: TransitionOptions & { rea
     details: { reason: opts.reason, ...opts.details },
     correlation_id: found.correlation_id,
   });
+
+  // The prior ticket may already be terminal (`done`) — createTicket's own
+  // dedup only matches non-terminal tickets, so this opens a FRESH ticket
+  // for the reopened work rather than trying to un-terminate the old one.
+  await ensureCaseTicket(caseId, found.title, found.mode, opts.actor_id);
 
   // Reopen always lands the case back in ASSESSING — the prior assessment
   // is stale by definition once new activity triggered the reopen.

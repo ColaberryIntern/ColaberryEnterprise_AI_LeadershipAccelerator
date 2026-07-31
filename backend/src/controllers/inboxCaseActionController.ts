@@ -3,12 +3,13 @@ import InboxCase from '../models/InboxCase';
 import InboxCaseQuestion from '../models/InboxCaseQuestion';
 import { caseQuestionParamSchema, caseIdParamSchema, caseActionParamSchema, answerQuestionSchema, approveActionSchema, rejectActionSchema, approveLowRiskSchema, closeCaseSchema, reopenCaseSchema } from '../schemas/inboxCaseSchema';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
-import { reopenCase } from '../services/inboxCase/caseRepository';
+import { reopenCase, maybeAdvanceFromNeedsAli } from '../services/inboxCase/caseRepository';
 import { generatePlan } from '../services/inboxCase/caseActionPlanner';
 import { approveAction, rejectAction, approveLowRiskActions } from '../services/inboxCase/caseApprovalService';
 import { executeApprovedActions } from '../services/inboxCase/caseExecutionService';
 import { verifyCase } from '../services/inboxCase/caseVerificationService';
 import { closeCase } from '../services/inboxCase/caseClosureService';
+import { learnFromAnsweredQuestion } from '../services/inboxCase/caseKnowledgeService';
 
 // Plan/Approve/Execute/Verify/Close/Reopen handlers for the Inbox Intel —
 // Case Resolution Engine. All handlers are now implemented (Phases 3-5).
@@ -45,6 +46,46 @@ export async function handleAnswerQuestion(req: Request, res: Response) {
     details: { question_id: questionId, answer, blocks_action_ids: question.blocks_action_ids },
     correlation_id: caseRow?.correlation_id || questionId,
   });
+
+  // The learning loop: feed this answered question back into the knowledge
+  // base (always inactive — a human reviews before it can affect Cora's live
+  // replies) so the next similar case doesn't have to ask again. Best-effort
+  // and never blocks the response — a KB-write failure must not make
+  // answering a question fail.
+  try {
+    const learned = await learnFromAnsweredQuestion({
+      caseId,
+      question: question.question,
+      answer,
+      whyRequired: question.why_required,
+      answeredBy: bodyParsed.data.answered_by,
+    });
+    if (learned.created) {
+      await logCaseEvent({
+        case_id: caseId,
+        event_type: 'knowledge_base_entry_proposed',
+        actor_type: 'system',
+        actor_id: 'case_knowledge_service',
+        details: { question_id: questionId, kb_entry_id: learned.entryId },
+        correlation_id: caseRow?.correlation_id || questionId,
+      });
+    }
+  } catch (err: any) {
+    console.error(`[InboxCase] Knowledge-base learning step failed for question ${questionId}: ${err?.message}`);
+  }
+
+  // Answering an individual question never itself decides case state — this
+  // is the ONLY place that re-checks "were there other open questions?" and
+  // advances the case out of NEEDS_ALI once the answer just given was the
+  // last one blocking it. Without this, a case sits in NEEDS_ALI forever
+  // after its last question is answered: no Plan step ever appears, and any
+  // Close attempt fails with a checklist that doesn't explain why nothing
+  // is progressing.
+  try {
+    await maybeAdvanceFromNeedsAli(caseId, bodyParsed.data.answered_by);
+  } catch (err: any) {
+    console.error(`[InboxCase] Failed to advance case ${caseId} after answering question ${questionId}: ${err?.message}`);
+  }
 
   res.json({ question: question.toJSON() });
 }

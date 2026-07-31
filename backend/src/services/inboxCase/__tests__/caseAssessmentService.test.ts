@@ -50,6 +50,20 @@ jest.mock('../../openaiInstrumented', () => ({
   getInstrumentedOpenAI: () => ({ chat: { completions: { create: mockCreate } } }),
 }));
 
+// caseRepository (used here for getCaseOrThrow/transitionCase) and
+// caseAssessmentService itself now use caseTicketService/caseKnowledgeService,
+// both of which transitively import the full models barrel via
+// ticketService.ts — stub both out entirely so they don't poison the
+// model mocks above.
+jest.mock('../caseTicketService', () => ({
+  ensureCaseTicket: jest.fn(async () => {}),
+  syncTicketForCase: jest.fn(async () => {}),
+  postCaseProgressNote: jest.fn(async () => {}),
+}));
+jest.mock('../caseKnowledgeService', () => ({
+  buildKnowledgeReferenceBlock: jest.fn(async () => ({ text: '', matches: [] })),
+}));
+
 import { runAssessment } from '../caseAssessmentService';
 
 const VALID_MODEL_OUTPUT = {

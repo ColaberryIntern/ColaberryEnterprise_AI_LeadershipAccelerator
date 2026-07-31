@@ -2,6 +2,7 @@ import InboxCaseAction from '../../models/InboxCaseAction';
 import { ActionType } from '../../types/inboxCase';
 import { logCaseEvent } from './caseEventLog';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
+import { postCaseProgressNote } from './caseTicketService';
 
 // Verify (root directive section 12/24 — "Execution is verified"). For each
 // SUCCEEDED action, confirms the external effect actually landed rather
@@ -81,6 +82,11 @@ export async function verifyCase(caseId: string, requestedBy: string): Promise<V
       details: { requested_by: requestedBy, verified, verification_failed: verificationFailed, target },
     });
   }
+
+  await postCaseProgressNote(
+    caseId,
+    `Verification: ${verified} action(s) confirmed, ${verificationFailed} failed verification. Case status: ${target}.`
+  );
 
   return { verified, verificationFailed, finalCaseState: caseRow.state };
 }
