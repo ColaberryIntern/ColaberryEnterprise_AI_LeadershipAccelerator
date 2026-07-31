@@ -3,6 +3,7 @@ import { SectionCard } from '../shell';
 import { TenureBucket, SubscriptionPlanKey } from '../../../services/subscriptionAnalyticsApi';
 import { PLAN_COLOR, PLAN_LABEL } from './format';
 import ExplorerRosterModal from './ExplorerRosterModal';
+import MemberRosterModal from './MemberRosterModal';
 
 interface Props {
   buckets: TenureBucket[];
@@ -13,20 +14,16 @@ interface Props {
 // always render as an empty, meaningless legend entry.
 const PLAN_ORDER: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp'];
 
-// Only this bucket has a drill-down roster today (see explorerRosterService) —
-// it's the largest, most actionable group for re-engagement campaigns. Paying
-// buckets are already reachable via the Attention/Upcoming lists elsewhere.
-const DRILLABLE_LABEL = 'Explorer';
-
 /** Tenure funnel — a snapshot heatmap of how many current subscribers are how
  *  many months into their subscription, split by plan, with a retention %
  *  against the bucket above. Explorer (free trial, no subscription yet) sits
  *  at the top; higher tenure buckets get thinner as people churn out. This is
  *  a headcount-ratio snapshot, not per-person cohort tracking across time —
  *  the subscription model is too new for a full acquisition-month matrix to
- *  carry enough data yet. */
+ *  carry enough data yet. Every bucket drills down into its roster. */
 export default function TenureRetentionFunnel({ buckets }: Props) {
   const [showExplorers, setShowExplorers] = useState(false);
+  const [monthDrill, setMonthDrill] = useState<{ month: number; label: string } | null>(null);
   const maxCount = Math.max(1, ...buckets.map((b) => b.count));
 
   return (
@@ -44,19 +41,22 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
         ))}
       </div>
 
-      {buckets.map((b) => {
+      {buckets.map((b, i) => {
         const widthPct = Math.max(b.count > 0 ? 4 : 0, Math.round((b.count / maxCount) * 100));
-        const drillable = b.label === DRILLABLE_LABEL;
+        // buckets[0] is always "Explorer"; buckets[1..5] are Month 1..5+ (1-based month index = i).
+        const isExplorer = i === 0;
+        const monthIndex = i; // i=1 -> Month 1 ... i=5 -> Month 5+
+        const onClick = isExplorer ? () => setShowExplorers(true) : () => setMonthDrill({ month: monthIndex, label: b.label });
         return (
           <div
             key={b.label}
             className="d-flex align-items-center gap-3 my-2"
-            style={{ fontSize: 13, cursor: drillable ? 'pointer' : undefined }}
-            onClick={drillable ? () => setShowExplorers(true) : undefined}
-            role={drillable ? 'button' : undefined}
-            title={drillable ? `View all ${b.count} Explorers` : undefined}
+            style={{ fontSize: 13, cursor: 'pointer' }}
+            onClick={onClick}
+            role="button"
+            title={`View all ${b.count} in ${b.label}`}
           >
-            <span style={{ width: 84, color: drillable ? 'var(--red-600, #c0392b)' : 'var(--bs-secondary-color)', textDecoration: drillable ? 'underline' : undefined }}>
+            <span style={{ width: 84, color: 'var(--red-600, #c0392b)', textDecoration: 'underline' }}>
               {b.label}
             </span>
             <span
@@ -91,6 +91,13 @@ export default function TenureRetentionFunnel({ buckets }: Props) {
       })}
 
       {showExplorers && <ExplorerRosterModal onClose={() => setShowExplorers(false)} />}
+      {monthDrill && (
+        <MemberRosterModal
+          monthIndex={monthDrill.month}
+          bucketLabel={monthDrill.label}
+          onClose={() => setMonthDrill(null)}
+        />
+      )}
     </SectionCard>
   );
 }

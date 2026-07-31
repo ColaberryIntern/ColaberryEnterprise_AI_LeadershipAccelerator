@@ -9,6 +9,7 @@ interface Props {
   txns: RevenueTransaction[];
   onRefund: (t: RevenueTransaction) => void;
   refunding: string | null;
+  onOpenHistory: (enrollmentId: string, name: string) => void;
 }
 
 const typeMeta: Record<RevenueTransaction['type'], { label: string; tone: 'success' | 'info' | 'danger' }> = {
@@ -31,7 +32,7 @@ type TypeFilter = 'all' | 'membership' | 'deposit' | 'refund';
 /** The reconciled cash ledger (memberships + Open House deposits + refunds),
  *  newest first — unchanged from the original /admin/revenue rebuild, just
  *  extracted into its own file so the page component stays a manageable size. */
-export default function PaymentsLedgerTable({ summary, txns, onRefund, refunding }: Props) {
+export default function PaymentsLedgerTable({ summary, txns, onRefund, refunding, onOpenHistory }: Props) {
   const [filter, setFilter] = useState<TypeFilter>('all');
   const [query, setQuery] = useState('');
 
@@ -73,7 +74,19 @@ export default function PaymentsLedgerTable({ summary, txns, onRefund, refunding
               <tr key={t.id} style={t.counted ? undefined : { opacity: 0.62 }}>
                 <td className="small text-muted text-nowrap" title={fmtAbs(t.date)}>{timeAgo(t.date)}</td>
                 <td>
-                  <div className="fw-medium">{t.payer_name}</div>
+                  {t.enrollment_id ? (
+                    <button
+                      type="button"
+                      className="btn btn-link p-0 fw-medium text-decoration-none text-body"
+                      style={{ verticalAlign: 'baseline' }}
+                      onClick={() => onOpenHistory(t.enrollment_id as string, t.payer_name)}
+                      title={`View ${t.payer_name}'s payment history & timeline`}
+                    >
+                      {t.payer_name}
+                    </button>
+                  ) : (
+                    <div className="fw-medium">{t.payer_name}</div>
+                  )}
                   <div className="small text-muted"><code>{t.payer_email}</code></div>
                   <div className="d-flex gap-3 mt-1">
                     {t.lead_id != null ? (

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import api from '../../utils/api';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import { getRevenuePayments, RevenueTransaction, RevenueSummary } from '../../services/revenueApi';
 import { getSubscriptionAnalytics, SubscriptionAnalytics } from '../../services/subscriptionAnalyticsApi';
@@ -10,6 +11,7 @@ import PlanBreakdownCard from '../../components/admin/revenue/PlanBreakdownCard'
 import UpcomingPaymentsCard from '../../components/admin/revenue/UpcomingPaymentsCard';
 import TenureRetentionFunnel from '../../components/admin/revenue/TenureRetentionFunnel';
 import PaymentsLedgerTable from '../../components/admin/revenue/PaymentsLedgerTable';
+import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
 import { money } from '../../components/admin/revenue/format';
 
 function AdminRevenueDashboardPage() {
@@ -20,6 +22,7 @@ function AdminRevenueDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [refunding, setRefunding] = useState<string | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<{ id: string; name: string } | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -56,6 +59,18 @@ function AdminRevenueDashboardPage() {
       );
     } finally {
       setRefunding(null);
+    }
+  };
+
+  // Read-only "view as" — mints a token that observes the student's portal
+  // without changing anything (server-enforced), same handler AdminAcceleratorPage uses.
+  const handleViewAsStudent = async (enrollmentId: string) => {
+    try {
+      const res = await api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/view-as-token`);
+      const url = res.data?.url;
+      if (url) window.open(url, '_blank', 'noopener,noreferrer');
+    } catch {
+      /* no-op — the drawer stays open either way */
     }
   };
 
@@ -147,7 +162,22 @@ function AdminRevenueDashboardPage() {
         </div>
       </div>
 
-      <PaymentsLedgerTable summary={summary} txns={txns} onRefund={onRefund} refunding={refunding} />
+      <PaymentsLedgerTable
+        summary={summary}
+        txns={txns}
+        onRefund={onRefund}
+        refunding={refunding}
+        onOpenHistory={(id, name) => setHistoryTarget({ id, name })}
+      />
+
+      {historyTarget && (
+        <PersonHistoryDrawer
+          enrollmentId={historyTarget.id}
+          name={historyTarget.name}
+          onClose={() => setHistoryTarget(null)}
+          onViewAsStudent={handleViewAsStudent}
+        />
+      )}
     </>
   );
 }
