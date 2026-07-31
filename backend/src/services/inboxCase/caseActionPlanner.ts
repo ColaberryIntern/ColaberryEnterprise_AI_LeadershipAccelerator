@@ -6,6 +6,8 @@ import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment
 import { computeIdempotencyKey } from './textNormalization';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { logCaseEvent } from './caseEventLog';
+import { redactSecretLikePatterns } from './promptSafety';
+import { redactSensitive } from '../../utils/piiRedaction';
 
 // Plan (root directive section 6/11): turns a completed assessment into a
 // concrete, previewable bundle of proposed InboxCaseAction rows. Rule-based
@@ -32,13 +34,22 @@ interface ProposedAction {
   idempotencyParts: string[];
 }
 
+// `assessment` and `teaching_brief` are two separate InboxCase columns; the
+// planner wants the two recommendation fields it needs alongside the rest
+// of the assessment, so this local type flattens them onto one object
+// rather than threading two parameters through every builder function.
+interface PlannerAssessment extends CaseAssessment {
+  teaching_brief_recommended_decision: string;
+  recommendation_rationale: string;
+}
+
 const DEFAULT_FOLLOWUP_DAYS = 3;
 
 function requiresIndividualApproval(actionType: ActionType, risk: ActionRiskLevel): boolean {
   return ALWAYS_INDIVIDUAL_APPROVAL.includes(actionType) || risk === 'HIGH';
 }
 
-function buildReplyAction(caseRow: InboxCase, assessment: CaseAssessment, replyTargetItem: InboxCaseItem | null): ProposedAction | null {
+function buildReplyAction(caseRow: InboxCase, assessment: PlannerAssessment, replyTargetItem: InboxCaseItem | null): ProposedAction | null {
   if (!replyTargetItem) return null;
   if (!assessment.recommended_next_actions?.length) return null;
 
@@ -79,7 +90,7 @@ function buildWaitingActions(caseRow: InboxCase, assessment: CaseAssessment): Pr
   return actions;
 }
 
-function buildBasecampCommentActions(caseRow: InboxCase, assessment: CaseAssessment, basecampItems: InboxCaseItem[]): ProposedAction[] {
+function buildBasecampCommentActions(caseRow: InboxCase, assessment: PlannerAssessment, basecampItems: InboxCaseItem[]): ProposedAction[] {
   if (!assessment.recommended_next_actions?.length) return [];
   const decision = assessment.teaching_brief_recommended_decision || assessment.recommended_next_actions[0];
 
@@ -129,7 +140,7 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
   // assessment object for the builder functions above, since `assessment`
   // (persisted) and `teaching_brief` (persisted separately) are two columns
   // on InboxCase but the planner wants them together.
-  const flatAssessment: CaseAssessment & Record<string, any> = {
+  const flatAssessment: PlannerAssessment = {
     ...assessment,
     teaching_brief_recommended_decision: caseRow.teaching_brief?.recommended_decision || caseRow.recommendation || '',
     recommendation_rationale: caseRow.teaching_brief?.rationale || '',
@@ -174,16 +185,37 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
   return { actionsCreated: createdIds.length, actionIds: createdIds };
 }
 
+// Defense-in-depth: every proposed action's human-readable preview and any
+// string payload field passes through the same redaction used for AI input,
+// plus a secret-label pattern check, before it is ever persisted — so an
+// approver reviewing the preview, and any downstream executor, never sees
+// or sends a labeled secret that made it into an assessment's recommended
+// wording. See promptSafety.ts::redactSecretLikePatterns for why this is
+// necessary in addition to (not instead of) the assessment-time redaction.
+function sanitizeText(text: string): string {
+  return redactSecretLikePatterns(redactSensitive(text));
+}
+
+function sanitizeProposal(proposal: ProposedAction): ProposedAction {
+  const payload: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(proposal.payload)) {
+    payload[key] = typeof value === 'string' ? sanitizeText(value) : value;
+  }
+  return { ...proposal, preview: sanitizeText(proposal.preview), payload };
+}
+
 async function createActionIfNew(
   caseRow: InboxCase,
   correlationId: string,
   requestedBy: string,
-  proposal: ProposedAction,
+  rawProposal: ProposedAction,
   idempotency_key: string,
   dependsOn: string[]
 ): Promise<string | null> {
   const existing = await InboxCaseAction.findOne({ where: { idempotency_key } });
   if (existing) return null; // re-planning is idempotent — never a duplicate proposal
+
+  const proposal = sanitizeProposal(rawProposal);
 
   try {
     const created = await InboxCaseAction.create({

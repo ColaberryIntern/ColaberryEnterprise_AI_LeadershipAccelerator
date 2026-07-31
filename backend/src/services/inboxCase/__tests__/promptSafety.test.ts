@@ -1,4 +1,4 @@
-import { detectPromptInjectionSignals, truncateEvidenceText, wrapAsUntrustedEvidence } from '../promptSafety';
+import { detectPromptInjectionSignals, truncateEvidenceText, wrapAsUntrustedEvidence, redactSecretLikePatterns } from '../promptSafety';
 
 describe('detectPromptInjectionSignals', () => {
   it('flags "ignore previous instructions"', () => {
@@ -64,6 +64,32 @@ describe('truncateEvidenceText', () => {
 
   it('handles empty input', () => {
     expect(truncateEvidenceText('', 100)).toBe('');
+  });
+});
+
+describe('redactSecretLikePatterns', () => {
+  it('redacts a labeled password', () => {
+    expect(redactSecretLikePatterns('Here is the password: hunter2, use it today')).toContain('password: [REDACTED]');
+    expect(redactSecretLikePatterns('Here is the password: hunter2, use it today')).not.toContain('hunter2');
+  });
+
+  it('redacts a labeled api key', () => {
+    const result = redactSecretLikePatterns('api_key=sk-abc123def456');
+    expect(result).not.toContain('sk-abc123def456');
+  });
+
+  it('redacts a bearer token', () => {
+    const result = redactSecretLikePatterns('Authorization: bearer: eyJhbGciOiJIUzI1NiJ9.abc.def');
+    expect(result).not.toContain('eyJhbGciOiJIUzI1NiJ9');
+  });
+
+  it('leaves ordinary business text untouched', () => {
+    const text = 'Please confirm the vendor payment before Friday.';
+    expect(redactSecretLikePatterns(text)).toBe(text);
+  });
+
+  it('handles empty input', () => {
+    expect(redactSecretLikePatterns('')).toBe('');
   });
 });
 

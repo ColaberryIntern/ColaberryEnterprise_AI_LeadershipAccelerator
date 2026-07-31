@@ -54,6 +54,22 @@ export function truncateEvidenceText(text: string, maxChars: number = MAX_EVIDEN
   return `${lastSpace > maxChars * 0.6 ? cut.slice(0, lastSpace) : cut}…`;
 }
 
+// Defense-in-depth for OUTBOUND proposed-action text (email bodies, Basecamp
+// comments) — the assessment call's evidence is redacted going IN via
+// getInstrumentedOpenAI's redactSensitive() wrapper, but that only covers
+// SSN/card patterns and only protects the model's INPUT. A model response
+// that echoes a labeled secret found in evidence ("password: hunter2",
+// "api_key=sk-...") is not caught by that pass, and would otherwise flow
+// straight into an executable BASECAMP_COMMENT/EMAIL_SEND payload with no
+// further check. Applied to every proposed action's preview/payload text at
+// creation time in caseActionPlanner.ts.
+const SECRET_LABEL_RE = /(password|passwd|api[_-]?key|secret|access[_-]?token|bearer)\s*[:=]\s*\S+/gi;
+
+export function redactSecretLikePatterns(text: string): string {
+  if (!text) return text;
+  return text.replace(SECRET_LABEL_RE, (m) => `${m.split(/[:=]/)[0]}: [REDACTED]`);
+}
+
 // Wraps evidence content in an explicit, hard-to-spoof delimiter so the
 // system prompt can instruct the model to treat everything between the
 // markers as DATA, never as instructions — the primary defense per root

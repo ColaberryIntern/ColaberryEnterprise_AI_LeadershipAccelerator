@@ -202,6 +202,21 @@ describe('generatePlan — proposes the right action shapes', () => {
   });
 });
 
+describe('generatePlan — secret redaction hardening (Phase 7 break/harden finding)', () => {
+  it('redacts a labeled secret that leaked into the assessment recommendation before it reaches a proposed action preview', async () => {
+    const c = await seedCase({
+      teaching_brief: { recommended_decision: 'Use password: hunter2 to access the shared account', rationale: 'Vendor requested it directly.' },
+    });
+    await seedEmailItem(c.id);
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    const reply = actions.find((a) => a.action_type === 'EMAIL_SEND');
+    expect(reply.preview).not.toContain('hunter2');
+    expect(reply.payload.body).not.toContain('hunter2');
+  });
+});
+
 describe('generatePlan — idempotency', () => {
   it('does not duplicate actions when the plan is regenerated for the same case state', async () => {
     const c = await seedCase();
