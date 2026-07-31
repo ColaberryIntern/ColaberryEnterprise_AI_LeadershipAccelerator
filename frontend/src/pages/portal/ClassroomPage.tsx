@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
@@ -292,6 +292,15 @@ const ClassroomPage: React.FC = () => {
               {nextSession.status === 'live'
                 ? <div className="tl-small" style={{ fontWeight: 700 }}>Live now</div>
                 : liveCd && <div className="countdown">{seg(liveCd.days, 'Days')}{seg(liveCd.hours, 'Hrs')}{seg(liveCd.minutes, 'Min')}{seg(liveCd.seconds, 'Sec')}</div>}
+              {nextSession.room_id && (
+                <Link
+                  className="tl-btn primary sm"
+                  style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}
+                  to={`/portal/rooms/${nextSession.room_id}`}
+                >
+                  Open the room
+                </Link>
+              )}
             </div>
           )}
 
