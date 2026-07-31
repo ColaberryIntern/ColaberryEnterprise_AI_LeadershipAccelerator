@@ -270,7 +270,7 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
 
     const link = await createPaymentLink({
       externalId,
-      cohortName: appliedCents > 0 ? `${cfg.label} plan (−$${round2(appliedCents / 100)} credit)` : `${cfg.label} plan`,
+      cohortName: appliedCents > 0 ? `${cfg.label} (−$${round2(appliedCents / 100)} credit)` : `${cfg.label} plan`,
       // Real plan amount less any account credit, on prod (live mode). On dev
       // (PAYMENT_MODE=test) the service reduces this to $0.01 so checkout can be
       // tested without a real charge.
