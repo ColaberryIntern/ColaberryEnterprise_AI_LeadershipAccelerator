@@ -76,6 +76,30 @@ describe('KitConfig panel smoke rendering', () => {
     expect(html2).toContain('AI rewrite');
   });
 
+  it('TeachPanel/StoryBeatsPanel/PromptsPanel do not throw on real authored-default shapes missing optional fields (seedOverrides copies these verbatim into the custom editor)', () => {
+    // Real authored TeachSlide/StoryBeat/ClassPrompt content genuinely omits
+    // bullets/body/punch/ccMode/etc — confirmed against classTeachContent.ts
+    // and classTeachWeeks.ts, where a real share of slides have no `bullets`
+    // key at all. seedOverrides copies these objects as-is into the "write
+    // my own" editor, so the panel's field reads must survive the gap, not
+    // assume the frontend's Override types' fields are always present.
+    const bareSlide = { segment: 'guided-build', eyebrow: '', title: 'Bare slide' } as TeachSlideOverride;
+    expect(() => renderToStaticMarkup(
+      <TeachPanel config={{ enabled: true, max: null, overrides: [bareSlide] }} defaults={[]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />,
+    )).not.toThrow();
+
+    const bareBeat = { segment: 'business-problem', icon: '💡', eyebrow: '', title: 'Bare beat', tone: 'berry' } as StoryBeatOverride;
+    expect(() => renderToStaticMarkup(
+      <StoryBeatsPanel config={{ enabled: true, max: null, overrides: [bareBeat] }} defaults={[]} onRewrite={noopRewriteBeats} onChange={noop} />,
+    )).not.toThrow();
+
+    const barePrompt = { label: 'Bare prompt', prompt: 'Do the thing.' } as PromptOverride;
+    expect(() => renderToStaticMarkup(
+      <PromptsPanel config={{ enabled: true, max: null, overrides: [barePrompt] }} defaults={[]} buildBayDetail={true} onToggleDetail={noop}
+        appliesToThisSession={true} dayKind="build" onRewrite={noopRewritePrompts} onChange={noop} />,
+    )).not.toThrow();
+  });
+
   it('PromptsPanel shows the Lessons-precedence note when this week has deep-teach content', () => {
     const base: CountAndOverride<PromptOverride> = { enabled: true, max: null, overrides: null };
     const html = renderToStaticMarkup(

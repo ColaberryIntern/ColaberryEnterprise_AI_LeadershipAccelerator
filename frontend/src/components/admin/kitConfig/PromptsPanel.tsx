@@ -80,7 +80,7 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
                     </div>
                     <div className="col-6">
                       <label className="form-label small">Claude Code mode</label>
-                      <select className="form-select form-select-sm" value={p.ccMode} onChange={(e) => update(i, { ccMode: e.target.value })}>
+                      <select className="form-select form-select-sm" value={p.ccMode ?? 'Plan Mode'} onChange={(e) => update(i, { ccMode: e.target.value })}>
                         <option>Manual</option><option>Plan Mode</option><option>Auto</option>
                       </select>
                     </div>
@@ -88,11 +88,11 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
                   <label className="form-label small">Prompt</label>
                   <textarea className="form-control form-control-sm mb-2" rows={3} value={p.prompt} onChange={(e) => update(i, { prompt: e.target.value })} />
                   <label className="form-label small">You should see (optional)</label>
-                  <input className="form-control form-control-sm mb-2" value={p.expectedResult} onChange={(e) => update(i, { expectedResult: e.target.value })} />
+                  <input className="form-control form-control-sm mb-2" value={p.expectedResult ?? ''} onChange={(e) => update(i, { expectedResult: e.target.value })} />
                   <label className="form-label small">Stop when (optional)</label>
-                  <input className="form-control form-control-sm mb-2" value={p.stopCondition} onChange={(e) => update(i, { stopCondition: e.target.value })} />
+                  <input className="form-control form-control-sm mb-2" value={p.stopCondition ?? ''} onChange={(e) => update(i, { stopCondition: e.target.value })} />
                   <label className="form-label small">If stuck (optional)</label>
-                  <input className="form-control form-control-sm" value={p.rescue} onChange={(e) => update(i, { rescue: e.target.value })} />
+                  <input className="form-control form-control-sm" value={p.rescue ?? ''} onChange={(e) => update(i, { rescue: e.target.value })} />
                 </OverrideCard>
               ))}
               <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add prompt</button>

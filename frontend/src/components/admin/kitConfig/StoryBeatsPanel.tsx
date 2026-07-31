@@ -82,9 +82,9 @@ const StoryBeatsPanel: React.FC<Props> = ({ config, defaults, onRewrite, onChang
                   <label className="form-label small">Title</label>
                   <input className="form-control form-control-sm mb-2" value={b.title} onChange={(e) => update(i, { title: e.target.value })} />
                   <label className="form-label small">Story (body)</label>
-                  <textarea className="form-control form-control-sm mb-2" rows={3} value={b.body} onChange={(e) => update(i, { body: e.target.value })} />
+                  <textarea className="form-control form-control-sm mb-2" rows={3} value={b.body ?? ''} onChange={(e) => update(i, { body: e.target.value })} />
                   <label className="form-label small">Punch line (optional)</label>
-                  <input className="form-control form-control-sm" value={b.punch} onChange={(e) => update(i, { punch: e.target.value })} />
+                  <input className="form-control form-control-sm" value={b.punch ?? ''} onChange={(e) => update(i, { punch: e.target.value })} />
                 </OverrideCard>
               ))}
               <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add story beat</button>

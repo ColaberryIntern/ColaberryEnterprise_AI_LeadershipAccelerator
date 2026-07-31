@@ -240,6 +240,11 @@ export async function handleRewriteCategory(req: Request, res: Response, next: N
     const ctx = await loadGroundingContext(req.params.id as string);
     if (!ctx) return res.status(404).json({ error: 'Session not found' });
 
+    // Cast erases which of the three differently-typed rewrite* functions this
+    // is — safe only because none of them read fields off `currentItems`
+    // (each treats it as opaque: JSON.stringify'd into the prompt, or returned
+    // verbatim as the scaffold fallback). A future rewrite* that reads a field
+    // off individual items would need a real per-category dispatch instead.
     const rewrite = REWRITE_HANDLERS[category as RewriteCategory];
     const result = await (rewrite as (input: { weekTitle: string; contentSummary: string; currentItems: unknown[]; instruction: string }) => Promise<unknown>)({
       weekTitle: ctx.session.title, contentSummary: ctx.contentSummary, currentItems, instruction,

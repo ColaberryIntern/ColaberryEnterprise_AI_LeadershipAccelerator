@@ -45,17 +45,29 @@ export const SEGMENT_OPTIONS: { group: string; options: { value: string; label: 
   },
 ];
 
+/** `body`/`punch` are genuinely optional on the wire — authored defaults
+ * (`KitConfigDefaults.storyBeats`, spread straight from the backend's
+ * `StoryBeat` source data) and AI-rewritten items alike can omit them, and
+ * JSON drops any key whose value is `undefined`. Every read of these fields
+ * must fall back explicitly (`?? ''`), the same discipline `InteractionPlacement`
+ * already follows below. */
 export interface StoryBeatOverride {
-  segment: string; icon: string; eyebrow: string; title: string; body: string; punch: string; tone: Tone;
+  segment: string; icon: string; eyebrow: string; title: string; body?: string; punch?: string; tone: Tone;
 }
 export interface EvidenceOverride {
   claim: string; publisher: string; sourceTitle: string; publicationDate: string; sourceType: string; note: string;
 }
+/** `body`/`bullets`/`code`/`script` are genuinely optional on the wire — see
+ * the `StoryBeatOverride` comment above; the same gap applies here (real
+ * authored `TeachSlide` content and AI-rewritten slides both omit fields
+ * freely). Every read must fall back explicitly, never assume presence. */
 export interface TeachSlideOverride {
-  segment: string; eyebrow: string; title: string; body: string; bullets: string[]; code: { label: string; code: string } | null; script: string;
+  segment: string; eyebrow: string; title: string; body?: string; bullets?: string[]; code?: { label: string; code: string } | null; script?: string;
 }
+/** All fields but `label`/`prompt` are genuinely optional on the wire — see
+ * the `StoryBeatOverride` comment above. */
 export interface PromptOverride {
-  label: string; prompt: string; pasteWhere: string; ccMode: string; expectedResult: string; stopCondition: string; rescue: string;
+  label: string; prompt: string; pasteWhere?: string; ccMode?: string; expectedResult?: string; stopCondition?: string; rescue?: string;
 }
 /** One survey question, placed at a specific run-of-show segment — an
  * arbitrary, segment-taggable list (mirrors StoryBeatOverride's own

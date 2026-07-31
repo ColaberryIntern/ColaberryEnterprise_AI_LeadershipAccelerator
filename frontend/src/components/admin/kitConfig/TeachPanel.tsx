@@ -68,9 +68,9 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onRewrite, on
                   <label className="form-label small">Title</label>
                   <input className="form-control form-control-sm mb-2" value={s.title} onChange={(e) => update(i, { title: e.target.value })} />
                   <label className="form-label small">Body</label>
-                  <textarea className="form-control form-control-sm mb-2" rows={3} value={s.body} onChange={(e) => update(i, { body: e.target.value })} />
+                  <textarea className="form-control form-control-sm mb-2" rows={3} value={s.body ?? ''} onChange={(e) => update(i, { body: e.target.value })} />
                   <label className="form-label small">Bullets (one per line, optional)</label>
-                  <textarea className="form-control form-control-sm mb-2" rows={2} value={s.bullets.join('\n')}
+                  <textarea className="form-control form-control-sm mb-2" rows={2} value={(s.bullets ?? []).join('\n')}
                     onChange={(e) => update(i, { bullets: e.target.value.split('\n').filter((l) => l.trim().length > 0) })} />
                   <div className="row g-2 mb-2">
                     <div className="col-4">
@@ -85,7 +85,7 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onRewrite, on
                     </div>
                   </div>
                   <label className="form-label small">Instructor script (optional — what to say/do)</label>
-                  <input className="form-control form-control-sm" value={s.script} onChange={(e) => update(i, { script: e.target.value })} />
+                  <input className="form-control form-control-sm" value={s.script ?? ''} onChange={(e) => update(i, { script: e.target.value })} />
                 </OverrideCard>
               ))}
               <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add lesson slide</button>

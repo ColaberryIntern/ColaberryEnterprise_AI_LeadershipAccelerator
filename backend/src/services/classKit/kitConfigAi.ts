@@ -207,7 +207,7 @@ function normalizeStoryBeat(raw: unknown): StoryBeatOverride | null {
     title: r.title,
     body: r.body,
     punch: typeof r.punch === 'string' ? r.punch : undefined,
-    tone: (['cherry', 'berry', 'amber', 'leaf', 'violet'] as const).includes(r.tone as any) ? (r.tone as StoryBeatOverride['tone']) : 'berry',
+    tone: (['cherry', 'berry', 'amber', 'leaf', 'violet'] as const).some((t) => t === r.tone) ? (r.tone as StoryBeatOverride['tone']) : 'berry',
   };
 }
 
