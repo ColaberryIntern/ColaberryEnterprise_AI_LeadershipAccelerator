@@ -67,6 +67,8 @@ function scaffoldQuestion(segment: string, weekTitle: string): InteractionPlacem
     options: ['Not sure yet', 'I can explain it', 'I need a recap', 'Ask me later'],
     answer: 1,
     reveal: 'Edit this question — it is a placeholder scaffold, not AI-generated (no OpenAI key configured, or the request failed).',
+    theater: false,
+    presenterTip: '',
   };
 }
 
@@ -105,6 +107,10 @@ export async function generateQuestion(input: GenerateQuestionInput): Promise<Ge
     if (typeof parsed.q !== 'string' || !parsed.q.trim() || options.length < 2) {
       return { question: scaffold, source: 'scaffold' };
     }
+    // Every field is set explicitly (never `undefined`) — an `undefined` value
+    // is dropped by JSON serialization entirely, which silently produced an
+    // incomplete object on the frontend (caught in Phase 1 review: a missing
+    // `theater`/`presenterTip`/`reveal` key, not just a falsy one).
     const question: InteractionPlacement = {
       segment: input.segment,
       kind,
@@ -113,7 +119,9 @@ export async function generateQuestion(input: GenerateQuestionInput): Promise<Ge
       q: parsed.q,
       options,
       answer: kind === 'trivia' && Number.isInteger(parsed.answer) ? parsed.answer : undefined,
-      reveal: typeof parsed.reveal === 'string' ? parsed.reveal : undefined,
+      reveal: typeof parsed.reveal === 'string' ? parsed.reveal : '',
+      theater: false,
+      presenterTip: '',
     };
     return { question, source: 'ai' };
   } catch {

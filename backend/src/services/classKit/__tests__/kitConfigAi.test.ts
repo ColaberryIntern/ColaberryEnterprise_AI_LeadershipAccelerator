@@ -39,7 +39,24 @@ describe('generateQuestion', () => {
       segment: 'trivia', kind: 'trivia', eyebrow: '🧠 Check', title: 'Quick check',
       q: 'What does CLAUDE.md do?', options: ['Nothing', 'Steers Claude', 'Deletes files', 'Runs tests'],
       answer: 1, reveal: 'It gives Claude your project conventions.',
+      // Always present (never undefined) so the field survives JSON
+      // serialization — a real bug this test caught during Phase 1 review.
+      theater: false, presenterTip: '',
     });
+  });
+
+  it('never returns a question that would lose a key over JSON (no undefined values)', async () => {
+    // A poll response deliberately omits `answer` (not applicable to polls) —
+    // the returned object must still round-trip through JSON with every key
+    // the frontend expects present (as null/false/'' if not applicable),
+    // never silently dropped the way `undefined` values are.
+    envModule.env.openaiApiKey = 'test-key';
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ kind: 'poll', q: 'Pick one?', options: ['A', 'B'], reveal: 'Either way.' }) } }],
+    });
+    const result = await generateQuestion({ segment: 'checkin', weekTitle: 'Week 1', contentSummary: 'x' });
+    const roundTripped = JSON.parse(JSON.stringify(result.question));
+    expect(Object.keys(roundTripped).sort()).toEqual(['eyebrow', 'kind', 'options', 'presenterTip', 'q', 'reveal', 'segment', 'theater', 'title'].sort());
   });
 
   it('falls back to the scaffold when the AI response is missing required fields', async () => {

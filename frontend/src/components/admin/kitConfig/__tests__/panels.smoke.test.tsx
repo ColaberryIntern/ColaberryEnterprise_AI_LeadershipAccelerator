@@ -72,7 +72,7 @@ describe('KitConfig panel smoke rendering', () => {
   it('InteractionsPanel renders authored defaults without throwing', () => {
     const base: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: null };
     const html = renderToStaticMarkup(
-      <InteractionsPanel config={base} defaults={[question]} theaterEnabled={true} onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+      <InteractionsPanel config={base} defaults={[question]} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
     );
     expect(html).toContain('Pick one?');
     expect(html).toContain('Live Decision Theater');
@@ -81,10 +81,35 @@ describe('KitConfig panel smoke rendering', () => {
   it('InteractionsPanel renders the custom editable list with the AI-generate control', () => {
     const custom: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [question] };
     const html = renderToStaticMarkup(
-      <InteractionsPanel config={custom} defaults={[]} theaterEnabled={true} onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+      <InteractionsPanel config={custom} defaults={[]} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
     );
     expect(html).toContain('AI-generate a question');
     expect(html).toContain('Remove');
+  });
+
+  it('InteractionsPanel does not throw on a question missing every optional field (a real AI-generated/authored shape)', () => {
+    // eyebrow/title/answer/reveal/theater/presenterTip all omitted — proves the
+    // panel's reads fall back safely instead of rendering an uncontrolled input.
+    const minimal: InteractionPlacement = { segment: 'checkin', kind: 'poll', q: 'Bare-minimum question?', options: ['A', 'B'] };
+    const custom: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [minimal] };
+    expect(() => renderToStaticMarkup(
+      <InteractionsPanel config={custom} defaults={[]} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+    )).not.toThrow();
+    const defaultsHtml = renderToStaticMarkup(
+      <InteractionsPanel config={{ enabled: true, max: null, overrides: null }} defaults={[minimal]} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+    );
+    expect(defaultsHtml).toContain('Bare-minimum question?');
+  });
+
+  it('InteractionsPanel only offers this session\'s own day-kind segments as placement targets', () => {
+    const custom: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [] };
+    const html = renderToStaticMarkup(
+      <InteractionsPanel config={custom} defaults={[]} theaterEnabled={true} dayKind="build" onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+    );
+    // Build Day segments present, Architecture-Day-only segments absent.
+    expect(html).toContain('Readiness check');
+    expect(html).not.toContain('Cold open');
+    expect(html).not.toContain('Architecture challenge');
   });
 
   it('EvidencePanel renders in defaults and custom modes', () => {

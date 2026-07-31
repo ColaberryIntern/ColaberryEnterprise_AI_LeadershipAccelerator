@@ -150,7 +150,7 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
                   )}
                   {active === 'interactions' && (
                     <InteractionsPanel config={config.interactions} defaults={defaults.interactions}
-                      theaterEnabled={config.theaterEnabled}
+                      theaterEnabled={config.theaterEnabled} dayKind={defaults.dayKind}
                       onChange={(next) => setConfig({ ...config, interactions: next })}
                       onToggleTheater={(v) => setConfig({ ...config, theaterEnabled: v })}
                       onGenerateQuestion={generateQuestion} />

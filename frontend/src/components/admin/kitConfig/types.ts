@@ -65,14 +65,20 @@ export interface PromptOverride {
 export interface InteractionPlacement {
   segment: string;
   kind: 'poll' | 'trivia' | 'prediction';
-  eyebrow: string;
-  title: string;
   q: string;
   options: string[];
-  answer: number | null;
-  reveal: string;
-  theater: boolean;
-  presenterTip: string;
+  /** All of these are genuinely optional on the wire — authored defaults
+   * spread straight from a hand-authored `Interaction` often omit `theater`
+   * entirely (only polls set it), and JSON drops any key whose value is
+   * `undefined`. Every read of these fields in this panel must fall back
+   * explicitly (never assume presence), the same way the backend's own
+   * `InteractionPlacement` type declares them optional. */
+  eyebrow?: string;
+  title?: string;
+  answer?: number | null;
+  reveal?: string;
+  theater?: boolean;
+  presenterTip?: string;
 }
 export interface CountAndOverride<T> {
   enabled: boolean; max: number | null; overrides: T[] | null;

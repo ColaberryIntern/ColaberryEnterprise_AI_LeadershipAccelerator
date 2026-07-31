@@ -6,6 +6,7 @@ interface Props {
   config: CountAndOverride<InteractionPlacement>;
   defaults: InteractionPlacement[];
   theaterEnabled: boolean;
+  dayKind: 'orientation' | 'architecture' | 'build';
   onToggleTheater: (v: boolean) => void;
   /** Calls the backend's AI-generate-a-question endpoint; the parent owns the
    * sessionId and the actual API call. Always resolves to a usable question
@@ -13,6 +14,10 @@ interface Props {
   onGenerateQuestion: (segment: string, instruction?: string) => Promise<InteractionPlacement>;
   onChange: (next: CountAndOverride<InteractionPlacement>) => void;
 }
+
+const GROUP_FOR_DAYKIND: Record<Props['dayKind'], string> = {
+  orientation: 'Orientation', architecture: 'Architecture Day (Monday)', build: 'Build Day (Thursday)',
+};
 
 const segmentLabel = (value: string) => {
   for (const g of SEGMENT_OPTIONS) {
@@ -22,12 +27,16 @@ const segmentLabel = (value: string) => {
   return value;
 };
 
-const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, onToggleTheater, onGenerateQuestion, onChange }) => {
+const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, dayKind, onToggleTheater, onGenerateQuestion, onChange }) => {
   const usingCustom = config.overrides != null;
   const questions = config.overrides ?? [];
   const [generatingFor, setGeneratingFor] = useState<number | null>(null);
   const [instruction, setInstruction] = useState('');
-  const [addSegment, setAddSegment] = useState(SEGMENT_OPTIONS[1].options[0].value);
+  // Only this session's own day-kind segments are ever valid placement
+  // targets — offering every day's segments let an instructor place a
+  // question on a segment that literally never renders for this session.
+  const relevantSegments = SEGMENT_OPTIONS.find((g) => g.group === GROUP_FOR_DAYKIND[dayKind])?.options ?? [];
+  const [addSegment, setAddSegment] = useState(relevantSegments[0]?.value ?? '');
 
   const update = (i: number, patch: Partial<InteractionPlacement>) => onChange({ ...config, overrides: questions.map((q, idx) => (idx === i ? { ...q, ...patch } : q)) });
   const remove = (i: number) => onChange({ ...config, overrides: questions.filter((_, idx) => idx !== i) });
@@ -86,7 +95,7 @@ const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, 
               <EmptyDefaultsNote>No survey questions are authored for this class yet — flip to "Write my own" to add some.</EmptyDefaultsNote>
             ) : (
               defaults.map((q, i) => (
-                <DefaultPreviewCard key={i} eyebrow={`${q.eyebrow} · ${segmentLabel(q.segment)}`} title={q.q}
+                <DefaultPreviewCard key={i} eyebrow={`${q.eyebrow || '🗳️ Survey'} · ${segmentLabel(q.segment)}`} title={q.q}
                   footer={
                     <ul className="small text-muted mb-0 ps-3 mt-1">
                       {q.options.map((o, oi) => <li key={oi} className={q.answer === oi ? 'fw-semibold text-success' : ''}>{o}{q.answer === oi ? ' ✓' : ''}</li>)}
@@ -102,11 +111,7 @@ const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, 
                     <div className="col-4">
                       <label className="form-label small">Segment (where it shows)</label>
                       <select className="form-select form-select-sm" value={q.segment} onChange={(e) => update(i, { segment: e.target.value })}>
-                        {SEGMENT_OPTIONS.map((g) => (
-                          <optgroup key={g.group} label={g.group}>
-                            {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </optgroup>
-                        ))}
+                        {relevantSegments.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                       </select>
                     </div>
                     <div className="col-3">
@@ -119,7 +124,7 @@ const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, 
                     </div>
                     <div className="col-3">
                       <label className="form-label small">Eyebrow</label>
-                      <input className="form-control form-control-sm" value={q.eyebrow} onChange={(e) => update(i, { eyebrow: e.target.value })} />
+                      <input className="form-control form-control-sm" value={q.eyebrow ?? ''} onChange={(e) => update(i, { eyebrow: e.target.value })} />
                     </div>
                     <div className="col-2 d-flex align-items-end">
                       <button className="btn btn-outline-secondary btn-sm w-100" disabled={generatingFor === i} onClick={() => regenerate(i)}>
@@ -128,7 +133,7 @@ const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, 
                     </div>
                   </div>
                   <label className="form-label small">Title</label>
-                  <input className="form-control form-control-sm mb-2" value={q.title} onChange={(e) => update(i, { title: e.target.value })} />
+                  <input className="form-control form-control-sm mb-2" value={q.title ?? ''} onChange={(e) => update(i, { title: e.target.value })} />
                   <label className="form-label small">Question</label>
                   <input className="form-control form-control-sm mb-2" value={q.q} onChange={(e) => update(i, { q: e.target.value })} />
                   <label className="form-label small">Options</label>
@@ -145,9 +150,11 @@ const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, 
                   ))}
                   <button className="btn btn-outline-secondary btn-sm mb-2" onClick={() => update(i, { options: [...q.options, ''] })}>+ Add option</button>
                   <label className="form-label small">Reveal line</label>
-                  <input className="form-control form-control-sm mb-2" value={q.reveal} onChange={(e) => update(i, { reveal: e.target.value })} />
+                  <input className="form-control form-control-sm mb-2" value={q.reveal ?? ''} onChange={(e) => update(i, { reveal: e.target.value })} />
+                  <label className="form-label small">Presenter tip (optional — shown only to the instructor)</label>
+                  <input className="form-control form-control-sm mb-2" value={q.presenterTip ?? ''} onChange={(e) => update(i, { presenterTip: e.target.value })} />
                   <div className="form-check form-switch">
-                    <input className="form-check-input" type="checkbox" id={`q${i}-theater`} checked={q.theater} onChange={(e) => update(i, { theater: e.target.checked })} />
+                    <input className="form-check-input" type="checkbox" id={`q${i}-theater`} checked={q.theater ?? false} onChange={(e) => update(i, { theater: e.target.checked })} />
                     <label className="form-check-label small" htmlFor={`q${i}-theater`}>Live Decision Theater moment</label>
                   </div>
                 </OverrideCard>
@@ -158,11 +165,7 @@ const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, 
                   <div className="col-5">
                     <label className="form-label small">New question's segment</label>
                     <select className="form-select form-select-sm" value={addSegment} onChange={(e) => setAddSegment(e.target.value)}>
-                      {SEGMENT_OPTIONS.map((g) => (
-                        <optgroup key={g.group} label={g.group}>
-                          {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                        </optgroup>
-                      ))}
+                      {relevantSegments.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
                   <div className="col-7">
