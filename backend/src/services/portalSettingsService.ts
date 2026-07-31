@@ -9,6 +9,7 @@
 // error the caller maps to a 400; only genuine DB faults bubble to a 500.
 
 import { Enrollment, OnboardingProfile, Cohort } from '../models';
+import { award } from './pointsService';
 
 // ── Caps + allow-lists ───────────────────────────────────────────────────────
 
@@ -293,6 +294,10 @@ export async function setResume(
     resume_data: cleanB64,
     resume_uploaded_at: new Date(),
   });
+
+  // "Upload resume / LinkedIn" onboarding step — idempotent per enrollment
+  // (award() dedupes on eventKey), so re-uploading never double-awards.
+  await award(enrollmentId, { eventType: 'profile_completed' });
 
   // Parse the uploaded resume (pdf/docx/rtf/txt) and prefill the profile from it.
   // Runs inline so the profile is ready when the client re-reads the prefill.

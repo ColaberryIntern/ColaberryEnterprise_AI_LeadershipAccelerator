@@ -1,5 +1,6 @@
 import { OnboardingProfile } from '../models';
 import type { ProjectDnaInput } from './projectDnaService';
+import { award } from './pointsService';
 
 const EXTRACTION_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const MAX_SOURCE_CHARS = 8000;
@@ -235,6 +236,12 @@ export async function ingestBackground(
     prefill: { ...projectDna, profile, personalization },
     extracted: extraction ?? undefined,
   });
+
+  // "Upload resume / LinkedIn" onboarding step — idempotent per enrollment
+  // (award() dedupes on eventKey), so re-ingesting never double-awards.
+  if (resumeText || linkedinUrl || profile.linkedin_url) {
+    await award(enrollmentId, { eventType: 'profile_completed' });
+  }
 
   return { ok: true, parsed: !!extraction, prefill: projectDna, profile, personalization, variables, linkedin_url: linkedinUrl || profile.linkedin_url || null };
 }
