@@ -104,9 +104,17 @@ export function deckScript(): string {
   }
 
   // ---- pace tracker ----
+  // Hard ceiling: no class clock runs past 3 hours no matter what — an
+  // instructor who leaves a Present tab open (or forgets to stop it) must
+  // never see it climb past this, since these tabs also double as the
+  // screen-recording source that gets turned into video after class.
+  var MAX_CLASS_MS = 3 * 60 * 60 * 1000;
   var startKey = 'kit_start_' + (K.meta && K.meta.sessionId || 'x');
+  var endKey = 'kit_end_' + (K.meta && K.meta.sessionId || 'x');
   function classStart(){ var v = localStorage.getItem(startKey); return v ? parseInt(v, 10) : 0; }
   function setStart(ms){ if (ms) localStorage.setItem(startKey, String(ms)); else localStorage.removeItem(startKey); }
+  function classEnd(){ var v = localStorage.getItem(endKey); return v ? parseInt(v, 10) : 0; }
+  function setEnd(ms){ if (ms) localStorage.setItem(endKey, String(ms)); else localStorage.removeItem(endKey); }
 
   var elStart = document.getElementById('kstart');
   var elClock = document.getElementById('kpaceclock');
@@ -114,33 +122,67 @@ export function deckScript(): string {
   var elStatus = document.getElementById('kpacestatus');
   var elNow = document.getElementById('kpacenow');
 
+  // Whether anyone has been seen checked in during this run — guards the
+  // "everyone left" auto-stop so it can't fire before the room ever fills up.
+  var sawPresence = false;
+
   elStart.addEventListener('click', function(){
-    if (classStart()){ if (confirm('Reset the class clock?')) { setStart(0); } }
-    else { setStart(Date.now()); }
+    var start = classStart(), end = classEnd();
+    if (start && !end){
+      // running -> stop. This is the normal end-of-class action, so it
+      // doesn't confirm; the clock freezes but the elapsed time is kept.
+      setEnd(Date.now());
+    } else if (start && end){
+      // stopped but not yet cleared -> confirm before wiping the run.
+      if (confirm('Reset the class clock?')) { setStart(0); setEnd(0); sawPresence = false; }
+    } else {
+      setStart(Date.now()); setEnd(0); sawPresence = false;
+    }
     updatePace();
     updateLateQr();
   });
 
+  // Auto-stop: 3-hour hard cap, OR everyone has checked out after having
+  // checked in — whichever comes first. Runs every tick from updatePace()
+  // and every live poll, so it fires even if the instructor never returns
+  // to the tab.
+  function autoStopIfNeeded(start, rawElapsedMs){
+    if (classEnd()) return;
+    if (rawElapsedMs >= MAX_CLASS_MS){ setEnd(start + MAX_CLASS_MS); return; }
+    if (live.enabled){
+      if (pulse.present > 0) sawPresence = true;
+      else if (sawPresence) { setEnd(Date.now()); return; }
+    }
+  }
+
   function updatePace(){
     var start = classStart();
     if (!start){
-      elStart.textContent = 'Start class'; elStart.classList.remove('running');
+      elStart.textContent = 'Start class'; elStart.classList.remove('running', 'ended');
       elClock.textContent = '00:00';
       elSeg.innerHTML = '<b>Not started</b>press Start class when you begin';
       elStatus.className = 'kpace-status idle'; elStatus.textContent = 'READY';
       if (elNow) elNow.style.left = '0%';
       return;
     }
-    elStart.textContent = 'Reset'; elStart.classList.add('running');
-    var elapsedMs = Date.now() - start;
+    autoStopIfNeeded(start, Date.now() - start);
+    var end = classEnd();
+    var elapsedMs = end ? (end - start) : (Date.now() - start);
     var elapsedMin = elapsedMs / 60000;
     elClock.textContent = fmtMMSS(elapsedMs);
     var cur = segOfSlide(i);
     elSeg.innerHTML = '<b>' + esc(cur.label) + '</b>planned ' + Math.round(cur.start) + '–' + Math.round(cur.end) + ' min';
 
-    var cls = 'ontime', txt = 'ON TIME';
-    if (elapsedMin > cur.end){ cls = 'behind'; txt = 'BEHIND ' + Math.round(elapsedMin - cur.end) + ' MIN'; }
-    else if (elapsedMin < cur.start){ cls = 'ahead'; txt = 'AHEAD ' + Math.round(cur.start - elapsedMin) + ' MIN'; }
+    var cls, txt;
+    if (end){
+      elStart.textContent = 'Reset'; elStart.classList.remove('running'); elStart.classList.add('ended');
+      cls = 'ended'; txt = 'CLASS ENDED';
+    } else {
+      elStart.textContent = 'Stop class'; elStart.classList.add('running'); elStart.classList.remove('ended');
+      cls = 'ontime'; txt = 'ON TIME';
+      if (elapsedMin > cur.end){ cls = 'behind'; txt = 'BEHIND ' + Math.round(elapsedMin - cur.end) + ' MIN'; }
+      else if (elapsedMin < cur.start){ cls = 'ahead'; txt = 'AHEAD ' + Math.round(cur.start - elapsedMin) + ' MIN'; }
+    }
     elStatus.className = 'kpace-status ' + cls; elStatus.textContent = txt;
 
     if (elNow) elNow.style.left = Math.min(100, (elapsedMin / total) * 100) + '%';
