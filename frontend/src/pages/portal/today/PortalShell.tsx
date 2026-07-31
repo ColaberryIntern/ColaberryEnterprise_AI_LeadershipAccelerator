@@ -371,10 +371,22 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
         </div>
         <div className="te-top-right">
           <div className="te-rail">
-            <span className="te-cd class" title="Next class">
-              <span className="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M7 11v4c0 1 2 2 5 2s5-1 5-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
-              <span className="tx"><span className="lbl">Next class</span><span className="when mono">{fcCd ? `${fcCd.d}d ${fcCd.h}h` : '—'}</span></span>
-            </span>
+            {(() => {
+              const cdInner = (
+                <>
+                  <span className="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M7 11v4c0 1 2 2 5 2s5-1 5-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
+                  <span className="tx"><span className="lbl">Next class</span><span className="when mono">{fcCd ? `${fcCd.d}d ${fcCd.h}h` : '—'}</span></span>
+                </>
+              );
+              // Clickable straight into the class's room when one exists (real
+              // live_sessions countdown); a cohort-level fallback countdown (no
+              // linked session yet) stays a plain, non-clickable pill.
+              return nextLiveSessionHud?.room_id ? (
+                <Link className="te-cd class" title="Next class" to={`/portal/rooms/${nextLiveSessionHud.room_id}`}>{cdInner}</Link>
+              ) : (
+                <span className="te-cd class" title="Next class">{cdInner}</span>
+              );
+            })()}
             <span className="te-cd event" title="Next event">
               <span className="ic"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
               <span className="tx"><span className="lbl">Next event</span><span className="when mono">{ohCd ? `${ohCd.d}d ${ohCd.h}h` : '—'}</span></span>
