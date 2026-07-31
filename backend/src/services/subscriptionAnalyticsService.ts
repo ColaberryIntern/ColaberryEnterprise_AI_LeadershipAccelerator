@@ -49,7 +49,7 @@ export interface UpcomingPayment {
 }
 
 export interface TenureBucket {
-  label: string; // 'Free Trial' | 'Month 1' | 'Month 2' | ... | 'Month 5+'
+  label: string; // 'Explorer' | 'Month 1' | 'Month 2' | ... | 'Month 5+'
   count: number;
   byPlan: Record<SubscriptionPlanKey, number>;
   retentionPct: number | null; // vs. previous bucket; null for the first bucket
@@ -153,7 +153,7 @@ async function fetchPayingMembers(): Promise<MemberRow[]> {
 
 /** Explorers still in their free trial, split by whether they've paid the $50
  *  Open House "hold your spot" deposit — a real, if small, dollar commitment
- *  that deserves its own bucket rather than being invisible inside "Free Trial". */
+ *  that deserves its own bucket rather than being invisible inside "Explorer". */
 async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolders: number; depositTotal: number }> {
   const rows = (await sequelize.query(
     `SELECT
@@ -308,7 +308,7 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
   });
 
   // Tenure funnel: bucket every activated subscriber by months since their
-  // tenure anchor. Free Trial = Explorers with no deposit and no subscription.
+  // tenure anchor. Explorer = free-trial signups with no deposit and no subscription.
   // retentionPct is a snapshot ratio (this bucket's headcount vs. the bucket
   // above it, right now) — not per-person cohort tracking across time, since
   // the subscription model only launched recently and there isn't enough
@@ -326,7 +326,7 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
     bucketCounts[bucketIndex].byPlan[plan] += 1;
   }
 
-  buckets.push({ label: 'Free Trial', count: freeTrialCount, byPlan: emptyPlanCounts(), retentionPct: null });
+  buckets.push({ label: 'Explorer', count: freeTrialCount, byPlan: emptyPlanCounts(), retentionPct: null });
   bucketCounts.forEach((b, i) => {
     const label = i === TENURE_BUCKET_COUNT - 1 ? `Month ${i + 1}+` : `Month ${i + 1}`;
     const prev = buckets[buckets.length - 1];

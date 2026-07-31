@@ -3,6 +3,7 @@ import { getRevenueDashboard } from '../services/revenueDashboardService';
 import { getRevenuePayments } from '../services/revenuePaymentsService';
 import { reconcileAppPayments } from '../services/appPaymentReconcileService';
 import { getSubscriptionAnalytics } from '../services/subscriptionAnalyticsService';
+import { getExplorerRoster } from '../services/explorerRosterService';
 
 export async function handleGetRevenueDashboard(
   _req: Request,
@@ -43,6 +44,21 @@ export async function handleGetSubscriptionAnalytics(
   try {
     const data = await getSubscriptionAnalytics();
     res.json(data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+// Drill-down roster behind the "Explorer" tenure bucket: everyone still in
+// free trial, tagged with their existing points-based engagement level.
+export async function handleGetExplorerRoster(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = await getExplorerRoster();
+    res.json({ explorers: data });
   } catch (error) {
     next(error);
   }
