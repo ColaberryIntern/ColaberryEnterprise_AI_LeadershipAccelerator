@@ -6,7 +6,7 @@
  * there is no circular dependency between the two.
  */
 import {
-  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS, StoryBeat, Interaction,
+  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ARCHITECTURE_DIAGRAMS, StoryBeat, DayKind,
 } from '../../data/classSessionPlan';
 import { teachSlidesFor, ORIENTATION_TEACH, TeachSlide } from '../../data/classTeachContent';
 import { runOfShowFor } from './runOfShow';
@@ -16,7 +16,7 @@ import {
   detectDayKind, parseWeek, buildMeta, toSegments,
   BUILDER_BROADCAST_PROMPTS, PROVE_FORMULA, STEP_EMOJIS, PHONE_RULES,
 } from './kitSpec';
-import { KitConfig, DEFAULT_KIT_CONFIG, InteractionSlot } from './kitConfig';
+import { KitConfig, DEFAULT_KIT_CONFIG, InteractionPlacement } from './kitConfig';
 
 /** Insert story beats right after a segment's own content — the instructor's
  * `config.storyBeats.overrides` (a full replacement set, filtered to this
@@ -48,12 +48,57 @@ function resolveTeachSlides(base: TeachSlide[], config: KitConfig): TeachSlide[]
   return config.teach.max != null ? list.slice(0, config.teach.max) : list;
 }
 
-/** Resolve one of the three fixed interaction slots ("survey questions").
- * Returns null when the instructor has turned that slot off — callers must
- * skip pushing the slide entirely in that case. */
-function resolveInteraction(defaultInt: Interaction, slot: InteractionSlot): Interaction | null {
-  if (!slot.enabled) return null;
-  return slot.override ?? defaultInt;
+/** The authored default survey questions ("interactions") for a given week +
+ * day kind, expressed as an ordinary segment-taggable list — the SAME shape
+ * an instructor's overrides use. Exported so kitConfigDefaults.ts (the
+ * Customize UI's "here's what's actually running" preview) can resolve the
+ * identical list without duplicating this logic. Monday's design-choice poll
+ * appears twice on purpose (asked at check-in, revealed at the architecture
+ * challenge, same question both times) — that's authored content, not a
+ * special case the engine needs to know about. */
+export function defaultInteractionsFor(week: number | null, dayKind: DayKind): InteractionPlacement[] {
+  if (dayKind === 'orientation') {
+    return [
+      { ...ORIENTATION_PLAN.designChoice, segment: 'welcome', eyebrow: 'Warm-up', title: 'Where are you starting from?', presenterTip: 'Read the spread out loud. Sets up the "from user to builder" arc.' },
+      { ...ORIENTATION_PLAN.trivia, segment: 'setup', eyebrow: 'One more', title: 'What do you leave with?', presenterTip: 'Reveal: a working system + CCA-F + portfolio. Then the close.' },
+    ];
+  }
+  const wc = week != null ? WEEK_CLASS_CONTENT.find((w) => w.week === week) : undefined;
+  if (!wc) return [];
+  if (dayKind === 'architecture') {
+    const m = wc.monday;
+    return [
+      { ...m.designChoice, segment: 'checkin', eyebrow: '🔮 Predict', title: 'Before we start — make your call', presenterTip: 'Everyone scans the QR here. Read the prediction; do not reveal yet — it pays off later.' },
+      { ...m.designChoice, segment: 'challenge', eyebrow: '🧭 Architecture challenge', title: 'Choose the design', presenterTip: 'Now reveal. Tie their Monday prediction to the right architecture.' },
+      { ...m.trivia, segment: 'trivia', eyebrow: '🧠 Knowledge check', title: 'Quick check', presenterTip: 'Fast. Reveal, one line of why, move on.' },
+    ];
+  }
+  const t = wc.thursday;
+  return [
+    { ...t.trivia, segment: 'readiness', eyebrow: '🧠 Warm-up', title: 'Quick check', presenterTip: 'One trivia to confirm last week landed before we build on it.' },
+  ];
+}
+
+/** Resolve the survey-question list for this session: enabled:false hides
+ * every question; overrides fully replaces the authored defaults; max caps
+ * the total count. Mirrors `resolveTeachSlides`'s exact shape. */
+function resolveInteractions(base: InteractionPlacement[], config: KitConfig): InteractionPlacement[] {
+  if (!config.interactions.enabled) return [];
+  const list = config.interactions.overrides ?? base;
+  return config.interactions.max != null ? list.slice(0, config.interactions.max) : list;
+}
+
+/** Push whichever resolved survey questions are tagged for this segment. A
+ * question's `segment` field is what "strategically place it on the
+ * timeline" actually means — dragging a question card to a different lane
+ * in the Timeline Builder (a later phase) is exactly changing this field. */
+function pushInteractions(out: KitSlide[], list: InteractionPlacement[], segId: string, seg: KitSegment): void {
+  list.filter((q) => q.segment === segId).forEach((q, i) => {
+    out.push(slide(seg, 950 + i, 'interaction', {
+      eyebrow: q.eyebrow || '🗳️ Survey', title: q.title || 'Quick check', interaction: q,
+      presenterTip: q.presenterTip || 'Read the question, take responses, reveal when ready.',
+    }));
+  });
 }
 
 /** Applies the deck-wide parts of KitConfig that don't need per-segment
@@ -88,8 +133,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   if (!wc) return out;
   const m = wc.monday;
   const mteach = resolveTeachSlides(teachSlidesFor(meta.week, 'monday'), config); // deep teaching slides, inserted per segment
-  const mondayPoll = resolveInteraction(m.designChoice, config.interactions.mondayPoll);
-  const mondayTrivia = resolveInteraction(m.trivia, config.interactions.mondayTrivia);
+  const interactions = resolveInteractions(defaultInteractionsFor(meta.week, 'architecture'), config);
 
   const cold = segById(segs, 'cold-open');
   if (m.hook) {
@@ -102,14 +146,10 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
     eyebrow: '🎬 Cold open', title: 'By Thursday, this will exist', body: m.payoffPreview,
     presenterTip: 'Show the finished artifact first. Sell the payoff before any theory.',
   }));
+  pushInteractions(out, interactions, 'cold-open', cold);
 
   const checkin = segById(segs, 'checkin');
-  if (mondayPoll) {
-    out.push(slide(checkin, 0, 'interaction', {
-      eyebrow: '🔮 Predict', title: 'Before we start — make your call', interaction: mondayPoll,
-      presenterTip: 'Everyone scans the QR here. Read the prediction; do not reveal yet — it pays off later.',
-    }));
-  }
+  pushInteractions(out, interactions, 'checkin', checkin);
   pushStoryBeats(out, m.storyBeats, 'checkin', checkin, config);
 
   const prob = segById(segs, 'business-problem');
@@ -119,6 +159,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   }));
   out.push(...teachToSlides(mteach, 'business-problem', prob));
   pushStoryBeats(out, m.storyBeats, 'business-problem', prob, config);
+  pushInteractions(out, interactions, 'business-problem', prob);
 
   const arch = segById(segs, 'architecture');
   out.push(slide(arch, 0, 'architecture', {
@@ -129,6 +170,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   }));
   out.push(...teachToSlides(mteach, 'architecture', arch));
   pushStoryBeats(out, m.storyBeats, 'architecture', arch, config);
+  pushInteractions(out, interactions, 'architecture', arch);
 
   const dec = segById(segs, 'deconstruct');
   out.push(slide(dec, 0, 'example', {
@@ -137,6 +179,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   }));
   out.push(...teachToSlides(mteach, 'deconstruct', dec));
   pushStoryBeats(out, m.storyBeats, 'deconstruct', dec, config);
+  pushInteractions(out, interactions, 'deconstruct', dec);
 
   out.push(breakSlide(segById(segs, 'reset')));
 
@@ -146,28 +189,20 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
     presenterTip: 'Watch the pulse. If people go “stuck”, slow down. This is the tutorial sequence.',
   }));
   out.push(...teachToSlides(mteach, 'micro-build', micro));
+  pushInteractions(out, interactions, 'micro-build', micro);
 
   const chal = segById(segs, 'challenge');
-  if (mondayPoll) {
-    out.push(slide(chal, 0, 'interaction', {
-      eyebrow: '🧭 Architecture challenge', title: 'Choose the design', interaction: mondayPoll,
-      presenterTip: 'Now reveal. Tie their Monday prediction to the right architecture.',
-    }));
-  }
+  pushInteractions(out, interactions, 'challenge', chal);
 
   const triv = segById(segs, 'trivia');
-  if (mondayTrivia) {
-    out.push(slide(triv, 0, 'interaction', {
-      eyebrow: '🧠 Knowledge check', title: 'Quick check', interaction: mondayTrivia,
-      presenterTip: 'Fast. Reveal, one line of why, move on.',
-    }));
-  }
+  pushInteractions(out, interactions, 'trivia', triv);
 
   const trailer = segById(segs, 'trailer');
   out.push(slide(trailer, 0, 'cta', {
     eyebrow: '🎟️ Thursday', title: 'Thursday we make it work', body: m.thursdayTrailer,
     presenterTip: 'Open loop. Leave them wanting Build Day. This is the social teaser.',
   }));
+  pushInteractions(out, interactions, 'trailer', trailer);
 
   return out;
 }
@@ -180,7 +215,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
   if (!wc) return out;
   const t = wc.thursday;
   const tteach = resolveTeachSlides(teachSlidesFor(meta.week, 'thursday'), config); // deep teaching slides, inserted per segment
-  const thursdayTrivia = resolveInteraction(t.trivia, config.interactions.thursdayTrivia);
+  const interactions = resolveInteractions(defaultInteractionsFor(meta.week, 'build'), config);
 
   const preview = segById(segs, 'result-preview');
   out.push(slide(preview, 0, 'segment', {
@@ -190,18 +225,14 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
   // No default Build Day story beats are authored yet — this only fires when
   // the instructor adds a custom one via Present ▾ → Customize.
   pushStoryBeats(out, undefined, 'result-preview', preview, config);
+  pushInteractions(out, interactions, 'result-preview', preview);
 
   const readiness = segById(segs, 'readiness');
   out.push(slide(readiness, 0, 'segment', {
     eyebrow: '✅ Readiness check', title: 'You are ready to build if…', body: t.readinessCheck,
     presenterTip: 'Ask the room to tap “I’m here”. Anyone not set up goes to the rescue branch.',
   }));
-  if (thursdayTrivia) {
-    out.push(slide(readiness, 1, 'interaction', {
-      eyebrow: '🧠 Warm-up', title: 'Quick check', interaction: thursdayTrivia,
-      presenterTip: 'One trivia to confirm last week landed before we build on it.',
-    }));
-  }
+  pushInteractions(out, interactions, 'readiness', readiness);
 
   const map = segById(segs, 'build-map');
   out.push(slide(map, 0, 'buildmap', {
@@ -217,6 +248,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       presenterTip: i === 0 ? 'Everyone starts here. Confirm CP0 before the first prompt.' : 'Wait for the pulse to catch up before the next checkpoint.',
     }));
   });
+  pushInteractions(out, interactions, 'build-map', map);
 
   // Guided build: the deep teaching steps when authored, else the plain prompt
   // beats — `config.prompts` only affects this fallback path (a week WITH
@@ -236,6 +268,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       }));
     });
   }
+  pushInteractions(out, interactions, 'guided-build', guided);
 
   out.push(breakSlide(segById(segs, 'reset')));
 
@@ -255,12 +288,14 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
     }));
     pushStoryBeats(out, undefined, 'failure', fail, config);
   }
+  pushInteractions(out, interactions, 'failure', fail);
 
   const demos = segById(segs, 'demos');
   out.push(slide(demos, 0, 'demos', {
     eyebrow: '🎤 Student demonstrations', title: 'Show your build', body: 'Two or three students share their screen and demo what they built. The room votes on the strongest one.',
     presenterTip: 'Call on students who tapped “I finished”. Social proof + peer learning = testimonial clips.',
   }));
+  pushInteractions(out, interactions, 'demos', demos);
 
   const bc = segById(segs, 'broadcast');
   out.push(slide(bc, 0, 'broadcast', {
@@ -268,8 +303,10 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
     body: `This week, your proof is: ${wc.builderBroadcastFocus}.`,
     presenterTip: 'Everyone records 30–60s on their phone using these five prompts. Opt-in becomes your content pipeline.',
   }));
+  pushInteractions(out, interactions, 'broadcast', bc);
 
   const cta = segById(segs, 'cta');
+  pushInteractions(out, interactions, 'cta', cta);
   if (t.beforeAfter) {
     out.push(slide(cta, -1, 'beforeafter', {
       title: t.beforeAfter.label || 'Before → After', beforeAfter: t.beforeAfter,
@@ -289,6 +326,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
 
 function orientationSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitSlide[] {
   const out: KitSlide[] = [...openingSlides(meta, segs)];
+  const interactions = resolveInteractions(defaultInteractionsFor(meta.week, 'orientation'), config);
 
   const welcome = segById(segs, 'welcome');
   out.push(slide(welcome, 0, 'segment', {
@@ -296,10 +334,7 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig)
     presenterTip: 'High energy. Everyone scans the QR and checks in before you start.',
   }));
   pushStoryBeats(out, ORIENTATION_PLAN.storyBeats, 'welcome', welcome, config);
-  out.push(slide(welcome, 1, 'interaction', {
-    eyebrow: 'Warm-up', title: 'Where are you starting from?', interaction: ORIENTATION_PLAN.designChoice,
-    presenterTip: 'Read the spread out loud. Sets up the “from user to builder” arc.',
-  }));
+  pushInteractions(out, interactions, 'welcome', welcome);
 
   const segIds = ['big-picture', 'platform', 'setup'];
   ORIENTATION_PLAN.segments.forEach((os, si) => {
@@ -310,13 +345,14 @@ function orientationSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig)
     }));
     out.push(...teachToSlides(ORIENTATION_TEACH, segIds[si], seg));
     pushStoryBeats(out, ORIENTATION_PLAN.storyBeats, segIds[si], seg, config);
+    // 'setup' is handled once, below, at the close — it appears twice in this
+    // function (once here as a plain content segment, once as the closing
+    // wrap-up) and pushing its tagged questions in both places would double them.
+    if (segIds[si] !== 'setup') pushInteractions(out, interactions, segIds[si], seg);
   });
 
   const close = segById(segs, 'setup');
-  out.push(slide(close, 1, 'interaction', {
-    eyebrow: 'One more', title: 'What do you leave with?', interaction: ORIENTATION_PLAN.trivia,
-    presenterTip: 'Reveal: a working system + CCA-F + portfolio. Then the close.',
-  }));
+  pushInteractions(out, interactions, 'setup', close);
   out.push(slide(close, 2, 'assignment', {
     eyebrow: 'Before Week 1', title: ORIENTATION_PLAN.assignment.title,
     brief: {

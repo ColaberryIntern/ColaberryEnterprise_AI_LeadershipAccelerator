@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../utils/api';
-import { CategoryKey, CategoryStatus, KitConfig, KitConfigDefaults, statusForCountAndOverride } from './kitConfig/types';
+import { CategoryKey, CategoryStatus, InteractionPlacement, KitConfig, KitConfigDefaults, statusForCountAndOverride } from './kitConfig/types';
 import { StatusBadge } from './kitConfig/shared';
 import StoryBeatsPanel from './kitConfig/StoryBeatsPanel';
 import TeachPanel from './kitConfig/TeachPanel';
@@ -71,19 +71,19 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
 
   const statuses: Record<CategoryKey, CategoryStatus> | null = useMemo(() => {
     if (!config || !defaults) return null;
-    const relevantSlots = defaults.dayKind === 'architecture' ? ['mondayPoll', 'mondayTrivia'] as const
-      : defaults.dayKind === 'build' ? ['thursdayTrivia'] as const : [];
-    const interactionStatus: CategoryStatus = relevantSlots.length === 0 ? 'default'
-      : relevantSlots.every((k) => !config.interactions[k].enabled) ? 'off'
-        : relevantSlots.some((k) => config.interactions[k].override != null) ? 'custom' : 'default';
     return {
       storyBeats: statusForCountAndOverride(config.storyBeats),
       teach: statusForCountAndOverride(config.teach),
       prompts: statusForCountAndOverride(config.prompts),
-      interactions: interactionStatus,
+      interactions: statusForCountAndOverride(config.interactions),
       evidence: config.evidenceOverrides != null ? 'custom' : 'default',
     };
   }, [config, defaults]);
+
+  const generateQuestion = async (segment: string, instruction?: string): Promise<InteractionPlacement> => {
+    const res = await api.post(`/api/admin/accelerator/sessions/${sessionId}/kit-config/generate-question`, { segment, instruction });
+    return res.data.question;
+  };
 
   const customizedCount = statuses ? Object.values(statuses).filter((s) => s !== 'default').length : 0;
 
@@ -149,10 +149,11 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
                       onChange={(next) => setConfig({ ...config, prompts: next })} />
                   )}
                   {active === 'interactions' && (
-                    <InteractionsPanel interactions={config.interactions} defaults={defaults.interactions}
-                      theaterEnabled={config.theaterEnabled} dayKind={defaults.dayKind}
+                    <InteractionsPanel config={config.interactions} defaults={defaults.interactions}
+                      theaterEnabled={config.theaterEnabled}
                       onChange={(next) => setConfig({ ...config, interactions: next })}
-                      onToggleTheater={(v) => setConfig({ ...config, theaterEnabled: v })} />
+                      onToggleTheater={(v) => setConfig({ ...config, theaterEnabled: v })}
+                      onGenerateQuestion={generateQuestion} />
                   )}
                   {active === 'evidence' && (
                     <EvidencePanel overrides={config.evidenceOverrides} defaults={defaults.evidence}

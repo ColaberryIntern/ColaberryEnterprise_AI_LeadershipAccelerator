@@ -57,11 +57,22 @@ export interface TeachSlideOverride {
 export interface PromptOverride {
   label: string; prompt: string; pasteWhere: string; ccMode: string; expectedResult: string; stopCondition: string; rescue: string;
 }
-export interface InteractionOverride {
-  kind: 'poll' | 'trivia' | 'prediction'; q: string; options: string[]; answer: number | null; reveal: string; theater: boolean;
-}
-export interface InteractionSlot {
-  enabled: boolean; override: InteractionOverride | null;
+/** One survey question, placed at a specific run-of-show segment — an
+ * arbitrary, segment-taggable list (mirrors StoryBeatOverride's own
+ * segment-tagging), not a fixed set of named slots. Dragging a question card
+ * to a different lane in the Timeline Builder (a later phase) is exactly
+ * changing this `segment` field. */
+export interface InteractionPlacement {
+  segment: string;
+  kind: 'poll' | 'trivia' | 'prediction';
+  eyebrow: string;
+  title: string;
+  q: string;
+  options: string[];
+  answer: number | null;
+  reveal: string;
+  theater: boolean;
+  presenterTip: string;
 }
 export interface CountAndOverride<T> {
   enabled: boolean; max: number | null; overrides: T[] | null;
@@ -74,11 +85,7 @@ export interface KitConfig {
   evidenceOverrides: EvidenceOverride[] | null;
   teach: CountAndOverride<TeachSlideOverride>;
   prompts: CountAndOverride<PromptOverride>;
-  interactions: {
-    mondayPoll: InteractionSlot;
-    mondayTrivia: InteractionSlot;
-    thursdayTrivia: InteractionSlot;
-  };
+  interactions: CountAndOverride<InteractionPlacement>;
 }
 
 /** Read-only authored-default content, so the UI can show what is actually
@@ -88,11 +95,7 @@ export interface KitConfigDefaults {
   week: number | null;
   teach: TeachSlideOverride[];
   prompts: PromptOverride[];
-  interactions: {
-    mondayPoll: InteractionOverride | null;
-    mondayTrivia: InteractionOverride | null;
-    thursdayTrivia: InteractionOverride | null;
-  };
+  interactions: InteractionPlacement[];
   storyBeats: StoryBeatOverride[];
   evidence: EvidenceOverride[];
 }
@@ -101,7 +104,10 @@ export const blankBeat = (): StoryBeatOverride => ({ segment: 'business-problem'
 export const blankEvidence = (): EvidenceOverride => ({ claim: '', publisher: '', sourceTitle: '', publicationDate: '', sourceType: 'research', note: '' });
 export const blankTeach = (): TeachSlideOverride => ({ segment: 'guided-build', eyebrow: '', title: '', body: '', bullets: [], code: null, script: '' });
 export const blankPrompt = (): PromptOverride => ({ label: '', prompt: '', pasteWhere: 'Claude Code', ccMode: 'Plan Mode', expectedResult: '', stopCondition: '', rescue: '' });
-export const blankInteraction = (kind: InteractionOverride['kind']): InteractionOverride => ({ kind, q: '', options: ['', ''], answer: kind === 'trivia' ? 0 : null, reveal: '', theater: false });
+export const blankInteraction = (segment: string, kind: InteractionPlacement['kind'] = 'trivia'): InteractionPlacement => ({
+  segment, kind, eyebrow: '🗳️ Survey', title: 'Quick check', q: '', options: ['', ''],
+  answer: kind === 'trivia' ? 0 : null, reveal: '', theater: false, presenterTip: '',
+});
 
 export type CategoryKey = 'storyBeats' | 'teach' | 'prompts' | 'interactions' | 'evidence';
 

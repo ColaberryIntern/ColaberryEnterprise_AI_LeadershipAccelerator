@@ -21,9 +21,8 @@ describe('getKitConfigDefaults', () => {
     expect(d.week).toBe(1);
     expect(d.teach.length).toBeGreaterThan(0);
     expect(d.teach.some((s) => /Claude audits its own work/.test(s.title))).toBe(true);
-    expect(d.interactions.thursdayTrivia?.q).toContain('Architecture Proposal');
-    expect(d.interactions.mondayPoll).toBeNull();
-    expect(d.interactions.mondayTrivia).toBeNull();
+    expect(d.interactions.every((q) => q.segment === 'readiness')).toBe(true);
+    expect(d.interactions.some((q) => q.q.includes('Architecture Proposal'))).toBe(true);
     // Evidence is aggregated across rendered teach slides; may be empty for a
     // week with no authored EvidenceClaims, so just assert the shape is an array.
     expect(Array.isArray(d.evidence)).toBe(true);
@@ -32,9 +31,8 @@ describe('getKitConfigDefaults', () => {
   it('resolves Architecture Day defaults: the Monday poll/trivia and story beats', () => {
     const d = getKitConfigDefaults(week1Monday);
     expect(d.dayKind).toBe('architecture');
-    expect(d.interactions.mondayPoll?.q).toContain('CLAUDE.md');
-    expect(d.interactions.mondayTrivia?.q).toContain('Plan Mode');
-    expect(d.interactions.thursdayTrivia).toBeNull();
+    expect(d.interactions.filter((q) => q.segment === 'checkin' || q.segment === 'challenge').every((q) => q.q.includes('CLAUDE.md'))).toBe(true);
+    expect(d.interactions.some((q) => q.segment === 'trivia' && q.q.includes('Plan Mode'))).toBe(true);
     expect(d.storyBeats.length).toBeGreaterThan(0);
     expect(d.storyBeats.every((b) => typeof b.segment === 'string')).toBe(true);
     expect(d.prompts).toEqual([]);
@@ -45,7 +43,7 @@ describe('getKitConfigDefaults', () => {
     expect(d.dayKind).toBe('orientation');
     expect(d.week).toBeNull();
     expect(d.teach.length).toBeGreaterThan(0);
-    expect(d.interactions.mondayPoll).not.toBeNull();
-    expect(d.interactions.thursdayTrivia).not.toBeNull();
+    expect(d.interactions.some((q) => q.segment === 'welcome')).toBe(true);
+    expect(d.interactions.some((q) => q.segment === 'setup')).toBe(true);
   });
 });

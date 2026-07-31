@@ -5,7 +5,7 @@ import TeachPanel from '../TeachPanel';
 import PromptsPanel from '../PromptsPanel';
 import InteractionsPanel from '../InteractionsPanel';
 import EvidencePanel from '../EvidencePanel';
-import { CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionSlot, EvidenceOverride } from '../types';
+import { CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionPlacement, EvidenceOverride } from '../types';
 
 /**
  * Render-only smoke tests for the Customize modal panels — no
@@ -19,10 +19,10 @@ const storyBeat: StoryBeatOverride = { segment: 'business-problem', icon: '🎫'
 const teachSlide: TeachSlideOverride = { segment: 'guided-build', eyebrow: '📄 Step', title: 'A lesson', body: 'Lesson body.', bullets: ['One', 'Two'], code: { label: 'Do it', code: 'Prompt text.' }, script: 'Say this.' };
 const prompt: PromptOverride = { label: 'Governance gate', prompt: 'Read CLAUDE.md.', pasteWhere: 'Claude Code', ccMode: 'Plan Mode', expectedResult: 'A summary.', stopCondition: 'It stops.', rescue: 'Ask a mentor.' };
 const evidence: EvidenceOverride = { claim: 'A claim.', publisher: 'Publisher', sourceTitle: 'Title', publicationDate: '2026', sourceType: 'research', note: '' };
-const slotOff: InteractionSlot = { enabled: false, override: null };
-const slotOn: InteractionSlot = { enabled: true, override: null };
+const question: InteractionPlacement = { segment: 'checkin', kind: 'poll', eyebrow: '🔮 Predict', title: 'Make your call', q: 'Pick one?', options: ['A', 'B'], answer: null, reveal: 'Reveal.', theater: true, presenterTip: '' };
 
 const noop = () => {};
+const noopAsync = async () => question;
 
 describe('KitConfig panel smoke rendering', () => {
   it('StoryBeatsPanel renders in defaults and custom modes', () => {
@@ -69,14 +69,22 @@ describe('KitConfig panel smoke rendering', () => {
     expect(html).toContain('only apply to Build Day');
   });
 
-  it('InteractionsPanel renders the relevant slots per dayKind without throwing', () => {
-    const interactions = { mondayPoll: slotOn, mondayTrivia: slotOn, thursdayTrivia: slotOff };
-    const defaults = { mondayPoll: { kind: 'poll' as const, q: 'Pick one?', options: ['A', 'B'], answer: null, reveal: 'Reveal.', theater: true }, mondayTrivia: null, thursdayTrivia: null };
+  it('InteractionsPanel renders authored defaults without throwing', () => {
+    const base: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: null };
     const html = renderToStaticMarkup(
-      <InteractionsPanel interactions={interactions} defaults={defaults} theaterEnabled={true} dayKind="architecture" onChange={noop} onToggleTheater={noop} />,
+      <InteractionsPanel config={base} defaults={[question]} theaterEnabled={true} onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
     );
     expect(html).toContain('Pick one?');
     expect(html).toContain('Live Decision Theater');
+  });
+
+  it('InteractionsPanel renders the custom editable list with the AI-generate control', () => {
+    const custom: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [question] };
+    const html = renderToStaticMarkup(
+      <InteractionsPanel config={custom} defaults={[]} theaterEnabled={true} onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+    );
+    expect(html).toContain('AI-generate a question');
+    expect(html).toContain('Remove');
   });
 
   it('EvidencePanel renders in defaults and custom modes', () => {

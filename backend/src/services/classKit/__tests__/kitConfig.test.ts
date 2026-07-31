@@ -33,21 +33,30 @@ describe('mergeKitConfig', () => {
     expect(merged.teach.overrides).toEqual([customSlide]);
   });
 
-  it('merges individual interaction slots independently, defaulting the ones not present', () => {
-    const merged = mergeKitConfig({ interactions: { mondayTrivia: { enabled: false, override: null } } });
-    expect(merged.interactions.mondayTrivia).toEqual({ enabled: false, override: null });
-    expect(merged.interactions.mondayPoll).toEqual(DEFAULT_KIT_CONFIG.interactions.mondayPoll);
-    expect(merged.interactions.thursdayTrivia).toEqual(DEFAULT_KIT_CONFIG.interactions.thursdayTrivia);
+  it('merges a partial interactions config (survey questions), defaulting untouched sub-fields', () => {
+    const merged = mergeKitConfig({ interactions: { enabled: false } });
+    expect(merged.interactions).toEqual({ enabled: false, max: null, overrides: null });
   });
 
-  it('accepts a full interaction override object', () => {
-    const custom = { kind: 'trivia' as const, q: 'Custom question?', options: ['A', 'B'], answer: 0 };
-    const merged = mergeKitConfig({ interactions: { thursdayTrivia: { enabled: true, override: custom } } });
-    expect(merged.interactions.thursdayTrivia.override).toEqual(custom);
+  it('preserves a full interactions override array (arbitrary, segment-taggable questions)', () => {
+    const q1 = { segment: 'checkin', kind: 'poll' as const, q: 'Custom poll?', options: ['A', 'B'] };
+    const q2 = { segment: 'trivia', kind: 'trivia' as const, q: 'Custom trivia?', options: ['A', 'B'], answer: 0 };
+    const merged = mergeKitConfig({ interactions: { enabled: true, max: null, overrides: [q1, q2] } });
+    expect(merged.interactions.overrides).toEqual([q1, q2]);
   });
 
-  it('ignores a malformed interaction slot (non-object) and falls back to default', () => {
-    const merged = mergeKitConfig({ interactions: { mondayPoll: 'not an object' } });
-    expect(merged.interactions.mondayPoll).toEqual(DEFAULT_KIT_CONFIG.interactions.mondayPoll);
+  it('is backward-compatible with the old 3-named-slot interactions shape (pre-restructure)', () => {
+    // Shape saved by the Customize modal before interactions became a list —
+    // has no enabled/max/overrides fields at all, so it must fall through to
+    // the new list defaults cleanly rather than crash or resurrect the old shape.
+    const oldShape = {
+      interactions: {
+        mondayPoll: { enabled: false, override: null },
+        mondayTrivia: { enabled: true, override: null },
+        thursdayTrivia: { enabled: true, override: null },
+      },
+    };
+    const merged = mergeKitConfig(oldShape);
+    expect(merged.interactions).toEqual(DEFAULT_KIT_CONFIG.interactions);
   });
 });

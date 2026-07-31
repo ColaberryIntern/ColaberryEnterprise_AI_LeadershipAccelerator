@@ -152,33 +152,35 @@ describe('buildKitSpec — KitConfig wiring', () => {
     expect(spec.slides.some((s) => s.kind === 'prompt')).toBe(false);
   });
 
-  it('disabling an interaction slot removes that slide; an override replaces its content', async () => {
-    const disabledConfig: KitConfig = {
-      ...DEFAULT_KIT_CONFIG,
-      interactions: { ...DEFAULT_KIT_CONFIG.interactions, thursdayTrivia: { enabled: false, override: null } },
-    };
-    const disabledSpec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config: disabledConfig });
-    expect(disabledSpec.slides.some((s) => s.eyebrow === '🧠 Warm-up')).toBe(false);
-
-    const overrideConfig: KitConfig = {
-      ...DEFAULT_KIT_CONFIG,
-      interactions: {
-        ...DEFAULT_KIT_CONFIG.interactions,
-        thursdayTrivia: { enabled: true, override: { kind: 'trivia', q: 'Custom trivia?', options: ['A', 'B'], answer: 0 } },
-      },
-    };
-    const overrideSpec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config: overrideConfig });
-    expect(overrideSpec.slides.some((s) => s.interaction?.q === 'Custom trivia?')).toBe(true);
+  it('interactions.enabled:false removes every survey question slide', async () => {
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, interactions: { enabled: false, max: null, overrides: null } };
+    const spec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config });
+    expect(spec.slides.some((s) => s.kind === 'interaction')).toBe(false);
   });
 
-  it('disabling the Monday poll removes both its predict and reveal slides', async () => {
-    const config: KitConfig = {
-      ...DEFAULT_KIT_CONFIG,
-      interactions: { ...DEFAULT_KIT_CONFIG.interactions, mondayPoll: { enabled: false, override: null } },
-    };
+  it('interactions.overrides fully replaces the authored defaults, placed by segment', async () => {
+    const custom = [{ segment: 'readiness', kind: 'trivia' as const, q: 'Custom trivia?', options: ['A', 'B'], answer: 0 }];
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, interactions: { enabled: true, max: null, overrides: custom } };
+    const spec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config });
+    expect(spec.slides.some((s) => s.interaction?.q === 'Custom trivia?')).toBe(true);
+    expect(spec.slides.some((s) => s.eyebrow === '🧠 Warm-up')).toBe(false); // the authored default is gone
+  });
+
+  it('interactions.max caps the total number of survey questions across the whole class', async () => {
+    const unconfigured = buildKitSpec(await inputFor(week1MondaySession));
+    const defaultCount = unconfigured.slides.filter((s) => s.kind === 'interaction').length;
+    expect(defaultCount).toBeGreaterThan(1); // Monday has 3 by default (poll shown twice + trivia)
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, interactions: { enabled: true, max: 1, overrides: null } };
+    const capped = buildKitSpec({ ...(await inputFor(week1MondaySession)), config });
+    expect(capped.slides.filter((s) => s.kind === 'interaction').length).toBe(1);
+  });
+
+  it('an added question placed on a new segment via overrides renders only there ("strategically place on the timeline")', async () => {
+    const custom = [{ segment: 'deconstruct', kind: 'poll' as const, q: 'Where should this live?', options: ['A', 'B'] }];
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, interactions: { enabled: true, max: null, overrides: custom } };
     const spec = buildKitSpec({ ...(await inputFor(week1MondaySession)), config });
-    expect(spec.slides.some((s) => s.eyebrow === '🔮 Predict')).toBe(false);
-    expect(spec.slides.some((s) => s.eyebrow === '🧭 Architecture challenge')).toBe(false);
+    const hit = spec.slides.find((s) => s.interaction?.q === 'Where should this live?');
+    expect(hit?.segmentId).toBe('deconstruct');
   });
 });
 

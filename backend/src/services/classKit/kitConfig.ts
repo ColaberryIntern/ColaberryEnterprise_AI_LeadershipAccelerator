@@ -22,23 +22,35 @@ export interface StoryBeatOverride extends StoryBeat {
   segment: string;
 }
 
-/** A single interaction "slot" — one of the three fixed poll/trivia moments
- * every class carries (Monday's design-choice poll, Monday's knowledge-check
- * trivia, Thursday's warm-up trivia). enabled:false removes that slide
- * entirely; override replaces the question/options/reveal wholesale. */
-export interface InteractionSlot {
+/** One survey question ("interaction") placed at a specific run-of-show
+ * segment. Generalizes what used to be 3 fixed named slots (Monday poll,
+ * Monday trivia, Thursday trivia) into an arbitrary, segment-taggable list —
+ * an instructor can add a 4th/5th/Nth question and place it anywhere, the
+ * same way `StoryBeatOverride` already works for story beats. `eyebrow`/
+ * `title` carry the slide's framing text (e.g. "🔮 Predict" vs "🧭 Architecture
+ * challenge") since a generic list-driven renderer can't infer that from the
+ * segment alone the way the old hardcoded call sites could. */
+export interface InteractionPlacement extends Interaction {
+  segment: string;
+  eyebrow?: string;
+  title?: string;
+  /** Guidance shown in the instructor's presenter rail for this specific
+   * question (e.g. "do not reveal yet — it pays off later" vs "now reveal").
+   * Falls back to a generic tip if omitted. */
+  presenterTip?: string;
+}
+
+export interface CountAndOverride<T> {
   enabled: boolean;
-  override: Interaction | null;
+  /** Cap on how many of this category's slides show, in authored/list order.
+   * null = no cap (show all). */
+  max: number | null;
+  /** Full replacement set. null = use the authored defaults. */
+  overrides: T[] | null;
 }
 
 export interface KitConfig {
-  storyBeats: {
-    enabled: boolean;
-    /** Cap on total story-beat slides in the deck. null = no cap (show all). */
-    max: number | null;
-    /** Full replacement set. null = use the authored defaults for this day. */
-    overrides: StoryBeatOverride[] | null;
-  };
+  storyBeats: CountAndOverride<StoryBeatOverride>;
   /** Live Decision Theater — full-screen poll treatment. When false, theater-
    * flagged interactions render as the normal compact inline poll instead. */
   theaterEnabled: boolean;
@@ -59,11 +71,7 @@ export interface KitConfig {
    * Day or Build Day, never both, so no separate day tag is needed). null
    * overrides = use classTeachContent.ts's hand-authored/fan-out-generated
    * defaults for this week+day. */
-  teach: {
-    enabled: boolean;
-    max: number | null;
-    overrides: TeachSlide[] | null;
-  };
+  teach: CountAndOverride<TeachSlide>;
 
   /** Copy-ready Claude Code prompts ("Claude Code examples") shown in the
    * guided-build FALLBACK path — i.e. weeks that do NOT yet have deep
@@ -72,24 +80,16 @@ export interface KitConfig {
    * `teach` overrides instead (each teach slide's own `code` field) — this
    * category has no effect there; the Customize UI surfaces that distinction
    * so it's never a silent no-op. */
-  prompts: {
-    enabled: boolean;
-    max: number | null;
-    overrides: ClassPrompt[] | null;
-  };
+  prompts: CountAndOverride<ClassPrompt>;
 
-  /** The three fixed interaction slots every class can carry ("survey
-   * questions"): Monday's design-choice poll (asked once, revealed once —
-   * the same question both times), Monday's knowledge-check trivia, and
-   * Thursday's warm-up trivia. */
-  interactions: {
-    mondayPoll: InteractionSlot;
-    mondayTrivia: InteractionSlot;
-    thursdayTrivia: InteractionSlot;
-  };
+  /** Survey questions (polls + trivia) — an arbitrary, segment-taggable list.
+   * enabled:false removes every question; max caps the total shown; overrides
+   * fully replaces the authored defaults (which recreate the 3 questions this
+   * class always carried — Monday's predict-then-reveal poll and knowledge
+   * check, Thursday's warm-up trivia — as ordinary list entries, so nothing
+   * changes visually until an instructor actually adds/edits/removes one). */
+  interactions: CountAndOverride<InteractionPlacement>;
 }
-
-const DEFAULT_INTERACTION_SLOT: InteractionSlot = { enabled: true, override: null };
 
 export const DEFAULT_KIT_CONFIG: KitConfig = {
   storyBeats: { enabled: true, max: null, overrides: null },
@@ -98,30 +98,15 @@ export const DEFAULT_KIT_CONFIG: KitConfig = {
   evidenceOverrides: null,
   teach: { enabled: true, max: null, overrides: null },
   prompts: { enabled: true, max: null, overrides: null },
-  interactions: {
-    mondayPoll: { ...DEFAULT_INTERACTION_SLOT },
-    mondayTrivia: { ...DEFAULT_INTERACTION_SLOT },
-    thursdayTrivia: { ...DEFAULT_INTERACTION_SLOT },
-  },
+  interactions: { enabled: true, max: null, overrides: null },
 };
 
-function mergeCountAndOverride<T>(
-  saved: unknown,
-  fallback: { enabled: boolean; max: number | null; overrides: T[] | null },
-): { enabled: boolean; max: number | null; overrides: T[] | null } {
-  const s = (saved && typeof saved === 'object' ? saved : {}) as Partial<{ enabled: boolean; max: number | null; overrides: T[] | null }>;
+function mergeCountAndOverride<T>(saved: unknown, fallback: CountAndOverride<T>): CountAndOverride<T> {
+  const s = (saved && typeof saved === 'object' ? saved : {}) as Partial<CountAndOverride<T>>;
   return {
     enabled: typeof s.enabled === 'boolean' ? s.enabled : fallback.enabled,
     max: typeof s.max === 'number' ? s.max : fallback.max,
     overrides: Array.isArray(s.overrides) ? s.overrides : fallback.overrides,
-  };
-}
-
-function mergeInteractionSlot(saved: unknown, fallback: InteractionSlot): InteractionSlot {
-  const s = (saved && typeof saved === 'object' ? saved : {}) as Partial<InteractionSlot>;
-  return {
-    enabled: typeof s.enabled === 'boolean' ? s.enabled : fallback.enabled,
-    override: s.override && typeof s.override === 'object' ? (s.override as Interaction) : fallback.override,
   };
 }
 
@@ -130,23 +115,19 @@ function mergeInteractionSlot(saved: unknown, fallback: InteractionSlot): Intera
  * crashes a render; missing pieces just fall back to the default. */
 export function mergeKitConfig(saved: unknown): KitConfig {
   const s = (saved && typeof saved === 'object' ? saved : {}) as Partial<KitConfig>;
-  const sb = (s.storyBeats && typeof s.storyBeats === 'object' ? s.storyBeats : {}) as Partial<KitConfig['storyBeats']>;
-  const si = (s.interactions && typeof s.interactions === 'object' ? s.interactions : {}) as Partial<KitConfig['interactions']>;
   return {
-    storyBeats: {
-      enabled: typeof sb.enabled === 'boolean' ? sb.enabled : DEFAULT_KIT_CONFIG.storyBeats.enabled,
-      max: typeof sb.max === 'number' ? sb.max : DEFAULT_KIT_CONFIG.storyBeats.max,
-      overrides: Array.isArray(sb.overrides) ? sb.overrides : DEFAULT_KIT_CONFIG.storyBeats.overrides,
-    },
+    storyBeats: mergeCountAndOverride(s.storyBeats, DEFAULT_KIT_CONFIG.storyBeats),
     theaterEnabled: typeof s.theaterEnabled === 'boolean' ? s.theaterEnabled : DEFAULT_KIT_CONFIG.theaterEnabled,
     buildBayDetail: typeof s.buildBayDetail === 'boolean' ? s.buildBayDetail : DEFAULT_KIT_CONFIG.buildBayDetail,
     evidenceOverrides: Array.isArray(s.evidenceOverrides) ? s.evidenceOverrides : DEFAULT_KIT_CONFIG.evidenceOverrides,
     teach: mergeCountAndOverride(s.teach, DEFAULT_KIT_CONFIG.teach),
     prompts: mergeCountAndOverride(s.prompts, DEFAULT_KIT_CONFIG.prompts),
-    interactions: {
-      mondayPoll: mergeInteractionSlot(si.mondayPoll, DEFAULT_KIT_CONFIG.interactions.mondayPoll),
-      mondayTrivia: mergeInteractionSlot(si.mondayTrivia, DEFAULT_KIT_CONFIG.interactions.mondayTrivia),
-      thursdayTrivia: mergeInteractionSlot(si.thursdayTrivia, DEFAULT_KIT_CONFIG.interactions.thursdayTrivia),
-    },
+    // Backward-compat: a config saved under the old 3-named-slot shape
+    // ({ mondayPoll: {...}, mondayTrivia: {...}, thursdayTrivia: {...} })
+    // has no `enabled`/`max`/`overrides` fields at all, so it falls through
+    // cleanly to the new list defaults rather than crashing or resurrecting
+    // the old shape — exactly the discipline this function already existed
+    // to guarantee for every other category.
+    interactions: mergeCountAndOverride(s.interactions, DEFAULT_KIT_CONFIG.interactions),
   };
 }

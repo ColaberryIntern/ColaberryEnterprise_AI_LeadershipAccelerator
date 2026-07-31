@@ -4,7 +4,7 @@ import {
   handleListSessions, handleGetSession, handleCreateSession, handleUpdateSession, handleDeleteSession,
   handleSkipSession, handleUnskipDate, handleGetSessionCurriculum,
   handleGetSessionKit, handleGetSessionKitDoc, handleGetSessionOutline, handleGetSessionReadiness,
-  handleGetSessionKitConfig, handleSaveSessionKitConfig,
+  handleGetSessionKitConfig, handleSaveSessionKitConfig, handleGenerateInteraction,
   handleGenerateMeetLink, handleGenerateCohortMeetLinks,
   handleGetAttendance, handleMarkAttendance, handleUpdateAttendance,
   handleListEnrollmentSubmissions, handleListSessionSubmissions, handleCreateSubmission,
@@ -115,6 +115,7 @@ router.get('/api/admin/accelerator/sessions/:id/readiness', requireAdmin, handle
 // Instructor Class Kit overrides (story beats, Theater, Build Bay detail, evidence).
 router.get('/api/admin/accelerator/sessions/:id/kit-config', requireAdmin, handleGetSessionKitConfig);
 router.put('/api/admin/accelerator/sessions/:id/kit-config', requireAdmin, handleSaveSessionKitConfig);
+router.post('/api/admin/accelerator/sessions/:id/kit-config/generate-question', requireAdmin, handleGenerateInteraction);
 router.post('/api/admin/accelerator/cohorts/:cohortId/meet-links', requireAdmin, handleGenerateCohortMeetLinks);
 router.get('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleGetAttendance);
 router.post('/api/admin/accelerator/sessions/:id/attendance', requireAdmin, handleMarkAttendance);

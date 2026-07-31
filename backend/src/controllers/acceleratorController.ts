@@ -15,6 +15,8 @@ import { buildSessionKit } from '../services/sessionKitService';
 import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, KitDocMode } from '../services/sessionKitDocService';
 import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
 import { getKitConfigDefaults } from '../services/classKit/kitConfigDefaults';
+import { generateQuestion } from '../services/classKit/kitConfigAi';
+import { weekBlueprint } from '../data/weekBlueprints';
 import { LiveSession } from '../models';
 
 // -- Sessions --
@@ -173,6 +175,39 @@ export async function handleSaveSessionKitConfig(req: Request, res: Response, ne
     const config = await saveKitConfig(req.params.id as string, req.body?.config);
     if (!config) return res.status(404).json({ error: 'Session not found' });
     res.json({ config });
+  } catch (err) { next(err); }
+}
+
+// AI-generate one survey question, grounded in the session's real week
+// content (blueprint purpose/objectives + the resolved Lessons text) — the
+// "+ Add question" flow's default population. Always returns a usable
+// question (falls back to a deterministic scaffold with or without an
+// OpenAI key, or on any generation failure) so the button never dead-ends.
+export async function handleGenerateInteraction(req: Request, res: Response, next: NextFunction) {
+  try {
+    const segment = req.body?.segment;
+    if (typeof segment !== 'string' || !segment.trim()) {
+      return res.status(400).json({ error: 'segment is required' });
+    }
+    const instruction = typeof req.body?.instruction === 'string' ? req.body.instruction : undefined;
+
+    const session = await LiveSession.findByPk(req.params.id as string);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+
+    const defaults = getKitConfigDefaults({
+      id: session.id, session_number: session.session_number, title: session.title,
+      session_date: session.session_date, start_time: session.start_time,
+      end_time: session.end_time, status: session.status,
+    });
+    const bp = defaults.week != null ? weekBlueprint(defaults.week) : undefined;
+    const contentSummary = [
+      bp?.purpose,
+      (bp?.learning_objectives || []).join('; '),
+      ...defaults.teach.map((t) => `${t.title}: ${t.body || ''}`),
+    ].filter(Boolean).join('\n');
+
+    const result = await generateQuestion({ segment, weekTitle: session.title, contentSummary, instruction });
+    res.json(result);
   } catch (err) { next(err); }
 }
 

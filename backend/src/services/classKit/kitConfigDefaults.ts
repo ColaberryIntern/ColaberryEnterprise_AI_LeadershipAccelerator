@@ -10,12 +10,12 @@
  * every other category is read directly from the source data.
  */
 import {
-  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ClassPrompt, Interaction, StoryBeat, DayKind,
+  WEEK_CLASS_CONTENT, ORIENTATION_PLAN, ClassPrompt, StoryBeat, DayKind,
 } from '../../data/classSessionPlan';
 import { teachSlidesFor, ORIENTATION_TEACH, TeachSlide, EvidenceClaim } from '../../data/classTeachContent';
 import { detectDayKind, parseWeek, BuildKitSpecInput, KitSessionInput } from './kitSpec';
-import { buildKitSpec } from './kitSpecDaySlides';
-import { DEFAULT_KIT_CONFIG, StoryBeatOverride } from './kitConfig';
+import { buildKitSpec, defaultInteractionsFor } from './kitSpecDaySlides';
+import { DEFAULT_KIT_CONFIG, StoryBeatOverride, InteractionPlacement } from './kitConfig';
 
 export interface KitConfigDefaults {
   dayKind: DayKind;
@@ -24,11 +24,9 @@ export interface KitConfigDefaults {
   teach: TeachSlide[];
   /** Build Bay prompts — only non-empty on Build Day. */
   prompts: ClassPrompt[];
-  interactions: {
-    mondayPoll: Interaction | null;
-    mondayTrivia: Interaction | null;
-    thursdayTrivia: Interaction | null;
-  };
+  /** Survey questions (polls + trivia) — an ordinary segment-taggable list,
+   * the same shape config.interactions.overrides uses. */
+  interactions: InteractionPlacement[];
   storyBeats: StoryBeatOverride[];
   evidence: EvidenceClaim[];
 }
@@ -50,11 +48,7 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
 
   const prompts = dayKind === 'build' && wc ? wc.thursday.prompts : [];
 
-  const interactions = {
-    mondayPoll: dayKind === 'architecture' && wc ? wc.monday.designChoice : dayKind === 'orientation' ? ORIENTATION_PLAN.designChoice : null,
-    mondayTrivia: dayKind === 'architecture' && wc ? wc.monday.trivia : null,
-    thursdayTrivia: dayKind === 'build' && wc ? wc.thursday.trivia : dayKind === 'orientation' ? ORIENTATION_PLAN.trivia : null,
-  };
+  const interactions = defaultInteractionsFor(week, dayKind);
 
   const storyBeats = flattenStoryBeats(
     dayKind === 'orientation' ? ORIENTATION_PLAN.storyBeats
