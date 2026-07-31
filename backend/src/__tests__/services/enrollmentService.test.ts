@@ -107,7 +107,7 @@ describe('markEnrollmentPaid', () => {
 
 describe('createExplorerEnrollment', () => {
   it('stores company/title/company_size and a custom source label (regression for the /enroll free-signup path)', async () => {
-    enrFindOne.mockResolvedValue(null); // no existing enrollment for this email
+    enrFindAll.mockResolvedValue([]); // no existing active enrollment for this email
     enrCreate.mockResolvedValue({ id: 'enr-free-1', email: 'new@example.com' });
 
     const result = await createExplorerEnrollment({
@@ -136,7 +136,7 @@ describe('createExplorerEnrollment', () => {
   });
 
   it('defaults to the Open House source label and empty company when not provided (back-compat)', async () => {
-    enrFindOne.mockResolvedValue(null);
+    enrFindAll.mockResolvedValue([]);
     enrCreate.mockResolvedValue({ id: 'enr-oh-1', email: 'guest@example.com' });
 
     await createExplorerEnrollment({ name: 'Guest', email: 'guest@example.com' });
@@ -146,13 +146,49 @@ describe('createExplorerEnrollment', () => {
     );
   });
 
-  it('is idempotent — an existing enrollment for the email is reused, not duplicated', async () => {
-    const existing = { id: 'enr-existing', email: 'again@example.com' };
-    enrFindOne.mockResolvedValue(existing);
+  it('is idempotent — an existing Explorer-cohort enrollment for the email is reused, not duplicated', async () => {
+    const existing = { id: 'enr-existing', email: 'again@example.com', enrollment_type: 'explorer', payment_status: 'pending', cohort_id: 'explorer-cohort-1', created_at: '2026-07-01T00:00:00Z' };
+    enrFindAll.mockResolvedValue([existing]);
 
     const result = await createExplorerEnrollment({ name: 'Again', email: 'again@example.com' });
 
     expect(result).toEqual({ enrollment: existing, created: false, cohort_id: 'explorer-cohort-1' });
+    expect(enrCreate).not.toHaveBeenCalled();
+  });
+
+  it('regression: reuses a REAL enrollment in a DIFFERENT cohort instead of creating a duplicate Explorer row', async () => {
+    // This is the actual root cause found live 2026-07-31 across 8+ students
+    // (Sonya Parker, Britiana Akhile, Martin Mungai, and others): the old
+    // existing-check only looked inside the Explorer cohort itself, so a
+    // student who already had a real paid seat in a different cohort got a
+    // brand-new duplicate Explorer row every time this ran.
+    const realAccount = {
+      id: 'enr-real',
+      email: 'sonya@example.com',
+      enrollment_type: 'standard',
+      payment_status: 'paid',
+      cohort_id: 'cohort-july-2026', // NOT the Explorer cohort
+      created_at: '2026-07-01T00:00:00Z',
+    };
+    enrFindAll.mockResolvedValue([realAccount]);
+
+    const result = await createExplorerEnrollment({ name: 'Sonya Parker', email: 'sonya@example.com' });
+
+    expect(result).toEqual({ enrollment: realAccount, created: false, cohort_id: 'cohort-july-2026' });
+    expect(enrCreate).not.toHaveBeenCalled();
+    expect(enrFindAll).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: 'sonya@example.com', status: 'active' } }),
+    );
+  });
+
+  it('picks the real (non-explorer, paid) account over a pre-existing duplicate when both are already active', async () => {
+    const real = { id: 'enr-real', email: 'dup@example.com', enrollment_type: 'standard', payment_status: 'paid', cohort_id: 'cohort-july-2026', created_at: '2026-07-01T00:00:00Z' };
+    const staleExplorer = { id: 'enr-stale', email: 'dup@example.com', enrollment_type: 'explorer', payment_status: 'pending', cohort_id: 'explorer-cohort-1', created_at: '2026-07-24T00:00:00Z' };
+    enrFindAll.mockResolvedValue([staleExplorer, real]);
+
+    const result = await createExplorerEnrollment({ name: 'Dup', email: 'dup@example.com' });
+
+    expect(result.enrollment).toBe(real);
     expect(enrCreate).not.toHaveBeenCalled();
   });
 });

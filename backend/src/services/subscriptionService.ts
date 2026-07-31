@@ -6,6 +6,7 @@ import {
   availableCreditRows, getAvailableCreditCents, selectCreditsUpTo, creditApplyTarget,
   consumeCreditsForSubscription,
 } from './accountCreditService';
+import { retireRedundantExplorerAccounts } from './enrollmentService';
 import type { SubscriptionPlan } from '../models/Subscription';
 
 /**
@@ -385,6 +386,17 @@ async function grantMembership(
     payment_mode: env.paymentMode === 'live' ? 'live' : 'test',
     enrolled_at: enrollment.enrolled_at || opts.now,
   });
+
+  // The legacy CB- payment path (markEnrollmentPaid, enrollmentService.ts) has
+  // always retired a paying student's lingering free Explorer duplicate on
+  // confirmation -- this self-serve path (activateByRef, and grantFreeAccess
+  // below, both funnel through here) never did, which is a real reason 8+
+  // students found live 2026-07-31 ended up with an active Explorer duplicate
+  // shadowing their real, newly-paid account. Best-effort + idempotent, same
+  // as the legacy call: never blocks or fails the activation itself.
+  retireRedundantExplorerAccounts(enrollment.email, enrollment.id).catch((err: any) =>
+    console.error('[Subscription] Explorer reconcile failed (non-fatal):', err?.message),
+  );
 }
 
 const COMP_PREFIX = 'COMP-';
