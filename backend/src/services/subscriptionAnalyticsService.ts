@@ -79,8 +79,9 @@ export interface TenureRosterRow {
   payer_name: string;
   payer_email: string;
   plan: SubscriptionPlanKey;
-  monthly_amount: number;
+  monthly_amount: number; // recurring $/mo for annual/monthly; the one-time $50 for deposit_holder; 0 otherwise
   member_since: string | null;
+  next_payment_date: string | null; // ISO — null when not applicable (comp, deposit_holder, lapsed, no period on record)
 }
 
 interface MemberRow {
@@ -351,21 +352,84 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
   return { kpis, planBreakdown, upcomingPayments, tenureFunnel: buckets, attention };
 }
 
+/** A next payment date only exists for a real, currently-active, billable
+ *  cycle that hasn't already passed — never for a comped seat (never billed
+ *  again), never when the best-known subscription row isn't actually
+ *  'active' (pending/no period on record), and never a PAST period_end
+ *  (that's a lapse, not an upcoming payment). Same rule
+ *  getSubscriptionAnalytics uses for upcomingPayments. */
+function nextPaymentDateFor(m: ClassifiedMember, nowMs: number): string | null {
+  if (!m.best || m.plan === 'comp' || m.best.sub_status !== 'active' || !m.best.current_period_end) return null;
+  const dueMs = new Date(m.best.current_period_end).getTime();
+  return Number.isFinite(dueMs) && dueMs >= nowMs ? new Date(dueMs).toISOString() : null;
+}
+
+function toRosterRow(m: ClassifiedMember, nowMs: number): TenureRosterRow {
+  return {
+    enrollment_id: m.enrollmentId,
+    payer_name: m.payerName,
+    payer_email: m.payerEmail,
+    plan: m.plan,
+    monthly_amount: m.monthlyAmount,
+    member_since: m.memberSince,
+    next_payment_date: nextPaymentDateFor(m, nowMs),
+  };
+}
+
+/** Soonest-payment-last ordering, as requested: real dates sort descending
+ *  (latest next-payment first); anyone with no next payment date (comp,
+ *  lapsed, no period on record) sorts to the bottom, not the top. */
+function sortByNextPaymentDesc(rows: TenureRosterRow[]): TenureRosterRow[] {
+  return rows.sort((a, b) => {
+    const at = a.next_payment_date ? new Date(a.next_payment_date).getTime() : -Infinity;
+    const bt = b.next_payment_date ? new Date(b.next_payment_date).getTime() : -Infinity;
+    return bt - at;
+  });
+}
+
 /** Drill-down roster for one Month-N tenure bucket (1-based; TENURE_BUCKET_COUNT
  *  means "Month N+"). Shares classifyAllMembers with getSubscriptionAnalytics so
  *  a bucket's roster length always matches its displayed count exactly. */
 export async function getTenureBucketRoster(oneBasedMonth: number, nowMs: number = Date.now()): Promise<TenureRosterRow[]> {
   const targetIndex = Math.min(Math.max(oneBasedMonth, 1), TENURE_BUCKET_COUNT) - 1;
   const members = await classifyAllMembers(nowMs);
-  return members
-    .filter((m) => m.tenureBucketIndex === targetIndex)
-    .map((m) => ({
-      enrollment_id: m.enrollmentId,
-      payer_name: m.payerName,
-      payer_email: m.payerEmail,
-      plan: m.plan,
-      monthly_amount: m.monthlyAmount,
-      member_since: m.memberSince,
-    }))
-    .sort((a, b) => new Date(a.member_since || 0).getTime() - new Date(b.member_since || 0).getTime());
+  const rows = members.filter((m) => m.tenureBucketIndex === targetIndex).map((m) => toRosterRow(m, nowMs));
+  return sortByNextPaymentDesc(rows);
+}
+
+/** Drill-down roster for one plan category, across every tenure month —
+ *  "just the Annual people", "just the Monthly people", etc. Covers
+ *  annual/monthly/comp/other; deposit_holder isn't a paying-member category
+ *  (see getDepositHolderRoster) so it's not classifyAllMembers output at all. */
+export async function getPlanRoster(
+  plan: 'annual' | 'monthly' | 'comp' | 'other',
+  nowMs: number = Date.now()
+): Promise<TenureRosterRow[]> {
+  const members = await classifyAllMembers(nowMs);
+  const rows = members.filter((m) => m.plan === plan).map((m) => toRosterRow(m, nowMs));
+  return sortByNextPaymentDesc(rows);
+}
+
+/** Drill-down roster for the "Deposit Holder" category: Explorers who paid
+ *  the $50 Open House deposit but haven't converted to a paying plan yet —
+ *  the same population fetchExplorerCounts() counts, just as rows. */
+export async function getDepositHolderRoster(): Promise<TenureRosterRow[]> {
+  const rows = (await sequelize.query(
+    `SELECT e.id AS enrollment_id, e.full_name, e.email, e.created_at, ac.amount_cents
+       FROM enrollments e
+       JOIN account_credits ac ON ac.enrollment_id = e.id
+      WHERE e.enrollment_type = 'explorer' AND ac.reason = 'open_house_deposit' AND ac.status = 'available'`,
+    { type: QueryTypes.SELECT }
+  )) as Array<{ enrollment_id: string; full_name: string | null; email: string | null; created_at: string | null; amount_cents: number }>;
+
+  const roster: TenureRosterRow[] = rows.map((r) => ({
+    enrollment_id: r.enrollment_id,
+    payer_name: r.full_name || r.email || '—',
+    payer_email: r.email || '',
+    plan: 'deposit_holder',
+    monthly_amount: r.amount_cents / 100,
+    member_since: r.created_at ? new Date(r.created_at).toISOString() : null,
+    next_payment_date: null,
+  }));
+  return sortByNextPaymentDesc(roster);
 }

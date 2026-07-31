@@ -13,7 +13,13 @@ jest.mock('../../config/database', () => ({
   sequelize: { query: mockQuery },
 }));
 
-import { getSubscriptionAnalytics, getTenureBucketRoster, SubscriptionAnalytics } from '../../services/subscriptionAnalyticsService';
+import {
+  getSubscriptionAnalytics,
+  getTenureBucketRoster,
+  getPlanRoster,
+  getDepositHolderRoster,
+  SubscriptionAnalytics,
+} from '../../services/subscriptionAnalyticsService';
 
 type Row = {
   enrollment_id: string;
@@ -274,14 +280,26 @@ describe('getTenureBucketRoster', () => {
     mockQuery.mockReset();
   });
 
-  it('returns only the members anchored in the requested month, sorted oldest-member-first', async () => {
+  it('returns only the members anchored in the requested month, sorted by next payment date descending', async () => {
     mockRows([
-      row({ enrollment_id: 'enr-m1-a', started_at: new Date(NOW - 20 * DAY_MS).toISOString() }),
-      row({ enrollment_id: 'enr-m1-b', started_at: new Date(NOW - 5 * DAY_MS).toISOString() }),
+      row({ enrollment_id: 'enr-m1-a', started_at: new Date(NOW - 20 * DAY_MS).toISOString(), current_period_end: new Date(NOW + 5 * DAY_MS).toISOString() }),
+      row({ enrollment_id: 'enr-m1-b', started_at: new Date(NOW - 5 * DAY_MS).toISOString(), current_period_end: new Date(NOW + 25 * DAY_MS).toISOString() }),
       row({ enrollment_id: 'enr-m2', started_at: new Date(NOW - 35 * DAY_MS).toISOString() }),
     ]);
     const roster = await getTenureBucketRoster(1, NOW);
-    expect(roster.map((r) => r.enrollment_id)).toEqual(['enr-m1-a', 'enr-m1-b']);
+    // enr-m1-b's next payment (day 25) is later than enr-m1-a's (day 5) -> sorts first, descending.
+    expect(roster.map((r) => r.enrollment_id)).toEqual(['enr-m1-b', 'enr-m1-a']);
+    expect(roster[0].next_payment_date).toBe(new Date(NOW + 25 * DAY_MS).toISOString());
+  });
+
+  it('sorts members with no next payment date (e.g. lapsed) to the bottom, not the top', async () => {
+    mockRows([
+      row({ enrollment_id: 'enr-has-date', started_at: new Date(NOW - 5 * DAY_MS).toISOString(), current_period_end: new Date(NOW + 10 * DAY_MS).toISOString() }),
+      row({ enrollment_id: 'enr-lapsed', started_at: new Date(NOW - 5 * DAY_MS).toISOString(), current_period_end: new Date(NOW - 2 * DAY_MS).toISOString() }), // lapsed -> null next_payment_date
+    ]);
+    const roster = await getTenureBucketRoster(1, NOW);
+    expect(roster.map((r) => r.enrollment_id)).toEqual(['enr-has-date', 'enr-lapsed']);
+    expect(roster[1].next_payment_date).toBeNull();
   });
 
   it('maps oneBasedMonth=5 to the "Month 5+" tail bucket', async () => {
@@ -294,5 +312,50 @@ describe('getTenureBucketRoster', () => {
     mockRows([noSubRow({ amount_paid: null })]); // classifies as 'other' — no anchor
     const roster = await getTenureBucketRoster(1, NOW);
     expect(roster).toEqual([]);
+  });
+});
+
+describe('getPlanRoster', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('returns only members of the requested plan, regardless of tenure month', async () => {
+    mockRows([
+      row({ enrollment_id: 'enr-annual', plan: 'annual', started_at: new Date(NOW - 5 * DAY_MS).toISOString() }),
+      row({ enrollment_id: 'enr-monthly-old', plan: 'monthly', started_at: new Date(NOW - 200 * DAY_MS).toISOString() }),
+      row({ enrollment_id: 'enr-monthly-new', plan: 'monthly', started_at: new Date(NOW - 5 * DAY_MS).toISOString() }),
+    ]);
+    const roster = await getPlanRoster('monthly', NOW);
+    expect(roster.map((r) => r.enrollment_id).sort()).toEqual(['enr-monthly-new', 'enr-monthly-old'].sort());
+    expect(roster.every((r) => r.plan === 'monthly')).toBe(true);
+  });
+
+  it('returns an empty roster for a plan with no members', async () => {
+    mockRows([row({ enrollment_id: 'enr-annual', plan: 'annual' })]);
+    const roster = await getPlanRoster('monthly', NOW);
+    expect(roster).toEqual([]);
+  });
+});
+
+describe('getDepositHolderRoster', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('returns Explorers with an available Open House deposit, labeled deposit_holder', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FROM enrollments e') && sql.includes('JOIN account_credits')) {
+        return Promise.resolve([
+          { enrollment_id: 'enr-dep', full_name: 'Deposit Person', email: 'dep@example.com', created_at: new Date(NOW - 3 * DAY_MS).toISOString(), amount_cents: 5000 },
+        ]);
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    const roster = await getDepositHolderRoster();
+    expect(roster).toHaveLength(1);
+    expect(roster[0]).toEqual(expect.objectContaining({
+      enrollment_id: 'enr-dep', plan: 'deposit_holder', monthly_amount: 50, next_payment_date: null,
+    }));
   });
 });

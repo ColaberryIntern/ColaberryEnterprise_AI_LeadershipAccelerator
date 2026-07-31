@@ -69,10 +69,18 @@ export interface TenureRosterRow {
   plan: SubscriptionPlanKey;
   monthly_amount: number;
   member_since: string | null;
+  next_payment_date: string | null;
 }
 
 /** Drill-down roster for one Month-N tenure bucket. month is 1-based; 5 means "Month 5+". */
 export async function getTenureBucketRoster(month: number): Promise<TenureRosterRow[]> {
   const { data } = await api.get(`/api/admin/revenue/tenure/${month}`);
+  return data.members;
+}
+
+/** Drill-down roster for one plan category ("just the Annual people", etc.),
+ *  across every tenure month — behind each row of "Subscribers by plan". */
+export async function getPlanRoster(plan: SubscriptionPlanKey): Promise<TenureRosterRow[]> {
+  const { data } = await api.get(`/api/admin/revenue/plan/${plan}`);
   return data.members;
 }
