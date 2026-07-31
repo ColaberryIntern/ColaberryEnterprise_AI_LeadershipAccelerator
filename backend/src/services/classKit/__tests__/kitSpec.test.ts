@@ -182,6 +182,58 @@ describe('buildKitSpec — KitConfig wiring', () => {
     const hit = spec.slides.find((s) => s.interaction?.q === 'Where should this live?');
     expect(hit?.segmentId).toBe('deconstruct');
   });
+
+  it('opening.coldOpen.enabled:false removes the cold-open slide but leaves the hook alone', async () => {
+    const baseline = buildKitSpec(await inputFor(week1MondaySession));
+    expect(baseline.slides.some((s) => s.title === 'By Thursday, this will exist')).toBe(true);
+    expect(baseline.slides.some((s) => s.kind === 'hook')).toBe(true); // Week 1 has an authored hook
+
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, opening: { ...DEFAULT_KIT_CONFIG.opening, coldOpen: { enabled: false, override: null } } };
+    const spec = buildKitSpec({ ...(await inputFor(week1MondaySession)), config });
+    expect(spec.slides.some((s) => s.title === 'By Thursday, this will exist')).toBe(false);
+    expect(spec.slides.some((s) => s.kind === 'hook')).toBe(true); // independent of coldOpen
+  });
+
+  it('opening.hook.enabled:false removes the hook slide but leaves cold-open alone', async () => {
+    const config: KitConfig = { ...DEFAULT_KIT_CONFIG, opening: { ...DEFAULT_KIT_CONFIG.opening, hook: { enabled: false, override: null } } };
+    const spec = buildKitSpec({ ...(await inputFor(week1MondaySession)), config });
+    expect(spec.slides.some((s) => s.kind === 'hook')).toBe(false);
+    expect(spec.slides.some((s) => s.title === 'By Thursday, this will exist')).toBe(true);
+  });
+
+  it('opening.coldOpen.override replaces the cold-open title/body', async () => {
+    const config: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      opening: { ...DEFAULT_KIT_CONFIG.opening, coldOpen: { enabled: true, override: { title: 'Custom cold open', body: 'Custom body.' } } },
+    };
+    const spec = buildKitSpec({ ...(await inputFor(week1MondaySession)), config });
+    expect(spec.slides.some((s) => s.title === 'Custom cold open' && s.body === 'Custom body.')).toBe(true);
+    expect(spec.slides.some((s) => s.title === 'By Thursday, this will exist')).toBe(false);
+  });
+
+  it('opening.hook.override replaces the hook headline/caption', async () => {
+    const config: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      opening: { ...DEFAULT_KIT_CONFIG.opening, hook: { enabled: true, override: { headline: 'Custom hook', caption: 'Custom caption.' } } },
+    };
+    const spec = buildKitSpec({ ...(await inputFor(week1MondaySession)), config });
+    const hookSlide = spec.slides.find((s) => s.kind === 'hook');
+    expect(hookSlide?.title).toBe('Custom hook');
+    expect(hookSlide?.body).toBe('Custom caption.');
+  });
+
+  it('opening.resultPreview.enabled:false removes it on Build Day; override replaces its content', async () => {
+    const disabledConfig: KitConfig = { ...DEFAULT_KIT_CONFIG, opening: { ...DEFAULT_KIT_CONFIG.opening, resultPreview: { enabled: false, override: null } } };
+    const disabledSpec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config: disabledConfig });
+    expect(disabledSpec.slides.some((s) => s.eyebrow === '🎯 Result preview')).toBe(false);
+
+    const overrideConfig: KitConfig = {
+      ...DEFAULT_KIT_CONFIG,
+      opening: { ...DEFAULT_KIT_CONFIG.opening, resultPreview: { enabled: true, override: { title: 'Custom preview', body: 'Custom body.' } } },
+    };
+    const overrideSpec = buildKitSpec({ ...(await inputFor(week1ThursdaySession)), config: overrideConfig });
+    expect(overrideSpec.slides.some((s) => s.title === 'Custom preview' && s.body === 'Custom body.')).toBe(true);
+  });
 });
 
 describe('renderKitHtml', () => {

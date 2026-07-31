@@ -14,7 +14,7 @@ import {
 } from '../../data/classSessionPlan';
 import { teachSlidesFor, ORIENTATION_TEACH, TeachSlide, EvidenceClaim } from '../../data/classTeachContent';
 import { detectDayKind, parseWeek, BuildKitSpecInput, KitSessionInput } from './kitSpec';
-import { buildKitSpec, defaultInteractionsFor } from './kitSpecDaySlides';
+import { buildKitSpec, defaultInteractionsFor, defaultOpeningFor, DefaultOpening } from './kitSpecDaySlides';
 import { DEFAULT_KIT_CONFIG, StoryBeatOverride, InteractionPlacement } from './kitConfig';
 
 export interface KitConfigDefaults {
@@ -29,6 +29,8 @@ export interface KitConfigDefaults {
   interactions: InteractionPlacement[];
   storyBeats: StoryBeatOverride[];
   evidence: EvidenceClaim[];
+  /** The authored default opening content (cold-open/hook/result-preview). */
+  opening: DefaultOpening;
 }
 
 function flattenStoryBeats(map: Record<string, StoryBeat[]> | undefined): StoryBeatOverride[] {
@@ -49,6 +51,7 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
   const prompts = dayKind === 'build' && wc ? wc.thursday.prompts : [];
 
   const interactions = defaultInteractionsFor(week, dayKind);
+  const opening = defaultOpeningFor(week, dayKind);
 
   const storyBeats = flattenStoryBeats(
     dayKind === 'orientation' ? ORIENTATION_PLAN.storyBeats
@@ -62,5 +65,5 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
   const defaultSpec = buildKitSpec(input);
   const evidence = defaultSpec.slides.flatMap((s) => s.evidence || []);
 
-  return { dayKind, week, teach, prompts, interactions, storyBeats, evidence };
+  return { dayKind, week, teach, prompts, interactions, storyBeats, evidence, opening };
 }

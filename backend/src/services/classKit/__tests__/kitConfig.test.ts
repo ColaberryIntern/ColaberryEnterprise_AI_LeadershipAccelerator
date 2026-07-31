@@ -59,4 +59,27 @@ describe('mergeKitConfig', () => {
     const merged = mergeKitConfig(oldShape);
     expect(merged.interactions).toEqual(DEFAULT_KIT_CONFIG.interactions);
   });
+
+  it('is backward-compatible with a config saved before `opening` existed', () => {
+    const merged = mergeKitConfig({ storyBeats: { enabled: false, max: null, overrides: null } });
+    expect(merged.opening).toEqual(DEFAULT_KIT_CONFIG.opening);
+  });
+
+  it('merges a partial opening config, defaulting untouched slots', () => {
+    const merged = mergeKitConfig({ opening: { coldOpen: { enabled: false, override: null } } });
+    expect(merged.opening.coldOpen).toEqual({ enabled: false, override: null });
+    expect(merged.opening.hook).toEqual(DEFAULT_KIT_CONFIG.opening.hook);
+    expect(merged.opening.resultPreview).toEqual(DEFAULT_KIT_CONFIG.opening.resultPreview);
+  });
+
+  it('preserves a full opening slot override', () => {
+    const custom = { headline: 'Custom hook', caption: 'Custom caption' };
+    const merged = mergeKitConfig({ opening: { hook: { enabled: true, override: custom } } });
+    expect(merged.opening.hook.override).toEqual(custom);
+  });
+
+  it('ignores a malformed opening slot (non-object) and falls back to default', () => {
+    const merged = mergeKitConfig({ opening: { coldOpen: 'not an object' } });
+    expect(merged.opening.coldOpen).toEqual(DEFAULT_KIT_CONFIG.opening.coldOpen);
+  });
 });

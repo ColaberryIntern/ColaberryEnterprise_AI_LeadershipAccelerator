@@ -84,6 +84,14 @@ export interface CountAndOverride<T> {
   enabled: boolean; max: number | null; overrides: T[] | null;
 }
 
+/** A single fixed moment (not a list) — enabled:false removes it entirely;
+ * override replaces its content wholesale. */
+export interface Slot<T> {
+  enabled: boolean; override: T | null;
+}
+export interface OpeningCopy { title: string; body: string }
+export interface HookCopy { headline: string; caption: string }
+
 export interface KitConfig {
   storyBeats: CountAndOverride<StoryBeatOverride>;
   theaterEnabled: boolean;
@@ -92,6 +100,11 @@ export interface KitConfig {
   teach: CountAndOverride<TeachSlideOverride>;
   prompts: CountAndOverride<PromptOverride>;
   interactions: CountAndOverride<InteractionPlacement>;
+  opening: {
+    coldOpen: Slot<OpeningCopy>;
+    hook: Slot<HookCopy>;
+    resultPreview: Slot<OpeningCopy>;
+  };
 }
 
 /** Read-only authored-default content, so the UI can show what is actually
@@ -104,6 +117,7 @@ export interface KitConfigDefaults {
   interactions: InteractionPlacement[];
   storyBeats: StoryBeatOverride[];
   evidence: EvidenceOverride[];
+  opening: { coldOpen: OpeningCopy | null; hook: HookCopy | null; resultPreview: OpeningCopy | null };
 }
 
 export const blankBeat = (): StoryBeatOverride => ({ segment: 'business-problem', icon: '💡', eyebrow: '', title: '', body: '', punch: '', tone: 'berry' });
@@ -115,7 +129,7 @@ export const blankInteraction = (segment: string, kind: InteractionPlacement['ki
   answer: kind === 'trivia' ? 0 : null, reveal: '', theater: false, presenterTip: '',
 });
 
-export type CategoryKey = 'storyBeats' | 'teach' | 'prompts' | 'interactions' | 'evidence';
+export type CategoryKey = 'storyBeats' | 'teach' | 'prompts' | 'interactions' | 'opening' | 'evidence';
 
 /** Category status, used to render the left-rail badge — one shared mental
  * model across every count+override category. */

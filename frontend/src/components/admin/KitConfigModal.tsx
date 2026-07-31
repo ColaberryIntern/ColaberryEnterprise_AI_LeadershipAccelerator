@@ -6,6 +6,7 @@ import StoryBeatsPanel from './kitConfig/StoryBeatsPanel';
 import TeachPanel from './kitConfig/TeachPanel';
 import PromptsPanel from './kitConfig/PromptsPanel';
 import InteractionsPanel from './kitConfig/InteractionsPanel';
+import OpeningPanel from './kitConfig/OpeningPanel';
 import EvidencePanel from './kitConfig/EvidencePanel';
 
 /**
@@ -35,6 +36,7 @@ const CATEGORIES: CategoryDef[] = [
   { key: 'teach', icon: '📖', label: 'Lessons' },
   { key: 'prompts', icon: '⌨️', label: 'Claude Code Examples' },
   { key: 'interactions', icon: '🗳️', label: 'Survey Questions' },
+  { key: 'opening', icon: '🎬', label: 'Opening' },
   { key: 'evidence', icon: '📎', label: 'Sources' },
 ];
 
@@ -71,11 +73,17 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
 
   const statuses: Record<CategoryKey, CategoryStatus> | null = useMemo(() => {
     if (!config || !defaults) return null;
+    const openingSlots = defaults.dayKind === 'architecture' ? [config.opening.coldOpen, config.opening.hook]
+      : defaults.dayKind === 'build' ? [config.opening.resultPreview] : [];
+    const openingStatus: CategoryStatus = openingSlots.length === 0 ? 'default'
+      : openingSlots.every((s) => !s.enabled) ? 'off'
+        : openingSlots.some((s) => s.override != null) ? 'custom' : 'default';
     return {
       storyBeats: statusForCountAndOverride(config.storyBeats),
       teach: statusForCountAndOverride(config.teach),
       prompts: statusForCountAndOverride(config.prompts),
       interactions: statusForCountAndOverride(config.interactions),
+      opening: openingStatus,
       evidence: config.evidenceOverrides != null ? 'custom' : 'default',
     };
   }, [config, defaults]);
@@ -154,6 +162,10 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
                       onChange={(next) => setConfig({ ...config, interactions: next })}
                       onToggleTheater={(v) => setConfig({ ...config, theaterEnabled: v })}
                       onGenerateQuestion={generateQuestion} />
+                  )}
+                  {active === 'opening' && (
+                    <OpeningPanel opening={config.opening} defaults={defaults.opening} dayKind={defaults.dayKind}
+                      onChange={(next) => setConfig({ ...config, opening: next })} />
                   )}
                   {active === 'evidence' && (
                     <EvidencePanel overrides={config.evidenceOverrides} defaults={defaults.evidence}

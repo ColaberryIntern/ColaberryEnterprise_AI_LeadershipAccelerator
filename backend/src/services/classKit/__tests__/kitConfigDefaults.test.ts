@@ -26,9 +26,13 @@ describe('getKitConfigDefaults', () => {
     // Evidence is aggregated across rendered teach slides; may be empty for a
     // week with no authored EvidenceClaims, so just assert the shape is an array.
     expect(Array.isArray(d.evidence)).toBe(true);
+    // Build Day has no cold-open/hook (Monday-only); result-preview is authored.
+    expect(d.opening.coldOpen).toBeNull();
+    expect(d.opening.hook).toBeNull();
+    expect(d.opening.resultPreview?.title).toBe('What you are producing today');
   });
 
-  it('resolves Architecture Day defaults: the Monday poll/trivia and story beats', () => {
+  it('resolves Architecture Day defaults: the Monday poll/trivia, story beats, and opening content', () => {
     const d = getKitConfigDefaults(week1Monday);
     expect(d.dayKind).toBe('architecture');
     expect(d.interactions.filter((q) => q.segment === 'checkin' || q.segment === 'challenge').every((q) => q.q.includes('CLAUDE.md'))).toBe(true);
@@ -36,14 +40,20 @@ describe('getKitConfigDefaults', () => {
     expect(d.storyBeats.length).toBeGreaterThan(0);
     expect(d.storyBeats.every((b) => typeof b.segment === 'string')).toBe(true);
     expect(d.prompts).toEqual([]);
+    expect(d.opening.coldOpen?.title).toBe('By Thursday, this will exist');
+    expect(d.opening.hook).not.toBeNull(); // Week 1 has an authored hook
+    expect(d.opening.resultPreview).toBeNull(); // Thursday-only
   });
 
-  it('resolves Orientation defaults without a week number', () => {
+  it('resolves Orientation defaults without a week number, and no opening content (Monday/Thursday-only)', () => {
     const d = getKitConfigDefaults(orientation);
     expect(d.dayKind).toBe('orientation');
     expect(d.week).toBeNull();
     expect(d.teach.length).toBeGreaterThan(0);
     expect(d.interactions.some((q) => q.segment === 'welcome')).toBe(true);
     expect(d.interactions.some((q) => q.segment === 'setup')).toBe(true);
+    expect(d.opening.coldOpen).toBeNull();
+    expect(d.opening.hook).toBeNull();
+    expect(d.opening.resultPreview).toBeNull();
   });
 });

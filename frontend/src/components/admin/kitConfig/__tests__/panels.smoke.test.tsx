@@ -4,8 +4,9 @@ import StoryBeatsPanel from '../StoryBeatsPanel';
 import TeachPanel from '../TeachPanel';
 import PromptsPanel from '../PromptsPanel';
 import InteractionsPanel from '../InteractionsPanel';
+import OpeningPanel from '../OpeningPanel';
 import EvidencePanel from '../EvidencePanel';
-import { CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionPlacement, EvidenceOverride } from '../types';
+import { CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionPlacement, EvidenceOverride, KitConfig, KitConfigDefaults } from '../types';
 
 /**
  * Render-only smoke tests for the Customize modal panels — no
@@ -117,5 +118,54 @@ describe('KitConfig panel smoke rendering', () => {
     expect(html1).toContain('A claim.');
     const html2 = renderToStaticMarkup(<EvidencePanel overrides={[evidence]} defaults={[]} onChange={noop} />);
     expect(html2).toContain('+ Add source');
+  });
+
+  it('OpeningPanel renders cold-open + hook for Architecture Day', () => {
+    const opening: KitConfig['opening'] = {
+      coldOpen: { enabled: true, override: null }, hook: { enabled: true, override: null }, resultPreview: { enabled: true, override: null },
+    };
+    const defaults: KitConfigDefaults['opening'] = {
+      coldOpen: { title: 'By Thursday, this will exist', body: 'Payoff.' },
+      hook: { headline: 'Custom headline', caption: 'Custom caption.' },
+      resultPreview: null,
+    };
+    const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="architecture" onChange={noop} />);
+    expect(html).toContain('Cold Open');
+    expect(html).toContain('By Thursday, this will exist');
+    expect(html).toContain('Story Mode Hook');
+    expect(html).toContain('Custom headline');
+    expect(html).not.toContain('Result Preview');
+  });
+
+  it('OpeningPanel renders only Result Preview for Build Day', () => {
+    const opening: KitConfig['opening'] = {
+      coldOpen: { enabled: true, override: null }, hook: { enabled: true, override: null }, resultPreview: { enabled: true, override: null },
+    };
+    const defaults: KitConfigDefaults['opening'] = {
+      coldOpen: null, hook: null, resultPreview: { title: 'What you are producing today', body: 'Body.' },
+    };
+    const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="build" onChange={noop} />);
+    expect(html).toContain('Result Preview');
+    expect(html).toContain('What you are producing today');
+    expect(html).not.toContain('Cold Open');
+    expect(html).not.toContain('Story Mode Hook');
+  });
+
+  it('OpeningPanel shows a not-yet-configurable note for Orientation (not wired into the deck builder)', () => {
+    const opening: KitConfig['opening'] = {
+      coldOpen: { enabled: true, override: null }, hook: { enabled: true, override: null }, resultPreview: { enabled: true, override: null },
+    };
+    const defaults: KitConfigDefaults['opening'] = { coldOpen: null, hook: null, resultPreview: null };
+    const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="orientation" onChange={noop} />);
+    expect(html).toContain('not yet configurable');
+  });
+
+  it('OpeningPanel: disabling a slot shows the Off status', () => {
+    const opening: KitConfig['opening'] = {
+      coldOpen: { enabled: false, override: null }, hook: { enabled: true, override: null }, resultPreview: { enabled: true, override: null },
+    };
+    const defaults: KitConfigDefaults['opening'] = { coldOpen: { title: 'T', body: 'B' }, hook: null, resultPreview: null };
+    const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="architecture" onChange={noop} />);
+    expect(html).toContain('Off');
   });
 });

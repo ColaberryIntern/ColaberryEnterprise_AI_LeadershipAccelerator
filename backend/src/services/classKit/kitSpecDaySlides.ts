@@ -16,7 +16,7 @@ import {
   detectDayKind, parseWeek, buildMeta, toSegments,
   BUILDER_BROADCAST_PROMPTS, PROVE_FORMULA, STEP_EMOJIS, PHONE_RULES,
 } from './kitSpec';
-import { KitConfig, DEFAULT_KIT_CONFIG, InteractionPlacement } from './kitConfig';
+import { KitConfig, DEFAULT_KIT_CONFIG, InteractionPlacement, Slot, OpeningCopy, HookCopy } from './kitConfig';
 
 /** Insert story beats right after a segment's own content — the instructor's
  * `config.storyBeats.overrides` (a full replacement set, filtered to this
@@ -79,6 +79,43 @@ export function defaultInteractionsFor(week: number | null, dayKind: DayKind): I
   ];
 }
 
+export interface DefaultOpening {
+  coldOpen: OpeningCopy | null;
+  hook: HookCopy | null;
+  resultPreview: OpeningCopy | null;
+}
+
+/** The authored default "opening" content for a given week + day kind —
+ * cold-open framing (Monday), the optional Story Mode hook (Monday), and
+ * the result-preview (Thursday). Exported so kitConfigDefaults.ts can
+ * resolve the identical content without duplicating this logic. */
+export function defaultOpeningFor(week: number | null, dayKind: DayKind): DefaultOpening {
+  if (dayKind === 'orientation') return { coldOpen: null, hook: null, resultPreview: null };
+  const wc = week != null ? WEEK_CLASS_CONTENT.find((w) => w.week === week) : undefined;
+  if (!wc) return { coldOpen: null, hook: null, resultPreview: null };
+  if (dayKind === 'architecture') {
+    return {
+      coldOpen: { title: 'By Thursday, this will exist', body: wc.monday.payoffPreview },
+      hook: wc.monday.hook ? { headline: wc.monday.hook.headline, caption: wc.monday.hook.caption } : null,
+      resultPreview: null,
+    };
+  }
+  return {
+    coldOpen: null,
+    hook: null,
+    resultPreview: { title: 'What you are producing today', body: wc.thursday.resultPreview },
+  };
+}
+
+/** Resolve one opening slot: enabled:false removes it entirely; override
+ * replaces its content (even for a week with no authored default — an
+ * instructor can add a hook to a week that never had one); null default +
+ * no override = nothing to show. */
+function resolveSlot<T>(defaultValue: T | null, slot: Slot<T>): T | null {
+  if (!slot.enabled) return null;
+  return slot.override ?? defaultValue;
+}
+
 /** Resolve the survey-question list for this session: enabled:false hides
  * every question; overrides fully replaces the authored defaults; max caps
  * the total count. Mirrors `resolveTeachSlides`'s exact shape. */
@@ -134,18 +171,23 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   const m = wc.monday;
   const mteach = resolveTeachSlides(teachSlidesFor(meta.week, 'monday'), config); // deep teaching slides, inserted per segment
   const interactions = resolveInteractions(defaultInteractionsFor(meta.week, 'architecture'), config);
+  const opening = defaultOpeningFor(meta.week, 'architecture');
+  const hook = resolveSlot(opening.hook, config.opening.hook);
+  const coldOpen = resolveSlot(opening.coldOpen, config.opening.coldOpen);
 
   const cold = segById(segs, 'cold-open');
-  if (m.hook) {
+  if (hook) {
     out.push(slide(cold, -1, 'hook', {
-      title: m.hook.headline, body: m.hook.caption,
+      title: hook.headline, body: hook.caption,
       presenterTip: 'One sentence. Let it land. Do not explain it yet — the class explains it.',
     }));
   }
-  out.push(slide(cold, 0, 'segment', {
-    eyebrow: '🎬 Cold open', title: 'By Thursday, this will exist', body: m.payoffPreview,
-    presenterTip: 'Show the finished artifact first. Sell the payoff before any theory.',
-  }));
+  if (coldOpen) {
+    out.push(slide(cold, 0, 'segment', {
+      eyebrow: '🎬 Cold open', title: coldOpen.title, body: coldOpen.body,
+      presenterTip: 'Show the finished artifact first. Sell the payoff before any theory.',
+    }));
+  }
   pushInteractions(out, interactions, 'cold-open', cold);
 
   const checkin = segById(segs, 'checkin');
@@ -216,12 +258,15 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
   const t = wc.thursday;
   const tteach = resolveTeachSlides(teachSlidesFor(meta.week, 'thursday'), config); // deep teaching slides, inserted per segment
   const interactions = resolveInteractions(defaultInteractionsFor(meta.week, 'build'), config);
+  const resultPreview = resolveSlot(defaultOpeningFor(meta.week, 'build').resultPreview, config.opening.resultPreview);
 
   const preview = segById(segs, 'result-preview');
-  out.push(slide(preview, 0, 'segment', {
-    eyebrow: '🎯 Result preview', title: 'What you are producing today', body: t.resultPreview,
-    presenterTip: 'Show the finished result first. This is the cold open of the episode.',
-  }));
+  if (resultPreview) {
+    out.push(slide(preview, 0, 'segment', {
+      eyebrow: '🎯 Result preview', title: resultPreview.title, body: resultPreview.body,
+      presenterTip: 'Show the finished result first. This is the cold open of the episode.',
+    }));
+  }
   // No default Build Day story beats are authored yet — this only fires when
   // the instructor adds a custom one via Present ▾ → Customize.
   pushStoryBeats(out, undefined, 'result-preview', preview, config);

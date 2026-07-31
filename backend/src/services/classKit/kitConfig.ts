@@ -49,6 +49,18 @@ export interface CountAndOverride<T> {
   overrides: T[] | null;
 }
 
+/** A single fixed moment (not a list) — enabled:false removes it entirely;
+ * override replaces its content wholesale. Used for the recurring "opening"
+ * slides (cold-open, hook, result-preview) that are one-per-class, not an
+ * open list like story beats/questions. */
+export interface Slot<T> {
+  enabled: boolean;
+  override: T | null;
+}
+
+export interface OpeningCopy { title: string; body: string }
+export interface HookCopy { headline: string; caption: string }
+
 export interface KitConfig {
   storyBeats: CountAndOverride<StoryBeatOverride>;
   /** Live Decision Theater — full-screen poll treatment. When false, theater-
@@ -89,7 +101,24 @@ export interface KitConfig {
    * check, Thursday's warm-up trivia — as ordinary list entries, so nothing
    * changes visually until an instructor actually adds/edits/removes one). */
   interactions: CountAndOverride<InteractionPlacement>;
+
+  /** The recurring "opening" moments that repeat in near-identical shape
+   * across weeks — the cold-open framing ("By Thursday, this will exist"),
+   * Story Mode's optional full-screen hook, and Build Day's result-preview.
+   * A named-slot category (not a list) since each is exactly one moment per
+   * class, not something an instructor adds more of. */
+  opening: {
+    coldOpen: Slot<OpeningCopy>;
+    /** Monday-only; the authored default is often null (not every week has
+     * a hook), but an instructor can still enable+override to ADD one to a
+     * week that never had one authored. */
+    hook: Slot<HookCopy>;
+    /** Thursday-only. */
+    resultPreview: Slot<OpeningCopy>;
+  };
 }
+
+const DEFAULT_SLOT = { enabled: true, override: null };
 
 export const DEFAULT_KIT_CONFIG: KitConfig = {
   storyBeats: { enabled: true, max: null, overrides: null },
@@ -99,6 +128,11 @@ export const DEFAULT_KIT_CONFIG: KitConfig = {
   teach: { enabled: true, max: null, overrides: null },
   prompts: { enabled: true, max: null, overrides: null },
   interactions: { enabled: true, max: null, overrides: null },
+  opening: {
+    coldOpen: { ...DEFAULT_SLOT },
+    hook: { ...DEFAULT_SLOT },
+    resultPreview: { ...DEFAULT_SLOT },
+  },
 };
 
 function mergeCountAndOverride<T>(saved: unknown, fallback: CountAndOverride<T>): CountAndOverride<T> {
@@ -110,11 +144,20 @@ function mergeCountAndOverride<T>(saved: unknown, fallback: CountAndOverride<T>)
   };
 }
 
+function mergeSlot<T>(saved: unknown, fallback: Slot<T>): Slot<T> {
+  const s = (saved && typeof saved === 'object' ? saved : {}) as Partial<Slot<T>>;
+  return {
+    enabled: typeof s.enabled === 'boolean' ? s.enabled : fallback.enabled,
+    override: s.override && typeof s.override === 'object' ? (s.override as T) : fallback.override,
+  };
+}
+
 /** Merge a possibly-partial/possibly-null saved config over the defaults —
  * every field is independently optional, so an old/short-saved config never
  * crashes a render; missing pieces just fall back to the default. */
 export function mergeKitConfig(saved: unknown): KitConfig {
   const s = (saved && typeof saved === 'object' ? saved : {}) as Partial<KitConfig>;
+  const so = (s.opening && typeof s.opening === 'object' ? s.opening : {}) as Partial<KitConfig['opening']>;
   return {
     storyBeats: mergeCountAndOverride(s.storyBeats, DEFAULT_KIT_CONFIG.storyBeats),
     theaterEnabled: typeof s.theaterEnabled === 'boolean' ? s.theaterEnabled : DEFAULT_KIT_CONFIG.theaterEnabled,
@@ -129,5 +172,10 @@ export function mergeKitConfig(saved: unknown): KitConfig {
     // the old shape — exactly the discipline this function already existed
     // to guarantee for every other category.
     interactions: mergeCountAndOverride(s.interactions, DEFAULT_KIT_CONFIG.interactions),
+    opening: {
+      coldOpen: mergeSlot(so.coldOpen, DEFAULT_KIT_CONFIG.opening.coldOpen),
+      hook: mergeSlot(so.hook, DEFAULT_KIT_CONFIG.opening.hook),
+      resultPreview: mergeSlot(so.resultPreview, DEFAULT_KIT_CONFIG.opening.resultPreview),
+    },
   };
 }
