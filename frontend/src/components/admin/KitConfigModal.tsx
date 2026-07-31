@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '../../utils/api';
-import { CategoryKey, CategoryStatus, InteractionPlacement, KitConfig, KitConfigDefaults, statusForCountAndOverride } from './kitConfig/types';
+import { CategoryKey, CategoryStatus, InteractionPlacement, KitConfig, KitConfigDefaults, PromptOverride, StoryBeatOverride, TeachSlideOverride, statusForCountAndOverride } from './kitConfig/types';
 import { StatusBadge } from './kitConfig/shared';
 import StoryBeatsPanel from './kitConfig/StoryBeatsPanel';
 import TeachPanel from './kitConfig/TeachPanel';
@@ -93,6 +93,20 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
     return res.data.question;
   };
 
+  async function rewriteCategory<T>(category: 'teach' | 'storyBeats' | 'prompts', currentItems: T[], instruction: string): Promise<T[]> {
+    try {
+      const res = await api.post(`/api/admin/accelerator/sessions/${sessionId}/kit-config/rewrite`, { category, currentItems, instruction });
+      if (res.data.source === 'scaffold') showToast('No change — AI rewrite unavailable right now, kept your current list', 'error');
+      return res.data.items;
+    } catch {
+      showToast('AI rewrite failed — kept your current list', 'error');
+      return currentItems;
+    }
+  }
+  const rewriteTeach = (items: TeachSlideOverride[], instruction: string) => rewriteCategory('teach', items, instruction);
+  const rewriteStoryBeats = (items: StoryBeatOverride[], instruction: string) => rewriteCategory('storyBeats', items, instruction);
+  const rewritePrompts = (items: PromptOverride[], instruction: string) => rewriteCategory('prompts', items, instruction);
+
   const customizedCount = statuses ? Object.values(statuses).filter((s) => s !== 'default').length : 0;
 
   if (loading || !config || !defaults || !statuses) {
@@ -144,16 +158,19 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
                 <div className="flex-grow-1 p-3" style={{ overflowY: 'auto' }}>
                   {active === 'storyBeats' && (
                     <StoryBeatsPanel config={config.storyBeats} defaults={defaults.storyBeats}
+                      onRewrite={rewriteStoryBeats}
                       onChange={(next) => setConfig({ ...config, storyBeats: next })} />
                   )}
                   {active === 'teach' && (
                     <TeachPanel config={config.teach} defaults={defaults.teach} dayLabel={DAY_LABEL[defaults.dayKind]}
+                      onRewrite={rewriteTeach}
                       onChange={(next) => setConfig({ ...config, teach: next })} />
                   )}
                   {active === 'prompts' && (
                     <PromptsPanel config={config.prompts} defaults={defaults.prompts} dayKind={defaults.dayKind}
                       appliesToThisSession={promptsApplyHere}
                       buildBayDetail={config.buildBayDetail} onToggleDetail={(v) => setConfig({ ...config, buildBayDetail: v })}
+                      onRewrite={rewritePrompts}
                       onChange={(next) => setConfig({ ...config, prompts: next })} />
                   )}
                   {active === 'interactions' && (

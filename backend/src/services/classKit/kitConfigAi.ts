@@ -19,7 +19,9 @@
  */
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { env } from '../../config/env';
-import { InteractionPlacement } from './kitConfig';
+import { InteractionPlacement, StoryBeatOverride } from './kitConfig';
+import { TeachSlide } from '../../data/classTeachContent';
+import { ClassPrompt } from '../../data/classSessionPlan';
 
 const BASE_TIMEOUT_MS = 15_000;
 const TIMEOUT_PER_1K_TOKENS = 5_000;
@@ -127,4 +129,116 @@ export async function generateQuestion(input: GenerateQuestionInput): Promise<Ge
   } catch {
     return { question: scaffold, source: 'scaffold' };
   }
+}
+
+// ── List rewrite (Phase 3): "write my own" for Lessons/Story Beats/Claude
+// Code Examples means "type an instruction, get a draft, then edit it" —
+// this is the shared engine behind that for all three categories. ─────────
+
+export interface RewriteListInput<T> {
+  weekTitle: string;
+  contentSummary: string;
+  currentItems: T[];
+  instruction: string;
+}
+export interface RewriteListResult<T> { items: T[]; source: 'ai' | 'scaffold' }
+
+/** Grounded rewrite of an existing list, given a one-line instruction. Falls
+ * back to the CURRENT list unchanged (not a blank scaffold — there is
+ * nothing sensible to invent generically for an arbitrary T) with or
+ * without an OpenAI key, or if the response can't be parsed into at least
+ * one valid item. `workflow` feeds `groundedJsonCall`'s tracing; `system`
+ * is the category-specific shape instructions; `normalize` validates/coerces
+ * one raw parsed item or returns null to drop it. */
+async function rewriteList<T>(
+  workflow: string, system: string, normalize: (raw: unknown) => T | null,
+  input: RewriteListInput<T>,
+): Promise<RewriteListResult<T>> {
+  if (!env.openaiApiKey) return { items: input.currentItems, source: 'scaffold' };
+  const user =
+    `Week: "${input.weekTitle}"\nContent taught this week:\n${input.contentSummary.slice(0, 3000)}\n` +
+    `Current list:\n${JSON.stringify(input.currentItems).slice(0, 3000)}\n` +
+    `Instructor instruction: "${input.instruction}"\n` +
+    'Rewrite the list per the instruction — keep the same number of items unless the instruction asks to add or remove some.';
+  try {
+    const parsed = await groundedJsonCall(workflow, system, user, 1400);
+    const raw = Array.isArray(parsed.items) ? parsed.items : [];
+    const items = raw.map(normalize).filter((x: T | null): x is T => x != null);
+    if (!items.length) return { items: input.currentItems, source: 'scaffold' };
+    return { items, source: 'ai' };
+  } catch {
+    return { items: input.currentItems, source: 'scaffold' };
+  }
+}
+
+function normalizeTeachItem(raw: unknown): TeachSlide | null {
+  const r = raw as Record<string, unknown>;
+  if (!r || typeof r.title !== 'string' || !r.title.trim()) return null;
+  const item: TeachSlide = {
+    segment: typeof r.segment === 'string' && r.segment.trim() ? r.segment : 'guided-build',
+    eyebrow: typeof r.eyebrow === 'string' ? r.eyebrow : '',
+    title: r.title,
+  };
+  if (typeof r.body === 'string') item.body = r.body;
+  if (Array.isArray(r.bullets)) item.bullets = r.bullets.filter((b: unknown): b is string => typeof b === 'string');
+  if (typeof r.script === 'string') item.script = r.script;
+  const rc = r.code as Record<string, unknown> | undefined;
+  if (rc && typeof rc.code === 'string') item.code = { label: typeof rc.label === 'string' ? rc.label : '', code: rc.code };
+  return item;
+}
+
+export async function rewriteTeach(input: RewriteListInput<TeachSlide>): Promise<RewriteListResult<TeachSlide>> {
+  const system =
+    'You rewrite a list of deep-teaching "Lesson" slides for a live coding-bootcamp class, grounded in the week ' +
+    'content given, per the instructor\'s instruction. Return STRICT json: { "items": [ { "segment": string, ' +
+    '"eyebrow": string (emoji + short label), "title": string, "body": string, "bullets": string[] (optional), ' +
+    '"code": {"label": string, "code": string} (optional, a copy-ready Claude Code prompt/snippet), ' +
+    '"script": string (optional, what the instructor says) } ] }.';
+  return rewriteList('classkit_rewrite_teach', system, normalizeTeachItem, input);
+}
+
+function normalizeStoryBeat(raw: unknown): StoryBeatOverride | null {
+  const r = raw as Record<string, unknown>;
+  if (!r || typeof r.title !== 'string' || !r.title.trim() || typeof r.body !== 'string') return null;
+  return {
+    segment: typeof r.segment === 'string' && r.segment.trim() ? r.segment : 'business-problem',
+    icon: typeof r.icon === 'string' && r.icon.trim() ? r.icon : '💡',
+    eyebrow: typeof r.eyebrow === 'string' ? r.eyebrow : 'Change of pace',
+    title: r.title,
+    body: r.body,
+    punch: typeof r.punch === 'string' ? r.punch : undefined,
+    tone: (['cherry', 'berry', 'amber', 'leaf', 'violet'] as const).includes(r.tone as any) ? (r.tone as StoryBeatOverride['tone']) : 'berry',
+  };
+}
+
+export async function rewriteStoryBeats(input: RewriteListInput<StoryBeatOverride>): Promise<RewriteListResult<StoryBeatOverride>> {
+  const system =
+    'You rewrite a list of "change of pace" story-beat slides (a metaphor or real-world story that illustrates a ' +
+    'concept) for a live coding-bootcamp class, grounded in the week content given, per the instructor\'s ' +
+    'instruction. Return STRICT json: { "items": [ { "segment": string, "icon": string (one large emoji), ' +
+    '"eyebrow": string, "title": string, "body": string (2-4 sentences, the story itself), ' +
+    '"punch": string (optional closing one-liner), "tone": "cherry"|"berry"|"amber"|"leaf"|"violet" } ] }.';
+  return rewriteList('classkit_rewrite_storybeats', system, normalizeStoryBeat, input);
+}
+
+function normalizePrompt(raw: unknown): ClassPrompt | null {
+  const r = raw as Record<string, unknown>;
+  if (!r || typeof r.label !== 'string' || !r.label.trim() || typeof r.prompt !== 'string' || !r.prompt.trim()) return null;
+  const item: ClassPrompt = { label: r.label, prompt: r.prompt };
+  if (typeof r.pasteWhere === 'string') item.pasteWhere = r.pasteWhere;
+  if (typeof r.ccMode === 'string') item.ccMode = r.ccMode;
+  if (typeof r.expectedResult === 'string') item.expectedResult = r.expectedResult;
+  if (typeof r.stopCondition === 'string') item.stopCondition = r.stopCondition;
+  if (typeof r.rescue === 'string') item.rescue = r.rescue;
+  return item;
+}
+
+export async function rewritePrompts(input: RewriteListInput<ClassPrompt>): Promise<RewriteListResult<ClassPrompt>> {
+  const system =
+    'You rewrite a list of copy-ready Claude Code prompts driven live in a coding-bootcamp\'s "Build Bay", grounded ' +
+    'in the week content given, per the instructor\'s instruction. Return STRICT json: { "items": [ { "label": ' +
+    'string, "prompt": string (the exact text to paste into Claude Code), "pasteWhere": string (optional), ' +
+    '"ccMode": "Manual"|"Plan Mode"|"Auto" (optional), "expectedResult": string (optional, "you should see"), ' +
+    '"stopCondition": string (optional, "stop when"), "rescue": string (optional, "if stuck") } ] }.';
+  return rewriteList('classkit_rewrite_prompts', system, normalizePrompt, input);
 }

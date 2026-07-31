@@ -129,6 +129,14 @@ export const blankInteraction = (segment: string, kind: InteractionPlacement['ki
   answer: kind === 'trivia' ? 0 : null, reveal: '', theater: false, presenterTip: '',
 });
 
+/** What "Write my own" seeds the editable list from: a copy of the real
+ * authored defaults when any exist (so editing starts from real content,
+ * not a blank template — the whole point of Phase 3's unification), else
+ * one blank item so the editor isn't empty with nothing to click into. */
+export function seedOverrides<T>(defaults: T[], blank: () => T): T[] {
+  return defaults.length ? defaults.map((d) => ({ ...d })) : [blank()];
+}
+
 export type CategoryKey = 'storyBeats' | 'teach' | 'prompts' | 'interactions' | 'opening' | 'evidence';
 
 /** Category status, used to render the left-rail badge — one shared mental

@@ -6,7 +6,7 @@ import PromptsPanel from '../PromptsPanel';
 import InteractionsPanel from '../InteractionsPanel';
 import OpeningPanel from '../OpeningPanel';
 import EvidencePanel from '../EvidencePanel';
-import { CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionPlacement, EvidenceOverride, KitConfig, KitConfigDefaults } from '../types';
+import { CountAndOverride, StoryBeatOverride, TeachSlideOverride, PromptOverride, InteractionPlacement, EvidenceOverride, KitConfig, KitConfigDefaults, seedOverrides, blankBeat } from '../types';
 
 /**
  * Render-only smoke tests for the Customize modal panels — no
@@ -24,38 +24,63 @@ const question: InteractionPlacement = { segment: 'checkin', kind: 'poll', eyebr
 
 const noop = () => {};
 const noopAsync = async () => question;
+const noopRewriteBeats = async () => [storyBeat];
+const noopRewriteTeach = async () => [teachSlide];
+const noopRewritePrompts = async () => [prompt];
+
+describe('seedOverrides', () => {
+  it('seeds from a real copy of the authored defaults when any exist (Phase 3\'s core fix)', () => {
+    const seeded = seedOverrides([storyBeat], blankBeat);
+    expect(seeded).toEqual([storyBeat]);
+    expect(seeded[0]).not.toBe(storyBeat); // a copy, not the same reference
+  });
+
+  it('falls back to one blank item only when there are no defaults to copy', () => {
+    const seeded = seedOverrides([] as StoryBeatOverride[], blankBeat);
+    expect(seeded).toEqual([blankBeat()]);
+  });
+
+  it('mutating a seeded copy does not affect the original defaults array', () => {
+    const defaults = [storyBeat];
+    const seeded = seedOverrides(defaults, blankBeat);
+    seeded[0].title = 'Mutated';
+    expect(defaults[0].title).toBe('A real story');
+  });
+});
 
 describe('KitConfig panel smoke rendering', () => {
   it('StoryBeatsPanel renders in defaults and custom modes', () => {
     const base: CountAndOverride<StoryBeatOverride> = { enabled: true, max: null, overrides: null };
-    const html1 = renderToStaticMarkup(<StoryBeatsPanel config={base} defaults={[storyBeat]} onChange={noop} />);
+    const html1 = renderToStaticMarkup(<StoryBeatsPanel config={base} defaults={[storyBeat]} onRewrite={noopRewriteBeats} onChange={noop} />);
     expect(html1).toContain('Story Beats');
     expect(html1).toContain('A real story');
     const custom: CountAndOverride<StoryBeatOverride> = { enabled: true, max: 2, overrides: [storyBeat] };
-    const html2 = renderToStaticMarkup(<StoryBeatsPanel config={custom} defaults={[storyBeat]} onChange={noop} />);
+    const html2 = renderToStaticMarkup(<StoryBeatsPanel config={custom} defaults={[storyBeat]} onRewrite={noopRewriteBeats} onChange={noop} />);
     expect(html2).toContain('Remove');
     expect(html2).toContain('will show');
+    expect(html2).toContain('AI rewrite');
   });
 
   it('StoryBeatsPanel renders the disabled/empty-defaults state without throwing', () => {
     const off: CountAndOverride<StoryBeatOverride> = { enabled: false, max: null, overrides: null };
-    expect(() => renderToStaticMarkup(<StoryBeatsPanel config={off} defaults={[]} onChange={noop} />)).not.toThrow();
+    expect(() => renderToStaticMarkup(<StoryBeatsPanel config={off} defaults={[]} onRewrite={noopRewriteBeats} onChange={noop} />)).not.toThrow();
   });
 
   it('TeachPanel renders in defaults and custom modes', () => {
     const base: CountAndOverride<TeachSlideOverride> = { enabled: true, max: null, overrides: null };
-    const html1 = renderToStaticMarkup(<TeachPanel config={base} defaults={[teachSlide]} dayLabel="Build Day (Thursday)" onChange={noop} />);
+    const html1 = renderToStaticMarkup(<TeachPanel config={base} defaults={[teachSlide]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />);
     expect(html1).toContain('A lesson');
     const custom: CountAndOverride<TeachSlideOverride> = { enabled: true, max: null, overrides: [teachSlide] };
-    const html2 = renderToStaticMarkup(<TeachPanel config={custom} defaults={[]} dayLabel="Build Day (Thursday)" onChange={noop} />);
+    const html2 = renderToStaticMarkup(<TeachPanel config={custom} defaults={[]} dayLabel="Build Day (Thursday)" onRewrite={noopRewriteTeach} onChange={noop} />);
     expect(html2).toContain('+ Add lesson slide');
+    expect(html2).toContain('AI rewrite');
   });
 
   it('PromptsPanel shows the Lessons-precedence note when this week has deep-teach content', () => {
     const base: CountAndOverride<PromptOverride> = { enabled: true, max: null, overrides: null };
     const html = renderToStaticMarkup(
       <PromptsPanel config={base} defaults={[prompt]} buildBayDetail={true} onToggleDetail={noop}
-        appliesToThisSession={false} dayKind="build" onChange={noop} />,
+        appliesToThisSession={false} dayKind="build" onRewrite={noopRewritePrompts} onChange={noop} />,
     );
     expect(html).toContain('already renders from');
     expect(html).toContain('Governance gate');
@@ -65,7 +90,7 @@ describe('KitConfig panel smoke rendering', () => {
     const base: CountAndOverride<PromptOverride> = { enabled: true, max: null, overrides: null };
     const html = renderToStaticMarkup(
       <PromptsPanel config={base} defaults={[]} buildBayDetail={true} onToggleDetail={noop}
-        appliesToThisSession={false} dayKind="architecture" onChange={noop} />,
+        appliesToThisSession={false} dayKind="architecture" onRewrite={noopRewritePrompts} onChange={noop} />,
     );
     expect(html).toContain('only apply to Build Day');
   });

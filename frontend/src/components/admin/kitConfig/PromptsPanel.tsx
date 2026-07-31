@@ -1,6 +1,6 @@
 import React from 'react';
-import { CountAndOverride, PromptOverride, blankPrompt } from './types';
-import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote } from './shared';
+import { CountAndOverride, PromptOverride, blankPrompt, seedOverrides } from './types';
+import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote, AiRewriteBar } from './shared';
 
 interface Props {
   config: CountAndOverride<PromptOverride>;
@@ -12,16 +12,18 @@ interface Props {
    * effect, so we say so instead of leaving it a silent no-op. */
   appliesToThisSession: boolean;
   dayKind: 'orientation' | 'architecture' | 'build';
+  onRewrite: (currentItems: PromptOverride[], instruction: string) => Promise<PromptOverride[]>;
   onChange: (next: CountAndOverride<PromptOverride>) => void;
 }
 
-const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onToggleDetail, appliesToThisSession, dayKind, onChange }) => {
+const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onToggleDetail, appliesToThisSession, dayKind, onRewrite, onChange }) => {
   const usingCustom = config.overrides != null;
   const prompts = config.overrides ?? [];
 
   const update = (i: number, patch: Partial<PromptOverride>) => onChange({ ...config, overrides: prompts.map((p, idx) => (idx === i ? { ...p, ...patch } : p)) });
   const add = () => onChange({ ...config, overrides: [...prompts, blankPrompt()] });
   const remove = (i: number) => onChange({ ...config, overrides: prompts.filter((_, idx) => idx !== i) });
+  const rewrite = async (instruction: string) => onChange({ ...config, overrides: await onRewrite(prompts.length ? prompts : defaults, instruction) });
 
   if (dayKind !== 'build') {
     return <EmptyDefaultsNote>Claude Code examples only apply to Build Day (Thursday) sessions.</EmptyDefaultsNote>;
@@ -57,7 +59,7 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
       {config.enabled && (
         <>
           <ContentModeSwitch id="cfg-prompts-custom" usingCustom={usingCustom} itemNoun="prompts"
-            onSwitch={(custom) => onChange({ ...config, overrides: custom ? [blankPrompt()] : null })} />
+            onSwitch={(custom) => onChange({ ...config, overrides: custom ? seedOverrides(defaults, blankPrompt) : null })} />
           {!usingCustom ? (
             defaults.length === 0 ? (
               <EmptyDefaultsNote>No fallback prompts are authored for this week.</EmptyDefaultsNote>
@@ -68,6 +70,7 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
             )
           ) : (
             <>
+              <AiRewriteBar itemNoun="Claude Code examples" onRewrite={rewrite} />
               {prompts.map((p, i) => (
                 <OverrideCard key={i} index={i} onRemove={() => remove(i)}>
                   <div className="row g-2 mb-2">

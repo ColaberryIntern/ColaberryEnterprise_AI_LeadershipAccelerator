@@ -1,10 +1,11 @@
 import React from 'react';
-import { CountAndOverride, StoryBeatOverride, TONES, SEGMENT_OPTIONS, blankBeat } from './types';
-import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote } from './shared';
+import { CountAndOverride, StoryBeatOverride, TONES, SEGMENT_OPTIONS, blankBeat, seedOverrides } from './types';
+import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote, AiRewriteBar } from './shared';
 
 interface Props {
   config: CountAndOverride<StoryBeatOverride>;
   defaults: StoryBeatOverride[];
+  onRewrite: (currentItems: StoryBeatOverride[], instruction: string) => Promise<StoryBeatOverride[]>;
   onChange: (next: CountAndOverride<StoryBeatOverride>) => void;
 }
 
@@ -16,13 +17,14 @@ const segmentLabel = (value: string) => {
   return value;
 };
 
-const StoryBeatsPanel: React.FC<Props> = ({ config, defaults, onChange }) => {
+const StoryBeatsPanel: React.FC<Props> = ({ config, defaults, onRewrite, onChange }) => {
   const usingCustom = config.overrides != null;
   const beats = config.overrides ?? [];
 
   const update = (i: number, patch: Partial<StoryBeatOverride>) => onChange({ ...config, overrides: beats.map((b, idx) => (idx === i ? { ...b, ...patch } : b)) });
   const add = () => onChange({ ...config, overrides: [...beats, blankBeat()] });
   const remove = (i: number) => onChange({ ...config, overrides: beats.filter((_, idx) => idx !== i) });
+  const rewrite = async (instruction: string) => onChange({ ...config, overrides: await onRewrite(beats.length ? beats : defaults, instruction) });
 
   return (
     <>
@@ -38,7 +40,7 @@ const StoryBeatsPanel: React.FC<Props> = ({ config, defaults, onChange }) => {
       {config.enabled && (
         <>
           <ContentModeSwitch id="cfg-story-custom" usingCustom={usingCustom} itemNoun="story beats"
-            onSwitch={(custom) => onChange({ ...config, overrides: custom ? [blankBeat()] : null })} />
+            onSwitch={(custom) => onChange({ ...config, overrides: custom ? seedOverrides(defaults, blankBeat) : null })} />
           {!usingCustom ? (
             defaults.length === 0 ? (
               <EmptyDefaultsNote>No story beats are authored for this class yet — flip to "Write my own" to add some.</EmptyDefaultsNote>
@@ -50,6 +52,7 @@ const StoryBeatsPanel: React.FC<Props> = ({ config, defaults, onChange }) => {
             )
           ) : (
             <>
+              <AiRewriteBar itemNoun="story beats" onRewrite={rewrite} />
               {beats.map((b, i) => (
                 <OverrideCard key={i} index={i} onRemove={() => remove(i)}>
                   <div className="row g-2 mb-2">

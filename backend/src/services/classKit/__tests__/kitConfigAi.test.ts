@@ -1,4 +1,4 @@
-import { generateQuestion } from '../kitConfigAi';
+import { generateQuestion, rewriteTeach, rewriteStoryBeats, rewritePrompts } from '../kitConfigAi';
 import * as envModule from '../../../config/env';
 
 // Mock the env module so tests are deterministic regardless of the real
@@ -95,4 +95,83 @@ describe('generateQuestion', () => {
     expect(result.source).toBe('scaffold');
     expect(mockCreate).toHaveBeenCalledTimes(3); // initial + 2 retries
   }, 10000);
+});
+
+describe('rewriteTeach / rewriteStoryBeats / rewritePrompts', () => {
+  const currentTeach = [{ segment: 'guided-build', eyebrow: '📄', title: 'Old lesson', body: 'Old body.' }];
+  const currentBeats = [{ segment: 'business-problem', icon: '💡', eyebrow: 'Old', title: 'Old beat', body: 'Old body.', tone: 'berry' as const }];
+  const currentPrompts = [{ label: 'Old prompt', prompt: 'Old text.' }];
+
+  beforeEach(() => {
+    mockCreate.mockReset();
+    envModule.env.openaiApiKey = '';
+  });
+
+  it('rewriteTeach returns the current list unchanged (scaffold) with no OpenAI key configured', async () => {
+    const result = await rewriteTeach({ weekTitle: 'Week 1', contentSummary: 'x', currentItems: currentTeach, instruction: 'make it about testing' });
+    expect(result.source).toBe('scaffold');
+    expect(result.items).toEqual(currentTeach);
+    expect(mockCreate).not.toHaveBeenCalled();
+  });
+
+  it('rewriteTeach parses a valid AI response into normalized TeachSlide items', async () => {
+    envModule.env.openaiApiKey = 'test-key';
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({
+        items: [{ segment: 'guided-build', eyebrow: '🧪', title: 'New lesson', body: 'New body.', bullets: ['a', 'b'], code: { label: 'Try it', code: 'Do the thing.' }, script: 'Say this.' }],
+      }) } }],
+    });
+    const result = await rewriteTeach({ weekTitle: 'Week 1', contentSummary: 'x', currentItems: currentTeach, instruction: 'add a testing example' });
+    expect(result.source).toBe('ai');
+    expect(result.items).toEqual([{ segment: 'guided-build', eyebrow: '🧪', title: 'New lesson', body: 'New body.', bullets: ['a', 'b'], code: { label: 'Try it', code: 'Do the thing.' }, script: 'Say this.' }]);
+  });
+
+  it('rewriteTeach drops invalid items (no title) but keeps valid ones from the same response', async () => {
+    envModule.env.openaiApiKey = 'test-key';
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ items: [{ body: 'no title here' }, { title: 'Valid one', body: 'b' }] }) } }],
+    });
+    const result = await rewriteTeach({ weekTitle: 'Week 1', contentSummary: 'x', currentItems: currentTeach, instruction: 'x' });
+    expect(result.source).toBe('ai');
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].title).toBe('Valid one');
+  });
+
+  it('rewriteTeach falls back to the current list if every returned item is invalid', async () => {
+    envModule.env.openaiApiKey = 'test-key';
+    mockCreate.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify({ items: [{ body: 'no title' }] }) } }] });
+    const result = await rewriteTeach({ weekTitle: 'Week 1', contentSummary: 'x', currentItems: currentTeach, instruction: 'x' });
+    expect(result.source).toBe('scaffold');
+    expect(result.items).toEqual(currentTeach);
+  });
+
+  it('rewriteStoryBeats parses a valid AI response, defaulting an invalid tone to "berry"', async () => {
+    envModule.env.openaiApiKey = 'test-key';
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({
+        items: [{ segment: 'architecture', icon: '🚀', eyebrow: 'New', title: 'New beat', body: 'New body.', tone: 'not-a-real-tone' }],
+      }) } }],
+    });
+    const result = await rewriteStoryBeats({ weekTitle: 'Week 1', contentSummary: 'x', currentItems: currentBeats, instruction: 'x' });
+    expect(result.source).toBe('ai');
+    expect(result.items[0].tone).toBe('berry');
+  });
+
+  it('rewritePrompts parses a valid AI response into normalized ClassPrompt items', async () => {
+    envModule.env.openaiApiKey = 'test-key';
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify({ items: [{ label: 'New prompt', prompt: 'New text.', ccMode: 'Plan Mode' }] }) } }],
+    });
+    const result = await rewritePrompts({ weekTitle: 'Week 1', contentSummary: 'x', currentItems: currentPrompts, instruction: 'x' });
+    expect(result.source).toBe('ai');
+    expect(result.items).toEqual([{ label: 'New prompt', prompt: 'New text.', ccMode: 'Plan Mode' }]);
+  });
+
+  it('rewritePrompts falls back to the current list on a non-JSON response', async () => {
+    envModule.env.openaiApiKey = 'test-key';
+    mockCreate.mockResolvedValueOnce({ choices: [{ message: { content: 'not json' } }] });
+    const result = await rewritePrompts({ weekTitle: 'Week 1', contentSummary: 'x', currentItems: currentPrompts, instruction: 'x' });
+    expect(result.source).toBe('scaffold');
+    expect(result.items).toEqual(currentPrompts);
+  });
 });
