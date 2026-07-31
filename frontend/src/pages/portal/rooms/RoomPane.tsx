@@ -138,6 +138,18 @@ const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
   );
 };
 
+// General video rooms (is_video, no linked_live_session_id — e.g. a cohort's
+// always-open room) get the same "live" visual treatment as an actual class
+// (see ClassSessionBanner above), but always-on rather than schedule-gated —
+// this is the practice/demo venue for what joining a real class looks like,
+// so it never shows a countdown or a completed state.
+const AlwaysOpenVideoBanner: React.FC<{ onJoin: () => void }> = ({ onJoin }) => (
+  <div className="rm-classbanner live">
+    <div className="rm-classbanner-live"><span className="te-livedot" aria-hidden="true" /> Live now · always open</div>
+    <button type="button" className="te-btn cherry sm" onClick={onJoin}>📹 Join Google Meet</button>
+  </div>
+);
+
 type RoomTab = 'chat' | 'files' | 'recordings';
 
 const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () => void }> = ({ roomId, onDeleted, onChanged }) => {
@@ -313,12 +325,13 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
         {room.privacy !== 'public' && <span className={`rm-privacy ${room.privacy}`}>{room.privacy.replace('_', ' ')}</span>}
         {activeCount > 0 && <span className="rm-presence">{activeCount} here</span>}
         <span style={{ flex: 1 }} />
-        {room.is_video && !room.linked_live_session_id && <button type="button" className="te-btn cherry sm" onClick={doJoinVideo}>📹 Join call</button>}
         {canManage && <button type="button" className="te-btn ghost sm" onClick={() => setShowInvite(true)}>Invite</button>}
         {isOwner && !room.is_system && <button type="button" className="te-btn ghost sm rm-danger" onClick={doDelete}>Delete</button>}
       </div>
 
-      {room.linked_live_session_id && <ClassSessionBanner sessionId={room.linked_live_session_id} />}
+      {room.linked_live_session_id
+        ? <ClassSessionBanner sessionId={room.linked_live_session_id} />
+        : room.is_video && <AlwaysOpenVideoBanner onJoin={doJoinVideo} />}
 
       <div className="rm-tabs" role="tablist" aria-label="Room sections">
         <button type="button" role="tab" aria-selected={paneTab === 'chat'} className={`rm-tab${paneTab === 'chat' ? ' active' : ''}`} onClick={() => setPaneTab('chat')}>Chat</button>
