@@ -228,6 +228,14 @@ import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
 import InboxSurfacePreference from './InboxSurfacePreference';
 import InboxDeletedEmail from './InboxDeletedEmail';
 
+// Inbox Intel — Case Resolution Engine models
+import InboxCase from './InboxCase';
+import InboxCaseItem from './InboxCaseItem';
+import InboxIdentityAlias from './InboxIdentityAlias';
+import InboxCaseQuestion from './InboxCaseQuestion';
+import InboxCaseAction from './InboxCaseAction';
+import InboxCaseEvent from './InboxCaseEvent';
+
 // --- Universal Lead Ingestion associations ---
 LeadSource.hasMany(EntryPoint, { foreignKey: 'source_id', as: 'entryPoints', onDelete: 'CASCADE' });
 EntryPoint.belongsTo(LeadSource, { foreignKey: 'source_id', as: 'source' });
@@ -256,6 +264,18 @@ InboxEmail.hasMany(InboxOpportunityScore, { foreignKey: 'email_id', as: 'opportu
 InboxOpportunityScore.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
 InboxEmail.hasMany(InboxFalseNegativeFeedback, { foreignKey: 'email_id', as: 'falseNegativeFeedback' });
 InboxFalseNegativeFeedback.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+
+// --- Inbox Intel — Case Resolution Engine associations ---
+InboxCase.hasMany(InboxCaseItem, { foreignKey: 'case_id', as: 'items' });
+InboxCaseItem.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCaseQuestion, { foreignKey: 'case_id', as: 'questions' });
+InboxCaseQuestion.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCaseAction, { foreignKey: 'case_id', as: 'actions' });
+InboxCaseAction.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCaseItem.hasMany(InboxCaseAction, { foreignKey: 'item_id', as: 'actions' });
+InboxCaseAction.belongsTo(InboxCaseItem, { foreignKey: 'item_id', as: 'item' });
+InboxCase.hasMany(InboxCaseEvent, { foreignKey: 'case_id', as: 'events' });
+InboxCaseEvent.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
 
 // --- Preview Stack associations ---
 Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
@@ -1174,6 +1194,12 @@ export {
   InboxFalseNegativeFeedback,
   InboxSurfacePreference,
   InboxDeletedEmail,
+  InboxCase,
+  InboxCaseItem,
+  InboxIdentityAlias,
+  InboxCaseQuestion,
+  InboxCaseAction,
+  InboxCaseEvent,
   LeadSource,
   EntryPoint,
   FormDefinition,
