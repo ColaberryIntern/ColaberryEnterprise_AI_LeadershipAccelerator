@@ -1,6 +1,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { inferPlanFromAmountPaid } from './planInference';
+import { IS_STAFF_SQL } from './staffDetection';
 
 /* ------------------------------------------------------------------ */
 /*  Subscription analytics — the recurring-revenue lens for            */
@@ -21,14 +22,15 @@ import { inferPlanFromAmountPaid } from './planInference';
 /*  does not revoke access.                                              */
 /* ------------------------------------------------------------------ */
 
-export type SubscriptionPlanKey = 'annual' | 'monthly' | 'comp' | 'deposit_holder' | 'other';
+export type SubscriptionPlanKey = 'annual' | 'monthly' | 'comp' | 'deposit_holder' | 'other' | 'staff';
 
 export interface SubscriptionKpis {
   mrr: number;
   arr: number;
-  activeSubscribers: number; // paying (annual/monthly), excludes comp/other/deposit_holder
+  activeSubscribers: number; // paying (annual/monthly), excludes comp/other/deposit_holder/staff
   compedSeats: number;
   otherPaidCount: number; // paid members whose plan/amount can't be classified (e.g. sponsor-invoiced)
+  staffCount: number; // real Colaberry team members — never a revenue/funnel signal, see IS_STAFF_SQL
   arpu: number; // mrr / activeSubscribers
 }
 
@@ -90,6 +92,7 @@ interface MemberRow {
   email: string | null;
   amount_paid: string | null; // numeric from PG comes back as string
   enrollment_created_at: string | null; // last-resort tenure anchor when there's no subscription row at all
+  is_staff: boolean;
   sub_id: string | null;
   plan: 'annual' | 'monthly' | 'comp' | null;
   sub_status: 'pending' | 'active' | 'canceled' | 'failed' | null;
@@ -120,6 +123,7 @@ const PLAN_LABELS: Record<SubscriptionPlanKey, string> = {
   comp: 'Free Access',
   deposit_holder: 'Deposit Holder',
   other: 'Other',
+  staff: 'Staff',
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -131,7 +135,7 @@ const monthlyEquivalent = (plan: 'annual' | 'monthly', amount: number): number =
   plan === 'annual' ? amount / 12 : amount;
 
 const emptyPlanCounts = (): Record<SubscriptionPlanKey, number> => ({
-  annual: 0, monthly: 0, comp: 0, deposit_holder: 0, other: 0,
+  annual: 0, monthly: 0, comp: 0, deposit_holder: 0, other: 0, staff: 0,
 });
 
 /** The one subscription row (if any) that best represents this enrollment's
@@ -153,11 +157,13 @@ function pickBestSubscription(rows: MemberRow[]): MemberRow | null {
 async function fetchPayingMembers(): Promise<MemberRow[]> {
   return (await sequelize.query(
     `SELECT e.id AS enrollment_id, e.full_name, e.email, e.amount_paid, e.created_at AS enrollment_created_at,
+            ${IS_STAFF_SQL} AS is_staff,
             s.id AS sub_id, s.plan, s.status AS sub_status, s.amount_cents,
             s.started_at, s.current_period_end, s.created_at AS sub_created_at
        FROM enrollments e
+       LEFT JOIN community_members cm ON cm.enrollment_id = e.id
        LEFT JOIN subscriptions s ON s.enrollment_id = e.id
-      WHERE e.payment_status = 'paid' AND e.enrollment_type != 'explorer'
+      WHERE e.payment_status = 'paid' AND e.enrollment_type != 'explorer' AND e.status = 'active'
       ORDER BY e.id, s.created_at DESC`,
     { type: QueryTypes.SELECT }
   )) as MemberRow[];
@@ -165,24 +171,29 @@ async function fetchPayingMembers(): Promise<MemberRow[]> {
 
 /** Explorers still in their free trial, split by whether they've paid the $50
  *  Open House "hold your spot" deposit — a real, if small, dollar commitment
- *  that deserves its own bucket rather than being invisible inside "Explorer". */
-async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolders: number; depositTotal: number }> {
+ *  that deserves its own bucket rather than being invisible inside "Explorer".
+ *  Real Colaberry staff who happen to hold an Explorer-shaped enrollment
+ *  (internal test/onboarding signups) are carved out into their own count —
+ *  they were never real prospects and shouldn't dilute the funnel. */
+async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolders: number; depositTotal: number; staff: number }> {
   const rows = (await sequelize.query(
     `SELECT
-        COUNT(*) FILTER (WHERE ac.enrollment_id IS NULL)::int AS free_trial,
-        COUNT(*) FILTER (WHERE ac.enrollment_id IS NOT NULL)::int AS deposit_holders,
-        COALESCE(SUM(ac.amount_cents) FILTER (WHERE ac.enrollment_id IS NOT NULL), 0)::int AS deposit_cents
+        COUNT(*) FILTER (WHERE ${IS_STAFF_SQL})::int AS staff,
+        COUNT(*) FILTER (WHERE NOT ${IS_STAFF_SQL} AND ac.enrollment_id IS NULL)::int AS free_trial,
+        COUNT(*) FILTER (WHERE NOT ${IS_STAFF_SQL} AND ac.enrollment_id IS NOT NULL)::int AS deposit_holders,
+        COALESCE(SUM(ac.amount_cents) FILTER (WHERE NOT ${IS_STAFF_SQL} AND ac.enrollment_id IS NOT NULL), 0)::int AS deposit_cents
        FROM enrollments e
+       LEFT JOIN community_members cm ON cm.enrollment_id = e.id
        LEFT JOIN LATERAL (
          SELECT enrollment_id, amount_cents FROM account_credits
           WHERE enrollment_id = e.id AND reason = 'open_house_deposit' AND status = 'available'
           LIMIT 1
        ) ac ON true
-      WHERE e.enrollment_type = 'explorer'`,
+      WHERE e.enrollment_type = 'explorer' AND e.status = 'active'`,
     { type: QueryTypes.SELECT }
-  )) as Array<{ free_trial: number; deposit_holders: number; deposit_cents: number }>;
-  const r = rows[0] || { free_trial: 0, deposit_holders: 0, deposit_cents: 0 };
-  return { freeTrial: r.free_trial, depositHolders: r.deposit_holders, depositTotal: r.deposit_cents / 100 };
+  )) as Array<{ staff: number; free_trial: number; deposit_holders: number; deposit_cents: number }>;
+  const r = rows[0] || { staff: 0, free_trial: 0, deposit_holders: 0, deposit_cents: 0 };
+  return { freeTrial: r.free_trial, depositHolders: r.deposit_holders, depositTotal: r.deposit_cents / 100, staff: r.staff };
 }
 
 function classifyMember(enrollmentId: string, memberRows: MemberRow[], nowMs: number): ClassifiedMember {
@@ -195,7 +206,13 @@ function classifyMember(enrollmentId: string, memberRows: MemberRow[], nowMs: nu
 
   let plan: SubscriptionPlanKey;
   let monthlyAmount = 0;
-  if (best) {
+  if (first.is_staff) {
+    // Staff overrides every other signal — a comped seat given to a real team
+    // member is a Staff account, not "Free Access" (which means a non-staff
+    // person a Colaberry admin chose to comp), regardless of what plan/amount
+    // their enrollment would otherwise resolve to.
+    plan = 'staff';
+  } else if (best) {
     plan = best.plan as SubscriptionPlanKey;
     monthlyAmount = plan === 'comp' ? 0 : monthlyEquivalent(plan as 'annual' | 'monthly', (best.amount_cents || 0) / 100);
   } else {
@@ -218,7 +235,7 @@ function classifyMember(enrollmentId: string, memberRows: MemberRow[], nowMs: nu
   // from amount_paid) — still a real, if less precise, "since when" signal.
   let memberSince: string | null = null;
   let tenureBucketIndex: number | null = null;
-  if (plan !== 'other') {
+  if (plan !== 'other' && plan !== 'staff') {
     const anchorSource = best?.started_at || best?.sub_created_at || first.enrollment_created_at;
     if (anchorSource) {
       const startedMs = new Date(anchorSource).getTime();
@@ -252,13 +269,14 @@ function monthLabel(oneBased: number): string {
 export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Promise<SubscriptionAnalytics> {
   const members = await classifyAllMembers(nowMs);
 
-  const kpis: SubscriptionKpis = { mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, arpu: 0 };
+  const kpis: SubscriptionKpis = { mrr: 0, arr: 0, activeSubscribers: 0, compedSeats: 0, otherPaidCount: 0, staffCount: 0, arpu: 0 };
   const planCounts: Record<SubscriptionPlanKey, { count: number; amount: number }> = {
     annual: { count: 0, amount: 0 },
     monthly: { count: 0, amount: 0 },
     comp: { count: 0, amount: 0 },
     deposit_holder: { count: 0, amount: 0 },
     other: { count: 0, amount: 0 },
+    staff: { count: 0, amount: 0 },
   };
   const upcomingPayments: UpcomingPayment[] = [];
   const attention: AttentionRow[] = [];
@@ -279,11 +297,14 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
       kpis.compedSeats += 1;
     } else if (plan === 'other') {
       kpis.otherPaidCount += 1;
+    } else if (plan === 'staff') {
+      kpis.staffCount += 1;
     }
 
     // Renewal/lapse only make sense with a real, activated period — and never
-    // apply to a comped seat, which is never billed again.
-    if (best && best.current_period_end && plan !== 'comp') {
+    // apply to a comped seat (never billed again) or a staff account (not a
+    // revenue relationship at all, whatever subscription row it may carry).
+    if (best && best.current_period_end && plan !== 'comp' && plan !== 'staff') {
       const dueMs = new Date(best.current_period_end).getTime();
       const inDays = Math.ceil((dueMs - nowMs) / DAY_MS);
       if (best.sub_status === 'active' && dueMs >= nowMs && inDays <= UPCOMING_HORIZON_DAYS) {
@@ -301,8 +322,9 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
 
     // Failed-attempt detection: the newest subscription row is a failed
     // checkout and nothing else about this enrollment counts as a real,
-    // currently-active plan (best would be that active row instead, if one existed).
-    if (newest && newest.sub_status === 'failed' && (!best || best.sub_status !== 'active')) {
+    // currently-active plan (best would be that active row instead, if one
+    // existed) — and never for staff, who aren't a revenue relationship at all.
+    if (plan !== 'staff' && newest && newest.sub_status === 'failed' && (!best || best.sub_status !== 'active')) {
       attention.push({
         enrollment_id: enrollmentId, payer_name: payerName, payer_email: payerEmail, kind: 'failed',
         plan: (newest.plan as SubscriptionPlanKey) || 'other',
@@ -319,10 +341,13 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
   kpis.arr = kpis.mrr * 12;
   kpis.arpu = kpis.activeSubscribers > 0 ? kpis.mrr / kpis.activeSubscribers : 0;
 
-  const { freeTrial: freeTrialCount, depositHolders, depositTotal } = await fetchExplorerCounts();
+  const { freeTrial: freeTrialCount, depositHolders, depositTotal, staff: explorerStaffCount } = await fetchExplorerCounts();
   planCounts.deposit_holder = { count: depositHolders, amount: depositTotal };
+  planCounts.staff.count += explorerStaffCount; // + whatever staff already accrued above from paying-member rows
+  kpis.staffCount += explorerStaffCount;
 
   const planOrder: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp', 'deposit_holder'];
+  if (planCounts.staff.count > 0) planOrder.push('staff');
   if (planCounts.other.count > 0) planOrder.push('other'); // only surface if it's real, never hidden
   const planBreakdown: PlanBreakdownRow[] = planOrder.map((plan) => ({
     plan, label: PLAN_LABELS[plan], count: planCounts[plan].count, amount: planCounts[plan].amount,
@@ -412,13 +437,16 @@ export async function getPlanRoster(
 
 /** Drill-down roster for the "Deposit Holder" category: Explorers who paid
  *  the $50 Open House deposit but haven't converted to a paying plan yet —
- *  the same population fetchExplorerCounts() counts, just as rows. */
+ *  the same population fetchExplorerCounts() counts, just as rows. Excludes
+ *  staff and withdrawn rows, matching fetchExplorerCounts exactly. */
 export async function getDepositHolderRoster(): Promise<TenureRosterRow[]> {
   const rows = (await sequelize.query(
     `SELECT e.id AS enrollment_id, e.full_name, e.email, e.created_at, ac.amount_cents
        FROM enrollments e
+       LEFT JOIN community_members cm ON cm.enrollment_id = e.id
        JOIN account_credits ac ON ac.enrollment_id = e.id
-      WHERE e.enrollment_type = 'explorer' AND ac.reason = 'open_house_deposit' AND ac.status = 'available'`,
+      WHERE e.enrollment_type = 'explorer' AND e.status = 'active' AND NOT ${IS_STAFF_SQL}
+        AND ac.reason = 'open_house_deposit' AND ac.status = 'available'`,
     { type: QueryTypes.SELECT }
   )) as Array<{ enrollment_id: string; full_name: string | null; email: string | null; created_at: string | null; amount_cents: number }>;
 
@@ -428,6 +456,32 @@ export async function getDepositHolderRoster(): Promise<TenureRosterRow[]> {
     payer_email: r.email || '',
     plan: 'deposit_holder',
     monthly_amount: r.amount_cents / 100,
+    member_since: r.created_at ? new Date(r.created_at).toISOString() : null,
+    next_payment_date: null,
+  }));
+  return sortByNextPaymentDesc(roster);
+}
+
+/** Drill-down roster for the "Staff" category: real Colaberry team members,
+ *  wherever they happen to sit (an Explorer-shaped internal signup, or a
+ *  comped/paid enrollment) — a single unified query rather than reusing
+ *  classifyAllMembers, since staff span enrollment_type boundaries that
+ *  matter for other categories but not for this one. */
+export async function getStaffRoster(): Promise<TenureRosterRow[]> {
+  const rows = (await sequelize.query(
+    `SELECT e.id AS enrollment_id, e.full_name, e.email, e.created_at
+       FROM enrollments e
+       LEFT JOIN community_members cm ON cm.enrollment_id = e.id
+      WHERE e.status = 'active' AND ${IS_STAFF_SQL}`,
+    { type: QueryTypes.SELECT }
+  )) as Array<{ enrollment_id: string; full_name: string | null; email: string | null; created_at: string | null }>;
+
+  const roster: TenureRosterRow[] = rows.map((r) => ({
+    enrollment_id: r.enrollment_id,
+    payer_name: r.full_name || r.email || '—',
+    payer_email: r.email || '',
+    plan: 'staff',
+    monthly_amount: 0,
     member_since: r.created_at ? new Date(r.created_at).toISOString() : null,
     next_payment_date: null,
   }));

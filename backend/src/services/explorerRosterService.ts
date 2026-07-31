@@ -1,15 +1,16 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getTotalsForEnrollments, levelForPoints } from './pointsService';
+import { IS_STAFF_SQL } from './staffDetection';
 
 /* ------------------------------------------------------------------ */
 /*  Explorer roster — the drill-down list behind the "Explorer" bucket */
 /*  on /admin/revenue's subscriber-tenure funnel. Scoped to the exact  */
-/*  same population as that bucket's count (Explorers with no $50      */
-/*  Open House deposit — depositors get their own bucket elsewhere),    */
-/*  each tagged with their existing points-based engagement level so    */
-/*  this can feed campaign targeting without inventing a new scoring    */
-/*  scheme.                                                              */
+/*  same population as that bucket's count (active, non-staff Explorers */
+/*  with no $50 Open House deposit — depositors and staff get their own */
+/*  buckets elsewhere), each tagged with their existing points-based    */
+/*  engagement level so this can feed campaign targeting without        */
+/*  inventing a new scoring scheme.                                      */
 /* ------------------------------------------------------------------ */
 
 export interface ExplorerRosterRow {
@@ -37,12 +38,13 @@ export async function getExplorerRoster(): Promise<ExplorerRosterRow[]> {
   const rows = (await sequelize.query(
     `SELECT e.id AS enrollment_id, e.full_name, e.email, e.created_at
        FROM enrollments e
+       LEFT JOIN community_members cm ON cm.enrollment_id = e.id
        LEFT JOIN LATERAL (
          SELECT enrollment_id FROM account_credits
           WHERE enrollment_id = e.id AND reason = 'open_house_deposit' AND status = 'available'
           LIMIT 1
        ) ac ON true
-      WHERE e.enrollment_type = 'explorer' AND ac.enrollment_id IS NULL`,
+      WHERE e.enrollment_type = 'explorer' AND e.status = 'active' AND ac.enrollment_id IS NULL AND NOT ${IS_STAFF_SQL}`,
     { type: QueryTypes.SELECT }
   )) as ExplorerRow[];
 

@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
 import { sequelize } from '../config/database';
 import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
@@ -10,11 +11,34 @@ import { ensureRoomForSession } from './communityRooms/roomService';
 import { emitRoomEvent } from './communityRooms/roomOutboxService';
 import { ROOM_EVENTS } from './communityRooms/roomEvents';
 import { log } from './communityRooms/roomShared';
-import { findRecordingForSession, streamDriveFile } from './driveService';
+import { findRecordingForSession as findDriveRecording, streamDriveFile, DriveRecordingMatch } from './driveService';
+import { findRecordingForSession as findZoomRecording, streamZoomFile, ZoomRecordingMatch } from './zoomService';
 
 // Bridges the accelerator's LiveSession lifecycle to the Rooms domain's
-// RoomResource/RoomBooking, so a completed class's Google Meet recording ends
-// up as a downloadable resource in that class's room — automatically.
+// RoomResource/RoomBooking, so a completed class's recording (Google Meet via
+// Drive, or Zoom Cloud Recording) ends up as a downloadable resource in that
+// class's room — automatically.
+
+type RecordingMatch = DriveRecordingMatch | ZoomRecordingMatch;
+
+// Dispatches to the right source by LiveSession.meeting_provider. An object
+// literal, not a class hierarchy — only 2 providers exist and no third is
+// planned. Both match shapes already carry {name, mimeType, sizeBytes}
+// directly, so the shared ingest logic below never needs to know which one
+// it has beyond picking the right streamFile closure.
+const PROVIDERS: Record<string, {
+  findRecording: (session: LiveSession) => Promise<RecordingMatch | null>;
+  streamFile: (match: RecordingMatch) => Promise<Readable>;
+}> = {
+  google_meet: {
+    findRecording: findDriveRecording,
+    streamFile: (match) => streamDriveFile((match as DriveRecordingMatch).fileId),
+  },
+  zoom: {
+    findRecording: findZoomRecording,
+    streamFile: (match) => streamZoomFile(match as ZoomRecordingMatch),
+  },
+};
 
 // Idempotent findOrCreate of a RoomBooking for a session, mirroring the exact
 // pattern ensureRoomForSession already uses for the room itself. A room must
@@ -51,9 +75,18 @@ export interface IngestResult {
 
 // No-op-safe: running this twice for the same session never re-downloads or
 // duplicates a resource (checks for an existing recording first), and a
-// "not found" result is a normal outcome — Meet recording is a manual toggle
-// a host may not have used for a given class.
-export async function ingestRecordingForSession(session: LiveSession): Promise<IngestResult> {
+// "not found" result is a normal outcome — recording is still effectively a
+// per-meeting setting that could be off for a given class.
+//
+// preResolvedMatch lets a webhook handler (Zoom's recording.completed) skip
+// the findRecording lookup entirely — the webhook payload already IS the
+// found recording, so there's no reason to make a redundant list-API call.
+// The polling/backfill cron (schedulerService.ts) omits it and lets the
+// provider's own findRecording run, as a fallback for a missed webhook.
+export async function ingestRecordingForSession(
+  session: LiveSession,
+  preResolvedMatch?: RecordingMatch,
+): Promise<IngestResult> {
   const booking = await ensureBookingForSession(session);
 
   const existing = await RoomResource.findOne({
@@ -61,7 +94,10 @@ export async function ingestRecordingForSession(session: LiveSession): Promise<I
   });
   if (existing) return { status: 'already_present', resourceId: existing.id };
 
-  const match = await findRecordingForSession(session);
+  const provider = PROVIDERS[session.meeting_provider || 'google_meet'];
+  if (!provider) return { status: 'not_found' };
+
+  const match = preResolvedMatch ?? await provider.findRecording(session);
   if (!match) return { status: 'not_found' };
 
   if (match.sizeBytes && match.sizeBytes > MAX_ROOM_RECORDING_SIZE) {
@@ -73,9 +109,9 @@ export async function ingestRecordingForSession(session: LiveSession): Promise<I
   const storageKey = `${crypto.randomUUID()}${ext}`;
   const destPath = path.join(ROOM_RECORDING_DIR, storageKey);
 
-  // Stream Drive -> disk directly; never buffer the file in memory (this
+  // Stream provider -> disk directly; never buffer the file in memory (this
   // process runs with a 512MB heap cap).
-  const source = await streamDriveFile(match.fileId);
+  const source = await provider.streamFile(match);
   await new Promise<void>((resolve, reject) => {
     const dest = fs.createWriteStream(destPath);
     source.on('error', reject);
@@ -105,7 +141,7 @@ export async function ingestRecordingForSession(session: LiveSession): Promise<I
     // Kept in sync for the existing Portal "Watch Recording" button
     // (PortalSessionDetailPage.tsx), which reads LiveSession.recording_url —
     // point it at the same authenticated download route rather than a raw
-    // Drive link, since the file is now hosted on our own disk.
+    // provider link, since the file is now hosted on our own disk.
     await session.update(
       { recording_url: `/api/portal/community/rooms/${booking.room_id}/resources/${resource.id}/download` },
       { transaction: t },

@@ -13,6 +13,9 @@ build/
 
 # IDE
 .vscode/
+
+# /loop-architect skill run state (per-run scratch state, not source)
+.loop-architect/
 .idea/
 
 # Personal Claude Code overrides — project-scoped, never shared with the team

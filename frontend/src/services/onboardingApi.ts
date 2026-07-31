@@ -193,6 +193,25 @@ export async function fetchClassSessionDetail(sessionId: string): Promise<ClassS
   return data.session;
 }
 
+// ── The full list of the student's own cohort sessions — used by the Rooms
+// page's "Your Classes" rail section so students can reach any class's room
+// (completed or upcoming) without leaving Rooms. Same backing endpoint
+// PortalSessionsPage uses. ────────────────────────────────────────────────
+export interface MySession {
+  id: string;
+  session_number: number;
+  title: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  room_id: string | null;
+}
+export async function fetchMySessions(): Promise<MySession[]> {
+  const { data } = await portalApi.get<{ sessions: MySession[] }>('/api/portal/sessions');
+  return data.sessions ?? [];
+}
+
 // ── Join a live session (records attendance + awards session_attended once) ───
 export interface JoinSessionResult { ok: true; status: 'present' | 'late'; awarded: boolean; points: number; }
 /** Record attendance for a live session. Idempotent — safe to call on every join

@@ -26,7 +26,7 @@ export const timeAgo = (iso: string | null): string => {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 };
 
-export type PlanKey = 'annual' | 'monthly' | 'comp' | 'deposit_holder' | 'other';
+export type PlanKey = 'annual' | 'monthly' | 'comp' | 'deposit_holder' | 'other' | 'staff';
 
 export const PLAN_LABEL: Record<PlanKey, string> = {
   annual: 'Annual',
@@ -34,6 +34,7 @@ export const PLAN_LABEL: Record<PlanKey, string> = {
   comp: 'Free Access',
   deposit_holder: 'Deposit Holder',
   other: 'Other',
+  staff: 'Staff',
 };
 
 // Fixed categorical color per plan, used everywhere a plan is shown (plan
@@ -45,4 +46,5 @@ export const PLAN_COLOR: Record<PlanKey, string> = {
   comp: 'var(--text-muted)',
   deposit_holder: '#b4302a',
   other: '#8a6d3b',
+  staff: '#6f42c1',
 };
