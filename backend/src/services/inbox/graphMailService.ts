@@ -13,22 +13,75 @@ export function isConfigured(): boolean {
   return !!(process.env.MS_GRAPH_CLIENT_ID && process.env.MS_GRAPH_REFRESH_TOKEN);
 }
 
+/**
+ * Extracts a safe, human-readable detail from an MS Graph / AAD token-endpoint axios
+ * error. Only ever reads specific allowlisted fields (`error`, `error_description`,
+ * `error.code`, `error.message`) off `error.response.data` — never blanket
+ * `JSON.stringify`s the response body, so a request/response body that happened to
+ * echo a `client_secret` or `access_token` field can never end up in a log line or
+ * thrown error message (root CLAUDE.md Secrets Management: "no secrets in logs").
+ *
+ * Handles both shapes this file's two call sites can hit:
+ *   - AAD token endpoint (RFC 6749): { error: "invalid_grant", error_description, error_codes }
+ *   - MS Graph API:                  { error: { code: "...", message: "..." } }
+ */
+export function extractGraphErrorDetail(error: any): { message: string; errorClass: string } {
+  const data = error?.response?.data;
+  const fallback = { message: error?.message || 'Unknown Graph/AAD error', errorClass: 'MsGraphRequestError' };
+  if (!data || typeof data !== 'object') return fallback;
+
+  // AAD token-endpoint shape: `error` is a string code.
+  if (typeof data.error === 'string') {
+    const parts = [data.error, data.error_description].filter(Boolean);
+    const isAuth = /invalid_grant|invalid_client|unauthorized_client/i.test(data.error);
+    return {
+      message: parts.length ? parts.join(': ') : fallback.message,
+      errorClass: isAuth ? 'MsGraphAuthError' : 'MsGraphRequestError',
+    };
+  }
+
+  // MS Graph API shape: `error` is an { code, message } object.
+  if (data.error && typeof data.error === 'object') {
+    const parts = [data.error.code, data.error.message].filter(Boolean);
+    const isAuth = /invalidauthenticationtoken|unauthorized/i.test(String(data.error.code || ''));
+    return {
+      message: parts.length ? parts.join(': ') : fallback.message,
+      errorClass: isAuth ? 'MsGraphAuthError' : 'MsGraphRequestError',
+    };
+  }
+
+  return fallback;
+}
+
+function wrapGraphError(error: any, context: string): Error {
+  const { message, errorClass } = extractGraphErrorDetail(error);
+  console.error(`${LOG_PREFIX} ${context} failed [${errorClass}]: ${message}`);
+  const wrapped = new Error(message);
+  (wrapped as any).error_class = errorClass;
+  return wrapped;
+}
+
 async function getAccessToken(): Promise<string> {
   if (cachedAccessToken && Date.now() < tokenExpiry) return cachedAccessToken;
 
   const clientId = process.env.MS_GRAPH_CLIENT_ID!;
   const refreshToken = process.env.MS_GRAPH_REFRESH_TOKEN!;
 
-  const res = await axios.post(
-    'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
-    new URLSearchParams({
-      client_id: clientId,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      scope: 'Mail.Read Mail.ReadWrite offline_access',
-    }).toString(),
-    { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
-  );
+  let res;
+  try {
+    res = await axios.post(
+      'https://login.microsoftonline.com/consumers/oauth2/v2.0/token',
+      new URLSearchParams({
+        client_id: clientId,
+        grant_type: 'refresh_token',
+        refresh_token: refreshToken,
+        scope: 'Mail.Read Mail.ReadWrite offline_access',
+      }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    );
+  } catch (error: any) {
+    throw wrapGraphError(error, 'Token refresh');
+  }
 
   cachedAccessToken = res.data.access_token;
   tokenExpiry = Date.now() + (res.data.expires_in - 60) * 1000;
@@ -60,11 +113,15 @@ export async function fetchInboxMessages(top: number = 100): Promise<GraphMessag
   let url: string | null = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=${Math.min(top, 50)}&$orderby=receivedDateTime desc&$select=id,conversationId,subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,internetMessageHeaders,webLink`;
 
   while (url && messages.length < top) {
-    const res: any = await axios.get(url, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    messages.push(...(res.data.value || []));
-    url = res.data['@odata.nextLink'] || null;
+    try {
+      const res: any = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      messages.push(...(res.data.value || []));
+      url = res.data['@odata.nextLink'] || null;
+    } catch (error: any) {
+      throw wrapGraphError(error, 'fetchInboxMessages');
+    }
   }
 
   return messages.slice(0, top);
