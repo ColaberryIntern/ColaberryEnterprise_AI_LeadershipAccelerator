@@ -1,12 +1,17 @@
 /**
  * Proves two things about syncAllMailboxes():
- *  1. A provider that keeps failing (gmail_colaberry, rate-limited) gets backed off
- *     — its Gmail API is not called again on the very next tick once backoff engages.
+ *  1. A single failure is enough to engage backoff for that provider — the very next
+ *     tick, even moments later, must NOT call that provider's API again.
  *  2. That backoff never blocks a different provider (gmail_personal) — it is
  *     attempted on every tick regardless of gmail_colaberry's state. All three
  *     provider blocks in syncAllMailboxes share the same independent try/catch
  *     structure, so proving Gmail-to-Gmail isolation demonstrates the pattern that
  *     also isolates the hotmail_graph block.
+ *
+ * Uses Jest fake timers so backoff timing is deterministic — asserting this against
+ * real wall-clock speed is a trap: a slow test run can accidentally let enough real
+ * time pass to clear the backoff window, producing a false pass that says nothing
+ * about the actual logic.
  */
 jest.mock('../../../models/InboxEmail', () => ({
   __esModule: true,
@@ -56,6 +61,8 @@ jest.mock('googleapis', () => ({
 describe('syncAllMailboxes — per-provider backoff + failure isolation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-08-01T00:00:00.000Z'));
     createdClients.length = 0;
     process.env.GMAIL_CLIENT_ID = 'colaberry-client-id';
     process.env.GMAIL_CLIENT_SECRET = 'colaberry-secret';
@@ -73,26 +80,27 @@ describe('syncAllMailboxes — per-provider backoff + failure isolation', () => 
     backoff.recordSuccess('gmail_personal');
   });
 
-  it('backs off gmail_colaberry after repeated failures without blocking gmail_personal', async () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('backs off gmail_colaberry immediately after one failure, without affecting gmail_personal', async () => {
     const { syncAllMailboxes } = require('../../../services/inbox/inboxSyncService');
     const RATE_LIMIT_ERROR = new Error('User-rate limit exceeded.');
 
-    // Tick 1: colaberry's client (index 0) fails, personal's client (index 1) succeeds.
-    createdClients as FakeGmailClient[];
-    let colaberryTick1Rejected = false;
-    const originalGmailImpl = require('googleapis').google.gmail;
+    // Every tick: the 1st gmail client created is colaberry's, the 2nd is personal's
+    // (matches the fixed call order in syncAllMailboxes). Colaberry's client always
+    // rejects for this test; personal's uses the default (empty, successful) mock.
     (require('googleapis').google.gmail as jest.Mock).mockImplementation(() => {
       const client = makeFakeClient();
-      const isFirstThisTick = createdClients.length % 2 === 1; // 1st client created each tick = colaberry
-      if (isFirstThisTick) {
+      const isColaberryThisTick = createdClients.length % 2 === 1;
+      if (isColaberryThisTick) {
         client.users.messages.list.mockRejectedValue(RATE_LIMIT_ERROR);
-        colaberryTick1Rejected = true;
       }
       return client;
     });
-    void originalGmailImpl;
-    void colaberryTick1Rejected;
 
+    // Tick 1: colaberry's client (index 0) fails, personal's client (index 1) succeeds.
     await syncAllMailboxes();
 
     expect(createdClients).toHaveLength(2);
@@ -100,21 +108,27 @@ describe('syncAllMailboxes — per-provider backoff + failure isolation', () => 
     expect(colaberryClientTick1.users.messages.list).toHaveBeenCalledTimes(1);
     expect(personalClientTick1.users.messages.list).toHaveBeenCalledTimes(1);
 
-    // Tick 2: colaberry fails again (2nd consecutive failure -> backoff window opens).
+    // Tick 2: fires 1 second later (well within the 30s backoff window a single
+    // failure opens) — colaberry's client must still be constructed (shouldSkip()
+    // gates the sync call, not client construction) but its API must NOT be called
+    // again, while personal is attempted exactly as before.
+    jest.setSystemTime(new Date('2026-08-01T00:00:01.000Z'));
     await syncAllMailboxes();
+
     expect(createdClients).toHaveLength(4);
     const [, , colaberryClientTick2, personalClientTick2] = createdClients;
-    expect(colaberryClientTick2.users.messages.list).toHaveBeenCalledTimes(1);
+    expect(colaberryClientTick2.users.messages.list).not.toHaveBeenCalled();
     expect(personalClientTick2.users.messages.list).toHaveBeenCalledTimes(1);
 
-    // Tick 3: fires immediately (well within the backoff window) — colaberry must be
-    // skipped (its client is still constructed, since shouldSkip() gates the sync
-    // call, not client construction, but its Gmail API must NOT be invoked), while
-    // personal is attempted exactly as before.
+    // Tick 3: fires after the 30s backoff window has elapsed — colaberry is
+    // attempted again (and fails again, extending its backoff), personal continues
+    // unaffected throughout.
+    jest.setSystemTime(new Date('2026-08-01T00:00:31.000Z'));
     await syncAllMailboxes();
+
     expect(createdClients).toHaveLength(6);
     const [, , , , colaberryClientTick3, personalClientTick3] = createdClients;
-    expect(colaberryClientTick3.users.messages.list).not.toHaveBeenCalled();
+    expect(colaberryClientTick3.users.messages.list).toHaveBeenCalledTimes(1);
     expect(personalClientTick3.users.messages.list).toHaveBeenCalledTimes(1);
   });
 });
