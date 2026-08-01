@@ -29,6 +29,7 @@ import {
   type OpenAction,
 } from './trustRubric';
 import { getInpactGoalsEstimate } from './trustInpactGoalsService';
+import { classifyAgent } from './agentRegistryAuditClassification';
 
 type MetricState = 'live' | 'baseline' | 'placeholder';
 
@@ -439,6 +440,60 @@ export async function getAgentRoster(): Promise<{ rows: AgentRosterRow[] }> {
     structuredError('agent_roster_query', err);
   }
   return { rows };
+}
+
+export type RegistryHealthBucket = 'live' | 'internal_pipeline_step' | 'confirmed_dead' | 'staged_pending_activation' | 'unclassified';
+
+// The 4 agents T002 (aiOpsScheduler.ts) wired through trackAgentRun() — genuinely live
+// and scheduled, but run_count stays 0 until their first post-deploy cron tick fires
+// (up to 6h for CoryEvolutionCycle). Counting them as 'live' immediately, rather than
+// 'unclassified' during that window, is what the audit's own findings established.
+const REGISTRY_LIVE_BY_NAME = new Set(['AutonomousEngine', 'AICOOStrategicCycle', 'MetaAgentLoop', 'CoryEvolutionCycle']);
+
+export interface RegistryHealthAgent { name: string; category: string | null; note?: string; }
+export interface RegistryHealthGroup { count: number; agents: RegistryHealthAgent[]; }
+export type RegistryHealth = Record<RegistryHealthBucket, RegistryHealthGroup>;
+
+/**
+ * Buckets the full ai_agents registry (all 211+ rows, not just the 10 Workforce
+ * directors getAgentRoster covers) by real status, per the 2026-07-31 registry audit.
+ * Prefers the DB's own config.registry_audit annotation (written by
+ * scripts/auditAgentRegistryStatus.ts) when present; falls back to the static
+ * classification module for any row not yet annotated, so this stays accurate even
+ * before that one-time script has run in a given environment.
+ */
+export async function getRegistryHealth(): Promise<RegistryHealth> {
+  const health: RegistryHealth = {
+    live: { count: 0, agents: [] },
+    internal_pipeline_step: { count: 0, agents: [] },
+    confirmed_dead: { count: 0, agents: [] },
+    staged_pending_activation: { count: 0, agents: [] },
+    unclassified: { count: 0, agents: [] },
+  };
+
+  try {
+    const workforceAgentNames = new Set(Object.values(WORKFORCE_AGENT_NAME));
+    const agents = await AiAgent.findAll();
+
+    for (const agent of agents) {
+      const dbAudit = (agent.config as any)?.registry_audit;
+      const bucket: RegistryHealthBucket = dbAudit?.status
+        ?? classifyAgent(agent.agent_name)?.status
+        ?? (workforceAgentNames.has(agent.agent_name) && agent.run_count === 0 ? 'staged_pending_activation' : null)
+        ?? (agent.run_count > 0 || REGISTRY_LIVE_BY_NAME.has(agent.agent_name) ? 'live' : 'unclassified');
+
+      health[bucket].count++;
+      health[bucket].agents.push({
+        name: agent.agent_name,
+        category: agent.category ?? null,
+        note: dbAudit?.note ?? classifyAgent(agent.agent_name)?.note,
+      });
+    }
+  } catch (err) {
+    structuredError('registry_health_query', err);
+  }
+
+  return health;
 }
 
 export interface AgentGoalsDimension { key: string; label: string; score: number; source: 'live' | 'fixed'; evidence: string; }

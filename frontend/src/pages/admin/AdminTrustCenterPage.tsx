@@ -47,6 +47,15 @@ interface Activity {
   costUsd24h: { value: number | null; state: MetricState; note: string };
   trend: Array<{ day: string; generations: number; conversations: number; agentRuns: number }>;
 }
+interface RegistryHealthAgent { name: string; category: string | null; note?: string; }
+interface RegistryHealthGroup { count: number; agents: RegistryHealthAgent[]; }
+interface RegistryHealth {
+  live: RegistryHealthGroup;
+  internal_pipeline_step: RegistryHealthGroup;
+  confirmed_dead: RegistryHealthGroup;
+  staged_pending_activation: RegistryHealthGroup;
+  unclassified: RegistryHealthGroup;
+}
 interface Governance {
   killSwitchActive: boolean | null;
   safeModeActive: boolean | null;
@@ -348,6 +357,7 @@ function AdminTrustCenterPage() {
   const [actions, setActions] = useState<OpenAction[]>([]);
   const [value, setValue] = useState<AiValue | null>(null);
   const [agentRoster, setAgentRoster] = useState<AgentRosterRow[] | null>(null);
+  const [registryHealth, setRegistryHealth] = useState<RegistryHealth | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -407,6 +417,15 @@ function AdminTrustCenterPage() {
         if (active) setAgentRoster(ar.data.rows || []);
       } catch {
         // Leave the last-known roster in place; the next 30s tick retries independently.
+      }
+
+      // Same isolation rationale as the roster fetch above — the newest endpoint must
+      // not block the established trust metrics if it fails.
+      try {
+        const rh = await api.get<RegistryHealth>('/api/admin/trust/registry-health');
+        if (active) setRegistryHealth(rh.data);
+      } catch {
+        // Leave the last-known snapshot in place; the next 30s tick retries independently.
       }
     };
     load();
@@ -726,6 +745,64 @@ function AdminTrustCenterPage() {
               </tbody>
             </table>
           </div>
+        </SectionCard>
+      )}
+
+      {/* Registry health — the full ai_agents registry (211+ rows), not just the 10
+          Workforce directors above. Per the 2026-07-31 audit: some agents run but were
+          never wired to report here (now fixed); some are internal steps of a parent
+          agent; some are genuinely dead code. */}
+      {registryHealth && (
+        <SectionCard title="Agent registry health" icon="database-2-line" className="mt-3">
+          <p className="text-muted small mb-3">
+            Every registered AI agent, bucketed by real status — not just whether it's marked "enabled."
+          </p>
+          <div className="row g-3 text-center mb-3">
+            <div className="col-6 col-md">
+              <div className="fs-4 fw-bold text-success">{registryHealth.live.count}</div>
+              <div className="small text-muted">Live</div>
+            </div>
+            <div className="col-6 col-md">
+              <div className="fs-4 fw-bold text-primary">{registryHealth.internal_pipeline_step.count}</div>
+              <div className="small text-muted">Pipeline step</div>
+            </div>
+            <div className="col-6 col-md">
+              <div className="fs-4 fw-bold text-warning">{registryHealth.staged_pending_activation.count}</div>
+              <div className="small text-muted">Staged, not yet active</div>
+            </div>
+            <div className="col-6 col-md">
+              <div className="fs-4 fw-bold text-danger">{registryHealth.confirmed_dead.count}</div>
+              <div className="small text-muted">Confirmed dead</div>
+            </div>
+            <div className="col-6 col-md">
+              <div className="fs-4 fw-bold text-secondary">{registryHealth.unclassified.count}</div>
+              <div className="small text-muted">Unclassified</div>
+            </div>
+          </div>
+          {registryHealth.confirmed_dead.count > 0 && (
+            <details className="mb-2">
+              <summary className="small fw-semibold text-danger" style={{ cursor: 'pointer' }}>
+                Confirmed dead ({registryHealth.confirmed_dead.count}) — disabled, no code path reaches them
+              </summary>
+              <ul className="small text-muted mb-0 mt-2">
+                {registryHealth.confirmed_dead.agents.map((a) => (
+                  <li key={a.name}><span className="text-body">{a.name}</span>{a.note ? ` — ${a.note}` : ''}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+          {registryHealth.internal_pipeline_step.count > 0 && (
+            <details>
+              <summary className="small fw-semibold text-primary" style={{ cursor: 'pointer' }}>
+                Internal pipeline steps ({registryHealth.internal_pipeline_step.count}) — run as part of a parent agent, not independently
+              </summary>
+              <ul className="small text-muted mb-0 mt-2">
+                {registryHealth.internal_pipeline_step.agents.map((a) => (
+                  <li key={a.name}><span className="text-body">{a.name}</span>{a.note ? ` — ${a.note}` : ''}</li>
+                ))}
+              </ul>
+            </details>
+          )}
         </SectionCard>
       )}
 
