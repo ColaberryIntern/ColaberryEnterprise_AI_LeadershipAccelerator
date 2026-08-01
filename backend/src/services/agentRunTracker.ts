@@ -13,16 +13,22 @@ import AiAgent from '../models/AiAgent';
 
 /**
  * Runs `fn`, then records the attempt on the named AiAgent row — on success AND on
- * failure, since a failed-but-executed run is not "never ran." Skips execution (and
- * returns null without touching the row) if the agent isn't registered or is disabled,
- * matching aiOrchestrator.ts's runAgent() skip semantics. Rethrows on failure so the
- * caller's own .catch() (aiOpsScheduler.ts) still logs it exactly as before.
+ * failure, since a failed-but-executed run is not "never ran." Only skips EXECUTION
+ * when the row exists and is explicitly `enabled: false` — a deliberate admin action,
+ * matching aiOrchestrator.ts's runAgent() skip semantics for that case. If no row
+ * exists at all, `fn()` still runs (real business logic must never be gated on a
+ * dashboard-bookkeeping lookup — see CLAUDE.md Failure-First Design); only the
+ * bookkeeping update is skipped, with a loud warning so the missing registration is
+ * visible and fixable. (Regression found in production verification 2026-08-01:
+ * CoryEvolutionCycle has no ai_agents row, and the original fail-closed version of
+ * this function silently stopped its real self-evolution cycle from ever running.)
+ * Rethrows on failure so the caller's own .catch() (aiOpsScheduler.ts) still logs it.
  */
 export async function trackAgentRun<T>(agentName: string, fn: () => Promise<T>): Promise<T | null> {
   const agent = await AiAgent.findOne({ where: { agent_name: agentName } });
   if (!agent) {
-    console.error(`[AgentRunTracker] Agent not found: ${agentName}`);
-    return null;
+    console.warn(`[AgentRunTracker] No AiAgent row for "${agentName}" — running anyway (bookkeeping only is skipped). Register this agent so its activity shows on the Trust dashboard.`);
+    return fn();
   }
   if (!agent.enabled) {
     console.log(`[AgentRunTracker] Agent ${agentName} is disabled, skipping`);

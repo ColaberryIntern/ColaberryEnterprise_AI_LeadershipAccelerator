@@ -51,14 +51,19 @@ describe('trackAgentRun', () => {
     expect(call.last_error_at).toBeInstanceOf(Date);
   });
 
-  it('boundary: agent not found returns null without calling fn', async () => {
+  // Regression (found in production verification, 2026-08-01): CoryEvolutionCycle has
+  // no AiAgent row at all, and an earlier version of this function treated "not found"
+  // the same as "explicitly disabled" — silently skipping fn() and stopping a real,
+  // previously-working scheduled job from ever running again. A missing dashboard
+  // registration must never gate real business logic (CLAUDE.md Failure-First Design).
+  it('boundary: agent not found still RUNS fn and returns its result — only bookkeeping is skipped', async () => {
     findOneMock.mockResolvedValue(null);
-    const fn = jest.fn();
+    const fn = jest.fn().mockResolvedValue('ran-anyway');
 
-    const result = await trackAgentRun('MissingAgent', fn);
+    const result = await trackAgentRun('UnregisteredAgent', fn);
 
-    expect(result).toBeNull();
-    expect(fn).not.toHaveBeenCalled();
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(result).toBe('ran-anyway');
   });
 
   it('boundary: disabled agent is skipped without calling fn or updating the row', async () => {
