@@ -1,6 +1,6 @@
-import React from 'react';
-import { CountAndOverride, PromptOverride, blankPrompt, seedOverrides } from './types';
-import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote, AiRewriteBar } from './shared';
+import React, { useState } from 'react';
+import { CountAndOverride, PromptOverride, blankPrompt } from './types';
+import { CategoryToggleRow, CollapsibleOverrideCard, EmptyDefaultsNote, AiRewriteBar, moveItem } from './shared';
 
 interface Props {
   config: CountAndOverride<PromptOverride>;
@@ -16,14 +16,23 @@ interface Props {
   onChange: (next: CountAndOverride<PromptOverride>) => void;
 }
 
+/** Always shows the real, resolved Claude Code examples (authored defaults,
+ * or the instructor's own overrides once they've touched anything) directly
+ * editable in place — no separate "authored defaults preview" vs. "write my
+ * own" switch. Day-kind gating and the Lessons-precedence alert are unchanged. */
 const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onToggleDetail, appliesToThisSession, dayKind, onRewrite, onChange }) => {
-  const usingCustom = config.overrides != null;
-  const prompts = config.overrides ?? [];
+  const prompts = config.overrides ?? defaults;
+  const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
 
   const update = (i: number, patch: Partial<PromptOverride>) => onChange({ ...config, overrides: prompts.map((p, idx) => (idx === i ? { ...p, ...patch } : p)) });
-  const add = () => onChange({ ...config, overrides: [...prompts, blankPrompt()] });
+  const add = () => {
+    const next = [...prompts, blankPrompt()];
+    onChange({ ...config, overrides: next });
+    setJustAddedIndex(next.length - 1);
+  };
   const remove = (i: number) => onChange({ ...config, overrides: prompts.filter((_, idx) => idx !== i) });
-  const rewrite = async (instruction: string) => onChange({ ...config, overrides: await onRewrite(prompts.length ? prompts : defaults, instruction) });
+  const move = (i: number, direction: 'up' | 'down') => onChange({ ...config, overrides: moveItem(prompts, i, direction) });
+  const rewrite = async (instruction: string) => onChange({ ...config, overrides: await onRewrite(prompts, instruction) });
 
   if (dayKind !== 'build') {
     return <EmptyDefaultsNote>Claude Code examples only apply to Build Day (Thursday) sessions.</EmptyDefaultsNote>;
@@ -58,46 +67,39 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
       />
       {config.enabled && (
         <>
-          <ContentModeSwitch id="cfg-prompts-custom" usingCustom={usingCustom} itemNoun="prompts"
-            onSwitch={(custom) => onChange({ ...config, overrides: custom ? seedOverrides(defaults, blankPrompt) : null })} />
-          {!usingCustom ? (
-            defaults.length === 0 ? (
-              <EmptyDefaultsNote>No fallback prompts are authored for this week.</EmptyDefaultsNote>
-            ) : (
-              defaults.map((p, i) => (
-                <DefaultPreviewCard key={i} eyebrow={p.ccMode} title={p.label} body={p.prompt} />
-              ))
-            )
+          <AiRewriteBar itemNoun="Claude Code examples" onRewrite={rewrite} />
+          {prompts.length === 0 ? (
+            <EmptyDefaultsNote>No fallback prompts are authored for this week — add one below, or ask the AI rewrite above for a starting draft.</EmptyDefaultsNote>
           ) : (
-            <>
-              <AiRewriteBar itemNoun="Claude Code examples" onRewrite={rewrite} />
-              {prompts.map((p, i) => (
-                <OverrideCard key={i} index={i} onRemove={() => remove(i)}>
-                  <div className="row g-2 mb-2">
-                    <div className="col-6">
-                      <label className="form-label small">Label</label>
-                      <input className="form-control form-control-sm" value={p.label} onChange={(e) => update(i, { label: e.target.value })} />
-                    </div>
-                    <div className="col-6">
-                      <label className="form-label small">Claude Code mode</label>
-                      <select className="form-select form-select-sm" value={p.ccMode ?? 'Plan Mode'} onChange={(e) => update(i, { ccMode: e.target.value })}>
-                        <option>Manual</option><option>Plan Mode</option><option>Auto</option>
-                      </select>
-                    </div>
+            prompts.map((p, i) => (
+              <CollapsibleOverrideCard key={i} index={i} total={prompts.length}
+                summary={<><strong>{p.label || '(untitled prompt)'}</strong> {p.ccMode && <span className="text-muted">· {p.ccMode}</span>}</>}
+                defaultExpanded={i === justAddedIndex}
+                onRemove={() => remove(i)} onMoveUp={() => move(i, 'up')} onMoveDown={() => move(i, 'down')}>
+                <div className="row g-2 mb-2">
+                  <div className="col-6">
+                    <label className="form-label small">Label</label>
+                    <input className="form-control form-control-sm" value={p.label} onChange={(e) => update(i, { label: e.target.value })} />
                   </div>
-                  <label className="form-label small">Prompt</label>
-                  <textarea className="form-control form-control-sm mb-2" rows={3} value={p.prompt} onChange={(e) => update(i, { prompt: e.target.value })} />
-                  <label className="form-label small">You should see (optional)</label>
-                  <input className="form-control form-control-sm mb-2" value={p.expectedResult ?? ''} onChange={(e) => update(i, { expectedResult: e.target.value })} />
-                  <label className="form-label small">Stop when (optional)</label>
-                  <input className="form-control form-control-sm mb-2" value={p.stopCondition ?? ''} onChange={(e) => update(i, { stopCondition: e.target.value })} />
-                  <label className="form-label small">If stuck (optional)</label>
-                  <input className="form-control form-control-sm" value={p.rescue ?? ''} onChange={(e) => update(i, { rescue: e.target.value })} />
-                </OverrideCard>
-              ))}
-              <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add prompt</button>
-            </>
+                  <div className="col-6">
+                    <label className="form-label small">Claude Code mode</label>
+                    <select className="form-select form-select-sm" value={p.ccMode ?? 'Plan Mode'} onChange={(e) => update(i, { ccMode: e.target.value })}>
+                      <option>Manual</option><option>Plan Mode</option><option>Auto</option>
+                    </select>
+                  </div>
+                </div>
+                <label className="form-label small">Prompt</label>
+                <textarea className="form-control form-control-sm mb-2" rows={3} value={p.prompt} onChange={(e) => update(i, { prompt: e.target.value })} />
+                <label className="form-label small">You should see (optional)</label>
+                <input className="form-control form-control-sm mb-2" value={p.expectedResult ?? ''} onChange={(e) => update(i, { expectedResult: e.target.value })} />
+                <label className="form-label small">Stop when (optional)</label>
+                <input className="form-control form-control-sm mb-2" value={p.stopCondition ?? ''} onChange={(e) => update(i, { stopCondition: e.target.value })} />
+                <label className="form-label small">If stuck (optional)</label>
+                <input className="form-control form-control-sm" value={p.rescue ?? ''} onChange={(e) => update(i, { rescue: e.target.value })} />
+              </CollapsibleOverrideCard>
+            ))
           )}
+          <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add prompt</button>
         </>
       )}
     </>
