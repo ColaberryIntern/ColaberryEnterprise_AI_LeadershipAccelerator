@@ -1,6 +1,6 @@
-import React from 'react';
-import { CountAndOverride, TeachSlideOverride, SEGMENT_OPTIONS, blankTeach, seedOverrides } from './types';
-import { CategoryToggleRow, ContentModeSwitch, DefaultPreviewCard, OverrideCard, EmptyDefaultsNote, AiRewriteBar } from './shared';
+import React, { useState } from 'react';
+import { CountAndOverride, TeachSlideOverride, SEGMENT_OPTIONS, blankTeach } from './types';
+import { CategoryToggleRow, CollapsibleOverrideCard, EmptyDefaultsNote, AiRewriteBar, moveItem } from './shared';
 
 interface Props {
   config: CountAndOverride<TeachSlideOverride>;
@@ -10,14 +10,31 @@ interface Props {
   onChange: (next: CountAndOverride<TeachSlideOverride>) => void;
 }
 
+const segmentLabel = (value: string) => {
+  for (const g of SEGMENT_OPTIONS) {
+    const hit = g.options.find((o) => o.value === value);
+    if (hit) return hit.label;
+  }
+  return value;
+};
+
+/** Always shows the real, resolved Lessons (authored defaults, or the
+ * instructor's own overrides once they've touched anything) directly editable
+ * in place — no separate "authored defaults preview" vs. "write my own"
+ * switch. The first edit/add/delete/move commits `overrides`. */
 const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onRewrite, onChange }) => {
-  const usingCustom = config.overrides != null;
-  const slides = config.overrides ?? [];
+  const slides = config.overrides ?? defaults;
+  const [justAddedIndex, setJustAddedIndex] = useState<number | null>(null);
 
   const update = (i: number, patch: Partial<TeachSlideOverride>) => onChange({ ...config, overrides: slides.map((s, idx) => (idx === i ? { ...s, ...patch } : s)) });
-  const add = () => onChange({ ...config, overrides: [...slides, blankTeach()] });
+  const add = () => {
+    const next = [...slides, blankTeach()];
+    onChange({ ...config, overrides: next });
+    setJustAddedIndex(next.length - 1);
+  };
   const remove = (i: number) => onChange({ ...config, overrides: slides.filter((_, idx) => idx !== i) });
-  const rewrite = async (instruction: string) => onChange({ ...config, overrides: await onRewrite(slides.length ? slides : defaults, instruction) });
+  const move = (i: number, direction: 'up' | 'down') => onChange({ ...config, overrides: moveItem(slides, i, direction) });
+  const rewrite = async (instruction: string) => onChange({ ...config, overrides: await onRewrite(slides, instruction) });
 
   return (
     <>
@@ -33,64 +50,56 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onRewrite, on
       />
       {config.enabled && (
         <>
-          <ContentModeSwitch id="cfg-teach-custom" usingCustom={usingCustom} itemNoun="lessons"
-            onSwitch={(custom) => onChange({ ...config, overrides: custom ? seedOverrides(defaults, blankTeach) : null })} />
-          {!usingCustom ? (
-            defaults.length === 0 ? (
-              <EmptyDefaultsNote>No deep-teaching content is authored for {dayLabel} yet.</EmptyDefaultsNote>
-            ) : (
-              defaults.map((s, i) => (
-                <DefaultPreviewCard key={i} eyebrow={`${s.eyebrow} · ${s.segment}`} title={s.title} body={s.body}
-                  footer={s.code ? <div className="small mt-2"><span className="badge bg-dark-subtle text-dark-emphasis">⌨️ {s.code.label}</span></div> : undefined} />
-              ))
-            )
+          <AiRewriteBar itemNoun="Lessons" onRewrite={rewrite} />
+          {slides.length === 0 ? (
+            <EmptyDefaultsNote>No deep-teaching content is authored for {dayLabel} yet — add one below, or ask the AI rewrite above for a starting draft.</EmptyDefaultsNote>
           ) : (
-            <>
-              <AiRewriteBar itemNoun="Lessons" onRewrite={rewrite} />
-              {slides.map((s, i) => (
-                <OverrideCard key={i} index={i} onRemove={() => remove(i)}>
-                  <div className="row g-2 mb-2">
-                    <div className="col-8">
-                      <label className="form-label small">Segment</label>
-                      <select className="form-select form-select-sm" value={s.segment} onChange={(e) => update(i, { segment: e.target.value })}>
-                        {SEGMENT_OPTIONS.map((g) => (
-                          <optgroup key={g.group} label={g.group}>
-                            {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-                          </optgroup>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="col-4">
-                      <label className="form-label small">Eyebrow</label>
-                      <input className="form-control form-control-sm" value={s.eyebrow} onChange={(e) => update(i, { eyebrow: e.target.value })} placeholder="🧭 Emoji + label" />
-                    </div>
+            slides.map((s, i) => (
+              <CollapsibleOverrideCard key={i} index={i} total={slides.length}
+                summary={<><strong>{s.title || '(untitled lesson)'}</strong> <span className="text-muted">· {segmentLabel(s.segment)}</span></>}
+                defaultExpanded={i === justAddedIndex}
+                onRemove={() => remove(i)} onMoveUp={() => move(i, 'up')} onMoveDown={() => move(i, 'down')}>
+                <div className="row g-2 mb-2">
+                  <div className="col-8">
+                    <label className="form-label small">Segment</label>
+                    <select className="form-select form-select-sm" value={s.segment} onChange={(e) => update(i, { segment: e.target.value })}>
+                      {SEGMENT_OPTIONS.map((g) => (
+                        <optgroup key={g.group} label={g.group}>
+                          {g.options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </optgroup>
+                      ))}
+                    </select>
                   </div>
-                  <label className="form-label small">Title</label>
-                  <input className="form-control form-control-sm mb-2" value={s.title} onChange={(e) => update(i, { title: e.target.value })} />
-                  <label className="form-label small">Body</label>
-                  <textarea className="form-control form-control-sm mb-2" rows={3} value={s.body ?? ''} onChange={(e) => update(i, { body: e.target.value })} />
-                  <label className="form-label small">Bullets (one per line, optional)</label>
-                  <textarea className="form-control form-control-sm mb-2" rows={2} value={(s.bullets ?? []).join('\n')}
-                    onChange={(e) => update(i, { bullets: e.target.value.split('\n').filter((l) => l.trim().length > 0) })} />
-                  <div className="row g-2 mb-2">
-                    <div className="col-4">
-                      <label className="form-label small">Code label (optional)</label>
-                      <input className="form-control form-control-sm" value={s.code?.label ?? ''}
-                        onChange={(e) => update(i, { code: e.target.value || s.code?.code ? { label: e.target.value, code: s.code?.code ?? '' } : null })} />
-                    </div>
-                    <div className="col-8">
-                      <label className="form-label small">Claude Code prompt / snippet</label>
-                      <textarea className="form-control form-control-sm" rows={2} value={s.code?.code ?? ''}
-                        onChange={(e) => update(i, { code: e.target.value || s.code?.label ? { label: s.code?.label ?? '', code: e.target.value } : null })} />
-                    </div>
+                  <div className="col-4">
+                    <label className="form-label small">Eyebrow</label>
+                    <input className="form-control form-control-sm" value={s.eyebrow} onChange={(e) => update(i, { eyebrow: e.target.value })} placeholder="🧭 Emoji + label" />
                   </div>
-                  <label className="form-label small">Instructor script (optional — what to say/do)</label>
-                  <input className="form-control form-control-sm" value={s.script ?? ''} onChange={(e) => update(i, { script: e.target.value })} />
-                </OverrideCard>
-              ))}
-              <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add lesson slide</button>
-            </>
+                </div>
+                <label className="form-label small">Title</label>
+                <input className="form-control form-control-sm mb-2" value={s.title} onChange={(e) => update(i, { title: e.target.value })} />
+                <label className="form-label small">Body</label>
+                <textarea className="form-control form-control-sm mb-2" rows={3} value={s.body ?? ''} onChange={(e) => update(i, { body: e.target.value })} />
+                <label className="form-label small">Bullets (one per line, optional)</label>
+                <textarea className="form-control form-control-sm mb-2" rows={2} value={(s.bullets ?? []).join('\n')}
+                  onChange={(e) => update(i, { bullets: e.target.value.split('\n').filter((l) => l.trim().length > 0) })} />
+                <div className="row g-2 mb-2">
+                  <div className="col-4">
+                    <label className="form-label small">Code label (optional)</label>
+                    <input className="form-control form-control-sm" value={s.code?.label ?? ''}
+                      onChange={(e) => update(i, { code: e.target.value || s.code?.code ? { label: e.target.value, code: s.code?.code ?? '' } : null })} />
+                  </div>
+                  <div className="col-8">
+                    <label className="form-label small">Claude Code prompt / snippet</label>
+                    <textarea className="form-control form-control-sm" rows={2} value={s.code?.code ?? ''}
+                      onChange={(e) => update(i, { code: e.target.value || s.code?.label ? { label: s.code?.label ?? '', code: e.target.value } : null })} />
+                  </div>
+                </div>
+                <label className="form-label small">Instructor script (optional — what to say/do)</label>
+                <input className="form-control form-control-sm" value={s.script ?? ''} onChange={(e) => update(i, { script: e.target.value })} />
+              </CollapsibleOverrideCard>
+            ))
           )}
+          <button className="btn btn-outline-secondary btn-sm" onClick={add}>+ Add lesson slide</button>
         </>
       )}
     </>

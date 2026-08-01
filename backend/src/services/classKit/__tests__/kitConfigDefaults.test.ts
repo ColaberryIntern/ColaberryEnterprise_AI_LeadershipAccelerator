@@ -21,6 +21,10 @@ const shortBuildDay: KitSessionInput = {
   id: 's-short-thu', session_number: 3, title: 'Week 1: Business Analyst',
   session_date: '2026-07-30', start_time: '18:30:00', end_time: '20:00:00', status: 'scheduled', // 90 min, not the nominal 120
 };
+const week2Monday: KitSessionInput = {
+  id: 's-w2-mon', session_number: 2, title: 'Week 2: Agent Skills',
+  session_date: '2026-08-03', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+};
 
 describe('getKitConfigDefaults', () => {
   it('resolves Build Day defaults: teach slides, prompts, thursday trivia, and evidence', () => {
@@ -90,6 +94,16 @@ describe('getKitConfigDefaults', () => {
     expect(d.checkpoints.length).toBe(4);
     expect(d.checkpoints.map((cp) => cp.n)).toEqual([0, 1, 2, 3]);
     expect(d.checkpoints.every((cp) => cp.segment === 'build-map')).toBe(true);
+  });
+
+  it('resolves Week 2\'s Story Beats (the Timeline-page redesign\'s worked example)', () => {
+    const d = getKitConfigDefaults(week2Monday);
+    expect(d.dayKind).toBe('architecture');
+    expect(d.week).toBe(2);
+    expect(d.storyBeats.length).toBe(4);
+    expect(d.storyBeats.map((b) => b.segment).sort()).toEqual(['architecture', 'business-problem', 'checkin', 'deconstruct']);
+    expect(d.storyBeats.every((b) => typeof b.body === 'string' && b.body.length > 20)).toBe(true);
+    expect(d.storyBeats.find((b) => b.segment === 'checkin')?.title).toContain('repeated task');
   });
 
   it('scales segment lane widths to a session\'s actual (non-120-min) duration, proportionally', () => {
