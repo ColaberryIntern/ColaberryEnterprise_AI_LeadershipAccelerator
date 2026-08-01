@@ -1,7 +1,8 @@
 import { Request, Response } from 'express';
 import InboxCase from '../models/InboxCase';
 import InboxCaseQuestion from '../models/InboxCaseQuestion';
-import { caseQuestionParamSchema, caseIdParamSchema, caseActionParamSchema, answerQuestionSchema, approveActionSchema, rejectActionSchema, approveLowRiskSchema, closeCaseSchema, reopenCaseSchema } from '../schemas/inboxCaseSchema';
+import { caseQuestionParamSchema, caseIdParamSchema, caseActionParamSchema, answerQuestionSchema, approveActionSchema, rejectActionSchema, approveLowRiskSchema, closeCaseSchema, reopenCaseSchema, overrideActionsSchema } from '../schemas/inboxCaseSchema';
+import { overrideProposedActions } from '../services/inboxCase/caseActionOverrideService';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
 import { reopenCase, maybeAdvanceFromNeedsAli } from '../services/inboxCase/caseRepository';
 import { generatePlan } from '../services/inboxCase/caseActionPlanner';
@@ -136,6 +137,22 @@ export async function handleRejectAction(req: Request, res: Response) {
     if (err?.name === 'InvalidActionTransitionError') return res.status(409).json({ error: err.name, message: err.message });
     console.error('[InboxCase] RejectAction error:', err?.message);
     res.status(500).json({ error: 'InternalError', message: err?.message });
+  }
+}
+
+export async function handleOverrideActions(req: Request, res: Response) {
+  const parsed = caseIdParamSchema.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
+  const bodyParsed = overrideActionsSchema.safeParse(req.body);
+  if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
+
+  try {
+    const result = await overrideProposedActions(parsed.data.caseId, bodyParsed.data.instruction, (req as any).admin?.email || 'admin');
+    res.json(result);
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    console.error('[InboxCase] OverrideActions error:', err?.message);
+    res.status(500).json({ error: 'OverrideFailedError', message: err?.message });
   }
 }
 

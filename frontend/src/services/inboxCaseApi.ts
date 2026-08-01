@@ -151,6 +151,64 @@ export interface CaseStats {
   state_breakdown: Array<{ state: string; count: number }>;
 }
 
+export interface InboxCaseEventRecord {
+  id: string;
+  case_id: string;
+  item_id: string | null;
+  action_id: string | null;
+  event_type: string;
+  actor_type: string;
+  actor_id: string;
+  previous_state: string | null;
+  new_state: string | null;
+  details: Record<string, any>;
+  correlation_id: string;
+  created_at: string;
+}
+
+// Plain-English labels for the case's real event history — grounded in
+// every event_type actually emitted by backend/src/services/inboxCase/*
+// and backend/src/controllers/inboxCaseController.ts. Anything not listed
+// here (a future event type, or a one-off manual DB entry) falls back to
+// a title-cased version of the raw event_type rather than being hidden.
+const EVENT_LABELS: Record<string, string> = {
+  case_discovery_started: 'Discovery started',
+  case_discovery_completed: 'Discovery completed',
+  assessment_completed: 'Assessment complete',
+  assessment_failed: 'Assessment could not be generated automatically',
+  question_answered: 'A blocking question was answered',
+  candidate_included: 'A candidate item was included',
+  candidate_excluded: 'A candidate item was excluded',
+  candidate_manually_adjusted: 'An item was manually adjusted',
+  item_disposition_changed: 'An item disposition was set',
+  case_ready_to_plan_after_last_question_answered: 'Ready to plan — last question answered',
+  plan_generated: 'Action plan generated',
+  action_proposed: 'An action was proposed',
+  action_approved: 'An action was approved',
+  action_rejected: 'An action was rejected',
+  action_execution_started: 'Execution started',
+  action_execution_succeeded: 'An action succeeded',
+  action_execution_failed: 'An action failed',
+  action_execution_skipped_dependency_failed: 'An action was skipped (a dependency failed)',
+  action_execution_reconciled_as_retryable: 'A stuck action was reset to retry safely',
+  action_execution_reconciled_as_succeeded: 'A stuck action was confirmed already succeeded',
+  case_execution_failed: 'Execution run had at least one failure',
+  action_verified: 'An action was verified',
+  case_verification_completed: 'Verification completed',
+  case_resolved: 'Case closed',
+  case_reopened: 'Case reopened',
+  case_reassessing_after_reopen: 'Re-assessing after reopen',
+  closure_blocked: 'Close Case was blocked — see the checklist',
+  prompt_injection_signals_flagged: 'Unusual instruction-like text was flagged in the evidence (informational only)',
+  knowledge_base_entry_proposed: 'A knowledge base entry was proposed from your answer',
+  item_quick_resolved: 'An item was marked Handled/Ignore',
+  action_override_applied: 'Your instruction replaced the proposed action(s)',
+};
+
+export function humanizeCaseEvent(event: InboxCaseEventRecord): string {
+  return EVENT_LABELS[event.event_type] || event.event_type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
 export const inboxCaseApi = {
   discover: (mode: CaseMode, query: string, window: DiscoveryWindow = '90d') =>
     api.post<{ cases: DiscoveredCaseSummary[] }>(`${BASE}/discover`, { mode, query, window }).then((r) => r.data),
@@ -188,5 +246,11 @@ export const inboxCaseApi = {
 
   reopen: (caseId: string, reason: string) => api.post(`${BASE}/${caseId}/reopen`, { reason }).then((r) => r.data),
 
-  audit: (caseId: string) => api.get(`${BASE}/${caseId}/audit`).then((r) => r.data),
+  audit: (caseId: string) => api.get<{ events: InboxCaseEventRecord[] }>(`${BASE}/${caseId}/audit`).then((r) => r.data),
+
+  quickResolve: (caseId: string, itemId: string, resolution: 'HANDLED' | 'IGNORE') =>
+    api.post<{ dispositionSet: ItemDisposition; actionProposed: string | null }>(`${BASE}/${caseId}/items/${itemId}/quick-resolve`, { resolution }).then((r) => r.data),
+
+  overrideActions: (caseId: string, instruction: string) =>
+    api.post<{ rejected: string[]; proposed: string | null }>(`${BASE}/${caseId}/actions/override`, { instruction }).then((r) => r.data),
 };
