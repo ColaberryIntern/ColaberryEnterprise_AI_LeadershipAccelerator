@@ -2,6 +2,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { getTotalsForEnrollments, levelForPoints } from './pointsService';
 import { IS_STAFF_SQL } from './staffDetection';
+import { pickBestDuplicate } from './emailIdentity';
 
 /* ------------------------------------------------------------------ */
 /*  Explorer roster — the drill-down list behind the "Explorer" bucket */
@@ -48,9 +49,17 @@ export async function getExplorerRoster(): Promise<ExplorerRosterRow[]> {
     { type: QueryTypes.SELECT }
   )) as ExplorerRow[];
 
-  const totals = await getTotalsForEnrollments(rows.map((r) => r.enrollment_id));
+  // A Gmail "+alias" re-signup or an unresolved exact-email duplicate must not
+  // show up as two Explorers — collapse by email identity, keeping the
+  // earliest signup (no subscription/payment data exists at this stage to
+  // rank by, so tenure order is the only meaningful tiebreak).
+  const deduped = pickBestDuplicate(rows, (r) => ({
+    email: r.email, hasActiveSubscription: false, paymentStatusPaid: false, isExplorer: true, createdAt: r.created_at,
+  }));
 
-  const roster: ExplorerRosterRow[] = rows.map((r) => {
+  const totals = await getTotalsForEnrollments(deduped.map((r) => r.enrollment_id));
+
+  const roster: ExplorerRosterRow[] = deduped.map((r) => {
     const points = totals.get(r.enrollment_id) ?? 0;
     const { level, name } = levelForPoints(points);
     return {

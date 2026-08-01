@@ -267,6 +267,43 @@ describe('generatePlan — secret redaction hardening (Phase 7 break/harden find
   });
 });
 
+describe('generatePlan — sent_email reply-target fallback (bug fix: cases with only outbound evidence got zero actions)', () => {
+  it('falls back to the highest-scoring INCLUDED sent_email item when no inbound email item is included', async () => {
+    const c = await seedCase();
+    await seedEmailItem(c.id, {
+      source_type: 'sent_email',
+      match_score: 0.9,
+      snapshot: { from_address: 'ali@colaberry.com', to_addresses: ['customer@example.com'] },
+    });
+
+    const result = await generatePlan(c.id, 'ali@colaberry.com');
+
+    expect(result.actionsCreated).toBeGreaterThan(0);
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    const reply = actions.find((a) => a.action_type === 'EMAIL_SEND');
+    expect(reply).toBeDefined();
+  });
+
+  it('does not use a sent_email item as the reply target when it has no recorded recipient', async () => {
+    // Keep seedCase()'s default assessment (non-empty recommended_next_actions +
+    // a commitment owned by someone other than Ali) so this exercises the
+    // recipient check specifically, not the unrelated "nothing to propose" gate —
+    // MARK_WAITING is still expected to fire from that same default assessment.
+    const c = await seedCase();
+    await seedEmailItem(c.id, {
+      source_type: 'sent_email',
+      snapshot: { from_address: 'ali@colaberry.com', to_addresses: [] },
+    });
+
+    const result = await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    expect(actions.find((a) => a.action_type === 'EMAIL_SEND')).toBeUndefined();
+    expect(actions.find((a) => a.action_type === 'MARK_WAITING')).toBeDefined();
+    expect(result.actionsCreated).toBeGreaterThan(0);
+  });
+});
+
 describe('generatePlan — answered-question reply content (bug fix: plan ignored answered blocking questions)', () => {
   it('drafts a reply using the answered blocking question even when the assessment had no recommended next actions', async () => {
     const c = await seedCase({

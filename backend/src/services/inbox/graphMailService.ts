@@ -51,12 +51,13 @@ export interface GraphMessage {
   receivedDateTime: string;
   hasAttachments: boolean;
   internetMessageHeaders?: Array<{ name: string; value: string }>;
+  webLink?: string;
 }
 
 export async function fetchInboxMessages(top: number = 100): Promise<GraphMessage[]> {
   const token = await getAccessToken();
   const messages: GraphMessage[] = [];
-  let url: string | null = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=${Math.min(top, 50)}&$orderby=receivedDateTime desc&$select=id,conversationId,subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,internetMessageHeaders`;
+  let url: string | null = `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=${Math.min(top, 50)}&$orderby=receivedDateTime desc&$select=id,conversationId,subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,internetMessageHeaders,webLink`;
 
   while (url && messages.length < top) {
     const res: any = await axios.get(url, {
@@ -74,7 +75,7 @@ export async function fetchInboxMessages(top: number = 100): Promise<GraphMessag
 export async function fetchFolderMessages(folder: string, top: number = 100): Promise<GraphMessage[]> {
   const token = await getAccessToken();
   const messages: GraphMessage[] = [];
-  let url: string | null = `https://graph.microsoft.com/v1.0/me/mailFolders/${folder}/messages?$top=${Math.min(top, 50)}&$orderby=receivedDateTime desc&$select=id,conversationId,subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,internetMessageHeaders`;
+  let url: string | null = `https://graph.microsoft.com/v1.0/me/mailFolders/${folder}/messages?$top=${Math.min(top, 50)}&$orderby=receivedDateTime desc&$select=id,conversationId,subject,from,toRecipients,ccRecipients,body,receivedDateTime,hasAttachments,internetMessageHeaders,webLink`;
 
   while (url && messages.length < top) {
     const res: any = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } });

@@ -77,7 +77,12 @@ async function searchAndNormalize(
         source_type: sourceType,
         source_id: msg.id,
         provider,
-        source_url: null, // Gmail has no stable public deep-link without a UI-specific format; the thread id is the durable reference
+        // Gmail's web UI opens a specific message when the id is passed as
+        // the #all/<id> fragment — works across any label/folder view.
+        // Assumes the first Google account slot (u/0) in the browser
+        // session, which matches how this integration authenticates (one
+        // fixed mailbox per provider, not an ambiguous multi-account login).
+        source_url: `https://mail.google.com/mail/u/0/#all/${msg.id}`,
         title: subject,
         occurred_at: new Date(parseInt(msg.internalDate || '0', 10) || Date.now()),
         participants: [fromAddress, ...toAddrs, ...ccAddrs].filter(Boolean),

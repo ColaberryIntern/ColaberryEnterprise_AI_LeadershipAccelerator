@@ -82,4 +82,18 @@ describe('getExplorerRoster', () => {
     expect(sql).toContain("e.status = 'active'");
     expect(sql).toContain('cm.mgmt_role'); // IS_STAFF_SQL is inlined into the WHERE clause
   });
+
+  it('collapses a duplicate Explorer identity (Gmail "+alias" re-signup) into one roster entry, keeping the earlier signup', async () => {
+    mockQuery.mockResolvedValue([
+      { enrollment_id: 'later', full_name: 'Dup Person', email: 'dup.person+1@gmail.com', created_at: '2026-07-28T00:14:23.995Z' },
+      { enrollment_id: 'earlier', full_name: 'Dup Person', email: 'dup.person@gmail.com', created_at: '2026-07-11T19:42:25.016Z' },
+    ]);
+    mockGetTotals.mockResolvedValue(new Map());
+
+    const result = await getExplorerRoster();
+
+    expect(result).toHaveLength(1);
+    expect(result[0].enrollment_id).toBe('earlier');
+    expect(mockGetTotals).toHaveBeenCalledWith(['earlier']);
+  });
 });

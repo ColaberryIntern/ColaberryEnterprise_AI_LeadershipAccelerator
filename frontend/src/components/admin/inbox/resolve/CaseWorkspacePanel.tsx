@@ -123,6 +123,10 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
         {/* Left: evidence / items */}
         <div className="col-lg-4">
           <SectionCard title="Evidence" subtitle={`${visibleItems.length} item(s) · ${excludedItems.length} excluded`} icon="file-list-3-line">
+            <p className="small text-muted mb-2">
+              Included items are already part of this case — nothing to do there. Candidates are the AI's best
+              guesses and need your Include or Exclude call below.
+            </p>
             <div className="d-flex flex-column gap-2" style={{ maxHeight: 520, overflowY: 'auto' }}>
               {items.map((item) => (
                 <div key={item.id} className="border rounded p-2">
@@ -142,8 +146,14 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                     </span>
                     {item.disposition && <span className="badge bg-info text-dark">{item.disposition}</span>}
                     {item.source_url && (
-                      <a href={item.source_url} target="_blank" rel="noreferrer" className="small" aria-label={`Open source for ${item.title}`}>
-                        <i className="ri-external-link-line" aria-hidden="true" />
+                      <a
+                        href={item.source_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="small d-inline-flex align-items-center gap-1"
+                        aria-label={`Open source for ${item.title}`}
+                      >
+                        <i className="ri-external-link-line" aria-hidden="true" /> Open
                       </a>
                     )}
                   </div>
@@ -290,6 +300,10 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
 
           {actions.length > 0 && (
             <SectionCard title="Proposed Actions" subtitle={`${emailsLeavingInbox} email(s) will leave the inbox`} icon="flashlight-line" className="mb-3">
+              <p className="small text-muted mb-2">
+                Actions marked "Needs your approval" must be approved one at a time for safety. Everything else can
+                be approved together with "Approve all low-risk" below.
+              </p>
               <div className="d-flex flex-column gap-2 mb-2" style={{ maxHeight: 320, overflowY: 'auto' }}>
                 {actions.map((a) => (
                   <ActionCard
@@ -476,6 +490,14 @@ function ActionCard({
       {action.error_message && <div className="small text-danger mt-1">{action.error_class}: {action.error_message}</div>}
       {action.status === 'PROPOSED' && (
         <div className="d-flex flex-wrap gap-1 mt-2 align-items-center">
+          {/* Mirrors caseApprovalService.ts's approveLowRisk bulk-eligibility
+              check exactly (risk_level !== 'LOW' || requires_individual_approval)
+              so this label can never disagree with what that button actually does. */}
+          {action.risk_level !== 'LOW' || action.requires_individual_approval ? (
+            <span className="badge bg-warning text-dark">Needs your approval</span>
+          ) : (
+            <span className="badge bg-secondary">Can be bundled</span>
+          )}
           <button type="button" className="btn btn-success btn-sm" disabled={busy} onClick={onApprove}>Approve</button>
           <input
             type="text"

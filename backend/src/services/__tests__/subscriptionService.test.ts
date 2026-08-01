@@ -10,7 +10,7 @@ import { env } from '../../config/env';
 
 jest.mock('../../config/env', () => ({ env: { paysimpleApiUser: 'u', paysimpleApiKey: 'k', paymentMode: 'test' } }));
 jest.mock('../../models', () => ({
-  Enrollment: { findByPk: jest.fn() },
+  Enrollment: { findByPk: jest.fn(), findAll: jest.fn() },
   Cohort: { findByPk: jest.fn(), findAll: jest.fn() },
   Subscription: { findAll: jest.fn(), findOne: jest.fn(), create: jest.fn() },
   AccountCredit: { findAll: jest.fn(), update: jest.fn() },
@@ -65,6 +65,7 @@ describe('subscriptionService', () => {
     it('grantFreeAccess: creates an active comp subscription and flips the enrollment to a paid member', async () => {
       const update = jest.fn();
       (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: 'staff@example.com', cohort_id: 'c1', enrolled_at: null, update });
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([{ id: 'e1' }]); // no siblings beyond itself
       (Subscription.findOne as jest.Mock).mockResolvedValue(null);
       (Subscription.create as jest.Mock).mockImplementation(async (attrs: any) => ({ id: 'sub1', ...attrs }));
 
@@ -95,6 +96,22 @@ describe('subscriptionService', () => {
       expect(update).toHaveBeenCalled(); // membership grant is still (idempotently) applied
     });
 
+    it('grantFreeAccess: idempotent across sibling enrollments — does not create a second comp row when a SIBLING already holds an active one', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: 'brianna@example.com', cohort_id: 'c1', enrolled_at: null, update });
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([{ id: 'e1' }, { id: 'e2' }]);
+      const existingSub = { id: 'existing-on-e2', enrollment_id: 'e2', plan: 'comp', status: 'active' };
+      (Subscription.findOne as jest.Mock).mockResolvedValue(existingSub);
+
+      const sub = await grantFreeAccess('e1', NOW);
+
+      expect(Subscription.create).not.toHaveBeenCalled();
+      expect((sub as any).id).toBe('existing-on-e2');
+      expect((Subscription.findOne as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
+        where: expect.objectContaining({ enrollment_id: ['e1', 'e2'], plan: 'comp', status: 'active' }),
+      }));
+    });
+
     it('grantFreeAccess: throws NotFoundError when the enrollment is missing', async () => {
       (Enrollment.findByPk as jest.Mock).mockResolvedValue(null);
       await expect(grantFreeAccess('nope', NOW)).rejects.toMatchObject({ error_class: 'NotFoundError' });
@@ -103,15 +120,32 @@ describe('subscriptionService', () => {
 
     it('revokeFreeAccess: cancels an active comp and returns true', async () => {
       const update = jest.fn();
-      (Subscription.findOne as jest.Mock).mockResolvedValue({ id: 'sub1', update });
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: null });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([{ id: 'sub1', update }]);
       const ok = await revokeFreeAccess('e1', NOW);
       expect(ok).toBe(true);
       expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'canceled', cancel_reason: 'comp_revoked' }));
     });
 
     it('revokeFreeAccess: returns false when there is no active comp', async () => {
-      (Subscription.findOne as jest.Mock).mockResolvedValue(null);
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', email: null });
+      (Subscription.findAll as jest.Mock).mockResolvedValue([]);
       await expect(revokeFreeAccess('e1', NOW)).resolves.toBe(false);
+    });
+
+    it('revokeFreeAccess: cancels the active comp even when it lives on a SIBLING enrollment, not the requested id (Brianna Woodard shape, 2026-07-31)', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'explorer-row', email: 'brianna@example.com' });
+      (Enrollment.findAll as jest.Mock).mockResolvedValue([{ id: 'explorer-row' }, { id: 'member-row' }]);
+      const siblingSub = { id: 'sub-on-member-row', enrollment_id: 'member-row', update: jest.fn() };
+      (Subscription.findAll as jest.Mock).mockResolvedValue([siblingSub]);
+
+      const ok = await revokeFreeAccess('explorer-row', NOW);
+
+      expect(ok).toBe(true);
+      expect(siblingSub.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'canceled', cancel_reason: 'comp_revoked' }));
+      expect((Subscription.findAll as jest.Mock).mock.calls[0][0]).toEqual(expect.objectContaining({
+        where: expect.objectContaining({ enrollment_id: ['explorer-row', 'member-row'], plan: 'comp', status: 'active' }),
+      }));
     });
 
     it('activeCompEnrollmentIds: empty input short-circuits with no query', async () => {
