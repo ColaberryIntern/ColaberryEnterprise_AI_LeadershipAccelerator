@@ -59,6 +59,7 @@ Respond with a single JSON object matching this exact shape (no markdown, no pro
   "blockers": [string], "missing_information": [string], "decisions_required": [string],
   "recommended_next_actions": [string], "confidence": number(0-100),
   "questions": [{ "question": string, "why_required": string, "choices": [{ "label": string, "consequence": string }], "recommended_answer": string|null }],
+  "candidate_item_assessments": [{ "item_id": string, "recommendation": "INCLUDE"|"EXCLUDE", "reasoning": string }],
   "teaching_brief": {
     "what_is_happening": string, "why_it_matters": string, "what_ali_is_deciding": string,
     "root_cause": string|null, "confirmed_vs_inferred": string, "risk_of_acting": string,
@@ -70,23 +71,32 @@ Rules:
 - Every item_id you cite in "evidence" arrays MUST be one of the evidence ids actually provided.
 - Never state an inference as a confirmed fact — use "assumptions" with a confidence score instead.
 - "questions" must be CONSOLIDATED at the case level (do not ask one question per evidence item) and limited to what actually blocks resolution.
-- If evidence is thin, say so in missing_information rather than inventing detail.`;
+- If evidence is thin, say so in missing_information rather than inventing detail.
+- Each evidence block is tagged CANDIDATE or INCLUDED. For every CANDIDATE item, take a deeper look at its
+  actual content (not just its title/match reasons) and add an entry to "candidate_item_assessments" with
+  your honest verdict — INCLUDE if it genuinely belongs to this case's story, EXCLUDE if it's a false match
+  (e.g. same participants but an unrelated topic, or a name collision). Give one concrete sentence of
+  reasoning citing what's actually in the item. This is advisory only — you are not deciding for Ali, you
+  are giving him your read before he decides. Do not include INCLUDED items in this list — they're already
+  decided. If there are no CANDIDATE items, return an empty array.`;
 
-function buildEvidenceBlock(items: InboxCaseItem[]): string {
+function buildEvidenceBlock(items: InboxCaseItem[]): { text: string; boundedItems: InboxCaseItem[] } {
   const bounded = [...items]
     .filter((i) => i.inclusion_status !== 'EXCLUDED')
     .sort((a, b) => Number(b.match_score) - Number(a.match_score))
     .slice(0, MAX_EVIDENCE_ITEMS);
 
-  return bounded
+  const text = bounded
     .map((item) => {
       const bodyText = String((item.snapshot as any)?.body_excerpt || item.title || '');
       return wrapAsUntrustedEvidence(
         item.id,
-        `source_type=${item.source_type} provider=${item.provider} occurred_at=${item.occurred_at?.toISOString?.() || item.occurred_at}\ntitle: ${item.title}\n${bodyText}`
+        `source_type=${item.source_type} provider=${item.provider} inclusion_status=${item.inclusion_status} occurred_at=${item.occurred_at?.toISOString?.() || item.occurred_at}\ntitle: ${item.title}\n${bodyText}`
       );
     })
     .join('\n\n');
+
+  return { text, boundedItems: bounded };
 }
 
 function collectInjectionFlags(items: InboxCaseItem[]): Array<{ item_id: string; signals: string[] }> {
@@ -100,8 +110,28 @@ function collectInjectionFlags(items: InboxCaseItem[]): Array<{ item_id: string;
 }
 
 function toStoredAssessment(output: CaseAssessmentOutput): CaseAssessment {
-  const { teaching_brief, questions, ...rest } = output;
+  const { teaching_brief, questions, candidate_item_assessments, ...rest } = output;
   return rest as CaseAssessment;
+}
+
+// Applies the AI's advisory per-CANDIDATE-item verdicts to the item rows
+// themselves — never inclusion_status, only the two advisory columns.
+// Validated against boundedItems (the REAL evidence set this run actually
+// showed the model) so a hallucinated or prompt-injected item_id can never
+// touch a row it wasn't shown.
+async function applyCandidateItemAssessments(
+  assessments: CaseAssessmentOutput['candidate_item_assessments'],
+  boundedItems: InboxCaseItem[]
+): Promise<number> {
+  const candidateItemById = new Map(boundedItems.filter((i) => i.inclusion_status === 'CANDIDATE').map((i) => [i.id, i]));
+  let applied = 0;
+  for (const verdict of assessments) {
+    const item = candidateItemById.get(verdict.item_id);
+    if (!item) continue; // not a real CANDIDATE item this run actually showed the model
+    await item.update({ ai_recommendation: verdict.recommendation, ai_recommendation_reason: verdict.reasoning, updated_at: new Date() });
+    applied++;
+  }
+  return applied;
 }
 
 function safeFallbackOutput(items: InboxCaseItem[]): CaseAssessmentOutput {
@@ -127,6 +157,7 @@ function safeFallbackOutput(items: InboxCaseItem[]): CaseAssessmentOutput {
     recommended_next_actions: ['Review case evidence manually.'],
     confidence: 0,
     questions: [],
+    candidate_item_assessments: [],
     teaching_brief: {
       what_is_happening: 'The system could not generate an automated assessment for this case.',
       why_it_matters: 'Without an assessment, blocking questions and a recommended plan cannot be derived automatically.',
@@ -146,6 +177,7 @@ export interface RunAssessmentResult {
   teachingBrief: TeachMeBrief;
   questionsCreated: number;
   usedFallback: boolean;
+  candidateRecommendationsApplied: number;
 }
 
 export async function runAssessment(caseId: string, requestedBy: string): Promise<RunAssessmentResult> {
@@ -155,6 +187,7 @@ export async function runAssessment(caseId: string, requestedBy: string): Promis
   const injectionFlags = collectInjectionFlags(items);
   let output: CaseAssessmentOutput;
   let usedFallback = false;
+  let boundedItems: InboxCaseItem[] = [];
 
   if (items.length === 0) {
     output = safeFallbackOutput(items);
@@ -163,6 +196,7 @@ export async function runAssessment(caseId: string, requestedBy: string): Promis
     try {
       const client = getInstrumentedOpenAI({ workflow_id: 'inbox_case_assessment' });
       const evidenceBlock = buildEvidenceBlock(items);
+      boundedItems = evidenceBlock.boundedItems;
 
       // Best-effort: a knowledge-base lookup failure must never take down
       // the assessment itself — fall back to no KB context rather than
@@ -179,7 +213,7 @@ export async function runAssessment(caseId: string, requestedBy: string): Promis
         `Case mode: ${caseRow.mode}`,
         `Case query/title: ${caseRow.title}`,
         knowledgeBlock ? `\n${knowledgeBlock}` : '',
-        `\nEVIDENCE:\n${evidenceBlock}`,
+        `\nEVIDENCE:\n${evidenceBlock.text}`,
       ].join('\n');
 
       const response = await client.chat.completions.create({
@@ -219,6 +253,8 @@ export async function runAssessment(caseId: string, requestedBy: string): Promis
     updated_at: new Date(),
   });
 
+  const candidateRecommendationsApplied = await applyCandidateItemAssessments(output.candidate_item_assessments, boundedItems);
+
   // Consolidate: dedupe against any existing OPEN question with the same
   // text so re-running Assess doesn't spam duplicate questions.
   const existingOpen = await InboxCaseQuestion.findAll({ where: { case_id: caseId, status: 'OPEN' } });
@@ -251,6 +287,7 @@ export async function runAssessment(caseId: string, requestedBy: string): Promis
       used_fallback: usedFallback,
       confidence: output.confidence,
       questions_created: questionsCreated,
+      candidate_recommendations_applied: candidateRecommendationsApplied,
       injection_signals_flagged: injectionFlags,
     },
   });
@@ -270,8 +307,9 @@ export async function runAssessment(caseId: string, requestedBy: string): Promis
     caseId,
     usedFallback
       ? `Assessment could not be generated automatically (model unavailable or output was invalid) — manual review needed.`
-      : `Assessment complete (confidence ${Math.round(output.confidence)}%). ${output.summary} ${hasOpenQuestions ? `${questionsCreated ? 'New' : 'Still has'} blocking question(s) — needs your input.` : 'No blocking questions — ready to plan.'}`
+      : `Assessment complete (confidence ${Math.round(output.confidence)}%). ${output.summary} ${hasOpenQuestions ? `${questionsCreated ? 'New' : 'Still has'} blocking question(s) — needs your input.` : 'No blocking questions — ready to plan.'}` +
+          (candidateRecommendationsApplied > 0 ? ` AI reviewed ${candidateRecommendationsApplied} candidate item(s) and left a recommendation on each.` : '')
   );
 
-  return { assessment, teachingBrief, questionsCreated, usedFallback };
+  return { assessment, teachingBrief, questionsCreated, usedFallback, candidateRecommendationsApplied };
 }

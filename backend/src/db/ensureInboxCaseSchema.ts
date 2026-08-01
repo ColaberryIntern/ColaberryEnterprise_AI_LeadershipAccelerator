@@ -81,6 +81,15 @@ export async function ensureInboxCaseSchema(): Promise<void> {
     `CREATE INDEX IF NOT EXISTS idx_inbox_case_items_disposition ON inbox_case_items (disposition)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS uq_inbox_case_items_case_source_hash ON inbox_case_items (case_id, source_hash)`,
 
+    // Advisory AI recommendation for CANDIDATE items (Run Assessment "deeper
+    // look"). Never auto-applied to inclusion_status — Ali's Include/Exclude
+    // call is unchanged. Additive, nullable — safe on existing rows.
+    `ALTER TABLE inbox_case_items ADD COLUMN IF NOT EXISTS ai_recommendation VARCHAR(10)`,
+    `ALTER TABLE inbox_case_items ADD COLUMN IF NOT EXISTS ai_recommendation_reason TEXT`,
+    `ALTER TABLE inbox_case_items DROP CONSTRAINT IF EXISTS ck_inbox_case_items_ai_recommendation`,
+    `ALTER TABLE inbox_case_items ADD CONSTRAINT ck_inbox_case_items_ai_recommendation CHECK (ai_recommendation IS NULL OR ai_recommendation IN (
+       'INCLUDE','EXCLUDE'))`,
+
     `CREATE TABLE IF NOT EXISTS inbox_identity_aliases (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        canonical_name VARCHAR(200) NOT NULL,

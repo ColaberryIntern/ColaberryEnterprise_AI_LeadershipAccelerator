@@ -87,6 +87,11 @@ export interface InboxCaseItemRecord {
   disposition: ItemDisposition | null;
   disposition_reason: string | null;
   snapshot: Record<string, any>;
+  // AI's advisory verdict on a CANDIDATE item from the assessment's
+  // "deeper look" — never auto-applied, informs but never replaces
+  // Ali's own Include/Exclude call.
+  ai_recommendation: 'INCLUDE' | 'EXCLUDE' | null;
+  ai_recommendation_reason: string | null;
 }
 
 export interface InboxCaseQuestionRecord {

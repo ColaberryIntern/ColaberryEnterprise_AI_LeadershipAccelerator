@@ -44,7 +44,7 @@ jest.mock('../caseTicketService', () => ({
   postCaseProgressNote: jest.fn(async () => {}),
 }));
 
-import { executeApprovedActions, reconcileStuckActions } from '../caseExecutionService';
+import { executeApprovedActions, reconcileStuckActions, MaxRetriesExceededError } from '../caseExecutionService';
 
 beforeEach(() => {
   fakeInboxCase.rows.clear();
@@ -188,6 +188,49 @@ describe('reconcileStuckActions — interrupted-run recovery', () => {
 
     expect(stuck.status).toBe('SUCCEEDED'); // reconciled to APPROVED, then executed fresh
     expect(result.succeeded).toBe(1);
+  });
+});
+
+describe('executeApprovedActions — "Retry Failed" bug fix: a FAILED action is retryable, bounded', () => {
+  it('re-entering execute() from case state FAILED resets a retryable FAILED action to APPROVED and retries it (happy path)', async () => {
+    const c = await seedCase('FAILED');
+    const failedAction = await seedAction(c.id, { action_type: 'MARK_WAITING', status: 'FAILED', attempt_count: 1, error_class: 'RateLimitError' });
+
+    const result = await executeApprovedActions(c.id, 'ali@colaberry.com');
+
+    expect(failedAction.status).toBe('SUCCEEDED');
+    expect(result.succeeded).toBe(1);
+    expect(mockMarkWaitingExecutor).toHaveBeenCalledTimes(1);
+  });
+
+  it('a retry that fails again returns the case to FAILED with attempt_count incremented (failure path)', async () => {
+    const c = await seedCase('FAILED');
+    const failedAction = await seedAction(c.id, { action_type: 'BASECAMP_COMMENT', status: 'FAILED', attempt_count: 1 });
+
+    await executeApprovedActions(c.id, 'ali@colaberry.com');
+
+    expect(failedAction.status).toBe('FAILED');
+    expect(failedAction.attempt_count).toBe(2);
+    expect(c.state).toBe('FAILED');
+  });
+
+  it('an action at the retry cap is excluded and, with nothing else approved, throws MaxRetriesExceededError instead of silently doing nothing (boundary)', async () => {
+    const c = await seedCase('FAILED');
+    const exhausted = await seedAction(c.id, { action_type: 'BASECAMP_COMMENT', status: 'FAILED', attempt_count: 5 });
+
+    await expect(executeApprovedActions(c.id, 'ali@colaberry.com')).rejects.toThrow(MaxRetriesExceededError);
+    expect(mockFailingExecutor).not.toHaveBeenCalled(); // never re-attempted past the cap
+    expect(exhausted.status).toBe('FAILED'); // untouched, not silently reset
+  });
+
+  it('a case with no FAILED or APPROVED actions is a true no-op on retry (idempotency)', async () => {
+    const c = await seedCase('EXECUTING');
+    const already = await seedAction(c.id, { status: 'SUCCEEDED', external_receipt: { ok: true } });
+
+    const result = await executeApprovedActions(c.id, 'ali@colaberry.com');
+
+    expect(result).toEqual({ executed: 0, succeeded: 0, failed: 0, skipped: 0 });
+    expect(already.status).toBe('SUCCEEDED');
   });
 });
 

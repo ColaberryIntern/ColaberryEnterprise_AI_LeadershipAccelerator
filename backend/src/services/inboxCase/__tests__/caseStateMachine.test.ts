@@ -15,6 +15,10 @@ describe('canTransition / assertTransition — happy paths', () => {
     ['WAITING', 'RESOLVED'],
     ['DELEGATED', 'RESOLVED'],
     ['FAILED', 'ASSESSING'],
+    ['FAILED', 'READY_TO_PLAN'],
+    // Regression coverage: without this edge, "Retry Failed" was a dead
+    // end — a case that failed once could never execute again.
+    ['FAILED', 'EXECUTING'],
     ['REOPENED', 'ASSESSING'],
   ];
 

@@ -132,6 +132,17 @@ export const caseAssessmentOutputSchema = z.object({
       })
     )
     .default([]),
+  // Advisory-only: the AI's "deeper look" verdict on each CANDIDATE item it
+  // was shown, for Ali's Include/Exclude call — never auto-applied.
+  candidate_item_assessments: z
+    .array(
+      z.object({
+        item_id: z.string(),
+        recommendation: z.enum(['INCLUDE', 'EXCLUDE']),
+        reasoning: z.string().min(1),
+      })
+    )
+    .default([]),
   teaching_brief: z.object({
     what_is_happening: z.string(),
     why_it_matters: z.string(),

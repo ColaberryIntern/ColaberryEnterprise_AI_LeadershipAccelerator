@@ -5,10 +5,12 @@ import {
   CASE_PROVIDERS,
   ITEM_INCLUSION_STATUSES,
   ITEM_DISPOSITIONS,
+  AI_ITEM_RECOMMENDATIONS,
   CaseSourceType,
   CaseProvider,
   ItemInclusionStatus,
   ItemDisposition,
+  AiItemRecommendation,
   MatchReason,
 } from '../types/inboxCase';
 
@@ -33,6 +35,8 @@ interface InboxCaseItemAttributes {
   disposition_reason: string | null;
   snapshot: Record<string, unknown>;
   source_hash: string;
+  ai_recommendation: AiItemRecommendation | null;
+  ai_recommendation_reason: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -53,6 +57,8 @@ class InboxCaseItem extends Model<InboxCaseItemAttributes> implements InboxCaseI
   declare disposition_reason: string | null;
   declare snapshot: Record<string, unknown>;
   declare source_hash: string;
+  declare ai_recommendation: AiItemRecommendation | null;
+  declare ai_recommendation_reason: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -74,6 +80,8 @@ InboxCaseItem.init(
     disposition_reason: { type: DataTypes.TEXT, allowNull: true },
     snapshot: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     source_hash: { type: DataTypes.STRING(64), allowNull: false },
+    ai_recommendation: { type: DataTypes.ENUM(...AI_ITEM_RECOMMENDATIONS), allowNull: true },
+    ai_recommendation_reason: { type: DataTypes.TEXT, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },

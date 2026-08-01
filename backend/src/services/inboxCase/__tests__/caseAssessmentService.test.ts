@@ -253,6 +253,80 @@ describe('runAssessment — safe fallback behavior', () => {
   });
 });
 
+describe('runAssessment — AI reviews CANDIDATE items ("deeper look" feature)', () => {
+  it('writes ai_recommendation/ai_recommendation_reason onto a real CANDIDATE item the model was shown', async () => {
+    const c = await seedCase();
+    const candidate = await seedItem(c.id, { inclusion_status: 'CANDIDATE', title: 'Maybe related email' });
+    mockModelResponse(
+      JSON.stringify({
+        ...VALID_MODEL_OUTPUT,
+        candidate_item_assessments: [{ item_id: candidate.id, recommendation: 'EXCLUDE', reasoning: 'Different topic entirely — a scheduling conflict, not the ownership question.' }],
+      })
+    );
+
+    const result = await runAssessment(c.id, 'ali@colaberry.com');
+
+    expect(result.candidateRecommendationsApplied).toBe(1);
+    expect(candidate.ai_recommendation).toBe('EXCLUDE');
+    expect(candidate.ai_recommendation_reason).toContain('scheduling conflict');
+  });
+
+  it('never modifies inclusion_status — advisory only, Ali still decides', async () => {
+    const c = await seedCase();
+    const candidate = await seedItem(c.id, { inclusion_status: 'CANDIDATE' });
+    mockModelResponse(
+      JSON.stringify({
+        ...VALID_MODEL_OUTPUT,
+        candidate_item_assessments: [{ item_id: candidate.id, recommendation: 'INCLUDE', reasoning: 'Same thread, same participants, directly relevant.' }],
+      })
+    );
+
+    await runAssessment(c.id, 'ali@colaberry.com');
+
+    expect(candidate.inclusion_status).toBe('CANDIDATE'); // unchanged
+    expect(candidate.ai_recommendation).toBe('INCLUDE');
+  });
+
+  it('silently ignores a candidate_item_assessments entry whose item_id was never actually shown to the model (hallucination/injection guard)', async () => {
+    const c = await seedCase();
+    await seedItem(c.id, { inclusion_status: 'CANDIDATE' }); // real item, but not referenced below
+    mockModelResponse(
+      JSON.stringify({
+        ...VALID_MODEL_OUTPUT,
+        candidate_item_assessments: [{ item_id: 'not-a-real-item-id', recommendation: 'INCLUDE', reasoning: 'fabricated' }],
+      })
+    );
+
+    const result = await runAssessment(c.id, 'ali@colaberry.com');
+    expect(result.candidateRecommendationsApplied).toBe(0);
+  });
+
+  it('does not touch an already-INCLUDED item even if the model mistakenly returns a verdict for it', async () => {
+    const c = await seedCase();
+    const included = await seedItem(c.id, { inclusion_status: 'INCLUDED' });
+    mockModelResponse(
+      JSON.stringify({
+        ...VALID_MODEL_OUTPUT,
+        candidate_item_assessments: [{ item_id: included.id, recommendation: 'EXCLUDE', reasoning: 'model confused' }],
+      })
+    );
+
+    const result = await runAssessment(c.id, 'ali@colaberry.com');
+    expect(result.candidateRecommendationsApplied).toBe(0);
+    expect(included.ai_recommendation).toBeUndefined();
+  });
+
+  it('the safe-fallback path (model unavailable) still works with candidate_item_assessments absent from output', async () => {
+    const c = await seedCase();
+    await seedItem(c.id, { inclusion_status: 'CANDIDATE' });
+    mockCreate.mockRejectedValueOnce(new Error('OpenAI unavailable'));
+
+    const result = await runAssessment(c.id, 'ali@colaberry.com');
+    expect(result.usedFallback).toBe(true);
+    expect(result.candidateRecommendationsApplied).toBe(0);
+  });
+});
+
 describe('runAssessment — prompt injection observability', () => {
   it('flags evidence containing an injection-shaped phrase without altering the assessment call', async () => {
     const c = await seedCase();

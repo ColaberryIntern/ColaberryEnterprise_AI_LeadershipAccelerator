@@ -21,6 +21,24 @@ export interface ExecuteResult {
   skipped: number;
 }
 
+export class MaxRetriesExceededError extends Error {
+  error_class = 'MaxRetriesExceededError';
+  constructor(public exhaustedActionIds: string[]) {
+    super(
+      `${exhaustedActionIds.length} action(s) have failed ${MAX_ACTION_ATTEMPTS} times and will not be retried automatically. Regenerate the plan or reject them to unblock this case.`
+    );
+    this.name = 'MaxRetriesExceededError';
+  }
+}
+
+// Bounded retry cap for a FAILED action re-entering the retry-eligible set
+// on the next "Retry Failed" / execute() call. Prevents an infinite retry
+// loop against an external provider (CLAUDE.md: "retrying without an
+// upper bound is explicitly prohibited") while giving genuinely transient
+// failures (a rate limit, a momentary timeout) real room to succeed on a
+// later attempt.
+const MAX_ACTION_ATTEMPTS = 5;
+
 // Reconciliation: picks up any action left in EXECUTING by an interrupted
 // prior run (process crash, browser refresh mid-run, etc.) BEFORE the main
 // loop starts. If an external_receipt already exists, the side effect
@@ -104,12 +122,12 @@ const SATISFYING_STATUSES: ActionStatus[] = ['SUCCEEDED', 'VERIFIED'];
 
 export async function executeApprovedActions(caseId: string, requestedBy: string): Promise<ExecuteResult> {
   const caseRow = await getCaseOrThrow(caseId);
-  if (caseRow.state === 'AWAITING_APPROVAL') {
+  if (caseRow.state === 'AWAITING_APPROVAL' || caseRow.state === 'FAILED') {
     await transitionCase(caseId, 'EXECUTING', {
       actor_type: 'system',
       actor_id: 'case_execution_service',
       event_type: 'action_execution_started',
-      details: { requested_by: requestedBy },
+      details: { requested_by: requestedBy, retry: caseRow.state === 'FAILED' },
     });
   } else if (caseRow.state !== 'EXECUTING') {
     const err: any = new Error(`Cannot execute actions from case state ${caseRow.state}`);
@@ -120,11 +138,29 @@ export async function executeApprovedActions(caseId: string, requestedBy: string
   await reconcileStuckActions(caseId);
 
   const allActions = await InboxCaseAction.findAll({ where: { case_id: caseId } });
+
+  // "Retry Failed" calls this same function again. A FAILED action's
+  // status never becomes APPROVED on its own, so without this step every
+  // retry would silently execute zero actions. Bounded by attempt_count
+  // so a genuinely broken action (bad recipient, permanently revoked
+  // auth) can't retry forever — see MAX_ACTION_ATTEMPTS.
+  const failedActions = allActions.filter((a) => a.status === 'FAILED');
+  const retryableFailed = failedActions.filter((a) => a.attempt_count < MAX_ACTION_ATTEMPTS);
+  const exhaustedFailed = failedActions.filter((a) => a.attempt_count >= MAX_ACTION_ATTEMPTS);
+  for (const action of retryableFailed) {
+    await action.update({ status: 'APPROVED', updated_at: new Date() });
+  }
+
   const statusById = new Map(allActions.map((a) => [a.id, a.status as ActionStatus]));
   const items = await InboxCaseItem.findAll({ where: { case_id: caseId } });
   const itemsById = new Map(items.map((i) => [i.id, i]));
 
   const approved = allActions.filter((a) => a.status === 'APPROVED');
+
+  if (approved.length === 0 && exhaustedFailed.length > 0) {
+    throw new MaxRetriesExceededError(exhaustedFailed.map((a) => a.id));
+  }
+
   const ordered = topologicalOrder(approved);
 
   let succeeded = 0;
