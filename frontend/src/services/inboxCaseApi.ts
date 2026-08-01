@@ -203,6 +203,7 @@ const EVENT_LABELS: Record<string, string> = {
   knowledge_base_entry_proposed: 'A knowledge base entry was proposed from your answer',
   item_quick_resolved: 'An item was marked Handled/Ignore',
   action_override_applied: 'Your instruction replaced the proposed action(s)',
+  item_auto_dispositioned: 'An item was automatically marked resolved after its action was verified',
 };
 
 export function humanizeCaseEvent(event: InboxCaseEventRecord): string {
