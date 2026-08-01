@@ -26,7 +26,12 @@ import { redactSensitive } from '../../utils/piiRedaction';
 // trust the dependency graph alone rather than re-deriving "is this an
 // archive action" logic.
 
-interface ProposedAction {
+// Exported: reused by caseQuickResolveService.ts and
+// caseActionOverrideService.ts, which both need to create a single
+// InboxCaseAction with the same idempotency-dedup and sanitization
+// guarantees the full-case planner already relies on, rather than
+// duplicating that logic a second and third time.
+export interface ProposedAction {
   action_type: ActionType;
   item_id: string | null;
   target_source: string;
@@ -256,7 +261,7 @@ function sanitizeProposal(proposal: ProposedAction): ProposedAction {
   return { ...proposal, preview: sanitizeText(proposal.preview), payload };
 }
 
-async function createActionIfNew(
+export async function createActionIfNew(
   caseRow: InboxCase,
   correlationId: string,
   requestedBy: string,
