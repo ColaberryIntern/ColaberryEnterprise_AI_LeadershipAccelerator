@@ -1,7 +1,123 @@
 import { Cohort, Enrollment, AccountCredit, LiveSession, ProgramBlueprint } from '../models';
-import { UpdateCohortInput, CreateCohortInput } from '../schemas/cohortSchema';
+import { UpdateCohortInput, CreateCohortInput, ScheduleDayInput } from '../schemas/cohortSchema';
 import { AppError } from '../utils/AppError';
 import { Op, fn, col } from 'sequelize';
+
+const SESSION_DEFAULT_DURATION_MIN = 90; // matches the existing "Add Session" form's own 10:00->11:30 default
+const DEFAULT_PROGRAM_WEEKS = 12; // matches sessionGenerationService.ts's own constant of the same name
+
+function addMinutes(time24: string, minutes: number): string {
+  const [h, m] = time24.split(':').map(Number);
+  const total = ((h * 60 + m + minutes) % 1440 + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+function formatTimeLabel(time24: string): string {
+  const [h, m] = time24.split(':').map(Number);
+  const period = h >= 12 ? 'PM' : 'AM';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${hour}:00 ${period}` : `${hour}:${String(m).padStart(2, '0')} ${period}`;
+}
+
+export interface DerivedSchedule {
+  schedule: {
+    recurring_days: string[];
+    core_days: string[];
+    day_times: Record<string, { start_time: string; end_time: string }>;
+    start_time: string;
+    end_time: string;
+    total_sessions: number;
+  };
+  core_day: string;
+  core_time: string;
+  optional_lab_day: string | null;
+}
+
+/**
+ * Turns the new multi-day/per-day-time picker's input into (a) the
+ * settings_json.schedule shape sessionGenerationService.ts actually consumes for
+ * real session generation, and (b) the legacy core_day/core_time/optional_lab_day
+ * fields every other consumer (enrollment emails, the AI voice script, the public
+ * "next cohort" widget, AdminCohortDetailPage) still reads directly — derived from
+ * the FIRST and SECOND day in picker order, same convention SessionControlTab.tsx's
+ * own handleCohortSave already uses. A 3rd+ day has no legacy-field slot; that's an
+ * existing limitation of those two fields, not something this introduces.
+ */
+export function deriveScheduleFromDays(days: ScheduleDayInput[], existingTotalSessions?: number): DerivedSchedule {
+  if (!days.length) {
+    throw new AppError('schedule_days must include at least one day', 400);
+  }
+  const day_times: Record<string, { start_time: string; end_time: string }> = {};
+  for (const d of days) {
+    day_times[d.day] = { start_time: d.time, end_time: addMinutes(d.time, SESSION_DEFAULT_DURATION_MIN) };
+  }
+  const recurring_days = days.map((d) => d.day);
+  const [first, second] = days;
+  const firstTime = day_times[first.day];
+  return {
+    schedule: {
+      recurring_days,
+      core_days: recurring_days,
+      day_times,
+      start_time: firstTime.start_time,
+      end_time: firstTime.end_time,
+      total_sessions: existingTotalSessions ?? recurring_days.length * DEFAULT_PROGRAM_WEEKS,
+    },
+    core_day: first.day,
+    core_time: `${formatTimeLabel(firstTime.start_time)} - ${formatTimeLabel(firstTime.end_time)}`,
+    optional_lab_day: second ? second.day : null,
+  };
+}
+
+/** Shallow-merges settings_json at the `schedule` level: explicit keys the caller
+ *  sends override, keys the caller doesn't send (e.g. skipped_dates, day_times set
+ *  by a different admin surface) survive instead of being silently dropped by a
+ *  blind column overwrite. */
+export function mergeSettingsJson(
+  existing: Record<string, any> | null | undefined,
+  incoming: Record<string, any> | null | undefined
+): Record<string, any> {
+  const existingSchedule = existing?.schedule || {};
+  const incomingSchedule = incoming?.schedule || {};
+  return {
+    ...(existing || {}),
+    ...(incoming || {}),
+    schedule: { ...existingSchedule, ...incomingSchedule },
+  };
+}
+
+/** Builds the actual DB write patch for create/update: resolves schedule_days (if
+ *  present) into the legacy flat fields + settings_json.schedule, then merges with
+ *  whatever settings_json already exists on the row (update only — create has no
+ *  prior row to merge against). */
+function buildScheduleAwarePatch(
+  data: Record<string, any>,
+  existingSettingsJson?: Record<string, any> | null
+): Record<string, any> {
+  const { schedule_days, settings_json, ...rest } = data;
+  const patch: Record<string, any> = { ...rest };
+
+  let finalSettingsJson: Record<string, any> | undefined = settings_json;
+  if (schedule_days?.length) {
+    const existingSchedule = (existingSettingsJson || {}).schedule || {};
+    const derived = deriveScheduleFromDays(schedule_days, existingSchedule.total_sessions);
+    finalSettingsJson = {
+      ...(settings_json || {}),
+      schedule: { ...(settings_json?.schedule || {}), ...derived.schedule },
+    };
+    patch.core_day = derived.core_day;
+    patch.core_time = derived.core_time;
+    patch.optional_lab_day = derived.optional_lab_day;
+  }
+
+  if (finalSettingsJson) {
+    patch.settings_json = existingSettingsJson !== undefined
+      ? mergeSettingsJson(existingSettingsJson, finalSettingsJson)
+      : finalSettingsJson;
+  }
+
+  return patch;
+}
 
 export async function listOpenCohorts() {
   return Cohort.findAll({
@@ -66,7 +182,7 @@ export async function createCohort(data: CreateCohortInput) {
   return Cohort.create({
     seats_taken: 0,
     status: 'open',
-    ...data,
+    ...buildScheduleAwarePatch(data as unknown as Record<string, any>),
   } as any);
 }
 
@@ -217,7 +333,8 @@ export async function getCohortDetail(id: string) {
 export async function updateCohort(id: string, data: UpdateCohortInput) {
   const cohort = await Cohort.findByPk(id);
   if (!cohort) throw new AppError('Cohort not found', 404);
-  await cohort.update(data);
+  const patch = buildScheduleAwarePatch(data as unknown as Record<string, any>, (cohort as any).settings_json);
+  await cohort.update(patch);
   return cohort;
 }
 

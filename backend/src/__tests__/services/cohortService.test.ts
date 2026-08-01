@@ -28,8 +28,11 @@ import {
   getDashboardStats,
   listAllCohorts,
   createCohort,
+  updateCohort,
   deleteCohort,
   getCohortDependents,
+  deriveScheduleFromDays,
+  mergeSettingsJson,
 } from '../../services/cohortService';
 
 describe('getDashboardStats', () => {
@@ -240,5 +243,117 @@ describe('getCohortDependents / deleteCohort — safe-delete guard', () => {
     const dependents = await getCohortDependents('c1');
 
     expect(dependents).toEqual({ enrollmentCount: 2, unsafeEnrollmentCount: 1, liveSessionCount: 3 });
+  });
+});
+
+describe('deriveScheduleFromDays — multi-day/per-day-time picker input', () => {
+  it('happy path: 2 days produces day_times, recurring/core days, and legacy first/second-day fields', () => {
+    const result = deriveScheduleFromDays([
+      { day: 'Tuesday', time: '18:00' },
+      { day: 'Saturday', time: '10:00' },
+    ]);
+
+    expect(result.schedule.recurring_days).toEqual(['Tuesday', 'Saturday']);
+    expect(result.schedule.core_days).toEqual(['Tuesday', 'Saturday']);
+    expect(result.schedule.day_times).toEqual({
+      Tuesday: { start_time: '18:00', end_time: '19:30' }, // +90min default duration
+      Saturday: { start_time: '10:00', end_time: '11:30' },
+    });
+    expect(result.schedule.start_time).toBe('18:00'); // first day's time, for legacy shared-time consumers
+    expect(result.core_day).toBe('Tuesday');
+    expect(result.core_time).toBe('6:00 PM - 7:30 PM');
+    expect(result.optional_lab_day).toBe('Saturday');
+  });
+
+  it('a single day produces optional_lab_day: null, no crash on a missing 2nd entry', () => {
+    const result = deriveScheduleFromDays([{ day: 'Monday', time: '13:00' }]);
+    expect(result.optional_lab_day).toBeNull();
+    expect(result.schedule.recurring_days).toEqual(['Monday']);
+  });
+
+  it('preserves an existing total_sessions instead of silently resetting a customized schedule', () => {
+    const result = deriveScheduleFromDays([{ day: 'Monday', time: '13:00' }], 40);
+    expect(result.schedule.total_sessions).toBe(40);
+  });
+
+  it('defaults total_sessions to days.length * 12 when no prior schedule existed', () => {
+    const result = deriveScheduleFromDays([
+      { day: 'Tuesday', time: '18:00' },
+      { day: 'Saturday', time: '10:00' },
+    ]);
+    expect(result.schedule.total_sessions).toBe(24);
+  });
+
+  it('wraps a time near midnight correctly when adding the default duration', () => {
+    const result = deriveScheduleFromDays([{ day: 'Friday', time: '23:15' }]);
+    expect(result.schedule.day_times.Friday.end_time).toBe('00:45');
+  });
+});
+
+describe('mergeSettingsJson — preserves untouched keys instead of a blind overwrite', () => {
+  it('preserves existing schedule.skipped_dates when the incoming schedule does not mention it (the exact SessionControlTab.tsx bug this fixes)', () => {
+    const existing = { schedule: { recurring_days: ['Monday'], skipped_dates: ['2026-09-01'] } };
+    const incoming = { schedule: { recurring_days: ['Monday', 'Thursday'], start_time: '13:00', end_time: '15:00' } };
+
+    const merged = mergeSettingsJson(existing, incoming);
+
+    expect(merged.schedule.skipped_dates).toEqual(['2026-09-01']);
+    expect(merged.schedule.recurring_days).toEqual(['Monday', 'Thursday']); // explicit incoming key still wins
+  });
+
+  it('lets an explicit incoming key override the existing value (not a no-op merge)', () => {
+    const existing = { schedule: { total_sessions: 10 } };
+    const incoming = { schedule: { total_sessions: 24 } };
+    expect(mergeSettingsJson(existing, incoming).schedule.total_sessions).toBe(24);
+  });
+
+  it('does not crash when the cohort has no settings_json at all yet', () => {
+    expect(mergeSettingsJson(null, { schedule: { recurring_days: ['Monday'] } }).schedule.recurring_days).toEqual(['Monday']);
+    expect(mergeSettingsJson(undefined, undefined).schedule).toEqual({});
+  });
+});
+
+describe('updateCohort — schedule_days wiring + merge-not-overwrite', () => {
+  beforeEach(() => {
+    mockCohortFindByPk.mockReset();
+  });
+
+  it('a PATCH with schedule_days derives legacy fields and merges into existing settings_json (preserving skipped_dates)', async () => {
+    const update = jest.fn().mockResolvedValue(undefined);
+    mockCohortFindByPk.mockResolvedValue({
+      id: 'c1',
+      settings_json: { schedule: { skipped_dates: ['2026-09-01'], total_sessions: 24 } },
+      update,
+    });
+
+    await updateCohort('c1', {
+      schedule_days: [{ day: 'Tuesday', time: '18:00' }, { day: 'Saturday', time: '10:00' }],
+    } as any);
+
+    const patch = update.mock.calls[0][0];
+    expect(patch.core_day).toBe('Tuesday');
+    expect(patch.optional_lab_day).toBe('Saturday');
+    expect(patch.settings_json.schedule.skipped_dates).toEqual(['2026-09-01']); // preserved, not dropped
+    expect(patch.settings_json.schedule.total_sessions).toBe(24); // preserved existing, not reset to days.length*12
+    expect(patch.settings_json.schedule.day_times).toEqual({
+      Tuesday: { start_time: '18:00', end_time: '19:30' },
+      Saturday: { start_time: '10:00', end_time: '11:30' },
+    });
+  });
+
+  it('a plain rename (no schedule_days, no settings_json) never touches settings_json at all', async () => {
+    const update = jest.fn().mockResolvedValue(undefined);
+    mockCohortFindByPk.mockResolvedValue({ id: 'c1', settings_json: { schedule: { skipped_dates: ['x'] } }, update });
+
+    await updateCohort('c1', { name: 'Renamed Cohort' } as any);
+
+    const patch = update.mock.calls[0][0];
+    expect(patch).toEqual({ name: 'Renamed Cohort' });
+    expect(patch.settings_json).toBeUndefined();
+  });
+
+  it('throws 404 for a nonexistent cohort', async () => {
+    mockCohortFindByPk.mockResolvedValue(null);
+    await expect(updateCohort('missing', { name: 'x' } as any)).rejects.toMatchObject({ statusCode: 404 });
   });
 });
