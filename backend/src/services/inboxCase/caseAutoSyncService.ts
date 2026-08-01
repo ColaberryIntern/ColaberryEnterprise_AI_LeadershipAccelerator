@@ -61,18 +61,41 @@ async function fetchRecentEmailCandidates(cursor: Date): Promise<RawCandidateIte
   const hoursAgo = (Date.now() - cursor.getTime()) / (60 * 60 * 1000);
   const items: RawCandidateItem[] = [];
 
+  // Each mailbox is isolated behind its own try/catch — a broken credential
+  // on ONE mailbox (e.g. a revoked OAuth grant) must never take down the
+  // other two, healthy sources. This mirrors the resilience every
+  // query-based case-source adapter already has via its own findCandidates()
+  // wrapper (see gmailCaseSource.ts/hotmailCaseSource.ts's own try/catch) —
+  // calling searchAndNormalize/fetchFolderMessages directly here (instead of
+  // through those adapters, since auto-sync has no query to build
+  // DiscoveryParams from) bypassed that existing isolation, so it's
+  // reproduced here explicitly.
   const colaberryGmail = getColaberryGmailClient();
   if (colaberryGmail) {
-    items.push(...(await searchAndNormalize(colaberryGmail, 'gmail_colaberry', gmailWindowQuery(hoursAgo), 'email')));
+    try {
+      items.push(...(await searchAndNormalize(colaberryGmail, 'gmail_colaberry', gmailWindowQuery(hoursAgo), 'email')));
+    } catch (err: any) {
+      console.error(`[InboxCase][AutoSync] gmail_colaberry fetch failed, skipping this source: ${err?.message}`);
+    }
   }
+
   const personalGmail = getPersonalGmailClient();
   if (personalGmail) {
-    items.push(...(await searchAndNormalize(personalGmail, 'gmail_personal', gmailWindowQuery(hoursAgo), 'email')));
+    try {
+      items.push(...(await searchAndNormalize(personalGmail, 'gmail_personal', gmailWindowQuery(hoursAgo), 'email')));
+    } catch (err: any) {
+      console.error(`[InboxCase][AutoSync] gmail_personal fetch failed, skipping this source: ${err?.message}`);
+    }
   }
+
   if (isHotmailConfigured()) {
-    const inbox = await fetchFolderMessages('inbox', 75);
-    for (const msg of inbox) {
-      if (new Date(msg.receivedDateTime) > cursor) items.push(hotmailToCandidate(msg, 'email'));
+    try {
+      const inbox = await fetchFolderMessages('inbox', 75);
+      for (const msg of inbox) {
+        if (new Date(msg.receivedDateTime) > cursor) items.push(hotmailToCandidate(msg, 'email'));
+      }
+    } catch (err: any) {
+      console.error(`[InboxCase][AutoSync] hotmail fetch failed, skipping this source: ${err?.message}`);
     }
   }
 
@@ -80,8 +103,13 @@ async function fetchRecentEmailCandidates(cursor: Date): Promise<RawCandidateIte
 }
 
 async function fetchRecentBasecampCandidates(cursor: Date): Promise<RawCandidateItem[]> {
-  const todos = await OpsBcTodo.findAll({ where: { bc_updated_at: { [Op.gt]: cursor } } });
-  return todos.map(todoToCandidate);
+  try {
+    const todos = await OpsBcTodo.findAll({ where: { bc_updated_at: { [Op.gt]: cursor } } });
+    return todos.map(todoToCandidate);
+  } catch (err: any) {
+    console.error(`[InboxCase][AutoSync] Basecamp fetch failed, skipping this source: ${err?.message}`);
+    return [];
+  }
 }
 
 // Only INBOX/ASK_USER-classified email counts as "in scope," per Ali's own
