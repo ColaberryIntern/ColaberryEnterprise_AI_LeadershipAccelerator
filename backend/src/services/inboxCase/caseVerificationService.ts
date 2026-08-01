@@ -1,4 +1,5 @@
 import InboxCaseAction from '../../models/InboxCaseAction';
+import InboxCaseItem from '../../models/InboxCaseItem';
 import { ActionType } from '../../types/inboxCase';
 import { logCaseEvent } from './caseEventLog';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
@@ -33,6 +34,75 @@ function verifyReceipt(action: InboxCaseAction): boolean {
   return !!receipt && receipt[key] !== undefined && receipt[key] !== null;
 }
 
+// Settled = this action will never move again on its own; it's safe to
+// judge an item's overall state by looking only at settled actions.
+const SETTLED_ACTION_STATUSES = ['VERIFIED', 'REJECTED', 'SKIPPED'];
+
+// Closes the gap where an item whose action(s) actually ran and verified
+// successfully never picked up a disposition — only the manual dropdown and
+// the Handled/Ignore quick-resolve buttons used to set it, so a fully
+// completed item sat open forever, needlessly blocking Close Case. Only
+// touches items with disposition still null; never overwrites a disposition
+// set by any other path (manual, quick-resolve, or a prior verify run).
+async function applyAutoDispositions(caseId: string, correlationId: string, actions: InboxCaseAction[]): Promise<number> {
+  const actionsByItemId = new Map<string, InboxCaseAction[]>();
+  for (const action of actions) {
+    if (!action.item_id) continue;
+    const list = actionsByItemId.get(action.item_id) || [];
+    list.push(action);
+    actionsByItemId.set(action.item_id, list);
+  }
+  if (actionsByItemId.size === 0) return 0;
+
+  const items = await InboxCaseItem.findAll({ where: { case_id: caseId, disposition: null } });
+  let count = 0;
+
+  for (const item of items) {
+    const itemActions = actionsByItemId.get(item.id);
+    if (!itemActions || itemActions.length === 0) continue; // never targeted — still requires manual/quick-resolve
+
+    const allSettled = itemActions.every((a) => SETTLED_ACTION_STATUSES.includes(a.status));
+    if (!allSettled) continue; // still in flight (PROPOSED/APPROVED/EXECUTING/SUCCEEDED/FAILED) — not this item's turn yet
+
+    const verifiedActions = itemActions.filter((a) => a.status === 'VERIFIED');
+    if (verifiedActions.length === 0) continue; // every action on this item was rejected/skipped — no real work happened
+
+    const delegated = verifiedActions.find((a) => a.action_type === 'MARK_DELEGATED');
+    const waiting = verifiedActions.find((a) => a.action_type === 'MARK_WAITING');
+
+    let disposition: 'RESOLVED' | 'WAITING' | 'DELEGATED';
+    let reasonSource: string | null = null;
+
+    if (delegated) {
+      if (!item.source_url) continue; // closure condition 7 needs a source link too — don't trade one blocker for another
+      disposition = 'DELEGATED';
+      reasonSource = delegated.preview;
+    } else if (waiting) {
+      disposition = 'WAITING';
+      reasonSource = waiting.preview;
+    } else {
+      disposition = 'RESOLVED';
+    }
+
+    const patch: Record<string, unknown> = { disposition, updated_at: new Date() };
+    if (reasonSource && !item.disposition_reason) patch.disposition_reason = reasonSource;
+    await item.update(patch);
+
+    await logCaseEvent({
+      case_id: caseId,
+      item_id: item.id,
+      event_type: 'item_auto_dispositioned',
+      actor_type: 'system',
+      actor_id: 'case_verification_service',
+      details: { disposition, action_ids: itemActions.map((a) => a.id) },
+      correlation_id: correlationId,
+    });
+    count++;
+  }
+
+  return count;
+}
+
 export interface VerifyResult {
   verified: number;
   verificationFailed: number;
@@ -61,6 +131,8 @@ export async function verifyCase(caseId: string, requestedBy: string): Promise<V
     if (ok) verified++;
     else verificationFailed++;
   }
+
+  await applyAutoDispositions(caseId, caseRow.correlation_id, actions);
 
   await caseRow.update({ last_verified_at: new Date(), updated_at: new Date() });
 

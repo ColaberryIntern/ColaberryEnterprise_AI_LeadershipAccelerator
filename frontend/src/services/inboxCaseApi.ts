@@ -204,6 +204,7 @@ const EVENT_LABELS: Record<string, string> = {
   item_quick_resolved: 'An item was marked Handled/Ignore',
   action_override_applied: 'Your instruction replaced the proposed action(s)',
   action_override_failed: 'Your instruction could not be applied — the AI response was invalid',
+  item_auto_dispositioned: 'An item was automatically marked resolved after its action was verified',
 };
 
 export function humanizeCaseEvent(event: InboxCaseEventRecord): string {
@@ -216,7 +217,8 @@ const ACTION_EVENT_TYPES = new Set([
   'action_execution_reconciled_as_retryable', 'action_execution_reconciled_as_succeeded', 'action_verified',
 ]);
 const ITEM_EVENT_TYPES = new Set([
-  'candidate_included', 'candidate_excluded', 'candidate_manually_adjusted', 'item_disposition_changed', 'item_quick_resolved',
+  'candidate_included', 'candidate_excluded', 'candidate_manually_adjusted', 'item_disposition_changed',
+  'item_quick_resolved', 'item_auto_dispositioned',
 ]);
 
 /** Every case's Activity feed is correctly scoped to that case already (each
