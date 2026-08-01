@@ -50,6 +50,15 @@ Respond with a single JSON object matching this exact shape (no markdown, no pro
 export interface OverrideResult {
   rejected: string[];
   proposed: string | null;
+  // Set only when the AI call itself failed (network error, or its response
+  // failed schema validation) — distinct from a genuine "AI looked at the
+  // instruction and correctly found nothing to reject/propose," which is
+  // `rejected: [], proposed: null` with `failed` left undefined. Without this
+  // distinction, a real AI failure (confirmed live in production — a bad
+  // action_type outside the allowed enum) was indistinguishable from a
+  // valid no-op, so the caller reported it as a false success.
+  failed?: boolean;
+  failureReason?: string;
 }
 
 export async function overrideProposedActions(caseId: string, instruction: string, requestedBy: string): Promise<OverrideResult> {
@@ -91,10 +100,24 @@ export async function overrideProposedActions(caseId: string, instruction: strin
     if (!validated.success) throw new Error(`Override output failed schema validation: ${validated.error.message}`);
     output = validated.data;
   } catch (err: any) {
-    console.error(`[InboxCase] Action override generation failed for case ${caseId}: ${err?.message}`);
+    const failureReason = err?.message || 'Unknown error generating the override';
+    console.error(`[InboxCase] Action override generation failed for case ${caseId}: ${failureReason}`);
     // No partial state on model/schema failure: apply nothing rather than
-    // guess — the current proposed set is left exactly as it was.
-    return { rejected: [], proposed: null };
+    // guess — the current proposed set is left exactly as it was. But this
+    // IS a real failure, not the same thing as the AI validly finding
+    // nothing to change — mirrors caseAssessmentService.ts's
+    // usedFallback/assessment_failed convention: log a distinguishable event
+    // type so the caller (and the Activity feed) never reports this as a
+    // false success.
+    await logCaseEvent({
+      case_id: caseId,
+      event_type: 'action_override_failed',
+      actor_type: 'admin',
+      actor_id: requestedBy,
+      details: { instruction, reason: failureReason },
+      correlation_id: caseRow.correlation_id,
+    });
+    return { rejected: [], proposed: null, failed: true, failureReason };
   }
 
   const proposedById = new Set(proposedActions.map((a) => a.id));
