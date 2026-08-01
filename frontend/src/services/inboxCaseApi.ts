@@ -148,6 +148,23 @@ export interface AutoSyncResult {
   emailsSkippedUnclassified: number;
 }
 
+export type SyncStage = 'fetching_email' | 'fetching_basecamp' | 'classifying' | 'clustering_and_removing_stale' | null;
+
+export interface SyncStatus {
+  inProgress: boolean;
+  stage: SyncStage;
+  startedAt: string | null;
+  lastCompletedAt: string | null;
+  lastResult: AutoSyncResult | null;
+}
+
+export const SYNC_STAGE_LABELS: Record<Exclude<SyncStage, null>, string> = {
+  fetching_email: 'Checking your email…',
+  fetching_basecamp: 'Checking Basecamp…',
+  classifying: 'Filtering to what needs your attention…',
+  clustering_and_removing_stale: 'Grouping related items and clearing anything deleted…',
+};
+
 export interface CaseStats {
   total: number;
   resolved: number;
@@ -211,6 +228,8 @@ const EVENT_LABELS: Record<string, string> = {
   action_override_applied: 'Your instruction replaced the proposed action(s)',
   action_override_failed: 'Your instruction could not be applied — the AI response was invalid',
   item_auto_dispositioned: 'An item was automatically marked resolved after its action was verified',
+  item_removed_at_source: 'An item was removed — its source message was deleted from your inbox',
+  case_dismissed: 'Case dismissed — not worth responding to',
 };
 
 export function humanizeCaseEvent(event: InboxCaseEventRecord): string {
@@ -224,7 +243,7 @@ const ACTION_EVENT_TYPES = new Set([
 ]);
 const ITEM_EVENT_TYPES = new Set([
   'candidate_included', 'candidate_excluded', 'candidate_manually_adjusted', 'item_disposition_changed',
-  'item_quick_resolved', 'item_auto_dispositioned',
+  'item_quick_resolved', 'item_auto_dispositioned', 'item_removed_at_source',
 ]);
 
 /** Every case's Activity feed is correctly scoped to that case already (each
@@ -291,6 +310,8 @@ export const inboxCaseApi = {
 
   syncNow: () => api.post<AutoSyncResult>(`${BASE}/sync-now`).then((r) => r.data),
 
+  getSyncStatus: () => api.get<SyncStatus>(`${BASE}/sync-status`).then((r) => r.data),
+
   stats: () => api.get<CaseStats>(STATS_URL).then((r) => r.data),
 
   get: (caseId: string) => api.get<CaseDetail>(`${BASE}/${caseId}`).then((r) => r.data),
@@ -318,6 +339,12 @@ export const inboxCaseApi = {
   verify: (caseId: string) => api.post(`${BASE}/${caseId}/verify`).then((r) => r.data),
 
   close: (caseId: string) => api.post(`${BASE}/${caseId}/close`).then((r) => r.data),
+
+  // One-click "not worth responding to" from the case list — clears every
+  // blocker it safely can, then defers to the same real closeCase() guard
+  // /close uses. On a 409 the caller's catch block reads
+  // err.response.data.blockers, same shape /close already returns.
+  dismiss: (caseId: string) => api.post<{ closed: boolean }>(`${BASE}/${caseId}/dismiss`).then((r) => r.data),
 
   reopen: (caseId: string, reason: string) => api.post(`${BASE}/${caseId}/reopen`, { reason }).then((r) => r.data),
 

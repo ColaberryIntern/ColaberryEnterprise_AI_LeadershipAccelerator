@@ -1,7 +1,18 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SectionCard, StatCard } from '../../../components/admin/shell';
 import { useToast } from '../../../components/ui/ToastProvider';
-import { inboxCaseApi, CaseMode, CaseState, DiscoveryWindow, InboxCaseRecord, CaseStats, DiscoveredCaseSummary } from '../../../services/inboxCaseApi';
+import {
+  inboxCaseApi,
+  CaseMode,
+  CaseState,
+  DiscoveryWindow,
+  InboxCaseRecord,
+  CaseStats,
+  DiscoveredCaseSummary,
+  SyncStatus,
+  SyncStage,
+  SYNC_STAGE_LABELS,
+} from '../../../services/inboxCaseApi';
 import CaseWorkspacePanel from '../../../components/admin/inbox/resolve/CaseWorkspacePanel';
 
 // Resolve Work — the first/default tab of Inbox COS (root directive section
@@ -13,6 +24,18 @@ const STATE_TONE: Record<CaseState, string> = {
   AWAITING_APPROVAL: 'warning', EXECUTING: 'primary', WAITING: 'warning', DELEGATED: 'info',
   RESOLVED: 'success', FAILED: 'danger', REOPENED: 'warning',
 };
+
+// Order matters — this is the real sequence runAutoSync() moves through,
+// each stage weighted equally (25%) as a "still working" indicator rather
+// than a time-precise measurement (phase duration varies with how much new
+// mail exists on a given run).
+const SYNC_STAGE_ORDER: Exclude<SyncStage, null>[] = ['fetching_email', 'fetching_basecamp', 'classifying', 'clustering_and_removing_stale'];
+
+function syncProgressPercent(stage: SyncStage): number {
+  if (!stage) return 0;
+  const idx = SYNC_STAGE_ORDER.indexOf(stage);
+  return idx === -1 ? 0 : Math.round(((idx + 1) / SYNC_STAGE_ORDER.length) * 100);
+}
 
 function StateBadge({ state }: { state: CaseState }) {
   const tone = STATE_TONE[state] || 'secondary';
@@ -36,6 +59,8 @@ export default function InboxResolveWorkPage() {
   // sentinel that explicitly asks for everything, including RESOLVED.
   const [stateFilter, setStateFilter] = useState<CaseState | '' | '__ALL_INCL_RESOLVED__'>('');
   const [syncing, setSyncing] = useState(false);
+  const [dismissingId, setDismissingId] = useState<string | null>(null);
+  const [pageSyncStatus, setPageSyncStatus] = useState<SyncStatus | null>(null);
 
   const loadList = useCallback(async () => {
     try {
@@ -55,6 +80,43 @@ export default function InboxResolveWorkPage() {
   useEffect(() => {
     loadList();
   }, [loadList]);
+
+  // Kicks off exactly once per page load, per Ali's request: "When I click
+  // on the page there should be an auto sync running in the background."
+  // The list itself already loaded above, in parallel — this doesn't block
+  // it. Polls sync-status while a run (this one, the hourly cron, or
+  // another admin's page load) is in flight, then refreshes the list once
+  // it completes.
+  useEffect(() => {
+    let cancelled = false;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const poll = async () => {
+      try {
+        const status = await inboxCaseApi.getSyncStatus();
+        if (cancelled) return;
+        setPageSyncStatus(status);
+        if (!status.inProgress) {
+          if (intervalId) clearInterval(intervalId);
+          loadList();
+        }
+      } catch {
+        if (intervalId) clearInterval(intervalId);
+      }
+    };
+
+    inboxCaseApi.syncNow().catch(() => {}); // fire-and-forget kickoff — errors surface via the manual "Sync Now" button's own toast when triggered there
+    poll();
+    intervalId = setInterval(poll, 1500);
+
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+    };
+    // Deliberately once-per-mount only (empty deps) — this must NOT re-fire
+    // on every stateFilter/loadList change, or changing the filter dropdown
+    // would kick off a brand new sync each time.
+  }, []);
 
   const handleDiscover = async () => {
     if (!query.trim()) {
@@ -90,6 +152,28 @@ export default function InboxResolveWorkPage() {
       showToast(err.response?.data?.message || 'Sync failed', 'error');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleDismiss = async (e: React.MouseEvent, caseId: string, title: string) => {
+    e.stopPropagation(); // never also trigger the row's own "open case" navigation
+    if (!window.confirm(`Dismiss "${title}"? This closes the case and clears its remaining evidence/actions.`)) return;
+
+    try {
+      setDismissingId(caseId);
+      await inboxCaseApi.dismiss(caseId);
+      showToast('Dismissed', 'success');
+      loadList();
+    } catch (err: any) {
+      const blockers = err.response?.data?.blockers as Array<{ detail: string }> | undefined;
+      showToast(
+        blockers && blockers.length > 0
+          ? `Could not fully dismiss — ${blockers.map((b) => b.detail).join('; ')}`
+          : err.response?.data?.message || 'Dismiss failed',
+        'error'
+      );
+    } finally {
+      setDismissingId(null);
     }
   };
 
@@ -207,6 +291,22 @@ export default function InboxResolveWorkPage() {
           </button>
         </div>
 
+        {pageSyncStatus?.inProgress && (
+          <div className="mb-3" role="status" aria-live="polite" data-testid="sync-progress">
+            <div className="small text-muted mb-1">{pageSyncStatus.stage ? SYNC_STAGE_LABELS[pageSyncStatus.stage] : 'Syncing…'}</div>
+            <div className="progress" style={{ height: 6 }}>
+              <div
+                className="progress-bar"
+                role="progressbar"
+                style={{ width: `${syncProgressPercent(pageSyncStatus.stage)}%` }}
+                aria-valuenow={syncProgressPercent(pageSyncStatus.stage)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+              />
+            </div>
+          </div>
+        )}
+
         {discoveredSummaries && (
           <div className="border rounded p-2 bg-light" role="status" aria-live="polite" data-testid="discovery-results">
             {discoveredSummaries.length === 0 ? (
@@ -271,6 +371,7 @@ export default function InboxResolveWorkPage() {
                   <th>Mode</th>
                   <th>State</th>
                   <th>Opened</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -294,6 +395,24 @@ export default function InboxResolveWorkPage() {
                     <td className="small text-muted">{c.mode}</td>
                     <td><StateBadge state={c.state} /></td>
                     <td className="small text-muted">{new Date(c.opened_at).toLocaleDateString()}</td>
+                    <td>
+                      <button
+                        type="button"
+                        data-testid="resolve-dismiss-button"
+                        className="btn btn-sm btn-outline-secondary"
+                        disabled={dismissingId === c.id}
+                        onClick={(e) => handleDismiss(e, c.id, c.title)}
+                        aria-label={`Dismiss case: ${c.title}`}
+                      >
+                        {dismissingId === c.id ? (
+                          <span className="spinner-border spinner-border-sm" role="status" aria-hidden="true" />
+                        ) : (
+                          <>
+                            <i className="ri-close-circle-line" aria-hidden="true" /> Dismiss
+                          </>
+                        )}
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

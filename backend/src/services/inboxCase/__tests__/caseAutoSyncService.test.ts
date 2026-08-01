@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
 import { Op } from 'sequelize';
 
-// Mirrors testHelpers/fakeModel.ts's Op-symbol handling with Op.gt added —
-// see caseActionPlanner.test.ts for why test files in this directory each
-// keep their own local copy tailored to what they need.
+// Mirrors testHelpers/fakeModel.ts's Op-symbol handling with Op.gt and
+// Op.ne added — see caseActionPlanner.test.ts for why test files in this
+// directory each keep their own local copy tailored to what they need.
 function matchesWhere(row: any, where: any): boolean {
   if (!where) return true;
   for (const [key, value] of Object.entries(where)) {
@@ -11,6 +11,7 @@ function matchesWhere(row: any, where: any): boolean {
       const symbolKeys = Object.getOwnPropertySymbols(value as object);
       if (symbolKeys.includes(Op.in)) { if (!(value as any)[Op.in].includes(row[key])) return false; continue; }
       if (symbolKeys.includes(Op.gt)) { if (!(row[key] > (value as any)[Op.gt])) return false; continue; }
+      if (symbolKeys.includes(Op.ne)) { if (row[key] === (value as any)[Op.ne]) return false; continue; }
     }
     if (row[key] !== value) return false;
   }
@@ -61,18 +62,24 @@ function makeFakeModel() {
 const fakeSystemSetting = makeFakeModel();
 const fakeInboxEmail = makeFakeModel();
 const fakeInboxClassification = makeFakeModel();
+const fakeInboxDeletedEmail = makeFakeModel();
 const fakeOpsBcTodo = makeFakeModel();
 const fakeInboxCase = makeFakeModel();
 const fakeInboxCaseItem = makeFakeModel();
+const fakeInboxCaseQuestion = makeFakeModel();
+const fakeInboxCaseAction = makeFakeModel();
 const fakeInboxIdentityAlias = makeFakeModel();
 const fakeInboxCaseEvent = makeFakeModel();
 
 jest.mock('../../../models/SystemSetting', () => ({ __esModule: true, default: fakeSystemSetting }));
 jest.mock('../../../models/InboxEmail', () => ({ __esModule: true, default: fakeInboxEmail }));
 jest.mock('../../../models/InboxClassification', () => ({ __esModule: true, default: fakeInboxClassification }));
+jest.mock('../../../models/InboxDeletedEmail', () => ({ __esModule: true, default: fakeInboxDeletedEmail }));
 jest.mock('../../../models/OpsBcTodo', () => ({ __esModule: true, default: fakeOpsBcTodo }));
 jest.mock('../../../models/InboxCase', () => ({ __esModule: true, default: fakeInboxCase }));
 jest.mock('../../../models/InboxCaseItem', () => ({ __esModule: true, default: fakeInboxCaseItem }));
+jest.mock('../../../models/InboxCaseQuestion', () => ({ __esModule: true, default: fakeInboxCaseQuestion }));
+jest.mock('../../../models/InboxCaseAction', () => ({ __esModule: true, default: fakeInboxCaseAction }));
 jest.mock('../../../models/InboxIdentityAlias', () => ({ __esModule: true, default: fakeInboxIdentityAlias }));
 jest.mock('../../../models/InboxCaseEvent', () => ({ __esModule: true, default: fakeInboxCaseEvent }));
 
@@ -139,15 +146,18 @@ jest.mock('../../inbox/inboxSyncService', () => ({
   getPersonalGmailClient: () => (personalConfigured ? {} : null),
 }));
 
-import { runAutoSync } from '../caseAutoSyncService';
+import { runAutoSync, getSyncStatus } from '../caseAutoSyncService';
 
 beforeEach(() => {
   fakeSystemSetting.rows.clear();
   fakeInboxEmail.rows.clear();
   fakeInboxClassification.rows.clear();
+  fakeInboxDeletedEmail.rows.clear();
   fakeOpsBcTodo.rows.clear();
   fakeInboxCase.rows.clear();
   fakeInboxCaseItem.rows.clear();
+  fakeInboxCaseQuestion.rows.clear();
+  fakeInboxCaseAction.rows.clear();
   fakeInboxIdentityAlias.rows.clear();
   fakeInboxCaseEvent.rows.clear();
   mockSearchAndNormalize.mockReset().mockResolvedValue([]);
@@ -352,5 +362,122 @@ describe('runAutoSync — cursor', () => {
     const setting = await fakeSystemSetting.findOne({ where: { key: 'inbox_case_auto_sync_cursor' } });
     expect(setting).not.toBeNull();
     expect(new Date(setting.value.cursor).getTime()).toBeGreaterThan(Date.now() - 5000);
+  });
+});
+
+describe('runAutoSync — auto-dispose items deleted at the source', () => {
+  it('dispositions an open item NO_ACTION when its source message shows up in InboxDeletedEmail', async () => {
+    const c = await fakeInboxCase.create({ title: 'Test case', mode: 'TOPIC', state: 'ASSESSING', correlation_id: randomUUID(), reopen_count: 0 });
+    const item = await fakeInboxCaseItem.create({
+      case_id: c.id, source_type: 'email', source_id: 'msg-1', provider: 'gmail_colaberry',
+      inclusion_status: 'INCLUDED', disposition: null, title: 'Deleted email',
+    });
+    await fakeInboxDeletedEmail.create({ provider: 'gmail_colaberry', provider_message_id: 'msg-1', folder: 'trash' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    await runAutoSync('cron', 'system');
+
+    expect(item.disposition).toBe('NO_ACTION');
+    expect(item.disposition_reason).toContain('deleted');
+  });
+
+  it('closes the case when the deleted-at-source item was the last remaining blocker', async () => {
+    // EXECUTING, not ASSESSING — only EXECUTING/WAITING/DELEGATED have a
+    // legal path to RESOLVED (CASE_STATE_TRANSITIONS); a fresh ASSESSING
+    // case genuinely cannot close directly even with a clean item guard,
+    // per the real state machine (see caseClosureService.test.ts's own
+    // "case_not_in_closable_state" regression test for that exact case).
+    const c = await fakeInboxCase.create({ title: 'Test case', mode: 'TOPIC', state: 'EXECUTING', correlation_id: randomUUID(), reopen_count: 0 });
+    await fakeInboxCaseItem.create({
+      case_id: c.id, source_type: 'email', source_id: 'msg-2', provider: 'gmail_colaberry',
+      inclusion_status: 'INCLUDED', disposition: null, title: 'Deleted email',
+    });
+    await fakeInboxDeletedEmail.create({ provider: 'gmail_colaberry', provider_message_id: 'msg-2', folder: 'spam' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    await runAutoSync('cron', 'system');
+
+    expect(c.state).toBe('RESOLVED');
+    expect(c.closed_at).toBeInstanceOf(Date);
+  });
+
+  it('leaves the case open, with the item still correctly dispositioned, when another real blocker remains', async () => {
+    const c = await fakeInboxCase.create({ title: 'Test case', mode: 'TOPIC', state: 'ASSESSING', correlation_id: randomUUID(), reopen_count: 0 });
+    const item = await fakeInboxCaseItem.create({
+      case_id: c.id, source_type: 'email', source_id: 'msg-3', provider: 'gmail_colaberry',
+      inclusion_status: 'INCLUDED', disposition: null, title: 'Deleted email',
+    });
+    // A second, still-undispositioned item on the same case blocks closure.
+    await fakeInboxCaseItem.create({
+      case_id: c.id, source_type: 'email', source_id: 'msg-4', provider: 'gmail_colaberry',
+      inclusion_status: 'INCLUDED', disposition: null, title: 'Still needs a look',
+    });
+    await fakeInboxDeletedEmail.create({ provider: 'gmail_colaberry', provider_message_id: 'msg-3', folder: 'trash' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    await runAutoSync('cron', 'system');
+
+    expect(item.disposition).toBe('NO_ACTION'); // still correctly dispositioned
+    expect(c.state).toBe('ASSESSING'); // case itself stays open — the OTHER item still blocks it
+  });
+
+  it('leaves an item untouched when no matching InboxDeletedEmail row exists', async () => {
+    const c = await fakeInboxCase.create({ title: 'Test case', mode: 'TOPIC', state: 'ASSESSING', correlation_id: randomUUID(), reopen_count: 0 });
+    const item = await fakeInboxCaseItem.create({
+      case_id: c.id, source_type: 'email', source_id: 'msg-5', provider: 'gmail_colaberry',
+      inclusion_status: 'INCLUDED', disposition: null, title: 'Still in inbox',
+    });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    await runAutoSync('cron', 'system');
+
+    expect(item.disposition).toBeNull();
+  });
+
+  it('does not re-process an item that already has a disposition', async () => {
+    const c = await fakeInboxCase.create({ title: 'Test case', mode: 'TOPIC', state: 'RESOLVED', correlation_id: randomUUID(), reopen_count: 0 });
+    const item = await fakeInboxCaseItem.create({
+      case_id: c.id, source_type: 'email', source_id: 'msg-6', provider: 'gmail_colaberry',
+      inclusion_status: 'INCLUDED', disposition: 'RESOLVED', title: 'Already handled',
+    });
+    await fakeInboxDeletedEmail.create({ provider: 'gmail_colaberry', provider_message_id: 'msg-6', folder: 'trash' });
+
+    await runAutoSync('cron', 'system');
+
+    expect(item.disposition).toBe('RESOLVED'); // untouched — was never open to begin with
+  });
+});
+
+describe('runAutoSync — sync-status tracker and concurrency guard', () => {
+  it('reports inProgress:false with a populated lastResult after a normal completed run', async () => {
+    mockSearchAndNormalize.mockResolvedValue([]);
+    await runAutoSync('cron', 'system');
+
+    const status = getSyncStatus();
+    expect(status.inProgress).toBe(false);
+    expect(status.stage).toBeNull();
+    expect(status.lastResult).not.toBeNull();
+    expect(status.lastCompletedAt).not.toBeNull();
+  });
+
+  it('a call arriving while a run is already in progress returns immediately without starting a second run', async () => {
+    let releaseFirstCall: () => void = () => {};
+    const firstCallGate = new Promise<void>((resolve) => {
+      releaseFirstCall = resolve;
+    });
+    mockSearchAndNormalize.mockImplementation(async () => {
+      await firstCallGate; // hold the first call open until we release it below
+      return [];
+    });
+
+    const firstRun = runAutoSync('cron', 'system'); // deliberately not awaited yet
+    await new Promise((r) => setTimeout(r, 10)); // let the first call actually start and set inProgress
+
+    const secondRun = await runAutoSync('admin', 'ali@colaberry.com'); // arrives while the first is still in flight
+    expect(secondRun).toEqual({ newCasesCreated: 0, itemsAdded: 0, emailsSkippedUnclassified: 0 });
+    expect(mockSearchAndNormalize).toHaveBeenCalledTimes(1); // the second call never actually fetched anything
+
+    releaseFirstCall();
+    await firstRun; // let the first call finish so it doesn't leak into the next test
   });
 });

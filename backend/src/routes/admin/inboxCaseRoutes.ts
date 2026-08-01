@@ -20,8 +20,10 @@ import {
   handleExecuteCase,
   handleVerifyCase,
   handleCloseCase,
+  handleDismissCase,
   handleReopenCase,
   handleSyncNow,
+  handleGetSyncStatus,
 } from '../../controllers/inboxCaseActionController';
 
 // Mounted under the SAME /api/admin/inbox prefix as the existing Inbox COS
@@ -35,6 +37,10 @@ router.post('/api/admin/inbox/cases/discover', requireAdmin, handleDiscoverCase)
 router.post('/api/admin/inbox/cases/sync-now', requireAdmin, handleSyncNow);
 router.get('/api/admin/inbox/cases', requireAdmin, handleListCases);
 router.get('/api/admin/inbox/case-stats', requireAdmin, handleCaseStats);
+// Registered BEFORE /:caseId — a literal path must come first or Express
+// would route "sync-status" requests into handleGetCase with caseId set
+// to the literal string "sync-status".
+router.get('/api/admin/inbox/cases/sync-status', requireAdmin, handleGetSyncStatus);
 router.get('/api/admin/inbox/cases/:caseId', requireAdmin, handleGetCase);
 router.post('/api/admin/inbox/cases/:caseId/assess', requireAdmin, handleAssessCase);
 router.patch('/api/admin/inbox/cases/:caseId/items/:itemId', requireAdmin, handleUpdateCaseItem);
@@ -50,6 +56,7 @@ router.post('/api/admin/inbox/cases/:caseId/actions/override', requireAdmin, han
 router.post('/api/admin/inbox/cases/:caseId/execute', requireAdmin, handleExecuteCase);
 router.post('/api/admin/inbox/cases/:caseId/verify', requireAdmin, handleVerifyCase);
 router.post('/api/admin/inbox/cases/:caseId/close', requireAdmin, handleCloseCase);
+router.post('/api/admin/inbox/cases/:caseId/dismiss', requireAdmin, handleDismissCase);
 router.post('/api/admin/inbox/cases/:caseId/reopen', requireAdmin, handleReopenCase);
 
 export default router;
