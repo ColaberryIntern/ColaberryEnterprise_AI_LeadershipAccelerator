@@ -165,7 +165,7 @@ describe('overrideProposedActions — hallucination guards', () => {
 });
 
 describe('overrideProposedActions — safe fallback', () => {
-  it('applies nothing (no partial state) when the model call fails', async () => {
+  it('applies nothing (no partial state) when the model call fails, and reports it as a real failure, not a false success', async () => {
     const c = await seedCase();
     const item = await seedItem(c.id);
     const action = await seedAction(c.id, item.id);
@@ -173,14 +173,52 @@ describe('overrideProposedActions — safe fallback', () => {
 
     const result = await overrideProposedActions(c.id, 'do something', 'ali@colaberry.com');
 
-    expect(result).toEqual({ rejected: [], proposed: null });
+    expect(result.rejected).toEqual([]);
+    expect(result.proposed).toBeNull();
+    expect(result.failed).toBe(true);
+    expect(result.failureReason).toContain('OpenAI unavailable');
     expect(action.status).toBe('PROPOSED'); // untouched
+
+    const events = Array.from(fakeInboxCaseEvent.rows.values());
+    expect(events.some((e) => e.event_type === 'action_override_failed' && e.case_id === c.id)).toBe(true);
+  });
+
+  it('reports failed:true when the model returns an action_type outside the allowed enum (reproduces the exact live production failure — case 187a78ce)', async () => {
+    const c = await seedCase();
+    const item = await seedItem(c.id);
+    await seedAction(c.id, item.id);
+
+    mockModelResponse(JSON.stringify({
+      actions_to_reject: [],
+      new_action: { item_id: item.id, action_type: 'REACH_OUT_TO_PERSON', preview: 'not a real action type', payload: {} },
+    }));
+
+    const result = await overrideProposedActions(c.id, 'reach out about this', 'ali@colaberry.com');
+
+    expect(result.failed).toBe(true);
+    expect(result.failureReason).toContain('schema validation');
+    expect(result.proposed).toBeNull();
+  });
+
+  it('does NOT mark failed:true for a genuine AI no-op (the AI validly found nothing to change)', async () => {
+    const c = await seedCase();
+    const item = await seedItem(c.id);
+    await seedAction(c.id, item.id);
+
+    mockModelResponse(JSON.stringify({ actions_to_reject: [], new_action: null }));
+
+    const result = await overrideProposedActions(c.id, 'just noting this for the record', 'ali@colaberry.com');
+
+    expect(result.failed).toBeUndefined();
+    expect(result.rejected).toEqual([]);
+    expect(result.proposed).toBeNull();
   });
 
   it('is a no-op when there are no PROPOSED actions to override', async () => {
     const c = await seedCase();
     const result = await overrideProposedActions(c.id, 'do something', 'ali@colaberry.com');
     expect(result).toEqual({ rejected: [], proposed: null });
+    expect(result.failed).toBeUndefined();
     expect(mockCreate).not.toHaveBeenCalled(); // never even calls the model with nothing to override
   });
 });

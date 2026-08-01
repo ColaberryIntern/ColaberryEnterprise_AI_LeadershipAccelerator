@@ -203,10 +203,75 @@ const EVENT_LABELS: Record<string, string> = {
   knowledge_base_entry_proposed: 'A knowledge base entry was proposed from your answer',
   item_quick_resolved: 'An item was marked Handled/Ignore',
   action_override_applied: 'Your instruction replaced the proposed action(s)',
+  action_override_failed: 'Your instruction could not be applied — the AI response was invalid',
 };
 
 export function humanizeCaseEvent(event: InboxCaseEventRecord): string {
   return EVENT_LABELS[event.event_type] || event.event_type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
+const ACTION_EVENT_TYPES = new Set([
+  'action_proposed', 'action_approved', 'action_rejected', 'action_execution_started',
+  'action_execution_succeeded', 'action_execution_failed', 'action_execution_skipped_dependency_failed',
+  'action_execution_reconciled_as_retryable', 'action_execution_reconciled_as_succeeded', 'action_verified',
+]);
+const ITEM_EVENT_TYPES = new Set([
+  'candidate_included', 'candidate_excluded', 'candidate_manually_adjusted', 'item_disposition_changed', 'item_quick_resolved',
+]);
+
+/** Every case's Activity feed is correctly scoped to that case already (each
+ *  event's `case_id` is real and distinct) — but `humanizeCaseEvent` alone
+ *  produces a generic lifecycle-stage string that reads identically across
+ *  DIFFERENT cases going through the same stages. This cross-references the
+ *  event's `item_id`/`action_id` against the case's own already-loaded
+ *  `items`/`actions` (no extra network call) plus `event.details`, so two
+ *  cases' Activity lists read distinguishably instead of like a template.
+ *  Falls back to `humanizeCaseEvent` whenever the referenced item/action
+ *  can't be found (e.g. deleted) rather than throwing. */
+export function describeCaseEvent(
+  event: InboxCaseEventRecord,
+  items: InboxCaseItemRecord[],
+  actions: InboxCaseActionRecord[]
+): string {
+  const base = humanizeCaseEvent(event);
+  const item = event.item_id ? items.find((i) => i.id === event.item_id) : undefined;
+  const action = event.action_id ? actions.find((a) => a.id === event.action_id) : undefined;
+
+  if (ACTION_EVENT_TYPES.has(event.event_type) && action) {
+    const target = item ? ` for "${item.title}"` : '';
+    const reason = typeof event.details?.reason === 'string' ? ` — ${event.details.reason}` : '';
+    return `${base}: ${action.action_type}${target}${reason}`;
+  }
+  if (ITEM_EVENT_TYPES.has(event.event_type) && item) {
+    return `${base}: "${item.title}"`;
+  }
+  if (event.event_type === 'case_discovery_started' && event.details?.mode && event.details?.query) {
+    return `${base} — ${String(event.details.mode).toLowerCase()} search: "${event.details.query}"`;
+  }
+  if ((event.event_type === 'action_override_applied' || event.event_type === 'action_override_failed') && typeof event.details?.instruction === 'string') {
+    const reason = event.event_type === 'action_override_failed' && typeof event.details?.reason === 'string' ? ` (${event.details.reason})` : '';
+    return `${base}: "${event.details.instruction}"${reason}`;
+  }
+  return base;
+}
+
+export interface LastRunInfo {
+  status: 'never' | 'success' | 'failed';
+  at: string | null;
+}
+
+/** Most recent event matching either set of types, for a real "last run"
+ *  indicator on a manual lifecycle step (Assess/Plan/Execute). There is no
+ *  scheduled job for any of these — confirmed no cron references this system
+ *  in schedulerService.ts, every step is a button click — so the events log
+ *  is the only record of "when did this actually last run." `failureTypes`
+ *  lets the caller show a distinct failed-attempt light rather than treating
+ *  every matching event as a success. */
+export function lastRunInfo(events: InboxCaseEventRecord[], successTypes: string[], failureTypes: string[] = []): LastRunInfo {
+  const relevant = events.filter((e) => successTypes.includes(e.event_type) || failureTypes.includes(e.event_type));
+  if (relevant.length === 0) return { status: 'never', at: null };
+  const latest = relevant.reduce((a, b) => (new Date(a.created_at).getTime() >= new Date(b.created_at).getTime() ? a : b));
+  return { status: failureTypes.includes(latest.event_type) ? 'failed' : 'success', at: latest.created_at };
 }
 
 export const inboxCaseApi = {
@@ -252,5 +317,5 @@ export const inboxCaseApi = {
     api.post<{ dispositionSet: ItemDisposition; actionProposed: string | null }>(`${BASE}/${caseId}/items/${itemId}/quick-resolve`, { resolution }).then((r) => r.data),
 
   overrideActions: (caseId: string, instruction: string) =>
-    api.post<{ rejected: string[]; proposed: string | null }>(`${BASE}/${caseId}/actions/override`, { instruction }).then((r) => r.data),
+    api.post<{ rejected: string[]; proposed: string | null; failed?: boolean; failureReason?: string }>(`${BASE}/${caseId}/actions/override`, { instruction }).then((r) => r.data),
 };

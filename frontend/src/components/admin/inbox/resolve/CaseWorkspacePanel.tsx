@@ -9,7 +9,9 @@ import {
   InboxCaseActionRecord,
   InboxCaseEventRecord,
   ItemDisposition,
-  humanizeCaseEvent,
+  describeCaseEvent,
+  lastRunInfo,
+  LastRunInfo,
 } from '../../../../services/inboxCaseApi';
 
 interface Props {
@@ -53,6 +55,25 @@ function ActionStatusBadge({ status }: { status: string }) {
     SUCCEEDED: 'success', VERIFIED: 'success', FAILED: 'danger', SKIPPED: 'secondary', COMPENSATED: 'warning',
   };
   return <span className={`badge bg-${tone[status] || 'secondary'}`}>{status}</span>;
+}
+
+// There is no scheduled job for Assess/Plan/Execute — every step is a manual
+// button click (confirmed: no cron references this system anywhere in
+// schedulerService.ts) — so this is the ONLY visible record of "when did
+// this actually last run," derived from the case's own event history rather
+// than a decorative always-on dot.
+const LIGHT_COLOR: Record<LastRunInfo['status'], string> = { never: '#adb5bd', success: '#28a745', failed: '#dc3545' };
+function LastRunLight({ info, label }: { info: LastRunInfo; label: string }) {
+  const text = info.status === 'never' ? 'Never run' : `${info.status === 'failed' ? 'Last attempt failed' : 'Last ran'} ${formatRelativeTime(info.at as string)}`;
+  return (
+    <span
+      className="d-inline-flex align-items-center gap-1 small text-muted"
+      title={info.at ? `${label}: ${new Date(info.at).toLocaleString()}` : `${label}: never run`}
+    >
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: LIGHT_COLOR[info.status], display: 'inline-block', flexShrink: 0 }} aria-hidden="true" />
+      {text}
+    </span>
+  );
 }
 
 export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
@@ -139,6 +160,14 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
   const emailsLeavingInbox = items.filter(
     (i) => (i.source_type === 'email') && actions.some((a) => a.item_id === i.id && ['EMAIL_ARCHIVE', 'EMAIL_LABEL'].includes(a.action_type))
   ).length;
+
+  const assessmentLastRun = lastRunInfo(events, ['assessment_completed'], ['assessment_failed']);
+  const planLastRun = lastRunInfo(events, ['plan_generated']);
+  const executionLastRun = lastRunInfo(
+    events,
+    ['action_execution_succeeded', 'action_execution_reconciled_as_succeeded'],
+    ['action_execution_failed', 'case_execution_failed']
+  );
 
   return (
     <div>
@@ -317,19 +346,26 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
           {!c.assessment && c.state === 'ASSESSING' && (
             <SectionCard title="Assessment" icon="brain-line">
               <p className="small text-muted">No assessment yet.</p>
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                disabled={busy === 'assess'}
-                onClick={() => withBusy('assess', () => inboxCaseApi.assess(c.id), 'Assessment generated')}
-              >
-                {busy === 'assess' ? 'Assessing…' : 'Run Assessment'}
-              </button>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={busy === 'assess'}
+                  onClick={() => withBusy('assess', () => inboxCaseApi.assess(c.id), 'Assessment generated')}
+                >
+                  {busy === 'assess' ? 'Assessing…' : 'Run Assessment'}
+                </button>
+                <LastRunLight info={assessmentLastRun} label="Assessment" />
+              </div>
             </SectionCard>
           )}
 
           {c.assessment && (
-            <SectionCard title="Facts, Assumptions & Contradictions" icon="scales-3-line">
+            <SectionCard
+              title="Facts, Assumptions & Contradictions"
+              icon="scales-3-line"
+              actions={<LastRunLight info={assessmentLastRun} label="Assessment" />}
+            >
               <div className="small mb-2">
                 <strong>Confirmed facts</strong>
                 <ul className="mb-2">{c.assessment.confirmed_facts.map((f, i) => <li key={i}>{f.statement}</li>)}</ul>
@@ -368,19 +404,28 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
           {c.state === 'READY_TO_PLAN' && (
             <SectionCard title="Plan" icon="road-map-line" className="mb-3">
               <p className="small text-muted">No actions proposed yet.</p>
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                disabled={busy === 'plan'}
-                onClick={() => withBusy('plan', () => inboxCaseApi.generatePlan(c.id), 'Action plan generated')}
-              >
-                {busy === 'plan' ? 'Planning…' : 'Generate Action Plan'}
-              </button>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={busy === 'plan'}
+                  onClick={() => withBusy('plan', () => inboxCaseApi.generatePlan(c.id), 'Action plan generated')}
+                >
+                  {busy === 'plan' ? 'Planning…' : 'Generate Action Plan'}
+                </button>
+                <LastRunLight info={planLastRun} label="Plan" />
+              </div>
             </SectionCard>
           )}
 
           {actions.length > 0 && (
-            <SectionCard title="Proposed Actions" subtitle={`${emailsLeavingInbox} email(s) will leave the inbox`} icon="flashlight-line" className="mb-3">
+            <SectionCard
+              title="Proposed Actions"
+              subtitle={`${emailsLeavingInbox} email(s) will leave the inbox`}
+              icon="flashlight-line"
+              className="mb-3"
+              actions={<LastRunLight info={planLastRun} label="Plan" />}
+            >
               <p className="small text-muted mb-2">
                 Actions marked "Needs your approval" must be approved one at a time for safety. Everything else can
                 be approved together with "Approve all low-risk" below.
@@ -464,6 +509,11 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                   </button>
                 )}
               </div>
+              {executionLastRun.status !== 'never' && (
+                <div className="mt-2">
+                  <LastRunLight info={executionLastRun} label="Execution" />
+                </div>
+              )}
               {actions.some((a) => a.status === 'PROPOSED') && (
                 <div className="mt-3 pt-3 border-top">
                   <label htmlFor="override-instruction" className="form-label small fw-semibold mb-1">
@@ -490,6 +540,13 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                         'override',
                         () => inboxCaseApi.overrideActions(c.id, overrideInstruction.trim()),
                         (result) => {
+                          // A schema/AI-call failure is NOT the same thing as "the AI
+                          // correctly found nothing to change" — check this FIRST, or a
+                          // real failure (confirmed live in production) silently reads as
+                          // a false "no new action was needed" success.
+                          if (result.failed) {
+                            return { message: `Instruction could not be applied — ${result.failureReason || 'the AI response was invalid'}. Nothing changed; try rephrasing.`, tone: 'warning' };
+                          }
                           setOverrideInstruction('');
                           const parts = [
                             result.rejected.length > 0 ? `${result.rejected.length} action(s) replaced` : null,
@@ -575,7 +632,7 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
               <ul className="list-unstyled small mb-0" style={{ maxHeight: 240, overflowY: 'auto' }}>
                 {[...events].reverse().map((e) => (
                   <li key={e.id} className="d-flex justify-content-between gap-2 border-bottom py-1">
-                    <span>{humanizeCaseEvent(e)}</span>
+                    <span>{describeCaseEvent(e, items, actions)}</span>
                     <span className="text-muted text-nowrap">{formatRelativeTime(e.created_at)}</span>
                   </li>
                 ))}
