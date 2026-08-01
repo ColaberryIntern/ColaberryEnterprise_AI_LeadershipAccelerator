@@ -23,6 +23,40 @@ function snapshotOf(item: InboxCaseItem | null): Record<string, any> {
   return (item?.snapshot as Record<string, any>) || {};
 }
 
+// Classifies a raw provider-client exception (Gmail/googleapis, MS Graph,
+// Basecamp/axios) into a stable error_class, per CLAUDE.md's Observability
+// Framework ("Generic Error is not an acceptable classification in
+// production code paths"). Wraps every external call site below so
+// caseExecutionService.ts's catch-all (`err?.error_class || err?.name ||
+// 'Error'`) always sees something specific instead of falling through to a
+// bare "Error" that tells nobody — human or dashboard — what actually
+// happened or whether retrying is likely to help.
+async function withClassifiedProviderCall<T>(providerLabel: string, call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err: any) {
+    if (err instanceof ClassifiedExecutionError) throw err;
+    const status = err?.code ?? err?.response?.status ?? err?.status;
+    const message = String(err?.message || err);
+    // Matches autoArchiveService.ts's existing rate-limit detection pattern —
+    // Gmail's SDK error `.code` isn't reliably numeric across error shapes,
+    // so the message-text fallback carries real weight here.
+    if (status === 429 || String(status) === '429' || /rate[- ]?limit/i.test(message)) {
+      throw new ClassifiedExecutionError('RateLimitError', `${providerLabel}: ${message}`);
+    }
+    if (status === 401 || status === 403) {
+      throw new ClassifiedExecutionError('AuthError', `${providerLabel}: ${message}`);
+    }
+    if (typeof status === 'number' && status >= 500) {
+      throw new ClassifiedExecutionError('UpstreamUnavailable', `${providerLabel}: ${message}`);
+    }
+    if (err?.code === 'ETIMEDOUT' || err?.code === 'ECONNABORTED' || /timeout/i.test(message)) {
+      throw new ClassifiedExecutionError('TimeoutError', `${providerLabel}: ${message}`);
+    }
+    throw new ClassifiedExecutionError('UpstreamError', `${providerLabel}: ${message}`);
+  }
+}
+
 // Builds a base64url-encoded RFC 2822 message for gmail.users.messages.send,
 // threaded via In-Reply-To/References when the original message-id is known.
 function buildRawMimeReply(params: { to: string; subject: string; body: string; inReplyTo?: string | null }): string {
@@ -59,10 +93,9 @@ export async function executeEmailSend(action: InboxCaseAction, item: InboxCaseI
     inReplyTo: snap.message_id,
   });
 
-  const res = await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw, threadId: snap.thread_id || undefined },
-  });
+  const res = await withClassifiedProviderCall('gmail', () =>
+    gmail.users.messages.send({ userId: 'me', requestBody: { raw, threadId: snap.thread_id || undefined } })
+  );
 
   return { message_id: res.data.id, thread_id: res.data.threadId, sent_to: to };
 }
@@ -70,13 +103,15 @@ export async function executeEmailSend(action: InboxCaseAction, item: InboxCaseI
 const RESOLVED_LABEL = 'Inbox Intel/Resolved';
 
 async function ensureGmailLabel(gmail: any, labelName: string): Promise<string> {
-  const list = await gmail.users.labels.list({ userId: 'me' });
+  const list = await withClassifiedProviderCall<any>('gmail', () => gmail.users.labels.list({ userId: 'me' }));
   const existing = (list.data.labels || []).find((l: any) => l.name === labelName);
   if (existing?.id) return existing.id;
-  const created = await gmail.users.labels.create({
-    userId: 'me',
-    requestBody: { name: labelName, labelListVisibility: 'labelShow', messageListVisibility: 'show' },
-  });
+  const created = await withClassifiedProviderCall<any>('gmail', () =>
+    gmail.users.labels.create({
+      userId: 'me',
+      requestBody: { name: labelName, labelListVisibility: 'labelShow', messageListVisibility: 'show' },
+    })
+  );
   return created.data.id;
 }
 
@@ -88,11 +123,13 @@ export async function executeEmailLabel(action: InboxCaseAction, item: InboxCase
   const labelName = String(action.payload.label || RESOLVED_LABEL);
   const labelId = await ensureGmailLabel(gmail, labelName);
 
-  await gmail.users.messages.modify({
-    userId: 'me',
-    id: item.source_id,
-    requestBody: { removeLabelIds: ['INBOX'], addLabelIds: [labelId] },
-  });
+  await withClassifiedProviderCall('gmail', () =>
+    gmail.users.messages.modify({
+      userId: 'me',
+      id: item.source_id,
+      requestBody: { removeLabelIds: ['INBOX'], addLabelIds: [labelId] },
+    })
+  );
 
   return { message_id: item.source_id, label_applied: labelName };
 }
@@ -104,7 +141,7 @@ export async function executeEmailArchive(action: InboxCaseAction, item: InboxCa
     return executeEmailLabel(action, item);
   }
   if (!isHotmailConfigured()) throw new ClassifiedExecutionError('ProviderNotConfiguredError', 'Hotmail/Graph not configured');
-  await archiveHotmailMessage(item.source_id);
+  await withClassifiedProviderCall('hotmail', () => archiveHotmailMessage(item.source_id));
   return { message_id: item.source_id, archived: true };
 }
 
@@ -115,7 +152,9 @@ export async function executeBasecampComment(action: InboxCaseAction, item: Inbo
     throw new ClassifiedExecutionError('ValidationError', 'BASECAMP_COMMENT action missing project_id or recording id');
   }
   const content = String(action.payload.comment || '');
-  const res = await bcPost<{ id: number; created_at: string }>(`/buckets/${projectId}/recordings/${recordingId}/comments.json`, { content });
+  const res = await withClassifiedProviderCall('basecamp', () =>
+    bcPost<{ id: number; created_at: string }>(`/buckets/${projectId}/recordings/${recordingId}/comments.json`, { content })
+  );
   return { comment_id: res.id, created_at: res.created_at };
 }
 
@@ -123,7 +162,7 @@ export async function executeBasecampUpdateTodo(action: InboxCaseAction, item: I
   const projectId = (action.payload.project_id as string) || (item?.snapshot as any)?.project_id;
   const todoId = action.target_id || item?.source_id;
   if (!projectId || !todoId) throw new ClassifiedExecutionError('ValidationError', 'BASECAMP_UPDATE_TODO missing project_id or todo id');
-  await bcPut(`/buckets/${projectId}/todos/${todoId}.json`, action.payload.updates || {});
+  await withClassifiedProviderCall('basecamp', () => bcPut(`/buckets/${projectId}/todos/${todoId}.json`, action.payload.updates || {}));
   return { todo_id: todoId, updated: true };
 }
 
@@ -131,7 +170,7 @@ export async function executeBasecampCompleteTodo(action: InboxCaseAction, item:
   const projectId = (action.payload.project_id as string) || (item?.snapshot as any)?.project_id;
   const todoId = action.target_id || item?.source_id;
   if (!projectId || !todoId) throw new ClassifiedExecutionError('ValidationError', 'BASECAMP_COMPLETE_TODO missing project_id or todo id');
-  await bcPut(`/buckets/${projectId}/todos/${todoId}/completion.json`);
+  await withClassifiedProviderCall('basecamp', () => bcPut(`/buckets/${projectId}/todos/${todoId}/completion.json`));
   return { todo_id: todoId, completed: true };
 }
 

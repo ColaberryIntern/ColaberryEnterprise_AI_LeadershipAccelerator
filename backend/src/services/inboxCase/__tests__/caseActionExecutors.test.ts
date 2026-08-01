@@ -110,6 +110,34 @@ describe('executeEmailSend', () => {
     const item = makeItem({ source_type: 'sent_email', snapshot: { from_address: 'ali@colaberry.com', to_addresses: [] } });
     await expect(executeEmailSend(makeAction(), item)).rejects.toThrow(ClassifiedExecutionError);
   });
+
+  // Regression coverage: a raw Gmail 429 used to surface as the bare, useless
+  // error_class "Error" in caseExecutionService.ts's catch-all, indistinguishable
+  // from any other failure. Ali hit this live.
+  it('classifies a Gmail rate-limit response as RateLimitError instead of a bare Error', async () => {
+    mockGmailSend.mockRejectedValueOnce(Object.assign(new Error('User-rate limit exceeded.  Retry after 2026-08-01T03:10:54.542Z'), { code: 429 }));
+    await expect(executeEmailSend(makeAction(), makeItem())).rejects.toMatchObject({ error_class: 'RateLimitError' });
+  });
+
+  it('classifies a Gmail 401/403 response as AuthError', async () => {
+    mockGmailSend.mockRejectedValueOnce(Object.assign(new Error('Invalid Credentials'), { code: 401 }));
+    await expect(executeEmailSend(makeAction(), makeItem())).rejects.toMatchObject({ error_class: 'AuthError' });
+  });
+
+  it('classifies a Gmail 5xx response as UpstreamUnavailable', async () => {
+    mockGmailSend.mockRejectedValueOnce(Object.assign(new Error('Backend Error'), { code: 503 }));
+    await expect(executeEmailSend(makeAction(), makeItem())).rejects.toMatchObject({ error_class: 'UpstreamUnavailable' });
+  });
+
+  it('classifies a network timeout as TimeoutError', async () => {
+    mockGmailSend.mockRejectedValueOnce(Object.assign(new Error('connect ETIMEDOUT 1.2.3.4:443'), { code: 'ETIMEDOUT' }));
+    await expect(executeEmailSend(makeAction(), makeItem())).rejects.toMatchObject({ error_class: 'TimeoutError' });
+  });
+
+  it('classifies an unrecognized provider failure as UpstreamError, never the bare "Error" class', async () => {
+    mockGmailSend.mockRejectedValueOnce(new Error('Something unexpected from Gmail'));
+    await expect(executeEmailSend(makeAction(), makeItem())).rejects.toMatchObject({ error_class: 'UpstreamError' });
+  });
 });
 
 describe('executeEmailLabel', () => {
