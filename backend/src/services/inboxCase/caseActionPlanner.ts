@@ -1,7 +1,9 @@
 import { randomUUID } from 'crypto';
+import { Op } from 'sequelize';
 import InboxCase from '../../models/InboxCase';
 import InboxCaseItem from '../../models/InboxCaseItem';
 import InboxCaseAction from '../../models/InboxCaseAction';
+import InboxCaseQuestion from '../../models/InboxCaseQuestion';
 import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment } from '../../types/inboxCase';
 import { computeIdempotencyKey } from './textNormalization';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
@@ -50,14 +52,24 @@ function requiresIndividualApproval(actionType: ActionType, risk: ActionRiskLeve
   return ALWAYS_INDIVIDUAL_APPROVAL.includes(actionType) || risk === 'HIGH';
 }
 
-function buildReplyAction(caseRow: InboxCase, assessment: PlannerAssessment, replyTargetItem: InboxCaseItem | null): ProposedAction | null {
+function buildReplyAction(
+  caseRow: InboxCase,
+  assessment: PlannerAssessment,
+  replyTargetItem: InboxCaseItem | null,
+  answeredQaText: string
+): ProposedAction | null {
   if (!replyTargetItem) return null;
-  if (!assessment.recommended_next_actions?.length) return null;
+  // A reply is worth drafting if the assessment itself recommended next
+  // actions, OR if Ali answered a blocking question since the assessment ran
+  // — that answer IS the content the customer is waiting on (e.g. "what's
+  // the payment schedule"), even when the original assessment had nothing
+  // concrete to recommend because the answer didn't exist yet.
+  if (!assessment.recommended_next_actions?.length && !answeredQaText) return null;
 
-  const body = [assessment.teaching_brief_recommended_decision, assessment.recommendation_rationale]
+  const body = [assessment.teaching_brief_recommended_decision, assessment.recommendation_rationale, answeredQaText]
     .filter(Boolean)
     .join('\n\n');
-  const draftBody = body || assessment.recommended_next_actions.join('\n');
+  const draftBody = body || (assessment.recommended_next_actions || []).join('\n') || answeredQaText;
 
   return {
     action_type: 'EMAIL_SEND',
@@ -135,6 +147,8 @@ export interface GeneratePlanResult {
 export async function generatePlan(caseId: string, requestedBy: string): Promise<GeneratePlanResult> {
   const caseRow = await getCaseOrThrow(caseId);
   const items = await InboxCaseItem.findAll({ where: { case_id: caseId } });
+  const answeredQuestions = await InboxCaseQuestion.findAll({ where: { case_id: caseId, status: 'ANSWERED' } });
+  const answeredQaText = answeredQuestions.map((q) => `${q.question}\nAnswer: ${q.answer}`).join('\n\n');
   const assessment = (caseRow.assessment || {}) as any;
 
   // Flatten a couple of nested teaching_brief/recommendation fields onto the
@@ -151,7 +165,7 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
   const basecampItems = items.filter((i) => i.source_type.startsWith('basecamp_'));
   const replyTarget = emailItems.filter((i) => i.inclusion_status === 'INCLUDED').sort((a, b) => Number(b.match_score) - Number(a.match_score))[0] || null;
 
-  const replyAction = buildReplyAction(caseRow, flatAssessment, replyTarget);
+  const replyAction = buildReplyAction(caseRow, flatAssessment, replyTarget, answeredQaText);
   const nonArchiveProposals: ProposedAction[] = [
     ...(replyAction ? [replyAction] : []),
     ...buildWaitingActions(caseRow, flatAssessment),
@@ -176,6 +190,19 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
     if (created) createdIds.push(created);
   }
 
+  // Zero-action plans are a dead end if left as-is: the case would sit in
+  // AWAITING_APPROVAL with nothing to approve, and Close Case would still
+  // block on the "every item has a disposition" closure condition since no
+  // action ever touched the items. Auto-mark untouched, non-excluded items
+  // NO_ACTION so the very next thing Ali does (Close Case) actually
+  // succeeds instead of surfacing another opaque blocker.
+  if (createdIds.length === 0) {
+    await InboxCaseItem.update(
+      { disposition: 'NO_ACTION', disposition_reason: 'Auto-set: plan produced no actions for this item.' },
+      { where: { case_id: caseId, disposition: null, inclusion_status: { [Op.ne]: 'EXCLUDED' } } }
+    );
+  }
+
   await transitionCase(caseId, 'AWAITING_APPROVAL', {
     actor_type: 'system',
     actor_id: 'case_action_planner',
@@ -187,7 +214,7 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
     caseId,
     createdIds.length > 0
       ? `Plan generated: ${createdIds.length} action(s) proposed (${archiveProposals.length} archive, ${createdIds.length - archiveProposals.length} other). Awaiting your approval.`
-      : `Plan generated: no actions were needed for this case.`
+      : `Plan generated: no actions were needed for this case. Items auto-marked NO_ACTION — ready to close.`
   );
 
   return { actionsCreated: createdIds.length, actionIds: createdIds };
