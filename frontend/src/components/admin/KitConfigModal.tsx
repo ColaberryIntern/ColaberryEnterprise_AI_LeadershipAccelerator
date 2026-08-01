@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../../utils/api';
 import { CategoryKey, CategoryStatus, InteractionPlacement, KitConfig, KitConfigDefaults, PromptOverride, StoryBeatOverride, TeachSlideOverride, statusForCountAndOverride } from './kitConfig/types';
 import { StatusBadge } from './kitConfig/shared';
-import TimelineBuilderPanel from './kitConfig/TimelineBuilderPanel';
 import StoryBeatsPanel from './kitConfig/StoryBeatsPanel';
 import TeachPanel from './kitConfig/TeachPanel';
 import PromptsPanel from './kitConfig/PromptsPanel';
@@ -33,7 +33,9 @@ interface Props {
 
 interface CategoryDef { key: CategoryKey; icon: string; label: string; }
 // 'timeline' is deliberately first and has no status badge — it's a map of
-// the other categories, not a customizable setting of its own.
+// the other categories, not a customizable setting of its own. It no longer
+// renders in-modal (that outgrew modal-xl — "running out of space"); clicking
+// it navigates to its own full page instead (AdminAcceleratorSessionTimelinePage).
 const CATEGORIES: CategoryDef[] = [
   { key: 'timeline', icon: '🗓️', label: 'Timeline' },
   { key: 'storyBeats', icon: '🎭', label: 'Story Beats' },
@@ -49,11 +51,17 @@ const DAY_LABEL: Record<KitConfigDefaults['dayKind'], string> = {
 };
 
 const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, showToast }) => {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<KitConfig | null>(null);
   const [defaults, setDefaults] = useState<KitConfigDefaults | null>(null);
-  const [active, setActive] = useState<CategoryKey>('timeline');
+  const [active, setActive] = useState<CategoryKey>('storyBeats');
+
+  const openTimeline = () => {
+    navigate(`/admin/accelerator/sessions/${sessionId}/timeline`, { state: { sessionTitle } });
+    onClose();
+  };
 
   useEffect(() => {
     let alive = true;
@@ -152,30 +160,14 @@ const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, sho
                     {CATEGORIES.map((c) => (
                       <button key={c.key} type="button"
                         className={`nav-link text-start d-flex justify-content-between align-items-center ${active === c.key ? 'active' : ''}`}
-                        onClick={() => setActive(c.key)}>
+                        onClick={() => (c.key === 'timeline' ? openTimeline() : setActive(c.key))}>
                         <span>{c.icon} {c.label}</span>
-                        {c.key !== 'timeline' && <StatusBadge status={statuses[c.key]} />}
+                        {c.key === 'timeline' ? <span className="text-muted small">↗</span> : <StatusBadge status={statuses[c.key]} />}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="flex-grow-1 p-3" style={{ overflowY: 'auto' }}>
-                  {active === 'timeline' && (
-                    <TimelineBuilderPanel
-                      dayKind={defaults.dayKind} segments={defaults.segments}
-                      checkpoints={defaults.checkpoints} breakSegment={defaults.breakSegment}
-                      storyBeats={{ config: config.storyBeats, defaults: defaults.storyBeats }}
-                      teach={{ config: config.teach, defaults: defaults.teach }}
-                      prompts={{ config: config.prompts, defaults: defaults.prompts }}
-                      interactions={{ config: config.interactions, defaults: defaults.interactions }}
-                      onChangeStoryBeats={(next) => setConfig({ ...config, storyBeats: next })}
-                      onChangeTeach={(next) => setConfig({ ...config, teach: next })}
-                      onChangePrompts={(next) => setConfig({ ...config, prompts: next })}
-                      onChangeInteractions={(next) => setConfig({ ...config, interactions: next })}
-                      onJumpToCategory={setActive}
-                      onGenerateQuestion={generateQuestion}
-                      promptsApplyHere={promptsApplyHere} />
-                  )}
                   {active === 'storyBeats' && (
                     <StoryBeatsPanel config={config.storyBeats} defaults={defaults.storyBeats}
                       onRewrite={rewriteStoryBeats}

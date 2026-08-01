@@ -472,6 +472,40 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         reveal: 'Claude decides to invoke a Skill from its description. Vague description → no trigger.',
       },
       thursdayTrailer: 'Thursday we build three real Skills for your project — and debug one that refuses to fire.',
+      storyBeats: {
+        checkin: [
+          {
+            icon: '🔁', tone: 'violet', eyebrow: 'Right now — the room you are in',
+            title: 'You just guessed where a repeated task belongs. Almost everyone in this room has typed the same instruction into Claude five times this month without noticing.',
+            body: 'That repetition is not a discipline problem — it is a missing Skill. Tonight you will watch the exact moment a copy-pasted instruction turns into something Claude triggers on its own, and by the time you predict-and-reveal again in a few minutes, you will already know which one is right.',
+            punch: 'The fifth time you type the same instruction is the signal, not the habit.',
+          },
+        ],
+        'business-problem': [
+          {
+            icon: '📋', tone: 'berry', eyebrow: 'Change of pace — the onboarding doc nobody reads',
+            title: 'Every new hire gets the same 40-minute walkthrough. Nobody remembers slide 30.',
+            body: 'A team lead re-explains the deploy checklist to every new engineer, live, from memory, slightly differently each time — because writing it down once felt like overkill for "something everyone just learns." Six months and four hires later, the checklist has never been the same twice, and two of those four hires shipped a bad deploy doing it "their way." The knowledge was never missing. It was never packaged.',
+            punch: 'A Skill is not documentation nobody reads. It is documentation Claude actually runs.',
+          },
+        ],
+        architecture: [
+          {
+            icon: '🔑', tone: 'violet', eyebrow: 'Change of pace — the labeled toolbox',
+            title: 'Two toolboxes, same tools inside. One has labels. Guess which one gets used at 2am.',
+            body: 'A mechanic with an unlabeled toolbox still has every wrench she needs — she just cannot find the right one under pressure, so she reaches for whatever is closest and makes it work, badly. A Skill with a vague description is the unlabeled drawer: the capability exists, but nothing tells Claude when to reach for it, so it either never fires or fires for the wrong job. The description is not documentation about the Skill. It is the label on the drawer.',
+            punch: 'A Skill nobody can find is a Skill that does not exist yet.',
+          },
+        ],
+        deconstruct: [
+          {
+            icon: '👻', tone: 'cherry', eyebrow: 'Change of pace — the Skill that was technically there',
+            title: 'The Skill existed. The instructions were perfect. It never once fired.',
+            body: 'A team spent an afternoon writing a beautifully detailed Skill for release notes — multi-step instructions, examples, edge cases, the works — then described it as "helps with releases." Weeks later, nobody could explain why Claude kept ignoring it in favor of generic answers. The body of the Skill was never the problem. Claude was never told, precisely, when "helps with releases" meant THIS.',
+            punch: 'A Skill is judged by its trigger, not its prose. Write the description like the whole Skill depends on it — because it does.',
+          },
+        ],
+      },
     },
     thursday: {
       resultPreview: 'Three project-specific Agent Skills committed to your workspace, one of them multi-file with scoped tool access.',

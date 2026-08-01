@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CategoryStatus, Tone } from './types';
+import { CategoryStatus } from './types';
 
 /** Small status pill shown on the left-rail nav item and each panel header —
  * one glance tells you whether a category is running as-authored, capped,
@@ -46,57 +46,66 @@ export const CategoryToggleRow: React.FC<{
   </div>
 );
 
-/** The "authored defaults" vs "write my own" segmented switch that sits above
- * every override editor. */
-export const ContentModeSwitch: React.FC<{
-  id: string; usingCustom: boolean; onSwitch: (custom: boolean) => void; itemNoun: string;
-}> = ({ id, usingCustom, onSwitch, itemNoun }) => (
-  <div className="d-flex justify-content-between align-items-center mb-2">
-    <h6 className="mb-0">Content</h6>
-    <div className="btn-group btn-group-sm" role="group" aria-label={`${itemNoun} content mode`}>
-      <button type="button" className={`btn ${!usingCustom ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => onSwitch(false)}>
-        Authored defaults
-      </button>
-      <button type="button" id={id} className={`btn ${usingCustom ? 'btn-primary' : 'btn-outline-secondary'}`} onClick={() => onSwitch(true)}>
-        Write my own
-      </button>
-    </div>
-  </div>
+export const EmptyDefaultsNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <p className="text-muted small fst-italic mb-2">{children}</p>
 );
 
-/** A read-only preview card for one authored-default item — this is the "show
- * me the defaults" surface: real content, not a placeholder sentence. */
-export const DefaultPreviewCard: React.FC<{
-  eyebrow?: string; title: string; body?: string; footer?: React.ReactNode; tone?: Tone;
-}> = ({ eyebrow, title, body, footer, tone }) => {
-  const toneBorder: Record<Tone, string> = {
-    cherry: '#e5121d', berry: '#367895', amber: '#c9820a', leaf: '#2f8f4e', violet: '#7c5cbf',
-  };
+/** Collapsed-by-default, always-editable card for one item in a resolved list —
+ * replaces the old "authored defaults preview vs. write-my-own editor" split
+ * (`ContentModeSwitch`/`DefaultPreviewCard`/`OverrideCard`) with a single
+ * always-in-place editor: collapsed shows a one-line `summary` (the "here's
+ * what this actually is" glance), expanded shows the full field editor in
+ * `children`. Move-up/move-down + the numbered badge give explicit "1st, 2nd,
+ * etc." positioning without standing up a per-panel drag-and-drop context —
+ * the Timeline page keeps drag-and-drop for its own cross-lane use case; a
+ * flat single-list editor doesn't need to duplicate that. Chevron/collapse
+ * pattern matches `TimelineEditorTab.tsx`'s `BucketSection` and
+ * `SectionBlueprintCard.tsx` (`bi-chevron-right/down`, collapsed by default). */
+export const CollapsibleOverrideCard: React.FC<{
+  index: number; total: number; summary: React.ReactNode;
+  onRemove: () => void; onMoveUp: () => void; onMoveDown: () => void;
+  defaultExpanded?: boolean; children: React.ReactNode;
+}> = ({ index, total, summary, onRemove, onMoveUp, onMoveDown, defaultExpanded, children }) => {
+  const [expanded, setExpanded] = useState(!!defaultExpanded);
+  const isFirst = index === 0;
+  const isLast = index === total - 1;
+  const toggle = () => setExpanded((v) => !v);
   return (
-    <div className="rounded-3 border p-3 mb-2" style={tone ? { borderLeftWidth: 4, borderLeftColor: toneBorder[tone] } : undefined}>
-      {eyebrow && <div className="text-uppercase small fw-semibold text-muted mb-1" style={{ letterSpacing: '.03em' }}>{eyebrow}</div>}
-      <div className="fw-semibold mb-1">{title}</div>
-      {body && <div className="text-muted small">{body}</div>}
-      {footer}
+    <div className="card border shadow-sm mb-2">
+      <div
+        className="card-header bg-white py-2 d-flex justify-content-between align-items-center gap-2"
+        style={{ cursor: 'pointer' }}
+        role="button" tabIndex={0} aria-expanded={expanded}
+        onClick={toggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } }}
+      >
+        <div className="d-flex align-items-center gap-2 flex-grow-1" style={{ minWidth: 0 }}>
+          <span className="badge bg-dark-subtle text-dark-emphasis rounded-pill flex-shrink-0">{index + 1}</span>
+          <span className="text-truncate small">{summary}</span>
+        </div>
+        <div className="d-flex align-items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          <button type="button" className="btn btn-outline-secondary btn-sm" style={{ padding: '.15rem .5rem' }}
+            disabled={isFirst} onClick={onMoveUp} aria-label={`Move item ${index + 1} up`} title="Move up">↑</button>
+          <button type="button" className="btn btn-outline-secondary btn-sm" style={{ padding: '.15rem .5rem' }}
+            disabled={isLast} onClick={onMoveDown} aria-label={`Move item ${index + 1} down`} title="Move down">↓</button>
+          <button type="button" className="btn btn-outline-danger btn-sm" onClick={onRemove} aria-label={`Remove item ${index + 1}`}>Remove</button>
+          <i className={`bi bi-chevron-${expanded ? 'down' : 'right'} text-muted ms-1`} style={{ fontSize: 11 }} aria-hidden="true"></i>
+        </div>
+      </div>
+      {expanded && <div className="card-body py-2">{children}</div>}
     </div>
   );
 };
 
-/** Numbered card wrapper for an editable override item — consistent chrome
- * (index badge, remove button) across every override editor. */
-export const OverrideCard: React.FC<{ index: number; onRemove: () => void; children: React.ReactNode }> = ({ index, onRemove, children }) => (
-  <div className="rounded-3 border p-3 mb-2 position-relative">
-    <div className="d-flex justify-content-between align-items-start mb-2">
-      <span className="badge bg-dark-subtle text-dark-emphasis rounded-pill">{index + 1}</span>
-      <button className="btn btn-outline-danger btn-sm" onClick={onRemove}>Remove</button>
-    </div>
-    {children}
-  </div>
-);
-
-export const EmptyDefaultsNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <p className="text-muted small fst-italic mb-2">{children}</p>
-);
+/** Pure reorder helper every redesigned panel's move-up/move-down uses:
+ * swaps the item at `index` with its neighbor, no-op past either end. */
+export function moveItem<T>(list: T[], index: number, direction: 'up' | 'down'): T[] {
+  const target = direction === 'up' ? index - 1 : index + 1;
+  if (target < 0 || target >= list.length) return list;
+  const next = [...list];
+  [next[index], next[target]] = [next[target], next[index]];
+  return next;
+}
 
 /** "Write my own" now means: type an instruction, get an AI-regenerated
  * draft (grounded in this week's real content), then edit it normally —

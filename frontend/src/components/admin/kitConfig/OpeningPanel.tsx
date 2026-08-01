@@ -14,14 +14,20 @@ interface Props {
  * shape) since `OpeningCopy`/`HookCopy` are the only two shapes and a TS
  * generic constrained to "all-string-fields" doesn't play well with plain
  * interfaces (no index signature), so two small concrete editors below are
- * simpler than fighting that. */
+ * simpler than fighting that.
+ *
+ * No "write my own" toggle — the fields are always shown, pre-filled with
+ * the resolved value (`override ?? default`), and directly editable; the
+ * first real edit is what populates `override` (mirrors `resolveSlot`'s
+ * own `override ?? defaultValue` read semantics, just applied to the write
+ * side too). There's exactly one of each slot, so no add/delete/reorder. */
 function SlotShell({
-  id, label, hint, hasContent, usingCustom, enabled, onToggleEnabled, onToggleCustom, children,
+  id, label, hint, hasContent, isCustom, enabled, onToggleEnabled, children,
 }: {
-  id: string; label: string; hint: string; hasContent: boolean; usingCustom: boolean; enabled: boolean;
-  onToggleEnabled: (v: boolean) => void; onToggleCustom: (v: boolean) => void; children: React.ReactNode;
+  id: string; label: string; hint: string; hasContent: boolean; isCustom: boolean; enabled: boolean;
+  onToggleEnabled: (v: boolean) => void; children: React.ReactNode;
 }) {
-  const status = !enabled ? 'off' : usingCustom ? 'custom' : 'default';
+  const status = !enabled ? 'off' : isCustom ? 'custom' : 'default';
   return (
     <div className="rounded-3 border bg-white p-3 mb-3">
       <div className="d-flex justify-content-between align-items-start mb-2">
@@ -36,13 +42,7 @@ function SlotShell({
       </div>
       {enabled && (
         <>
-          {!hasContent && !usingCustom && (
-            <EmptyDefaultsNote>Nothing authored here for this week — turn on "Write my own" below to add one.</EmptyDefaultsNote>
-          )}
-          <div className="form-check form-switch mb-2 ms-1 mt-2">
-            <input className="form-check-input" type="checkbox" id={`${id}-custom`} checked={usingCustom} onChange={(e) => onToggleCustom(e.target.checked)} />
-            <label className="form-check-label small" htmlFor={`${id}-custom`}>Write my own</label>
-          </div>
+          {!hasContent && <EmptyDefaultsNote>Nothing authored here for this week yet — fill it in below.</EmptyDefaultsNote>}
           {children}
         </>
       )}
@@ -51,67 +51,52 @@ function SlotShell({
 }
 
 function ColdOpenEditor({ slot, def, onChangeSlot }: { slot: Slot<OpeningCopy>; def: OpeningCopy | null; onChangeSlot: (next: Slot<OpeningCopy>) => void }) {
-  const usingCustom = slot.override != null;
   const current = slot.override ?? def ?? { title: '', body: '' };
+  const setField = (patch: Partial<OpeningCopy>) => onChangeSlot({ ...slot, override: { ...current, ...patch } });
   return (
     <SlotShell id="cfg-open-coldopen" label="Cold Open" hint='The "By Thursday, this will exist" framing that opens Architecture Day.'
-      hasContent={def != null} usingCustom={usingCustom} enabled={slot.enabled}
-      onToggleEnabled={(v) => onChangeSlot({ ...slot, enabled: v })}
-      onToggleCustom={(v) => onChangeSlot({ ...slot, override: v ? { ...current } : null })}>
-      {!usingCustom ? (
-        def && <div className="ms-1"><div className="fw-medium small">{def.title}</div><div className="small text-muted">{def.body}</div></div>
-      ) : (
-        <div className="ms-1">
-          <label className="form-label small">Title</label>
-          <input className="form-control form-control-sm mb-2" value={current.title} onChange={(e) => onChangeSlot({ ...slot, override: { ...current, title: e.target.value } })} />
-          <label className="form-label small">Body</label>
-          <textarea className="form-control form-control-sm" rows={2} value={current.body} onChange={(e) => onChangeSlot({ ...slot, override: { ...current, body: e.target.value } })} />
-        </div>
-      )}
+      hasContent={def != null} isCustom={slot.override != null} enabled={slot.enabled}
+      onToggleEnabled={(v) => onChangeSlot({ ...slot, enabled: v })}>
+      <div className="ms-1">
+        <label className="form-label small">Title</label>
+        <input className="form-control form-control-sm mb-2" value={current.title} onChange={(e) => setField({ title: e.target.value })} />
+        <label className="form-label small">Body</label>
+        <textarea className="form-control form-control-sm" rows={2} value={current.body} onChange={(e) => setField({ body: e.target.value })} />
+      </div>
     </SlotShell>
   );
 }
 
 function HookEditor({ slot, def, onChangeSlot }: { slot: Slot<HookCopy>; def: HookCopy | null; onChangeSlot: (next: Slot<HookCopy>) => void }) {
-  const usingCustom = slot.override != null;
   const current = slot.override ?? def ?? { headline: '', caption: '' };
+  const setField = (patch: Partial<HookCopy>) => onChangeSlot({ ...slot, override: { ...current, ...patch } });
   return (
     <SlotShell id="cfg-open-hook" label="Story Mode Hook" hint="An optional full-screen single-statement cold open, shown before the cold-open segment."
-      hasContent={def != null} usingCustom={usingCustom} enabled={slot.enabled}
-      onToggleEnabled={(v) => onChangeSlot({ ...slot, enabled: v })}
-      onToggleCustom={(v) => onChangeSlot({ ...slot, override: v ? { ...current } : null })}>
-      {!usingCustom ? (
-        def && <div className="ms-1"><div className="fw-medium small">{def.headline}</div><div className="small text-muted">{def.caption}</div></div>
-      ) : (
-        <div className="ms-1">
-          <label className="form-label small">Headline</label>
-          <input className="form-control form-control-sm mb-2" value={current.headline} onChange={(e) => onChangeSlot({ ...slot, override: { ...current, headline: e.target.value } })} />
-          <label className="form-label small">Caption</label>
-          <textarea className="form-control form-control-sm" rows={2} value={current.caption} onChange={(e) => onChangeSlot({ ...slot, override: { ...current, caption: e.target.value } })} />
-        </div>
-      )}
+      hasContent={def != null} isCustom={slot.override != null} enabled={slot.enabled}
+      onToggleEnabled={(v) => onChangeSlot({ ...slot, enabled: v })}>
+      <div className="ms-1">
+        <label className="form-label small">Headline</label>
+        <input className="form-control form-control-sm mb-2" value={current.headline} onChange={(e) => setField({ headline: e.target.value })} />
+        <label className="form-label small">Caption</label>
+        <textarea className="form-control form-control-sm" rows={2} value={current.caption} onChange={(e) => setField({ caption: e.target.value })} />
+      </div>
     </SlotShell>
   );
 }
 
 function ResultPreviewEditor({ slot, def, onChangeSlot }: { slot: Slot<OpeningCopy>; def: OpeningCopy | null; onChangeSlot: (next: Slot<OpeningCopy>) => void }) {
-  const usingCustom = slot.override != null;
   const current = slot.override ?? def ?? { title: '', body: '' };
+  const setField = (patch: Partial<OpeningCopy>) => onChangeSlot({ ...slot, override: { ...current, ...patch } });
   return (
     <SlotShell id="cfg-open-resultpreview" label="Result Preview" hint="Build Day's &quot;what you are producing today&quot; opening."
-      hasContent={def != null} usingCustom={usingCustom} enabled={slot.enabled}
-      onToggleEnabled={(v) => onChangeSlot({ ...slot, enabled: v })}
-      onToggleCustom={(v) => onChangeSlot({ ...slot, override: v ? { ...current } : null })}>
-      {!usingCustom ? (
-        def && <div className="ms-1"><div className="fw-medium small">{def.title}</div><div className="small text-muted">{def.body}</div></div>
-      ) : (
-        <div className="ms-1">
-          <label className="form-label small">Title</label>
-          <input className="form-control form-control-sm mb-2" value={current.title} onChange={(e) => onChangeSlot({ ...slot, override: { ...current, title: e.target.value } })} />
-          <label className="form-label small">Body</label>
-          <textarea className="form-control form-control-sm" rows={2} value={current.body} onChange={(e) => onChangeSlot({ ...slot, override: { ...current, body: e.target.value } })} />
-        </div>
-      )}
+      hasContent={def != null} isCustom={slot.override != null} enabled={slot.enabled}
+      onToggleEnabled={(v) => onChangeSlot({ ...slot, enabled: v })}>
+      <div className="ms-1">
+        <label className="form-label small">Title</label>
+        <input className="form-control form-control-sm mb-2" value={current.title} onChange={(e) => setField({ title: e.target.value })} />
+        <label className="form-label small">Body</label>
+        <textarea className="form-control form-control-sm" rows={2} value={current.body} onChange={(e) => setField({ body: e.target.value })} />
+      </div>
     </SlotShell>
   );
 }
