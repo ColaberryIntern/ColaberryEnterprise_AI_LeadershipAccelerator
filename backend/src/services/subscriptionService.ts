@@ -1,3 +1,4 @@
+import { Op } from 'sequelize';
 import { Enrollment, Cohort, Subscription } from '../models';
 import { env } from '../config/env';
 import { findOrCreateCustomer, createPaymentLink } from './paysimpleService';
@@ -401,13 +402,29 @@ async function grantMembership(
 
 const COMP_PREFIX = 'COMP-';
 
+/** Every enrollment id sharing this one's email (case-insensitive), including
+ *  itself — a person can span more than one enrollment row (an Explorer-shaped
+ *  duplicate alongside their real paid/comped row), and Free Access must be
+ *  read/written consistently regardless of which sibling row an admin happens
+ *  to have open. Takes the email directly (callers that already have the
+ *  enrollment loaded pass its email straight through — no redundant re-fetch).
+ *  Falls back to just the requested id if there's no email or no siblings. */
+async function resolveSiblingEnrollmentIds(enrollmentId: string, email: string | null | undefined): Promise<string[]> {
+  const normalizedEmail = email ? email.toLowerCase().trim() : '';
+  if (!normalizedEmail) return [enrollmentId];
+  const siblings = await Enrollment.findAll({ where: { email: { [Op.iLike]: normalizedEmail } }, attributes: ['id'] });
+  return siblings.length ? siblings.map((s) => s.id) : [enrollmentId];
+}
+
 /**
  * Admin grant — "Free Access": comp a seat (100% discount) for anyone, with NO
  * employee/staff role. The person gets the NORMAL student experience (normal
  * curriculum gating), just never billed — distinct from staff, who bypass
  * gating. Creates (idempotently) an active 'comp' subscription so the paywall
  * clears + the seat is labelled, then flips the enrollment to a paid member.
- * Idempotent: a second call reuses the existing active comp row (no stacking).
+ * Idempotent across this person's OTHER enrollment rows too: if a sibling
+ * enrollment already holds an active comp subscription, reuses it instead of
+ * stacking a second comp row for the same real person under a different id.
  */
 export async function grantFreeAccess(enrollmentId: string, nowMs: number = Date.now()): Promise<Subscription> {
   const enrollment = await Enrollment.findByPk(enrollmentId);
@@ -416,7 +433,8 @@ export async function grantFreeAccess(enrollmentId: string, nowMs: number = Date
   }
   const now = new Date(nowMs);
 
-  let sub = await Subscription.findOne({ where: { enrollment_id: enrollmentId, plan: 'comp', status: 'active' } });
+  const siblingIds = await resolveSiblingEnrollmentIds(enrollmentId, enrollment.email);
+  let sub = await Subscription.findOne({ where: { enrollment_id: siblingIds, plan: 'comp', status: 'active' } });
   if (!sub) {
     sub = await Subscription.create({
       enrollment_id: enrollmentId,
@@ -435,17 +453,24 @@ export async function grantFreeAccess(enrollmentId: string, nowMs: number = Date
 }
 
 /**
- * Admin revoke — remove the Free-Access label by canceling the active comp
- * subscription (and the future no-bill expectation). It deliberately does NOT
- * downgrade the enrollment's current access; forcibly locking someone out is a
- * separate, explicit admin action, so revoking a comp can never fight a real
- * payment or strand a student mid-course. Returns whether a comp row was found.
+ * Admin revoke — remove the Free-Access label by canceling whichever of this
+ * person's enrollment rows actually holds the active comp subscription — not
+ * necessarily the exact id the admin has open (confirmed live: Brianna
+ * Woodard's comp subscription lived on a sibling row, so revoking against her
+ * Explorer row alone silently did nothing). Cancels every active comp row
+ * found across her siblings, not just the first, so a stray second comp row
+ * can never survive a revoke. Deliberately does NOT downgrade the
+ * enrollment's current access; forcibly locking someone out is a separate,
+ * explicit admin action, so revoking a comp can never fight a real payment or
+ * strand a student mid-course.
  */
 export async function revokeFreeAccess(enrollmentId: string, nowMs: number = Date.now()): Promise<boolean> {
-  const sub = await Subscription.findOne({ where: { enrollment_id: enrollmentId, plan: 'comp', status: 'active' } });
-  if (!sub) return false;
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  const siblingIds = await resolveSiblingEnrollmentIds(enrollmentId, enrollment?.email);
+  const subs = await Subscription.findAll({ where: { enrollment_id: siblingIds, plan: 'comp', status: 'active' } });
+  if (!subs.length) return false;
   const now = new Date(nowMs);
-  await sub.update({ status: 'canceled', canceled_at: now, cancel_reason: 'comp_revoked', updated_at: now });
+  await Promise.all(subs.map((sub) => sub.update({ status: 'canceled', canceled_at: now, cancel_reason: 'comp_revoked', updated_at: now })));
   return true;
 }
 

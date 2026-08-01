@@ -2,9 +2,11 @@
  * subscriptionAnalyticsService unit tests.
  *
  * All DB access is a raw sequelize.query call — mocked by inspecting the SQL
- * text. The service issues exactly two distinct queries: the paying-members
- * query (enrollments LEFT JOIN subscriptions) and the explorer/deposit-holder
- * count query.
+ * text. getSubscriptionAnalytics() issues three distinct queries: the
+ * paying-members query (enrollments LEFT JOIN subscriptions), the explorer
+ * row-fetch (free trial / deposit holder — row-shaped, not an aggregate, so
+ * duplicate identities can be deduped before counting), and getStaffRoster()'s
+ * own query (the one authoritative source for the Staff headcount).
  */
 
 const mockQuery = jest.fn();
@@ -41,22 +43,31 @@ type Row = {
 const NOW = Date.UTC(2026, 6, 30, 12, 0, 0); // 2026-07-30 noon UTC
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-const row = (overrides: Partial<Row>): Row => ({
-  enrollment_id: 'enr-1',
-  full_name: 'Test Student',
-  email: 'test@example.com',
-  amount_paid: '199.00',
-  enrollment_created_at: new Date(NOW - 10 * DAY_MS).toISOString(),
-  is_staff: false,
-  sub_id: 'sub-1',
-  plan: 'monthly',
-  sub_status: 'active',
-  amount_cents: 19900,
-  started_at: new Date(NOW - 10 * DAY_MS).toISOString(),
-  current_period_end: new Date(NOW + 20 * DAY_MS).toISOString(),
-  sub_created_at: new Date(NOW - 10 * DAY_MS).toISOString(),
-  ...overrides,
-});
+// Default email is DERIVED from enrollment_id (not a fixed constant) so two
+// row() calls with different enrollment_ids — almost every test's assumption,
+// representing two different fictional people — never accidentally collide
+// under the identity-based dedup added for the Tanmayi Katamaraja/aleem
+// duplicate-roster fix. Tests that intentionally exercise the SAME identity
+// (a real duplicate) pass an explicit `email` override instead.
+const row = (overrides: Partial<Row>): Row => {
+  const enrollmentId = overrides.enrollment_id || 'enr-1';
+  return {
+    enrollment_id: enrollmentId,
+    full_name: 'Test Student',
+    email: `${enrollmentId}@example.com`,
+    amount_paid: '199.00',
+    enrollment_created_at: new Date(NOW - 10 * DAY_MS).toISOString(),
+    is_staff: false,
+    sub_id: 'sub-1',
+    plan: 'monthly',
+    sub_status: 'active',
+    amount_cents: 19900,
+    started_at: new Date(NOW - 10 * DAY_MS).toISOString(),
+    current_period_end: new Date(NOW + 20 * DAY_MS).toISOString(),
+    sub_created_at: new Date(NOW - 10 * DAY_MS).toISOString(),
+    ...overrides,
+  };
+};
 
 /** A paid enrollment with no subscription row at all. */
 const noSubRow = (overrides: Partial<Row>): Row => ({
@@ -76,16 +87,29 @@ const noSubRow = (overrides: Partial<Row>): Row => ({
   ...overrides,
 });
 
-/** Wire the two-query mock: member rows first, explorer/deposit counts second. */
-function mockRows(
-  memberRows: Row[],
-  explorerCounts: { free_trial: number; deposit_holders: number; deposit_cents: number; staff?: number } = {
-    free_trial: 0, deposit_holders: 0, deposit_cents: 0,
-  }
-): void {
+type ExplorerRow = {
+  enrollment_id: string; email: string | null; created_at: string | null;
+  is_staff: boolean; deposit_enrollment_id: string | null; deposit_cents: number | null;
+};
+
+type StaffRosterRow = {
+  enrollment_id: string; full_name: string | null; email: string | null; created_at: string | null;
+  payment_status: string | null; enrollment_type: string | null;
+};
+
+/** A plain (non-staff, non-deposit) free-trial Explorer row. */
+const explorerRow = (overrides: Partial<ExplorerRow>): ExplorerRow => ({
+  enrollment_id: 'exp-1', email: 'explorer@example.com', created_at: null,
+  is_staff: false, deposit_enrollment_id: null, deposit_cents: null,
+  ...overrides,
+});
+
+/** Wire the three-query mock: paying members, the explorer row-fetch, and getStaffRoster(). */
+function mockRows(memberRows: Row[], explorerRows: ExplorerRow[] = [], staffRosterRows: StaffRosterRow[] = []): void {
   mockQuery.mockImplementation((sql: string) => {
     if (sql.includes('FROM enrollments e') && sql.includes('LEFT JOIN subscriptions')) return Promise.resolve(memberRows);
-    if (sql.includes("enrollment_type = 'explorer'")) return Promise.resolve([{ staff: 0, ...explorerCounts }]);
+    if (sql.includes("enrollment_type = 'explorer'")) return Promise.resolve(explorerRows);
+    if (sql.includes('cm.mgmt_role') && sql.includes('e.payment_status')) return Promise.resolve(staffRosterRows);
     throw new Error(`Unexpected query: ${sql}`);
   });
 }
@@ -100,7 +124,13 @@ describe('getSubscriptionAnalytics', () => {
       row({ enrollment_id: 'enr-annual', plan: 'annual', amount_cents: 178800 }), // $1788/yr -> $149/mo
       row({ enrollment_id: 'enr-monthly', plan: 'monthly', amount_cents: 19900 }), // $199/mo
       row({ enrollment_id: 'enr-comp', plan: 'comp', amount_cents: 0 }),
-    ], { free_trial: 3, deposit_holders: 2, deposit_cents: 10000 });
+    ], [
+      explorerRow({ enrollment_id: 'exp-1', email: 'exp1@example.com' }),
+      explorerRow({ enrollment_id: 'exp-2', email: 'exp2@example.com' }),
+      explorerRow({ enrollment_id: 'exp-3', email: 'exp3@example.com' }),
+      explorerRow({ enrollment_id: 'dep-1', email: 'dep1@example.com', deposit_enrollment_id: 'dep-1', deposit_cents: 5000 }),
+      explorerRow({ enrollment_id: 'dep-2', email: 'dep2@example.com', deposit_enrollment_id: 'dep-2', deposit_cents: 5000 }),
+    ]);
 
     const result: SubscriptionAnalytics = await getSubscriptionAnalytics(NOW);
 
@@ -245,7 +275,10 @@ describe('getSubscriptionAnalytics', () => {
       row({ enrollment_id: 'enr-m1', started_at: new Date(NOW - 5 * DAY_MS).toISOString() }), // Month 1
       row({ enrollment_id: 'enr-m2', started_at: new Date(NOW - 35 * DAY_MS).toISOString() }), // Month 2
       row({ enrollment_id: 'enr-m6', started_at: new Date(NOW - 200 * DAY_MS).toISOString() }), // Month 5+ tail
-    ], { free_trial: 2, deposit_holders: 0, deposit_cents: 0 });
+    ], [
+      explorerRow({ enrollment_id: 'exp-1', email: 'exp1@example.com' }),
+      explorerRow({ enrollment_id: 'exp-2', email: 'exp2@example.com' }),
+    ]);
 
     const result = await getSubscriptionAnalytics(NOW);
     const byLabel = new Map(result.tenureFunnel.map((b) => [b.label, b]));
@@ -283,10 +316,12 @@ describe('getSubscriptionAnalytics', () => {
     expect(byLabel.get('Month 1')!.byPlan.monthly).toBe(1);
   });
 
-  it('classifies a comped seat held by a real team member as Staff, not Free Access', async () => {
-    mockRows([
-      row({ enrollment_id: 'enr-staff-comp', plan: 'comp', amount_cents: 0, is_staff: true }),
-    ]);
+  it('classifies a comped seat held by a real team member as Staff, not Free Access — and the Staff count comes from getStaffRoster(), not the paying-members loop', async () => {
+    mockRows(
+      [row({ enrollment_id: 'enr-staff-comp', plan: 'comp', amount_cents: 0, is_staff: true })],
+      [],
+      [{ enrollment_id: 'enr-staff-comp', full_name: 'Staff Member', email: 'staff@colaberry.com', created_at: null, payment_status: 'paid', enrollment_type: 'standard' }]
+    );
     const result = await getSubscriptionAnalytics(NOW);
     expect(result.kpis.staffCount).toBe(1);
     expect(result.kpis.compedSeats).toBe(0);
@@ -309,15 +344,33 @@ describe('getSubscriptionAnalytics', () => {
     expect(byLabel.get('Month 1')!.count).toBe(0);
   });
 
-  it('adds explorer-shaped staff (internal test/onboarding signups) into staffCount via fetchExplorerCounts, on top of any staff already found among paying members', async () => {
+  it('staffCount always matches getStaffRoster()\'s own length exactly — the one authoritative source, regardless of how many staff also show up among paying members or explorer-shaped rows', async () => {
     mockRows(
       [row({ enrollment_id: 'enr-staff-paying', is_staff: true, plan: 'monthly' })],
-      { free_trial: 5, deposit_holders: 0, deposit_cents: 0, staff: 2 }
+      [explorerRow({ enrollment_id: 'enr-staff-explorer', email: 'staff2@colaberry.com', is_staff: true })],
+      [
+        { enrollment_id: 'enr-staff-paying', full_name: 'Staff A', email: 'staff1@colaberry.com', created_at: null, payment_status: 'paid', enrollment_type: 'standard' },
+        { enrollment_id: 'enr-staff-explorer', full_name: 'Staff B', email: 'staff2@colaberry.com', created_at: null, payment_status: 'pending', enrollment_type: 'explorer' },
+        { enrollment_id: 'enr-staff-third', full_name: 'Staff C', email: 'staff3@colaberry.com', created_at: null, payment_status: 'pending', enrollment_type: 'standard' },
+      ]
     );
     const result = await getSubscriptionAnalytics(NOW);
-    expect(result.kpis.staffCount).toBe(3); // 1 from paying members + 2 explorer-shaped
+    expect(result.kpis.staffCount).toBe(3); // getStaffRoster()'s own 3 rows, not a sum of the other two queries' staff signals
     const byPlan = Object.fromEntries(result.planBreakdown.map((p) => [p.plan, p]));
     expect(byPlan.staff.count).toBe(3);
+  });
+
+  it('collapses a duplicate staff identity (aleem@colaberry.com shape: exact-email duplicate, one paid one pending) into a single staffCount', async () => {
+    mockRows(
+      [],
+      [],
+      [
+        { enrollment_id: 'aleem-pending', full_name: 'Aleem', email: 'aleem@colaberry.com', created_at: '2026-07-07T13:33:32.032Z', payment_status: 'pending', enrollment_type: 'standard' },
+        { enrollment_id: 'aleem-paid', full_name: 'Aleem', email: 'aleem@colaberry.com', created_at: '2026-07-09T13:24:59.513Z', payment_status: 'paid', enrollment_type: 'standard' },
+      ]
+    );
+    const result = await getSubscriptionAnalytics(NOW);
+    expect(result.kpis.staffCount).toBe(1);
   });
 });
 
@@ -382,6 +435,22 @@ describe('getPlanRoster', () => {
     const roster = await getPlanRoster('monthly', NOW);
     expect(roster).toEqual([]);
   });
+
+  it('collapses a Gmail "+alias" duplicate into a single comp roster entry, keeping the earlier signup (Tanmayi Katamaraja shape)', async () => {
+    mockRows([
+      row({
+        enrollment_id: 'tk-plain-earliest', email: 'tanmayi.katamaraja@gmail.com', plan: 'comp', amount_cents: 0,
+        started_at: new Date(NOW - 20 * DAY_MS).toISOString(), sub_created_at: new Date(NOW - 20 * DAY_MS).toISOString(),
+      }),
+      row({
+        enrollment_id: 'tk-plus3-later', email: 'tanmayi.katamaraja+3@gmail.com', plan: 'comp', amount_cents: 0,
+        started_at: new Date(NOW - 3 * DAY_MS).toISOString(), sub_created_at: new Date(NOW - 3 * DAY_MS).toISOString(),
+      }),
+    ]);
+    const roster = await getPlanRoster('comp', NOW);
+    expect(roster).toHaveLength(1);
+    expect(roster[0].enrollment_id).toBe('tk-plain-earliest');
+  });
 });
 
 describe('getDepositHolderRoster', () => {
@@ -404,6 +473,21 @@ describe('getDepositHolderRoster', () => {
       enrollment_id: 'enr-dep', plan: 'deposit_holder', monthly_amount: 50, next_payment_date: null,
     }));
   });
+
+  it('collapses a duplicate deposit-holder identity into one roster entry, keeping the earlier signup', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FROM enrollments e') && sql.includes('JOIN account_credits')) {
+        return Promise.resolve([
+          { enrollment_id: 'dep-later', full_name: 'Dup Person', email: 'dup.person@gmail.com', created_at: new Date(NOW - 1 * DAY_MS).toISOString(), amount_cents: 5000 },
+          { enrollment_id: 'dep-earlier', full_name: 'Dup Person', email: 'dup.person+2@gmail.com', created_at: new Date(NOW - 5 * DAY_MS).toISOString(), amount_cents: 5000 },
+        ]);
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    const roster = await getDepositHolderRoster();
+    expect(roster).toHaveLength(1);
+    expect(roster[0].enrollment_id).toBe('dep-earlier');
+  });
 });
 
 describe('getStaffRoster', () => {
@@ -415,7 +499,7 @@ describe('getStaffRoster', () => {
     mockQuery.mockImplementation((sql: string) => {
       if (sql.includes('FROM enrollments e') && sql.includes('cm.mgmt_role')) {
         return Promise.resolve([
-          { enrollment_id: 'enr-vivek', full_name: 'Vivek', email: 'vivek@colaberry.com', created_at: new Date(NOW - 400 * DAY_MS).toISOString() },
+          { enrollment_id: 'enr-vivek', full_name: 'Vivek', email: 'vivek@colaberry.com', created_at: new Date(NOW - 400 * DAY_MS).toISOString(), payment_status: 'paid', enrollment_type: 'standard' },
         ]);
       }
       throw new Error(`Unexpected query: ${sql}`);
@@ -424,5 +508,20 @@ describe('getStaffRoster', () => {
     expect(roster).toEqual([
       expect.objectContaining({ enrollment_id: 'enr-vivek', plan: 'staff', monthly_amount: 0, next_payment_date: null }),
     ]);
+  });
+
+  it('collapses an exact-email staff duplicate into one roster entry, preferring the paid row over the pending one (aleem@colaberry.com shape)', async () => {
+    mockQuery.mockImplementation((sql: string) => {
+      if (sql.includes('FROM enrollments e') && sql.includes('cm.mgmt_role')) {
+        return Promise.resolve([
+          { enrollment_id: 'aleem-pending', full_name: 'Mohammed Abdul Aleem', email: 'aleem@colaberry.com', created_at: '2026-07-07T13:33:32.032Z', payment_status: 'pending', enrollment_type: 'standard' },
+          { enrollment_id: 'aleem-paid', full_name: 'Mohammed Abdul Aleem', email: 'aleem@colaberry.com', created_at: '2026-07-09T13:24:59.513Z', payment_status: 'paid', enrollment_type: 'standard' },
+        ]);
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    const roster = await getStaffRoster();
+    expect(roster).toHaveLength(1);
+    expect(roster[0].enrollment_id).toBe('aleem-paid');
   });
 });
