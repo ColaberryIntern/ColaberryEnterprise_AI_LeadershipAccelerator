@@ -35,7 +35,11 @@ export const CASE_STATE_TRANSITIONS: Record<CaseState, CaseState[]> = {
   WAITING: ['ASSESSING', 'RESOLVED', 'REOPENED', 'FAILED'],
   DELEGATED: ['ASSESSING', 'RESOLVED', 'REOPENED', 'FAILED'],
   RESOLVED: ['REOPENED'],
-  FAILED: ['ASSESSING', 'READY_TO_PLAN'],
+  // EXECUTING added so a failed action's "Retry Failed" can actually
+  // retry — without it, one transient action failure (e.g. a Gmail rate
+  // limit) permanently locked the case out of ever executing again,
+  // since FAILED had no path back into EXECUTING.
+  FAILED: ['ASSESSING', 'READY_TO_PLAN', 'EXECUTING'],
   REOPENED: ['ASSESSING'],
 };
 
@@ -53,6 +57,11 @@ export type ItemDisposition = (typeof ITEM_DISPOSITIONS)[number];
 
 export const ITEM_INCLUSION_STATUSES = ['INCLUDED', 'CANDIDATE', 'EXCLUDED'] as const;
 export type ItemInclusionStatus = (typeof ITEM_INCLUSION_STATUSES)[number];
+
+// AI's advisory fit verdict for a CANDIDATE item, produced by Run
+// Assessment's "deeper look" — never auto-applied to inclusion_status.
+export const AI_ITEM_RECOMMENDATIONS = ['INCLUDE', 'EXCLUDE'] as const;
+export type AiItemRecommendation = (typeof AI_ITEM_RECOMMENDATIONS)[number];
 
 export const CASE_SOURCE_TYPES = [
   'email',

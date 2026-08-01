@@ -165,6 +165,7 @@ export async function handleExecuteCase(req: Request, res: Response) {
   } catch (err: any) {
     if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
     if (err?.name === 'InvalidCaseTransitionError') return res.status(409).json({ error: err.name, message: err.message });
+    if (err?.name === 'MaxRetriesExceededError') return res.status(409).json({ error: err.name, message: err.message });
     console.error('[InboxCase] ExecuteCase error:', err?.message);
     res.status(500).json({ error: 'ExecutionFailedError', message: err?.message });
   }

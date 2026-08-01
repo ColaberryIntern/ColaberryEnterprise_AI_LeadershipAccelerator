@@ -140,6 +140,14 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                       {item.match_reasons.map((r) => r.kind).join(', ')}
                     </div>
                   )}
+                  {item.inclusion_status === 'CANDIDATE' && item.ai_recommendation && (
+                    <div className="small mt-1">
+                      <span className={`fw-semibold ${item.ai_recommendation === 'INCLUDE' ? 'text-success' : 'text-danger'}`}>
+                        AI recommends: {item.ai_recommendation === 'INCLUDE' ? 'Include' : 'Exclude'}
+                      </span>
+                      {item.ai_recommendation_reason && <span className="text-muted"> — {item.ai_recommendation_reason}</span>}
+                    </div>
+                  )}
                   <div className="d-flex flex-wrap gap-1 mt-2 align-items-center">
                     <span className={`badge bg-${item.inclusion_status === 'INCLUDED' ? 'success' : item.inclusion_status === 'CANDIDATE' ? 'warning' : 'secondary'}`}>
                       {item.inclusion_status}
