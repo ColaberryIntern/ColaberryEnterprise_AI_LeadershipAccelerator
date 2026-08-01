@@ -54,7 +54,7 @@ function toCandidate(msg: GraphMessage, sourceType: 'email' | 'sent_email'): Raw
     source_type: sourceType,
     source_id: msg.id,
     provider: 'hotmail',
-    source_url: null,
+    source_url: msg.webLink || null,
     title: msg.subject || '(no subject)',
     occurred_at: new Date(msg.receivedDateTime),
     participants: [
