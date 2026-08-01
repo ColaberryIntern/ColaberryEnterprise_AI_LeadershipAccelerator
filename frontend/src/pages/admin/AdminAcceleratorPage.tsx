@@ -186,22 +186,40 @@ function AdminAcceleratorPage() {
   }, [searchParams, setSearchParams]);
 
   // Reusable so the new Cohorts management tab can refresh this (open-cohorts-only)
-  // selector after a create/edit/delete, not just on first mount.
+  // selector after a create/edit/delete, not just on first mount. Also honors a
+  // ?cohort=<id> deep link (from the Cohorts tab's per-row quick-nav buttons) even
+  // when that cohort is closed/completed and therefore wouldn't normally appear in
+  // this open-only selector — fetched individually and added to the list so the
+  // deep link actually lands filtered instead of silently falling back to the
+  // default cohort.
   const loadCohorts = useCallback(() => {
-    return api.get('/api/admin/cohorts').then((res) => {
-      // Selector shows only open cohorts; completed/closed ones (e.g. April) remain as data but off the dropdown.
-      const openCohorts: Cohort[] = (res.data.cohorts || []).filter((c: Cohort) => c.status === 'open');
+    const deepLinkedId = searchParams.get('cohort');
+    return api.get('/api/admin/cohorts').then(async (res) => {
+      let openCohorts: Cohort[] = (res.data.cohorts || []).filter((c: Cohort) => c.status === 'open');
+      if (deepLinkedId && !openCohorts.some((c) => c.id === deepLinkedId)) {
+        try {
+          const detail = await api.get(`/api/admin/cohorts/${deepLinkedId}`);
+          if (detail.data?.cohort) openCohorts = [detail.data.cohort, ...openCohorts];
+        } catch {
+          // Deep-linked cohort id doesn't exist (deleted, bad link) — fall through
+          // to the normal default-cohort behavior rather than blocking the page.
+        }
+      }
       setCohorts(openCohorts);
-      setSelectedCohortId((prev) => (prev && openCohorts.some((c) => c.id === prev)) ? prev : (openCohorts[0]?.id || ''));
+      setSelectedCohortId((prev) => {
+        if (deepLinkedId && openCohorts.some((c) => c.id === deepLinkedId)) return deepLinkedId;
+        return (prev && openCohorts.some((c) => c.id === prev)) ? prev : (openCohorts[0]?.id || '');
+      });
     }).catch(() => showToast('Failed to load cohorts', 'error'));
-  }, [showToast]);
+  }, [showToast]); // eslint-disable-line
 
   useEffect(() => {
     loadCohorts().finally(() => setLoading(false));
   }, []); // eslint-disable-line
 
-  // Deep-link: /admin/accelerator?tab=cohorts (used by the admin dashboard's
-  // "Manage" link) opens straight to the Cohorts management tab.
+  // Deep-link: /admin/accelerator?tab=cohorts&cohort=<id> (used by the admin
+  // dashboard's "Manage" link and the Cohorts tab's per-row quick-nav buttons)
+  // opens straight to the given tab, and (via loadCohorts above) the given cohort.
   useEffect(() => {
     const tab = searchParams.get('tab');
     if (tab && (TAB_ORDER as string[]).includes(tab)) {
