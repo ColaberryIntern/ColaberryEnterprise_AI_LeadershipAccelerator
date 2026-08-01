@@ -19,6 +19,21 @@ const DISPOSITION_OPTIONS: ItemDisposition[] = [
   'RESOLVED', 'WAITING', 'DELEGATED', 'NEEDS_ALI', 'SILENT_HOLD', 'NO_ACTION', 'PROTECTED', 'FAILED',
 ];
 
+// Matches EmailPreviewCard.tsx's established relative-time convention
+// for this feature area.
+function formatRelativeTime(dateStr: string): string {
+  const now = new Date();
+  const date = new Date(dateStr);
+  const diffMs = now.getTime() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay}d ago`;
+}
+
 function ScorePill({ score }: { score: string | number }) {
   const pct = Math.round(Number(score) * 100);
   const tone = pct >= 85 ? 'success' : pct >= 65 ? 'warning' : 'secondary';
@@ -72,11 +87,24 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
     load();
   }, [load]);
 
-  const withBusy = async (key: string, fn: () => Promise<any>, successMsg?: string) => {
+  // `any` here: withBusy is generic over every mutation this panel makes
+  // (case, item, question, action endpoints), each with a different
+  // response shape — callers that need a typed result read it inside
+  // their own successMsg function instead.
+  const withBusy = async (
+    key: string,
+    fn: () => Promise<any>,
+    successMsg?: string | ((result: any) => { message: string; tone?: 'success' | 'warning' })
+  ) => {
     try {
       setBusy(key);
-      await fn();
-      if (successMsg) showToast(successMsg, 'success');
+      const result = await fn();
+      if (typeof successMsg === 'function') {
+        const { message, tone } = successMsg(result);
+        showToast(message, tone || 'success');
+      } else if (successMsg) {
+        showToast(successMsg, 'success');
+      }
       await load();
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Action failed', 'error');
@@ -134,7 +162,7 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                     <div className="small fw-semibold text-truncate" style={{ maxWidth: 180 }}>{item.title}</div>
                     <ScorePill score={item.match_score} />
                   </div>
-                  <div className="small text-muted">{item.source_type} · {item.provider}</div>
+                  <div className="small text-muted">{item.source_type} · {item.provider} · {formatRelativeTime(item.occurred_at)}</div>
                   {item.match_reasons?.length > 0 && (
                     <div className="small text-muted mt-1">
                       {item.match_reasons.map((r) => r.kind).join(', ')}
@@ -341,7 +369,13 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                     type="button"
                     className="btn btn-sm btn-primary"
                     disabled={busy === 'execute'}
-                    onClick={() => withBusy('execute', () => inboxCaseApi.execute(c.id), 'Execution run complete')}
+                    onClick={() =>
+                      withBusy('execute', () => inboxCaseApi.execute(c.id), (result) =>
+                        result.failed > 0
+                          ? { message: `${result.succeeded} succeeded, ${result.failed} failed — see the error below`, tone: 'warning' }
+                          : { message: 'Execution run complete' }
+                      )
+                    }
                   >
                     {busy === 'execute' ? 'Executing…' : 'Execute Approved Actions'}
                   </button>
@@ -351,7 +385,13 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                     type="button"
                     className="btn btn-sm btn-outline-primary"
                     disabled={busy === 'verify'}
-                    onClick={() => withBusy('verify', () => inboxCaseApi.verify(c.id), 'Verification complete')}
+                    onClick={() =>
+                      withBusy('verify', () => inboxCaseApi.verify(c.id), (result) =>
+                        result.verificationFailed > 0
+                          ? { message: `${result.verified} confirmed, ${result.verificationFailed} failed verification`, tone: 'warning' }
+                          : { message: 'Verification complete' }
+                      )
+                    }
                   >
                     {busy === 'verify' ? 'Verifying…' : 'Verify'}
                   </button>
@@ -361,7 +401,19 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                     type="button"
                     className="btn btn-sm btn-outline-warning"
                     disabled={busy === 'execute'}
-                    onClick={() => withBusy('execute', () => inboxCaseApi.execute(c.id), 'Retry run complete')}
+                    onClick={() =>
+                      withBusy('execute', () => inboxCaseApi.execute(c.id), (result) =>
+                        result.failed > 0
+                          ? {
+                              message:
+                                result.succeeded > 0
+                                  ? `${result.succeeded} succeeded, still failing — see the error below`
+                                  : 'Still failing — see the error below',
+                              tone: 'warning',
+                            }
+                          : { message: `Retry succeeded — ${result.succeeded} action(s) completed` }
+                      )
+                    }
                   >
                     Retry Failed
                   </button>
