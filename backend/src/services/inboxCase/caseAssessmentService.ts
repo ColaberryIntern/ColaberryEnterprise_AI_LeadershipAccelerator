@@ -60,6 +60,7 @@ Respond with a single JSON object matching this exact shape (no markdown, no pro
   "recommended_next_actions": [string], "confidence": number(0-100),
   "questions": [{ "question": string, "why_required": string, "choices": [{ "label": string, "consequence": string }], "recommended_answer": string|null }],
   "candidate_item_assessments": [{ "item_id": string, "recommendation": "INCLUDE"|"EXCLUDE", "reasoning": string }],
+  "basecamp_close_recommendations": [{ "item_id": string, "recommend_close": boolean, "reasoning": string }],
   "teaching_brief": {
     "what_is_happening": string, "why_it_matters": string, "what_ali_is_deciding": string,
     "root_cause": string|null, "confirmed_vs_inferred": string, "risk_of_acting": string,
@@ -78,7 +79,13 @@ Rules:
   (e.g. same participants but an unrelated topic, or a name collision). Give one concrete sentence of
   reasoning citing what's actually in the item. This is advisory only — you are not deciding for Ali, you
   are giving him your read before he decides. Do not include INCLUDED items in this list — they're already
-  decided. If there are no CANDIDATE items, return an empty array.`;
+  decided. If there are no CANDIDATE items, return an empty array.
+- For every INCLUDED item with source_type=basecamp_todo where "recommended_next_actions" implies posting
+  an update/comment on it, add an entry to "basecamp_close_recommendations": recommend_close=true if that
+  update itself finishes the work (nothing further is needed from anyone after it posts), false if the
+  todo should stay open (more work remains, or you're waiting on someone else). One concrete sentence of
+  reasoning. This is advisory only — a human still approves the resulting action individually either way.
+  If there are no basecamp_todo items being commented on, return an empty array.`;
 
 function buildEvidenceBlock(items: InboxCaseItem[]): { text: string; boundedItems: InboxCaseItem[] } {
   const bounded = [...items]
@@ -110,7 +117,7 @@ function collectInjectionFlags(items: InboxCaseItem[]): Array<{ item_id: string;
 }
 
 function toStoredAssessment(output: CaseAssessmentOutput): CaseAssessment {
-  const { teaching_brief, questions, candidate_item_assessments, ...rest } = output;
+  const { teaching_brief, questions, candidate_item_assessments, basecamp_close_recommendations, ...rest } = output;
   return rest as CaseAssessment;
 }
 
@@ -129,6 +136,30 @@ async function applyCandidateItemAssessments(
     const item = candidateItemById.get(verdict.item_id);
     if (!item) continue; // not a real CANDIDATE item this run actually showed the model
     await item.update({ ai_recommendation: verdict.recommendation, ai_recommendation_reason: verdict.reasoning, updated_at: new Date() });
+    applied++;
+  }
+  return applied;
+}
+
+// Applies the AI's advisory "close this Basecamp item after the comment"
+// signal onto the item rows themselves — read later by the action planner,
+// never executes anything on its own. Validated against boundedItems (the
+// REAL evidence set this run actually showed the model), scoped to INCLUDED
+// basecamp_todo items only, so a hallucinated or prompt-injected item_id (or
+// one belonging to a different source_type) can never touch a row it wasn't
+// meant for.
+async function applyBasecampCloseRecommendations(
+  recommendations: CaseAssessmentOutput['basecamp_close_recommendations'],
+  boundedItems: InboxCaseItem[]
+): Promise<number> {
+  const eligibleById = new Map(
+    boundedItems.filter((i) => i.inclusion_status === 'INCLUDED' && i.source_type === 'basecamp_todo').map((i) => [i.id, i])
+  );
+  let applied = 0;
+  for (const rec of recommendations) {
+    const item = eligibleById.get(rec.item_id);
+    if (!item) continue; // not a real INCLUDED basecamp_todo item this run actually showed the model
+    await item.update({ basecamp_close_recommended: rec.recommend_close, basecamp_close_recommended_reason: rec.reasoning, updated_at: new Date() });
     applied++;
   }
   return applied;
@@ -158,6 +189,7 @@ function safeFallbackOutput(items: InboxCaseItem[]): CaseAssessmentOutput {
     confidence: 0,
     questions: [],
     candidate_item_assessments: [],
+    basecamp_close_recommendations: [],
     teaching_brief: {
       what_is_happening: 'The system could not generate an automated assessment for this case.',
       why_it_matters: 'Without an assessment, blocking questions and a recommended plan cannot be derived automatically.',
@@ -254,6 +286,7 @@ export async function runAssessment(caseId: string, requestedBy: string): Promis
   });
 
   const candidateRecommendationsApplied = await applyCandidateItemAssessments(output.candidate_item_assessments, boundedItems);
+  await applyBasecampCloseRecommendations(output.basecamp_close_recommendations, boundedItems);
 
   // Consolidate: dedupe against any existing OPEN question with the same
   // text so re-running Assess doesn't spam duplicate questions.

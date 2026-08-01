@@ -31,15 +31,18 @@ export default function InboxResolveWorkPage() {
   const [stats, setStats] = useState<CaseStats | null>(null);
   const [loadingList, setLoadingList] = useState(true);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
-  const [stateFilter, setStateFilter] = useState<CaseState | ''>('');
+  // '' = all states except RESOLVED (the default, per Ali's request that
+  // resolved cases stop cluttering the list); '__ALL_INCL_RESOLVED__' is a
+  // sentinel that explicitly asks for everything, including RESOLVED.
+  const [stateFilter, setStateFilter] = useState<CaseState | '' | '__ALL_INCL_RESOLVED__'>('');
+  const [syncing, setSyncing] = useState(false);
 
   const loadList = useCallback(async () => {
     try {
       setLoadingList(true);
-      const [listRes, statsRes] = await Promise.all([
-        inboxCaseApi.list(stateFilter ? { state: stateFilter } : {}),
-        inboxCaseApi.stats(),
-      ]);
+      const listParams =
+        stateFilter === '__ALL_INCL_RESOLVED__' ? { include_resolved: true } : stateFilter ? { state: stateFilter } : {};
+      const [listRes, statsRes] = await Promise.all([inboxCaseApi.list(listParams), inboxCaseApi.stats()]);
       setCases(listRes.cases);
       setStats(statsRes);
     } catch (err: any) {
@@ -69,6 +72,24 @@ export default function InboxResolveWorkPage() {
       showToast(err.response?.data?.message || 'Discovery failed', 'error');
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    try {
+      setSyncing(true);
+      const result = await inboxCaseApi.syncNow();
+      showToast(
+        result.newCasesCreated === 0
+          ? 'Sync complete — nothing new to add'
+          : `Sync complete — ${result.newCasesCreated} new case${result.newCasesCreated === 1 ? '' : 's'}, ${result.itemsAdded} item${result.itemsAdded === 1 ? '' : 's'}`,
+        'success'
+      );
+      loadList();
+    } catch (err: any) {
+      showToast(err.response?.data?.message || 'Sync failed', 'error');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -165,6 +186,25 @@ export default function InboxResolveWorkPage() {
               </>
             )}
           </button>
+
+          <button
+            type="button"
+            data-testid="resolve-sync-now-button"
+            className="btn btn-sm btn-outline-primary"
+            onClick={handleSyncNow}
+            disabled={syncing}
+            aria-label="Sync cases with your inbox now"
+          >
+            {syncing ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true" /> Syncing…
+              </>
+            ) : (
+              <>
+                <i className="ri-refresh-line" aria-hidden="true" /> Sync Now
+              </>
+            )}
+          </button>
         </div>
 
         {discoveredSummaries && (
@@ -202,7 +242,7 @@ export default function InboxResolveWorkPage() {
             style={{ width: 'auto' }}
             aria-label="Filter cases by state"
             value={stateFilter}
-            onChange={(e) => setStateFilter(e.target.value as CaseState | '')}
+            onChange={(e) => setStateFilter(e.target.value as CaseState | '' | '__ALL_INCL_RESOLVED__')}
           >
             <option value="">All states</option>
             <option value="NEEDS_ALI">Needs you</option>
@@ -210,6 +250,7 @@ export default function InboxResolveWorkPage() {
             <option value="WAITING">Waiting</option>
             <option value="FAILED">Failed</option>
             <option value="RESOLVED">Resolved</option>
+            <option value="__ALL_INCL_RESOLVED__">All states (incl. resolved)</option>
           </select>
         }
       >

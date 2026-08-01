@@ -26,6 +26,10 @@ export const listCasesQuerySchema = z.object({
   mode: z.enum(['PERSON', 'TOPIC']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
+  // When true (and no explicit `state` filter), the default RESOLVED-hidden
+  // behavior is skipped and every state is returned, matching the frontend's
+  // "All states (incl. resolved)" option.
+  include_resolved: z.coerce.boolean().optional(),
 });
 
 export const caseIdParamSchema = z.object({ caseId: z.string().uuid() });
@@ -164,6 +168,21 @@ export const caseAssessmentOutputSchema = z.object({
       z.object({
         item_id: z.string(),
         recommendation: z.enum(['INCLUDE', 'EXCLUDE']),
+        reasoning: z.string().min(1),
+      })
+    )
+    .default([]),
+  // Advisory-only: for INCLUDED basecamp_todo items the assessment is about
+  // to propose a comment on, whether the recommended update also finishes
+  // the work — read later by the action planner to decide whether to ALSO
+  // propose a linked BASECAMP_COMPLETE_TODO action. Never executes anything
+  // on its own; the resulting action still always needs Ali's individual
+  // approval like any other Basecamp-writing action.
+  basecamp_close_recommendations: z
+    .array(
+      z.object({
+        item_id: z.string(),
+        recommend_close: z.boolean(),
         reasoning: z.string().min(1),
       })
     )

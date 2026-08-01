@@ -212,6 +212,39 @@ describe('generatePlan — proposes the right action shapes', () => {
     expect(comment.requires_individual_approval).toBe(true);
   });
 
+  it('also proposes a linked, dependent BASECAMP_COMPLETE_TODO when the assessment recommended closing after the comment', async () => {
+    const c = await seedCase();
+    const bcItem = await seedBasecampItem(c.id, { basecamp_close_recommended: true });
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    const comment = actions.find((a) => a.action_type === 'BASECAMP_COMMENT');
+    const close = actions.find((a) => a.action_type === 'BASECAMP_COMPLETE_TODO');
+    expect(comment).toBeDefined();
+    expect(close).toBeDefined();
+    expect(close.item_id).toBe(bcItem.id);
+    expect(close.depends_on_action_ids).toEqual([comment.id]);
+    expect(close.requires_individual_approval).toBe(true); // BASECAMP_COMPLETE_TODO is always individual-approval
+  });
+
+  it('does not propose a linked close action when no close was recommended', async () => {
+    const c = await seedCase();
+    await seedBasecampItem(c.id, { basecamp_close_recommended: false });
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    expect(actions.some((a) => a.action_type === 'BASECAMP_COMPLETE_TODO')).toBe(false);
+  });
+
+  it('does not propose a linked close action when basecamp_close_recommended is null (no recommendation made)', async () => {
+    const c = await seedCase();
+    await seedBasecampItem(c.id, { basecamp_close_recommended: null });
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    expect(actions.some((a) => a.action_type === 'BASECAMP_COMPLETE_TODO')).toBe(false);
+  });
+
   it('proposes an archive action per included email item, depending on every non-archive action in the plan', async () => {
     const c = await seedCase();
     await seedEmailItem(c.id);
