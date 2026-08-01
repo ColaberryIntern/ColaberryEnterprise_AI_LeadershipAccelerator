@@ -34,6 +34,19 @@ interface TicketAttributes {
   completed_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
+  // --- ProofDesk Work Ledger fields (Milestone 1 - Foundation, additive/nullable) ---
+  phase?: string | null;
+  work_intent?: string | null;
+  domain?: string | null;
+  risk_tier?: string | null;
+  proof_readiness?: string | null;
+  environment?: string | null;
+  verification_status?: string | null;
+  outcome_status?: string | null;
+  owner_department?: string | null;
+  orchestrator_run_id?: string | null;
+  summary_current?: string | null;
+  last_meaningful_activity_at?: Date | null;
 }
 
 class Ticket extends Model<TicketAttributes> implements TicketAttributes {
@@ -62,6 +75,18 @@ class Ticket extends Model<TicketAttributes> implements TicketAttributes {
   declare completed_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
+  declare phase: string | null;
+  declare work_intent: string | null;
+  declare domain: string | null;
+  declare risk_tier: string | null;
+  declare proof_readiness: string | null;
+  declare environment: string | null;
+  declare verification_status: string | null;
+  declare outcome_status: string | null;
+  declare owner_department: string | null;
+  declare orchestrator_run_id: string | null;
+  declare summary_current: string | null;
+  declare last_meaningful_activity_at: Date | null;
 }
 
 Ticket.init(
@@ -170,6 +195,55 @@ Ticket.init(
       defaultValue: DataTypes.NOW,
     },
     updated_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    // --- ProofDesk Work Ledger fields (Milestone 1 - Foundation, additive/nullable) ---
+    phase: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    work_intent: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    domain: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    risk_tier: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    proof_readiness: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    environment: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    verification_status: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    outcome_status: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    owner_department: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    orchestrator_run_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    summary_current: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    last_meaningful_activity_at: {
       type: DataTypes.DATE,
       allowNull: true,
     },
