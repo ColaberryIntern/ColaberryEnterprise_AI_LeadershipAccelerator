@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Op } from 'sequelize';
 import {
   Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail, Subscription,
+  ProgramBlueprint,
 } from '../models';
 import { env } from '../config/env';
 import { centralWallClockToInstant } from './centralDate';
@@ -295,7 +296,13 @@ export async function computeAllReadinessScores(cohortId: string) {
 
 export async function getCohortDashboard(cohortId: string) {
   const [cohort, sessions, enrollments] = await Promise.all([
-    Cohort.findByPk(cohortId),
+    // Course -> Cohort -> Session distinction: the parent Course (ProgramBlueprint)
+    // is included so the admin UI can label which course this cohort belongs to,
+    // rather than leaving program_id as an opaque id (see AdminAcceleratorPage's
+    // course/cohort breadcrumb).
+    Cohort.findByPk(cohortId, {
+      include: [{ model: ProgramBlueprint, as: 'program', attributes: ['id', 'name'] }],
+    }),
     LiveSession.findAll({ where: { cohort_id: cohortId }, order: [['session_number', 'ASC']] }),
     Enrollment.findAll({ where: { cohort_id: cohortId, status: 'active' } }),
   ]);

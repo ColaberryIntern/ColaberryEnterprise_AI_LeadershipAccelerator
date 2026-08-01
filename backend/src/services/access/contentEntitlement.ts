@@ -34,8 +34,25 @@ export interface ContentAccessRoleInfo {
 }
 
 // Minimal structural shapes so callers/tests need not build Sequelize instances.
-type EntitlementEnrollment = { payment_status?: string | null } | null | undefined;
+type EntitlementEnrollment = {
+  payment_status?: string | null;
+  /** Nullable future-dated access gate (Enrollment.access_starts_at). Set + in the
+   *  future => full access is deferred regardless of payment/comp/staff/business
+   *  status below; used for a postponed-cohort-move scenario where the student
+   *  keeps free-tier access but full access shouldn't unlock early. */
+  access_starts_at?: string | Date | null;
+} | null | undefined;
 type EntitlementCohort = { cohort_type?: string | null } | null | undefined;
+
+function isAccessStartDeferred(accessStartsAt: string | Date | null | undefined, now: Date): boolean {
+  if (!accessStartsAt) return false;
+  const gate = new Date(accessStartsAt);
+  if (Number.isNaN(gate.getTime())) return false;
+  // Compare by calendar day (DATEONLY column) so "today" already counts as unlocked.
+  const today = new Date(now.toISOString().slice(0, 10));
+  const gateDay = new Date(gate.toISOString().slice(0, 10));
+  return gateDay > today;
+}
 
 /**
  * PURE paywall rule. "Full curriculum access" is the OR of:
@@ -44,6 +61,9 @@ type EntitlementCohort = { cohort_type?: string | null } | null | undefined;
  *   - staff:     community_members.role === 'staff' (roleInfo.isStaff)
  *   - business:  the enrollment sits in a private business/owner workspace cohort
  *                (cohort_type='business') — the internal owner accounts (Ali, Ram)
+ * ...UNLESS `access_starts_at` is set to a future date, which overrides all of the
+ * above and defers full access until that date (free-tier/Week-0 access is
+ * untouched either way — this only ever narrows access, never widens it).
  *
  * Everyone else — guests (free self-serve signups), explorers (open-house
  * prospects), and enrolled-but-UNPAID members — is on the free preview tier and
@@ -53,8 +73,10 @@ export function hasFullCurriculumAccess(
   enrollment: EntitlementEnrollment,
   cohort: EntitlementCohort,
   roleInfo?: ContentAccessRoleInfo | null,
+  now: Date = new Date(),
 ): boolean {
   if (!enrollment) return false;
+  if (isAccessStartDeferred(enrollment.access_starts_at, now)) return false;
   const paid = enrollment.payment_status === 'paid';
   const comped = roleInfo?.hasActiveComp === true;
   const staff = roleInfo?.isStaff === true;
@@ -76,7 +98,7 @@ export function hasFullCurriculumAccess(
 export async function isFreePreviewTier(enrollmentId: string): Promise<boolean> {
   try {
     const enrollment = await Enrollment.findByPk(enrollmentId, {
-      attributes: ['id', 'payment_status', 'enrollment_type', 'cohort_id'],
+      attributes: ['id', 'payment_status', 'enrollment_type', 'cohort_id', 'access_starts_at'],
     });
     if (!enrollment) return false;
 
@@ -120,7 +142,7 @@ export async function resolveContentPageAccess(enrollmentId: string): Promise<{ 
   if (!env.contentPageGateEnabled) return { isStaff: false, hasFullAccess: true };
   try {
     if (!enrollmentId) return { isStaff: false, hasFullAccess: true };
-    const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'payment_status', 'cohort_id'] });
+    const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'payment_status', 'cohort_id', 'access_starts_at'] });
     if (!enrollment) return { isStaff: false, hasFullAccess: true };
     const cohort = enrollment.cohort_id
       ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type'] })

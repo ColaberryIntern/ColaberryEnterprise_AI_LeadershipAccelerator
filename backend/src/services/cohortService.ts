@@ -1,7 +1,7 @@
-import { Cohort, Enrollment, AccountCredit } from '../models';
-import { UpdateCohortInput } from '../schemas/cohortSchema';
+import { Cohort, Enrollment, AccountCredit, LiveSession, ProgramBlueprint } from '../models';
+import { UpdateCohortInput, CreateCohortInput } from '../schemas/cohortSchema';
 import { AppError } from '../utils/AppError';
-import { Op } from 'sequelize';
+import { Op, fn, col } from 'sequelize';
 
 export async function listOpenCohorts() {
   return Cohort.findAll({
@@ -20,10 +20,106 @@ export async function listOpenCohorts() {
   });
 }
 
+/**
+ * Real, live headcount per cohort — COUNT(*) of active enrollments, regardless of
+ * `enrollment_type`. `Cohort.seats_taken` is deliberately NOT this number: it's a
+ * paid-capacity counter that enrollmentService intentionally skips for Explorer
+ * signups (they have no seat limit), so any UI that reused `seats_taken` to mean
+ * "how many people are enrolled" always read 0 for the Explorer cohort no matter
+ * how many prospects actually signed up. This is the correct source for that.
+ */
+async function getEnrolledCountsByCohort(): Promise<Map<string, number>> {
+  const rows = (await Enrollment.findAll({
+    attributes: ['cohort_id', [fn('COUNT', col('id')), 'count']],
+    where: { status: 'active', cohort_id: { [Op.ne]: null } } as any,
+    group: ['cohort_id'],
+    raw: true,
+  })) as unknown as Array<{ cohort_id: string; count: string }>;
+
+  const byCohort = new Map<string, number>();
+  for (const row of rows) {
+    byCohort.set(row.cohort_id, Number(row.count));
+  }
+  return byCohort;
+}
+
 export async function listAllCohorts() {
-  return Cohort.findAll({
-    order: [['start_date', 'DESC']],
-  });
+  const [cohorts, enrolledCounts] = await Promise.all([
+    Cohort.findAll({
+      order: [['start_date', 'DESC']],
+      // Surfaces the parent Course name alongside each Cohort so the admin UI can
+      // show the Course -> Cohort hierarchy explicitly instead of leaving
+      // program_id as an opaque id (see AdminAcceleratorPage's course/cohort
+      // breadcrumb). A cohort with no program_id (e.g. the Explorer cohort) simply
+      // has a null `program` — the UI renders "No parent course set" for that case.
+      include: [{ model: ProgramBlueprint, as: 'program', attributes: ['id', 'name'] }],
+    }),
+    getEnrolledCountsByCohort(),
+  ]);
+  return cohorts.map((c) => ({
+    ...c.toJSON(),
+    enrolled_count: enrolledCounts.get(c.id) || 0,
+  }));
+}
+
+export async function createCohort(data: CreateCohortInput) {
+  return Cohort.create({
+    seats_taken: 0,
+    status: 'open',
+    ...data,
+  } as any);
+}
+
+export interface CohortDependents {
+  enrollmentCount: number;
+  /** Non-withdrawn enrollments with a real recorded payment — the signal that
+   *  blocks a default (non-forced) delete, since cascading would destroy a real
+   *  student's record, not a test/internal fixture. */
+  unsafeEnrollmentCount: number;
+  liveSessionCount: number;
+}
+
+export async function getCohortDependents(cohortId: string): Promise<CohortDependents> {
+  const [enrollments, liveSessionCount] = await Promise.all([
+    Enrollment.findAll({
+      where: { cohort_id: cohortId },
+      attributes: ['id', 'status', 'amount_paid'],
+    }),
+    LiveSession.count({ where: { cohort_id: cohortId } }),
+  ]);
+  const unsafeEnrollmentCount = enrollments.filter(
+    (e) => e.status !== 'withdrawn' && Number(e.amount_paid) > 0
+  ).length;
+  return { enrollmentCount: enrollments.length, unsafeEnrollmentCount, liveSessionCount };
+}
+
+export type DeleteCohortResult =
+  | { deleted: true; cohortId: string; dependents: CohortDependents }
+  | { deleted: false; blocked: true; dependents: CohortDependents };
+
+/**
+ * Deletes a cohort. The DB FK (`enrollments_cohort_id_fkey` etc.) is
+ * ON DELETE CASCADE, so this also removes every dependent enrollment/session row —
+ * irreversible. Refuses by default (returns `blocked: true` rather than throwing,
+ * so the controller can surface the dependent counts to the caller) whenever the
+ * cohort has a non-withdrawn enrollment with a real recorded payment, or any live
+ * session, unless the caller explicitly passes `force: true`.
+ */
+export async function deleteCohort(
+  id: string,
+  opts: { force?: boolean } = {}
+): Promise<DeleteCohortResult> {
+  const cohort = await Cohort.findByPk(id);
+  if (!cohort) throw new AppError('Cohort not found', 404);
+
+  const dependents = await getCohortDependents(id);
+  const blocked = dependents.unsafeEnrollmentCount > 0 || dependents.liveSessionCount > 0;
+  if (blocked && !opts.force) {
+    return { deleted: false, blocked: true, dependents };
+  }
+
+  await cohort.destroy();
+  return { deleted: true, cohortId: id, dependents };
 }
 
 /**
@@ -109,7 +205,10 @@ export async function getOrCreateExplorerCohort(): Promise<Cohort> {
 
 export async function getCohortDetail(id: string) {
   const cohort = await Cohort.findByPk(id, {
-    include: [{ model: Enrollment, as: 'enrollments' }],
+    include: [
+      { model: Enrollment, as: 'enrollments' },
+      { model: ProgramBlueprint, as: 'program', attributes: ['id', 'name'] },
+    ],
   });
   if (!cohort) throw new AppError('Cohort not found', 404);
   return cohort;
