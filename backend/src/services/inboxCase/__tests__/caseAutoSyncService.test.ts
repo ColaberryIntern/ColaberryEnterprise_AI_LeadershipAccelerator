@@ -133,9 +133,10 @@ jest.mock('../sources/basecampCaseSource', () => ({
 }));
 
 let colaberryConfigured = true;
+let personalConfigured = false;
 jest.mock('../../inbox/inboxSyncService', () => ({
   getColaberryGmailClient: () => (colaberryConfigured ? {} : null),
-  getPersonalGmailClient: () => null,
+  getPersonalGmailClient: () => (personalConfigured ? {} : null),
 }));
 
 import { runAutoSync } from '../caseAutoSyncService';
@@ -153,6 +154,7 @@ beforeEach(() => {
   mockFetchFolderMessages.mockReset().mockResolvedValue([]);
   hotmailConfigured = false;
   colaberryConfigured = true;
+  personalConfigured = false;
 });
 
 function rawEmailCandidate(overrides: Partial<any> = {}) {
@@ -212,6 +214,50 @@ describe('runAutoSync — classification filter', () => {
 
     expect(result.newCasesCreated).toBe(0);
     expect(result.emailsSkippedUnclassified).toBe(1);
+  });
+});
+
+describe('runAutoSync — per-source failure isolation', () => {
+  it('a broken gmail_personal credential does not prevent healthy gmail_colaberry results from being processed', async () => {
+    personalConfigured = true;
+    const goodCandidate = rawEmailCandidate({ provider: 'gmail_colaberry' });
+    await seedClassifiedEmail('gmail_colaberry', goodCandidate.source_id, 'INBOX');
+
+    mockSearchAndNormalize.mockImplementation(async (_client: any, provider: string) => {
+      if (provider === 'gmail_personal') throw new Error('invalid_grant');
+      if (provider === 'gmail_colaberry') return [goodCandidate];
+      return [];
+    });
+
+    const result = await runAutoSync('cron', 'system');
+
+    // The healthy source's case is still created despite the other source failing.
+    expect(result.newCasesCreated).toBe(1);
+  });
+
+  it('a broken Hotmail fetch does not prevent healthy Basecamp results from being processed', async () => {
+    hotmailConfigured = true;
+    mockFetchFolderMessages.mockRejectedValue(new Error('400 Bad Request'));
+    await fakeOpsBcTodo.create({ bc_id: 'still-works', project_id: 'p1', title: 'Still works', bc_updated_at: new Date(), bc_app_url: 'https://x' });
+
+    const result = await runAutoSync('cron', 'system');
+
+    expect(result.newCasesCreated).toBe(1);
+  });
+
+  it('a broken Basecamp fetch does not prevent healthy email results from being processed', async () => {
+    const candidate = rawEmailCandidate();
+    await seedClassifiedEmail('gmail_colaberry', candidate.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([candidate]);
+
+    const originalFindAll = fakeOpsBcTodo.findAll;
+    fakeOpsBcTodo.findAll = jest.fn().mockRejectedValue(new Error('DB connection lost'));
+    try {
+      const result = await runAutoSync('cron', 'system');
+      expect(result.newCasesCreated).toBe(1);
+    } finally {
+      fakeOpsBcTodo.findAll = originalFindAll; // never leak this override into later tests
+    }
   });
 });
 
