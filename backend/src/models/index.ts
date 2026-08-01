@@ -119,6 +119,10 @@ import CallbackRequest from './CallbackRequest';
 import DocumentDeliveryLog from './DocumentDeliveryLog';
 import Ticket from './Ticket';
 import TicketActivity from './TicketActivity';
+import WorkContext from './WorkContext';
+import AgentRun from './AgentRun';
+import WorkLedgerEvent from './WorkLedgerEvent';
+import TicketActionLink from './TicketActionLink';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -759,6 +763,25 @@ TicketActivity.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 Ticket.hasMany(Ticket, { foreignKey: 'parent_ticket_id', as: 'subTasks' });
 Ticket.belongsTo(Ticket, { foreignKey: 'parent_ticket_id', as: 'parentTicket' });
 
+// --- ProofDesk Work Ledger associations (Milestone 1 - Foundation, shadow mode) ---
+Ticket.hasMany(WorkContext, { foreignKey: 'ticket_id', as: 'workContexts' });
+WorkContext.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(AgentRun, { foreignKey: 'ticket_id', as: 'agentRuns' });
+AgentRun.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkContext.hasMany(AgentRun, { foreignKey: 'work_context_id', as: 'agentRuns' });
+AgentRun.belongsTo(WorkContext, { foreignKey: 'work_context_id', as: 'workContext' });
+
+Ticket.hasMany(WorkLedgerEvent, { foreignKey: 'ticket_id', as: 'workLedgerEvents' });
+WorkLedgerEvent.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+AgentRun.hasMany(WorkLedgerEvent, { foreignKey: 'run_id', as: 'events' });
+WorkLedgerEvent.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+
+Ticket.hasMany(TicketActionLink, { foreignKey: 'ticket_id', as: 'actionLinks' });
+TicketActionLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkLedgerEvent.hasMany(TicketActionLink, { foreignKey: 'event_id', as: 'ticketLinks' });
+TicketActionLink.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -1109,6 +1132,10 @@ export {
   DocumentDeliveryLog,
   Ticket,
   TicketActivity,
+  WorkContext,
+  AgentRun,
+  WorkLedgerEvent,
+  TicketActionLink,
   StudentNavigationEvent,
   Alert,
   AlertEvent,
