@@ -16,3 +16,21 @@ export const updateCohortSchema = z.object({
 });
 
 export type UpdateCohortInput = z.infer<typeof updateCohortSchema>;
+
+export const createCohortSchema = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(1000).optional(),
+  start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Must be YYYY-MM-DD format'),
+  core_day: z.enum(DAYS_OF_WEEK),
+  core_time: z.string().min(1).max(50).default('Evening'),
+  optional_lab_day: z.string().max(50).optional(),
+  timezone: z.string().min(1).max(50).optional(),
+  max_seats: z.number().int().positive().optional(),
+  status: z.enum(['open', 'closed', 'completed']).optional(),
+  cohort_type: z.string().min(1).max(50).optional(),
+  curriculum_version: z.string().max(20).optional(),
+  program_id: z.string().uuid().optional(),
+  settings_json: z.record(z.string(), z.any()).optional(),
+});
+
+export type CreateCohortInput = z.infer<typeof createCohortSchema>;

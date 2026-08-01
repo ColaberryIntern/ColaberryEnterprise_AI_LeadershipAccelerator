@@ -9,12 +9,17 @@ import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
 import ClassKitModal from '../../components/admin/ClassKitModal';
 import KitConfigModal from '../../components/admin/KitConfigModal';
+import CohortManagementTab from './components/CohortManagementTab';
 
 interface Cohort {
   id: string;
   name: string;
   start_date: string;
   status: string;
+  cohort_type?: string;
+  // The parent Course this Cohort belongs to (Course -> Cohort -> Session
+  // hierarchy) — null for cohorts with no program_id set (e.g. Explorer).
+  program?: { id: string; name: string } | null;
 }
 
 interface LiveSession {
@@ -105,14 +110,17 @@ interface DashboardData {
   enrollments: EnrollmentInfo[];
 }
 
-type TabKey = 'sessions' | 'participants' | 'attendance' | 'submissions' | 'readiness' | 'curriculum';
+type TabKey = 'cohorts' | 'sessions' | 'participants' | 'attendance' | 'submissions' | 'readiness' | 'curriculum';
+
+const TAB_ORDER: TabKey[] = ['cohorts', 'sessions', 'participants', 'attendance', 'submissions', 'readiness', 'curriculum'];
 
 function AdminAcceleratorPage() {
   const { showToast } = useToast();
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [selectedCohortId, setSelectedCohortId] = useState('');
   // Default to Participants — Sessions is empty for most cohorts, so it made the
-  // page look blank on load.
+  // page look blank on load. A `?tab=cohorts` query param (used by the "Manage"
+  // link on the admin dashboard) overrides this on first load.
   const [activeTab, setActiveTab] = useState<TabKey>('participants');
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
@@ -177,16 +185,28 @@ function AdminAcceleratorPage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
-  useEffect(() => {
-    api.get('/api/admin/cohorts').then((res) => {
+  // Reusable so the new Cohorts management tab can refresh this (open-cohorts-only)
+  // selector after a create/edit/delete, not just on first mount.
+  const loadCohorts = useCallback(() => {
+    return api.get('/api/admin/cohorts').then((res) => {
       // Selector shows only open cohorts; completed/closed ones (e.g. April) remain as data but off the dropdown.
       const openCohorts: Cohort[] = (res.data.cohorts || []).filter((c: Cohort) => c.status === 'open');
       setCohorts(openCohorts);
-      if (openCohorts.length > 0) {
-        setSelectedCohortId(openCohorts[0].id);
-      }
-    }).catch(() => showToast('Failed to load cohorts', 'error'))
-      .finally(() => setLoading(false));
+      setSelectedCohortId((prev) => (prev && openCohorts.some((c) => c.id === prev)) ? prev : (openCohorts[0]?.id || ''));
+    }).catch(() => showToast('Failed to load cohorts', 'error'));
+  }, [showToast]);
+
+  useEffect(() => {
+    loadCohorts().finally(() => setLoading(false));
+  }, []); // eslint-disable-line
+
+  // Deep-link: /admin/accelerator?tab=cohorts (used by the admin dashboard's
+  // "Manage" link) opens straight to the Cohorts management tab.
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab && (TAB_ORDER as string[]).includes(tab)) {
+      setActiveTab(tab as TabKey);
+    }
   }, []); // eslint-disable-line
 
   const loadDashboard = useCallback(async () => {
@@ -637,7 +657,18 @@ function AdminAcceleratorPage() {
           </select>
         }
       >
-        {dashboard && (
+        {activeTab !== 'cohorts' && (
+          <div className="small text-muted mb-2">
+            <i className="ri-stack-line" aria-hidden="true" />{' '}
+            Course: <strong>{dashboard?.cohort?.program?.name || 'No parent course set'}</strong>
+            {' '}&rsaquo;{' '}
+            Cohort: <strong>{dashboard?.cohort?.name || '—'}</strong>
+            {activeTab === 'sessions' && (
+              <span> — sessions belong to this cohort within its course; attendance is tracked per session.</span>
+            )}
+          </div>
+        )}
+        {dashboard && activeTab !== 'cohorts' && (
           <div className="row g-3">
             <div className="col-6 col-lg-3">
               <StatCard
@@ -681,7 +712,7 @@ function AdminAcceleratorPage() {
 
       {/* Tabs */}
       <ul className="nav nav-tabs mb-4">
-        {(['sessions', 'participants', 'attendance', 'submissions', 'readiness', 'curriculum'] as TabKey[]).map((tab) => (
+        {TAB_ORDER.map((tab) => (
           <li key={tab} className="nav-item">
             <button
               className={`nav-link${activeTab === tab ? ' active' : ''}`}
@@ -694,6 +725,10 @@ function AdminAcceleratorPage() {
       </ul>
 
       {/* Tab Content */}
+      {activeTab === 'cohorts' && (
+        <CohortManagementTab onCohortsChanged={loadCohorts} />
+      )}
+
       {activeTab === 'sessions' && (
         <SectionCard
           title={`Sessions (${sessions.length})`}
