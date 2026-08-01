@@ -96,14 +96,16 @@ async function fetchExactReference(
   }
 }
 
-async function fetchCommentsForItem(projectId: string, recordingId: string): Promise<RawCandidateItem[]> {
+async function fetchCommentsForItem(projectId: string, recordingId: string, parentUrl: string | null): Promise<RawCandidateItem[]> {
   try {
     const comments = await bcGet<BcComment[]>(`/buckets/${projectId}/recordings/${recordingId}/comments.json`);
     return comments.slice(0, MAX_COMMENTS_PER_ITEM).map((c) => ({
       source_type: 'basecamp_comment' as const,
       source_id: String(c.id),
       provider: 'basecamp' as const,
-      source_url: null,
+      // Basecamp has no separate comment permalink in this API response —
+      // point at the parent item's page, which contains the comment.
+      source_url: parentUrl,
       title: `Comment on Basecamp item ${recordingId}`,
       occurred_at: new Date(c.created_at),
       participants: c.creator?.email_address ? [c.creator.email_address] : [],
@@ -161,7 +163,7 @@ export const basecampCaseSource: CaseSourceAdapter = {
       for (const target of commentTargets) {
         const projectId = (target.snapshot as any)?.bucket?.id;
         if (projectId) {
-          items.push(...(await fetchCommentsForItem(String(projectId), target.source_id)));
+          items.push(...(await fetchCommentsForItem(String(projectId), target.source_id, target.source_url)));
         }
       }
 
