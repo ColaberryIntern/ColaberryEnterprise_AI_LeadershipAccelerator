@@ -35,6 +35,10 @@ function matchesWhere(row: any, where: any): boolean {
         if (!(value as any)[Op.in].includes(row[key])) return false;
         continue;
       }
+      if (symbolKeys.includes(Op.ne)) {
+        if (row[key] === (value as any)[Op.ne]) return false;
+        continue;
+      }
       if (symbolKeys.includes(Op.or)) {
         const alt = (value as any)[Op.or];
         if (!alt.some((v: any) => row[key] === v)) return false;

@@ -57,7 +57,9 @@ export async function handleListCases(req: Request, res: Response) {
 
   const { count, rows } = await InboxCase.findAndCountAll({
     where,
-    order: [['opened_at', 'DESC']],
+    // Oldest-opened first by default, per Ali's request — the reverse of a
+    // normal email inbox's newest-on-top convention.
+    order: [['opened_at', 'ASC']],
     limit,
     offset: (page - 1) * limit,
   });

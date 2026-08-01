@@ -3,6 +3,7 @@ import { Op } from 'sequelize';
 import SystemSetting from '../../models/SystemSetting';
 import InboxEmail from '../../models/InboxEmail';
 import InboxClassification from '../../models/InboxClassification';
+import InboxDeletedEmail from '../../models/InboxDeletedEmail';
 import InboxCaseItem from '../../models/InboxCaseItem';
 import OpsBcTodo from '../../models/OpsBcTodo';
 import { getColaberryGmailClient, getPersonalGmailClient } from '../inbox/inboxSyncService';
@@ -14,6 +15,8 @@ import { RawCandidateItem } from './sources/caseSourceAdapter';
 import { ScoredCandidate, groupCandidates } from './caseGroupingService';
 import { computeSourceHash } from './textNormalization';
 import { persistClusterAsCase, DiscoveredCaseSummary } from './caseDiscoveryService';
+import { logCaseEvent } from './caseEventLog';
+import { evaluateClosureGuard, closeCase } from './caseClosureService';
 
 // Hourly + manual "Sync Now" ingestion of Ali's real inbox into Cases,
 // per his explicit request: "I would like the Cases to be in sync with my
@@ -155,6 +158,78 @@ async function dropAlreadyLinkedGlobally(items: RawCandidateItem[]): Promise<Raw
   return hashByItem.filter((h) => !existingHashes.has(h.hash)).map((h) => h.item);
 }
 
+// Reads InboxDeletedEmail (already kept current by the already-scheduled,
+// unrelated syncDeletedAndSpam() cron — never written to here) and, for any
+// still-open email/sent_email item whose source message now shows up
+// there, dispositions it NO_ACTION with a clear reason. If that was the
+// last thing blocking a case, the case closes opportunistically through
+// the real evaluateClosureGuard()/closeCase() gate — never forced. Per
+// Ali's request: "When something is deleted from regular inbox and the
+// system is sync'd then it should remove from the list."
+async function disposeItemsDeletedAtSource(correlationId: string): Promise<number> {
+  const openItems = await InboxCaseItem.findAll({
+    where: {
+      disposition: null,
+      inclusion_status: { [Op.ne]: 'EXCLUDED' },
+      source_type: { [Op.in]: ['email', 'sent_email'] },
+    },
+  });
+  if (openItems.length === 0) return 0;
+
+  let disposed = 0;
+  const affectedCaseIds = new Set<string>();
+
+  for (const item of openItems) {
+    const deletedMatch = await InboxDeletedEmail.findOne({ where: { provider: item.provider, provider_message_id: item.source_id } });
+    if (!deletedMatch) continue;
+
+    await item.update({
+      disposition: 'NO_ACTION',
+      disposition_reason: 'Source message was deleted or moved to trash/spam in your inbox (detected automatically)',
+      updated_at: new Date(),
+    });
+    await logCaseEvent({
+      case_id: item.case_id,
+      item_id: item.id,
+      event_type: 'item_removed_at_source',
+      actor_type: 'system',
+      actor_id: 'case_auto_sync_service',
+      details: { provider: item.provider, source_id: item.source_id },
+      correlation_id: correlationId,
+    });
+    disposed++;
+    affectedCaseIds.add(item.case_id);
+  }
+
+  for (const caseId of affectedCaseIds) {
+    const guard = await evaluateClosureGuard(caseId);
+    if (guard.canClose) await closeCase(caseId, 'system');
+  }
+
+  return disposed;
+}
+
+export type SyncStage = 'fetching_email' | 'fetching_basecamp' | 'classifying' | 'clustering_and_removing_stale' | null;
+
+export interface SyncStatus {
+  inProgress: boolean;
+  stage: SyncStage;
+  startedAt: string | null;
+  lastCompletedAt: string | null;
+  lastResult: AutoSyncResult | null;
+}
+
+// Single-instance in-memory tracker (this backend runs as one container per
+// the documented deploy model — no replicas — so this is safe and needs no
+// shared-state infra). Doubles as a concurrency guard: a call arriving
+// while a run is already in progress returns immediately without starting
+// a second overlapping run, per Idempotency & Replayability.
+let syncStatus: SyncStatus = { inProgress: false, stage: null, startedAt: null, lastCompletedAt: null, lastResult: null };
+
+export function getSyncStatus(): SyncStatus {
+  return { ...syncStatus };
+}
+
 function toScoredCandidate(item: RawCandidateItem): ScoredCandidate {
   return {
     ...item,
@@ -166,38 +241,63 @@ function toScoredCandidate(item: RawCandidateItem): ScoredCandidate {
 }
 
 export async function runAutoSync(triggeredBy: 'cron' | 'admin', requestedBy: string): Promise<AutoSyncResult> {
-  const cursor = await readCursor();
-  const runStartedAt = new Date();
-  const correlationId = randomUUID();
-
-  const [emailCandidatesRaw, basecampCandidates] = await Promise.all([
-    fetchRecentEmailCandidates(cursor),
-    fetchRecentBasecampCandidates(cursor),
-  ]);
-
-  const { kept: emailCandidates, skippedUnclassified } = await filterToInScopeEmails(emailCandidatesRaw);
-  const surviving = await dropAlreadyLinkedGlobally([...emailCandidates, ...basecampCandidates]);
-
-  const scored = surviving.map(toScoredCandidate);
-  const clusters = groupCandidates(scored);
-
-  let newCasesCreated = 0;
-  let itemsAdded = 0;
-
-  for (const cluster of clusters) {
-    const summary: DiscoveredCaseSummary = await persistClusterAsCase(
-      cluster,
-      'TOPIC',
-      cluster[0]?.title || 'Auto-synced from inbox',
-      requestedBy,
-      { auto_synced: true, triggered_by: triggeredBy },
-      correlationId
-    );
-    newCasesCreated++;
-    itemsAdded += summary.itemCount;
+  if (syncStatus.inProgress) {
+    // Concurrency guard: never run two syncs at once (the cron firing while
+    // a manual sync is still in flight, or two admins loading the page at
+    // the same moment). The caller's own toast/result is a minor UX
+    // trade-off in this rare case — the frontend's progress bar polls
+    // getSyncStatus() separately for the real, in-flight picture.
+    return { newCasesCreated: 0, itemsAdded: 0, emailsSkippedUnclassified: 0 };
   }
 
-  await writeCursor(runStartedAt);
+  syncStatus = { inProgress: true, stage: 'fetching_email', startedAt: new Date().toISOString(), lastCompletedAt: syncStatus.lastCompletedAt, lastResult: syncStatus.lastResult };
 
-  return { newCasesCreated, itemsAdded, emailsSkippedUnclassified: skippedUnclassified };
+  try {
+    const cursor = await readCursor();
+    const runStartedAt = new Date();
+    const correlationId = randomUUID();
+
+    syncStatus = { ...syncStatus, stage: 'fetching_email' };
+    const emailCandidatesRaw = await fetchRecentEmailCandidates(cursor);
+
+    syncStatus = { ...syncStatus, stage: 'fetching_basecamp' };
+    const basecampCandidates = await fetchRecentBasecampCandidates(cursor);
+
+    syncStatus = { ...syncStatus, stage: 'classifying' };
+    const { kept: emailCandidates, skippedUnclassified } = await filterToInScopeEmails(emailCandidatesRaw);
+    const surviving = await dropAlreadyLinkedGlobally([...emailCandidates, ...basecampCandidates]);
+
+    syncStatus = { ...syncStatus, stage: 'clustering_and_removing_stale' };
+    const scored = surviving.map(toScoredCandidate);
+    const clusters = groupCandidates(scored);
+
+    let newCasesCreated = 0;
+    let itemsAdded = 0;
+
+    for (const cluster of clusters) {
+      const summary: DiscoveredCaseSummary = await persistClusterAsCase(
+        cluster,
+        'TOPIC',
+        cluster[0]?.title || 'Auto-synced from inbox',
+        requestedBy,
+        { auto_synced: true, triggered_by: triggeredBy },
+        correlationId
+      );
+      newCasesCreated++;
+      itemsAdded += summary.itemCount;
+    }
+
+    await disposeItemsDeletedAtSource(correlationId);
+    await writeCursor(runStartedAt);
+
+    const result: AutoSyncResult = { newCasesCreated, itemsAdded, emailsSkippedUnclassified: skippedUnclassified };
+    syncStatus = { inProgress: false, stage: null, startedAt: syncStatus.startedAt, lastCompletedAt: new Date().toISOString(), lastResult: result };
+    return result;
+  } finally {
+    // Always clear inProgress even on an unexpected throw — a stuck tracker
+    // would permanently block every future sync (cron and manual alike).
+    if (syncStatus.inProgress) {
+      syncStatus = { ...syncStatus, inProgress: false, stage: null };
+    }
+  }
 }
