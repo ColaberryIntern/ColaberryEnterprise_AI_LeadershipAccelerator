@@ -33,6 +33,10 @@ export const caseItemParamSchema = z.object({ caseId: z.string().uuid(), itemId:
 export const caseQuestionParamSchema = z.object({ caseId: z.string().uuid(), questionId: z.string().uuid() });
 export const caseActionParamSchema = z.object({ caseId: z.string().uuid(), actionId: z.string().uuid() });
 
+export const quickResolveItemSchema = z.object({ resolution: z.enum(['HANDLED', 'IGNORE']) });
+
+export const overrideActionsSchema = z.object({ instruction: z.string().min(1).max(500) });
+
 export const updateCaseItemSchema = z
   .object({
     inclusion_status: z.enum(ITEM_INCLUSION_STATUSES).optional(),
@@ -77,6 +81,27 @@ export const reopenCaseSchema = z.object({
 });
 
 export const actionTypeEnum = z.enum(ACTION_TYPES);
+
+// AI free-text plan override (root directive extension, this session).
+// The model supplies ONLY these 4 fields for new_action — target_source,
+// target_id, risk_level, and idempotencyParts are always derived by code
+// in caseActionOverrideService.ts, never by the model. risk_level in
+// particular is hardcoded HIGH there regardless of what this schema would
+// otherwise allow, so an override-created action can never be swept into
+// bulk low-risk approval — see that file for the full reasoning.
+export const actionOverrideOutputSchema = z.object({
+  actions_to_reject: z.array(z.string()).default([]),
+  new_action: z
+    .object({
+      item_id: z.string(),
+      action_type: actionTypeEnum,
+      preview: z.string().min(1),
+      payload: z.record(z.string(), z.unknown()).default({}),
+    })
+    .nullable()
+    .default(null),
+});
+export type ActionOverrideOutput = z.infer<typeof actionOverrideOutputSchema>;
 
 // ---- AI assessment structured output (Phase 3: Assess/Teach/Ask) ----
 // Validates the model's JSON response before it is trusted for anything.

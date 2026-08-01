@@ -5,6 +5,7 @@ import {
   handleListCases,
   handleGetCase,
   handleUpdateCaseItem,
+  handleQuickResolveItem,
   handleAssessCase,
   handleGetCaseAudit,
   handleCaseStats,
@@ -15,6 +16,7 @@ import {
   handleApproveAction,
   handleRejectAction,
   handleApproveLowRiskActions,
+  handleOverrideActions,
   handleExecuteCase,
   handleVerifyCase,
   handleCloseCase,
@@ -34,6 +36,7 @@ router.get('/api/admin/inbox/case-stats', requireAdmin, handleCaseStats);
 router.get('/api/admin/inbox/cases/:caseId', requireAdmin, handleGetCase);
 router.post('/api/admin/inbox/cases/:caseId/assess', requireAdmin, handleAssessCase);
 router.patch('/api/admin/inbox/cases/:caseId/items/:itemId', requireAdmin, handleUpdateCaseItem);
+router.post('/api/admin/inbox/cases/:caseId/items/:itemId/quick-resolve', requireAdmin, handleQuickResolveItem);
 router.get('/api/admin/inbox/cases/:caseId/audit', requireAdmin, handleGetCaseAudit);
 
 router.post('/api/admin/inbox/cases/:caseId/questions/:questionId/answer', requireAdmin, handleAnswerQuestion);
@@ -41,6 +44,7 @@ router.post('/api/admin/inbox/cases/:caseId/plan', requireAdmin, handleGenerateP
 router.post('/api/admin/inbox/cases/:caseId/actions/:actionId/approve', requireAdmin, handleApproveAction);
 router.post('/api/admin/inbox/cases/:caseId/actions/:actionId/reject', requireAdmin, handleRejectAction);
 router.post('/api/admin/inbox/cases/:caseId/actions/approve-low-risk', requireAdmin, handleApproveLowRiskActions);
+router.post('/api/admin/inbox/cases/:caseId/actions/override', requireAdmin, handleOverrideActions);
 router.post('/api/admin/inbox/cases/:caseId/execute', requireAdmin, handleExecuteCase);
 router.post('/api/admin/inbox/cases/:caseId/verify', requireAdmin, handleVerifyCase);
 router.post('/api/admin/inbox/cases/:caseId/close', requireAdmin, handleCloseCase);

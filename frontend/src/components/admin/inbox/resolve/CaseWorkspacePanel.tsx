@@ -7,7 +7,11 @@ import {
   InboxCaseItemRecord,
   InboxCaseQuestionRecord,
   InboxCaseActionRecord,
+  InboxCaseEventRecord,
   ItemDisposition,
+  describeCaseEvent,
+  lastRunInfo,
+  LastRunInfo,
 } from '../../../../services/inboxCaseApi';
 
 interface Props {
@@ -53,6 +57,25 @@ function ActionStatusBadge({ status }: { status: string }) {
   return <span className={`badge bg-${tone[status] || 'secondary'}`}>{status}</span>;
 }
 
+// There is no scheduled job for Assess/Plan/Execute — every step is a manual
+// button click (confirmed: no cron references this system anywhere in
+// schedulerService.ts) — so this is the ONLY visible record of "when did
+// this actually last run," derived from the case's own event history rather
+// than a decorative always-on dot.
+const LIGHT_COLOR: Record<LastRunInfo['status'], string> = { never: '#adb5bd', success: '#28a745', failed: '#dc3545' };
+function LastRunLight({ info, label }: { info: LastRunInfo; label: string }) {
+  const text = info.status === 'never' ? 'Never run' : `${info.status === 'failed' ? 'Last attempt failed' : 'Last ran'} ${formatRelativeTime(info.at as string)}`;
+  return (
+    <span
+      className="d-inline-flex align-items-center gap-1 small text-muted"
+      title={info.at ? `${label}: ${new Date(info.at).toLocaleString()}` : `${label}: never run`}
+    >
+      <span style={{ width: 8, height: 8, borderRadius: '50%', background: LIGHT_COLOR[info.status], display: 'inline-block', flexShrink: 0 }} aria-hidden="true" />
+      {text}
+    </span>
+  );
+}
+
 export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
   const { showToast } = useToast();
   const [detail, setDetail] = useState<CaseDetail | null>(null);
@@ -61,6 +84,8 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
   const [closureBlockers, setClosureBlockers] = useState<Array<{ condition: string; detail: string }> | null>(null);
   const [writeInAnswers, setWriteInAnswers] = useState<Record<string, string>>({});
   const [rejectReasons, setRejectReasons] = useState<Record<string, string>>({});
+  const [events, setEvents] = useState<InboxCaseEventRecord[]>([]);
+  const [overrideInstruction, setOverrideInstruction] = useState('');
   const headingRef = useRef<HTMLHeadingElement>(null);
 
   // Moves keyboard/screen-reader focus to the case title when this panel
@@ -73,8 +98,9 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
 
   const load = useCallback(async () => {
     try {
-      const result = await inboxCaseApi.get(caseId);
+      const [result, auditResult] = await Promise.all([inboxCaseApi.get(caseId), inboxCaseApi.audit(caseId)]);
       setDetail(result);
+      setEvents(auditResult.events);
       setClosureBlockers(null);
     } catch (err: any) {
       showToast(err.response?.data?.message || 'Failed to load case', 'error');
@@ -127,9 +153,21 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
   const openQuestions = questions.filter((q) => q.status === 'OPEN');
   const visibleItems = items.filter((i) => i.inclusion_status !== 'EXCLUDED');
   const excludedItems = items.filter((i) => i.inclusion_status === 'EXCLUDED');
+  // Matches caseClosureService.ts's `undispositioned` filter exactly —
+  // this count can never disagree with what actually blocks Close Case.
+  const openItems = visibleItems.filter((i) => !i.disposition);
+  const closedItemsCount = visibleItems.length - openItems.length;
   const emailsLeavingInbox = items.filter(
     (i) => (i.source_type === 'email') && actions.some((a) => a.item_id === i.id && ['EMAIL_ARCHIVE', 'EMAIL_LABEL'].includes(a.action_type))
   ).length;
+
+  const assessmentLastRun = lastRunInfo(events, ['assessment_completed'], ['assessment_failed']);
+  const planLastRun = lastRunInfo(events, ['plan_generated']);
+  const executionLastRun = lastRunInfo(
+    events,
+    ['action_execution_succeeded', 'action_execution_reconciled_as_succeeded'],
+    ['action_execution_failed', 'case_execution_failed']
+  );
 
   return (
     <div>
@@ -150,7 +188,11 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
       <div className="row g-3">
         {/* Left: evidence / items */}
         <div className="col-lg-4">
-          <SectionCard title="Evidence" subtitle={`${visibleItems.length} item(s) · ${excludedItems.length} excluded`} icon="file-list-3-line">
+          <SectionCard
+            title="Evidence"
+            subtitle={`${closedItemsCount} of ${visibleItems.length} closed · ${excludedItems.length} excluded`}
+            icon="file-list-3-line"
+          >
             <p className="small text-muted mb-2">
               Included items are already part of this case — nothing to do there. Candidates are the AI's best
               guesses and need your Include or Exclude call below.
@@ -234,6 +276,38 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                       ))}
                     </select>
                   </div>
+                  {item.inclusion_status !== 'EXCLUDED' && (
+                    <div className="d-flex flex-wrap gap-1 mt-2">
+                      <button
+                        type="button"
+                        className="btn btn-outline-primary btn-sm"
+                        disabled={busy === `quick-resolve-${item.id}`}
+                        onClick={() =>
+                          withBusy(`quick-resolve-${item.id}`, () => inboxCaseApi.quickResolve(c.id, item.id, 'HANDLED'), (result) => ({
+                            message: result.actionProposed
+                              ? `Marked Handled — a ${result.actionProposed} is now proposed for your approval`
+                              : 'Marked Handled — no external action needed for this item',
+                          }))
+                        }
+                      >
+                        Handled
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline-secondary btn-sm"
+                        disabled={busy === `quick-resolve-${item.id}`}
+                        onClick={() =>
+                          withBusy(`quick-resolve-${item.id}`, () => inboxCaseApi.quickResolve(c.id, item.id, 'IGNORE'), (result) => ({
+                            message: result.actionProposed
+                              ? `Marked Ignore — a ${result.actionProposed} is now proposed for your approval`
+                              : 'Marked Ignore — no external action needed for this item',
+                          }))
+                        }
+                      >
+                        Ignore
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -252,17 +326,17 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
           {c.teaching_brief && (
             <SectionCard title="Teach Me" icon="lightbulb-line" className="mb-3">
               <dl className="small mb-0">
-                <dt>What's happening</dt>
+                <dt>🧭 What's happening</dt>
                 <dd>{c.teaching_brief.what_is_happening}</dd>
-                <dt>Why it matters</dt>
+                <dt>⚠️ Why it matters</dt>
                 <dd>{c.teaching_brief.why_it_matters}</dd>
-                <dt>What you're deciding</dt>
+                <dt>🤔 What you're deciding</dt>
                 <dd>{c.teaching_brief.what_ali_is_deciding}</dd>
-                <dt>Confirmed vs. inferred</dt>
+                <dt>🔎 Confirmed vs. inferred</dt>
                 <dd>{c.teaching_brief.confirmed_vs_inferred}</dd>
-                <dt>Risk of acting / delaying</dt>
+                <dt>⚖️ Risk of acting / delaying</dt>
                 <dd>{c.teaching_brief.risk_of_acting} — {c.teaching_brief.risk_of_delaying}</dd>
-                <dt>Recommended decision</dt>
+                <dt>✅ Recommended decision</dt>
                 <dd className="fw-semibold">{c.teaching_brief.recommended_decision}</dd>
                 <dd className="text-muted">{c.teaching_brief.rationale}</dd>
               </dl>
@@ -272,19 +346,26 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
           {!c.assessment && c.state === 'ASSESSING' && (
             <SectionCard title="Assessment" icon="brain-line">
               <p className="small text-muted">No assessment yet.</p>
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                disabled={busy === 'assess'}
-                onClick={() => withBusy('assess', () => inboxCaseApi.assess(c.id), 'Assessment generated')}
-              >
-                {busy === 'assess' ? 'Assessing…' : 'Run Assessment'}
-              </button>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={busy === 'assess'}
+                  onClick={() => withBusy('assess', () => inboxCaseApi.assess(c.id), 'Assessment generated')}
+                >
+                  {busy === 'assess' ? 'Assessing…' : 'Run Assessment'}
+                </button>
+                <LastRunLight info={assessmentLastRun} label="Assessment" />
+              </div>
             </SectionCard>
           )}
 
           {c.assessment && (
-            <SectionCard title="Facts, Assumptions & Contradictions" icon="scales-3-line">
+            <SectionCard
+              title="Facts, Assumptions & Contradictions"
+              icon="scales-3-line"
+              actions={<LastRunLight info={assessmentLastRun} label="Assessment" />}
+            >
               <div className="small mb-2">
                 <strong>Confirmed facts</strong>
                 <ul className="mb-2">{c.assessment.confirmed_facts.map((f, i) => <li key={i}>{f.statement}</li>)}</ul>
@@ -323,19 +404,28 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
           {c.state === 'READY_TO_PLAN' && (
             <SectionCard title="Plan" icon="road-map-line" className="mb-3">
               <p className="small text-muted">No actions proposed yet.</p>
-              <button
-                type="button"
-                className="btn btn-sm btn-primary"
-                disabled={busy === 'plan'}
-                onClick={() => withBusy('plan', () => inboxCaseApi.generatePlan(c.id), 'Action plan generated')}
-              >
-                {busy === 'plan' ? 'Planning…' : 'Generate Action Plan'}
-              </button>
+              <div className="d-flex align-items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  className="btn btn-sm btn-primary"
+                  disabled={busy === 'plan'}
+                  onClick={() => withBusy('plan', () => inboxCaseApi.generatePlan(c.id), 'Action plan generated')}
+                >
+                  {busy === 'plan' ? 'Planning…' : 'Generate Action Plan'}
+                </button>
+                <LastRunLight info={planLastRun} label="Plan" />
+              </div>
             </SectionCard>
           )}
 
           {actions.length > 0 && (
-            <SectionCard title="Proposed Actions" subtitle={`${emailsLeavingInbox} email(s) will leave the inbox`} icon="flashlight-line" className="mb-3">
+            <SectionCard
+              title="Proposed Actions"
+              subtitle={`${emailsLeavingInbox} email(s) will leave the inbox`}
+              icon="flashlight-line"
+              className="mb-3"
+              actions={<LastRunLight info={planLastRun} label="Plan" />}
+            >
               <p className="small text-muted mb-2">
                 Actions marked "Needs your approval" must be approved one at a time for safety. Everything else can
                 be approved together with "Approve all low-risk" below.
@@ -419,10 +509,69 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                   </button>
                 )}
               </div>
+              {executionLastRun.status !== 'never' && (
+                <div className="mt-2">
+                  <LastRunLight info={executionLastRun} label="Execution" />
+                </div>
+              )}
+              {actions.some((a) => a.status === 'PROPOSED') && (
+                <div className="mt-3 pt-3 border-top">
+                  <label htmlFor="override-instruction" className="form-label small fw-semibold mb-1">
+                    Not quite right? Tell it what to do instead
+                  </label>
+                  <p className="small text-muted mb-2">
+                    Your instruction replaces the proposed actions above — you can use this or the buttons above,
+                    not both. Whatever it proposes still needs your individual approval.
+                  </p>
+                  <textarea
+                    id="override-instruction"
+                    className="form-control form-control-sm mb-2"
+                    rows={2}
+                    placeholder={'e.g. "Just update the bc ticket, don\'t send an email reply"'}
+                    value={overrideInstruction}
+                    onChange={(e) => setOverrideInstruction(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-primary"
+                    disabled={busy === 'override' || !overrideInstruction.trim()}
+                    onClick={() =>
+                      withBusy(
+                        'override',
+                        () => inboxCaseApi.overrideActions(c.id, overrideInstruction.trim()),
+                        (result) => {
+                          // A schema/AI-call failure is NOT the same thing as "the AI
+                          // correctly found nothing to change" — check this FIRST, or a
+                          // real failure (confirmed live in production) silently reads as
+                          // a false "no new action was needed" success.
+                          if (result.failed) {
+                            return { message: `Instruction could not be applied — ${result.failureReason || 'the AI response was invalid'}. Nothing changed; try rephrasing.`, tone: 'warning' };
+                          }
+                          setOverrideInstruction('');
+                          const parts = [
+                            result.rejected.length > 0 ? `${result.rejected.length} action(s) replaced` : null,
+                            result.proposed ? 'a new action is now proposed for your approval' : 'no new action was needed',
+                          ].filter(Boolean);
+                          return { message: parts.join(', ') || 'Instruction applied' };
+                        }
+                      )
+                    }
+                  >
+                    {busy === 'override' ? 'Applying…' : 'Apply Instruction'}
+                  </button>
+                </div>
+              )}
             </SectionCard>
           )}
 
           <SectionCard title="Closure" icon="checkbox-circle-line">
+            {!c.closed_at && (
+              <p className="small text-muted mb-2">
+                {openItems.length === 0
+                  ? `All ${visibleItems.length} evidence item(s) have a disposition — nothing is blocking closure on that front.`
+                  : `${openItems.length} of ${visibleItems.length} evidence item(s) still need a disposition before this case can close.`}
+              </p>
+            )}
             {c.closed_at ? (
               <div className="text-success small"><i className="ri-check-line" aria-hidden="true" /> Closed {new Date(c.closed_at).toLocaleString()}</div>
             ) : (
@@ -469,6 +618,25 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
               >
                 Reopen
               </button>
+            )}
+          </SectionCard>
+        </div>
+      </div>
+
+      <div className="row g-3 mt-1">
+        <div className="col-12">
+          <SectionCard title="Activity" subtitle={`${events.length} event(s)`} icon="history-line">
+            {events.length === 0 ? (
+              <p className="small text-muted mb-0">No activity recorded yet.</p>
+            ) : (
+              <ul className="list-unstyled small mb-0" style={{ maxHeight: 240, overflowY: 'auto' }}>
+                {[...events].reverse().map((e) => (
+                  <li key={e.id} className="d-flex justify-content-between gap-2 border-bottom py-1">
+                    <span>{describeCaseEvent(e, items, actions)}</span>
+                    <span className="text-muted text-nowrap">{formatRelativeTime(e.created_at)}</span>
+                  </li>
+                ))}
+              </ul>
             )}
           </SectionCard>
         </div>

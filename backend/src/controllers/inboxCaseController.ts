@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
 import InboxCase from '../models/InboxCase';
 import InboxCaseEvent from '../models/InboxCaseEvent';
-import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema } from '../schemas/inboxCaseSchema';
+import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema, quickResolveItemSchema } from '../schemas/inboxCaseSchema';
 import { discoverCases } from '../services/inboxCase/caseDiscoveryService';
 import { getCaseWithChildren } from '../services/inboxCase/caseRepository';
 import { getCaseTicketId } from '../services/inboxCase/caseTicketService';
 import { runAssessment } from '../services/inboxCase/caseAssessmentService';
+import { quickResolveItem } from '../services/inboxCase/caseQuickResolveService';
 import InboxCaseItem from '../models/InboxCaseItem';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
 import { randomUUID } from 'crypto';
@@ -102,6 +103,27 @@ export async function handleUpdateCaseItem(req: Request, res: Response) {
   });
 
   res.json({ item: item.toJSON() });
+}
+
+export async function handleQuickResolveItem(req: Request, res: Response) {
+  const paramsParsed = caseItemParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) return res.status(400).json({ error: 'ValidationError', details: paramsParsed.error.issues });
+  const bodyParsed = quickResolveItemSchema.safeParse(req.body);
+  if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
+
+  try {
+    const result = await quickResolveItem(
+      paramsParsed.data.caseId,
+      paramsParsed.data.itemId,
+      bodyParsed.data.resolution,
+      (req as any).admin?.email || 'admin'
+    );
+    res.json(result);
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    console.error('[InboxCase] QuickResolveItem error:', err?.message);
+    res.status(500).json({ error: 'QuickResolveFailedError', message: err?.message });
+  }
 }
 
 export async function handleAssessCase(req: Request, res: Response) {
