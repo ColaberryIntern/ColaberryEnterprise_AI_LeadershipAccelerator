@@ -108,22 +108,54 @@ function buildWaitingActions(caseRow: InboxCase, assessment: CaseAssessment): Pr
   return actions;
 }
 
-function buildBasecampCommentActions(caseRow: InboxCase, assessment: PlannerAssessment, basecampItems: InboxCaseItem[]): ProposedAction[] {
+interface BasecampCommentPair {
+  comment: ProposedAction;
+  item: InboxCaseItem;
+}
+
+// Returns the comment proposal PAIRED with its source item (not just the
+// flat proposal) so generatePlan() can check item.basecamp_close_recommended
+// afterward and, if true, propose a linked BASECAMP_COMPLETE_TODO action
+// depending on the comment — the checkbox this run adds on the frontend
+// binds to exactly that pairing.
+function buildBasecampCommentActions(caseRow: InboxCase, assessment: PlannerAssessment, basecampItems: InboxCaseItem[]): BasecampCommentPair[] {
   if (!assessment.recommended_next_actions?.length) return [];
   const decision = assessment.teaching_brief_recommended_decision || assessment.recommended_next_actions[0];
 
   return basecampItems
     .filter((item) => item.disposition === null && item.inclusion_status !== 'EXCLUDED')
     .map((item) => ({
-      action_type: 'BASECAMP_COMMENT' as ActionType,
-      item_id: item.id,
-      target_source: 'basecamp',
-      target_id: item.source_id,
-      preview: `Comment on Basecamp item "${item.title}": ${decision}`,
-      payload: { project_id: (item.snapshot as any)?.project_id ?? null, comment: decision },
-      risk_level: 'MEDIUM' as ActionRiskLevel,
-      idempotencyParts: [caseRow.id, 'BASECAMP_COMMENT', item.id],
+      item,
+      comment: {
+        action_type: 'BASECAMP_COMMENT' as ActionType,
+        item_id: item.id,
+        target_source: 'basecamp',
+        target_id: item.source_id,
+        preview: `Comment on Basecamp item "${item.title}": ${decision}`,
+        payload: { project_id: (item.snapshot as any)?.project_id ?? null, comment: decision },
+        risk_level: 'MEDIUM' as ActionRiskLevel,
+        idempotencyParts: [caseRow.id, 'BASECAMP_COMMENT', item.id],
+      },
     }));
+}
+
+// The linked "also close this" action a Basecamp comment can carry, per
+// item.basecamp_close_recommended (set by caseAssessmentService.ts's
+// "deeper look", advisory only). risk_level/requires_individual_approval
+// are computed the normal way — no special-casing — because
+// BASECAMP_COMPLETE_TODO is already in ALWAYS_INDIVIDUAL_APPROVAL, so this
+// can never be bulk-approved regardless.
+function buildLinkedCloseAction(caseRow: InboxCase, item: InboxCaseItem): ProposedAction {
+  return {
+    action_type: 'BASECAMP_COMPLETE_TODO',
+    item_id: item.id,
+    target_source: 'basecamp',
+    target_id: item.source_id,
+    preview: `Close Basecamp item "${item.title}" after the comment above`,
+    payload: { project_id: (item.snapshot as any)?.project_id ?? null },
+    risk_level: 'LOW',
+    idempotencyParts: [caseRow.id, 'BASECAMP_COMPLETE_TODO', item.id],
+  };
 }
 
 function buildArchiveActions(caseRow: InboxCase, emailItems: InboxCaseItem[]): ProposedAction[] {
@@ -191,8 +223,8 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
   const nonArchiveProposals: ProposedAction[] = [
     ...(replyAction ? [replyAction] : []),
     ...buildWaitingActions(caseRow, flatAssessment),
-    ...buildBasecampCommentActions(caseRow, flatAssessment, basecampItems),
   ];
+  const basecampCommentPairs = buildBasecampCommentActions(caseRow, flatAssessment, basecampItems);
 
   const correlationId = randomUUID();
   const createdIds: string[] = [];
@@ -201,6 +233,28 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
     const idempotency_key = computeIdempotencyKey(proposal.idempotencyParts);
     const created = await createActionIfNew(caseRow, correlationId, requestedBy, proposal, idempotency_key, []);
     if (created) createdIds.push(created);
+  }
+
+  // Basecamp comment + optional linked "also close this" action: create the
+  // comment first, then — only when the assessment's "deeper look"
+  // recommended closing this item — propose a BASECAMP_COMPLETE_TODO that
+  // depends on the comment's real id (new this run, or already-existing
+  // from a prior plan run on a re-plan), so it can never execute before or
+  // instead of the comment.
+  for (const { comment, item } of basecampCommentPairs) {
+    const commentIdempotencyKey = computeIdempotencyKey(comment.idempotencyParts);
+    const createdCommentId = await createActionIfNew(caseRow, correlationId, requestedBy, comment, commentIdempotencyKey, []);
+    if (createdCommentId) createdIds.push(createdCommentId);
+
+    if (item.basecamp_close_recommended === true) {
+      const commentActionId = createdCommentId || (await InboxCaseAction.findOne({ where: { idempotency_key: commentIdempotencyKey } }))?.id;
+      if (commentActionId) {
+        const closeProposal = buildLinkedCloseAction(caseRow, item);
+        const closeIdempotencyKey = computeIdempotencyKey(closeProposal.idempotencyParts);
+        const createdCloseId = await createActionIfNew(caseRow, correlationId, requestedBy, closeProposal, closeIdempotencyKey, [commentActionId]);
+        if (createdCloseId) createdIds.push(createdCloseId);
+      }
+    }
   }
 
   // Archive actions depend on every non-archive action proposed in THIS

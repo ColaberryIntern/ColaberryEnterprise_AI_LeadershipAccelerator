@@ -21,6 +21,7 @@ import {
   handleVerifyCase,
   handleCloseCase,
   handleReopenCase,
+  handleSyncNow,
 } from '../../controllers/inboxCaseActionController';
 
 // Mounted under the SAME /api/admin/inbox prefix as the existing Inbox COS
@@ -31,6 +32,7 @@ import {
 const router = Router();
 
 router.post('/api/admin/inbox/cases/discover', requireAdmin, handleDiscoverCase);
+router.post('/api/admin/inbox/cases/sync-now', requireAdmin, handleSyncNow);
 router.get('/api/admin/inbox/cases', requireAdmin, handleListCases);
 router.get('/api/admin/inbox/case-stats', requireAdmin, handleCaseStats);
 router.get('/api/admin/inbox/cases/:caseId', requireAdmin, handleGetCase);

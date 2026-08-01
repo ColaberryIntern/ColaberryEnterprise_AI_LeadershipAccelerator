@@ -431,17 +431,42 @@ export default function CaseWorkspacePanel({ caseId, onBack }: Props) {
                 be approved together with "Approve all low-risk" below.
               </p>
               <div className="d-flex flex-column gap-2 mb-2" style={{ maxHeight: 320, overflowY: 'auto' }}>
-                {actions.map((a) => (
-                  <ActionCard
-                    key={a.id}
-                    action={a}
-                    busy={busy === `action-${a.id}`}
-                    reason={rejectReasons[a.id] || ''}
-                    onReasonChange={(v) => setRejectReasons((prev) => ({ ...prev, [a.id]: v }))}
-                    onApprove={() => withBusy(`action-${a.id}`, () => inboxCaseApi.approveAction(c.id, a.id), 'Approved')}
-                    onReject={() => withBusy(`action-${a.id}`, () => inboxCaseApi.rejectAction(c.id, a.id, rejectReasons[a.id] || 'Not needed'), 'Rejected')}
-                  />
-                ))}
+                {actions
+                  // A BASECAMP_COMPLETE_TODO that depends on a BASECAMP_COMMENT
+                  // in this same list is rendered as that comment's "also
+                  // close this" checkbox instead of a second full card.
+                  .filter(
+                    (a) =>
+                      !(
+                        a.action_type === 'BASECAMP_COMPLETE_TODO' &&
+                        actions.some((other) => other.action_type === 'BASECAMP_COMMENT' && a.depends_on_action_ids.includes(other.id))
+                      )
+                  )
+                  .map((a) => {
+                    const linkedClose =
+                      a.action_type === 'BASECAMP_COMMENT'
+                        ? actions.find((other) => other.action_type === 'BASECAMP_COMPLETE_TODO' && other.depends_on_action_ids.includes(a.id)) || null
+                        : null;
+                    return (
+                      <ActionCard
+                        key={a.id}
+                        action={a}
+                        busy={busy === `action-${a.id}`}
+                        reason={rejectReasons[a.id] || ''}
+                        onReasonChange={(v) => setRejectReasons((prev) => ({ ...prev, [a.id]: v }))}
+                        onApprove={() => withBusy(`action-${a.id}`, () => inboxCaseApi.approveAction(c.id, a.id), 'Approved')}
+                        onReject={() => withBusy(`action-${a.id}`, () => inboxCaseApi.rejectAction(c.id, a.id, rejectReasons[a.id] || 'Not needed'), 'Rejected')}
+                        linkedClose={linkedClose}
+                        linkedCloseBusy={linkedClose ? busy === `action-${linkedClose.id}` : false}
+                        onApproveLinkedClose={linkedClose ? () => withBusy(`action-${linkedClose.id}`, () => inboxCaseApi.approveAction(c.id, linkedClose.id), 'Close approved') : undefined}
+                        onRejectLinkedClose={
+                          linkedClose
+                            ? () => withBusy(`action-${linkedClose.id}`, () => inboxCaseApi.rejectAction(c.id, linkedClose.id, 'Unchecked — comment only'), 'Will not close the item')
+                            : undefined
+                        }
+                      />
+                    );
+                  })}
               </div>
               <div className="d-flex flex-wrap gap-2">
                 {actions.some((a) => a.status === 'PROPOSED' && !a.requires_individual_approval && a.risk_level === 'LOW') && (
@@ -697,6 +722,7 @@ function QuestionCard({
 
 function ActionCard({
   action, busy, reason, onReasonChange, onApprove, onReject,
+  linkedClose, linkedCloseBusy, onApproveLinkedClose, onRejectLinkedClose,
 }: {
   action: InboxCaseActionRecord;
   busy: boolean;
@@ -704,6 +730,13 @@ function ActionCard({
   onReasonChange: (v: string) => void;
   onApprove: () => void;
   onReject: () => void;
+  // A linked BASECAMP_COMPLETE_TODO this comment action carries, per the
+  // AI's "close this after the update" recommendation — rendered as a
+  // checkbox on this card instead of a second full ActionCard.
+  linkedClose?: InboxCaseActionRecord | null;
+  linkedCloseBusy?: boolean;
+  onApproveLinkedClose?: () => void;
+  onRejectLinkedClose?: () => void;
 }) {
   return (
     <div className="border rounded p-2">
@@ -737,6 +770,31 @@ function ActionCard({
             aria-label="Reason for rejecting this action"
           />
           <button type="button" className="btn btn-outline-danger btn-sm" disabled={busy} onClick={onReject}>Reject</button>
+        </div>
+      )}
+      {linkedClose && (
+        <div className="d-flex flex-wrap align-items-center gap-2 mt-2 pt-2 border-top">
+          <div className="form-check mb-0">
+            <input
+              type="checkbox"
+              className="form-check-input"
+              id={`linked-close-${linkedClose.id}`}
+              checked={linkedClose.status !== 'REJECTED'}
+              disabled={linkedCloseBusy || linkedClose.status !== 'PROPOSED'}
+              onChange={(e) => {
+                if (!e.target.checked) onRejectLinkedClose?.();
+              }}
+            />
+            <label className="form-check-label small" htmlFor={`linked-close-${linkedClose.id}`}>
+              Also close this Basecamp item
+            </label>
+          </div>
+          {linkedClose.status === 'PROPOSED' && (
+            <button type="button" className="btn btn-outline-success btn-sm" disabled={linkedCloseBusy} onClick={onApproveLinkedClose}>
+              Approve close
+            </button>
+          )}
+          {linkedClose.status !== 'PROPOSED' && <ActionStatusBadge status={linkedClose.status} />}
         </div>
       )}
     </div>

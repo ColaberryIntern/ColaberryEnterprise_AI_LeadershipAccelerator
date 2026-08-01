@@ -142,6 +142,12 @@ export interface DiscoveredCaseSummary {
   candidateCount: number;
 }
 
+export interface AutoSyncResult {
+  newCasesCreated: number;
+  itemsAdded: number;
+  emailsSkippedUnclassified: number;
+}
+
 export interface CaseStats {
   total: number;
   resolved: number;
@@ -280,8 +286,10 @@ export const inboxCaseApi = {
   discover: (mode: CaseMode, query: string, window: DiscoveryWindow = '90d') =>
     api.post<{ cases: DiscoveredCaseSummary[] }>(`${BASE}/discover`, { mode, query, window }).then((r) => r.data),
 
-  list: (params: { state?: CaseState; mode?: CaseMode; page?: number; limit?: number } = {}) =>
+  list: (params: { state?: CaseState; mode?: CaseMode; page?: number; limit?: number; include_resolved?: boolean } = {}) =>
     api.get<{ total: number; cases: InboxCaseRecord[] }>(BASE, { params }).then((r) => r.data),
+
+  syncNow: () => api.post<AutoSyncResult>(`${BASE}/sync-now`).then((r) => r.data),
 
   stats: () => api.get<CaseStats>(STATS_URL).then((r) => r.data),
 

@@ -36,6 +36,10 @@ const REASON_WEIGHTS: Record<MatchReasonKind, number> = {
   semantic_similarity: 0.2,
   generic_terminology: 0.15,
   ambiguous_first_name_only: 0.15,
+  // Auto-sync items are never scored via this module at all (caseAutoSyncService.ts
+  // sets score=1 and inclusionStatus='INCLUDED' directly) — this weight only
+  // exists to satisfy the exhaustive Record type and is never actually read.
+  auto_synced_from_inbox: 1.0,
 };
 
 export interface ScoredMatch {

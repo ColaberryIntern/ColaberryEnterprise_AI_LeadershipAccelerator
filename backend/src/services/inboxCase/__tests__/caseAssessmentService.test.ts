@@ -327,6 +327,66 @@ describe('runAssessment — AI reviews CANDIDATE items ("deeper look" feature)',
   });
 });
 
+describe('runAssessment — Basecamp "close after comment" recommendation', () => {
+  it('writes basecamp_close_recommended/reason onto a real INCLUDED basecamp_todo item the model was shown', async () => {
+    const c = await seedCase();
+    const bcItem = await seedItem(c.id, { source_type: 'basecamp_todo', provider: 'basecamp', inclusion_status: 'INCLUDED', title: 'Vendor onboarding checklist' });
+    mockModelResponse(
+      JSON.stringify({
+        ...VALID_MODEL_OUTPUT,
+        basecamp_close_recommendations: [{ item_id: bcItem.id, recommend_close: true, reasoning: 'The comment finishes the checklist — nothing further is needed.' }],
+      })
+    );
+
+    await runAssessment(c.id, 'ali@colaberry.com');
+
+    expect(bcItem.basecamp_close_recommended).toBe(true);
+    expect(bcItem.basecamp_close_recommended_reason).toContain('finishes the checklist');
+  });
+
+  it('silently ignores a basecamp_close_recommendations entry whose item_id was never actually shown to the model (hallucination/injection guard)', async () => {
+    const c = await seedCase();
+    const bcItem = await seedItem(c.id, { source_type: 'basecamp_todo', provider: 'basecamp', inclusion_status: 'INCLUDED' }); // real item, but not referenced below
+    mockModelResponse(
+      JSON.stringify({
+        ...VALID_MODEL_OUTPUT,
+        basecamp_close_recommendations: [{ item_id: 'not-a-real-item-id', recommend_close: true, reasoning: 'fabricated' }],
+      })
+    );
+
+    await runAssessment(c.id, 'ali@colaberry.com');
+
+    expect(bcItem.basecamp_close_recommended).toBeUndefined(); // never written
+  });
+
+  it('defaults to an empty array (no crash, no item touched) when the model omits the field entirely', async () => {
+    const c = await seedCase();
+    const bcItem = await seedItem(c.id, { source_type: 'basecamp_todo', provider: 'basecamp', inclusion_status: 'INCLUDED' });
+    const { basecamp_close_recommendations, ...outputWithoutField } = VALID_MODEL_OUTPUT as any;
+    mockModelResponse(JSON.stringify(outputWithoutField));
+
+    const result = await runAssessment(c.id, 'ali@colaberry.com');
+
+    expect(result.usedFallback).toBe(false); // schema default kicks in — not treated as invalid output
+    expect(bcItem.basecamp_close_recommended).toBeUndefined();
+  });
+
+  it('does not apply a recommendation to a CANDIDATE or EXCLUDED basecamp_todo item, even if the model returns one', async () => {
+    const c = await seedCase();
+    const candidateItem = await seedItem(c.id, { source_type: 'basecamp_todo', provider: 'basecamp', inclusion_status: 'CANDIDATE' });
+    mockModelResponse(
+      JSON.stringify({
+        ...VALID_MODEL_OUTPUT,
+        basecamp_close_recommendations: [{ item_id: candidateItem.id, recommend_close: true, reasoning: 'model confused — this is only a candidate' }],
+      })
+    );
+
+    await runAssessment(c.id, 'ali@colaberry.com');
+
+    expect(candidateItem.basecamp_close_recommended).toBeUndefined();
+  });
+});
+
 describe('runAssessment — prompt injection observability', () => {
   it('flags evidence containing an injection-shaped phrase without altering the assessment call', async () => {
     const c = await seedCase();

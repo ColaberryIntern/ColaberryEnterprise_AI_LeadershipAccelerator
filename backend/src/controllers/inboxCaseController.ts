@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import { Op } from 'sequelize';
 import InboxCase from '../models/InboxCase';
 import InboxCaseEvent from '../models/InboxCaseEvent';
 import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema, quickResolveItemSchema } from '../schemas/inboxCaseSchema';
@@ -42,9 +43,16 @@ export async function handleListCases(req: Request, res: Response) {
   if (!parsed.success) {
     return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
   }
-  const { state, mode, page, limit } = parsed.data;
+  const { state, mode, page, limit, include_resolved } = parsed.data;
   const where: Record<string, unknown> = {};
-  if (state) where.state = state;
+  if (state) {
+    where.state = state;
+  } else if (!include_resolved) {
+    // Default view hides RESOLVED cases so they don't clutter the active
+    // list — still reachable via state=RESOLVED or include_resolved=true.
+    // An explicit `state` filter above is completely unaffected by this.
+    where.state = { [Op.ne]: 'RESOLVED' };
+  }
   if (mode) where.mode = mode;
 
   const { count, rows } = await InboxCase.findAndCountAll({

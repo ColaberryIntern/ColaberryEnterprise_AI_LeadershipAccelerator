@@ -3,6 +3,7 @@ import InboxCase from '../models/InboxCase';
 import InboxCaseQuestion from '../models/InboxCaseQuestion';
 import { caseQuestionParamSchema, caseIdParamSchema, caseActionParamSchema, answerQuestionSchema, approveActionSchema, rejectActionSchema, approveLowRiskSchema, closeCaseSchema, reopenCaseSchema, overrideActionsSchema } from '../schemas/inboxCaseSchema';
 import { overrideProposedActions } from '../services/inboxCase/caseActionOverrideService';
+import { runAutoSync } from '../services/inboxCase/caseAutoSyncService';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
 import { reopenCase, maybeAdvanceFromNeedsAli } from '../services/inboxCase/caseRepository';
 import { generatePlan } from '../services/inboxCase/caseActionPlanner';
@@ -219,6 +220,16 @@ export async function handleCloseCase(req: Request, res: Response) {
     if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
     console.error('[InboxCase] CloseCase error:', err?.message);
     res.status(500).json({ error: 'InternalError', message: err?.message });
+  }
+}
+
+export async function handleSyncNow(req: Request, res: Response) {
+  try {
+    const result = await runAutoSync('admin', (req as any).admin?.email || 'admin');
+    res.json(result);
+  } catch (err: any) {
+    console.error('[InboxCase] SyncNow error:', err?.message);
+    res.status(500).json({ error: 'AutoSyncFailedError', message: err?.message });
   }
 }
 

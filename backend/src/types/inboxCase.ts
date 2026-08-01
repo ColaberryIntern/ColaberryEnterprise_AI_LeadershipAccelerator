@@ -164,7 +164,11 @@ export type MatchReasonKind =
   | 'same_basecamp_project'
   | 'semantic_similarity'
   | 'generic_terminology'
-  | 'ambiguous_first_name_only';
+  | 'ambiguous_first_name_only'
+  // Item came from the hourly/manual inbox auto-sync, not a person/topic
+  // search — provenance only, never scored (auto-synced items are always
+  // INCLUDED directly, bypassing the CANDIDATE-review scoring path).
+  | 'auto_synced_from_inbox';
 
 export interface MatchReason {
   kind: MatchReasonKind;

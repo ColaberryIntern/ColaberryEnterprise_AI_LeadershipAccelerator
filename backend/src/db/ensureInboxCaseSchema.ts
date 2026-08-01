@@ -90,6 +90,14 @@ export async function ensureInboxCaseSchema(): Promise<void> {
     `ALTER TABLE inbox_case_items ADD CONSTRAINT ck_inbox_case_items_ai_recommendation CHECK (ai_recommendation IS NULL OR ai_recommendation IN (
        'INCLUDE','EXCLUDE'))`,
 
+    // Advisory "close this Basecamp item after the comment" signal from the
+    // same assessment call, for basecamp_todo items only. Read by the
+    // action planner to decide whether to also propose a linked
+    // BASECAMP_COMPLETE_TODO action alongside a BASECAMP_COMMENT — never
+    // executes anything on its own. Additive, nullable — safe on existing rows.
+    `ALTER TABLE inbox_case_items ADD COLUMN IF NOT EXISTS basecamp_close_recommended BOOLEAN`,
+    `ALTER TABLE inbox_case_items ADD COLUMN IF NOT EXISTS basecamp_close_recommended_reason TEXT`,
+
     `CREATE TABLE IF NOT EXISTS inbox_identity_aliases (
        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
        canonical_name VARCHAR(200) NOT NULL,
