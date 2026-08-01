@@ -98,8 +98,14 @@ export async function getEnrollmentHistory(enrollmentId: string): Promise<Person
   const subsJson: any[] = toJSON(sibSubsR);
   const planByEnr = new Map<string, string>();
   for (const su of subsJson) if (su.plan) planByEnr.set(su.enrollment_id, su.plan);
-  // Comped "Free Access" seat = an active 'comp' subscription on THIS enrollment.
-  const freeAccess = subsJson.some((su) => su.enrollment_id === e.id && su.plan === 'comp' && su.status === 'active');
+  // Comped "Free Access" seat = an active 'comp' subscription on ANY enrollment
+  // sharing this email — not just the one being viewed. subsJson is already scoped
+  // to siblingIds (see the query above), so a comp row granted on a sibling row
+  // (e.g. an Explorer-shaped duplicate) still reads as "has Free Access" here;
+  // without this, the drawer showed "Grant Free Access" for someone who already had
+  // it, because the comp subscription happened to live on a different enrollment
+  // row for the same person (confirmed live: Brianna Woodard, 2026-07-31).
+  const freeAccess = subsJson.some((su) => su.plan === 'comp' && su.status === 'active');
   const totalPaid = siblings.reduce((sum, s) => sum + (s.payment_status === 'paid' ? Number(s.amount_paid || 0) : 0), 0)
     + credits.filter((c) => c.status !== 'void').reduce((sum, c) => sum + Number(c.amount_cents || 0) / 100, 0);
 

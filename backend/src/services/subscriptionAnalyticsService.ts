@@ -2,6 +2,8 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { inferPlanFromAmountPaid } from './planInference';
 import { IS_STAFF_SQL } from './staffDetection';
+import { pickBestDuplicate } from './emailIdentity';
+import { getStaffRoster, getDepositHolderRoster } from './subscriptionRosterService';
 
 /* ------------------------------------------------------------------ */
 /*  Subscription analytics — the recurring-revenue lens for            */
@@ -173,15 +175,17 @@ async function fetchPayingMembers(): Promise<MemberRow[]> {
  *  Open House "hold your spot" deposit — a real, if small, dollar commitment
  *  that deserves its own bucket rather than being invisible inside "Explorer".
  *  Real Colaberry staff who happen to hold an Explorer-shaped enrollment
- *  (internal test/onboarding signups) are carved out into their own count —
- *  they were never real prospects and shouldn't dilute the funnel. */
-async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolders: number; depositTotal: number; staff: number }> {
+ *  (internal test/onboarding signups) are excluded entirely — they were never
+ *  real prospects and shouldn't dilute the funnel; getStaffRoster() already
+ *  counts them under Staff regardless of enrollment_type. */
+async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolders: number; depositTotal: number }> {
+  // Row-fetch (not an aggregate COUNT) so a duplicate identity — a Gmail
+  // "+alias" re-signup or an unresolved exact-email duplicate — can be
+  // collapsed via pickBestDuplicate BEFORE counting, the same way every other
+  // roster/count in this file is deduped. An aggregate COUNT can't do that.
   const rows = (await sequelize.query(
-    `SELECT
-        COUNT(*) FILTER (WHERE ${IS_STAFF_SQL})::int AS staff,
-        COUNT(*) FILTER (WHERE NOT ${IS_STAFF_SQL} AND ac.enrollment_id IS NULL)::int AS free_trial,
-        COUNT(*) FILTER (WHERE NOT ${IS_STAFF_SQL} AND ac.enrollment_id IS NOT NULL)::int AS deposit_holders,
-        COALESCE(SUM(ac.amount_cents) FILTER (WHERE NOT ${IS_STAFF_SQL} AND ac.enrollment_id IS NOT NULL), 0)::int AS deposit_cents
+    `SELECT e.id AS enrollment_id, e.email, e.created_at, ${IS_STAFF_SQL} AS is_staff,
+            ac.enrollment_id AS deposit_enrollment_id, ac.amount_cents AS deposit_cents
        FROM enrollments e
        LEFT JOIN community_members cm ON cm.enrollment_id = e.id
        LEFT JOIN LATERAL (
@@ -191,9 +195,28 @@ async function fetchExplorerCounts(): Promise<{ freeTrial: number; depositHolder
        ) ac ON true
       WHERE e.enrollment_type = 'explorer' AND e.status = 'active'`,
     { type: QueryTypes.SELECT }
-  )) as Array<{ staff: number; free_trial: number; deposit_holders: number; deposit_cents: number }>;
-  const r = rows[0] || { staff: 0, free_trial: 0, deposit_holders: 0, deposit_cents: 0 };
-  return { freeTrial: r.free_trial, depositHolders: r.deposit_holders, depositTotal: r.deposit_cents / 100, staff: r.staff };
+  )) as Array<{ enrollment_id: string; email: string | null; created_at: string | null; is_staff: boolean; deposit_enrollment_id: string | null; deposit_cents: number | null }>;
+
+  const deduped = pickBestDuplicate(rows, (r) => ({
+    email: r.email,
+    hasActiveSubscription: r.deposit_enrollment_id != null, // "has a real $ deposit" is this population's equivalent of "active subscription" for ranking
+    paymentStatusPaid: false,
+    isExplorer: true,
+    createdAt: r.created_at,
+  }));
+
+  // Staff who happen to hold an Explorer-shaped enrollment are excluded here —
+  // getStaffRoster() (the one authoritative source for the Staff headcount,
+  // see getSubscriptionAnalytics) already covers them regardless of
+  // enrollment_type, so counting them here too would double-count nothing
+  // useful and just adds a second, easy-to-drift source of truth.
+  let freeTrial = 0, depositHolders = 0, depositCents = 0;
+  for (const r of deduped) {
+    if (r.is_staff) continue;
+    if (r.deposit_enrollment_id != null) { depositHolders += 1; depositCents += r.deposit_cents || 0; }
+    else { freeTrial += 1; }
+  }
+  return { freeTrial, depositHolders, depositTotal: depositCents / 100 };
 }
 
 function classifyMember(enrollmentId: string, memberRows: MemberRow[], nowMs: number): ClassifiedMember {
@@ -258,7 +281,20 @@ async function classifyAllMembers(nowMs: number): Promise<ClassifiedMember[]> {
     if (list) list.push(r);
     else byEnrollment.set(r.enrollment_id, [r]);
   }
-  return Array.from(byEnrollment.entries()).map(([id, memberRows]) => classifyMember(id, memberRows, nowMs));
+  const members = Array.from(byEnrollment.entries()).map(([id, memberRows]) => classifyMember(id, memberRows, nowMs));
+
+  // Two enrollment rows for the same real person (a Gmail "+alias" re-signup, or
+  // an exact-email duplicate the merge sweep hasn't resolved yet) must not show up
+  // as two "members" — collapse by email identity, keeping whichever row is most
+  // representative (active subscription > earliest signup). This is a display/
+  // count-layer fix only; the underlying duplicate enrollment rows are untouched.
+  return pickBestDuplicate(members, (m) => ({
+    email: m.payerEmail,
+    hasActiveSubscription: m.best?.sub_status === 'active',
+    paymentStatusPaid: true, // fetchPayingMembers already filters payment_status='paid'
+    isExplorer: false, // fetchPayingMembers already excludes enrollment_type='explorer'
+    createdAt: m.memberSince,
+  }));
 }
 
 /** Bucket label for a 1-based tenure month index (1..TENURE_BUCKET_COUNT). */
@@ -288,7 +324,10 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
   for (const m of members) {
     const { enrollmentId, payerName, payerEmail, plan, monthlyAmount, best, newest } = m;
 
-    planCounts[plan].count += 1;
+    // 'staff' is intentionally NOT counted here — planCounts.staff.count and
+    // kpis.staffCount are overwritten below from getStaffRoster()'s own
+    // (deduped) length, the one authoritative source for that number.
+    if (plan !== 'staff') planCounts[plan].count += 1;
     if (plan === 'annual' || plan === 'monthly') {
       kpis.mrr += monthlyAmount;
       kpis.activeSubscribers += 1;
@@ -297,8 +336,6 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
       kpis.compedSeats += 1;
     } else if (plan === 'other') {
       kpis.otherPaidCount += 1;
-    } else if (plan === 'staff') {
-      kpis.staffCount += 1;
     }
 
     // Renewal/lapse only make sense with a real, activated period — and never
@@ -341,10 +378,18 @@ export async function getSubscriptionAnalytics(nowMs: number = Date.now()): Prom
   kpis.arr = kpis.mrr * 12;
   kpis.arpu = kpis.activeSubscribers > 0 ? kpis.mrr / kpis.activeSubscribers : 0;
 
-  const { freeTrial: freeTrialCount, depositHolders, depositTotal, staff: explorerStaffCount } = await fetchExplorerCounts();
+  const { freeTrial: freeTrialCount, depositHolders, depositTotal } = await fetchExplorerCounts();
   planCounts.deposit_holder = { count: depositHolders, amount: depositTotal };
-  planCounts.staff.count += explorerStaffCount; // + whatever staff already accrued above from paying-member rows
-  kpis.staffCount += explorerStaffCount;
+
+  // Staff headcount comes from ONE authoritative source — getStaffRoster()'s own
+  // (deduped) roster — instead of summing two independent partial counts
+  // (paying-members loop + explorer-counts addition). Two separate counting
+  // paths can never be guaranteed to agree with what the roster itself shows;
+  // this is the same "20 vs 34" mismatch class of bug caught earlier this
+  // session, applied preemptively here rather than waiting to be caught again.
+  const staffRosterCount = (await getStaffRoster()).length;
+  planCounts.staff.count = staffRosterCount;
+  kpis.staffCount = staffRosterCount;
 
   const planOrder: SubscriptionPlanKey[] = ['annual', 'monthly', 'comp', 'deposit_holder'];
   if (planCounts.staff.count > 0) planOrder.push('staff');
@@ -435,55 +480,7 @@ export async function getPlanRoster(
   return sortByNextPaymentDesc(rows);
 }
 
-/** Drill-down roster for the "Deposit Holder" category: Explorers who paid
- *  the $50 Open House deposit but haven't converted to a paying plan yet —
- *  the same population fetchExplorerCounts() counts, just as rows. Excludes
- *  staff and withdrawn rows, matching fetchExplorerCounts exactly. */
-export async function getDepositHolderRoster(): Promise<TenureRosterRow[]> {
-  const rows = (await sequelize.query(
-    `SELECT e.id AS enrollment_id, e.full_name, e.email, e.created_at, ac.amount_cents
-       FROM enrollments e
-       LEFT JOIN community_members cm ON cm.enrollment_id = e.id
-       JOIN account_credits ac ON ac.enrollment_id = e.id
-      WHERE e.enrollment_type = 'explorer' AND e.status = 'active' AND NOT ${IS_STAFF_SQL}
-        AND ac.reason = 'open_house_deposit' AND ac.status = 'available'`,
-    { type: QueryTypes.SELECT }
-  )) as Array<{ enrollment_id: string; full_name: string | null; email: string | null; created_at: string | null; amount_cents: number }>;
-
-  const roster: TenureRosterRow[] = rows.map((r) => ({
-    enrollment_id: r.enrollment_id,
-    payer_name: r.full_name || r.email || '—',
-    payer_email: r.email || '',
-    plan: 'deposit_holder',
-    monthly_amount: r.amount_cents / 100,
-    member_since: r.created_at ? new Date(r.created_at).toISOString() : null,
-    next_payment_date: null,
-  }));
-  return sortByNextPaymentDesc(roster);
-}
-
-/** Drill-down roster for the "Staff" category: real Colaberry team members,
- *  wherever they happen to sit (an Explorer-shaped internal signup, or a
- *  comped/paid enrollment) — a single unified query rather than reusing
- *  classifyAllMembers, since staff span enrollment_type boundaries that
- *  matter for other categories but not for this one. */
-export async function getStaffRoster(): Promise<TenureRosterRow[]> {
-  const rows = (await sequelize.query(
-    `SELECT e.id AS enrollment_id, e.full_name, e.email, e.created_at
-       FROM enrollments e
-       LEFT JOIN community_members cm ON cm.enrollment_id = e.id
-      WHERE e.status = 'active' AND ${IS_STAFF_SQL}`,
-    { type: QueryTypes.SELECT }
-  )) as Array<{ enrollment_id: string; full_name: string | null; email: string | null; created_at: string | null }>;
-
-  const roster: TenureRosterRow[] = rows.map((r) => ({
-    enrollment_id: r.enrollment_id,
-    payer_name: r.full_name || r.email || '—',
-    payer_email: r.email || '',
-    plan: 'staff',
-    monthly_amount: 0,
-    member_since: r.created_at ? new Date(r.created_at).toISOString() : null,
-    next_payment_date: null,
-  }));
-  return sortByNextPaymentDesc(roster);
-}
+// getDepositHolderRoster and getStaffRoster live in subscriptionRosterService.ts
+// (split out to stay under this repo's 500-line file-size ceiling); re-exported
+// here so every existing caller of this module keeps working unchanged.
+export { getDepositHolderRoster, getStaffRoster };
