@@ -163,7 +163,24 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
 
   const emailItems = items.filter((i) => i.source_type === 'email');
   const basecampItems = items.filter((i) => i.source_type.startsWith('basecamp_'));
-  const replyTarget = emailItems.filter((i) => i.inclusion_status === 'INCLUDED').sort((a, b) => Number(b.match_score) - Number(a.match_score))[0] || null;
+
+  // Reply target: prefer an INCLUDED inbound email (its `from_address` is the
+  // customer we reply to). Some cases end up with ONLY sent_email evidence —
+  // e.g. a customer's original inbound message never matched the discovery
+  // query well enough to be included, but Ali's own reply/forward to them
+  // did. Fall back to the highest-scoring INCLUDED sent_email item that
+  // actually has a recorded recipient, so a case isn't stranded with zero
+  // actions just because its evidence happens to be all-outbound. See
+  // executeEmailSend in caseActionExecutors.ts, which resolves the real
+  // send-to address differently for sent_email items (to_addresses, not
+  // from_address) to match this.
+  const includedInboundEmail = emailItems
+    .filter((i) => i.inclusion_status === 'INCLUDED')
+    .sort((a, b) => Number(b.match_score) - Number(a.match_score));
+  const includedSentEmailWithRecipient = items
+    .filter((i) => i.source_type === 'sent_email' && i.inclusion_status === 'INCLUDED' && (i.snapshot as any)?.to_addresses?.length)
+    .sort((a, b) => Number(b.match_score) - Number(a.match_score));
+  const replyTarget = includedInboundEmail[0] || includedSentEmailWithRecipient[0] || null;
 
   const replyAction = buildReplyAction(caseRow, flatAssessment, replyTarget, answeredQaText);
   const nonArchiveProposals: ProposedAction[] = [

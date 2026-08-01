@@ -92,6 +92,24 @@ describe('executeEmailSend', () => {
     getColaberryGmailClient.mockReturnValueOnce(null);
     await expect(executeEmailSend(makeAction(), makeItem())).rejects.toThrow(ClassifiedExecutionError);
   });
+
+  // Regression coverage: caseActionPlanner.ts's reply-target fallback picks a
+  // sent_email item (Ali's own prior reply) when a case has no INCLUDED
+  // inbound email. For those items the customer is the RECIPIENT, not the
+  // sender — sending to from_address there would email Ali himself.
+  it('sends to the recorded recipient (to_addresses), not the sender, when the target item is a sent_email', async () => {
+    const item = makeItem({
+      source_type: 'sent_email',
+      snapshot: { from_address: 'ali@colaberry.com', to_addresses: ['customer@example.com'], message_id: '<orig@example.com>', thread_id: 'thread-1' },
+    });
+    const receipt = await executeEmailSend(makeAction(), item);
+    expect(receipt.sent_to).toBe('customer@example.com');
+  });
+
+  it('throws a classified error when a sent_email target has no recorded recipient', async () => {
+    const item = makeItem({ source_type: 'sent_email', snapshot: { from_address: 'ali@colaberry.com', to_addresses: [] } });
+    await expect(executeEmailSend(makeAction(), item)).rejects.toThrow(ClassifiedExecutionError);
+  });
 });
 
 describe('executeEmailLabel', () => {

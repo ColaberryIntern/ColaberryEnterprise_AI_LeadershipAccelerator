@@ -45,8 +45,12 @@ export async function executeEmailSend(action: InboxCaseAction, item: InboxCaseI
   if (!gmail) throw new ClassifiedExecutionError('ProviderNotConfiguredError', `Gmail client not configured for ${item.provider}`);
 
   const snap = snapshotOf(item);
-  const to = snap.from_address;
-  if (!to) throw new ClassifiedExecutionError('ValidationError', 'Reply target has no from_address on record');
+  // For an inbound email, the customer is the sender we reply to. For a
+  // sent_email item (the reply-target fallback in caseActionPlanner.ts for
+  // cases with no included inbound item), Ali/Colaberry was the sender, so
+  // the customer is the recipient instead.
+  const to = item.source_type === 'sent_email' ? (Array.isArray(snap.to_addresses) ? snap.to_addresses[0] : undefined) : snap.from_address;
+  if (!to) throw new ClassifiedExecutionError('ValidationError', 'Reply target has no resolvable recipient on record');
 
   const raw = buildRawMimeReply({
     to,
