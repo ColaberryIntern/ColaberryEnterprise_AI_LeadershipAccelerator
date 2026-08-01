@@ -77,3 +77,15 @@ describe('handleListCases — default RESOLVED-hidden behavior', () => {
     expect(callArgs.where.state).toBe('RESOLVED');
   });
 });
+
+describe('handleListCases — sort order', () => {
+  it('sorts oldest-opened first by default (ASC), the reverse of a normal email inbox', async () => {
+    const req: any = { query: {} };
+    const res = mockRes();
+
+    await handleListCases(req, res);
+
+    const callArgs = findAndCountAll.mock.calls[0][0];
+    expect(callArgs.order).toEqual([['opened_at', 'ASC']]);
+  });
+});

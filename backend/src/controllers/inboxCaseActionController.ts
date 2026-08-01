@@ -3,14 +3,14 @@ import InboxCase from '../models/InboxCase';
 import InboxCaseQuestion from '../models/InboxCaseQuestion';
 import { caseQuestionParamSchema, caseIdParamSchema, caseActionParamSchema, answerQuestionSchema, approveActionSchema, rejectActionSchema, approveLowRiskSchema, closeCaseSchema, reopenCaseSchema, overrideActionsSchema } from '../schemas/inboxCaseSchema';
 import { overrideProposedActions } from '../services/inboxCase/caseActionOverrideService';
-import { runAutoSync } from '../services/inboxCase/caseAutoSyncService';
+import { runAutoSync, getSyncStatus } from '../services/inboxCase/caseAutoSyncService';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
 import { reopenCase, maybeAdvanceFromNeedsAli } from '../services/inboxCase/caseRepository';
 import { generatePlan } from '../services/inboxCase/caseActionPlanner';
 import { approveAction, rejectAction, approveLowRiskActions } from '../services/inboxCase/caseApprovalService';
 import { executeApprovedActions } from '../services/inboxCase/caseExecutionService';
 import { verifyCase } from '../services/inboxCase/caseVerificationService';
-import { closeCase } from '../services/inboxCase/caseClosureService';
+import { closeCase, dismissCase } from '../services/inboxCase/caseClosureService';
 import { learnFromAnsweredQuestion } from '../services/inboxCase/caseKnowledgeService';
 
 // Plan/Approve/Execute/Verify/Close/Reopen handlers for the Inbox Intel —
@@ -223,6 +223,23 @@ export async function handleCloseCase(req: Request, res: Response) {
   }
 }
 
+export async function handleDismissCase(req: Request, res: Response) {
+  const parsed = caseIdParamSchema.safeParse(req.params);
+  if (!parsed.success) return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
+
+  try {
+    const result = await dismissCase(parsed.data.caseId, (req as any).admin?.email || 'admin');
+    if (!result.closed) {
+      return res.status(409).json({ error: 'ClosureBlockedError', blockers: result.blockers });
+    }
+    res.json({ closed: true });
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    console.error('[InboxCase] DismissCase error:', err?.message);
+    res.status(500).json({ error: 'InternalError', message: err?.message });
+  }
+}
+
 export async function handleSyncNow(req: Request, res: Response) {
   try {
     const result = await runAutoSync('admin', (req as any).admin?.email || 'admin');
@@ -231,6 +248,10 @@ export async function handleSyncNow(req: Request, res: Response) {
     console.error('[InboxCase] SyncNow error:', err?.message);
     res.status(500).json({ error: 'AutoSyncFailedError', message: err?.message });
   }
+}
+
+export async function handleGetSyncStatus(req: Request, res: Response) {
+  res.json(getSyncStatus());
 }
 
 export async function handleReopenCase(req: Request, res: Response) {

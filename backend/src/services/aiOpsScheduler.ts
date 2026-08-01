@@ -91,6 +91,7 @@ import { runCoryStrategicCycle, runSelfEvolution } from './cory/coryBrain';
 import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
 import { resolveAllCronSchedules, ResolvedCronSchedule } from './governanceResolutionService';
 import { expireStaleProposals } from './proposalCleanupService';
+import { trackAgentRun } from './agentRunTracker';
 
 // ─── Schedule Registry ──────────────────────────────────────────────────────
 // Maps agent_name (matching cron_schedule_configs rows) to runner + hardcoded default.
@@ -119,8 +120,14 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Intelligence layer
   { agentName: 'AutonomousRequirementExpansion', hardcodedSchedule: '3,18,33,48 * * * *', runner: async () => { const { runExpansionCycle } = await import('./autonomousRequirementExpansionService'); return runExpansionCycle(); }, label: 'Autonomous requirement expansion' },
-  { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: runAutonomousCycle, label: 'Autonomous engine' },
-  { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runCoryStrategicCycle, label: 'Cory Brain strategic cycle' },
+  // AutonomousEngine/AICOOStrategicCycle/MetaAgentLoop (below)/CoryEvolutionCycle (bottom of
+  // this array) are wrapped in trackAgentRun() — unlike most entries in this registry, their
+  // runners (autonomousEngine.ts/cory/coryBrain.ts/metaAgentLoop.ts) never touch the AiAgent
+  // row themselves, so without this wrapper they run correctly but always show run_count=0
+  // on the Trust Command Center. Confirmed via source read (2026-07-31 registry audit): neither
+  // file calls AiAgent.update for its own row.
+  { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: () => trackAgentRun('AutonomousEngine', runAutonomousCycle), label: 'Autonomous engine' },
+  { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: () => trackAgentRun('AICOOStrategicCycle', runCoryStrategicCycle), label: 'Cory Brain strategic cycle' },
   { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '15,45 * * * *', runner: async () => {
     const { isCompanyLayerEnabled } = await import('./company/companyToCoryAdapter');
     if (!(await isCompanyLayerEnabled())) return;
@@ -130,7 +137,7 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
     const { runCompanyStrategicCycle } = await import('./company/companyStrategyAgent');
     return runCompanyStrategicCycle((company as any).id);
   }, label: 'Company CEO strategic cycle' },
-  { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: runMetaAgentLoop, label: 'Meta-agent loop' },
+  { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: () => trackAgentRun('MetaAgentLoop', runMetaAgentLoop), label: 'Meta-agent loop' },
   { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
   { agentName: 'ApolloWeeklyEnrollmentAgent', hardcodedSchedule: '0 14 * * 1-5', runner: runWeeklyLeadEnrollment, label: 'Daily cold lead enrollment (Mon-Fri 9 AM CT, 20/day)' },
 
@@ -226,7 +233,7 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'FinanceSuperAgent', hardcodedSchedule: '17,47 * * * *', runner: runFinanceSuperAgent, label: 'Finance super agent' },
 
   // Cory self-evolution cycle (every 6 hours, offset from strategic cycle)
-  { agentName: 'CoryEvolutionCycle', hardcodedSchedule: '20 */6 * * *', runner: async () => { await runSelfEvolution(); return null as any; }, label: 'Cory self-evolution cycle' },
+  { agentName: 'CoryEvolutionCycle', hardcodedSchedule: '20 */6 * * *', runner: () => trackAgentRun('CoryEvolutionCycle', runSelfEvolution), label: 'Cory self-evolution cycle' },
 
   // AI Workforce directors (orgRegistry.ts) — one tool + one action each. All
   // seed disabled (agentRegistrySeed.ts); each runner is a no-op via the

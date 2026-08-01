@@ -23,7 +23,7 @@ jest.mock('../caseTicketService', () => ({
   postCaseProgressNote: jest.fn(async () => {}),
 }));
 
-import { evaluateClosureGuard, closeCase } from '../caseClosureService';
+import { evaluateClosureGuard, closeCase, dismissCase } from '../caseClosureService';
 
 beforeEach(() => {
   fakeInboxCase.rows.clear();
@@ -179,5 +179,81 @@ describe('closeCase', () => {
     const result = await closeCase(c.id, 'ali@colaberry.com');
     expect(result.closed).toBe(true);
     expect(c.state).toBe('RESOLVED');
+  });
+
+  it('reports a real blocker (not an uncaught exception) when the guard passes but the case state has no legal path to RESOLVED — e.g. a fresh ASSESSING case never planned or executed', async () => {
+    const c = await seedCase('ASSESSING');
+    await fakeInboxCaseItem.create({ case_id: c.id, inclusion_status: 'INCLUDED', disposition: 'RESOLVED', title: 'item' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    const result = await closeCase(c.id, 'ali@colaberry.com');
+
+    expect(result.closed).toBe(false);
+    expect(result.blockers.some((b) => b.condition === 'case_not_in_closable_state')).toBe(true);
+    expect(c.state).toBe('ASSESSING'); // untouched
+    expect(c.closed_at).toBeUndefined(); // never partially stamped
+  });
+});
+
+describe('dismissCase', () => {
+  it('skips an OPEN question, rejects a PROPOSED action, dispositions an undispositioned item, and closes the case', async () => {
+    const c = await seedCase();
+    const q = await fakeInboxCaseQuestion.create({ case_id: c.id, status: 'OPEN', question: 'Who owns this?' });
+    const a = await fakeInboxCaseAction.create({ case_id: c.id, status: 'PROPOSED', action_type: 'NO_ACTION' });
+    const item = await fakeInboxCaseItem.create({ case_id: c.id, inclusion_status: 'INCLUDED', disposition: null, title: 'item' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    const result = await dismissCase(c.id, 'ali@colaberry.com');
+
+    expect(q.status).toBe('SKIPPED');
+    expect(a.status).toBe('REJECTED');
+    expect(item.disposition).toBe('NO_ACTION');
+    expect(result.closed).toBe(true);
+    expect(c.state).toBe('RESOLVED');
+  });
+
+  it('also rejects an APPROVED (not yet executed) action — the exact gap the plan auditor caught', async () => {
+    const c = await seedCase();
+    const a = await fakeInboxCaseAction.create({ case_id: c.id, status: 'APPROVED', action_type: 'NO_ACTION' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    const result = await dismissCase(c.id, 'ali@colaberry.com');
+
+    expect(a.status).toBe('REJECTED');
+    expect(result.closed).toBe(true);
+  });
+
+  it('leaves an EXECUTING action untouched and correctly reports the case as not closed', async () => {
+    const c = await seedCase();
+    const a = await fakeInboxCaseAction.create({ case_id: c.id, status: 'EXECUTING', action_type: 'EMAIL_SEND' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    const result = await dismissCase(c.id, 'ali@colaberry.com');
+
+    expect(a.status).toBe('EXECUTING'); // no legal transition exists — left alone, not force-changed
+    expect(result.closed).toBe(false);
+    expect(result.blockers.some((b) => b.condition === 'all_approved_actions_executed')).toBe(true);
+  });
+
+  it('leaves a SUCCEEDED-but-unverified action untouched and correctly reports the case as not closed', async () => {
+    const c = await seedCase();
+    const a = await fakeInboxCaseAction.create({ case_id: c.id, status: 'SUCCEEDED', action_type: 'EMAIL_SEND' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    const result = await dismissCase(c.id, 'ali@colaberry.com');
+
+    expect(a.status).toBe('SUCCEEDED');
+    expect(result.closed).toBe(false);
+    expect(result.blockers.some((b) => b.condition === 'all_actions_verified')).toBe(true);
+  });
+
+  it('never overwrites an item that already has a disposition', async () => {
+    const c = await seedCase();
+    const item = await fakeInboxCaseItem.create({ case_id: c.id, inclusion_status: 'INCLUDED', disposition: 'RESOLVED', title: 'item' });
+    await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
+
+    await dismissCase(c.id, 'ali@colaberry.com');
+
+    expect(item.disposition).toBe('RESOLVED'); // untouched
   });
 });

@@ -13,6 +13,7 @@ import {
   getCostBreakdown,
   getAgentRoster,
   getAgentDetail,
+  getRegistryHealth,
 } from '../services/trustMetricsService';
 import { runDirectorBySlug } from '../services/workforce/directorActions';
 import { getAiValue } from '../services/aiValueService';
@@ -131,6 +132,15 @@ export async function handleGetAgentRoster(_req: Request, res: Response): Promis
     res.json(await getAgentRoster());
   } catch (err) {
     fail(res, 'trust_agent_roster', err);
+  }
+}
+
+/** Full 211+-row ai_agents registry, bucketed by real status per the 2026-07-31 audit — not just the 10 Workforce directors getAgentRoster covers. */
+export async function handleGetRegistryHealth(_req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await getRegistryHealth());
+  } catch (err) {
+    fail(res, 'trust_registry_health', err);
   }
 }
 

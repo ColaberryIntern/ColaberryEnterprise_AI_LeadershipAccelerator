@@ -766,6 +766,12 @@ async function ensureEnrollmentColumns() {
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS portal_enabled BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS active_project_id UUID`,
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'`,
+    // Nullable future-dated access gate: an enrollment can be active/paid but have
+    // its full-curriculum access deliberately deferred to a later date (e.g. a
+    // postponed cohort move) while retaining free-tier portal access in the
+    // interim. NULL (the default) means no gate — behavior for every existing
+    // enrollment is unchanged. See contentEntitlement.ts.
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS access_starts_at DATE`,
   ];
   for (const sql of statements) {
     try {
