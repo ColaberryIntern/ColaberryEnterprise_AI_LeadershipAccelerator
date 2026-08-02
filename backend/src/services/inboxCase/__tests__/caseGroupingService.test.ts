@@ -53,6 +53,30 @@ describe('groupCandidates — Basecamp reference merging', () => {
     const groups = groupCandidates([a, b]);
     expect(groups).toHaveLength(1);
   });
+
+  // Regression coverage for a real gap found before shipping the digest-
+  // decomposition feature: a resolved Basecamp todo's own basecamp_refs is
+  // always [] (it doesn't reference itself), so the symmetric check above
+  // alone could never merge a digest email with the real to-do resolved
+  // from a link inside it — they'd end up in two separate, disconnected
+  // clusters despite being obviously the same business matter.
+  it('merges an email referencing a Basecamp recording with the resolved item itself, even though the resolved item has no basecamp_refs of its own', () => {
+    const ref = { url: 'https://3.basecamp.com/1/buckets/2/todos/555', accountId: '1', projectId: '2', recordingType: 'todos', recordingId: '555' };
+    const digestEmail = candidate({ basecamp_refs: [ref] });
+    const resolvedTodo = candidate({ source_type: 'basecamp_todo', source_id: '555', basecamp_refs: [] });
+    const groups = groupCandidates([digestEmail, resolvedTodo]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0]).toHaveLength(2);
+  });
+
+  it('does NOT merge two items with basecamp_refs when neither references the other and they share no recordingId (negative/boundary case)', () => {
+    const refA = { url: 'https://3.basecamp.com/1/buckets/2/todos/111', accountId: '1', projectId: '2', recordingType: 'todos', recordingId: '111' };
+    const refB = { url: 'https://3.basecamp.com/1/buckets/2/todos/222', accountId: '1', projectId: '2', recordingType: 'todos', recordingId: '222' };
+    const a = candidate({ source_id: 'a', basecamp_refs: [refA] });
+    const b = candidate({ source_id: 'b', basecamp_refs: [refB] });
+    const groups = groupCandidates([a, b]);
+    expect(groups).toHaveLength(2);
+  });
 });
 
 describe('groupCandidates — the "avoid combining unrelated conversations" guard', () => {
