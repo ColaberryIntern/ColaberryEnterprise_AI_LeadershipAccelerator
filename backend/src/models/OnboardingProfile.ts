@@ -14,6 +14,14 @@ export interface OnboardingProfileAttributes {
   resume_mime?: string | null;
   resume_data?: string | null;        // base64-encoded file bytes
   resume_uploaded_at?: Date | null;
+  // CAPE Phase 2 (design doc §13 "Extensions to existing structures"): which
+  // resume upload + which extractor version produced the learner's current
+  // resume_skill_claims / placement state. Bumped by
+  // capeResumeClaimService.persistResumeSkillClaims on every successful
+  // extraction; 0 means "no resume ever ingested" (Foundation mode, design
+  // doc §5). See ensureCapePlacementSchema.ts for the column definitions.
+  resume_version?: number;
+  extractor_version?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -36,6 +44,8 @@ class OnboardingProfile extends Model<OnboardingProfileAttributes> implements On
   declare resume_mime: string | null;
   declare resume_data: string | null;
   declare resume_uploaded_at: Date | null;
+  declare resume_version: number;
+  declare extractor_version: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -52,6 +62,8 @@ OnboardingProfile.init(
     resume_mime: { type: DataTypes.STRING(120), allowNull: true },
     resume_data: { type: DataTypes.TEXT, allowNull: true },
     resume_uploaded_at: { type: DataTypes.DATE, allowNull: true },
+    resume_version: { type: DataTypes.INTEGER, allowNull: false, defaultValue: 0 },
+    extractor_version: { type: DataTypes.STRING(60), allowNull: true },
   },
   {
     sequelize,

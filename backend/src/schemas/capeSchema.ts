@@ -58,6 +58,49 @@ export const updateSkillDefinitionSchema = z.object({
 });
 export type UpdateSkillDefinitionInput = z.infer<typeof updateSkillDefinitionSchema>;
 
+/**
+ * CAPE Phase 2 (design doc §5, §13) — resume/LinkedIn placement + adaptive
+ * diagnostic contracts.
+ */
+
+/** The 6 evidence tiers §5 asks the extractor to distinguish, ascending strength. */
+export const evidenceKindSchema = z.enum([
+  'keyword_list', 'job_bullet', 'built_owned',
+  'measurable_outcome', 'production', 'led_architecture_decisions',
+]);
+
+export const ownershipSchema = z.enum(['built', 'owned', 'used', 'led']);
+export const scopeSchema = z.enum(['personal', 'team', 'production']);
+
+/** One raw skill claim as returned by the LLM extractor (§5 JSON shape), before
+ * merge/scoring. Every field the model could omit is optional; validated
+ * BEFORE any DB write (backend/CLAUDE.md: untrusted LLM output over untrusted
+ * resume text gets the same "validate before it reaches a service" treatment). */
+export const resumeSkillClaimSchema = z.object({
+  skill_id: architectureSkillIdSchema,
+  subskills: z.array(z.string().min(1).max(60)).max(10).optional(),
+  evidence_text: z.string().max(2000).nullable().optional(),
+  evidence_kind: evidenceKindSchema,
+  recency_years: z.number().min(0).max(60).nullable().optional(),
+  ownership: ownershipSchema.nullable().optional(),
+  scope: scopeSchema.nullable().optional(),
+  confidence: z.number().min(0).max(1),
+});
+export type RawSkillClaimInput = z.infer<typeof resumeSkillClaimSchema>;
+
+/** Body contract for POST /api/portal/cape/diagnostic/:skillId/submit. */
+export const diagnosticTriggerSchema = z.enum(['diagnostic_prompt', 'test_out']);
+export const diagnosticAnswerSchema = z.object({
+  item_id: z.string().min(1).max(60),
+  selected_option: z.string().min(1).max(60),
+});
+export const diagnosticSubmitSchema = z.object({
+  attempt_id: z.string().min(1).max(100),
+  answers: z.array(diagnosticAnswerSchema).min(1).max(5),
+  trigger: diagnosticTriggerSchema.optional(),
+});
+export type DiagnosticSubmitInput = z.infer<typeof diagnosticSubmitSchema>;
+
 /** Admin PUT /api/admin/cape/evidence-band-weights body — must sum to 1.0 (±0.001). */
 export const updateEvidenceBandWeightsSchema = z.object({
   claim_weight: z.number().min(0).max(1),
