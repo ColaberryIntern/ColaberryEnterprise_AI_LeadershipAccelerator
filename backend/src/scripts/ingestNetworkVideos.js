@@ -256,10 +256,14 @@ async function main() {
   tot.rows.forEach(x => console.log('  ' + JSON.stringify(x)));
 }
 
-// Run only when invoked directly (including piped `node -` — Node still sets
-// require.main === module for stdin-sourced scripts). Guarding this lets unit tests
-// require the module for its pure helpers without touching CCPP/Postgres.
-if (require.main === module) {
+// Run only when invoked directly. Node leaves `require.main` UNDEFINED (not equal
+// to `module`) for `node -e`/`node -` (stdin) execution — this script's own
+// documented invocation is `cat script.js | ssh ... docker exec -i ... node -` — so
+// the guard must accept both "real file" (require.main === module) and "stdin"
+// (require.main === undefined). When `require()`d from a test runner, require.main
+// is the runner's own entry module: neither undefined nor === this module, so the
+// guard correctly stays closed and CCPP/Postgres are never touched.
+if (require.main === module || require.main === undefined) {
   main().catch(e => { console.error('FATAL:', e.message); process.exit(1); });
 }
 
