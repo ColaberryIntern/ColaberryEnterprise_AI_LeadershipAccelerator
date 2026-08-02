@@ -6,14 +6,14 @@ import InboxClassification from '../../models/InboxClassification';
 import InboxDeletedEmail from '../../models/InboxDeletedEmail';
 import InboxCaseItem from '../../models/InboxCaseItem';
 import OpsBcTodo from '../../models/OpsBcTodo';
-import { getColaberryGmailClient, getPersonalGmailClient } from '../inbox/inboxSyncService';
+import { getColaberryGmailClient, getPersonalGmailClient, extractBodyText } from '../inbox/inboxSyncService';
 import { isConfigured as isHotmailConfigured, fetchFolderMessages } from '../inbox/graphMailService';
 import { searchAndNormalize } from './sources/gmailCaseSource';
 import { toCandidate as hotmailToCandidate } from './sources/hotmailCaseSource';
-import { todoToCandidate, fetchExactReference } from './sources/basecampCaseSource';
+import { todoToCandidate, fetchExactReference, resolveDigestTodoByTitle } from './sources/basecampCaseSource';
 import { RawCandidateItem } from './sources/caseSourceAdapter';
 import { ScoredCandidate, groupCandidates } from './caseGroupingService';
-import { computeSourceHash, BasecampReference } from './textNormalization';
+import { computeSourceHash, BasecampReference, parseDigestTodoLines, isBasecampDigestSender } from './textNormalization';
 import { persistClusterAsCase, DiscoveredCaseSummary, MAX_CANDIDATES_PER_CASE } from './caseDiscoveryService';
 import { logCaseEvent } from './caseEventLog';
 import { evaluateClosureGuard, closeCase } from './caseClosureService';
@@ -123,6 +123,75 @@ async function expandBasecampReferencedItems(inScopeEmailItems: RawCandidateItem
   const bounded = [...refsByRecordingId.values()].slice(0, MAX_CANDIDATES_PER_CASE);
   const resolved = await Promise.all(bounded.map((ref) => fetchExactReference(ref)));
   return resolved.filter((item): item is RawCandidateItem => item !== null);
+}
+
+// Resolves Basecamp's OTHER digest format — the periodic "N to-dos due soon"
+// rollup, which embeds ZERO per-to-do URLs (confirmed against 3 real
+// production samples; only expandBasecampReferencedItems's URL-based path
+// above handles individual notification emails that DO embed a link). Each
+// to-do is plain text, parsed by parseDigestTodoLines and resolved by exact
+// title match against the local Basecamp mirror. Scoped to gmail_colaberry
+// only (every real observed digest is on that provider — the business
+// Basecamp account is tied to the business mailbox); any digest-sender item
+// on a different provider is skipped with a log, never attempted against the
+// wrong client.
+async function expandDigestTextTodos(inScopeEmailItems: RawCandidateItem[], gmail: ReturnType<typeof getColaberryGmailClient>): Promise<RawCandidateItem[]> {
+  if (!gmail) return [];
+  // Pre-filter dedup within this expansion pass alone (avoids redundant
+  // Gmail/mirror lookups when two digests in the same run mention the same
+  // title) — dedupeBySourceHash() below is the real cross-source safety net,
+  // this is a performance nicety on top of it, not a substitute.
+  const resolvedByHash = new Map<string, RawCandidateItem>();
+
+  for (const item of inScopeEmailItems) {
+    if (item.basecamp_refs.length > 0) continue; // already handled by the URL path
+    if (!isBasecampDigestSender((item.snapshot as any)?.from_address)) continue;
+    if (item.provider !== 'gmail_colaberry') {
+      console.error(`[InboxCase][AutoSync] Digest-sender item on unsupported provider ${item.provider} — skipping text-parse expansion (only gmail_colaberry is wired).`);
+      continue;
+    }
+
+    let bodyText = '';
+    try {
+      const full = await gmail.users.messages.get({ userId: 'me', id: item.source_id, format: 'full' });
+      bodyText = extractBodyText(full.data.payload) || '';
+    } catch (err: any) {
+      console.error(`[InboxCase][AutoSync] Digest re-fetch failed for ${item.source_id}: ${err?.message}`);
+      continue;
+    }
+
+    for (const todo of parseDigestTodoLines(bodyText)) {
+      const candidate = await resolveDigestTodoByTitle(todo.title);
+      if (!candidate) continue;
+      candidate.thread_id = item.thread_id; // borrow the digest's own thread_id so shareThreadOrReplyChain clusters them together
+      const hash = computeSourceHash(candidate.provider, candidate.source_id);
+      if (!resolvedByHash.has(hash)) resolvedByHash.set(hash, candidate);
+    }
+  }
+
+  return [...resolvedByHash.values()];
+}
+
+// Cross-source dedup before clustering — a to-do can legitimately surface
+// from more than one source in the same run (e.g. fresh via the
+// bc_updated_at cursor AND resolved-by-title from a digest mentioning it).
+// Without this, groupCandidates() would see two distinct object instances
+// for the same underlying record and could persist it twice, across two
+// different cases. On a collision, keeps whichever instance carries a real
+// thread_id (the clustering-relevant one) rather than first-seen-wins, so
+// this is safe regardless of which order the pools are merged in.
+function dedupeBySourceHash(items: RawCandidateItem[]): RawCandidateItem[] {
+  const byHash = new Map<string, RawCandidateItem>();
+  for (const item of items) {
+    const hash = computeSourceHash(item.provider, item.source_id);
+    const existing = byHash.get(hash);
+    if (!existing) {
+      byHash.set(hash, item);
+    } else if (!existing.thread_id && item.thread_id) {
+      byHash.set(hash, item);
+    }
+  }
+  return [...byHash.values()];
 }
 
 async function fetchRecentBasecampCandidates(cursor: Date): Promise<RawCandidateItem[]> {
@@ -291,9 +360,11 @@ export async function runAutoSync(triggeredBy: 'cron' | 'admin', requestedBy: st
     // references can't resurrect it into a new case.
     syncStatus = { ...syncStatus, stage: 'fetching_basecamp' };
     const expandedBasecampItems = await expandBasecampReferencedItems(emailCandidates);
+    const textResolvedItems = await expandDigestTextTodos(emailCandidates, getColaberryGmailClient());
 
     syncStatus = { ...syncStatus, stage: 'classifying' };
-    const surviving = await dropAlreadyLinkedGlobally([...emailCandidates, ...basecampCandidates, ...expandedBasecampItems]);
+    const merged = dedupeBySourceHash([...emailCandidates, ...basecampCandidates, ...expandedBasecampItems, ...textResolvedItems]);
+    const surviving = await dropAlreadyLinkedGlobally(merged);
 
     syncStatus = { ...syncStatus, stage: 'clustering_and_removing_stale' };
     const scored = surviving.map(toScoredCandidate);
