@@ -256,7 +256,7 @@ export async function getFeed(enrollmentId: string): Promise<TimelineFeed> {
     } else {
       try {
         const gc = gateCardById.get(card.id)
-          || { id: card.id, type: card.type, bucket: card.bucket, week: card.week, program_id: (card as any).program_id ?? null, unlock_rules: card.unlock_rules };
+          || { id: card.id, type: card.type, bucket: card.bucket, week: card.week, program_id: (card as any).program_id ?? null, unlock_rules: card.unlock_rules, order: card.order };
         const verdict = evaluateCardLock(gc, gateCtx);
         status = verdict.locked ? 'locked' : 'available';
         lock_reason = verdict.locked ? (verdict.unmet[0]?.label ?? null) : null;
