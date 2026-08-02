@@ -3,6 +3,7 @@ import {
   isWatchableCard,
   requiredWatchPct,
   meetsWatchRequirement,
+  withAuthoritativeDuration,
   DEFAULT_WATCH_PCT,
   MAX_DELTA_PER_BEAT_S,
   WatchState,
@@ -53,6 +54,77 @@ describe('accumulateWatch', () => {
     expect(s.duration_s).toBe(0);
     expect(s.watched_pct).toBe(0);
     expect(s.watched_s).toBe(20);
+  });
+
+  it('omitting authoritativeDurationS preserves the exact existing ratchet behavior (regression guard)', () => {
+    let s = accumulateWatch(null, { delta_s: 5, position_s: 5, duration_s: 100 }, NOW);
+    s = accumulateWatch(s, { delta_s: 5, position_s: 10, duration_s: 40 }, NOW); // smaller — ignored, same as the pre-fix test above
+    expect(s.duration_s).toBe(100);
+  });
+});
+
+describe('accumulateWatch with an authoritative duration', () => {
+  it('is used from the very first beat — no ratchet warm-up needed', () => {
+    const s = accumulateWatch(null, { delta_s: 10, position_s: 10, duration_s: 600 }, NOW, 300);
+    expect(s.duration_s).toBe(300);          // authoritative wins outright, not the inflated client value
+    expect(s.watched_pct).toBe(3);           // 10/300, not 10/600
+  });
+
+  it('a smaller authoritative duration overrides a stale/poisoned larger ratcheted value', () => {
+    // Simulate a card already poisoned by the pre-fix bug: an inflated fallback (600s)
+    // was locked in via the old ratchet.
+    let s = accumulateWatch(null, { delta_s: 45, position_s: 45, duration_s: 600 }, NOW);
+    expect(s.duration_s).toBe(600); // poisoned, exactly as the bug described
+
+    // Ground truth (300s) becomes known on the next beat — must win immediately, not
+    // be capped by Math.max(600, 300) (which would keep the poisoned 600 forever).
+    s = accumulateWatch(s, { delta_s: 45, position_s: 90 }, NOW, 300);
+    expect(s.duration_s).toBe(300);
+    expect(s.watched_pct).toBe(30); // 90/300, judged against the true duration, not 600
+  });
+
+  it('ignores a non-finite/zero/negative authoritative value and falls back to the ratchet', () => {
+    const s = accumulateWatch(null, { delta_s: 10, position_s: 10, duration_s: 200 }, NOW, 0);
+    expect(s.duration_s).toBe(200);
+    const s2 = accumulateWatch(null, { delta_s: 10, position_s: 10, duration_s: 200 }, NOW, NaN);
+    expect(s2.duration_s).toBe(200);
+  });
+
+  it('still clamps per-beat delta and never lets watched_s exceed 2x duration', () => {
+    let s: WatchState | null = null;
+    for (let i = 0; i < 10; i++) s = accumulateWatch(s, { delta_s: 45, position_s: 45 * (i + 1) }, NOW, 60);
+    expect(s!.watched_s).toBeLessThanOrEqual(120);
+    expect(s!.watched_pct).toBe(100);
+  });
+});
+
+describe('withAuthoritativeDuration', () => {
+  const stored = (over: Partial<WatchState> = {}): WatchState => ({ watched_s: 460, max_position_s: 460, duration_s: 600, watched_pct: 77, ...over });
+
+  it('recomputes duration_s and watched_pct from the stored watched_s — no new beat required', () => {
+    const out = withAuthoritativeDuration(stored(), 400);
+    expect(out?.duration_s).toBe(400);
+    expect(out?.watched_pct).toBe(100); // capped — 460/400 > 100%
+  });
+
+  it('self-heals a poisoned card at completion-check time: stuck at 77% of 600 becomes past 75% of the true 400', () => {
+    const poisoned = stored({ watched_s: 310, duration_s: 600, watched_pct: 52 }); // 310/600 = 52%, below 75%
+    const healed = withAuthoritativeDuration(poisoned, 400);
+    expect(healed?.watched_pct).toBe(78); // 310/400 = 77.5% -> 78%, now past the 75% gate
+    expect(meetsWatchRequirement(healed, 0.75).met).toBe(true);
+    expect(meetsWatchRequirement(poisoned, 0.75).met).toBe(false); // the un-healed state was stuck
+  });
+
+  it('is a no-op when no authoritative duration is given', () => {
+    const s = stored();
+    expect(withAuthoritativeDuration(s, null)).toEqual(s);
+    expect(withAuthoritativeDuration(s, undefined)).toEqual(s);
+    expect(withAuthoritativeDuration(s, 0)).toEqual(s);
+  });
+
+  it('passes through null/undefined watch state unchanged', () => {
+    expect(withAuthoritativeDuration(null, 300)).toBeNull();
+    expect(withAuthoritativeDuration(undefined, 300)).toBeNull();
   });
 });
 
