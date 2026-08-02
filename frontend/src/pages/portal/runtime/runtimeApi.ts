@@ -8,7 +8,7 @@ import portalApi from '../../../utils/portalApi';
 export interface RtCard {
   id: string; type: string; title: string; subtitle?: string | null; description?: string | null;
   student_label: string; render_band: string; estimated_time?: number | null; competencies?: any;
-  evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
+  evidence_required?: boolean; video?: { url: string; presenter: string | null; poster: string | null; title?: string | null; duration_seconds?: number | null } | null;
   blog?: { url: string; title?: string | null; excerpt?: string | null; thumbnail?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // the saved lesson — the workspace opens with it
   course?: { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null;   // Skills Course link (skills_jar)

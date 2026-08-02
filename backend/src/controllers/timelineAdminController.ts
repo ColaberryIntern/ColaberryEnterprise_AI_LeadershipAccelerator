@@ -28,6 +28,10 @@ const videoSchema = z.object({
   url: z.string().max(2000).nullable().optional(),
   presenter: z.string().max(200).nullable().optional(),
   poster: z.string().max(2000).nullable().optional(),
+  // Real provider duration (YouTube Data API), when known — the watch-gate's ground
+  // truth. Must round-trip through the save endpoints or the video-draft fix upstream
+  // is silently lost the moment an author saves the generated draft.
+  duration_seconds: z.number().positive().nullable().optional(),
 }).nullable().optional();
 // AI-generated student content saved onto the card (metadata.content).
 const contentSchema = z.object({
