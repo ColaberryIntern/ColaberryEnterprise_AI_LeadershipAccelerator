@@ -9,7 +9,7 @@ const mockBcGet = jest.fn();
 jest.mock('../../../ops/basecampClient', () => ({ bcGet: mockBcGet }));
 jest.mock('../../../../models/OpsBcTodo', () => ({ __esModule: true, default: { findAll: jest.fn(async () => []) } }));
 
-import { basecampCaseSource } from '../basecampCaseSource';
+import { basecampCaseSource, fetchExactReference } from '../basecampCaseSource';
 
 describe('basecampCaseSource — comment source_url', () => {
   beforeEach(() => {
@@ -46,5 +46,51 @@ describe('basecampCaseSource — comment source_url', () => {
     const comment = items.find((i) => i.source_type === 'basecamp_comment');
     expect(comment).toBeDefined();
     expect(comment!.source_url).toBe('https://3.basecamp.com/12345/buckets/67/todos/42');
+  });
+});
+
+// Guards against a future accidental un-export breaking caseAutoSyncService.ts's
+// reuse of this function to resolve Basecamp references embedded in digest
+// emails (see execution-contract.md, 20260802-053423-digest-basecamp-action-decomposition).
+describe('fetchExactReference — exported for reuse', () => {
+  beforeEach(() => {
+    mockBcGet.mockReset();
+  });
+
+  it('is directly importable and resolves a real recording to a RawCandidateItem', async () => {
+    mockBcGet.mockResolvedValue({
+      id: 555,
+      title: 'Vendor onboarding checklist',
+      app_url: 'https://3.basecamp.com/1/buckets/9/todos/555',
+      bucket: { id: 9, name: 'Vendor Onboarding' },
+      updated_at: new Date().toISOString(),
+    });
+
+    const result = await fetchExactReference({
+      accountId: '1',
+      projectId: '9',
+      recordingType: 'todos',
+      recordingId: '555',
+      url: 'https://3.basecamp.com/1/buckets/9/todos/555',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.source_type).toBe('basecamp_todo');
+    expect(result!.source_id).toBe('555');
+    expect(mockBcGet).toHaveBeenCalledWith('/buckets/9/todos/555.json');
+  });
+
+  it('returns null (never throws) when the Basecamp API call fails', async () => {
+    mockBcGet.mockRejectedValue(new Error('Basecamp 404'));
+
+    const result = await fetchExactReference({
+      accountId: '1',
+      projectId: '9',
+      recordingType: 'todos',
+      recordingId: '999',
+      url: 'https://3.basecamp.com/1/buckets/9/todos/999',
+    });
+
+    expect(result).toBeNull();
   });
 });

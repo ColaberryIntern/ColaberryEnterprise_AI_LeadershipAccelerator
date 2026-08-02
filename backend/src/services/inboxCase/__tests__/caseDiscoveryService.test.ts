@@ -164,6 +164,24 @@ describe('discoverCases — Kes scenario (Mode A: resolve by person)', () => {
     expect(k2msg1Item.case_id).toBe(bcTodoItem.case_id);
   });
 
+  it('persists basecamp_refs onto the created item snapshot, not just the transient candidate', async () => {
+    await discoverCases({ mode: 'PERSON', query: 'Kes', window: '90d', openedBy: 'ali@colaberry.com' });
+    const items = Array.from(fakeInboxCaseItem.rows.values());
+    const k2msg1Item = items.find((i) => i.source_id === k2Msg1.source_id);
+
+    expect(k2msg1Item.snapshot.basecamp_refs).toEqual(k2Msg1.basecamp_refs);
+    expect(k2msg1Item.snapshot.basecamp_refs).toHaveLength(1);
+    expect(k2msg1Item.snapshot.basecamp_refs[0].recordingId).toBe('555');
+  });
+
+  it('persists an empty basecamp_refs array (never undefined) for an item with no Basecamp references', async () => {
+    await discoverCases({ mode: 'PERSON', query: 'Kes', window: '90d', openedBy: 'ali@colaberry.com' });
+    const items = Array.from(fakeInboxCaseItem.rows.values());
+    const k1msg1Item = items.find((i) => i.source_id === k1Msg1.source_id);
+
+    expect(k1msg1Item.snapshot.basecamp_refs).toEqual([]);
+  });
+
   it('excludes the unrelated Basecamp record from every real case', async () => {
     const summaries = await discoverCases({ mode: 'PERSON', query: 'Kes', window: '90d', openedBy: 'ali@colaberry.com' });
     const items = Array.from(fakeInboxCaseItem.rows.values());

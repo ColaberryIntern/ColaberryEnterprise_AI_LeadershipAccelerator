@@ -119,6 +119,7 @@ jest.mock('../sources/hotmailCaseSource', () => ({
     snapshot: {},
   }),
 }));
+const mockFetchExactReference = jest.fn(async (ref: any) => null as any);
 jest.mock('../sources/basecampCaseSource', () => ({
   todoToCandidate: (todo: any) => ({
     source_type: 'basecamp_todo',
@@ -137,6 +138,7 @@ jest.mock('../sources/basecampCaseSource', () => ({
     body_excerpt: '',
     snapshot: { project_id: todo.project_id },
   }),
+  fetchExactReference: (...args: any[]) => mockFetchExactReference(...args),
 }));
 
 let colaberryConfigured = true;
@@ -162,6 +164,7 @@ beforeEach(() => {
   fakeInboxCaseEvent.rows.clear();
   mockSearchAndNormalize.mockReset().mockResolvedValue([]);
   mockFetchFolderMessages.mockReset().mockResolvedValue([]);
+  mockFetchExactReference.mockReset().mockResolvedValue(null);
   hotmailConfigured = false;
   colaberryConfigured = true;
   personalConfigured = false;
@@ -224,6 +227,109 @@ describe('runAutoSync — classification filter', () => {
 
     expect(result.newCasesCreated).toBe(0);
     expect(result.emailsSkippedUnclassified).toBe(1);
+  });
+});
+
+describe('runAutoSync — Basecamp-reference expansion (digest decomposition)', () => {
+  const REF_1 = { url: 'https://3.basecamp.com/1/buckets/9/todos/555', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '555' };
+  const REF_2 = { url: 'https://3.basecamp.com/1/buckets/9/todos/556', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '556' };
+
+  function resolvedTodoCandidate(recordingId: string) {
+    return {
+      source_type: 'basecamp_todo' as const,
+      source_id: recordingId,
+      provider: 'basecamp' as const,
+      source_url: `https://3.basecamp.com/1/buckets/9/todos/${recordingId}`,
+      title: `Resolved to-do ${recordingId}`,
+      occurred_at: new Date(),
+      participants: [],
+      subject_normalized: `resolved to-do ${recordingId}`,
+      thread_id: null,
+      message_id: null,
+      in_reply_to: [],
+      basecamp_refs: [],
+      attachment_names: [],
+      body_excerpt: '',
+      snapshot: { exact_reference: true, bucket: { id: 9 } },
+    };
+  }
+
+  it('resolves a digest email\'s Basecamp references into additional candidate items', async () => {
+    const digest = rawEmailCandidate({ basecamp_refs: [REF_1, REF_2] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockFetchExactReference.mockImplementation(async (ref: any) => resolvedTodoCandidate(ref.recordingId));
+
+    const result = await runAutoSync('cron', 'system');
+
+    expect(mockFetchExactReference).toHaveBeenCalledTimes(2);
+    // 1 case created (digest + its 2 resolved todos cluster together via the
+    // T003 asymmetric shareBasecampRef fix), 3 items total.
+    expect(result.newCasesCreated).toBe(1);
+    expect(result.itemsAdded).toBe(3);
+    const items = Array.from(fakeInboxCaseItem.rows.values());
+    expect(items.filter((i) => i.source_type === 'basecamp_todo')).toHaveLength(2);
+  });
+
+  it('keeps the successfully-resolved reference even when a sibling reference fails to resolve', async () => {
+    const digest = rawEmailCandidate({ basecamp_refs: [REF_1, REF_2] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockFetchExactReference.mockImplementation(async (ref: any) =>
+      ref.recordingId === '555' ? resolvedTodoCandidate('555') : null
+    );
+
+    const result = await runAutoSync('cron', 'system');
+
+    expect(result.newCasesCreated).toBe(1); // sync doesn't crash on a partial failure
+    const items = Array.from(fakeInboxCaseItem.rows.values());
+    expect(items.filter((i) => i.source_type === 'basecamp_todo')).toHaveLength(1);
+  });
+
+  it('does not call fetchExactReference at all for an email with no Basecamp references', async () => {
+    const plain = rawEmailCandidate({ basecamp_refs: [] });
+    await seedClassifiedEmail('gmail_colaberry', plain.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([plain]);
+
+    await runAutoSync('cron', 'system');
+
+    expect(mockFetchExactReference).not.toHaveBeenCalled();
+  });
+
+  it('never expands references from an email that was filtered out by classification (AUTOMATION)', async () => {
+    const digest = rawEmailCandidate({ basecamp_refs: [REF_1] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'AUTOMATION');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+
+    const result = await runAutoSync('cron', 'system');
+
+    expect(mockFetchExactReference).not.toHaveBeenCalled();
+    expect(result.newCasesCreated).toBe(0);
+  });
+
+  it('does not create a duplicate item when the referenced todo was already persisted in a prior run', async () => {
+    // Simulate: an earlier sync already resolved and persisted this exact
+    // Basecamp todo (matches on provider+source_id -> source_hash, the same
+    // global dedup every other source already relies on).
+    const { computeSourceHash } = require('../textNormalization');
+    await fakeInboxCaseItem.create({
+      case_id: randomUUID(),
+      provider: 'basecamp',
+      source_id: '555',
+      source_hash: computeSourceHash('basecamp', '555'),
+    });
+
+    const digest = rawEmailCandidate({ basecamp_refs: [REF_1] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockFetchExactReference.mockResolvedValue(resolvedTodoCandidate('555'));
+
+    await runAutoSync('cron', 'system');
+
+    const todoItems = Array.from(fakeInboxCaseItem.rows.values()).filter(
+      (i: any) => i.provider === 'basecamp' && i.source_id === '555'
+    );
+    expect(todoItems).toHaveLength(1); // still just the one seeded row, not two
   });
 });
 
