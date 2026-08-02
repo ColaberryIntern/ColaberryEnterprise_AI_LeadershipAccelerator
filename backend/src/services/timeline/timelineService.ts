@@ -19,7 +19,7 @@ import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingSe
 import { isFreePreviewTier } from '../access/contentEntitlement';
 import { env } from '../../config/env';
 
-const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
+export const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
 export interface FeedVideo {
   url: string;

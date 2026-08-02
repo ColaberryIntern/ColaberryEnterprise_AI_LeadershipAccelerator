@@ -103,7 +103,7 @@ describe('anchoredWeekAllowed — free-tier / current-week gate', () => {
 
 describe('weekStartedForToday — Today-only same-week self-unlock', () => {
   const c = (o: Partial<WeekGateCard> & Pick<WeekGateCard, 'id'>): WeekGateCard => ({
-    type: 'quiz', week: 1, order: 0, status: 'available', ...o,
+    type: 'quiz', bucket: 'learn', week: 1, order: 0, status: 'available', ...o,
   });
 
   it('zero completions in week N: only the entry (lowest-order) card shows', () => {
@@ -146,5 +146,28 @@ describe('weekStartedForToday — Today-only same-week self-unlock', () => {
     const cards = [ann, entry, rest];
     expect(weekStartedForToday(entry, cards)).toBe(true);
     expect(weekStartedForToday(rest, cards)).toBe(false);
+  });
+
+  it('REGRESSION (prod bug 2026-08-02): a reflect/advance-bucket card tied at order 0 with an earlier-bucket card is never chosen as the entry card, regardless of UUID sort order', () => {
+    // Reproduces the exact live shape: an `evaluation` (bucket 'reflect', order 0)
+    // and a `learn`-bucket card (order 0) tied on raw order. `order` is scored PER
+    // BUCKET, not globally across the week, so a raw (order, id) sort can let the
+    // evaluation win purely by UUID string luck — it must never win against an
+    // earlier pedagogical bucket, no matter how the ids compare.
+    const evalCard = c({ id: 'aaaaaaaa-0000-0000-0000-000000000000', type: 'evaluation', bucket: 'reflect', order: 0 });
+    const learnCard = c({ id: 'zzzzzzzz-0000-0000-0000-000000000000', bucket: 'learn', order: 0 });
+    const cards = [evalCard, learnCard];
+    // Sanity: 'aaaa...' sorts before 'zzzz...' — a naive (order,id) sort would
+    // have picked evalCard as "entry" here. Bucket sequence must override that.
+    expect(weekStartedForToday(evalCard, cards)).toBe(false);
+    expect(weekStartedForToday(learnCard, cards)).toBe(true);
+  });
+
+  it('bucket sequence still respects order-within-bucket when buckets differ', () => {
+    const preClass = c({ id: 'pc', bucket: 'pre_class', order: 0 });
+    const build = c({ id: 'b1', bucket: 'build', order: 0 });
+    const cards = [preClass, build];
+    expect(weekStartedForToday(preClass, cards)).toBe(true);
+    expect(weekStartedForToday(build, cards)).toBe(false);
   });
 });
