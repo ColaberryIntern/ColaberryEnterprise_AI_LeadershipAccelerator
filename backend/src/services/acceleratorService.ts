@@ -223,7 +223,12 @@ export async function computeReadinessScore(enrollmentId: string) {
   const cohortSessions = await LiveSession.findAll({
     where: { cohort_id: enrollment.cohort_id, status: { [Op.ne]: 'cancelled' } },
   });
-  const totalSessions = cohortSessions.length;
+  // Attendance can only be measured against classes that have actually happened.
+  // Dividing by every scheduled session — including ones weeks in the future in a
+  // multi-week program — made a student who attended every class held so far read
+  // as having near-zero attendance (e.g. 2 of 25 total sessions = 8%, when the
+  // real answer is 2 of 3 sessions actually held = 67%).
+  const sessionsHeldSoFar = cohortSessions.filter((s) => s.status === 'completed' || s.status === 'live').length;
 
   const attendanceRecords = await AttendanceRecord.findAll({
     where: { enrollment_id: enrollmentId },
@@ -231,7 +236,7 @@ export async function computeReadinessScore(enrollmentId: string) {
   const attended = attendanceRecords.filter(
     (r) => r.status === 'present' || r.status === 'late'
   ).length;
-  const attendanceScore = totalSessions > 0 ? (attended / totalSessions) * 100 : 0;
+  const attendanceScore = sessionsHeldSoFar > 0 ? (attended / sessionsHeldSoFar) * 100 : 0;
 
   const preworkSubs = await AssignmentSubmission.findAll({
     where: {
