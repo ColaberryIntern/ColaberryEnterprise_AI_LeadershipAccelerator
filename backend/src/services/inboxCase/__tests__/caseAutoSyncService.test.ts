@@ -382,11 +382,10 @@ describe('runAutoSync — auto-dispose items deleted at the source', () => {
   });
 
   it('closes the case when the deleted-at-source item was the last remaining blocker', async () => {
-    // EXECUTING, not ASSESSING — only EXECUTING/WAITING/DELEGATED have a
-    // legal path to RESOLVED (CASE_STATE_TRANSITIONS); a fresh ASSESSING
-    // case genuinely cannot close directly even with a clean item guard,
-    // per the real state machine (see caseClosureService.test.ts's own
-    // "case_not_in_closable_state" regression test for that exact case).
+    // EXECUTING is one representative closable state here; every active
+    // state can now reach RESOLVED once evaluateClosureGuard() passes (see
+    // caseClosureService.test.ts's own regression coverage across all of
+    // them, added after CASE_STATE_TRANSITIONS was widened).
     const c = await fakeInboxCase.create({ title: 'Test case', mode: 'TOPIC', state: 'EXECUTING', correlation_id: randomUUID(), reopen_count: 0 });
     await fakeInboxCaseItem.create({
       case_id: c.id, source_type: 'email', source_id: 'msg-2', provider: 'gmail_colaberry',
