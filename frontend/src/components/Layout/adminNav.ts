@@ -65,6 +65,7 @@ export const NAV_GROUPS: NavGroup[] = [
     { path: '/admin/accelerator', label: 'Accelerator', icon: 'graduation-cap-line' },
     { path: '/admin/community-roles', label: 'Community Roles', icon: 'user-star-line' },
     { path: '/admin/orchestration', label: 'Orchestration', icon: 'flow-chart' },
+    { path: '/admin/cape-settings', label: 'Architecture Skills', icon: 'radar-line' },
     { path: '/admin/workforce', label: 'AI Organization', icon: 'team-line' },
     { path: '/admin/brain', label: 'Enterprise Intelligence', icon: 'brain-line' },
     { path: '/admin/projects', label: 'Projects', icon: 'rocket-2-line' },

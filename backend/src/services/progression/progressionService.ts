@@ -123,6 +123,23 @@ export async function onCardCompleted(enrollmentId: string, cardId: string): Pro
   // idempotent per (enrollment, card): re-completing awards 0.
   const points_awarded = await awardCardCompletionPoints(enrollmentId, { id: card.id, type: card.type, points: card.points });
 
+  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — additive, non-fatal skill
+  // evidence write. Runs from this single choke point ONLY (never from click/dwell/
+  // streak alone), and a failure here never blocks XP/points/promotion above.
+  // Fully separate ledger from XpEvent/EvidenceRecord — see capeTimelineEvidenceBridge.ts.
+  // recordCapeEvidenceForCompletedCard already swallows its own errors; this
+  // try/catch is defense-in-depth against a failure in the dynamic import itself.
+  try {
+    const { recordCapeEvidenceForCompletedCard } = await import('../cape/capeTimelineEvidenceBridge');
+    await recordCapeEvidenceForCompletedCard(enrollmentId, { id: card.id, type: card.type });
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+      event: 'cape_evidence_bridge_import_failed', error_class: err?.name || 'Error',
+      outcome: 'failure', context: { enrollment_id: enrollmentId, card_id: card.id },
+    }));
+  }
+
   await recomputeForEnrollment(enrollmentId);
   const promotion = await evaluateForEnrollment(enrollmentId);
 
