@@ -177,7 +177,10 @@ export default function ClassDashboardTab({ cohortId }: Props) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis domain={[0, 100]} unit="%" />
-                <Tooltip formatter={(value: number | null) => (value == null ? 'n/a' : `${value}%`)} />
+                {/* recharts' Formatter type covers string|number|array unions that don't
+                    narrow cleanly against our number|null data; `any` here is scoped to
+                    this one callback's parameter, not a broader type escape. */}
+                <Tooltip formatter={(value: any) => (value == null ? 'n/a' : `${value}%`)} />
                 <Legend />
                 <Line type="monotone" dataKey="Attendance" stroke="var(--status-success, #38a169)" strokeWidth={2} dot={{ r: 3 }} />
                 <Line type="monotone" dataKey="Submissions" stroke="var(--status-info, #2b6cb0)" strokeWidth={2} dot={{ r: 3 }} connectNulls />
