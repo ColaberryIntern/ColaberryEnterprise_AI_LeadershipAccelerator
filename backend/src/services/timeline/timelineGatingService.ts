@@ -48,7 +48,6 @@ export interface GateCard {
   type: string;
   bucket: string;
   week: number | null;
-  order: number;
   program_id?: string | null;
   unlock_rules?: any;
 }
@@ -57,11 +56,6 @@ export interface GateContext {
   completedCardIds: Set<string>;
   sectionRulesFor: (card: GateCard) => UnlockPredicate[];
   isCompletable: (card: GateCard) => boolean;
-  /** Week-start gate (env.timelineWeekStartGateEnabled) — threaded through the
-   *  context rather than read from env inside the pure evaluator, so
-   *  evaluateCardLock stays a pure function of its inputs (testable without
-   *  mutating process.env / the env module). */
-  weekStartGateEnabled: boolean;
 }
 export interface GateResult { locked: boolean; unmet: UnmetReason[] }
 
@@ -108,42 +102,6 @@ function predicateMet(pred: UnlockPredicate, card: GateCard, ctx: GateContext): 
   return { met, reason: { kind: pred.kind, label: pred.label || 'Finish the required activities first' } };
 }
 
-/**
- * PURE — is `card` its week's designated entry point? Non-completable types
- * (announcements, events, ...) are never subject to the week-start gate at all,
- * so they trivially count as "entry" (always exempt). Otherwise: the lowest
- * `(order, id)` completable card sharing `card.week`.
- */
-export function isWeekEntryCard(card: GateCard, ctx: GateContext): boolean {
-  if (!ctx.isCompletable(card)) return true;
-  const completableInWeek = ctx.allCards.filter((c) => c.week === card.week && ctx.isCompletable(c));
-  if (!completableInWeek.length) return false;
-  const entry = [...completableInWeek].sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id))[0];
-  return entry.id === card.id;
-}
-
-/**
- * PURE — automatic "same-week self-unlock" gate: a week's cards (weeks 1-12)
- * stay locked, except that week's own entry card, until the student completes
- * >=1 completable card in that week. Only fills the gap for cards an admin has
- * NOT already explicitly gated (no section rule, no own unlock_rules) — an
- * admin's explicit rules are trusted as sufficient and this rule stands down,
- * so the existing section_complete unlock path stays fully independent.
- */
-export function weekStartUnmet(card: GateCard, ctx: GateContext): UnmetReason | null {
-  if (!ctx.weekStartGateEnabled) return null;
-  if (card.week == null || card.week <= 0) return null;
-  if (!ctx.isCompletable(card)) return null;
-  const explicitRules = [...ctx.sectionRulesFor(card), ...normalizeRules(card.unlock_rules)];
-  if (explicitRules.length > 0) return null;
-  if (isWeekEntryCard(card, ctx)) return null;
-  const startedWeek = ctx.allCards.some(
-    (c) => c.week === card.week && ctx.isCompletable(c) && ctx.completedCardIds.has(c.id),
-  );
-  if (startedWeek) return null;
-  return { kind: 'week_not_started', label: `Complete an activity from Week ${card.week} first` };
-}
-
 /** PURE — the lock verdict for one card. locked = ANY predicate unmet (AND). */
 export function evaluateCardLock(card: GateCard, ctx: GateContext): GateResult {
   const rules = [...ctx.sectionRulesFor(card), ...normalizeRules(card.unlock_rules)];
@@ -152,15 +110,13 @@ export function evaluateCardLock(card: GateCard, ctx: GateContext): GateResult {
     const r = predicateMet(pred, card, ctx);
     if (!r.met) unmet.push(r.reason);
   }
-  const weekGate = weekStartUnmet(card, ctx);
-  if (weekGate) unmet.push(weekGate);
   return { locked: unmet.length > 0, unmet };
 }
 
 // ── I/O: compose the pure engine with the DB ─────────────────────────────────
 
 const toGateCard = (c: TimelineCard): GateCard => ({
-  id: c.id, type: c.type, bucket: c.bucket, week: c.week, order: c.order,
+  id: c.id, type: c.type, bucket: c.bucket, week: c.week,
   program_id: (c as any).program_id ?? null, unlock_rules: c.unlock_rules,
 });
 
@@ -200,7 +156,6 @@ export async function buildGateContext(
     completedCardIds,
     sectionRulesFor: (c) => sectionRules.get(`${c.program_id ?? 'null'}|${c.bucket}`) || [],
     isCompletable: (c) => isCompletableType(c.type),
-    weekStartGateEnabled: env.timelineWeekStartGateEnabled,
   };
 }
 

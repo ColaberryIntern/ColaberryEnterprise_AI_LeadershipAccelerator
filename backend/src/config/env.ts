@@ -148,12 +148,14 @@ export const env = {
   // unpaid members see the free preview until they pay. See
   // services/access/contentEntitlement.ts.
   contentPaidGateEnabled: process.env.CONTENT_PAID_GATE_ENABLED === 'true',
-  // Week-start gating — a curriculum week's cards stay locked (except that week's
-  // own first/entry card) until the student completes >=1 completable card in that
-  // week. Only applies to cards with NO existing admin-authored unlock_rules/section
-  // rule (those keep governing themselves independently). Default OFF: flag-off
-  // preserves the legacy "everything unlocked unless an admin explicitly gated it"
-  // behavior byte-for-byte. See timelineGatingService.weekStartUnmet.
+  // Week-start gating — TODAY TIMELINE ONLY (does not affect Classroom): a
+  // curriculum week's cards stay off the Today feed (except that week's own
+  // first/entry card) until the student completes >=1 completable card in that
+  // week. Classroom (`/portal/classroom`, timelineGatingService.evaluateCardLock)
+  // is completely unaffected — this flag is only read inside
+  // todayAnchoredSources.classCandidates. Default OFF: flag-off preserves the
+  // legacy "everything visible" behavior byte-for-byte. See
+  // todayFeedPlan.weekStartedForToday.
   timelineWeekStartGateEnabled: process.env.TIMELINE_WEEK_START_GATE_ENABLED === 'true',
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',

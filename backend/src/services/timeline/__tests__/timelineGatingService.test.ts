@@ -12,7 +12,6 @@ function ctxOf(
   completedIds: string[],
   sectionRules: Record<string, UnlockPredicate[]> = {},
   nonCompletableIds: string[] = [],
-  weekStartGateEnabled = false,
 ): GateContext {
   const nc = new Set(nonCompletableIds);
   return {
@@ -20,15 +19,12 @@ function ctxOf(
     completedCardIds: new Set(completedIds),
     sectionRulesFor: (c) => sectionRules[c.bucket] || [],
     isCompletable: (c) => !nc.has(c.id),
-    weekStartGateEnabled,
   };
 }
 
-let nextOrder = 0;
 const card = (o: Partial<GateCard> & Pick<GateCard, 'id'>): GateCard => ({
-  type: 'quiz', bucket: 'learn', week: 1, unlock_rules: [], order: nextOrder++, ...o,
+  type: 'quiz', bucket: 'learn', week: 1, unlock_rules: [], ...o,
 });
-beforeEach(() => { nextOrder = 0; });
 
 describe('normalizeRules', () => {
   it('keeps valid predicates and drops junk', () => {
@@ -121,57 +117,5 @@ describe('evaluateCardLock', () => {
   it('section_complete on an empty section is vacuously unlocked', () => {
     const test = card({ id: 'test', bucket: 'reflect', week: 1, unlock_rules: [{ kind: 'section_complete', bucket: 'practice' }] });
     expect(evaluateCardLock(test, ctxOf([test], [])).locked).toBe(false);
-  });
-});
-
-describe('weekStartUnmet — same-week self-unlock', () => {
-  it('zero completions in week N: only the entry (lowest-order) card is unlocked', () => {
-    const entry = card({ id: 'w1-first', week: 1, order: 0 });
-    const rest = card({ id: 'w1-second', week: 1, order: 1 });
-    const cards = [entry, rest];
-    const ctx = ctxOf(cards, [], {}, [], true);
-    expect(evaluateCardLock(entry, ctx).locked).toBe(false);
-    const verdict = evaluateCardLock(rest, ctx);
-    expect(verdict.locked).toBe(true);
-    expect(verdict.unmet.map((u) => u.kind)).toContain('week_not_started');
-  });
-
-  it('>=1 completed card in week N unlocks the rest of that week', () => {
-    const entry = card({ id: 'w1-first', week: 1, order: 0 });
-    const rest = card({ id: 'w1-second', week: 1, order: 1 });
-    const cards = [entry, rest];
-    const ctx = ctxOf(cards, ['w1-first'], {}, [], true);
-    expect(evaluateCardLock(rest, ctx).locked).toBe(false);
-  });
-
-  it('a card governed by an existing (satisfied) section rule is not additionally locked', () => {
-    const entry = card({ id: 'w1-first', week: 1, order: 0 });
-    const learn = card({ id: 'w1-learn', bucket: 'learn', week: 1, order: 1 });
-    const gated = card({
-      id: 'w1-gated', bucket: 'reflect', week: 1, order: 2,
-      unlock_rules: [{ kind: 'card_complete', card_id: 'w1-learn' }],
-    });
-    const cards = [entry, learn, gated];
-    // Zero completions in week 1 EXCEPT the explicit prerequisite the admin authored
-    // — the automatic week-start gate must stand down for `gated` since it already
-    // has its own explicit unlock_rules, leaving that rule as the sole gate.
-    const ctx = ctxOf(cards, ['w1-learn'], {}, [], true);
-    expect(evaluateCardLock(gated, ctx).locked).toBe(false);
-  });
-
-  it('week 0 is always exempt regardless of completions', () => {
-    const w0a = card({ id: 'w0-a', week: 0, order: 0 });
-    const w0b = card({ id: 'w0-b', week: 0, order: 1 });
-    const ctx = ctxOf([w0a, w0b], [], {}, [], true);
-    expect(evaluateCardLock(w0b, ctx).locked).toBe(false);
-  });
-
-  it('flag OFF: no behavior change from today (both cards unlocked)', () => {
-    const entry = card({ id: 'w1-first', week: 1, order: 0 });
-    const rest = card({ id: 'w1-second', week: 1, order: 1 });
-    const cards = [entry, rest];
-    const ctx = ctxOf(cards, [], {}, [], false);
-    expect(evaluateCardLock(entry, ctx).locked).toBe(false);
-    expect(evaluateCardLock(rest, ctx).locked).toBe(false);
   });
 });
