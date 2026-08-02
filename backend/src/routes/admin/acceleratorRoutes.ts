@@ -11,6 +11,7 @@ import {
   handleUpdateSubmission, handleUploadSubmission,
   handleGetReadiness, handleComputeReadiness, handleComputeAllReadiness,
   handleGetDashboard,
+  handleGetClassDashboard,
   handleCreateEnrollment,
   handleListCohortEnrollments,
   handleSetPortalAccess,
@@ -33,6 +34,7 @@ const router = Router();
 router.get('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, handleListSessions);
 router.post('/api/admin/accelerator/cohorts/:cohortId/sessions', requireAdmin, handleCreateSession);
 router.get('/api/admin/accelerator/cohorts/:cohortId/dashboard', requireAdmin, handleGetDashboard);
+router.get('/api/admin/accelerator/cohorts/:cohortId/class-dashboard', requireAdmin, handleGetClassDashboard);
 router.post('/api/admin/accelerator/cohorts/:cohortId/readiness', requireAdmin, handleComputeAllReadiness);
 // Quick-add student: create enrollment + enable portal + send magic link in one call
 router.post('/api/admin/accelerator/quick-add-student', requireAdmin, async (req: Request, res: Response) => {

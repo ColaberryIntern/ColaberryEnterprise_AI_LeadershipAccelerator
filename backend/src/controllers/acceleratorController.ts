@@ -3,7 +3,7 @@ import {
   listSessionsByCohort, getSession, createSession, updateSession, deleteSession,
   getSessionAttendance, markAttendance, bulkMarkAttendance, updateAttendanceRecord,
   listSubmissionsByEnrollment, listSubmissionsBySession, createSubmission, updateSubmission,
-  computeReadinessScore, computeAllReadinessScores, getCohortDashboard,
+  computeReadinessScore, computeAllReadinessScores, getCohortDashboard, getClassDashboard,
   listCohortEnrollments, setPortalAccess, getPortalLoginUrl, getReadOnlyViewAsUrl,
 } from '../services/acceleratorService';
 import {
@@ -368,6 +368,14 @@ export async function handleComputeAllReadiness(req: Request, res: Response, nex
 export async function handleGetDashboard(req: Request, res: Response, next: NextFunction) {
   try {
     const dashboard = await getCohortDashboard(req.params.cohortId as string);
+    if (!dashboard) return res.status(404).json({ error: 'Cohort not found' });
+    res.json(dashboard);
+  } catch (err) { next(err); }
+}
+
+export async function handleGetClassDashboard(req: Request, res: Response, next: NextFunction) {
+  try {
+    const dashboard = await getClassDashboard(req.params.cohortId as string);
     if (!dashboard) return res.status(404).json({ error: 'Cohort not found' });
     res.json(dashboard);
   } catch (err) { next(err); }

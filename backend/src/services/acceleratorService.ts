@@ -339,6 +339,181 @@ export async function getCohortDashboard(cohortId: string) {
 }
 
 
+// -- Class Dashboard --
+//
+// No historical score-snapshot table exists in this codebase (confirmed at
+// DISCOVER time) — Enrollment.readiness_score/attendance_score/etc. are
+// overwritten in place on every recompute, not stored over time. Trend
+// indicators here are therefore DERIVED from session-ordered attendance and
+// submission data (the one real "over time" substrate that does exist), not
+// from a fabricated history. avg_readiness has no derivable series of its own
+// (it's a composite blend, not tracked per-session) and deliberately carries no
+// trend arrow rather than inventing one.
+
+export type TrendDirection = 'up' | 'down' | 'flat';
+
+// Percentage-point gap required before a direction is reported as up/down
+// rather than flat — prevents the arrow from flickering on noise in small
+// cohorts (a defensible default, not a claim of statistical rigor).
+const TREND_THRESHOLD_POINTS = 3;
+
+/**
+ * Pure: compares the average of the last min(3, n-1) points against the
+ * average of everything before them. Fewer than 2 points is not enough signal
+ * to claim a trend either way.
+ */
+export function computeTrendDirection(series: number[]): TrendDirection {
+  if (series.length < 2) return 'flat';
+  const recentCount = Math.min(3, series.length - 1);
+  const splitAt = series.length - recentCount;
+  const earlier = series.slice(0, splitAt);
+  const recent = series.slice(splitAt);
+  const avg = (arr: number[]) => arr.reduce((sum, v) => sum + v, 0) / arr.length;
+  const diff = avg(recent) - avg(earlier);
+  if (diff > TREND_THRESHOLD_POINTS) return 'up';
+  if (diff < -TREND_THRESHOLD_POINTS) return 'down';
+  return 'flat';
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+export interface ClassDashboardSessionPoint {
+  session_number: number;
+  session_title: string;
+  /** % of active enrollments marked present/late for this session. */
+  attendance_rate: number;
+  /** % of this session's tied build_lab/evidence/reflection submissions that
+   *  are reviewed with a score. Null when no such assignment was due yet for
+   *  this session (not zero — "not applicable" vs "zero completion" matter). */
+  submission_rate: number | null;
+}
+
+export interface ClassDashboardStudentRow {
+  enrollment_id: string;
+  full_name: string;
+  readiness_score: number | null;
+  prework_score: number | null;
+  attendance_score: number | null;
+  assignment_score: number | null;
+  maturity_level: number;
+  /** This student's OWN recent-vs-earlier attendance trend, from their own
+   *  AttendanceRecord rows across the cohort's past sessions. */
+  attendance_trend: TrendDirection;
+}
+
+export interface ClassDashboard {
+  cohort_id: string;
+  kpis: {
+    avg_readiness: { value: number };
+    avg_attendance: { value: number; trend: TrendDirection };
+    avg_assignment: { value: number; trend: TrendDirection };
+    /** prework_intake + prework_upload completion — not session-ordered (both
+     *  precede session 1), reported as a single point-in-time stat rather than
+     *  forced into the per-session trend series. */
+    prework_completion_rate: number;
+  };
+  session_series: ClassDashboardSessionPoint[];
+  students: ClassDashboardStudentRow[];
+}
+
+export async function getClassDashboard(cohortId: string): Promise<ClassDashboard | null> {
+  const cohort = await Cohort.findByPk(cohortId);
+  if (!cohort) return null;
+
+  const enrollments = await Enrollment.findAll({ where: { cohort_id: cohortId, status: 'active' } });
+  const sessions = await LiveSession.findAll({
+    where: { cohort_id: cohortId, status: { [Op.ne]: 'cancelled' } },
+    order: [['session_number', 'ASC']],
+  });
+  const sessionIds = sessions.map((s) => s.id);
+  const enrollmentIds = enrollments.map((e) => e.id);
+
+  const [attendanceRecords, submissions] = await Promise.all([
+    sessionIds.length ? AttendanceRecord.findAll({ where: { session_id: { [Op.in]: sessionIds } } }) : Promise.resolve([]),
+    enrollmentIds.length ? AssignmentSubmission.findAll({ where: { enrollment_id: { [Op.in]: enrollmentIds } } }) : Promise.resolve([]),
+  ]);
+
+  // Only sessions that have actually happened contribute to the trend series —
+  // a still-`scheduled` future session has no attendance yet, and reading that
+  // as "0% attendance" would misrepresent it as a decline rather than "hasn't
+  // happened."
+  const pastSessions = sessions.filter((s) => s.status === 'completed' || s.status === 'live');
+
+  const sessionSeries: ClassDashboardSessionPoint[] = pastSessions.map((s) => {
+    const sessionAttendance = attendanceRecords.filter((r) => r.session_id === s.id);
+    const presentCount = sessionAttendance.filter((r) => r.status === 'present' || r.status === 'late').length;
+    const attendanceRate = enrollments.length > 0 ? (presentCount / enrollments.length) * 100 : 0;
+
+    const sessionSubs = submissions.filter(
+      (sub) => sub.session_id === s.id && ['build_lab', 'evidence', 'reflection'].includes(sub.assignment_type)
+    );
+    const submissionRate = sessionSubs.length > 0
+      ? (sessionSubs.filter((sub) => sub.status === 'reviewed' && sub.score != null).length / sessionSubs.length) * 100
+      : null;
+
+    return {
+      session_number: s.session_number,
+      session_title: s.title,
+      attendance_rate: round2(attendanceRate),
+      submission_rate: submissionRate != null ? round2(submissionRate) : null,
+    };
+  });
+
+  const attendanceRateSeries = sessionSeries.map((p) => p.attendance_rate);
+  const submissionRateSeries = sessionSeries
+    .map((p) => p.submission_rate)
+    .filter((v): v is number => v != null);
+
+  // Cohort-wide prework completion: two assignment_type slots per student
+  // (prework_intake + prework_upload), matching computeReadinessScore's own
+  // per-student expectation of the same two types, aggregated across the cohort.
+  const preworkSubs = submissions.filter((sub) => ['prework_intake', 'prework_upload'].includes(sub.assignment_type));
+  const preworkSubmittedCount = preworkSubs.filter((sub) => sub.status === 'submitted' || sub.status === 'reviewed').length;
+  const preworkExpected = enrollments.length * 2;
+  const preworkCompletionRate = preworkExpected > 0 ? Math.min((preworkSubmittedCount / preworkExpected) * 100, 100) : 0;
+
+  const avg = (arr: number[]) => (arr.length > 0 ? arr.reduce((sum, v) => sum + v, 0) / arr.length : 0);
+  const avgReadiness = avg(enrollments.map((e) => e.readiness_score || 0));
+  const avgAttendance = avg(enrollments.map((e) => e.attendance_score || 0));
+  const avgAssignment = avg(enrollments.map((e) => e.assignment_score || 0));
+
+  const pastSessionIdsInOrder = pastSessions.map((s) => s.id);
+  const students: ClassDashboardStudentRow[] = enrollments.map((e) => {
+    // A missing record for a past session counts as not-attended, same
+    // convention computeReadinessScore already uses (divides by total sessions,
+    // not just sessions with a record).
+    const ownAttendanceSeries = pastSessionIdsInOrder.map((sid) => {
+      const rec = attendanceRecords.find((r) => r.enrollment_id === e.id && r.session_id === sid);
+      return rec && (rec.status === 'present' || rec.status === 'late') ? 100 : 0;
+    });
+    return {
+      enrollment_id: e.id,
+      full_name: e.full_name,
+      readiness_score: e.readiness_score,
+      prework_score: e.prework_score,
+      attendance_score: e.attendance_score,
+      assignment_score: e.assignment_score,
+      maturity_level: e.maturity_level,
+      attendance_trend: computeTrendDirection(ownAttendanceSeries),
+    };
+  });
+
+  return {
+    cohort_id: cohortId,
+    kpis: {
+      avg_readiness: { value: round2(avgReadiness) },
+      avg_attendance: { value: round2(avgAttendance), trend: computeTrendDirection(attendanceRateSeries) },
+      avg_assignment: { value: round2(avgAssignment), trend: computeTrendDirection(submissionRateSeries) },
+      prework_completion_rate: round2(preworkCompletionRate),
+    },
+    session_series: sessionSeries,
+    students,
+  };
+}
+
+
 // -- Post-Session Processing --
 
 export async function detectAbsentParticipants(sessionId: string) {
