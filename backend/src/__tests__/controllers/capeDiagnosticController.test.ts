@@ -3,6 +3,7 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
 import { startDiagnostic, submitDiagnosticAttempt } from '../../services/cape/capeDiagnosticService';
+import { recomputeStudentArchitectureSkill } from '../../services/cape/capeProficiencyService';
 import capePortalRoutes from '../../routes/capePortalRoutes';
 
 jest.mock('../../services/cape/capeProficiencyService', () => ({
@@ -20,6 +21,7 @@ jest.mock('../../services/cape/capeDiagnosticService', () => {
 
 const mockStart = startDiagnostic as unknown as jest.Mock;
 const mockSubmit = submitDiagnosticAttempt as unknown as jest.Mock;
+const mockRecompute = recomputeStudentArchitectureSkill as unknown as jest.Mock;
 
 function buildApp() {
   const app = express();
@@ -86,6 +88,7 @@ describe('POST /api/portal/cape/diagnostic/:skillId/submit', () => {
       .send({ answers: [] });
     expect(res.status).toBe(400);
     expect(mockSubmit).not.toHaveBeenCalled();
+    expect(mockRecompute).not.toHaveBeenCalled(); // recompute must never fire on a rejected submit
   });
 
   it('400s an empty answers array', async () => {
@@ -96,9 +99,10 @@ describe('POST /api/portal/cape/diagnostic/:skillId/submit', () => {
       .send({ attempt_id: 'att-1', answers: [] });
     expect(res.status).toBe(400);
     expect(mockSubmit).not.toHaveBeenCalled();
+    expect(mockRecompute).not.toHaveBeenCalled();
   });
 
-  it('200s with the outcome on a valid submit', async () => {
+  it('200s with the outcome on a valid submit, and recomputes the submitted skill for the AUTHENTICATED enrollment (not a client-supplied id)', async () => {
     mockSubmit.mockResolvedValue({ outcome: 'confirmed', bridge_recommended: false, created: true });
     const app = buildApp();
     const res = await request(app)
@@ -108,5 +112,18 @@ describe('POST /api/portal/cape/diagnostic/:skillId/submit', () => {
     expect(res.status).toBe(200);
     expect(res.body.outcome).toBe('confirmed');
     expect(mockSubmit).toHaveBeenCalledWith('enr-1', 'agents_mcp', 'att-1', [{ item_id: 'i1', selected_option: 'a' }], 'diagnostic_prompt');
+    expect(mockRecompute).toHaveBeenCalledWith('enr-1', 'agents_mcp');
+    expect(mockRecompute).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT recompute when the underlying service rejects (recompute only follows a SUCCESSFUL submit)', async () => {
+    mockSubmit.mockRejectedValue(new Error('scoring failed'));
+    const app = buildApp();
+    const res = await request(app)
+      .post('/api/portal/cape/diagnostic/agents_mcp/submit')
+      .set('Authorization', `Bearer ${participantToken('enr-1')}`)
+      .send({ attempt_id: 'att-1', answers: [{ item_id: 'i1', selected_option: 'a' }] });
+    expect(res.status).toBe(500);
+    expect(mockRecompute).not.toHaveBeenCalled();
   });
 });
