@@ -294,7 +294,7 @@ const RuntimeWorkspace: React.FC = () => {
                 poster={card.video?.poster || videoThumbnail(parseVideoUrl(card.video?.url))}
                 badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
                 onWatchBeat={onWatchBeat}
-                fallbackDurationS={card.estimated_time ? card.estimated_time * 60 : null}
+                fallbackDurationS={card.video?.duration_seconds || (card.estimated_time ? card.estimated_time * 60 : null)}
               />
               {!completed && card.video?.url && (
                 <div className="tlv-watch">

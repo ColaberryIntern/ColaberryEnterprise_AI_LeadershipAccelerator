@@ -127,3 +127,29 @@ export async function searchShortVideos(query: string, opts: SearchOptions = {})
   }
   return out;
 }
+
+/**
+ * Look up ONE video's real duration by id — no min/max filtering, no ranking, just
+ * ground truth. Used at card-authoring time and by the duration backfill script, so
+ * an already-known video (unlike `searchShortVideos`) never gets rejected for being
+ * outside a "short video" range. Never throws: returns null when the key is missing,
+ * the video doesn't exist / isn't embeddable, or the API is unreachable after retries
+ * — callers degrade to their own fallback (mirrors `searchShortVideos`'s contract).
+ */
+export async function getVideoDurationSeconds(videoId: string, opts: Pick<SearchOptions, 'timeoutMs' | 'maxAttempts'> = {}): Promise<number | null> {
+  const key = process.env.YOUTUBE_API_KEY;
+  const id = String(videoId || '').trim();
+  if (!key || !id) return null;
+  const timeoutMs = opts.timeoutMs ?? 10000;
+  const maxAttempts = opts.maxAttempts ?? 3;
+  try {
+    const detailUrl = `${API}/videos?part=contentDetails,status&id=${encodeURIComponent(id)}&key=${key}`;
+    const details = await fetchJson(detailUrl, timeoutMs, maxAttempts);
+    const v = (details.items || [])[0];
+    if (!v || v?.status?.embeddable === false) return null;
+    const seconds = iso8601ToSeconds(v?.contentDetails?.duration || '');
+    return seconds > 0 ? seconds : null;
+  } catch {
+    return null; // quota exceeded, video deleted/private, network failure — caller falls back
+  }
+}
