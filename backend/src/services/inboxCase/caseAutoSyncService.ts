@@ -10,11 +10,11 @@ import { getColaberryGmailClient, getPersonalGmailClient } from '../inbox/inboxS
 import { isConfigured as isHotmailConfigured, fetchFolderMessages } from '../inbox/graphMailService';
 import { searchAndNormalize } from './sources/gmailCaseSource';
 import { toCandidate as hotmailToCandidate } from './sources/hotmailCaseSource';
-import { todoToCandidate } from './sources/basecampCaseSource';
+import { todoToCandidate, fetchExactReference } from './sources/basecampCaseSource';
 import { RawCandidateItem } from './sources/caseSourceAdapter';
 import { ScoredCandidate, groupCandidates } from './caseGroupingService';
-import { computeSourceHash } from './textNormalization';
-import { persistClusterAsCase, DiscoveredCaseSummary } from './caseDiscoveryService';
+import { computeSourceHash, BasecampReference } from './textNormalization';
+import { persistClusterAsCase, DiscoveredCaseSummary, MAX_CANDIDATES_PER_CASE } from './caseDiscoveryService';
 import { logCaseEvent } from './caseEventLog';
 import { evaluateClosureGuard, closeCase } from './caseClosureService';
 
@@ -103,6 +103,26 @@ async function fetchRecentEmailCandidates(cursor: Date): Promise<RawCandidateIte
   }
 
   return items;
+}
+
+// Resolves live Basecamp references embedded in already-in-scope email
+// bodies (e.g. Basecamp's own "N to-dos due soon" digest, which links one
+// URL per to-do) into real candidate items, so the existing planner's
+// buildBasecampCommentActions() can propose a real per-to-do action instead
+// of a generic reply against the digest itself. MUST be called with the
+// already-filtered (filterToInScopeEmails) kept list, never the raw
+// pre-filter candidates — an AUTOMATION/SILENT_HOLD-classified email's
+// Basecamp references must not resurrect it into a new case.
+async function expandBasecampReferencedItems(inScopeEmailItems: RawCandidateItem[]): Promise<RawCandidateItem[]> {
+  const refsByRecordingId = new Map<string, BasecampReference>();
+  for (const item of inScopeEmailItems) {
+    for (const ref of item.basecamp_refs) refsByRecordingId.set(ref.recordingId, ref);
+  }
+  if (refsByRecordingId.size === 0) return [];
+
+  const bounded = [...refsByRecordingId.values()].slice(0, MAX_CANDIDATES_PER_CASE);
+  const resolved = await Promise.all(bounded.map((ref) => fetchExactReference(ref)));
+  return resolved.filter((item): item is RawCandidateItem => item !== null);
 }
 
 async function fetchRecentBasecampCandidates(cursor: Date): Promise<RawCandidateItem[]> {
@@ -265,7 +285,15 @@ export async function runAutoSync(triggeredBy: 'cron' | 'admin', requestedBy: st
 
     syncStatus = { ...syncStatus, stage: 'classifying' };
     const { kept: emailCandidates, skippedUnclassified } = await filterToInScopeEmails(emailCandidatesRaw);
-    const surviving = await dropAlreadyLinkedGlobally([...emailCandidates, ...basecampCandidates]);
+
+    // Must run on the already-filtered, in-scope list — never the raw
+    // pre-filter candidates — so an AUTOMATION/SILENT_HOLD email's Basecamp
+    // references can't resurrect it into a new case.
+    syncStatus = { ...syncStatus, stage: 'fetching_basecamp' };
+    const expandedBasecampItems = await expandBasecampReferencedItems(emailCandidates);
+
+    syncStatus = { ...syncStatus, stage: 'classifying' };
+    const surviving = await dropAlreadyLinkedGlobally([...emailCandidates, ...basecampCandidates, ...expandedBasecampItems]);
 
     syncStatus = { ...syncStatus, stage: 'clustering_and_removing_stale' };
     const scored = surviving.map(toScoredCandidate);

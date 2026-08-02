@@ -70,7 +70,11 @@ export function todoToCandidate(todo: OpsBcTodo): RawCandidateItem {
   };
 }
 
-async function fetchExactReference(
+// Exported for reuse by caseAutoSyncService.ts — the same recordingId ->
+// real Basecamp record resolution is needed to decompose a digest email's
+// embedded Basecamp links into real per-to-do candidate items, not just
+// this file's own person/topic discovery flow.
+export async function fetchExactReference(
   ref: { accountId: string; projectId: string; recordingType: string; recordingId: string; url: string }
 ): Promise<RawCandidateItem | null> {
   try {
