@@ -2,6 +2,7 @@ import StudentSkillEvidence from '../../../models/StudentSkillEvidence';
 import StudentArchitectureSkill from '../../../models/StudentArchitectureSkill';
 import ArchitectureSkillDefinition from '../../../models/ArchitectureSkillDefinition';
 import ArchitectureSkillEvidenceBandWeights from '../../../models/ArchitectureSkillEvidenceBandWeights';
+import { computePlacementScore } from '../capePlacementService';
 import { recomputeStudentArchitectureSkill, getCurrentWeights, getLearnerSkillProfile } from '../capeProficiencyService';
 
 jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }));
@@ -12,12 +13,19 @@ jest.mock('../../../models/StudentArchitectureSkill', () => ({
 }));
 jest.mock('../../../models/ArchitectureSkillDefinition', () => ({ __esModule: true, default: { findAll: jest.fn() } }));
 jest.mock('../../../models/ArchitectureSkillEvidenceBandWeights', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
+// CAPE Phase 2: placement is computed by a separate, independently-tested
+// module (capePlacementService.test.ts). Mocked here at the module boundary
+// (not the raw model) so this file's existing all-zero-placement assertions
+// keep passing unchanged — the mock defaults to 0, exactly matching the
+// hardcoded-0 behavior this suite was originally written against.
+jest.mock('../capePlacementService', () => ({ computePlacementScore: jest.fn().mockResolvedValue(0) }));
 
 const evidenceFindAll = StudentSkillEvidence.findAll as unknown as jest.Mock;
 const archFindOrCreate = StudentArchitectureSkill.findOrCreate as unknown as jest.Mock;
 const archFindAll = StudentArchitectureSkill.findAll as unknown as jest.Mock;
 const defFindAll = ArchitectureSkillDefinition.findAll as unknown as jest.Mock;
 const weightsFindOne = ArchitectureSkillEvidenceBandWeights.findOne as unknown as jest.Mock;
+const mockComputePlacementScore = computePlacementScore as unknown as jest.Mock;
 
 function makeRow(overrides: Record<string, any> = {}) {
   const state: Record<string, any> = {
@@ -120,6 +128,19 @@ describe('recomputeStudentArchitectureSkill', () => {
     expect(Number(after.proficiency)).toBeCloseTo(70, 5); // 0.7 * 100
     expect(after.weights_version).toBe(2);
   });
+
+  it('CAPE Phase 2 wiring: a non-zero computePlacementScore() result flows through to the recomputed row, independent of the verified bands', async () => {
+    evidenceFindAll.mockResolvedValue([{ band: 'application', credit: 20, created_at: new Date('2026-01-01') }]);
+    const row = makeRow();
+    archFindOrCreate.mockResolvedValue([row, true]);
+    mockComputePlacementScore.mockResolvedValueOnce(63);
+
+    const result = await recomputeStudentArchitectureSkill('e1', 'agents_mcp');
+    expect(Number(result.placement_score)).toBe(63);
+    expect(mockComputePlacementScore).toHaveBeenCalledWith('e1', 'agents_mcp');
+    // the verified band computed from student_skill_evidence is unaffected by placement
+    expect(Number(result.application_score)).toBe(20);
+  });
 });
 
 describe('getLearnerSkillProfile', () => {
@@ -149,5 +170,17 @@ describe('getLearnerSkillProfile', () => {
     const profile = await getLearnerSkillProfile('e1');
     expect(profile.skills).toHaveLength(1);
     expect(evidenceFindAll).toHaveBeenCalled(); // recompute-on-read fired
+  });
+
+  it('CAPE Phase 2 wiring: a non-zero placement on a recomputed skill surfaces in the returned profile\'s placement field', async () => {
+    defFindAll.mockResolvedValue([{ skill_id: 'llm_core', name: 'LLM Core', axis_order: 0 }]);
+    archFindAll.mockResolvedValue([]); // no cached row -> forces a recompute
+    evidenceFindAll.mockResolvedValue([]);
+    archFindOrCreate.mockResolvedValue([makeRow({ skill_id: 'llm_core', weights_version: 1 }), true]);
+    mockComputePlacementScore.mockResolvedValueOnce(28);
+
+    const profile = await getLearnerSkillProfile('e1');
+    expect(profile.skills[0].placement).toBe(28);
+    expect(profile.overall_placement).toBe(28);
   });
 });

@@ -5,6 +5,13 @@
  * `student_skill_evidence` rows and rewrites the cache row as a FULL REPLACE —
  * never an in-place increment. This is what "recomputed from the append-only
  * ledger, never mutated in place" means operationally.
+ *
+ * `placement_score` (Phase 2, design doc §16) is likewise recomputed fresh
+ * every call, via `capePlacementService.computePlacementScore()` — from
+ * `resume_skill_claims` + `diagnostic_attempts`, NEVER from
+ * `student_skill_evidence`. The two scores share a recompute cycle but stay
+ * fully independent data paths (design doc §4 "one learner profile, two
+ * scores"; §17 AC 2, AC 12).
  */
 import { Op } from 'sequelize';
 import StudentSkillEvidence from '../../models/StudentSkillEvidence';
@@ -13,6 +20,7 @@ import ArchitectureSkillDefinition from '../../models/ArchitectureSkillDefinitio
 import ArchitectureSkillEvidenceBandWeights from '../../models/ArchitectureSkillEvidenceBandWeights';
 import type { EvidenceBand } from '../../models/StudentSkillEvidence';
 import type { ArchitectureSkillId } from '../../constants/architectureSkills';
+import { computePlacementScore } from './capePlacementService';
 
 const BAND_CAP = 100; // a single band's summed credit is capped so no band alone can dominate proficiency
 const REVIEW_INTERVAL_DAYS = 30; // Assumption 5 — placeholder review cadence; full spaced-review scheduling is Phase 4/6
@@ -92,12 +100,20 @@ export async function recomputeStudentArchitectureSkill(
       )
     : null;
 
+  // CAPE Phase 2: placement is DERIVED FRESH from current resume claims +
+  // diagnostic history on every recompute, exactly like the 4 verified bands
+  // above — never a stored field that could drift independently (design doc
+  // §13). A resume-only score never crosses into claim/knowledge/application/
+  // judgment (design doc §17 AC 2) — computePlacementScore() only ever reads
+  // resume_skill_claims/diagnostic_attempts, never student_skill_evidence.
+  const placementScore = await computePlacementScore(enrollmentId, String(skillId));
+
   const [row] = await StudentArchitectureSkill.findOrCreate({
     where: { enrollment_id: enrollmentId, skill_id: skillId },
     defaults: {
       enrollment_id: enrollmentId,
       skill_id: skillId,
-      placement_score: 0, // Phase 2 (resume/diagnostic placement) not built yet — expected zero
+      placement_score: placementScore,
       claim_score: claim,
       knowledge_score: knowledge,
       application_score: application,
@@ -115,7 +131,7 @@ export async function recomputeStudentArchitectureSkill(
   // Full replace — every derived field rewritten together, never a partial/
   // incrementing update.
   await row.update({
-    placement_score: 0,
+    placement_score: placementScore,
     claim_score: claim,
     knowledge_score: knowledge,
     application_score: application,
