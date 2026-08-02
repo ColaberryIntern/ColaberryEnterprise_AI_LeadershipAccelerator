@@ -2556,6 +2556,21 @@ async function start(): Promise<void> {
       .catch((err) => console.warn('[ArchitectPoller] scheduled run failed:', err?.message));
   });
 
+  // Cory health canary — exercises real read-only Cory tool executors every 4h so
+  // tool.call + retrieval observability (Trust Center P1-6) stays live even during
+  // weeks with no organic Cory investigation traffic. Read-only, no LLM involved,
+  // no write tools exposed. See services/observability/coryHealthCanaryService.ts.
+  cron.schedule('0 */4 * * *', () => {
+    import('./services/observability/coryHealthCanaryService')
+      .then(({ runCoryHealthCanary }) => runCoryHealthCanary())
+      .then((result) => {
+        if (result.errors.length > 0) {
+          console.warn('[CoryHealthCanary] completed with errors:', result.errors);
+        }
+      })
+      .catch((err) => console.warn('[CoryHealthCanary] scheduled run failed:', err?.message));
+  });
+
   // Colaberry Commons — drain the community-rooms outbox every minute (Meet-link
   // provisioning, timeline publish, reminders). Flag-gated so it registers no cron
   // at all when the feature is off; the drain itself is idempotent + retryable
