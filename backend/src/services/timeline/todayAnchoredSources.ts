@@ -12,7 +12,7 @@
  */
 import { getFeed, type FeedCard, type FeedVideo } from './timelineService';
 import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
-import { anchoredWeekAllowed } from './todayFeedPlan';
+import { anchoredWeekAllowed, weekStartedForToday } from './todayFeedPlan';
 import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
@@ -241,6 +241,10 @@ async function classCandidates(enrollmentId: string, placedRefs: Set<string>): P
   try {
     const feed = await getFeed(enrollmentId);
     const isExplorer = feed.is_explorer === true; // free tier — Week 0 curriculum only
+    // TODAY-ONLY: a week's cards only appear on Today once the student has
+    // started that week (see weekStartedForToday's docstring) — Classroom is
+    // completely unaffected (it never reads this flag or calls this function).
+    const weekStartGateOn = env.timelineWeekStartGateEnabled;
     return feed.cards
       .filter((c) => {
         if (!isTodayEligible(c.type) || isAmbient(c.type)) return false;
@@ -251,6 +255,7 @@ async function classCandidates(enrollmentId: string, placedRefs: Set<string>): P
         // engagement layer and must never be week-gated, or free users see none
         // of it (null !== 0). Paid users pass either way.
         if ((surfaceOf(c.type) ?? 'class') === 'class' && !anchoredWeekAllowed(c.week, isExplorer)) return false;
+        if (weekStartGateOn && (surfaceOf(c.type) ?? 'class') === 'class' && !weekStartedForToday(c, feed.cards)) return false;
         return true;
       })
       .map(anchoredItemFromCard);

@@ -2,7 +2,7 @@
  * Pure planner invariants for the Today Timeline v2 engagement engine (Phase 1).
  * No I/O — exercises todayFeedPlan.planSlots directly.
  */
-import { planSlots, anchoredWeekAllowed } from '../todayFeedPlan';
+import { planSlots, anchoredWeekAllowed, weekStartedForToday, WeekGateCard } from '../todayFeedPlan';
 import type { AmbientProviderSlug } from '../ambientPool';
 
 const P3: AmbientProviderSlug[] = ['blog', 'podcast', 'testimonial'];
@@ -98,5 +98,53 @@ describe('anchoredWeekAllowed — free-tier / current-week gate', () => {
   });
   it('free members do not see non-week (null) curriculum', () => {
     expect(anchoredWeekAllowed(null, true)).toBe(false);
+  });
+});
+
+describe('weekStartedForToday — Today-only same-week self-unlock', () => {
+  const c = (o: Partial<WeekGateCard> & Pick<WeekGateCard, 'id'>): WeekGateCard => ({
+    type: 'quiz', week: 1, order: 0, status: 'available', ...o,
+  });
+
+  it('zero completions in week N: only the entry (lowest-order) card shows', () => {
+    const entry = c({ id: 'w1-first', order: 0 });
+    const rest = c({ id: 'w1-second', order: 1 });
+    const cards = [entry, rest];
+    expect(weekStartedForToday(entry, cards)).toBe(true);
+    expect(weekStartedForToday(rest, cards)).toBe(false);
+  });
+
+  it('>=1 completed card in week N shows the rest of that week', () => {
+    const entry = c({ id: 'w1-first', order: 0, status: 'completed' });
+    const rest = c({ id: 'w1-second', order: 1 });
+    const cards = [entry, rest];
+    expect(weekStartedForToday(rest, cards)).toBe(true);
+  });
+
+  it('week 0 always shows regardless of completions', () => {
+    const w0a = c({ id: 'w0-a', week: 0, order: 0 });
+    const w0b = c({ id: 'w0-b', week: 0, order: 1 });
+    expect(weekStartedForToday(w0b, [w0a, w0b])).toBe(true);
+  });
+
+  it('non-completable types (announcements) always show, never gated', () => {
+    const ann = c({ id: 'ann', type: 'announcement', order: 5 }); // highest order, would never be "entry"
+    const entry = c({ id: 'w1-first', order: 0 });
+    const rest = c({ id: 'w1-second', order: 1 });
+    const cards = [ann, entry, rest];
+    expect(weekStartedForToday(ann, cards)).toBe(true);
+    expect(weekStartedForToday(rest, cards)).toBe(false); // unaffected by the announcement's presence
+  });
+
+  it('an announcement is never counted as the "entry card" for a completable sibling', () => {
+    // ann has the lowest order but is non-completable — the entry-card exemption
+    // must fall to the lowest-order COMPLETABLE card instead, or week 1 could
+    // never start (the announcement can't be "completed").
+    const ann = c({ id: 'ann', type: 'announcement', order: 0 });
+    const entry = c({ id: 'w1-first', order: 1 });
+    const rest = c({ id: 'w1-second', order: 2 });
+    const cards = [ann, entry, rest];
+    expect(weekStartedForToday(entry, cards)).toBe(true);
+    expect(weekStartedForToday(rest, cards)).toBe(false);
   });
 });

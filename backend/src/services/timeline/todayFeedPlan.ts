@@ -6,6 +6,7 @@
  * the slots this planner lays out.
  */
 import type { AmbientProviderSlug } from './ambientPool';
+import { isCompletableType } from './timelineGatingService';
 
 export type TodayItemKind = 'anchored' | 'ambient';
 export interface PlannedSlot { kind: TodayItemKind; provider?: AmbientProviderSlug; }
@@ -70,4 +71,30 @@ export function planSlots(opts: {
 export function anchoredWeekAllowed(week: number | null, isExplorer: boolean): boolean {
   if (!isExplorer) return true;   // paid: current-week bound handled by lock gating
   return week === 0;              // free: Week 0 curriculum only
+}
+
+/** The minimal card shape `weekStartedForToday` needs — a subset of `FeedCard`. */
+export interface WeekGateCard { id: string; type: string; week: number | null; order: number; status: string | null }
+
+/**
+ * TODAY-ONLY gate (env.timelineWeekStartGateEnabled): within class curriculum,
+ * a week's cards (1-12) show on the Today timeline only once the student has
+ * completed >=1 completable card in that same week. Every week always shows
+ * its own "entry card" (the lowest-`(order, id)` completable card in that
+ * week) so there's always something to start; non-completable types
+ * (announcements/events/system) are never gated by this rule at all.
+ *
+ * This is Today-timeline-specific — it narrows what Today displays among
+ * cards Classroom already marked 'available'. It never touches a card's
+ * `status`/`lock_reason` (that stays governed solely by
+ * timelineGatingService.evaluateCardLock) — Classroom is completely
+ * unaffected by this function; it isn't called anywhere on that path.
+ */
+export function weekStartedForToday(card: WeekGateCard, allCards: WeekGateCard[]): boolean {
+  if (card.week == null || card.week <= 0) return true;
+  if (!isCompletableType(card.type)) return true;
+  const completableInWeek = allCards.filter((c) => c.week === card.week && isCompletableType(c.type));
+  const entry = [...completableInWeek].sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id))[0];
+  if (entry && entry.id === card.id) return true;
+  return completableInWeek.some((c) => c.status === 'completed');
 }
