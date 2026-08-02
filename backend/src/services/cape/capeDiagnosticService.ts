@@ -100,7 +100,7 @@ export async function submitDiagnosticAttempt(
   // Defensive at the service boundary regardless of the route's Zod
   // validation (CLAUDE.md: a service must be safe even called directly, and
   // a generic Error/TypeError is not an acceptable classification here).
-  if (!Array.isArray(answers) || answers.some((a) => !a || typeof a.item_id !== 'string' || typeof a.selected_option !== 'string')) {
+  if (!Array.isArray(answers) || answers.length === 0 || answers.some((a) => !a || typeof a.item_id !== 'string' || typeof a.selected_option !== 'string')) {
     throw new CapeDiagnosticError('answers must be a non-empty array of { item_id, selected_option } strings');
   }
 

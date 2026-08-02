@@ -101,6 +101,8 @@ describe('submitDiagnosticAttempt', () => {
       .rejects.toThrow(CapeDiagnosticError); // missing selected_option
     await expect(submitDiagnosticAttempt('e1', 'agents_mcp', 'att-12', [{ selected_option: 'a' } as any]))
       .rejects.toThrow(CapeDiagnosticError); // missing item_id
+    await expect(submitDiagnosticAttempt('e1', 'agents_mcp', 'att-13', []))
+      .rejects.toThrow(CapeDiagnosticError); // empty array — must not silently score as not_confirmed
     expect(mockFindOrCreate).not.toHaveBeenCalled();
   });
 
