@@ -123,6 +123,9 @@ import WorkContext from './WorkContext';
 import AgentRun from './AgentRun';
 import WorkLedgerEvent from './WorkLedgerEvent';
 import TicketActionLink from './TicketActionLink';
+import EvidenceArtifact from './EvidenceArtifact';
+import EvidenceLink from './EvidenceLink';
+import DecisionRecord from './DecisionRecord';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -782,6 +785,20 @@ TicketActionLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 WorkLedgerEvent.hasMany(TicketActionLink, { foreignKey: 'event_id', as: 'ticketLinks' });
 TicketActionLink.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
 
+// --- ProofDesk Evidence associations (Milestone 2 - Proof & Ticket Experience) ---
+Ticket.hasMany(EvidenceArtifact, { foreignKey: 'ticket_id', as: 'evidenceArtifacts' });
+EvidenceArtifact.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkLedgerEvent.hasMany(EvidenceArtifact, { foreignKey: 'source_event_id', as: 'evidenceArtifacts' });
+EvidenceArtifact.belongsTo(WorkLedgerEvent, { foreignKey: 'source_event_id', as: 'sourceEvent' });
+
+EvidenceArtifact.hasMany(EvidenceLink, { foreignKey: 'evidence_id', as: 'links' });
+EvidenceLink.belongsTo(EvidenceArtifact, { foreignKey: 'evidence_id', as: 'evidence' });
+Ticket.hasMany(EvidenceLink, { foreignKey: 'ticket_id', as: 'evidenceLinks' });
+EvidenceLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(DecisionRecord, { foreignKey: 'ticket_id', as: 'decisionRecords' });
+DecisionRecord.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -1136,6 +1153,9 @@ export {
   AgentRun,
   WorkLedgerEvent,
   TicketActionLink,
+  EvidenceArtifact,
+  EvidenceLink,
+  DecisionRecord,
   StudentNavigationEvent,
   Alert,
   AlertEvent,

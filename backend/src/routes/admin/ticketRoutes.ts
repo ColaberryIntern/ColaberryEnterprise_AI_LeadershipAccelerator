@@ -12,6 +12,9 @@ import {
 } from '../../services/ticketService';
 import { dispatchTicketToAgent } from '../../services/ticketAgentDispatcher';
 import type { TicketStatus, TicketPriority, TicketType } from '../../models/Ticket';
+import { getEvidenceForTicket } from '../../services/evidence/evidenceService';
+import { getDecisionsForTicket, recordDecision, DecisionRecordValidationError } from '../../services/evidence/decisionRecordService';
+import { generateTicketSummary } from '../../services/workLedger/summaryGeneratorService';
 
 import { requireAdmin } from '../../middlewares/authMiddleware';
 
@@ -21,8 +24,22 @@ const router = Router();
 // endpoints publicly callable. Require an authenticated admin for every route below.
 router.use(requireAdmin);
 
+// ROUTING FIX (discovered during ProofDesk Milestone 2, T010): every route string in
+// this file previously started with bare `/tickets...`, but `adminRoutes.ts` mounts
+// this router with `router.use(ticketRoutes)` (no path prefix), and `server.ts` mounts
+// `adminRoutes` with `app.use(adminRoutes)` (also no prefix) — matching the convention
+// every OTHER admin sub-router uses (e.g. `cohortRoutes.ts` bakes `/api/admin/cohorts`
+// into its own route strings). Because this file's routes were missing that prefix,
+// none of them — including the 10 pre-existing ones, not just Milestone 2's 4 new
+// ones — actually resolved at `/api/admin/tickets/*`, the exact URL every caller
+// (`AdminTicketBoardPage.tsx`, `TicketDetailModal.tsx`, and this milestone's new tab
+// components) has always called. Confirmed via a real-module mount test (no scratch
+// reimplementation): `GET /tickets/board` matched and reached the DB-backed handler,
+// while `GET /api/admin/tickets/board` 404'd. Fixed by prefixing every route string
+// below with `/api/admin`, matching the established repo-wide convention exactly.
+
 // ── List with filters ────────────────────────────────────────────────────
-router.get('/tickets', async (req: Request, res: Response) => {
+router.get('/api/admin/tickets', async (req: Request, res: Response) => {
   try {
     const { status, priority, type, source, assigned_to_id, entity_type, entity_id } = req.query;
     const board = await getTicketsForBoard({
@@ -44,7 +61,7 @@ router.get('/tickets', async (req: Request, res: Response) => {
 });
 
 // ── Kanban board format ──────────────────────────────────────────────────
-router.get('/tickets/board', async (req: Request, res: Response) => {
+router.get('/api/admin/tickets/board', async (req: Request, res: Response) => {
   try {
     const { status, priority, type, source, assigned_to_id } = req.query;
     const board = await getTicketsForBoard({
@@ -61,7 +78,7 @@ router.get('/tickets/board', async (req: Request, res: Response) => {
 });
 
 // ── Stats ────────────────────────────────────────────────────────────────
-router.get('/tickets/stats', async (_req: Request, res: Response) => {
+router.get('/api/admin/tickets/stats', async (_req: Request, res: Response) => {
   try {
     const stats = await getTicketStats();
     res.json(stats);
@@ -71,7 +88,7 @@ router.get('/tickets/stats', async (_req: Request, res: Response) => {
 });
 
 // ── Detail with activities ───────────────────────────────────────────────
-router.get('/tickets/:id', async (req: Request, res: Response) => {
+router.get('/api/admin/tickets/:id', async (req: Request, res: Response) => {
   try {
     const result = await getTicketById(String(req.params.id));
     if (!result) return res.status(404).json({ error: 'Ticket not found' });
@@ -82,7 +99,7 @@ router.get('/tickets/:id', async (req: Request, res: Response) => {
 });
 
 // ── Create ───────────────────────────────────────────────────────────────
-router.post('/tickets', async (req: Request, res: Response) => {
+router.post('/api/admin/tickets', async (req: Request, res: Response) => {
   try {
     const ticket = await createTicket({
       ...req.body,
@@ -96,7 +113,7 @@ router.post('/tickets', async (req: Request, res: Response) => {
 });
 
 // ── Update fields ────────────────────────────────────────────────────────
-router.patch('/tickets/:id', async (req: Request, res: Response) => {
+router.patch('/api/admin/tickets/:id', async (req: Request, res: Response) => {
   try {
     const { title, description, priority, type, estimated_effort, due_date, metadata, confidence } = req.body;
     const ticket = await updateTicket(
@@ -112,7 +129,7 @@ router.patch('/tickets/:id', async (req: Request, res: Response) => {
 });
 
 // ── Status transition ────────────────────────────────────────────────────
-router.patch('/tickets/:id/status', async (req: Request, res: Response) => {
+router.patch('/api/admin/tickets/:id/status', async (req: Request, res: Response) => {
   try {
     const { status, actor_type, actor_id } = req.body;
     const ticket = await updateTicketStatus(
@@ -128,7 +145,7 @@ router.patch('/tickets/:id/status', async (req: Request, res: Response) => {
 });
 
 // ── Assignment ───────────────────────────────────────────────────────────
-router.patch('/tickets/:id/assign', async (req: Request, res: Response) => {
+router.patch('/api/admin/tickets/:id/assign', async (req: Request, res: Response) => {
   try {
     const { assigned_to_type, assigned_to_id, actor_type, actor_id } = req.body;
     const ticket = await assignTicket(
@@ -145,7 +162,7 @@ router.patch('/tickets/:id/assign', async (req: Request, res: Response) => {
 });
 
 // ── Add comment ──────────────────────────────────────────────────────────
-router.post('/tickets/:id/comment', async (req: Request, res: Response) => {
+router.post('/api/admin/tickets/:id/comment', async (req: Request, res: Response) => {
   try {
     const { comment, actor_type, actor_id } = req.body;
     if (!comment) return res.status(400).json({ error: 'comment is required' });
@@ -162,12 +179,67 @@ router.post('/tickets/:id/comment', async (req: Request, res: Response) => {
 });
 
 // ── Dispatch to agent ────────────────────────────────────────────────────
-router.post('/tickets/:id/dispatch', async (req: Request, res: Response) => {
+router.post('/api/admin/tickets/:id/dispatch', async (req: Request, res: Response) => {
   try {
     const result = await dispatchTicketToAgent(String(req.params.id));
     if (!result) return res.json({ message: 'No matching agent found', dispatched: false });
     res.json({ dispatched: true, agent: result.agent_name, result });
   } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── ProofDesk Milestone 2 (Proof & Ticket Experience) ───────────────────────
+// Evidence / summary / decisions surfaces powering TicketDetailModal's new tabs.
+// All 4 routes below sit behind this router's existing `requireAdmin` (line ~22).
+
+// ── Evidence (Visual Proof tab) ──────────────────────────────────────────
+router.get('/api/admin/tickets/:id/evidence', async (req: Request, res: Response) => {
+  try {
+    const evidence = await getEvidenceForTicket(String(req.params.id));
+    res.json({ evidence });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Summary (Story tab) ──────────────────────────────────────────────────
+router.get('/api/admin/tickets/:id/summary', async (req: Request, res: Response) => {
+  try {
+    const summary = await generateTicketSummary(String(req.params.id));
+    res.json(summary);
+  } catch (err: any) {
+    if (err.message?.includes('not found')) return res.status(404).json({ error: err.message });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Decisions (Decisions tab) ────────────────────────────────────────────
+router.get('/api/admin/tickets/:id/decisions', async (req: Request, res: Response) => {
+  try {
+    const decisions = await getDecisionsForTicket(String(req.params.id));
+    res.json({ decisions });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/tickets/:id/decisions', async (req: Request, res: Response) => {
+  try {
+    const { decision_type, rationale, linked_evidence_ids, actor_type, actor_id } = req.body;
+    const decision = await recordDecision({
+      ticketId: String(req.params.id),
+      decisionType: decision_type,
+      actorType: actor_type || 'human',
+      actorId: actor_id || (req as any).user?.id || 'system',
+      rationale,
+      linkedEvidenceIds: linked_evidence_ids,
+    });
+    res.status(201).json(decision);
+  } catch (err: any) {
+    if (err instanceof DecisionRecordValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
     res.status(400).json({ error: err.message });
   }
 });
