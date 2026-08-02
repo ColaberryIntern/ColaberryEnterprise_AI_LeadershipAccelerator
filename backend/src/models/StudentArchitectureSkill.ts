@@ -10,9 +10,12 @@ import { sequelize } from '../config/database';
  * row as a FULL REPLACE (every field rewritten together). No code path increments
  * a single field in place (no `UPDATE ... SET proficiency = proficiency + x`).
  *
- * `placement_score` stays 0 for every row in Phase 0-1 — resume/diagnostic
- * placement is Phase 2. This is expected, not a bug (design doc §16 Phase 2).
- * `weights_version` records which `architecture_skill_evidence_band_weights`
+ * `placement_score` (Phase 2, design doc §16) is derived from
+ * `resume_skill_claims` + `diagnostic_attempts` via
+ * `capePlacementService.computePlacementScore()` — 0 for a learner who has
+ * never uploaded a resume (design doc §17 AC 1), and NEVER derived from
+ * `student_skill_evidence` (§17 AC 2). `weights_version` records which
+ * `architecture_skill_evidence_band_weights`
  * version produced `proficiency`, so a later weights change is auditable without
  * silently rewriting what an old computed number meant.
  */

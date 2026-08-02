@@ -42,6 +42,7 @@ import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
+import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -2238,6 +2239,11 @@ async function start(): Promise<void> {
   await ensureOnboardingProfileSchema();
   // Student Settings: avatar photo + uploaded resume file columns (idempotent).
   await ensurePortalSettingsSchema();
+  // CAPE Phase 2 — resume/LinkedIn placement + adaptive diagnostic: 2 new
+  // onboarding_profiles columns + 2 new tables (idempotent DDL, additive
+  // only). Must run AFTER ensurePortalSettingsSchema() so onboarding_profiles
+  // already exists.
+  await ensureCapePlacementSchema();
   // Unified StudentTask: nullable requirement_key + story-driven columns (idempotent).
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
