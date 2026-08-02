@@ -7,6 +7,7 @@
  */
 import type { AmbientProviderSlug } from './ambientPool';
 import { isCompletableType } from './timelineGatingService';
+import { BUCKET_ORDER } from './timelineService';
 
 export type TodayItemKind = 'anchored' | 'ambient';
 export interface PlannedSlot { kind: TodayItemKind; provider?: AmbientProviderSlug; }
@@ -74,15 +75,30 @@ export function anchoredWeekAllowed(week: number | null, isExplorer: boolean): b
 }
 
 /** The minimal card shape `weekStartedForToday` needs — a subset of `FeedCard`. */
-export interface WeekGateCard { id: string; type: string; week: number | null; order: number; status: string | null }
+export interface WeekGateCard { id: string; type: string; bucket: string; week: number | null; order: number; status: string | null }
+
+/**
+ * `order` is scored PER BUCKET, not globally across a week (every bucket's own
+ * cards restart at 0) — so comparing raw `order` across buckets is comparing
+ * unrelated sequences. Rank by the curriculum's actual pedagogical sequence
+ * first (pre_class -> learn -> practice -> build -> reflect -> share ->
+ * advance), THEN by order within that bucket. Unknown buckets sort last.
+ */
+function bucketRank(bucket: string): number {
+  const i = (BUCKET_ORDER as readonly string[]).indexOf(bucket);
+  return i === -1 ? BUCKET_ORDER.length : i;
+}
 
 /**
  * TODAY-ONLY gate (env.timelineWeekStartGateEnabled): within class curriculum,
  * a week's cards (1-12) show on the Today timeline only once the student has
  * completed >=1 completable card in that same week. Every week always shows
- * its own "entry card" (the lowest-`(order, id)` completable card in that
- * week) so there's always something to start; non-completable types
- * (announcements/events/system) are never gated by this rule at all.
+ * its own "entry card" (the earliest-in-sequence completable card in that
+ * week, by bucket then order then id) so there's always something to start;
+ * non-completable types (announcements/events/system) are never gated by this
+ * rule at all. Evaluations/reflections/etc. (reflect/share/advance buckets)
+ * can never be mistaken for a week's entry point, since they always rank
+ * after pre_class/learn/practice/build.
  *
  * This is Today-timeline-specific — it narrows what Today displays among
  * cards Classroom already marked 'available'. It never touches a card's
@@ -94,7 +110,8 @@ export function weekStartedForToday(card: WeekGateCard, allCards: WeekGateCard[]
   if (card.week == null || card.week <= 0) return true;
   if (!isCompletableType(card.type)) return true;
   const completableInWeek = allCards.filter((c) => c.week === card.week && isCompletableType(c.type));
-  const entry = [...completableInWeek].sort((a, b) => (a.order - b.order) || a.id.localeCompare(b.id))[0];
+  const entry = [...completableInWeek].sort((a, b) =>
+    (bucketRank(a.bucket) - bucketRank(b.bucket)) || (a.order - b.order) || a.id.localeCompare(b.id))[0];
   if (entry && entry.id === card.id) return true;
   return completableInWeek.some((c) => c.status === 'completed');
 }
