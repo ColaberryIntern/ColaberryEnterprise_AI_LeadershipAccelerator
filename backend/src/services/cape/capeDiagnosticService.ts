@@ -97,6 +97,12 @@ export async function submitDiagnosticAttempt(
   if (items.length === 0) {
     throw new CapeDiagnosticError(`no diagnostic items configured for skill_id: ${skillId}`);
   }
+  // Defensive at the service boundary regardless of the route's Zod
+  // validation (CLAUDE.md: a service must be safe even called directly, and
+  // a generic Error/TypeError is not an acceptable classification here).
+  if (!Array.isArray(answers) || answers.some((a) => !a || typeof a.item_id !== 'string' || typeof a.selected_option !== 'string')) {
+    throw new CapeDiagnosticError('answers must be a non-empty array of { item_id, selected_option } strings');
+  }
 
   const { outcome } = scoreOutcome(items, answers);
   const idempotency_key = `diagnostic:${attemptId}:${skillId}`;

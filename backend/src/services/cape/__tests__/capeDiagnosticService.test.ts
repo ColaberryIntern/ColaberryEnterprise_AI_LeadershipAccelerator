@@ -90,6 +90,20 @@ describe('submitDiagnosticAttempt', () => {
     expect(mockFindOrCreate).not.toHaveBeenCalled();
   });
 
+  it('boundary/failure: a malformed answers payload is rejected with CapeDiagnosticError (not a raw TypeError) before touching the DB', async () => {
+    await expect(submitDiagnosticAttempt('e1', 'agents_mcp', 'att-8', null as any))
+      .rejects.toThrow(CapeDiagnosticError);
+    await expect(submitDiagnosticAttempt('e1', 'agents_mcp', 'att-9', undefined as any))
+      .rejects.toThrow(CapeDiagnosticError);
+    await expect(submitDiagnosticAttempt('e1', 'agents_mcp', 'att-10', 'not-an-array' as any))
+      .rejects.toThrow(CapeDiagnosticError);
+    await expect(submitDiagnosticAttempt('e1', 'agents_mcp', 'att-11', [{ item_id: 'i1' } as any]))
+      .rejects.toThrow(CapeDiagnosticError); // missing selected_option
+    await expect(submitDiagnosticAttempt('e1', 'agents_mcp', 'att-12', [{ selected_option: 'a' } as any]))
+      .rejects.toThrow(CapeDiagnosticError); // missing item_id
+    expect(mockFindOrCreate).not.toHaveBeenCalled();
+  });
+
   it('trigger metadata: test_out and diagnostic_prompt score identically for identical answers (same code path)', async () => {
     const answers = correctAnswersFor('governance');
     const a = await submitDiagnosticAttempt('e1', 'governance', 'att-6', answers, 'diagnostic_prompt');
