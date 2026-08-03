@@ -431,10 +431,10 @@ export async function handleCoraInquiry(email: {
       metadata: { error_class: 'GenerationError', error: error.message },
     });
     // Generation failed — don't bury the email; leave it for a human.
-    return decideCoraDisposition({ generated: false, dryRun: DRY_RUN, needsHuman: false, sent: false });
+    return decideCoraDisposition({ generated: false, dryRun: isDryRun(), needsHuman: false, sent: false });
   }
 
-  if (DRY_RUN) {
+  if (isDryRun()) {
     console.log(
       `${LOG_PREFIX} DRY RUN — would ${reply.needsHuman ? 'send handoff ack + flag for human' : 'send'} ` +
       `to ${email.from_address}:\nSubject: ${reply.subject}\n\n${reply.body}`
