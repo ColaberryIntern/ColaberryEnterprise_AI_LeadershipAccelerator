@@ -15,6 +15,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import AgentWriteAudit from '../models/AgentWriteAudit';
+import AiEvent from '../models/AiEvent';
 import { isKillSwitchActive } from './launchSafety';
 import { isSafeModeActive } from './systemControlService';
 import { MINUTES_SAVED_SQL, valueUsd } from './aiValueService';
@@ -75,6 +76,7 @@ export interface LiveSignals {
   llmCalls7d: number;
   promptVersionCoveragePct: number;
   userAttributedCostPct7d: number;
+  retentionEnforcedEventsEver: number;
   valueUsd30d: number;
   hoursSaved30d: number;
   consentChecks7d: number;
@@ -121,6 +123,7 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     llmCalls7d: 0,
     promptVersionCoveragePct: 0,
     userAttributedCostPct7d: 0,
+    retentionEnforcedEventsEver: 0,
     valueUsd30d: 0,
     hoursSaved30d: 0,
     consentChecks7d: 0,
@@ -184,6 +187,16 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     });
   } catch (err) {
     logErr('live_signals_blocked_writes', err);
+  }
+  try {
+    // All-time, not windowed: retention enforcement (retentionEnforcementService.ts) is an
+    // occasional admin-triggered action, not continuous traffic — a 7d window would show zero
+    // between runs even once it's genuinely been exercised for real (T006 / P2-5).
+    s.retentionEnforcedEventsEver = await AiEvent.count({
+      where: { event_type: 'governance.retention_enforced' } as any,
+    });
+  } catch (err) {
+    logErr('live_signals_retention_enforced', err);
   }
   try {
     await isKillSwitchActive();
@@ -265,7 +278,14 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
         evidence: 'Consent gate shipped (shadow) — consent_records + assertConsentForSend wired into the send chokepoint; no outbound sends in the last 7d to evaluate.',
         remediation: 'Add opt-in capture (Phase 2) + flip consent_enforcement=enforce when granted records exist (P0-3).' };
     } },
-    { key: 'retention', label: 'Data-retention / purge policy', weight: 2, ref: 'P2-5', ev: partial(50, 'A 24-month retention policy is defined for the PII data classes (chat/call transcripts, comms, sessions, leads) with a live dry-run report (/admin/trust/retention); purge enforcement is gated pending sign-off.', 'Review the dry-run, confirm scope (leads → anonymize, not delete), then enable the scheduled purge (P2-5).') },
+    { key: 'retention', label: 'Data-retention / purge policy', weight: 2, ref: 'P2-5', ev: (s) => {
+      const hasRun = s.retentionEnforcedEventsEver > 0;
+      return { status: hasRun ? 'met' : 'partial', source: 'live', pct: hasRun ? 100 : 60,
+        evidence: hasRun
+          ? `Retention enforcement is live and has run for real — ${s.retentionEnforcedEventsEver} governance.retention_enforced events recorded (enabled 2026-07-31 per sign-off; anonymizes leads, purges chat/call/comms/session records past the 24-month TTL).`
+          : 'Retention enforcement is deployed and enabled (2026-07-31 sign-off, no longer gated) with a live dry-run report (/admin/trust/retention) and an admin POST route to trigger it, but no enforce cycle has run yet.',
+        remediation: hasRun ? undefined : 'Trigger the retention enforcement cycle via the admin POST route (P2-5).' };
+    }},
   ]},
   observability: { label: 'Observability', criteria: [
     { key: 'unified-events', label: 'Unified ai_events model', weight: 2, ref: 'P1-1', ev: shipped('ai_events + emitAiEvent() unify the event stream (PR #50).') },

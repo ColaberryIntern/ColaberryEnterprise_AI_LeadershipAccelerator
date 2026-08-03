@@ -24,6 +24,7 @@ const SIGNALS: LiveSignals = {
   llmCalls7d: 50,
   promptVersionCoveragePct: 40,
   userAttributedCostPct7d: 0,
+  retentionEnforcedEventsEver: 0,
   valueUsd30d: 1200,
   hoursSaved30d: 24,
   consentChecks7d: 30,
@@ -102,6 +103,19 @@ describe('trustRubric', () => {
     const fullUserAttribution = evaluateDimension('businessImpact', { ...SIGNALS, distinctWorkflows7d: 12, userAttributedCostPct7d: 60 })!.criteria.find((c) => c.key === 'per-workflow-cost')!;
     expect(fullUserAttribution.status).toBe('met');
     expect(fullUserAttribution.pct).toBe(100);
+  });
+
+  it('retention criterion is live from governance.retention_enforced events, not a frozen 50 (T006)', () => {
+    const notYetRun = evaluateDimension('privacy', SIGNALS)!.criteria.find((c) => c.key === 'retention')!;
+    expect(notYetRun.status).toBe('partial');
+    expect(notYetRun.source).toBe('live');
+    expect(notYetRun.pct).toBe(60); // no longer the old frozen 50 — mechanism is enabled, just not yet exercised
+    expect(notYetRun.evidence).toContain('no enforce cycle has run yet');
+
+    const hasRun = evaluateDimension('privacy', { ...SIGNALS, retentionEnforcedEventsEver: 12 })!.criteria.find((c) => c.key === 'retention')!;
+    expect(hasRun.status).toBe('met');
+    expect(hasRun.pct).toBe(100);
+    expect(hasRun.evidence).toContain('12 governance.retention_enforced events');
   });
 
   it('returns all dimensions with criteria', () => {
