@@ -19,6 +19,11 @@ import {
   handleGetRegistryHealth,
   handleGetAgentDetail,
   handleRunAgent,
+  handleGetCompositeBreakdown,
+  handleGetActivityDetail,
+  handleGetActivityDetailForDay,
+  handleGetBlockedWrites,
+  handleGetAgentRegistryDetail,
 } from '../../controllers/trustController';
 
 const router = Router();
@@ -35,7 +40,14 @@ router.post('/api/admin/trust/retention/enforce', requireAdmin, handleEnforceRet
 router.get('/api/admin/trust/dimension/:key', requireAdmin, handleGetDimension);
 router.get('/api/admin/trust/agents', requireAdmin, handleGetAgentRoster);
 router.get('/api/admin/trust/registry-health', requireAdmin, handleGetRegistryHealth);
+router.get('/api/admin/trust/agents/registry/:name', requireAdmin, handleGetAgentRegistryDetail);
 router.get('/api/admin/trust/agents/:slug', requireAdmin, handleGetAgentDetail);
 router.post('/api/admin/trust/agents/:slug/run', requireAdmin, handleRunAgent);
+
+// Phase B — Trust 90+ drill-down (T008-T013)
+router.get('/api/admin/trust/composite-breakdown', requireAdmin, handleGetCompositeBreakdown);
+router.get('/api/admin/trust/activity/day/:date', requireAdmin, handleGetActivityDetailForDay);
+router.get('/api/admin/trust/activity/:kind', requireAdmin, handleGetActivityDetail);
+router.get('/api/admin/trust/blocked-writes', requireAdmin, handleGetBlockedWrites);
 
 export default router;
