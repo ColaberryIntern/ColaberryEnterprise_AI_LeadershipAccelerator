@@ -4,6 +4,7 @@ import { AppError } from '../utils/AppError';
 import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
 import { pickBestEnrollment } from './participantService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
   const cohort = await Cohort.findByPk(cohortId);
@@ -443,7 +444,7 @@ async function enrollInPaymentCampaignIfUnpaid(enrollment: Enrollment): Promise<
 
   const { enrollLeadsInCampaign } = await import('./campaignService');
   const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
+  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
 }
 
 /* ------------------------------------------------------------------ */
@@ -478,7 +479,7 @@ export async function enrollInClassReadinessCampaign(enrollment: Enrollment): Pr
 
   const { enrollLeadsInCampaign } = await import('./campaignService');
   const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
+  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
 }
 
 async function exitPaymentCampaign(email: string): Promise<void> {

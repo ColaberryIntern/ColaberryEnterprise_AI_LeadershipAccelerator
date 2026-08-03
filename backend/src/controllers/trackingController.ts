@@ -12,6 +12,7 @@ import { computeIntentScore } from '../services/intentScoringService';
 import { evaluateVisitorForTriggers } from '../services/behavioralTriggerService';
 import { env } from '../config/env';
 import { logAgentExecution } from '../services/governanceService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /** Fire-and-forget signal detection + intent scoring + behavioral triggers for high-value events */
 function triggerSignalAnalysis(sessionId: string, visitorId: string): void {
@@ -434,7 +435,7 @@ export async function handleIdentify(req: Request, res: Response): Promise<void>
       }
     } catch { /* non-blocking */ }
 
-    console.log(`[Tracking] Identified visitor ${fingerprint.substring(0, 12)} as lead ${lead.id} (${lead.name}, ${emailLower})${created ? ' [NEW]' : ''}`);
+    console.log(`[Tracking] Identified visitor ${fingerprint.substring(0, 12)} as lead ${lead.id} (${redactForLogs(lead.name)}, ${redactForLogs(emailLower)})${created ? ' [NEW]' : ''}`);
 
     res.json({
       lead_id: lead.id,

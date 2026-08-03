@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { env } from '../config/env';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /* ------------------------------------------------------------------ */
 /*  PaySimple API Service                                              */
@@ -121,11 +122,11 @@ export async function findOrCreateCustomer(params: {
 }): Promise<PaySimpleCustomer> {
   const existing = await findCustomerByEmail(params.email);
   if (existing) {
-    console.log(`[PaySimple] Found existing customer ${existing.Id} for ${params.email}`);
+    console.log(`[PaySimple] Found existing customer ${existing.Id} for ${redactForLogs(params.email)}`);
     return existing;
   }
   const customer = await createCustomer(params);
-  console.log(`[PaySimple] Created customer ${customer.Id} for ${params.email}`);
+  console.log(`[PaySimple] Created customer ${customer.Id} for ${redactForLogs(params.email)}`);
   return customer;
 }
 

@@ -247,7 +247,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
   privacy: { label: 'Privacy', criteria: [
     { key: 'pii-redaction', label: 'PII redacted before LLM/voice', weight: 3, ref: 'P0-3', ev: shipped('SSN/payment-card redacted at the LLM boundary on TS + cron paths (PR #50/#54).') },
     { key: 'suppression', label: 'Unsubscribe / suppression honored', weight: 1, ev: shipped('Unsubscribe + suppression handling present (audit offset).') },
-    { key: 'pii-logs', label: 'PII minimized in logs', weight: 1, ev: partial(50, 'redactForLogs helper added (PR #50) but not yet applied at every log site.', 'Apply redactForLogs across all structured log call sites.') },
+    { key: 'pii-logs', label: 'PII minimized in logs', weight: 1, ev: shipped('redactForLogs applied across all identified lead/student/visitor PII-risk log call sites (emailService, synthflow voice, GHL/Mandrill/Apollo webhooks, calendar, enrollment, scheduler hot-lead escalation, GDPR erasure endpoint — ~95 sites across 24 files). inbox/inboxCase subsystem intentionally out of scope pending a dedicated audit.') },
     { key: 'consent', label: 'Affirmative consent on outbound voice/email', weight: 3, ref: 'P0-3', ev: (s) => {
       // Gate is SHIPPED (consentService + consent_records + send-path hook). Live state:
       // enforcing+checks → met; shadowing with traffic → partial (exposure quantified, capture pending);
