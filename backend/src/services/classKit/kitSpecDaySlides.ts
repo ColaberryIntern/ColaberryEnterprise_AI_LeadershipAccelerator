@@ -71,6 +71,10 @@ export function defaultInteractionsFor(week: number | null, dayKind: DayKind): I
       { ...m.designChoice, segment: 'checkin', eyebrow: '🔮 Predict', title: 'Before we start — make your call', presenterTip: 'Everyone scans the QR here. Read the prediction; do not reveal yet — it pays off later.' },
       { ...m.designChoice, segment: 'challenge', eyebrow: '🧭 Architecture challenge', title: 'Choose the design', presenterTip: 'Now reveal. Tie their Monday prediction to the right architecture.' },
       { ...m.trivia, segment: 'trivia', eyebrow: '🧠 Knowledge check', title: 'Quick check', presenterTip: 'Fast. Reveal, one line of why, move on.' },
+      // Optional extra questions beyond the 3 fixed slots above — empty for
+      // every week that doesn't author any (see classSessionPlan.ts's
+      // WeekClassContent.monday.extraInteractions doc comment).
+      ...(m.extraInteractions || []),
     ];
   }
   const t = wc.thursday;
@@ -231,6 +235,11 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
     presenterTip: 'Watch the pulse. If people go “stuck”, slow down. This is the tutorial sequence.',
   }));
   out.push(...teachToSlides(mteach, 'micro-build', micro));
+  // Story beats keyed 'micro-build' are opt-in (empty for every week that
+  // doesn't author one) — added so a week's narrative can continue through
+  // the guided-build phase instead of only checkin/business-problem/
+  // architecture/deconstruct.
+  pushStoryBeats(out, m.storyBeats, 'micro-build', micro, config);
   pushInteractions(out, interactions, 'micro-build', micro);
 
   const chal = segById(segs, 'challenge');

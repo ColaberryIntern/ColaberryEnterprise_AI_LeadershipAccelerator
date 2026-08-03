@@ -117,6 +117,13 @@ export interface WeekClassContent {
      * segment's content (segment id -> beats to insert there). Omit for weeks
      * without any authored. */
     storyBeats?: Record<string, StoryBeat[]>;
+    /** Optional extra survey questions beyond the fixed designChoice/trivia
+     * slots, each tagged with the run-of-show segment to render in (same
+     * shape as kitConfig.ts's InteractionPlacement, inlined here to avoid a
+     * circular import — classSessionPlan.ts stays dependency-free). Spliced
+     * in by kitSpecDaySlides.ts's defaultInteractionsFor(); empty/omitted for
+     * every week that doesn't need more than the 3 default questions. */
+    extraInteractions?: Array<Interaction & { segment: string; eyebrow?: string; title?: string; presenterTip?: string }>;
   };
 
   thursday: {
@@ -447,63 +454,105 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     publicTitle: 'Teach Claude Once and Reuse It Forever',
     monday: {
       tension:
-        'Repeating the same instructions every session does not scale. Agent Skills let you teach Claude a capability once — with a clear description and its own files — and reuse it everywhere, consistently and context-efficiently.',
-      payoffPreview: 'By Thursday you have three project-specific Skills that trigger on demand and are shareable across a team.',
+        'It is 8:05 AM. The executive revenue dashboard says revenue is down 18%. The ETL job says SUCCESS — it ran clean, on schedule, no errors. But the analyst who normally validates the numbers by hand before anyone sees them is out today, and nobody ran that check. The source data actually contains a duplicate order ID, a missing region, a negative revenue amount, and a load timestamp older than 48 hours — a green pipeline only proves the job ran, it never proved the data was trustworthy. The analyst should not be the control. The repeatable procedure should be the control.',
+      payoffPreview: 'By Thursday you adapt this exact pattern into three project-specific Skills of your own — hardened, tested, versioned, and committed.',
       architectureBeats: [
-        'What a Skill is, and how it differs from CLAUDE.md, subagents, and MCP',
-        'Anatomy: frontmatter + an effective description (the trigger) + the instruction body',
-        'Multi-file Skills and scoping tool access to only what the Skill needs',
-        'Packaging and sharing Skills across a team or org',
-        'Why a vague description is the #1 reason a Skill never fires',
+        'data-quality-gate — validates orders/ETL output against a quality contract before anything publishes; PASS/WARN/FAIL + a PUBLISH/BLOCK recommendation',
+        'etl-failure-triage — when the gate blocks, reads logs + run metadata, ranks likely causes with evidence, recommends the next diagnostic step',
+        'executive-dashboard-brief — turns the technical findings into status, business impact, decision, owner, and next-update leadership can act on',
+        'One incident, one connected workflow: Detect → Diagnose → Communicate',
+        'Detection protects the business. Diagnosis restores the system. Communication closes the loop.',
       ],
-      realExample: 'Compare two Skills with the same body but different descriptions — one triggers reliably, one never does. The description is the architecture.',
-      microBuild: 'Author your first Skill: frontmatter, a sharp description, and a 5-line body. Invoke it once to confirm it triggers.',
+      realExample: 'Compare two descriptions for the exact same data-quality-gate body. "Helps with data" never fires — it names no trigger, no output, and collides with every other data-related ask. "Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication" fires reliably, every time, because it names the trigger and the output in the words a data analyst actually uses.',
+      microBuild: 'The gate just blocked the bad data — that stops the bleeding, but the incident is not resolved. Now build the two Skills that finish it: etl-failure-triage investigates why the pipeline produced invalid data, and executive-dashboard-brief turns that investigation into something leadership can act on.',
       designChoice: {
         kind: 'poll',
-        q: 'A task repeats in three places. Skill, CLAUDE.md, or subagent?',
-        options: ['CLAUDE.md — always', 'A Skill — reusable, scoped, invocable on demand', 'A subagent — always', 'Copy-paste the prompt each time'],
-        answer: 1,
-        reveal: 'A repeated, self-contained capability is a Skill. CLAUDE.md is standing context; subagents are for delegated, isolated work.',
+        q: 'The ETL run is green, but the dashboard looks wrong. What should happen first?',
+        options: ['Rebuild the dashboard', 'Rerun the entire ETL pipeline', 'Validate the output against its data-quality contract', 'Ask leadership which number looks suspicious'],
+        answer: 2,
+        reveal: 'A green pipeline proves that the job ran. It does not prove that the resulting data is trustworthy.',
       },
       trivia: {
         kind: 'trivia',
-        q: 'Your Skill never triggers. First thing to check?',
-        options: ['The body length', 'The description — is it specific about when to use it?', 'Your internet', 'The repo name'],
+        q: 'Which part primarily helps Claude recognize when a Skill is relevant?',
+        options: ['Folder color', 'Description', 'Body length', 'Creation date'],
         answer: 1,
-        reveal: 'Claude decides to invoke a Skill from its description. Vague description → no trigger.',
+        reveal: 'Claude scans name + description to decide WHEN to load a Skill — the description is the routing logic, not documentation.',
       },
-      thursdayTrailer: 'Thursday we build three real Skills for your project — and debug one that refuses to fire.',
+      extraInteractions: [
+        {
+          segment: 'deconstruct', kind: 'poll',
+          q: 'The Skill works when you type /data-quality-gate, but not when you ask, "Is this dataset safe to publish?" What should you inspect first?',
+          options: ['Dataset size', 'Skill description', 'Body length', 'CSV filename'],
+          answer: 1,
+          reveal: 'Direct invocation proves the body can run. Natural invocation tests whether the description helps Claude recognize when the Skill is relevant.',
+          eyebrow: '🔬 Deconstruct', title: 'Direct invocation works. Natural does not. Why?',
+          presenterTip: 'This is the trigger-failure diagnosis moment — land it before moving into Harden.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'The gate blocked the dataset. What capability should come next?',
+          options: ['Rebuild the dashboard', 'Add a permanent rule to CLAUDE.md', 'Run a reusable ETL failure-triage procedure', 'Send the entire log to the CFO'],
+          answer: 2,
+          reveal: 'The gate tells us the data is unsafe. Triage determines what evidence explains the failure and what should be tested next.',
+          eyebrow: '🩺 The incident continues', title: 'Data is blocked. What comes next?',
+          presenterTip: 'Take responses, reveal, then move straight into building etl-failure-triage.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'What belongs in the executive incident update?',
+          options: ['The entire pipeline log', 'Every SQL statement tested', 'Status, impact, evidence, decision, owner, and next update', 'A generic statement that IT is investigating'],
+          answer: 2,
+          reveal: 'Leadership needs a decision product, not a technical data dump.',
+          eyebrow: '📣 Leadership is waiting', title: 'What goes in the brief?',
+          presenterTip: 'Take responses, reveal, then move straight into building executive-dashboard-brief.',
+        },
+        {
+          segment: 'trivia', kind: 'trivia',
+          q: 'What does allowed-tools currently do?',
+          options: ['Permanently restricts the Skill to those tools', 'Pre-approves named tools for the invocation turn', 'Prevents automatic Skill invocation', 'Loads every reference file'],
+          answer: 1,
+          reveal: 'Pre-approval and restriction are different controls. allowed-tools pre-approves tools for the turn; disallowed-tools and broader permission deny rules are what actually restrict.',
+          eyebrow: '🧠 Knowledge check', title: 'Tool permissions, precisely',
+          presenterTip: 'This corrects a common misconception — read the reveal exactly as written, do not paraphrase.',
+        },
+      ],
+      thursdayTrailer: 'Thursday you adapt this exact pattern into three project-specific Skills of your own — one hardened, all tested, all versioned and committed.',
+      hook: {
+        headline: 'The ETL job says SUCCESS. The revenue number is wrong.',
+        caption: 'A green pipeline proves the job ran. It never proved the data was trustworthy.',
+      },
       storyBeats: {
         checkin: [
           {
-            icon: '🔁', tone: 'violet', eyebrow: 'Right now — the room you are in',
-            title: 'You just guessed where a repeated task belongs. Almost everyone in this room has typed the same instruction into Claude five times this month without noticing.',
-            body: 'That repetition is not a discipline problem — it is a missing Skill. Tonight you will watch the exact moment a copy-pasted instruction turns into something Claude triggers on its own, and by the time you predict-and-reveal again in a few minutes, you will already know which one is right.',
-            punch: 'The fifth time you type the same instruction is the signal, not the habit.',
+            icon: '🕗', tone: 'violet', eyebrow: '8:05 AM · The analyst is unavailable',
+            title: 'The analyst who normally catches this is out today.',
+            body: 'The company does not lack a procedure. The analyst runs the same checks every morning: freshness, row count, duplicate keys, required fields, unreasonable amounts. But the procedure exists only in her head, so the control disappears the day she is unavailable.',
+            punch: 'The analyst should not be the control. The repeatable procedure should be the control.',
           },
         ],
         'business-problem': [
           {
-            icon: '📋', tone: 'berry', eyebrow: 'Change of pace — the onboarding doc nobody reads',
-            title: 'Every new hire gets the same 40-minute walkthrough. Nobody remembers slide 30.',
-            body: 'A team lead re-explains the deploy checklist to every new engineer, live, from memory, slightly differently each time — because writing it down once felt like overkill for "something everyone just learns." Six months and four hires later, the checklist has never been the same twice, and two of those four hires shipped a bad deploy doing it "their way." The knowledge was never missing. It was never packaged.',
-            punch: 'A Skill is not documentation nobody reads. It is documentation Claude actually runs.',
-          },
-        ],
-        architecture: [
-          {
-            icon: '🔑', tone: 'violet', eyebrow: 'Change of pace — the labeled toolbox',
-            title: 'Two toolboxes, same tools inside. One has labels. Guess which one gets used at 2am.',
-            body: 'A mechanic with an unlabeled toolbox still has every wrench she needs — she just cannot find the right one under pressure, so she reaches for whatever is closest and makes it work, badly. A Skill with a vague description is the unlabeled drawer: the capability exists, but nothing tells Claude when to reach for it, so it either never fires or fires for the wrong job. The description is not documentation about the Skill. It is the label on the drawer.',
-            punch: 'A Skill nobody can find is a Skill that does not exist yet.',
+            icon: '✅', tone: 'berry', eyebrow: 'The procedure became visible',
+            title: 'Everyone in the room just performed the same checks.',
+            body: 'A few minutes ago, the procedure existed only in an analyst\'s memory and saved prompts. Now every student used the same checks, the same thresholds, and the same PASS or FAIL language.',
+            punch: 'Tribal knowledge just became an executable team asset.',
           },
         ],
         deconstruct: [
           {
-            icon: '👻', tone: 'cherry', eyebrow: 'Change of pace — the Skill that was technically there',
-            title: 'The Skill existed. The instructions were perfect. It never once fired.',
-            body: 'A team spent an afternoon writing a beautifully detailed Skill for release notes — multi-step instructions, examples, edge cases, the works — then described it as "helps with releases." Weeks later, nobody could explain why Claude kept ignoring it in favor of generic answers. The body of the Skill was never the problem. Claude was never told, precisely, when "helps with releases" meant THIS.',
-            punch: 'A Skill is judged by its trigger, not its prose. Write the description like the whole Skill depends on it — because it does.',
+            icon: '🚧', tone: 'cherry', eyebrow: 'The incident continues',
+            title: 'The gate protected the dashboard. Now the business wants the cause.',
+            body: 'Blocking unsafe data is the correct decision, but it does not resolve the incident. Operations still needs to understand why the pipeline produced invalid data, what evidence supports the diagnosis, and what should be tested next.',
+            punch: 'Detection protects the business. Diagnosis restores the system.',
+          },
+        ],
+        'micro-build': [
+          {
+            icon: '📣', tone: 'amber', eyebrow: 'The audience changes',
+            title: 'The technical team has an answer. Leadership is still waiting.',
+            body: 'The data-quality report explains what is wrong. The triage report explains why it may have happened. Neither is written for the CFO, who needs impact, confidence, action, ownership, and the next update.',
+            punch: 'A technically correct answer can still be the wrong communication product.',
           },
         ],
       },
@@ -1237,13 +1286,11 @@ export const ARCHITECTURE_DIAGRAMS: Record<number, string> = {
   W --> R[("Your repo")]
   MD["CLAUDE.md — persistent standards"] -.-> CC`,
   2: `flowchart TD
-  T["A task you repeat"] --> S["Agent Skill"]
-  S --> D["Description = the trigger"]
-  S --> B["Instruction body"]
-  S --> F["Extra files + scoped tools"]
-  D --> Q{"Claude matches the ask?"}
-  Q -->|"sharp"| Y["Fires every time"]
-  Q -->|"vague"| N["Never triggers"]`,
+  D["Orders + ETL output"] --> G["data-quality-gate"]
+  G -->|"FAIL"| T["etl-failure-triage"]
+  G -->|"PASS"| PUB["Publish to dashboard"]
+  T --> B["executive-dashboard-brief"]
+  B --> L["Leadership: PUBLISH or BLOCK decision"]`,
   3: `flowchart LR
   In["Business input"] --> API["Claude API"]
   API --> SYS["System prompt + streaming"]
