@@ -21,6 +21,39 @@ const IMAGE_MIME_BY_EXT: Record<string, string> = { '.png': 'image/png', '.jpg':
 
 export interface CertVerifyResult { valid: boolean; is_certificate: boolean; matches: boolean; reason: string }
 
+/**
+ * OpenAI vision rejects some uploaded bytes outright — e.g. "You uploaded an
+ * unsupported image" — even when the browser labeled them image/png, because
+ * screenshot tools and some phone cameras write non-standard encodings (seen
+ * in prod ai_events for workflow_id=skillsjar_cert_verify). Re-encode through
+ * sharp into a guaranteed-valid PNG (honouring EXIF rotation) and cap the
+ * longest edge so oversized captures don't hit payload/token limits either.
+ */
+async function normalizeImageForVision(buf: Buffer): Promise<{ mime: string; dataUrl: string }> {
+  const out = await sharp(buf).rotate().resize({ width: 2000, height: 2000, fit: 'inside', withoutEnlargement: true }).png().toBuffer();
+  return { mime: 'image/png', dataUrl: `data:image/png;base64,${out.toString('base64')}` };
+}
+
+/**
+ * pdf-parse v2 replaced the v1 `pdf(buffer)` function with a `PDFParse` class
+ * (`new PDFParse({ data }).getText()`). Extract text via that API; return ''
+ * on any parse failure (caller treats empty text as "could not read PDF").
+ */
+async function extractPdfText(buf: Buffer): Promise<string> {
+  try {
+    const { PDFParse } = await import('pdf-parse');
+    const parser = new PDFParse({ data: buf });
+    try {
+      const result = await parser.getText();
+      return result?.text || '';
+    } finally {
+      await parser.destroy();
+    }
+  } catch {
+    return '';
+  }
+}
+
 const SYSTEM = 'You verify whether an uploaded file is a genuine course/exam COMPLETION or ACHIEVEMENT certificate issued to a person. Be strict about it actually being a certificate; do not accept random screenshots, photos, invoices, or unrelated documents. Return STRICT json.';
 
 function userText(className?: string | null): string {
@@ -51,22 +84,15 @@ export async function verifyCertificate(filePath: string, mime: string, classNam
   try {
     if (isImage) {
       const buf = await fs.readFile(filePath);
-      const imgMime = mime.startsWith('image/') ? mime : (IMAGE_MIME_BY_EXT[ext] || 'image/png');
-      const dataUrl = `data:${imgMime};base64,${buf.toString('base64')}`;
+      const { dataUrl } = await normalizeImageForVision(buf);
       return await classify([
         { role: 'system', content: SYSTEM },
         { role: 'user', content: [{ type: 'text', text: userText(className) }, { type: 'image_url', image_url: { url: dataUrl } }] },
       ]);
     }
-    // PDF → extract text (pdf-parse v1/v2 tolerant), then verify by text.
+    // PDF → extract text (pdf-parse v2 class API), then verify by text.
     const buf = await fs.readFile(filePath);
-    let text = '';
-    try {
-      const mod: any = await import('pdf-parse');
-      const pdf = mod.pdf || mod.default || mod;
-      const parsed = await pdf(buf);
-      text = (parsed?.text || '').slice(0, 6000);
-    } catch { text = ''; }
+    const text = (await extractPdfText(buf)).slice(0, 6000);
     if (!text.trim()) {
       return { valid: false, is_certificate: false, matches: false, reason: 'Could not read that PDF — please upload a clear image (PNG/JPG) of your certificate.' };
     }
@@ -114,21 +140,14 @@ export async function verifyProgress(filePath: string, mime: string, className?:
   try {
     if (isImage) {
       const buf = await fs.readFile(filePath);
-      const imgMime = mime.startsWith('image/') ? mime : (IMAGE_MIME_BY_EXT[ext] || 'image/png');
-      const dataUrl = `data:${imgMime};base64,${buf.toString('base64')}`;
+      const { dataUrl } = await normalizeImageForVision(buf);
       return await classifyProgress([
         { role: 'system', content: PROGRESS_SYSTEM },
         { role: 'user', content: [{ type: 'text', text: progressUserText(className) }, { type: 'image_url', image_url: { url: dataUrl } }] },
       ]);
     }
     const buf = await fs.readFile(filePath);
-    let text = '';
-    try {
-      const mod: any = await import('pdf-parse');
-      const pdf = mod.pdf || mod.default || mod;
-      const parsed = await pdf(buf);
-      text = (parsed?.text || '').slice(0, 6000);
-    } catch { text = ''; }
+    const text = (await extractPdfText(buf)).slice(0, 6000);
     if (!text.trim()) {
       return { valid: false, reason: 'Could not read that file — please upload a clear screenshot (PNG/JPG) of your course progress.' };
     }
