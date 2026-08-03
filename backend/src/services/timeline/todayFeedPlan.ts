@@ -165,6 +165,18 @@ export function isPrecedenceImpression(row: { kind: string; week: number | null 
   return row.kind === 'anchored' && row.week != null;
 }
 
+/**
+ * PURE — was this ambient placement made within the repeat-cooldown window
+ * (still excluded from re-selection), or has it aged out and become eligible
+ * again via ambientPool's own least-recently-seen ordering? See
+ * AMBIENT_REPEAT_COOLDOWN_DAYS in ambientPool.ts for why this exists: an
+ * all-time exclusion permanently exhausts small ambient pools (blog: 89
+ * posts, podcast: 24 episodes) for any long-lived account.
+ */
+export function isWithinAmbientCooldown(servedAt: Date, cooldownDays: number, now: Date = new Date()): boolean {
+  return servedAt.getTime() >= now.getTime() - cooldownDays * 24 * 60 * 60 * 1000;
+}
+
 /** The minimal card shape `weekStartedForToday` needs — a subset of `FeedCard`. */
 export interface WeekGateCard { id: string; type: string; bucket: string; week: number | null; order: number; status: string | null }
 

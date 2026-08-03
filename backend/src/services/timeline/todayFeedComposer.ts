@@ -35,8 +35,8 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineService';
 import { resolve as resolveType } from './typeRegistry';
-import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
-import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, type TodayItemKind } from './todayFeedPlan';
+import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
+import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
 import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
 import { env } from '../../config/env';
@@ -86,6 +86,7 @@ interface ImpressionRow {
   card_id: string | null;
   item: any;                   // stored TodayFeedItem payload
   interacted_at: Date | null;
+  served_at: Date;
 }
 
 function ambientItemFrom(a: AmbientItem, position: number): TodayFeedItem {
@@ -118,7 +119,7 @@ function ambientItemFrom(a: AmbientItem, position: number): TodayFeedItem {
 
 async function loadImpressions(enrollmentId: string): Promise<ImpressionRow[]> {
   return sequelize.query<ImpressionRow>(
-    `SELECT position, kind, ref, provider, card_id, item, interacted_at
+    `SELECT position, kind, ref, provider, card_id, item, interacted_at, served_at
        FROM today_feed_impressions WHERE enrollment_id = :eid ORDER BY position ASC`,
     { replacements: { eid: enrollmentId }, type: QueryTypes.SELECT },
   );
@@ -156,9 +157,15 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   const anchoredPlaced = existing.filter((r) => isPrecedenceImpression({ kind: r.kind, week: (r.item as TodayFeedItem | null)?.week ?? null })).length;
   const ambientPlaced = existing.length - anchoredPlaced;
   const placedRefs = new Set(existing.map((r) => r.ref));
+  // Only recently-placed ambient items stay excluded — an all-time exclusion
+  // permanently exhausts small pools (blog: 89 posts, podcast: 24 episodes) for
+  // any long-lived account, defeating ambientPool's own least-recently-seen
+  // recycling (see AMBIENT_REPEAT_COOLDOWN_DAYS docstring). Real curriculum/
+  // evergreen card dedup (placedRefs, above) is unaffected — cards have their
+  // own separate reuse mechanism (generatedContentRetention.ts).
   const placedMedia: Record<AmbientProviderSlug, string[]> = { blog: [], podcast: [], testimonial: [] };
   for (const r of existing) {
-    if (r.kind === 'ambient' && r.provider && r.ref.includes(':')) {
+    if (r.kind === 'ambient' && r.provider && r.ref.includes(':') && isWithinAmbientCooldown(r.served_at, AMBIENT_REPEAT_COOLDOWN_DAYS)) {
       const mediaId = r.ref.slice(r.ref.indexOf(':') + 1);
       if (r.provider in placedMedia) placedMedia[r.provider as AmbientProviderSlug].push(mediaId);
     }
@@ -196,7 +203,19 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     const n = perKeyNeed[key] ?? 0;
     if (n <= 0) continue;
     if (REAL_AMBIENT_PROVIDERS.has(key)) {
-      ambientQueues[key] = await pickAmbientBatch(enrollmentId, key as AmbientProviderSlug, n, placedMedia[key as AmbientProviderSlug] ?? []);
+      const provider = key as AmbientProviderSlug;
+      const fresh = await pickAmbientBatch(enrollmentId, provider, n, placedMedia[provider] ?? []);
+      // Small ambient pools (podcast: 24 episodes) can be fully consumed by an
+      // active student within the cooldown window itself — a provider going
+      // completely dark is worse than a near-term repeat, so top up with the
+      // least-recently-seen items regardless of the cooldown (still excludes
+      // this SAME batch's own picks, so no literal duplicate on one page).
+      if (fresh.length < n) {
+        const topUp = await pickAmbientBatch(enrollmentId, provider, n - fresh.length, fresh.map((a) => a.media_id));
+        ambientQueues[key] = [...fresh, ...topUp];
+      } else {
+        ambientQueues[key] = fresh;
+      }
     } else {
       evergreenQueues[key] = (evergreenByType.get(key) ?? []).slice(0, n);
     }
