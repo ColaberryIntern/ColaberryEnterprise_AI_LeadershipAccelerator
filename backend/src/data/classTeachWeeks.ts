@@ -11,237 +11,210 @@ export const GENERATED_WEEK_TEACH: Record<number, DayTeach> = {
     "monday": [
       {
         "segment": "business-problem",
-        "eyebrow": "🔁 The Repetition Tax",
-        "title": "You pay a repetition tax every single session",
-        "body": "Every time you open Claude Code and re-explain how your team writes commit messages, how a PR description is structured, or how release notes get grouped, you are re-teaching the model from zero. That instruction lives in your head and your clipboard, not in the system. It is inconsistent because you phrase it slightly differently each time, it is expensive in both tokens and your minutes, and it drifts so the standard you used Monday is not the one you use Thursday. Multiply that across five people and the standard becomes whatever each person happens to remember that day.",
+        "eyebrow": "📁 Where Agent Skill Files Live",
+        "title": "Every file tonight stays inside your current project — nothing leaves it",
+        "body": "Before we build, know exactly where things land. Project Skills live at .claude/skills/<skill-name>/SKILL.md, with supporting files in references/, templates/, and scripts/ subfolders. Tonight's lab inputs and outputs — the sample orders, the quality contract, every report — live in skill-lab/. After every build, Claude reports the exact project-relative path of every file it created so you can open it directly in the VS Code Explorer. No Downloads folder, no exports — everything stays in the project.",
         "bullets": [
-          "The same instruction, retyped by hand every session",
-          "Silent drift between sessions and between teammates",
-          "No single source of truth for the capability",
-          "Onboarding cost = re-explaining everything to every new hire"
+          "Skill: .claude/skills/<skill-name>/SKILL.md",
+          "Supporting files: .claude/skills/<skill-name>/references|templates|scripts/",
+          "Lab inputs and outputs: skill-lab/",
+          "Claude reports every path — you never guess where a file went"
         ],
-        "script": "Show of hands: how many of you have a note somewhere, or a saved prompt, that you paste into the AI every time? That paste is the symptom. Today we make the paste unnecessary."
+        "script": "Say it plainly: nothing tonight leaves this project. Every file has a project-relative path, and Claude will tell you exactly what it is after every build."
       },
       {
         "segment": "business-problem",
-        "eyebrow": "🧱 First Reusable Asset",
-        "title": "A capability you keep repeating is an asset you have not built yet",
-        "body": "Architects do not solve the same problem twice by hand. They build the thing that solves it and then reuse it. An Agent Skill is the first reusable asset in your growing architecture: instead of a prompt you have to remember, the capability becomes a named thing that lives in the repo, is versioned in git, and behaves the same for everyone who touches it. The mindset shift is the whole point of the week. Stop asking how do I prompt this better, and start asking what asset am I failing to build.",
-        "bullets": [
-          "Repeated instruction becomes a named, versioned capability",
-          "Consistency is enforced by the file, not by memory",
-          "Three skills this week = three assets that outlive this session"
-        ],
-        "script": "Reframe it out loud with me: every repeated instruction is a missing asset. That is the sentence I want stuck in your head all week."
-      },
-      {
-        "segment": "business-problem",
-        "eyebrow": "🎯 Where We Land",
-        "title": "By Thursday: three skills that fire on demand and share across your team",
-        "body": "Here is the contract for the week. Monday is architecture day: what a Skill actually is, how it differs from CLAUDE.md, subagents, and MCP, its anatomy, and why a vague description is the number-one reason a skill never fires. Thursday is build day: you author three real project skills, upgrade one to multi-file with scoped tool access, share them, and debug one that refuses to trigger. The concrete deliverable is a .claude/skills/ folder with three skills committed and a short README on how to invoke them.",
-        "bullets": [
-          "Monday: the architecture and the decision rules",
-          "Thursday: build three, one multi-file with tool scoping",
-          "Debug one dead trigger like an architect",
-          "Ship: .claude/skills/ committed + a README"
-        ],
-        "script": "Monday you will understand skills well enough to design them. Thursday you walk out with three in your repo you can actually use at work Monday morning."
-      },
-      {
-        "segment": "architecture",
-        "eyebrow": "📂 Anatomy",
-        "title": "A Skill is a folder with a SKILL.md — that is the whole secret",
-        "body": "Let us kill the mystery immediately. A Skill is just a directory under .claude/skills/<skill-name>/ containing a SKILL.md file. That file has YAML frontmatter at the top and a Markdown instruction body below it. There is no SDK, no registration, no build step: you drop the folder in and Claude Code discovers it on the next run. Project skills live in the repo at .claude/skills/; personal skills you want in every project live in ~/.claude/skills/.",
-        "bullets": [
-          ".claude/skills/<name>/SKILL.md is the minimum viable skill",
-          "Frontmatter (metadata) + Markdown body (instructions)",
-          "Project skills in the repo; personal skills in ~/.claude/skills/",
-          "No build step — discovered automatically"
-        ],
+        "eyebrow": "🛠️ Build data-quality-gate",
+        "title": "First Skill: block bad data before it reaches the dashboard",
+        "body": "We build the Skill that would have caught this morning's incident. It reads a dataset and a quality contract, checks schema, freshness, uniqueness, required fields, and numeric rules, and returns PASS, WARN, or FAIL with a PUBLISH or BLOCK recommendation. It never modifies the source data. First it checks whether .claude/skills/ already exists in this project and creates it if not — that check itself is part of the prompt, not assumed.",
         "code": {
-          "label": "Minimal skill on disk",
-          "code": ".claude/skills/\n  commit-summary/\n    SKILL.md\n\n--- SKILL.md ---\n---\nname: commit-summary\ndescription: Use when the user asks for a commit message after staging changes. Writes a conventional-commit summary from the staged diff.\n---\n\nWrite a conventional-commit message from the staged changes:\n1. Run git diff --staged to read what changed.\n2. Pick a type: feat, fix, chore, docs, refactor, test.\n3. Output one subject line under 72 chars, then a short body if needed."
+          "label": "Claude Code prompt — build data-quality-gate",
+          "code": "We are completing a guided Agent Skills lab inside my Week 1 workspace.\n\nFIRST: WORKSPACE AND SKILLS DIRECTORY CHECK\n1. Read CLAUDE.md and follow all project rules.\n2. Check whether the project directory .claude/skills/ exists.\n3. If .claude/skills/ does not exist, create it before doing anything else.\n4. Record whether the directory already existed or was created.\n5. If a CLAUDE.md rule conflicts with this request, stop and explain.\n\nCREATE THESE FILES\n1. .claude/skills/data-quality-gate/SKILL.md\n2. skill-lab/orders.csv\n3. skill-lab/quality-contract.md\n\nSKILL REQUIREMENTS\nName: data-quality-gate\nDescription: Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication. Checks the data against a quality contract and returns PASS, WARN, or FAIL with evidence and a PUBLISH or BLOCK recommendation.\n\nThe instruction body must:\n- Require a dataset path.\n- Use a supplied quality contract when available.\n- Check schema, freshness, expected volume, key uniqueness, duplicates, required fields, nulls, and numeric rules.\n- Return a table with Check, Evidence, Status, and Recommended Action.\n- Finish with PASS, WARN, or FAIL.\n- Finish with a PUBLISH or BLOCK recommendation.\n- Never modify the source data.\n- Remain concise and procedural.\n- Not include allowed-tools yet.\n\nSAMPLE DATA\nCreate approximately 12 believable order records in skill-lab/orders.csv. Deliberately include: one duplicate order ID, one missing region, one negative revenue value, one load timestamp older than 48 hours.\n\nQUALITY CONTRACT\nCreate skill-lab/quality-contract.md with: order_id must be unique; region is required; revenue must be greater than zero; load_timestamp must be less than 24 hours old; expected row count is at least 10.\n\nDo not commit anything and do not run the Skill yet.\n\nWHEN FINISHED, REPORT:\n1. Whether .claude/skills/ already existed or was created\n2. Every file created\n3. The exact project-relative path of every file\n4. A one-line explanation of what each file contains\n5. The final Skill description\n6. Whether Claude Code should be restarted because the top-level Skills directory was created after the current session started"
         },
-        "script": "If you can write a README, you can write a skill. There is no magic runtime here: it is a folder and a Markdown file with a header. Say that back to yourself when it starts to feel complicated."
+        "bullets": [
+          "WHERE THESE FILES WILL BE STORED",
+          ".claude/skills/data-quality-gate/SKILL.md",
+          "skill-lab/orders.csv",
+          "skill-lab/quality-contract.md"
+        ],
+        "script": "Paste this on screen exactly as written. Watch the pulse rail — nobody moves on until .claude/skills/ exists and all three files are reported back with their exact paths."
+      },
+      {
+        "segment": "business-problem",
+        "eyebrow": "🧪 Test Automatic Invocation",
+        "title": "Separate slide, separate action: prove it fires without naming it",
+        "body": "Never combine building a Skill with testing it on the same prompt. Now, in a fresh ask, validate the sample orders against the quality contract WITHOUT naming the Skill — Claude should invoke data-quality-gate on its own because the description matched. Expect FAIL and BLOCK: duplicate order, missing region, negative revenue, and stale data are all deliberately present.",
+        "code": {
+          "label": "Claude Code prompt — test automatic invocation",
+          "code": "Before this data feeds the executive revenue dashboard, validate:\nskill-lab/orders.csv\nagainst:\nskill-lab/quality-contract.md\n\nTell me whether I should PUBLISH or BLOCK the dataset.\n\nSave the completed report to:\nskill-lab/data-quality-report.md\n\nDo not modify orders.csv.\n\nWHEN FINISHED, REPORT:\n1. Whether data-quality-gate was invoked automatically\n2. Every issue found\n3. The final PASS, WARN, or FAIL result\n4. The PUBLISH or BLOCK recommendation\n5. The exact path of the saved report"
+        },
+        "bullets": [
+          "WHERE THE RESULT WILL BE STORED",
+          "skill-lab/data-quality-report.md",
+          "Expected: automatic invocation, FAIL, BLOCK"
+        ],
+        "script": "This is the acceptance test for every Skill tonight: ask in plain English, never name the Skill. If it fires on its own, the description works."
       },
       {
         "segment": "architecture",
-        "eyebrow": "🧬 Three Parts",
-        "title": "Frontmatter, description, body — and the description is the architecture",
-        "body": "A skill has three parts and you must not confuse their jobs. The frontmatter is machine-readable metadata: the name, the description, and optionally allowed-tools. The description is the trigger: the natural-language sentence Claude reads to decide WHEN to load this skill at all. The body is the instructions Claude follows once the skill has been triggered. The critical insight beginners miss: Claude does not read the body to decide whether to use the skill, it reads only the name and description. So the description is not documentation, it is the routing logic.",
+        "eyebrow": "🗄️ Familiar Analogy",
+        "title": "A prompt is like ad hoc SQL. A Skill is like a governed reusable procedure.",
+        "body": "You already know this pattern from data work. Copied ad hoc SQL maps to a repeated prompt — works once, drifts every time you retype it. A stored procedure or reusable ETL package maps to an Agent Skill. The procedure catalog's metadata maps to the Skill's name and description. The procedure's steps map to the SKILL.md body. Lookup and configuration files map to supporting resources. Validation and reconciliation map to Skill tests. Source control maps to a committed project Skill. This is an analogy, not a claim that a Skill is executable SQL.",
         "bullets": [
-          "Frontmatter = metadata (name, description, allowed-tools)",
-          "Description = WHEN — the trigger Claude routes on",
-          "Body = WHAT — the steps Claude runs after triggering",
-          "Great body + lazy description = a skill that never runs"
+          "Ad hoc SQL → repeated prompt",
+          "Stored procedure / reusable ETL package → Agent Skill",
+          "Procedure catalog metadata → Skill name + description",
+          "Procedure steps → SKILL.md body",
+          "Validation and reconciliation → Skill tests"
         ],
-        "script": "Circle this on the board: the body is what the skill does, the description is when it does it. Beginners pour effort into the body and dash off a one-line description. That is exactly backwards."
+        "script": "Say explicitly: this is an analogy to build intuition, not a claim that a Skill literally executes SQL. Data people already understand governed reuse — we are just naming the AI-native version of it."
+      },
+      {
+        "segment": "architecture",
+        "eyebrow": "🧬 Anatomy",
+        "title": "Metadata routes the work. Instructions perform the work.",
+        "body": "A Skill has three parts and you must not confuse their jobs. The folder is the capability boundary. The name is the identifier. The description is routing information — the sentence Claude reads to decide WHEN to load this Skill at all. The body is the procedure Claude follows once triggered. References and templates are supporting knowledge, loaded only when needed. The output contract — PASS/WARN/FAIL, PUBLISH/BLOCK — is the evidence of correct execution.",
+        "bullets": [
+          "Folder = capability boundary",
+          "Description = routing information (the trigger)",
+          "Body = the procedure followed after invocation",
+          "Output contract = evidence of correct execution"
+        ],
+        "script": "The description is not documentation about the Skill — it is the routing logic. Say that sentence out loud once."
       },
       {
         "segment": "architecture",
         "eyebrow": "🪜 Progressive Disclosure",
-        "title": "Skills load in three levels — that is why they are cheap",
-        "body": "This is the most important architecture idea today. Level one: only the name and description of every skill sits in context at all times, and that is tiny, a line or two each. Level two: when a task matches a description, Claude loads that one skill's SKILL.md body. Level three: any extra files the body references, like a template, load only when they are actually needed. This is why you can have thirty skills installed and pay almost nothing until one fires. Contrast that with CLAUDE.md, which is loaded in full every session whether it is relevant to this turn or not.",
+        "title": "Claude reads the catalog before loading the procedure",
+        "body": "Only a Skill's name and description are advertised in context at all times — tiny, a line or two each. The full SKILL.md instructions load only when the Skill is actually invoked. Supporting resources — a reference file, a template — load only when the body says to read them. And once invoked, the rendered instructions remain in the conversation context for the rest of the turn. This is why having many Skills installed costs almost nothing until one actually fires.",
         "bullets": [
-          "Level 1: name + description always loaded (tiny)",
-          "Level 2: SKILL.md body loads only on trigger",
-          "Level 3: bundled files load only when referenced",
-          "Thirty skills, near-zero idle cost"
+          "1. Name + description advertised at all times",
+          "2. SKILL.md body loads when invoked",
+          "3. Supporting resources load as needed",
+          "4. Once invoked, instructions remain in context"
         ],
-        "script": "Skills are lazy-loaded; CLAUDE.md is eager-loaded. That one difference decides which one you reach for. Keep that fork in your head for the next slide."
+        "script": "Contrast this with CLAUDE.md, which loads in full every session whether relevant to this turn or not. Skills are lazy; CLAUDE.md is eager. Keep that fork in your head."
       },
       {
         "segment": "architecture",
-        "eyebrow": "🧭 Which Tool",
-        "title": "Skill, CLAUDE.md, subagent, or MCP — they are not interchangeable",
-        "body": "This is the comparison the entire week hinges on. CLAUDE.md is standing context: always-on rules and facts that apply to every turn. A Skill is an on-demand, reusable procedure loaded only when its description matches. A subagent is a separate context window for delegated, isolated work like research or parallel tasks. MCP is a connection to an external tool or data source, a server that exposes tools and data. Map each to a question and the choice becomes obvious.",
+        "eyebrow": "🧭 Skill, CLAUDE.md, Subagent, or MCP?",
+        "title": "Four components, four different jobs — they are not interchangeable",
+        "body": "Always-true project rule, like never modify production SQL without review → CLAUDE.md. A reusable procedure, like validate an extract before dashboard publication → Skill. A separate delegated investigation, like investigating several possible causes without filling the main context → Subagent. A connection to an outside system, like retrieving current data from Snowflake, Power BI, or Jira → MCP. Map every capability question to one of these four before you build.",
         "bullets": [
-          "Always true, every turn? → CLAUDE.md (standing context)",
-          "A repeated procedure you invoke? → Skill",
-          "Needs its own context / delegation? → Subagent",
-          "Reach an outside system or data? → MCP"
+          "Always true, every turn → CLAUDE.md",
+          "A repeated, invocable procedure → Skill",
+          "Separate delegated investigation → Subagent",
+          "Connection to an outside system → MCP"
         ],
-        "script": "If you remember one slide today, make it this one. Most messy AI setups are someone stuffing a procedure into CLAUDE.md, or trying to make a skill reach an external API instead of using MCP."
-      },
-      {
-        "segment": "architecture",
-        "eyebrow": "🔐 Least Privilege",
-        "title": "A skill that only formats text should not be able to run shell commands",
-        "body": "By default a skill can use the tools available in the session. The allowed-tools frontmatter field restricts a skill to the minimum tools it actually needs, which is least privilege applied to your AI. A text-formatting skill needs no Bash at all; a git skill needs to read files and run specific git commands but should never write arbitrary files. Scoping matters for safety, because a narrow skill cannot do damage; for predictability, because it cannot wander off task; and for review, because a teammate sees the blast radius right there in the frontmatter without reading the body.",
-        "bullets": [
-          "allowed-tools narrows a skill to only what it needs",
-          "Safety: a scoped skill cannot cause damage it was never meant to",
-          "Predictability: it cannot wander outside its job",
-          "Reviewability: blast radius is visible in the header"
-        ],
-        "code": {
-          "label": "Tool scoping in frontmatter",
-          "code": "---\nname: release-notes\ndescription: Use when the user asks for release notes or a changelog. Generates grouped release notes from a commit range.\nallowed-tools: Read, Bash(git log:*), Bash(git diff:*)\n---"
-        },
-        "script": "Least privilege is not paranoia, it is design. When you scope a skill's tools you are writing its blast radius down where a reviewer can see it. That is an architecture habit, not a nicety."
+        "script": "If you remember one slide tonight, make it this one. Most messy AI setups are someone stuffing a procedure into CLAUDE.md, or reaching for a Skill when they actually needed MCP."
       },
       {
         "segment": "deconstruct",
-        "eyebrow": "🔬 Live Deconstruct",
-        "title": "Two skills, identical bodies — one triggers, one is invisible",
-        "body": "Here is the experiment. I have two copies of the same commit-message skill open. The instruction bodies are byte-for-byte identical. The only difference between them is the description line. I am going to ask Claude the exact same thing and we are going to watch one skill fire and the other sit there completely dead. Keep your eyes on the descriptions, because the trigger lives entirely there and nowhere else.",
+        "eyebrow": "🔬 Deconstruct",
+        "title": "\"Helps with data\" versus a routable description",
+        "body": "Compare description: Helps with data. against description: Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication. Returns PASS, WARN, or FAIL with evidence and a PUBLISH or BLOCK recommendation. Identify the trigger, the input, the output, the boundary, and the user vocabulary in the second one — and notice the first has none of them.",
         "bullets": [
-          "Same body, word for word, in both skills",
-          "Only the description differs",
-          "One fires on a natural ask, one never does"
+          "Trigger: when does this fire?",
+          "Input: what does it need?",
+          "Output: what does it produce?",
+          "Boundary: what is it NOT for?",
+          "Vocabulary: does it use the words a user actually says?"
         ],
-        "script": "Two skills that are identical except one line. Watch which one Claude picks up when I ask in plain English. This little experiment is the whole ballgame."
+        "script": "Read both out loud. Ask the room which one Claude could actually route on. The vague one has nothing to match against — Claude does the work inline and the Skill stays invisible."
       },
       {
         "segment": "deconstruct",
-        "eyebrow": "✅ Why It Fires",
-        "title": "'Use when the user asks for a commit message' — specific trigger, named output",
-        "body": "Here is the winning description. Notice three things it does. It names the trigger condition, when the user asks for a commit message after staging changes. It names the output, a conventional-commit summary. And it uses the concrete vocabulary a real user would actually type. Claude scans every skill's description against the user's request and this one jumps out as the match. Good descriptions are written in the third person, they tend to start with Use when, and they include the words a person would actually say.",
-        "bullets": [
-          "Names the trigger: when the user asks for a commit message",
-          "Names the output: a conventional-commit summary",
-          "Uses the user's real vocabulary, not internal jargon"
-        ],
+        "eyebrow": "🛡️ Harden data-quality-gate",
+        "title": "Review and improve — do not rebuild from scratch",
+        "body": "Now harden the Skill so it triggers reliably for data-validation and publish-readiness requests, without firing on unrelated SQL, dashboard-design, or metric-calculation requests. Move the detailed check explanations into a reference file so SKILL.md stays concise, and write down real positive and negative trigger tests so this stays verifiable, not a guess.",
         "code": {
-          "label": "Description that triggers",
-          "code": "---\nname: commit-summary\ndescription: Use when the user asks for a commit message or asks to describe staged changes. Writes a conventional-commit summary (feat/fix/chore/...) from the staged diff.\n---"
+          "label": "Claude Code prompt — harden data-quality-gate",
+          "code": "Review the existing data-quality-gate Skill.\n\nDo not rebuild it from scratch.\n\nHarden it so it triggers reliably for data-validation and publish-readiness requests without triggering for unrelated SQL, dashboard-design, or metric-calculation requests.\n\nComplete these actions:\n1. Review and improve the description if necessary.\n2. Keep the trigger focused on: dataset validation, ETL-output validation, data-quality checks, dashboard or report publish readiness.\n3. Make clear that ordinary requests to write SQL, calculate a metric, or design a dashboard are not sufficient reasons to invoke it.\n4. Create .claude/skills/data-quality-gate/references/quality-checks.md\n5. Move detailed explanations of the quality checks into that reference.\n6. Keep SKILL.md concise and state exactly when to read the reference.\n7. Create skill-lab/data-quality-gate-tests.md\n8. Include: three prompts that should trigger the Skill, three prompts that should not trigger the Skill, expected output requirements.\n\nDo not commit anything.\n\nWHEN FINISHED, REPORT:\n1. Every file modified\n2. Every file created\n3. The exact project-relative path of every file\n4. A one-line explanation of what each file contains\n5. The final description\n6. The positive and negative trigger tests"
         },
-        "script": "Read this description as if you were Claude scanning 25 skills for the one that fits write my commit message. It jumps out. That findability is the entire job of a description."
+        "bullets": [
+          "WHERE THESE FILES WILL BE STORED",
+          ".claude/skills/data-quality-gate/SKILL.md",
+          ".claude/skills/data-quality-gate/references/quality-checks.md",
+          "skill-lab/data-quality-gate-tests.md"
+        ],
+        "script": "This is a review-and-improve prompt, not a rebuild. Read the final description out loud and ask: does this fire on the way a data analyst actually talks?"
       },
       {
         "segment": "deconstruct",
-        "eyebrow": "❌ Why It Is Dead",
-        "title": "'Helps with git' — no trigger, no output, so it never fires",
-        "body": "Here is the losing description: helps with git stuff. It names no trigger condition and no output, and it overlaps with a dozen unrelated git tasks like branching, rebasing, and blame. Claude has nothing specific to match against, so it defaults to doing the work inline and the skill stays invisible. This is the number-one risk area for the whole week. And notice the fix is not a better body: the body is identical to the one that works. The fix is naming when and what. On Thursday you will repair exactly this failure.",
-        "bullets": [
-          "No trigger condition, no named output",
-          "Overlaps with every unrelated git task",
-          "Claude does the work inline; the skill never loads",
-          "Fix is the description, not the body"
-        ],
+        "eyebrow": "🎯 Three-Way Retest",
+        "title": "Natural, direct, and negative — all three, every time",
+        "body": "A hardened Skill needs three separate proofs, not one. Test 1 asks naturally without naming the Skill. Test 2 invokes it directly by name. Test 3 is a deliberate negative test — an ordinary SQL request that must NOT trigger it. All three matter: natural proves the description, direct proves the body, negative proves the boundary.",
         "code": {
-          "label": "Dead description → the fix",
-          "code": "BEFORE (never fires):\ndescription: Helps with git stuff\n\nAFTER (fires reliably):\ndescription: Use when the user asks for a commit message after staging changes. Writes a conventional-commit summary from the staged diff."
+          "label": "Three-way retest",
+          "code": "TEST 1 — NATURAL INVOCATION\nIs skill-lab/orders.csv safe to publish to the executive dashboard?\n\nTEST 2 — DIRECT INVOCATION\n/data-quality-gate skill-lab/orders.csv using skill-lab/quality-contract.md\n\nTEST 3 — NEGATIVE TEST\nWrite a SQL query that totals revenue by region.\n\nExpected: Test 1 invokes data-quality-gate. Test 2 invokes data-quality-gate. Test 3 does not invoke data-quality-gate.\n\nNo new files are required for this test."
         },
-        "script": "This is the number-one reason skills die in the wild. The author knew what it did, so the vague line felt obvious to them. But Claude is not in your head, it only has this sentence. Vague sentence, dead skill."
+        "script": "Run all three back to back. The negative test matters as much as the positive ones — a Skill that fires on everything is as broken as one that fires on nothing."
       },
       {
         "segment": "micro-build",
-        "eyebrow": "🛠️ Micro-Build 1",
-        "title": "Step 1 — give your workspace a skills folder",
-        "body": "Now everyone builds along in your Week 1 Architect Workspace. We are going to add a .claude/skills/ folder and scaffold our first skill. Remember the location rule: project skills go in the repo so your team gets them, personal skills go in ~/.claude/skills/ so they follow you everywhere. We will let Claude Code do the scaffolding so you watch the anatomy appear in front of you rather than memorizing it.",
-        "bullets": [
-          "Open your Week 1 workspace",
-          "Project skills live in the repo's .claude/skills/",
-          "Let Claude scaffold so you see the structure appear"
-        ],
+        "eyebrow": "🕵️ Build etl-failure-triage",
+        "title": "Second Skill: rank likely causes with evidence, never guess",
+        "body": "The gate blocked the bad data — now the business wants to know why the pipeline produced it. etl-failure-triage reads logs and run metadata, separates facts from hypotheses, ranks likely causes with cited evidence, and recommends the next diagnostic step. It never changes pipeline code and never reruns jobs — diagnosis, not action.",
         "code": {
-          "label": "Claude Code prompt",
-          "code": "Create a .claude/skills/ folder in this workspace, then scaffold a skill named commit-summary as .claude/skills/commit-summary/SKILL.md. Include YAML frontmatter with name and a description, plus a short instruction body. Do not run git yet — just create the files."
+          "label": "Claude Code prompt — build etl-failure-triage",
+          "code": "Read CLAUDE.md and inspect the existing Week 2 Agent Skills lab.\n\nConfirm that .claude/skills/ exists. If it does not, create it.\n\nCreate:\n1. .claude/skills/etl-failure-triage/SKILL.md\n2. .claude/skills/etl-failure-triage/references/common-failures.md\n3. skill-lab/orders-pipeline-failure.log\n4. skill-lab/pipeline-run-metadata.md\n\nSKILL DESCRIPTION\nUse when the user asks why an ETL or ELT pipeline, scheduled load, SQL job, data refresh, or ingestion process failed or produced suspicious output. Reviews logs and run metadata, ranks likely causes, cites evidence, and recommends the next safe diagnostic steps.\n\nSKILL BEHAVIOR\n- Require a log, run output, or failure description.\n- Read run metadata when supplied.\n- Separate facts from hypotheses.\n- Cite evidence for every likely cause.\n- Rank the most likely causes.\n- Provide the next diagnostic step for each cause.\n- Do not change pipeline code.\n- Do not rerun jobs.\n- Do not claim a root cause without evidence.\n- Return: Incident Summary, Evidence, Ranked Causes, Next Tests, Escalation Recommendation.\n\nSAMPLE FAILURE\nCreate a believable ETL failure log and run-metadata file connected to the orders dataset. Include evidence of: a schema mismatch involving region, a failed conversion or mapping step, a retry that did not resolve the problem.\n\nDo not commit or run the Skill.\n\nWHEN FINISHED, REPORT:\n1. Every file created\n2. The exact project-relative path of every file\n3. A one-line explanation of what each file contains\n4. The final Skill description"
         },
-        "script": "Open your Week 1 workspace. We add one folder and let Claude scaffold the first skill so the anatomy shows up in front of you instead of on a slide."
+        "bullets": [
+          "WHERE THESE FILES WILL BE STORED",
+          ".claude/skills/etl-failure-triage/SKILL.md",
+          ".claude/skills/etl-failure-triage/references/common-failures.md",
+          "skill-lab/orders-pipeline-failure.log",
+          "skill-lab/pipeline-run-metadata.md"
+        ],
+        "script": "Same discipline as Skill #1, faster this time — description first, then the body. This one diagnoses; it never fixes or reruns anything."
       },
       {
         "segment": "micro-build",
-        "eyebrow": "✍️ Description First",
-        "title": "Step 2 — write the description before the body, on purpose",
-        "body": "Now the discipline that separates working skills from dead ones: author the description first. It is the hard part and it is the part that decides whether the skill ever runs, so it deserves your best thinking before you touch the body. Write a description that names the trigger and the output, using the template Use when the user <trigger>; <what it produces>. This inverts the beginner instinct to write a big body and then dash off a description. If you cannot write a sharp description, you do not yet understand the capability well enough to build it.",
-        "bullets": [
-          "Template: Use when the user <trigger>; <produces what>",
-          "Third person, concrete, in the user's words",
-          "If the description is hard, the capability is not clear yet"
-        ],
+        "eyebrow": "🧪 Test Automatic Invocation",
+        "title": "Separate slide: prove triage fires and cites real evidence",
+        "body": "Investigate the failure without naming the Skill. Expect it to invoke automatically, rank the schema mismatch as the top cause with cited log evidence, and recommend a next diagnostic step — never a fix, never a rerun.",
         "code": {
-          "label": "Description-first frontmatter",
-          "code": "---\nname: commit-summary\ndescription: Use when the user asks for a commit message or to summarize staged changes. Produces a conventional-commit subject line plus optional body from the staged diff.\nallowed-tools: Read, Bash(git diff:*), Bash(git status:*)\n---"
+          "label": "Claude Code prompt — test etl-failure-triage",
+          "code": "Investigate why the orders pipeline failed using:\nskill-lab/orders-pipeline-failure.log\nskill-lab/pipeline-run-metadata.md\n\nRank the likely causes, cite the evidence, and tell me what should be tested next.\n\nSave the investigation to:\nskill-lab/etl-triage-report.md\n\nDo not change the pipeline or rerun the job.\n\nWHEN FINISHED, REPORT:\n1. Whether etl-failure-triage was invoked automatically\n2. The highest-ranked likely cause\n3. The evidence supporting it\n4. The next recommended diagnostic test\n5. The exact path of the saved report"
         },
-        "script": "Do this in the order that feels wrong: description first. If you can't write a sharp description, you don't understand the capability well enough to build it yet."
+        "bullets": [
+          "WHERE THE RESULT WILL BE STORED",
+          "skill-lab/etl-triage-report.md"
+        ],
+        "script": "Confirm the report cites real evidence, not a guess. This is the difference between a Skill and a chatbot answer."
       },
       {
         "segment": "micro-build",
-        "eyebrow": "📝 The Body",
-        "title": "Step 3 — a body is a short imperative procedure, not an essay",
-        "body": "Now write the body. It is instructions in the imperative, as numbered steps, concrete about inputs and outputs. Keep it tight, because a rambling body wastes exactly the context you saved with progressive disclosure. Reference the exact command or format you want the model to use. A good body reads like a brief to a sharp new hire: numbered, load-bearing, no throat-clearing. Cut any step that is not doing work.",
-        "bullets": [
-          "Imperative, numbered steps",
-          "Concrete inputs and outputs",
-          "Keep it short — a long body wastes the context you saved",
-          "If a step is not load-bearing, delete it"
-        ],
+        "eyebrow": "📊 Build executive-dashboard-brief",
+        "title": "Third Skill: a decision product, not a technical data dump",
+        "body": "The technical team has an answer. Leadership needs something different: status, business impact, verified evidence, the decision needed, an owner, and the next update time. executive-dashboard-brief never invents financial impact, cause, owner, or timing — it only uses what the quality and triage reports actually established.",
         "code": {
-          "label": "The instruction body",
-          "code": "Write a conventional-commit message from the currently staged changes:\n1. Run git diff --staged to see exactly what changed.\n2. Choose one type: feat, fix, chore, docs, refactor, test.\n3. Write a subject line: type(scope): summary, under 72 characters.\n4. If the change is non-trivial, add a 1-3 line body explaining why.\n5. Output only the message, ready to paste into git commit."
+          "label": "Claude Code prompt — build executive-dashboard-brief",
+          "code": "Read CLAUDE.md and inspect the existing Week 2 lab outputs.\n\nConfirm that .claude/skills/ exists. If it does not, create it.\n\nCreate:\n1. .claude/skills/executive-dashboard-brief/SKILL.md\n2. .claude/skills/executive-dashboard-brief/template.md\n\nSKILL DESCRIPTION\nUse when the user asks to turn a data-quality result, failed refresh, pipeline incident, KPI variance, or technical investigation into an executive dashboard update. Produces a concise leadership brief containing status, business impact, verified evidence, decision needed, owner, and next update time.\n\nSKILL REQUIREMENTS\n- Use supplied quality and triage reports.\n- Separate verified facts from unresolved questions.\n- Never invent financial impact, cause, owner, or timing.\n- Avoid raw logs and unnecessary technical details.\n- State whether the dashboard should remain blocked.\n- Use template.md for the final structure.\n- Return: Status, Business Impact, What We Know, What We Do Not Know, Decision or Action Needed, Owner, Next Update.\n\nCreate template.md containing that exact executive structure.\n\nDo not commit or run the Skill.\n\nWHEN FINISHED, REPORT:\n1. Every file created\n2. The exact project-relative path of every file\n3. A one-line explanation of what each file contains\n4. The final Skill description\n5. How SKILL.md uses template.md"
         },
-        "script": "Write the body the way you'd brief a sharp new hire: numbered steps, no throat-clearing. If a step isn't load-bearing, cut it."
+        "bullets": [
+          "WHERE THESE FILES WILL BE STORED",
+          ".claude/skills/executive-dashboard-brief/SKILL.md",
+          ".claude/skills/executive-dashboard-brief/template.md"
+        ],
+        "script": "Read the required structure out loud: Status, Impact, What We Know, What We Do Not Know, Decision, Owner, Next Update. That is the whole shape of good incident communication."
       },
       {
         "segment": "micro-build",
-        "eyebrow": "🚀 First Fire",
-        "title": "Step 4 — invoke it and watch it trigger",
-        "body": "Now the payoff of everything Monday. Stage a change, then ask for a commit message in plain natural language without ever naming the skill. If it auto-fires, your description works, because Claude routed to it from the description alone. Then also invoke it explicitly by name to confirm the body does the right thing. If it only works when you name it but not on the natural ask, your description is too weak, and that is a live preview of exactly what we debug on Thursday.",
-        "bullets": [
-          "Natural-language ask tests the description (the trigger)",
-          "Explicit invocation tests the body (the procedure)",
-          "Fires only when named = description too weak"
-        ],
+        "eyebrow": "🧪 Test + Complete the Incident Package",
+        "title": "Run all three Skills together — the full connected workflow",
+        "body": "The orders dashboard is scheduled to publish. Run the complete incident workflow: validate, and if unsafe, investigate, then brief leadership — using the appropriate Skill for each stage, automatically, without naming any of them. This is the moment the three Skills stop being three separate builds and become one connected system.",
         "code": {
-          "label": "Two ways to test",
-          "code": "Natural-language (tests the trigger):\n  Stage the README change, then: \"write me a commit message for what I just staged\"\n\nExplicit (tests the body):\n  \"Use the commit-summary skill on my staged changes\""
+          "label": "Claude Code prompt — full incident workflow",
+          "code": "The orders dashboard is scheduled to publish.\n\nComplete the incident workflow using the appropriate Agent Skills.\n\n1. Validate: skill-lab/orders.csv against skill-lab/quality-contract.md\n2. If the data is unsafe, investigate: skill-lab/orders-pipeline-failure.log and skill-lab/pipeline-run-metadata.md\n3. Use the resulting findings to prepare a concise executive dashboard incident brief.\n\nDo not modify the source data.\nDo not change the pipeline.\nDo not invent financial impact, an owner, or a resolution time.\n\nSave the final outputs to:\nskill-lab/final-incident-package/data-quality-report.md\nskill-lab/final-incident-package/etl-triage-report.md\nskill-lab/final-incident-package/executive-dashboard-brief.md\n\nWHEN FINISHED, REPORT:\n1. Which Skill handled each stage\n2. Why each Skill was selected\n3. Whether each Skill was invoked automatically\n4. The exact path of each final output\n5. The final dashboard PUBLISH or BLOCK decision\n6. The next recommended business action"
         },
-        "script": "Two checks. Ask in plain English and see if it auto-fires — that tests your description. Then call it by name to confirm the body does the right thing. Both should pass."
-      },
-      {
-        "segment": "micro-build",
-        "eyebrow": "🧠 Monday Lands",
-        "title": "You built an asset — now do not let it duplicate CLAUDE.md",
-        "body": "Recap the mental model you now own: a skill is a folder with a SKILL.md, the description is the trigger, progressive disclosure makes it cheap, and you scope tools to least privilege. Then one warning that maps to a real risk area for the week: do not rebuild in a skill what CLAUDE.md already states as a standing rule. A skill is a procedure you invoke; CLAUDE.md is a rule that is always on. Overlap wastes context and creates two instructions that can disagree. Before Thursday, sort your repeated prompts into always-true rules versus procedures you invoke, and bring three procedure candidates.",
         "bullets": [
-          "Folder + SKILL.md; description is the trigger",
-          "Progressive disclosure = cheap until it fires",
-          "Scope tools to least privilege",
-          "Homework: bring three real procedure candidates Thursday"
+          "WHERE THE FINAL INCIDENT PACKAGE WILL BE STORED",
+          "skill-lab/final-incident-package/data-quality-report.md",
+          "skill-lab/final-incident-package/etl-triage-report.md",
+          "skill-lab/final-incident-package/executive-dashboard-brief.md"
         ],
-        "script": "Before Thursday, look at your own repeated prompts and sort them: which are always-true rules for CLAUDE.md, and which are procedures you invoke, which become skills. Come Thursday with three procedure candidates."
+        "script": "This is the payoff slide. Three Skills, one incident, zero manual coordination. Ask the room: which Skill handled which stage, and why that one and not another?"
       }
     ],
     "thursday": [
