@@ -14,6 +14,16 @@ import * as coryDecisionEngine from './reporting/coryDecisionEngine';
 import type { AgentExecutionResult } from './agents/types';
 import { emitEvent } from './workLedger/workLedgerService';
 import type { WorkLedgerEventInput } from '../schemas/workLedgerEventSchema';
+import { authorizeTicketDispatch } from './workLedger/agentActionAuthorizationBridge';
+import { checkSeparationOfDuty, recordSeparationOfDutyFlag } from './workLedger/separationOfDutyService';
+
+// ProofDesk Governance (Milestone 4, T007): the one verification-shaped capability in
+// the current registry (capabilityRegistry.ts's 'curriculum.qa_check' entry) - the
+// dispatcher only receives a resolved AgentMapping (agent_name/execute), not the
+// capabilityId itself, so this name is the correct, currently-only proxy for "this
+// dispatch is a verification action." Update this if a second verification capability
+// is ever added to the registry.
+const VERIFICATION_AGENT_NAME = 'CurriculumQAAgent';
 // ProofDesk Work Graph (Milestone 3, T009): the agent-runner imports that used to
 // live here (runCurriculumArchitectAgent, runArtifactGenerationAgent,
 // runCurriculumQAAgent, runPlatformFixAgent) moved with AGENT_MAPPINGS to
@@ -81,6 +91,35 @@ async function finishAgentRunSafe(
         context: { agent_run_id: (agentRun as any).id, message: err?.message },
       }),
     );
+  }
+}
+
+// ProofDesk Governance (Milestone 4, SHADOW MODE ONLY). Wraps authorizeTicketDispatch()
+// the same way every other write in this file is wrapped: a failure here can never
+// change dispatchTicketToAgent's existing return value or thrown-error behavior.
+// authorizeTicketDispatch() itself already degrades to a safe would_allow default on
+// any internal error (see agentActionAuthorizationBridge.ts) - this extra layer exists
+// only to match this file's own established defensive convention, in case of an
+// unexpected synchronous throw at the call boundary.
+async function authorizeTicketDispatchSafe(
+  input: Parameters<typeof authorizeTicketDispatch>[0],
+): Promise<{ decisionId: string | null }> {
+  try {
+    const result = await authorizeTicketDispatch(input);
+    return { decisionId: result.decisionId };
+  } catch (err: any) {
+    console.error(
+      JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'ticketAgentDispatcher',
+        event: 'authorize_ticket_dispatch_call_failed',
+        outcome: 'failure',
+        error_class: err?.name || 'Error',
+        context: { ticket_id: input.ticketId, agent_name: input.agentName, message: err?.message },
+      }),
+    );
+    return { decisionId: null };
   }
 }
 
@@ -198,6 +237,61 @@ export async function dispatchTicketToAgent(
     await updateTicketStatus(ticketId, 'in_progress', 'agent', mapping.agent_name);
   }
 
+  // ProofDesk Governance (Milestone 4, SHADOW MODE ONLY). Evaluated BEFORE execute()
+  // so the decision reflects "would this have been allowed to start," matching the
+  // conventional gate-ahead-of-the-action shape even though shadow mode never blocks.
+  // dispatchLedgerEventId is generated here and reused for BOTH the auth decision's
+  // approval_requests.event_id AND the ledger event this dispatch is about to write
+  // below (success or failure branch) - see agentActionAuthorizationBridge.ts's header
+  // for why this is the correlation mechanism instead of a second dedup key.
+  // CRITICAL INVARIANT: this call's result NEVER changes what happens next. Every line
+  // from here through mapping.execute() and both emitLedgerEventSafe() calls below is
+  // byte-for-byte identical to before this milestone, plus 3 extra fields on the
+  // ledger event (eventId, riskTier, authorizationDecisionId) that no existing reader
+  // consumes for anything but the new governance admin panel (T008).
+  const dispatchLedgerEventId = crypto.randomUUID();
+  const dispatchRiskTier = (ticket as any).risk_tier ?? 'R0';
+  const authDecision = await authorizeTicketDispatchSafe({
+    eventId: dispatchLedgerEventId,
+    ticketId,
+    runId: agentRun?.id,
+    agentName: mapping.agent_name,
+    action: 'ticket_dispatch',
+    riskTier: dispatchRiskTier,
+  });
+
+  // ProofDesk Governance (Milestone 4, T007, SHADOW MODE ONLY): separation-of-duty
+  // check, only when this dispatch is itself a verification action. Log-only - never
+  // gates dispatch, never affects the flag's own outcome, mirrors the authorization
+  // check's error handling exactly (a failure here degrades to a no-flag no-op).
+  if (mapping.agent_name === VERIFICATION_AGENT_NAME) {
+    try {
+      const sod = await checkSeparationOfDuty(ticketId, mapping.agent_name);
+      if (sod.flagged) {
+        await recordSeparationOfDutyFlag({
+          ticketId,
+          runId: agentRun?.id,
+          traceId,
+          agentName: mapping.agent_name,
+          idempotencyKey: `separation-of-duty:${dispatchLedgerEventId}`,
+          priorEventIds: sod.priorEventIds,
+        });
+      }
+    } catch (err: any) {
+      console.error(
+        JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          service: 'ticketAgentDispatcher',
+          event: 'separation_of_duty_check_call_failed',
+          outcome: 'failure',
+          error_class: err?.name || 'Error',
+          context: { ticket_id: ticketId, agent_name: mapping.agent_name, message: err?.message },
+        }),
+      );
+    }
+  }
+
   // Execute agent
   const startTime = Date.now();
   try {
@@ -219,6 +313,7 @@ export async function dispatchTicketToAgent(
       durationMs,
     });
     await emitLedgerEventSafe({
+      eventId: dispatchLedgerEventId,
       ticketId,
       runId: agentRun?.id,
       traceId,
@@ -232,6 +327,8 @@ export async function dispatchTicketToAgent(
       idempotencyKey: dispatchIdempotencyKey,
       result: runResult,
       durationMs,
+      riskTier: dispatchRiskTier,
+      authorizationDecisionId: authDecision.decisionId,
       sourceRecordType: 'ticket',
       sourceRecordId: ticketId,
     });
@@ -251,6 +348,7 @@ export async function dispatchTicketToAgent(
 
     await finishAgentRunSafe(agentRun, { status: 'failed', result: 'failure', durationMs });
     await emitLedgerEventSafe({
+      eventId: dispatchLedgerEventId,
       ticketId,
       runId: agentRun?.id,
       traceId,
@@ -265,6 +363,8 @@ export async function dispatchTicketToAgent(
       result: 'failure',
       reasonCode: 'agent_threw',
       durationMs,
+      riskTier: dispatchRiskTier,
+      authorizationDecisionId: authDecision.decisionId,
       sourceRecordType: 'ticket',
       sourceRecordId: ticketId,
     });

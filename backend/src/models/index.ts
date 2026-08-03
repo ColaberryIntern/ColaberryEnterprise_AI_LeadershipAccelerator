@@ -129,6 +129,7 @@ import DecisionRecord from './DecisionRecord';
 import TicketWorkUnit from './TicketWorkUnit';
 import WorkUnitDependency from './WorkUnitDependency';
 import ResourceLease from './ResourceLease';
+import ApprovalRequest from './ApprovalRequest';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -832,6 +833,16 @@ ResourceLease.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workU
 AgentRun.hasMany(ResourceLease, { foreignKey: 'run_id', as: 'leases' });
 ResourceLease.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
 
+// ProofDesk Governance (Milestone 4 - shadow mode) associations.
+Ticket.hasMany(ApprovalRequest, { foreignKey: 'ticket_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+TicketWorkUnit.hasMany(ApprovalRequest, { foreignKey: 'work_unit_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+AgentRun.hasMany(ApprovalRequest, { foreignKey: 'run_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+WorkLedgerEvent.hasOne(ApprovalRequest, { foreignKey: 'event_id', as: 'approvalRequest' });
+ApprovalRequest.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -1192,6 +1203,7 @@ export {
   TicketWorkUnit,
   WorkUnitDependency,
   ResourceLease,
+  ApprovalRequest,
   StudentNavigationEvent,
   Alert,
   AlertEvent,

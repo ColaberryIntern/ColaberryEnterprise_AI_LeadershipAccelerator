@@ -61,6 +61,29 @@ export interface ActionContext {
   resourceType?: string | null;
   isNewLead?: boolean; // first-ever contact to this lead
   campaignAgeHours?: number | null; // age of the campaign this action targets
+  // ProofDesk Milestone 4 (Governance Enforcement, shadow mode): the ProofDesk
+  // per-action R0-R4 risk tier (already on tickets.risk_tier / work_ledger_events.risk_tier
+  // since Milestone 1), reconciled here into the pre-existing 4-level autonomy ladder
+  // rather than a second, competing governance model. Optional and additive - every
+  // existing caller of actionRequiresApproval() that doesn't pass this (realtimeSyncEngine,
+  // legacyErpIntegrationAgent) is completely unaffected.
+  riskTier?: string | null;
+}
+
+// R0 (lowest) .. R4 (highest), same order/convention as
+// workGraph/capabilityRouter.ts's RISK_TIER_ORDER - kept in sync deliberately so "R3/R4"
+// means the same thing on both the dispatch-eligibility gate (capabilityRouter) and the
+// HITL-approval gate (here). An unknown/malformed tier is treated as index 0 (R0, the
+// safe/lowest tier) - the exact same fail-safe convention capabilityRouter.ts's own
+// riskTierIndex() already uses, so this introduces no new failure mode.
+const RISK_TIER_ORDER = ['R0', 'R1', 'R2', 'R3', 'R4'];
+const HIGH_RISK_TIER_FLOOR_INDEX = RISK_TIER_ORDER.indexOf('R3'); // R3 and R4 both qualify
+
+function isHighRiskTier(riskTier: string | null | undefined): boolean {
+  if (!riskTier) return false;
+  const idx = RISK_TIER_ORDER.indexOf(riskTier);
+  if (idx === -1) return false; // malformed/unrecognized tier -> safe default, not forced approval
+  return idx >= HIGH_RISK_TIER_FLOOR_INDEX;
 }
 
 export interface ApprovalDecision {
@@ -76,6 +99,17 @@ export interface ApprovalDecision {
 export function actionRequiresApproval(action: string, ctx: ActionContext = {}): ApprovalDecision {
   const cat = actionCategory(action);
   const a = (action || '').toLowerCase();
+
+  // ProofDesk Milestone 4 (Governance Enforcement, shadow mode): R3/R4 risk-tier
+  // actions ALWAYS require approval, independent of the acting agent's own ladder
+  // level or action category - checked first, ahead of every other rule, since a
+  // high-risk-tier action needs a human regardless of what category it happens to
+  // classify as. Malformed/unrecognized risk tiers never trigger this (isHighRiskTier's
+  // safe-default), so a bad string can only ever fail OPEN here, never crash the caller
+  // and never falsely force an approval that wasn't warranted.
+  if (isHighRiskTier(ctx.riskTier)) {
+    return { required: true, rule: 'high_risk_tier' };
+  }
 
   // High-stakes legacy ERP writes (VA financial/procurement/asset systems) are always
   // held for a human — REQ-003 approval gate + TBI "AI proposes, human approves".

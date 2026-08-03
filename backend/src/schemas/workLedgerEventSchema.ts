@@ -10,6 +10,14 @@ import { z } from 'zod';
 const uuid = z.string().uuid();
 
 export const workLedgerEventInputSchema = z.object({
+  // ProofDesk Milestone 4 (Governance Enforcement, shadow mode): optional
+  // caller-supplied event_id, so a governance decision (approval_requests row) can be
+  // correlated to the ledger event it belongs to even though the decision must be
+  // computed BEFORE the event exists (authorization happens ahead of the action;
+  // the ledger event is written only after the action completes). When omitted,
+  // behavior is byte-for-byte unchanged from before this milestone: the DB generates
+  // event_id via its own DEFAULT (DataTypes.UUIDV4), exactly as it always has.
+  eventId: uuid.optional(),
   workContextId: uuid.nullable().optional(),
   ticketId: uuid.nullable().optional(),
   relatedTicketIds: z.array(uuid).optional(),

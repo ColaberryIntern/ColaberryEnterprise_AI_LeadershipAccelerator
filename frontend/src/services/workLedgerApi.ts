@@ -26,3 +26,32 @@ export async function getWorkLedgerHealth(windowHours = 24): Promise<WorkLedgerH
   });
   return res.data;
 }
+
+// ProofDesk Governance — Milestone 4 (Governance Enforcement, SHADOW MODE ONLY).
+// Read-only would-allow/would-require-approval/would-block breakdown from real
+// ledger data. Nothing this page reads ever blocks a real action - see the backend
+// service's own header (workLedgerHealthService.getGovernanceShadowSummary()) for
+// the full shadow-mode invariant.
+
+export interface GovernanceShadowBreakdownRow {
+  action: string;
+  risk_tier: string;
+  verdict: 'would_allow' | 'would_require_approval' | 'would_block';
+  count: number;
+}
+
+export interface GovernanceShadowSummary {
+  window_hours: number;
+  total_decisions: number;
+  would_allow: number;
+  would_require_approval: number;
+  would_block: number;
+  breakdown: GovernanceShadowBreakdownRow[];
+}
+
+export async function getGovernanceShadowSummary(windowHours = 24): Promise<GovernanceShadowSummary> {
+  const res = await api.get<GovernanceShadowSummary>('/api/admin/dashboard/governance-shadow', {
+    params: { window_hours: windowHours },
+  });
+  return res.data;
+}
