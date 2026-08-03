@@ -37,6 +37,7 @@ const EvidencePanel: React.FC<Props> = ({ overrides, defaults, onChange }) => {
         evidence.map((e, i) => (
           <CollapsibleOverrideCard key={i} index={i} total={evidence.length}
             summary={<><strong>{e.claim || '(untitled claim)'}</strong> {e.publisher && <span className="text-muted">· {e.publisher}</span>}</>}
+            summaryText={`${e.claim || '(untitled claim)'}${e.publisher ? ' · ' + e.publisher : ''}`}
             defaultExpanded={i === justAddedIndex}
             onRemove={() => remove(i)} onMoveUp={() => move(i, 'up')} onMoveDown={() => move(i, 'down')}>
             <label className="form-label small">Claim / quote</label>

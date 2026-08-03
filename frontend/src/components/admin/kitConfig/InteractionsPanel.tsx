@@ -104,6 +104,7 @@ const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, 
             questions.map((q, i) => (
               <CollapsibleOverrideCard key={i} index={i} total={questions.length}
                 summary={<>{q.eyebrow || '🗳️ Survey'} <strong>{q.q || '(untitled question)'}</strong> <span className="text-muted">· {segmentLabel(q.segment)}</span></>}
+                summaryText={`${q.eyebrow || '🗳️ Survey'} ${q.q || '(untitled question)'} · ${segmentLabel(q.segment)}`}
                 defaultExpanded={i === justAddedIndex}
                 onRemove={() => remove(i)} onMoveUp={() => move(i, 'up')} onMoveDown={() => move(i, 'down')}>
                 <div className="row g-2 mb-2">

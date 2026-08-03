@@ -237,7 +237,9 @@ export function deckScript(): string {
         '<div class="lab"><span>' + esc(opt) + '</span><span class="n">' + n + '</span></div>' +
         '<div class="kpoll-bar"><i style="width:' + pct + '%"></i></div></div>';
     }).join('');
-    el.innerHTML = '<div class="kpoll-head">Live answers · ' + total + ' voted</div>' + rows;
+    var correctLine = (revealedNow && p.correctResponders && p.correctResponders.length)
+      ? '<div class="kpoll-correct">✅ Got it right: ' + esc(p.correctResponders.join(', ')) + '</div>' : '';
+    el.innerHTML = '<div class="kpoll-head">Live answers · ' + total + ' voted</div>' + rows + correctLine;
     el.style.display = 'block';
   }
 
@@ -261,6 +263,7 @@ export function deckScript(): string {
     var revealBtn = root.querySelector('[data-action="reveal"]');
     var reopenBtn = root.querySelector('[data-action="reopen"]');
     var explain = root.querySelector('[data-role="explain"]');
+    var correctList = root.querySelector('[data-role="correct-list"]');
     var p = pulse.poll;
     var total = (p && p.total) || 0;
     if (countEl) countEl.textContent = total + (pulse.present ? (' of ' + pulse.present + ' voted') : ' voted');
@@ -272,6 +275,16 @@ export function deckScript(): string {
     if (revealBtn) revealBtn.style.display = st === 'locked' ? '' : 'none';
     if (reopenBtn) reopenBtn.style.display = st === 'locked' ? '' : 'none';
     if (explain) explain.style.display = st === 'revealed' ? '' : 'none';
+    if (correctList){
+      var names = (p && p.correctResponders) || null;
+      if (st === 'revealed' && names && names.length){
+        correctList.textContent = '✅ Got it right: ' + names.join(', ');
+        correctList.style.display = '';
+      } else {
+        correctList.textContent = '';
+        correctList.style.display = 'none';
+      }
+    }
     for (var k = 0; k < tiles.length; k++){
       var idx = parseInt(tiles[k].getAttribute('data-idx'), 10);
       var n = (p && p.tally && p.tally[idx]) || 0;

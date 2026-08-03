@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import api from '../../utils/api';
-import { InteractionPlacement, KitConfig, KitConfigDefaults } from '../../components/admin/kitConfig/types';
+import { CategoryKey, InteractionPlacement, KitConfig, KitConfigDefaults } from '../../components/admin/kitConfig/types';
 import TimelineBuilderPanel from '../../components/admin/kitConfig/TimelineBuilderPanel';
 
 /**
@@ -19,13 +19,25 @@ import TimelineBuilderPanel from '../../components/admin/kitConfig/TimelineBuild
  * the rest of /admin, not a bare route.
  *
  * "Click a card to open its full editor" (TimelineBuilderPanel's
- * onJumpToCategory) navigates back to the session list rather than deep-
- * linking into a specific Customize tab from a different page — wiring
- * that would mean AdminAcceleratorPage reading cross-page navigation state
- * to auto-open its modal at a given tab, which is out of this page's scope.
+ * onJumpToCategory) opens that session's Customize modal, on the matching
+ * category tab, in a NEW browser tab (`?customizeSessionId=&customizeCategory=`,
+ * read by AdminAcceleratorPage) — this page itself stays open, untouched, in
+ * the original tab. "Back to sessions" is a separate, plain same-tab
+ * navigation that additionally requests the Sessions tab specifically
+ * (`?tab=sessions`) rather than AdminAcceleratorPage's own default
+ * (Participants — a deliberate fix for a different bug, left unchanged).
  */
 
 interface RouteState { sessionTitle?: string }
+
+/** Pure, exported so it's directly unit-testable without rendering the page
+ * (this component owns its own data fetch, so a full render never reaches
+ * past the loading state in `renderToStaticMarkup` — see
+ * `AdminAcceleratorSessionTimelinePage.smoke.test.tsx`). */
+export function buildCustomizeJumpUrl(sessionId: string, category: CategoryKey): string {
+  const params = new URLSearchParams({ customizeSessionId: sessionId, customizeCategory: category });
+  return `/admin/accelerator?${params.toString()}`;
+}
 
 const AdminAcceleratorSessionTimelinePage: React.FC = () => {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -72,13 +84,19 @@ const AdminAcceleratorSessionTimelinePage: React.FC = () => {
   }
 
   const promptsApplyHere = defaults.dayKind === 'build' && defaults.teach.length === 0;
-  const jumpToCategory = () => navigate('/admin/accelerator');
+
+  // Opens the Customize modal for THIS session, on the clicked card's category,
+  // in a new tab — the Timeline page itself is untouched, not navigated away.
+  const jumpToCategory = (key: CategoryKey) => {
+    if (!sessionId) return;
+    window.open(buildCustomizeJumpUrl(sessionId, key), '_blank');
+  };
 
   return (
     <div className="container-fluid py-4">
       <div className="d-flex justify-content-between align-items-center mb-3">
         <div>
-          <button className="btn btn-link ps-0 text-decoration-none small" onClick={() => navigate('/admin/accelerator')}>← Back to sessions</button>
+          <button className="btn btn-link ps-0 text-decoration-none small" onClick={() => navigate('/admin/accelerator?tab=sessions')}>← Back to sessions</button>
           <h4 className="mb-0">🗓️ Timeline — {routeState.sessionTitle || 'Session'}</h4>
         </div>
         <div className="d-flex align-items-center gap-2">
