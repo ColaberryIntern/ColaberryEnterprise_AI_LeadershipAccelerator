@@ -38,15 +38,31 @@ export interface LearningValueScoreResult {
   reasons: string[];
 }
 
-const AI_PULSE_TYPES = new Set([
+/** Exported so Stage 4 (`capeLearningValuePolicy.ts`) reuses the exact same
+ * type classification rather than redeclaring it — one source of truth for
+ * "what counts as AI Pulse" (design doc §7 "Intelligence / AI Pulse" group). */
+export const AI_PULSE_TYPES = new Set([
   'ai_news_flash', 'ai_research_digest', 'ai_tool_of_the_day', 'ai_video_stream',
   'ai_quote_of_the_day', 'ai_architecture_breakdown', 'build_breakdown',
   'mcp_server_spotlight', 'claude_code_technique', 'market_intelligence',
 ]);
 
-const URGENT_TYPES = new Set([
+/** Exported for Stage 4 reuse — design doc §7 "Delivery events" group. */
+export const URGENT_TYPES = new Set([
   'live_class', 'event', 'demo_tuesday', 'kes_wednesday', 'marketing_friday',
   'community_live_session', 'study_session',
+]);
+
+/** Exported for Stage 4 reuse — design doc §7 "Checks and evaluated learning",
+ * "Judgment and communication", and "Prompt/build/application" groups
+ * (types that require the learner to DO something, not just consume). Used
+ * by the Stage 4 "no more than two passive items before a check, reflection,
+ * or action" rule. */
+export const ACTIVE_TYPES = new Set([
+  'knowledge_check', 'survey', 'question', 'evaluation', 'certification_exercise',
+  'reflection', 'architect_mindset', 'ai_video_feedback', 'mock_interview', 'presentation', 'demo',
+  'prompt_lab', 'prompt_challenge', 'implementation_task', 'setup_lab', 'artifact_submission',
+  'project_task', 'build_story', 'internship_activity',
 ]);
 
 function clamp01(n: number): number {
