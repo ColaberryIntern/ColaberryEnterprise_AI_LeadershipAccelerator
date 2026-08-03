@@ -2,7 +2,7 @@
  * Pure planner invariants for the Today Timeline v2 engagement engine (Phase 1).
  * No I/O — exercises todayFeedPlan.planSlots directly.
  */
-import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, interleaveByType, groupByType, interleaveGroups, isPrecedenceImpression, WeekGateCard } from '../todayFeedPlan';
+import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, interleaveByType, groupByType, interleaveGroups, isPrecedenceImpression, isWithinAmbientCooldown, WeekGateCard } from '../todayFeedPlan';
 import type { AmbientProviderSlug } from '../ambientPool';
 
 const P3: AmbientProviderSlug[] = ['blog', 'podcast', 'testimonial'];
@@ -370,5 +370,34 @@ describe('isPrecedenceImpression — cadence-cursor classification (2026-08-04)'
 
   it('week 0 (free-tier onboarding) still counts as real precedence curriculum', () => {
     expect(isPrecedenceImpression({ kind: 'anchored', week: 0 })).toBe(true);
+  });
+});
+
+describe('isWithinAmbientCooldown — small-pool exhaustion fix (2026-08-04)', () => {
+  // REGRESSION context: a real production account placed 488 impressions in
+  // 11 days and fully exhausted blog (89/89) and podcast (24/24) — the OLD
+  // all-time exclusion made pickAmbientBatch return [] forever for that
+  // account. This is the pure predicate the composer uses to only exclude
+  // RECENT placements, letting old ones become re-eligible.
+  const now = new Date('2026-08-04T00:00:00Z');
+
+  it('a placement from 1 day ago is still within a 7-day cooldown', () => {
+    const servedAt = new Date('2026-08-03T00:00:00Z');
+    expect(isWithinAmbientCooldown(servedAt, 7, now)).toBe(true);
+  });
+
+  it('a placement from exactly 8 days ago has aged out of a 7-day cooldown', () => {
+    const servedAt = new Date('2026-07-27T00:00:00Z');
+    expect(isWithinAmbientCooldown(servedAt, 7, now)).toBe(false);
+  });
+
+  it('a placement exactly at the cooldown boundary is still excluded (inclusive)', () => {
+    const servedAt = new Date('2026-07-28T00:00:00Z'); // exactly 7 days before `now`
+    expect(isWithinAmbientCooldown(servedAt, 7, now)).toBe(true);
+  });
+
+  it('cooldown of 0 excludes nothing (everything has aged out immediately)', () => {
+    const servedAt = new Date('2026-08-03T23:59:59Z');
+    expect(isWithinAmbientCooldown(servedAt, 0, now)).toBe(false);
   });
 });
