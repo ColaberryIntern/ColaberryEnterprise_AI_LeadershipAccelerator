@@ -65,6 +65,15 @@ export interface TimelineCardAttributes {
   feed_frequency_cap?: number | null; // max times shown to one student
   feed_cooldown_days?: number | null; // min days before it can reappear
   pinned_until?: Date | null;         // boosted to the top while in the future
+  // CAPE Phase 3 — resolved curriculum-skill mapping, stamped at publish time (design
+  // doc §7). All nullable: a never-published or pre-Phase-3 card simply has nulls here
+  // until the backfill script (backfillCurriculumSkillMaps.ts) or a future publish
+  // stamps it. See capeCardSkillMappingService.ts.
+  skill_mapping?: any;                 // resolved LearningPlacementContract at stamp time
+  skill_mapping_source?: 'card_override' | 'week_blueprint' | 'type_default' | 'none' | null;
+  skill_mapping_map_id?: string | null;   // curriculum_skill_maps.id that resolved
+  skill_mapping_version?: number | null;  // that row's version at stamp time
+  skill_mapping_resolved_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -106,6 +115,11 @@ class TimelineCard extends Model<TimelineCardAttributes> implements TimelineCard
   declare feed_frequency_cap: number | null;
   declare feed_cooldown_days: number | null;
   declare pinned_until: Date | null;
+  declare skill_mapping: any;
+  declare skill_mapping_source: 'card_override' | 'week_blueprint' | 'type_default' | 'none' | null;
+  declare skill_mapping_map_id: string | null;
+  declare skill_mapping_version: number | null;
+  declare skill_mapping_resolved_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -148,6 +162,11 @@ TimelineCard.init(
     feed_frequency_cap: { type: DataTypes.INTEGER, allowNull: true },
     feed_cooldown_days: { type: DataTypes.INTEGER, allowNull: true },
     pinned_until: { type: DataTypes.DATE, allowNull: true },
+    skill_mapping: { type: DataTypes.JSONB, allowNull: true },
+    skill_mapping_source: { type: DataTypes.STRING(20), allowNull: true },
+    skill_mapping_map_id: { type: DataTypes.UUID, allowNull: true },
+    skill_mapping_version: { type: DataTypes.INTEGER, allowNull: true },
+    skill_mapping_resolved_at: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   },
