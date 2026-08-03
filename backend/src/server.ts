@@ -2405,6 +2405,11 @@ async function start(): Promise<void> {
       const { seedWeekSkillMaps } = await import('./services/cape/capeWeekSkillMapSeeds');
       const weekMaps = await seedWeekSkillMaps();
       console.log(`[CAPE] week-target skill maps seeded: ${weekMaps.created} created, ${weekMaps.skipped} already current, ${weekMaps.blueprintGapsLogged} blueprint gaps logged`);
+      // CAPE Phase 3: Architecture Skill prerequisite graph — a small starter seed
+      // (execution-contract.md Assumption 6), consumed by Phase 4's ranker later.
+      const { seedSkillPrerequisites } = await import('./services/cape/capeSkillPrerequisiteSeeds');
+      const prereqs = await seedSkillPrerequisites();
+      console.log(`[CAPE] skill prerequisites seeded: ${prereqs.created} created, ${prereqs.skipped} already existed`);
       // Feed Control: re-apply stored type routing to the registry AFTER the seed
       // (typeSeeder re-asserts surface columns from code, so routing must win last).
       const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');
