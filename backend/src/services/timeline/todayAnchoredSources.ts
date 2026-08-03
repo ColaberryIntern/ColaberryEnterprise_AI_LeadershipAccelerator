@@ -12,7 +12,7 @@
  */
 import { getFeed, type FeedCard, type FeedVideo } from './timelineService';
 import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
-import { anchoredWeekAllowed, weekStartedForToday } from './todayFeedPlan';
+import { anchoredWeekAllowed, weekStartedForToday, isWeekGated } from './todayFeedPlan';
 import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
@@ -250,12 +250,19 @@ async function classCandidates(enrollmentId: string, placedRefs: Set<string>): P
         if (!isTodayEligible(c.type) || isAmbient(c.type)) return false;
         if (c.status === 'locked' || c.status === 'completed') return false;
         if (placedRefs.has(`card:${c.id}`)) return false;
-        // The week gate governs CLASS curriculum progression only. Today-homed
-        // evergreen content (news / tools / quotes — week:null) is the free
-        // engagement layer and must never be week-gated, or free users see none
-        // of it (null !== 0). Paid users pass either way.
-        if ((surfaceOf(c.type) ?? 'class') === 'class' && !anchoredWeekAllowed(c.week, isExplorer)) return false;
-        if (weekStartGateOn && (surfaceOf(c.type) ?? 'class') === 'class' && !weekStartedForToday(c, feed.cards)) return false;
+        // The week gate governs any card tied to a real curriculum week,
+        // regardless of surface — REGRESSION (2026-08-03): this used to be
+        // scoped to `surfaceOf(c.type) === 'class'`, but `announcement` (and
+        // `implementation_task`/`artifact_submission`, `community_discussion`
+        // in some cases) are registered under other home surfaces
+        // (`home_surface: 'today'`/`'project'`/`'community'`) despite
+        // carrying a real `week` — so the gate silently never ran for them at
+        // all, regardless of what the gate functions themselves did. Today-
+        // homed EVERGREEN content (news / tools / quotes) has `week: null`
+        // and must never be week-gated, or free users see none of it
+        // (null !== 0) — that's what this guard actually protects, not surface.
+        if (isWeekGated(c.week) && !anchoredWeekAllowed(c.week, isExplorer)) return false;
+        if (weekStartGateOn && isWeekGated(c.week) && !weekStartedForToday(c, feed.cards)) return false;
         return true;
       })
       .map(anchoredItemFromCard);

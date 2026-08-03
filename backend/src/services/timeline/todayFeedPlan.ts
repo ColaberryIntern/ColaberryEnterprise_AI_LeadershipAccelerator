@@ -74,6 +74,25 @@ export function anchoredWeekAllowed(week: number | null, isExplorer: boolean): b
   return week === 0;              // free: Week 0 curriculum only
 }
 
+/**
+ * PURE — should this card even be subject to week-based Today gating at all?
+ * Only week-bound cards (`week != null`) are, REGARDLESS of surface.
+ *
+ * REGRESSION GUARD (2026-08-03): the call site used to gate on
+ * `surfaceOf(c.type) === 'class'` instead of this — but `announcement`
+ * (`home_surface: 'today'`), `implementation_task`/`artifact_submission`
+ * (`home_surface: 'project'`), and some `community_discussion` cards all
+ * carry a real `week` despite living on a non-'class' surface, so the week
+ * gate silently never ran for them at all, no matter what
+ * `anchoredWeekAllowed`/`weekStartedForToday` themselves returned. Evergreen
+ * Today content (news/tools/quotes) has `week: null` and must never be
+ * gated, or free users see none of it (null !== 0) — that's the actual
+ * invariant this protects, not surface.
+ */
+export function isWeekGated(week: number | null): boolean {
+  return week != null;
+}
+
 /** The minimal card shape `weekStartedForToday` needs — a subset of `FeedCard`. */
 export interface WeekGateCard { id: string; type: string; bucket: string; week: number | null; order: number; status: string | null }
 
