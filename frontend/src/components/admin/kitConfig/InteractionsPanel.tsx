@@ -136,14 +136,17 @@ const InteractionsPanel: React.FC<Props> = ({ config, defaults, theaterEnabled, 
                 <input className="form-control form-control-sm mb-2" value={q.title ?? ''} onChange={(e) => update(i, { title: e.target.value })} />
                 <label className="form-label small">Question</label>
                 <input className="form-control form-control-sm mb-2" value={q.q} onChange={(e) => update(i, { q: e.target.value })} />
-                <label className="form-label small">Options</label>
+                <label className="form-label small d-flex justify-content-between align-items-center">
+                  <span>Options{q.kind !== 'trivia' ? ' (optionally mark a correct answer — leave unmarked for a pure opinion poll)' : ''}</span>
+                  {q.kind !== 'trivia' && q.answer != null && (
+                    <button type="button" className="btn btn-link btn-sm p-0" onClick={() => update(i, { answer: null })}>Clear answer</button>
+                  )}
+                </label>
                 {q.options.map((o, oi) => (
                   <div className="d-flex gap-2 mb-1" key={oi}>
-                    {q.kind === 'trivia' && (
-                      <div className="form-check pt-1">
-                        <input className="form-check-input" type="radio" name={`q${i}-answer`} checked={q.answer === oi} onChange={() => update(i, { answer: oi })} title="Correct answer" />
-                      </div>
-                    )}
+                    <div className="form-check pt-1">
+                      <input className="form-check-input" type="radio" name={`q${i}-answer`} checked={q.answer === oi} onChange={() => update(i, { answer: oi })} title="Correct answer" />
+                    </div>
                     <input className="form-control form-control-sm" value={o} onChange={(e) => update(i, { options: q.options.map((x, xi) => (xi === oi ? e.target.value : x)) })} />
                     <button className="btn btn-outline-danger btn-sm" onClick={() => update(i, { options: q.options.filter((_, xi) => xi !== oi) })}>×</button>
                   </div>

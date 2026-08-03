@@ -253,3 +253,32 @@ describe('Class Kit deck — Live Decision Theater correct-responders reveal (cl
     expect(script).toContain('Got it right');
   });
 });
+
+describe('Class Kit deck — reveal control is a toggle, not one-way (classkit-deck-polish T003)', () => {
+  // Same disclosed limitation as above: `.kreveal-btn`'s click handler is
+  // reached via a delegated `document.addEventListener('click', ...)` +
+  // `e.target.closest(...)` chain that `bootDeck()`'s minimal mock DOM
+  // doesn't support. Verified via string-content assertions on the real
+  // compiled script.
+  const script = deckScript();
+
+  it('toggles revealed[sm.id] both ways instead of only ever setting it true', () => {
+    expect(script).toContain('var nowRevealed = !(sm && revealed[sm.id]);');
+    expect(script).toContain('revealed[sm.id] = nowRevealed;');
+  });
+
+  it('toggles the .correct highlight and .kreveal-line visibility both ways via classList.toggle, not .add', () => {
+    expect(script).toContain("line.classList.toggle('show', nowRevealed)");
+    expect(script).toContain("correct.classList.toggle('correct', nowRevealed)");
+  });
+
+  it('restores the reveal button\'s original label on hide instead of leaving it permanently hidden', () => {
+    expect(script).toContain("rb.textContent = nowRevealed ? 'Hide answer' : rb.getAttribute('data-label')");
+    // Regression: the old version permanently hid the button (`rb.style.display = 'none'`).
+    expect(script).not.toContain("rb.style.display = 'none';");
+  });
+
+  it('the R keyboard shortcut still just clicks the same toggling button (works both directions)', () => {
+    expect(script).toContain("e.key === 'r' || e.key === 'R'");
+  });
+});
