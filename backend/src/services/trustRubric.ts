@@ -72,6 +72,8 @@ export interface LiveSignals {
   toolEvents7d: number;
   retrievalEvents7d: number;
   vectorRetrievalEvents7d: number;
+  llmCalls7d: number;
+  promptVersionCoveragePct: number;
   valueUsd30d: number;
   hoursSaved30d: number;
   consentChecks7d: number;
@@ -115,6 +117,8 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     toolEvents7d: 0,
     retrievalEvents7d: 0,
     vectorRetrievalEvents7d: 0,
+    llmCalls7d: 0,
+    promptVersionCoveragePct: 0,
     valueUsd30d: 0,
     hoursSaved30d: 0,
     consentChecks7d: 0,
@@ -140,10 +144,12 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval' AND metadata->>'method' = 'vector')::int AS vec_retrieval7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'consent.check')::int AS consent7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'agent.authorization')::int AS abac7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'llm.call')::int AS llm_calls7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'llm.call' AND metadata->>'prompt_version' IS NOT NULL)::int AS llm_calls_versioned7d,
          COALESCE(SUM(${MINUTES_SAVED_SQL}) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::int AS minutes30d
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; abac7d: number; minutes30d: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; abac7d: number; llm_calls7d: number; llm_calls_versioned7d: number; minutes30d: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
@@ -159,6 +165,8 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
       s.vectorRetrievalEvents7d = Number(r.vec_retrieval7d) || 0;
       s.consentChecks7d = Number(r.consent7d) || 0;
       s.abacChecks7d = Number(r.abac7d) || 0;
+      s.llmCalls7d = Number(r.llm_calls7d) || 0;
+      s.promptVersionCoveragePct = s.llmCalls7d > 0 ? Math.round((Number(r.llm_calls_versioned7d) / s.llmCalls7d) * 100) : 0;
       const mins = Number(r.minutes30d) || 0;
       s.hoursSaved30d = Math.round((mins / 60) * 10) / 10;
       s.valueUsd30d = valueUsd(mins);
@@ -306,7 +314,15 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
       status: 'partial', source: 'shipped', pct: 85,
       evidence: `~58/60 LLM call sites logged to ai_events (PR #50/#54); ${s.events24h} events in the last 24h.`,
       remediation: 'Route the few remaining call sites through the audited client (P1-2).' }) },
-    { key: 'prompt-version', label: 'Prompt/model version in the audit record', weight: 1, ref: 'P2-3', ev: open('Prompts hardcoded; no promptTemplateId/version logged.', 'Version prompts + log promptTemplateId/version on each event (P2-3).') },
+    { key: 'prompt-version', label: 'Prompt/model version in the audit record', weight: 1, ref: 'P2-3', ev: (s) => {
+      const has = s.llmCalls7d > 0;
+      const pct = s.promptVersionCoveragePct;
+      return { status: pct >= 70 ? 'met' : pct >= 30 ? 'partial' : 'open', source: 'live', pct,
+        evidence: has
+          ? `${pct}% of llm.call events in the last 7d carry a prompt_version (Maya + assistant pipelines emit it; other call sites not yet versioned).`
+          : 'No llm.call events in the last 7d to check for prompt_version coverage.',
+        remediation: pct >= 70 ? undefined : 'Thread prompt_version through the remaining getInstrumentedOpenAI call sites (P2-3).' };
+    }},
   ]},
   explainability: { label: 'Explainability', criteria: [
     { key: 'decision-reasoning', label: 'Decision reasoning + confidence captured', weight: 2, ev: shipped('IntelligenceDecision persists reasoning + confidence for the autonomous engine.') },

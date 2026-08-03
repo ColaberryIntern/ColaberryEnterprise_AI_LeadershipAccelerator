@@ -21,6 +21,8 @@ const SIGNALS: LiveSignals = {
   toolEvents7d: 5,
   retrievalEvents7d: 8,
   vectorRetrievalEvents7d: 4,
+  llmCalls7d: 50,
+  promptVersionCoveragePct: 40,
   valueUsd30d: 1200,
   hoursSaved30d: 24,
   consentChecks7d: 30,
@@ -64,6 +66,23 @@ describe('trustRubric', () => {
     expect(metrics.evidence).toContain('p95 2000ms');
     const noData = evaluateDimension('observability', { ...SIGNALS, events7d: 0 })!.criteria.find((c) => c.key === 'metrics')!;
     expect(noData.status).toBe('open');
+  });
+
+  it('prompt-version criterion is live from llm.call prompt_version coverage (T003)', () => {
+    const partial = evaluateDimension('auditability', SIGNALS)!.criteria.find((c) => c.key === 'prompt-version')!;
+    expect(partial.status).toBe('partial'); // 40% coverage, between the 30/70 thresholds
+    expect(partial.source).toBe('live');
+    expect(partial.pct).toBe(40);
+
+    const met = evaluateDimension('auditability', { ...SIGNALS, promptVersionCoveragePct: 85 })!.criteria.find((c) => c.key === 'prompt-version')!;
+    expect(met.status).toBe('met');
+
+    const openLowCoverage = evaluateDimension('auditability', { ...SIGNALS, promptVersionCoveragePct: 10 })!.criteria.find((c) => c.key === 'prompt-version')!;
+    expect(openLowCoverage.status).toBe('open');
+
+    const openNoTraffic = evaluateDimension('auditability', { ...SIGNALS, llmCalls7d: 0, promptVersionCoveragePct: 0 })!.criteria.find((c) => c.key === 'prompt-version')!;
+    expect(openNoTraffic.status).toBe('open');
+    expect(openNoTraffic.evidence).toContain('No llm.call events');
   });
 
   it('returns all dimensions with criteria', () => {
