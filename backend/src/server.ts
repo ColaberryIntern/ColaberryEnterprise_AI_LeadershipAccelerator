@@ -14,6 +14,7 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
+import sponsorRoutes from './routes/sponsorRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
 import v1Routes from './routes/v1Routes';
@@ -59,6 +60,7 @@ app.use(calendarRoutes);
 app.use(strategyPrepRoutes);
 app.use(trackingRoutes);
 app.use(participantRoutes);
+app.use(sponsorRoutes);
 app.use(alumniReferralRoutes);
 app.use(qrRedirectRoutes);
 app.use(v1Routes);
@@ -153,6 +155,56 @@ async function ensureStudentTaskSchema() {
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_project_sprint ON student_tasks (project_id, sprint_id)`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_project_status ON student_tasks (project_id, status)`,
     `ALTER TABLE requirements_maps ADD COLUMN IF NOT EXISTS state VARCHAR(20) NOT NULL DEFAULT 'unmapped'`,
+  ];
+  for (const stmt of statements) {
+    await sequelize.query(stmt);
+  }
+}
+
+// Employer/sponsor roster schema (additive, idempotent) + webhook event dedup.
+// Same explicit CREATE TABLE IF NOT EXISTS approach as the ops/student schemas below.
+async function ensureSponsorSchema() {
+  const statements = [
+    `CREATE TABLE IF NOT EXISTS sponsor_accounts (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       organization_name VARCHAR(255) NOT NULL,
+       manager_name VARCHAR(255) NOT NULL,
+       manager_email VARCHAR(255) NOT NULL,
+       status VARCHAR(20) NOT NULL DEFAULT 'active',
+       paysimple_customer_id VARCHAR(100),
+       portal_token UUID,
+       portal_token_expires_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_sponsor_accounts_email ON sponsor_accounts (manager_email)`,
+    `CREATE INDEX IF NOT EXISTS idx_sponsor_accounts_token ON sponsor_accounts (portal_token)`,
+    `CREATE TABLE IF NOT EXISTS sponsor_purchases (
+       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+       sponsor_account_id UUID NOT NULL,
+       seat_count INTEGER NOT NULL,
+       unit_price INTEGER NOT NULL DEFAULT 1788,
+       total_amount INTEGER NOT NULL,
+       status VARCHAR(30) NOT NULL DEFAULT 'awaiting_payment',
+       payment_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+       payment_mode VARCHAR(10),
+       paysimple_invoice_id VARCHAR(100),
+       paysimple_external_id VARCHAR(100),
+       paid_at TIMESTAMPTZ,
+       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
+    `CREATE INDEX IF NOT EXISTS idx_sponsor_purchases_account ON sponsor_purchases (sponsor_account_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_sponsor_purchases_external ON sponsor_purchases (paysimple_external_id)`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS sponsor_account_id UUID`,
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS sponsor_purchase_id UUID`,
+    `CREATE INDEX IF NOT EXISTS idx_enrollments_sponsor_account ON enrollments (sponsor_account_id)`,
+    // Idempotency: dedup provider webhook events (closes the double-provision gap).
+    `CREATE TABLE IF NOT EXISTS webhook_events (
+       event_id VARCHAR(120) PRIMARY KEY,
+       provider VARCHAR(40) NOT NULL DEFAULT 'paysimple',
+       received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+     )`,
   ];
   for (const stmt of statements) {
     await sequelize.query(stmt);
@@ -571,6 +623,7 @@ async function start(): Promise<void> {
   // pre-existing index conflicts elsewhere and never reaches the ops_* models.
   await ensureOpsCommandCenterSchema();
   await ensureStudentTaskSchema();
+  await ensureSponsorSchema();
   // Missed Opportunities Report schema (idempotent, before alter sync).
   await ensureMissedOpportunitiesSchema();
   // Seed v0 automation rules (idempotent).
@@ -673,19 +726,23 @@ async function start(): Promise<void> {
           scoreResult.errors.slice(0, 3),
         );
       }
-      // Run automation rules after scoring.
-      try {
-        const { runAutomationRules } = await import('./services/ops/automationRulesService');
-        const automationResult = await runAutomationRules();
-        opsRoutesMod.setLastAutomationRun(automationResult);
-        if (automationResult.rules_fired > 0) {
-          console.log(
-            `[OpsAutomation] fired ${automationResult.rules_fired} rule(s)`,
-            automationResult.fire_results.filter((f) => f.rows_affected > 0),
-          );
+      // Run automation rules after scoring. Gated: this bulk-relabels ops_bc_todos
+      // (the PMO's own todo mirror), so it must never fire as an unplanned side
+      // effect of a boot/restart. Off by default; see BC #10106943371.
+      if (env.opsAutomationEnabled) {
+        try {
+          const { runAutomationRules } = await import('./services/ops/automationRulesService');
+          const automationResult = await runAutomationRules();
+          opsRoutesMod.setLastAutomationRun(automationResult);
+          if (automationResult.rules_fired > 0) {
+            console.log(
+              `[OpsAutomation] fired ${automationResult.rules_fired} rule(s)`,
+              automationResult.fire_results.filter((f) => f.rows_affected > 0),
+            );
+          }
+        } catch (err: any) {
+          console.warn('[OpsAutomation] cron run failed:', err?.message);
         }
-      } catch (err: any) {
-        console.warn('[OpsAutomation] cron run failed:', err?.message);
       }
     } catch (err: any) {
       console.warn('[OpsBcSync/Priority] scheduled run failed:', err?.message);
