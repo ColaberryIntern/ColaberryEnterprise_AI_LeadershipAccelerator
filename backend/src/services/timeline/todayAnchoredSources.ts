@@ -12,7 +12,7 @@
  */
 import { getFeed, type FeedCard, type FeedVideo } from './timelineService';
 import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
-import { anchoredWeekAllowed, weekStartedForToday, isWeekGated } from './todayFeedPlan';
+import { anchoredWeekAllowed, weekStartedForToday, isWeekGated, interleaveByType } from './todayFeedPlan';
 import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
@@ -245,7 +245,7 @@ async function classCandidates(enrollmentId: string, placedRefs: Set<string>): P
     // started that week (see weekStartedForToday's docstring) — Classroom is
     // completely unaffected (it never reads this flag or calls this function).
     const weekStartGateOn = env.timelineWeekStartGateEnabled;
-    return feed.cards
+    const eligible = feed.cards
       .filter((c) => {
         if (!isTodayEligible(c.type) || isAmbient(c.type)) return false;
         if (c.status === 'locked' || c.status === 'completed') return false;
@@ -266,6 +266,13 @@ async function classCandidates(enrollmentId: string, placedRefs: Set<string>): P
         return true;
       })
       .map(anchoredItemFromCard);
+    // Real curriculum (week-bound) keeps its existing order untouched; only the
+    // evergreen (week:null) tail gets type-diversified — otherwise a high-volume
+    // generator (e.g. daily AI News Flash) drowns out a small curated sibling
+    // (e.g. AI Quote of the Day) just by having accumulated more rows over time.
+    const weekBound = eligible.filter((i) => i.week != null);
+    const evergreen = interleaveByType(eligible.filter((i) => i.week == null), (i) => i.type);
+    return [...weekBound, ...evergreen];
   } catch (err: any) {
     console.warn('[todayAnchoredSources] class failed:', err?.message?.split('\n')[0]);
     return [];

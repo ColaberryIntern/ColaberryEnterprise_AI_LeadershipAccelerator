@@ -93,6 +93,44 @@ export function isWeekGated(week: number | null): boolean {
   return week != null;
 }
 
+/**
+ * PURE — round-robin interleave items by a grouping key, preserving each
+ * group's own internal relative order. Used so no single evergreen content
+ * type (e.g. an intelligence-pipeline generator that has accumulated
+ * hundreds of cards over time) can dominate the anchored queue and bury a
+ * smaller, curated sibling type just because it has more rows in the DB —
+ * without this, `feed.cards`' raw `ORDER BY week ASC, order ASC` groups all
+ * week:null evergreen cards together with no type diversity, and ties on the
+ * shared default `order = 0` fall back to arbitrary/insertion order.
+ */
+export function interleaveByType<T>(items: T[], keyOf: (item: T) => string): T[] {
+  const groups = new Map<string, T[]>();
+  const groupOrder: string[] = [];
+  for (const item of items) {
+    const key = keyOf(item);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      groupOrder.push(key);
+    }
+    groups.get(key)!.push(item);
+  }
+  const cursors = new Map<string, number>(groupOrder.map((k) => [k, 0]));
+  const out: T[] = [];
+  let remaining = items.length;
+  while (remaining > 0) {
+    for (const key of groupOrder) {
+      const list = groups.get(key)!;
+      const idx = cursors.get(key)!;
+      if (idx < list.length) {
+        out.push(list[idx]);
+        cursors.set(key, idx + 1);
+        remaining--;
+      }
+    }
+  }
+  return out;
+}
+
 /** The minimal card shape `weekStartedForToday` needs — a subset of `FeedCard`. */
 export interface WeekGateCard { id: string; type: string; bucket: string; week: number | null; order: number; status: string | null }
 
