@@ -5,24 +5,25 @@
  * deterministic. The composer (todayFeedComposer.ts) is the I/O shell that fills
  * the slots this planner lays out.
  */
-import type { AmbientProviderSlug } from './ambientPool';
 import { isCompletableType } from './timelineGatingService';
 import { BUCKET_ORDER } from './timelineService';
 
 export type TodayItemKind = 'anchored' | 'ambient';
-export interface PlannedSlot { kind: TodayItemKind; provider?: AmbientProviderSlug; }
+export interface PlannedSlot { kind: TodayItemKind; provider?: string; }
 
 /**
- * Decide the kind (and ambient provider) for the next `count` feed slots.
- * Cadence = anchored items between ambient injections; providers round-robin and
- * never repeat back-to-back when more than one is available. When anchored is
- * exhausted the remainder is pure ambient (bottomless). `anchoredPlaced` /
- * `ambientPlaced` carry cadence + round-robin continuity across pages.
+ * Decide the kind (and ambient/variety key) for the next `count` feed slots.
+ * Cadence = anchored (precedence) items between variety injections; `providers`
+ * (the variety keys — real ambient providers PLUS evergreen curriculum types,
+ * see `todayAnchoredSources.gatherAnchored`) round-robin and never repeat
+ * back-to-back when more than one is available. When anchored is exhausted the
+ * remainder is pure variety (bottomless). `anchoredPlaced` / `ambientPlaced`
+ * carry cadence + round-robin continuity across pages.
  */
 export function planSlots(opts: {
   count: number;
   anchoredAvailable: number;
-  providers: AmbientProviderSlug[];
+  providers: string[];
   cadence: number;
   anchoredPlaced: number;
   ambientPlaced: number;
@@ -35,7 +36,7 @@ export function planSlots(opts: {
   const slots: PlannedSlot[] = [];
   let anchoredUsed = 0;
   let ambientUsed = 0;
-  let lastProvider: AmbientProviderSlug | undefined;
+  let lastProvider: string | undefined;
 
   for (let i = 0; i < opts.count; i++) {
     const wantAnchored = anchoredRem > 0 && sinceAmbient < cad;
@@ -94,29 +95,32 @@ export function isWeekGated(week: number | null): boolean {
 }
 
 /**
- * PURE — round-robin interleave items by a grouping key, preserving each
- * group's own internal relative order. Used so no single evergreen content
- * type (e.g. an intelligence-pipeline generator that has accumulated
- * hundreds of cards over time) can dominate the anchored queue and bury a
- * smaller, curated sibling type just because it has more rows in the DB —
- * without this, `feed.cards`' raw `ORDER BY week ASC, order ASC` groups all
- * week:null evergreen cards together with no type diversity, and ties on the
- * shared default `order = 0` fall back to arbitrary/insertion order.
+ * PURE — bucket items by a grouping key, preserving each group's own internal
+ * relative order and the order groups were first seen. Shared building block
+ * for `interleaveByType` and for merging multiple candidate pools (evergreen
+ * curriculum types, ambient providers) into one round-robin-able shape.
  */
-export function interleaveByType<T>(items: T[], keyOf: (item: T) => string): T[] {
+export function groupByType<T>(items: T[], keyOf: (item: T) => string): Map<string, T[]> {
   const groups = new Map<string, T[]>();
-  const groupOrder: string[] = [];
   for (const item of items) {
     const key = keyOf(item);
-    if (!groups.has(key)) {
-      groups.set(key, []);
-      groupOrder.push(key);
-    }
+    if (!groups.has(key)) groups.set(key, []);
     groups.get(key)!.push(item);
   }
+  return groups;
+}
+
+/**
+ * PURE — round-robin interleave already-grouped buckets, preserving each
+ * bucket's own internal order. This is the actual "take one from each in
+ * turn" mechanic; `interleaveByType` is just `groupByType` + this.
+ */
+export function interleaveGroups<T>(groups: Map<string, T[]>): T[] {
+  const groupOrder = Array.from(groups.keys());
   const cursors = new Map<string, number>(groupOrder.map((k) => [k, 0]));
   const out: T[] = [];
-  let remaining = items.length;
+  let remaining = 0;
+  for (const list of groups.values()) remaining += list.length;
   while (remaining > 0) {
     for (const key of groupOrder) {
       const list = groups.get(key)!;
@@ -129,6 +133,36 @@ export function interleaveByType<T>(items: T[], keyOf: (item: T) => string): T[]
     }
   }
   return out;
+}
+
+/**
+ * PURE — round-robin interleave items by a grouping key, preserving each
+ * group's own internal relative order. Used so no single evergreen content
+ * type (e.g. an intelligence-pipeline generator that has accumulated
+ * hundreds of cards over time) can dominate the anchored queue and bury a
+ * smaller, curated sibling type just because it has more rows in the DB —
+ * without this, `feed.cards`' raw `ORDER BY week ASC, order ASC` groups all
+ * week:null evergreen cards together with no type diversity, and ties on the
+ * shared default `order = 0` fall back to arbitrary/insertion order.
+ */
+export function interleaveByType<T>(items: T[], keyOf: (item: T) => string): T[] {
+  return interleaveGroups(groupByType(items, keyOf));
+}
+
+/**
+ * PURE — is this a stored `today_feed_impressions` row real, precedence-tier
+ * curriculum (a week-bound card the student is actually assigned), or does it
+ * belong to the bottomless "variety" tier (evergreen curriculum types PLUS the
+ * ambient blog/podcast/testimonial providers)? Derived from the row's own
+ * stored `kind`/`week` rather than a separate column, so it applies
+ * retroactively to impressions persisted before this distinction existed —
+ * no backfill needed. `kind` itself is untouched (still reflects real
+ * provenance: a card vs. a raw ambient-provider pick) — this is a SEPARATE
+ * scheduling-tier classification layered on top, purely for cadence-cursor
+ * bookkeeping (`anchoredPlaced` / `ambientPlaced` continuity across pages).
+ */
+export function isPrecedenceImpression(row: { kind: string; week: number | null }): boolean {
+  return row.kind === 'anchored' && row.week != null;
 }
 
 /** The minimal card shape `weekStartedForToday` needs — a subset of `FeedCard`. */

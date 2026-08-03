@@ -1,19 +1,28 @@
 /**
  * todayFeedComposer — the Today Timeline v2 engagement engine (Phase 1).
  *
- * Produces a NEVER-ENDING, per-student feed by interleaving:
- *   • ANCHORED items — the student's real curriculum (class/project/… cards that
- *     are today_eligible), pulled from timelineService.getFeed, finite, consumed
- *     in order; and
- *   • AMBIENT items — bottomless rotating content (blog/podcast/testimonial) from
- *     ambientPool, injected on a cadence and alternated across providers.
+ * Produces a NEVER-ENDING, per-student feed with two tiers:
+ *   • PRECEDENCE (`kind: 'anchored'` slots) — the student's real, week-bound
+ *     curriculum (blended with Project/Community/session-replay when those
+ *     surfaces are on), pulled via todayAnchoredSources.gatherAnchored, finite,
+ *     consumed in order. Gets first billing at the configured cadence.
+ *   • VARIETY (`kind: 'ambient'` slots, bottomless) — once precedence content
+ *     runs out (or between injections, per cadence), EVERY evergreen curriculum
+ *     type (ai_news_flash, market_intelligence, ai_tool_of_the_day, …) and every
+ *     ambient provider (blog/podcast/testimonial, raw content from ambientPool)
+ *     round-robin together as PEERS, one flat rotation — so no single type gets
+ *     a bigger per-type share just because it's one of only 3 "providers"
+ *     while the others split ~14 ways (the "way too many blogs" bug this fixed
+ *     on 2026-08-04: see interleaveGroups/groupByType in ./todayFeedPlan).
  *
  * The feed is materialised as an APPEND-ONLY sequence of `today_feed_impressions`
  * rows per enrollment, which buys three properties:
  *   1. Deterministic pagination — re-fetching a cursor returns the exact same
  *      items (read back from their stored rows, never re-rolled).
- *   2. Bottomless scroll — when anchored is exhausted the tail is pure ambient,
- *      and ambient never runs dry (unseen → least-recently-seen rotation).
+ *   2. Bottomless scroll — when precedence content is exhausted the tail is pure
+ *      variety, and variety never runs dry (unseen → least-recently-seen
+ *      rotation for the ambient providers; evergreen types just keep recycling
+ *      via generatedContentRetention's reuse mechanism).
  *   3. Interact-to-hide — an item, once placed, is never re-placed (its media id /
  *      card id is excluded from future generation); interacting just records it.
  *
@@ -27,7 +36,7 @@ import { sequelize } from '../../config/database';
 import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineService';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
-import { planSlots, type TodayItemKind } from './todayFeedPlan';
+import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, type TodayItemKind } from './todayFeedPlan';
 import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
 import { env } from '../../config/env';
@@ -131,10 +140,21 @@ async function persistImpression(enrollmentId: string, it: TodayFeedItem, provid
   );
 }
 
+/** Real ambient providers (raw blog_posts/podcasts/network_videos pickers) — the
+ *  subset of "variety" keys that need an on-demand DB fetch via ambientPool,
+ *  as opposed to evergreen curriculum types (already resolved cards). */
+const REAL_AMBIENT_PROVIDERS = new Set<string>(AMBIENT_PROVIDERS);
+
 /** Extend the materialised feed by up to `need` items (append-only). Returns them in order. */
 async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need: number): Promise<TodayFeedItem[]> {
-  const anchoredPlaced = existing.filter((r) => r.kind === 'anchored').length;
-  const ambientPlaced = existing.filter((r) => r.kind === 'ambient').length;
+  // "Precedence" tier = real, week-bound curriculum (and curriculum-adjacent
+  // project/community/session work) — derived from each row's own stored
+  // kind+week rather than a separate column, so it applies to impressions
+  // persisted before this distinction existed too (see isPrecedenceImpression).
+  // Everything else (evergreen curriculum types + the 3 ambient providers) is
+  // the "variety" tier that round-robins evenly by type.
+  const anchoredPlaced = existing.filter((r) => isPrecedenceImpression({ kind: r.kind, week: (r.item as TodayFeedItem | null)?.week ?? null })).length;
+  const ambientPlaced = existing.length - anchoredPlaced;
   const placedRefs = new Set(existing.map((r) => r.ref));
   const placedMedia: Record<AmbientProviderSlug, string[]> = { blog: [], podcast: [], testimonial: [] };
   for (const r of existing) {
@@ -149,24 +169,37 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   // ≡ byte-identical to before).
   const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
   const cadence = policy ? policy.todayCadence : CADENCE;
-  const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
+  const ambientProviders: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
 
-  const anchoredQueue = await gatherAnchored(enrollmentId, placedRefs);
+  const { weekBound, evergreenByType } = await gatherAnchored(enrollmentId, placedRefs);
+  // The variety pool: every evergreen curriculum type is a peer of every
+  // ambient provider — one flat round-robin, so no single type (whether it's
+  // "blog" or "market_intelligence") gets a bigger per-type share than another.
+  const varietyKeys: string[] = [...ambientProviders, ...evergreenByType.keys()];
   const plan = planSlots({
     count: need,
-    anchoredAvailable: anchoredQueue.length,
-    providers,
+    anchoredAvailable: weekBound.length,
+    providers: varietyKeys,
     cadence,
     anchoredPlaced,
     ambientPlaced,
   });
 
-  // Fetch the ambient items each provider needs for this batch.
-  const perProviderNeed: Record<AmbientProviderSlug, number> = { blog: 0, podcast: 0, testimonial: 0 };
-  for (const s of plan.slots) if (s.kind === 'ambient' && s.provider) perProviderNeed[s.provider]++;
-  const ambientQueues: Record<AmbientProviderSlug, AmbientItem[]> = { blog: [], podcast: [], testimonial: [] };
-  for (const p of providers) {
-    if (perProviderNeed[p] > 0) ambientQueues[p] = await pickAmbientBatch(enrollmentId, p, perProviderNeed[p], placedMedia[p]);
+  // Fetch/assemble what each variety key needs for this batch: real ambient
+  // providers need an on-demand DB fetch; evergreen types are already resolved
+  // cards, just sliced off the front of their group.
+  const perKeyNeed: Record<string, number> = {};
+  for (const s of plan.slots) if (s.kind === 'ambient' && s.provider) perKeyNeed[s.provider] = (perKeyNeed[s.provider] ?? 0) + 1;
+  const ambientQueues: Record<string, AmbientItem[]> = {};
+  const evergreenQueues: Record<string, TodayFeedItem[]> = {};
+  for (const key of varietyKeys) {
+    const n = perKeyNeed[key] ?? 0;
+    if (n <= 0) continue;
+    if (REAL_AMBIENT_PROVIDERS.has(key)) {
+      ambientQueues[key] = await pickAmbientBatch(enrollmentId, key as AmbientProviderSlug, n, placedMedia[key as AmbientProviderSlug] ?? []);
+    } else {
+      evergreenQueues[key] = (evergreenByType.get(key) ?? []).slice(0, n);
+    }
   }
 
   let anchoredCur = 0;
@@ -176,11 +209,14 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     let item: TodayFeedItem | null = null;
     let provider: string | null = null;
     if (slot.kind === 'anchored') {
-      const cand = anchoredQueue[anchoredCur++];
+      const cand = weekBound[anchoredCur++];
       if (cand) item = { ...cand, position: pos };
-    } else if (slot.provider) {
-      const a = ambientQueues[slot.provider].shift();
+    } else if (slot.provider && REAL_AMBIENT_PROVIDERS.has(slot.provider)) {
+      const a = ambientQueues[slot.provider]?.shift();
       if (a) { item = ambientItemFrom(a, pos); provider = slot.provider; }
+    } else if (slot.provider) {
+      const cand = evergreenQueues[slot.provider]?.shift();
+      if (cand) item = { ...cand, position: pos }; // real card — provider stays null, same as weekBound curriculum
     }
     if (!item) continue; // source ran dry (e.g. empty pool) — skip the slot
     await persistImpression(enrollmentId, item, provider);
@@ -255,7 +291,7 @@ async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed
  */
 async function composeReadOnlyPage(enrollmentId: string, from: number, size: number, seed?: number): Promise<TodayFeedItem[]> {
   const targetEnd = from + size;
-  const anchored = await gatherAnchored(enrollmentId, new Set<string>());
+  const { weekBound, evergreenByType } = await gatherAnchored(enrollmentId, new Set<string>());
   const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
   const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
   const perProvider = Math.max(6, Math.ceil((targetEnd + 8) / Math.max(1, providers.length)));
@@ -263,7 +299,12 @@ async function composeReadOnlyPage(enrollmentId: string, from: number, size: num
     providers.map((p) => pickAmbientBatch(enrollmentId, p, perProvider, [], { readOnly: true, seed })),
   );
   const ambient = ambientBatches.flat().map((a) => ambientItemFrom(a, 0));
-  const combined = [...anchored, ...ambient];
+  // Same variety-tier merge as the real path (extendFeed): evergreen curriculum
+  // types round-robin evenly alongside the ambient providers rather than each
+  // clumping together, so the admin "view as" preview matches what a student's
+  // real feed actually looks like.
+  const varietyGroups = new Map([...evergreenByType, ...groupByType(ambient, (i) => i.type)]);
+  const combined = [...weekBound, ...interleaveGroups(varietyGroups)];
   const ordered = (seed != null ? orderForVisit(combined, seed) : combined)
     .map((it, i): TodayFeedItem => ({ ...it, position: i, interacted: false }));
   const [completed, collectedBlogs] = await Promise.all([
