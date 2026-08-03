@@ -11,10 +11,11 @@
  */
 import { getIntelSource, NormalizedIntelItem } from '../../intelRegistry';
 
-// Side-effect imports: registering the four adapters.
+// Side-effect imports: registering the five adapters.
 import { collect as collectTool } from '../ai_tool_of_the_day';
 import { collect as collectQuote } from '../ai_quote_of_the_day';
 import { collect as collectTechnique } from '../claude_code_technique';
+import { collect as collectMarket } from '../marketIntelligenceSource';
 import { collect as collectMcp, parseMcpReadme } from '../mcp_server_spotlight';
 
 type Collector = () => Promise<NormalizedIntelItem[]>;
@@ -49,6 +50,7 @@ const CURATED: ReadonlyArray<{ slug: string; enableEnv: string; maxPerRunEnv: st
   { slug: 'ai_tool_of_the_day', enableEnv: 'AI_TOOL_OF_THE_DAY_INGEST_ENABLED', maxPerRunEnv: 'AI_TOOL_OF_THE_DAY_MAX_PER_RUN', prefix: 'tool:', collect: collectTool },
   { slug: 'ai_quote_of_the_day', enableEnv: 'AI_QUOTE_OF_THE_DAY_INGEST_ENABLED', maxPerRunEnv: 'AI_QUOTE_OF_THE_DAY_MAX_PER_RUN', prefix: 'quote:', collect: collectQuote },
   { slug: 'claude_code_technique', enableEnv: 'CLAUDE_CODE_TECHNIQUE_INGEST_ENABLED', maxPerRunEnv: 'CLAUDE_CODE_TECHNIQUE_MAX_PER_RUN', prefix: 'cctech:', collect: collectTechnique },
+  { slug: 'market_intelligence', enableEnv: 'MARKET_INTELLIGENCE_INGEST_ENABLED', maxPerRunEnv: 'MARKET_INTELLIGENCE_MAX_PER_RUN', prefix: 'market:', collect: collectMarket },
 ];
 
 describe('curated intel source adapters', () => {

@@ -2,7 +2,7 @@
  * Pure planner invariants for the Today Timeline v2 engagement engine (Phase 1).
  * No I/O — exercises todayFeedPlan.planSlots directly.
  */
-import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, WeekGateCard } from '../todayFeedPlan';
+import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, interleaveByType, WeekGateCard } from '../todayFeedPlan';
 import type { AmbientProviderSlug } from '../ambientPool';
 
 const P3: AmbientProviderSlug[] = ['blog', 'podcast', 'testimonial'];
@@ -252,5 +252,55 @@ describe('weekStartedForToday — single current-week sequencing (2026-08-03 fix
     const cards = [w1Announcement, w2Entry];
     expect(weekStartedForToday(w1Announcement, cards)).toBe(true); // week 1 is current
     expect(weekStartedForToday(w2Entry, cards)).toBe(false); // week 2 does not leak through
+  });
+});
+
+describe('interleaveByType — fair round-robin exposure for evergreen content (2026-08-03)', () => {
+  // REGRESSION context: raw feed.cards ordering groups every week:null
+  // evergreen card together with no type diversity, so a high-volume
+  // generator (e.g. 50+ AI News Flash cards) could bury a small curated
+  // sibling (e.g. 20 AI Quote of the Day cards) that happens to sort after it.
+  const item = (type: string, n: number) => ({ type, n });
+
+  it('a high-volume type does not bury a low-volume type — every type appears in the first N slots', () => {
+    // 50 of type A, 5 of type B, all of A sorted first (worst case input order).
+    const input = [
+      ...Array.from({ length: 50 }, (_, i) => item('A', i)),
+      ...Array.from({ length: 5 }, (_, i) => item('B', i)),
+    ];
+    const out = interleaveByType(input, (i) => i.type);
+    expect(out).toHaveLength(55);
+    // Type B's first item must appear within the first 2 slots (round-robin),
+    // not buried behind all 50 of type A as in the raw input order.
+    const firstBIndex = out.findIndex((i) => i.type === 'B');
+    expect(firstBIndex).toBeLessThan(2);
+  });
+
+  it('preserves each type\'s own internal relative order', () => {
+    const input = [item('A', 0), item('B', 0), item('A', 1), item('B', 1), item('A', 2)];
+    const out = interleaveByType(input, (i) => i.type);
+    const aOrder = out.filter((i) => i.type === 'A').map((i) => i.n);
+    const bOrder = out.filter((i) => i.type === 'B').map((i) => i.n);
+    expect(aOrder).toEqual([0, 1, 2]);
+    expect(bOrder).toEqual([0, 1]);
+  });
+
+  it('is a stable no-op for a single type', () => {
+    const input = [item('A', 0), item('A', 1), item('A', 2)];
+    expect(interleaveByType(input, (i) => i.type)).toEqual(input);
+  });
+
+  it('handles an empty array', () => {
+    expect(interleaveByType([], (i: { type: string }) => i.type)).toEqual([]);
+  });
+
+  it('round-robins evenly across three or more types', () => {
+    const input = [
+      ...Array.from({ length: 3 }, (_, i) => item('A', i)),
+      ...Array.from({ length: 3 }, (_, i) => item('B', i)),
+      ...Array.from({ length: 3 }, (_, i) => item('C', i)),
+    ];
+    const out = interleaveByType(input, (i) => i.type);
+    expect(out.map((i) => i.type)).toEqual(['A', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C']);
   });
 });
