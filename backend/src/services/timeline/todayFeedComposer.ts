@@ -136,7 +136,7 @@ export interface CapeExplanation {
   learner_state_version: string;
 }
 
-async function persistImpression(enrollmentId: string, it: TodayFeedItem, provider: string | null, explanation?: CapeExplanation): Promise<void> {
+export async function persistImpression(enrollmentId: string, it: TodayFeedItem, provider: string | null, explanation?: CapeExplanation): Promise<void> {
   await sequelize.query(
     `INSERT INTO today_feed_impressions
        (id, enrollment_id, position, kind, ref, provider, card_id, item, served_at, rank_score, reasons, policy_version, learner_state_version)
