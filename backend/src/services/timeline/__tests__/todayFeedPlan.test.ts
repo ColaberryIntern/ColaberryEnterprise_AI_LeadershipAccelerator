@@ -2,7 +2,7 @@
  * Pure planner invariants for the Today Timeline v2 engagement engine (Phase 1).
  * No I/O — exercises todayFeedPlan.planSlots directly.
  */
-import { planSlots, anchoredWeekAllowed, weekStartedForToday, WeekGateCard } from '../todayFeedPlan';
+import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, WeekGateCard } from '../todayFeedPlan';
 import type { AmbientProviderSlug } from '../ambientPool';
 
 const P3: AmbientProviderSlug[] = ['blog', 'podcast', 'testimonial'];
@@ -169,6 +169,27 @@ describe('weekStartedForToday — Today-only same-week self-unlock', () => {
     const cards = [preClass, build];
     expect(weekStartedForToday(preClass, cards)).toBe(true);
     expect(weekStartedForToday(build, cards)).toBe(false);
+  });
+});
+
+describe('isWeekGated — REGRESSION GUARD (prod bug 2026-08-03)', () => {
+  // The real bug: the call site (todayAnchoredSources.classCandidates) used
+  // to gate week-based Today filtering on `surfaceOf(c.type) === 'class'`.
+  // `announcement` cards are registered under `home_surface: 'today'` (not
+  // 'class') despite carrying a real week number, so the week gate silently
+  // never ran for them at all -- students saw every un-started week's
+  // announcement regardless of what weekStartedForToday itself returned.
+  // This function is now the ONLY thing the call site checks, and it is
+  // surface-agnostic by construction: any card with a real week is gated,
+  // full stop.
+  it('a week-bound card is gated regardless of what its surface would be', () => {
+    expect(isWeekGated(8)).toBe(true);   // e.g. an announcement, week 8
+    expect(isWeekGated(1)).toBe(true);
+    expect(isWeekGated(0)).toBe(true);
+  });
+
+  it('evergreen (week: null) content is never gated', () => {
+    expect(isWeekGated(null)).toBe(false);
   });
 });
 
