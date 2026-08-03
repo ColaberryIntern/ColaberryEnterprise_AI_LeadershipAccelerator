@@ -2,7 +2,7 @@
   "schema": "colaberry.kb/v1",
   "version": "1.0",
   "name": "Colaberry Knowledge Base",
-  "description": "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund and cancellation terms are drafted, not final. The AI Systems Architect Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
+  "description": "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund/cancellation and $50 seat-deposit terms are approved (Ali, 2026-08-03). The AI Systems Architect Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
   "generated_from": [
     "sales/kb-data.js",
     "marketing/hub-data.js",
@@ -270,8 +270,8 @@
       "status": "active"
     }
   ],
-  "generated_at": "2026-07-17T19:47:32.556Z",
-  "count": 214,
+  "generated_at": "2026-08-03T13:49:31.712Z",
+  "count": 216,
   "entries": [
     {
       "id": "sales-1",
@@ -432,6 +432,24 @@
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
+      "question": "How does the $50 seat deposit work, and when does my membership actually start?",
+      "answer": "A $50 deposit reserves your seat in the Founding Cohort and is credited toward your first membership payment — it's not extra on top of the $149/$199 price. You get free access to our AI Learning Content right away while you wait, but full curriculum access doesn't begin until the day your live cohort starts. That's also when your first membership charge lands, with each following payment landing on that same date each following month.",
+      "detail": "Approved policy (Ali, 2026-08-03): deposit credited to first payment; no curriculum access before the cohort start date regardless of when the deposit was paid; billing cadence anchors to the cohort start date going forward.",
+      "tags": [
+        "deposit",
+        "down-payment",
+        "billing-start",
+        "access-timing"
+      ],
+      "reference": "sales/index.html#cat-pricing-billing",
+      "reference_label": "Pricing & billing",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-11",
+      "domain": "sales",
+      "category": "Pricing & billing",
+      "category_key": "pricing-billing",
       "question": "What exactly does the membership include? Are there extra course fees?",
       "answer": "There are no separate course fees. The one membership includes all four Architect Intensives, Anthropic Architect certification prep, a full-time internship experience, and guided GitHub portfolio projects. Everything is covered under that single price.",
       "detail": "It is a membership, not per-course tuition. No add-ons or hidden fees.",
@@ -445,7 +463,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-11",
+      "id": "sales-12",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -463,7 +481,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-12",
+      "id": "sales-13",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -480,7 +498,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-13",
+      "id": "sales-14",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -497,7 +515,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-14",
+      "id": "sales-15",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -515,7 +533,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-15",
+      "id": "sales-16",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -532,7 +550,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-16",
+      "id": "sales-17",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -550,7 +568,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-17",
+      "id": "sales-18",
       "domain": "sales",
       "category": "Founding Cohort & urgency",
       "category_key": "founding-urgency",
@@ -567,7 +585,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-18",
+      "id": "sales-19",
       "domain": "sales",
       "category": "Founding Cohort & urgency",
       "category_key": "founding-urgency",
@@ -584,7 +602,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-19",
+      "id": "sales-20",
       "domain": "sales",
       "category": "Founding Cohort & urgency",
       "category_key": "founding-urgency",
@@ -601,7 +619,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-20",
+      "id": "sales-21",
       "domain": "sales",
       "category": "Founding Cohort & urgency",
       "category_key": "founding-urgency",
@@ -618,7 +636,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-21",
+      "id": "sales-22",
       "domain": "sales",
       "category": "Founding Cohort & urgency",
       "category_key": "founding-urgency",
@@ -635,7 +653,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-22",
+      "id": "sales-23",
       "domain": "sales",
       "category": "Founding Cohort & urgency",
       "category_key": "founding-urgency",
@@ -652,7 +670,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-23",
+      "id": "sales-24",
       "domain": "sales",
       "category": "Founding Cohort & urgency",
       "category_key": "founding-urgency",
@@ -669,7 +687,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-24",
+      "id": "sales-25",
       "domain": "sales",
       "category": "Eligibility & prerequisites",
       "category_key": "eligibility",
@@ -686,7 +704,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-25",
+      "id": "sales-26",
       "domain": "sales",
       "category": "Eligibility & prerequisites",
       "category_key": "eligibility",
@@ -704,7 +722,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-26",
+      "id": "sales-27",
       "domain": "sales",
       "category": "Eligibility & prerequisites",
       "category_key": "eligibility",
@@ -721,7 +739,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-27",
+      "id": "sales-28",
       "domain": "sales",
       "category": "Eligibility & prerequisites",
       "category_key": "eligibility",
@@ -738,7 +756,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-28",
+      "id": "sales-29",
       "domain": "sales",
       "category": "Eligibility & prerequisites",
       "category_key": "eligibility",
@@ -755,7 +773,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-29",
+      "id": "sales-30",
       "domain": "sales",
       "category": "Eligibility & prerequisites",
       "category_key": "eligibility",
@@ -772,7 +790,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-30",
+      "id": "sales-31",
       "domain": "sales",
       "category": "Eligibility & prerequisites",
       "category_key": "eligibility",
@@ -790,7 +808,7 @@
       "needs_verification": true
     },
     {
-      "id": "sales-31",
+      "id": "sales-32",
       "domain": "sales",
       "category": "Time & schedule",
       "category_key": "time-schedule",
@@ -807,7 +825,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-32",
+      "id": "sales-33",
       "domain": "sales",
       "category": "Time & schedule",
       "category_key": "time-schedule",
@@ -824,7 +842,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-33",
+      "id": "sales-34",
       "domain": "sales",
       "category": "Time & schedule",
       "category_key": "time-schedule",
@@ -841,7 +859,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-34",
+      "id": "sales-35",
       "domain": "sales",
       "category": "Time & schedule",
       "category_key": "time-schedule",
@@ -858,7 +876,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-35",
+      "id": "sales-36",
       "domain": "sales",
       "category": "Time & schedule",
       "category_key": "time-schedule",
@@ -875,7 +893,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-36",
+      "id": "sales-37",
       "domain": "sales",
       "category": "Time & schedule",
       "category_key": "time-schedule",
@@ -892,7 +910,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-37",
+      "id": "sales-38",
       "domain": "sales",
       "category": "Curriculum & what you build",
       "category_key": "curriculum-build",
@@ -909,7 +927,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-38",
+      "id": "sales-39",
       "domain": "sales",
       "category": "Curriculum & what you build",
       "category_key": "curriculum-build",
@@ -926,7 +944,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-39",
+      "id": "sales-40",
       "domain": "sales",
       "category": "Curriculum & what you build",
       "category_key": "curriculum-build",
@@ -943,7 +961,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-40",
+      "id": "sales-41",
       "domain": "sales",
       "category": "Curriculum & what you build",
       "category_key": "curriculum-build",
@@ -960,7 +978,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-41",
+      "id": "sales-42",
       "domain": "sales",
       "category": "Curriculum & what you build",
       "category_key": "curriculum-build",
@@ -977,7 +995,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-42",
+      "id": "sales-43",
       "domain": "sales",
       "category": "Curriculum & what you build",
       "category_key": "curriculum-build",
@@ -994,7 +1012,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-43",
+      "id": "sales-44",
       "domain": "sales",
       "category": "Curriculum & what you build",
       "category_key": "curriculum-build",
@@ -1011,7 +1029,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-44",
+      "id": "sales-45",
       "domain": "sales",
       "category": "Curriculum & what you build",
       "category_key": "curriculum-build",
@@ -1028,7 +1046,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-45",
+      "id": "sales-46",
       "domain": "sales",
       "category": "Certification & credibility",
       "category_key": "certification",
@@ -1045,7 +1063,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-46",
+      "id": "sales-47",
       "domain": "sales",
       "category": "Certification & credibility",
       "category_key": "certification",
@@ -1062,7 +1080,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-47",
+      "id": "sales-48",
       "domain": "sales",
       "category": "Certification & credibility",
       "category_key": "certification",
@@ -1079,7 +1097,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-48",
+      "id": "sales-49",
       "domain": "sales",
       "category": "Certification & credibility",
       "category_key": "certification",
@@ -1096,7 +1114,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-49",
+      "id": "sales-50",
       "domain": "sales",
       "category": "Certification & credibility",
       "category_key": "certification",
@@ -1113,7 +1131,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-50",
+      "id": "sales-51",
       "domain": "sales",
       "category": "Certification & credibility",
       "category_key": "certification",
@@ -1130,7 +1148,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-51",
+      "id": "sales-52",
       "domain": "sales",
       "category": "Refunds & guarantees",
       "category_key": "refunds-guarantee",
@@ -1147,7 +1165,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-52",
+      "id": "sales-53",
       "domain": "sales",
       "category": "Refunds & guarantees",
       "category_key": "refunds-guarantee",
@@ -1164,7 +1182,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-53",
+      "id": "sales-54",
       "domain": "sales",
       "category": "Refunds & guarantees",
       "category_key": "refunds-guarantee",
@@ -1181,7 +1199,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-54",
+      "id": "sales-55",
       "domain": "sales",
       "category": "Refunds & guarantees",
       "category_key": "refunds-guarantee",
@@ -1198,7 +1216,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-55",
+      "id": "sales-56",
       "domain": "sales",
       "category": "Refunds & guarantees",
       "category_key": "refunds-guarantee",
@@ -1215,7 +1233,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-56",
+      "id": "sales-57",
       "domain": "sales",
       "category": "Refunds & guarantees",
       "category_key": "refunds-guarantee",
@@ -1232,7 +1250,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-57",
+      "id": "sales-58",
       "domain": "sales",
       "category": "Refunds & guarantees",
       "category_key": "refunds-guarantee",
@@ -1250,7 +1268,25 @@
       "needs_verification": false
     },
     {
-      "id": "sales-58",
+      "id": "sales-59",
+      "domain": "sales",
+      "category": "Refunds & guarantees",
+      "category_key": "refunds-guarantee",
+      "question": "What happens to my $50 Open House deposit if I don't end up attending my cohort?",
+      "answer": "If you reserved a seat with the $50 deposit and didn't attend your live class, the $50 is fully refundable, or you can apply it as a credit toward a future cohort of your choice. If your reserved cohort's start date passes without you completing enrollment, the reservation lapses automatically and the $50 becomes a credit on your account rather than a charge.",
+      "detail": "Approved policy (Ali, 2026-08-03): the $50 deposit is refundable or creditable to a future cohort if the prospect didn't attend; an unclaimed reservation past its start date auto-converts to an account credit, not a charge.",
+      "tags": [
+        "deposit",
+        "refund",
+        "no-show",
+        "credit"
+      ],
+      "reference": "sales/index.html#cat-refunds-guarantee",
+      "reference_label": "Refunds & guarantees",
+      "needs_verification": false
+    },
+    {
+      "id": "sales-60",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1267,7 +1303,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-59",
+      "id": "sales-61",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1284,7 +1320,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-60",
+      "id": "sales-62",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1301,7 +1337,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-61",
+      "id": "sales-63",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1318,7 +1354,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-62",
+      "id": "sales-64",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1335,7 +1371,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-63",
+      "id": "sales-65",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1352,7 +1388,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-64",
+      "id": "sales-66",
       "domain": "sales",
       "category": "Careers, portfolio & internship",
       "category_key": "career-outcomes",
@@ -1369,7 +1405,7 @@
       "needs_verification": true
     },
     {
-      "id": "sales-65",
+      "id": "sales-67",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1386,7 +1422,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-66",
+      "id": "sales-68",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1403,7 +1439,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-67",
+      "id": "sales-69",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1420,7 +1456,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-68",
+      "id": "sales-70",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1437,7 +1473,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-69",
+      "id": "sales-71",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1454,7 +1490,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-70",
+      "id": "sales-72",
       "domain": "sales",
       "category": "Enrollment & onboarding",
       "category_key": "enrollment-logistics",
@@ -1471,7 +1507,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-71",
+      "id": "sales-73",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1488,7 +1524,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-72",
+      "id": "sales-74",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1505,7 +1541,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-73",
+      "id": "sales-75",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1522,7 +1558,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-74",
+      "id": "sales-76",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1539,7 +1575,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-75",
+      "id": "sales-77",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1556,7 +1592,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-76",
+      "id": "sales-78",
       "domain": "sales",
       "category": "Objections & comparisons",
       "category_key": "objections-comparisons",
@@ -1573,7 +1609,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-77",
+      "id": "sales-79",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -1592,7 +1628,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-78",
+      "id": "sales-80",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -1611,7 +1647,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-79",
+      "id": "sales-81",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -1630,7 +1666,7 @@
       "needs_verification": false
     },
     {
-      "id": "sales-80",
+      "id": "sales-82",
       "domain": "sales",
       "category": "Pricing & billing",
       "category_key": "pricing-billing",
@@ -4004,14 +4040,14 @@
       "category": "How we communicate",
       "category_key": "transparency",
       "question": "Are the refund and cancellation terms final?",
-      "answer": "Not yet. The specific refund and cancellation terms are drafted and pending final approval, so we do not quote them as final. Ask at the Open House for the current terms before you enroll.",
+      "answer": "Yes. Monthly membership cancels anytime with access through the paid month, no partial-month refund. Annual membership has a 14-day money-back window from the cohort kickoff, then is non-refundable but stays active the full year at the locked founding rate. The separate $50 Open House seat deposit is refundable, or creditable toward another cohort, if the prospect doesn't attend; an unclaimed reservation past its start date lapses to an account credit automatically.",
       "detail": "",
       "tags": [
         "refund",
         "cancellation",
         "terms",
-        "drafted",
-        "not final"
+        "deposit",
+        "approved"
       ],
       "reference": "",
       "reference_label": "",
