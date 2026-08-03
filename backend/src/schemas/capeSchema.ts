@@ -101,6 +101,98 @@ export const diagnosticSubmitSchema = z.object({
 });
 export type DiagnosticSubmitInput = z.infer<typeof diagnosticSubmitSchema>;
 
+/**
+ * CAPE Phase 3 (design doc §7, §13) — curriculum-to-skill mapping contracts. These are
+ * the real, exported Zod counterparts of the `ArchitectureSkillImpact` /
+ * `LearningPlacementContract` TypeScript interfaces defined in
+ * `backend/src/models/CurriculumSkillMap.ts` — keep both definitions in sync by hand
+ * (Zod schemas can't be derived from a plain `interface`).
+ */
+
+export const evidenceBandNameSchema = z.enum(['claim', 'knowledge', 'application', 'judgment']);
+export const creditStrengthSchema = z.enum(['none', 'low', 'medium', 'high', 'capstone']);
+
+/** One entry of an `ArchitectureSkillImpact[]` array. `max_credit` may be 0 only when
+ * `credit_strength:'none'` (an explicit zero-credit declaration, design doc §17 AC 4) —
+ * enforced by the array-level refine below rather than per-item, since "0 is valid" is
+ * conditional on the sibling field. */
+export const architectureSkillImpactSchema = z.object({
+  skill_id: architectureSkillIdSchema,
+  weight: z.number().min(0).max(1),
+  bands: z.array(evidenceBandNameSchema).min(1),
+  credit_strength: creditStrengthSchema,
+  evidence_required: z.boolean(),
+  max_credit: z.number().min(0),
+});
+
+/** An empty array is a valid, explicit zero-credit declaration (§17 AC 4) — a
+ * non-empty array's weights must sum to 1.0 so no single skill can be silently
+ * over- or under-credited relative to the others it's split across (§6). */
+export const architectureSkillImpactListSchema = z.array(architectureSkillImpactSchema).refine((impacts) => {
+  if (impacts.length === 0) return true;
+  const sum = impacts.reduce((s, i) => s + i.weight, 0);
+  return Math.abs(sum - 1) < 0.001;
+}, { message: 'skill_impacts weights must sum to 1.0 (or the array must be empty for an explicit zero-credit declaration)' });
+
+export const prerequisiteSkillRefSchema = z.object({
+  skill_id: architectureSkillIdSchema,
+  min_placement: z.number().min(0).max(100),
+});
+
+export const recommendedRangeSchema = z.object({
+  min: z.number().min(0).max(100),
+  max: z.number().min(0).max(100),
+}).refine((v) => v.min <= v.max, { message: 'recommended_range.min must be <= max' });
+
+/** design doc §7 `LearningPlacementContract`. */
+export const learningPlacementContractSchema = z.object({
+  skill_impacts: architectureSkillImpactListSchema,
+  prerequisite_skills: z.array(prerequisiteSkillRefSchema).default([]),
+  recommended_range: recommendedRangeSchema,
+  freshness_days: z.number().int().positive().nullable().optional(),
+  reviewable: z.boolean().default(true),
+});
+export type LearningPlacementContractInput = z.infer<typeof learningPlacementContractSchema>;
+
+export const curriculumSkillMapScopeSchema = z.enum(['type', 'week', 'card']);
+export const curriculumSkillMapSourceSchema = z.enum(['human', 'ai_suggested']);
+
+/** Input contract for capeCurriculumSkillMapService.createOrVersionMapping(). Exactly
+ * one scope key must be set, matching `scope_type` (never two, never zero — a mapping
+ * always resolves to a single, unambiguous scope). */
+export const curriculumSkillMapCreateSchema = z.object({
+  scope_type: curriculumSkillMapScopeSchema,
+  type_slug: z.string().min(1).max(100).nullable().optional(),
+  week_number: z.number().int().min(0).max(52).nullable().optional(),
+  card_id: z.string().uuid().nullable().optional(),
+  skill_impacts: architectureSkillImpactListSchema,
+  prerequisite_skills: z.array(prerequisiteSkillRefSchema).default([]),
+  recommended_range: recommendedRangeSchema,
+  freshness_days: z.number().int().positive().nullable().optional(),
+  reviewable: z.boolean().default(true),
+  source: curriculumSkillMapSourceSchema.default('human'),
+  created_by: z.string().max(255).nullable().optional(),
+}).refine((v) => {
+  const keys = [v.type_slug, v.week_number, v.card_id].filter((k) => k !== null && k !== undefined);
+  if (v.scope_type === 'type') return v.type_slug != null && v.week_number == null && v.card_id == null;
+  if (v.scope_type === 'week') return v.week_number != null && v.type_slug == null && v.card_id == null;
+  if (v.scope_type === 'card') return v.card_id != null && v.type_slug == null && v.week_number == null;
+  return keys.length === 1;
+}, { message: 'exactly one of type_slug/week_number/card_id must be set, matching scope_type' });
+export type CurriculumSkillMapCreateInput = z.infer<typeof curriculumSkillMapCreateSchema>;
+
+/** Input contract for capeSkillPrerequisiteService.upsert(). A skill cannot be its own
+ * prerequisite (a self-referencing edge would create a trivial cycle). */
+export const architectureSkillPrerequisiteInputSchema = z.object({
+  skill_id: architectureSkillIdSchema,
+  prerequisite_skill_id: architectureSkillIdSchema,
+  min_placement: z.number().min(0).max(100).default(0),
+  created_by: z.string().max(255).nullable().optional(),
+}).refine((v) => v.skill_id !== v.prerequisite_skill_id, {
+  message: 'skill_id and prerequisite_skill_id must differ (no self-referencing edge)',
+});
+export type ArchitectureSkillPrerequisiteInput = z.infer<typeof architectureSkillPrerequisiteInputSchema>;
+
 /** Admin PUT /api/admin/cape/evidence-band-weights body — must sum to 1.0 (±0.001). */
 export const updateEvidenceBandWeightsSchema = z.object({
   claim_weight: z.number().min(0).max(1),

@@ -3,7 +3,8 @@ import {
   listCurrentSkillDefinitions, getSkillDefinitionHistory, updateSkillDefinition,
 } from '../services/cape/capeSkillDefinitionsService';
 import { getCurrentWeightsRow, getWeightsHistory, updateWeights } from '../services/cape/capeEvidenceBandWeightsService';
-import { updateSkillDefinitionSchema, updateEvidenceBandWeightsSchema } from '../schemas/capeSchema';
+import { resolveMappingForCard, createOrVersionMapping, assertCardExists } from '../services/cape/capeCurriculumSkillMapService';
+import { updateSkillDefinitionSchema, updateEvidenceBandWeightsSchema, curriculumSkillMapCreateSchema } from '../schemas/capeSchema';
 
 // AuthPayload (backend/src/middlewares/authMiddleware.ts) carries `.sub`, not `.id` —
 // matches the convention in adminLeadController.ts/adminSettingsController.ts/etc.
@@ -66,5 +67,45 @@ export async function handleUpdateEvidenceBandWeights(req: Request, res: Respons
     }
     const result = await updateWeights(parsed.data, adminId(req));
     res.json({ ok: true, ...result });
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * CAPE Phase 3 (design doc §7, §12 "Timeline editor" card-level override) — the
+ * backend contract for a card's resolved skill mapping. `GET` answers "what does
+ * this card resolve to right now, and from which tier" (design doc §17 AC 5); `PUT`
+ * creates a card-scoped override, always going through the same versioned write
+ * path (`createOrVersionMapping`) every other scope uses.
+ */
+
+/** GET /api/admin/cape/curriculum-skill-maps/card/:cardId */
+export async function handleGetCardSkillMapping(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await resolveMappingForCard(String(req.params.cardId));
+    res.json({ ok: true, ...result });
+  } catch (e) { fail(res, e, next); }
+}
+
+/** PUT /api/admin/cape/curriculum-skill-maps/card/:cardId */
+export async function handleUpsertCardSkillMapping(req: Request, res: Response, next: NextFunction) {
+  try {
+    const cardId = String(req.params.cardId);
+    // scope_type/card_id come from the URL, never the body — a card override can
+    // only ever target the card the caller is looking at.
+    const parsed = curriculumSkillMapCreateSchema.safeParse({
+      ...(req.body || {}),
+      scope_type: 'card',
+      card_id: cardId,
+      type_slug: null,
+      week_number: null,
+      created_by: adminId(req) ?? null,
+    });
+    if (!parsed.success) {
+      res.status(400).json({ ok: false, error: parsed.error.issues.map((i) => i.message).join('; ') });
+      return;
+    }
+    await assertCardExists(cardId);
+    const result = await createOrVersionMapping(parsed.data);
+    res.json({ ok: true, id: result.id, version: result.version, source: 'card_override' });
   } catch (e) { fail(res, e, next); }
 }

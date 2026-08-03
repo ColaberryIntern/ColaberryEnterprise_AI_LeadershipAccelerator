@@ -383,6 +383,9 @@ import StudentArchitectureSkill from './StudentArchitectureSkill';
 // CAPE Phase 2: resume/LinkedIn placement + adaptive diagnostic
 import ResumeSkillClaim from './ResumeSkillClaim';
 import DiagnosticAttempt from './DiagnosticAttempt';
+// CAPE Phase 3: curriculum-to-skill mapping
+import CurriculumSkillMap from './CurriculumSkillMap';
+import ArchitectureSkillPrerequisite from './ArchitectureSkillPrerequisite';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1373,6 +1376,9 @@ export {
   // CAPE — Colaberry Adaptive Path Engine (Phase 2: resume placement + diagnostic)
   ResumeSkillClaim,
   DiagnosticAttempt,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 3: curriculum-to-skill mapping)
+  CurriculumSkillMap,
+  ArchitectureSkillPrerequisite,
 };
 
 // --- Enrollment Lead associations ---
@@ -1522,3 +1528,10 @@ Enrollment.hasMany(ResumeSkillClaim, { foreignKey: 'enrollment_id', as: 'resumeS
 ResumeSkillClaim.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 Enrollment.hasMany(DiagnosticAttempt, { foreignKey: 'enrollment_id', as: 'diagnosticAttempts' });
 DiagnosticAttempt.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 3 (curriculum-to-skill mapping) ---
+// A card-scoped curriculum_skill_maps row references the TimelineCard it overrides.
+// Type-scoped and week-scoped rows have card_id:null and are not FK-joined to any
+// card — they resolve by (type_slug) / (week_number) directly, not via association.
+TimelineCard.hasMany(CurriculumSkillMap, { foreignKey: 'card_id', as: 'skillMapOverrides' });
+CurriculumSkillMap.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });

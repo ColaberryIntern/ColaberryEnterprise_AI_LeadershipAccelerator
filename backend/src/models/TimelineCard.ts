@@ -65,6 +65,15 @@ export interface TimelineCardAttributes {
   feed_frequency_cap?: number | null; // max times shown to one student
   feed_cooldown_days?: number | null; // min days before it can reappear
   pinned_until?: Date | null;         // boosted to the top while in the future
+  // CAPE Phase 3 — resolved curriculum-skill mapping, stamped at publish time (design
+  // doc §7). All nullable: a never-published or pre-Phase-3 card simply has nulls here
+  // until the backfill script (backfillCurriculumSkillMaps.ts) or a future publish
+  // stamps it. See capeCardSkillMappingService.ts.
+  skill_mapping?: any;                 // resolved LearningPlacementContract at stamp time
+  skill_mapping_source?: 'card_override' | 'week_blueprint' | 'type_default' | 'none' | null;
+  skill_mapping_map_id?: string | null;   // curriculum_skill_maps.id that resolved
+  skill_mapping_version?: number | null;  // that row's version at stamp time
+  skill_mapping_resolved_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -106,8 +115,29 @@ class TimelineCard extends Model<TimelineCardAttributes> implements TimelineCard
   declare feed_frequency_cap: number | null;
   declare feed_cooldown_days: number | null;
   declare pinned_until: Date | null;
+  declare skill_mapping: any;
+  declare skill_mapping_source: 'card_override' | 'week_blueprint' | 'type_default' | 'none' | null;
+  declare skill_mapping_map_id: string | null;
+  declare skill_mapping_version: number | null;
+  declare skill_mapping_resolved_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
+}
+
+/**
+ * CAPE Phase 3 (design doc §7) afterCreate/afterUpdate handler — see the `hooks:`
+ * block in `TimelineCard.init()` below for the full rationale (dynamic import,
+ * recursion safety, non-fatal). A named export so it is directly unit-testable
+ * (`models/__tests__/timelineCardSkillMappingHook.test.ts`) without needing
+ * Sequelize to actually execute it.
+ */
+export async function capeSkillMappingHook(instance: TimelineCard): Promise<void> {
+  try {
+    const { stampIfPublished } = await import('../services/cape/capeCardSkillMappingService');
+    await stampIfPublished({ id: instance.id, type: instance.type, week: instance.week, visibility: instance.visibility });
+  } catch (err: any) {
+    console.warn('[TimelineCard] CAPE skill-mapping stamp hook failed (non-fatal):', err?.message);
+  }
 }
 
 TimelineCard.init(
@@ -148,6 +178,11 @@ TimelineCard.init(
     feed_frequency_cap: { type: DataTypes.INTEGER, allowNull: true },
     feed_cooldown_days: { type: DataTypes.INTEGER, allowNull: true },
     pinned_until: { type: DataTypes.DATE, allowNull: true },
+    skill_mapping: { type: DataTypes.JSONB, allowNull: true },
+    skill_mapping_source: { type: DataTypes.STRING(20), allowNull: true },
+    skill_mapping_map_id: { type: DataTypes.UUID, allowNull: true },
+    skill_mapping_version: { type: DataTypes.INTEGER, allowNull: true },
+    skill_mapping_resolved_at: { type: DataTypes.DATE, allowNull: true },
     created_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, defaultValue: DataTypes.NOW },
   },
@@ -157,6 +192,24 @@ TimelineCard.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+    // CAPE Phase 3 (design doc §7) — stamp the resolved skill mapping onto ANY card
+    // that ends up visibility:'published', from ANY creation/update path (not just
+    // timelineAdminService.createCard/updateCard — plan-audit cycle 1 found several
+    // other direct TimelineCard.create() call sites, including the entire
+    // Intelligence Pipeline). Dynamic import (mirrors progressionService.ts's own
+    // pattern for the CAPE evidence bridge) avoids a static circular dependency with
+    // capeCardSkillMappingService.ts, which imports THIS model. Defense-in-depth
+    // try/catch here is on top of stampIfPublished's own internal non-fatal
+    // try/catch — a hook failure must never abort the create/update it's attached to.
+    // Recursion-safe: stampIfPublished writes via the STATIC TimelineCard.update()
+    // (bulk update -> beforeBulkUpdate/afterBulkUpdate, hooks this model does not
+    // register), never instance .save()/.update(), so it cannot re-trigger afterUpdate.
+    // The handler is a named, exported function (not an inline closure) specifically
+    // so it is unit-testable directly, without needing Sequelize to actually run it.
+    hooks: {
+      afterCreate: capeSkillMappingHook,
+      afterUpdate: capeSkillMappingHook,
+    },
     indexes: [
       { fields: ['cohort_id', 'week', 'bucket', 'order'] },
       { fields: ['type'] },

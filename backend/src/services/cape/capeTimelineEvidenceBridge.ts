@@ -1,13 +1,25 @@
 /**
- * capeTimelineEvidenceBridge — the ONE real evidence-writing integration point for
- * CAPE Phase 0-1 (design doc §16 Phase 1: "few real writers" is expected and
- * correct at this stage). Turns a completed Timeline card into
- * `student_skill_evidence` rows via a small, EXPLICITLY TEMPORARY default
- * type->skill/band/credit map (Assumption 1, execution-contract.md) — this is NOT
- * the Phase 3 `curriculum_skill_maps` contract (card override -> week blueprint ->
- * type default -> AI-suggested draft resolution hierarchy, design doc §7). It is
- * a placeholder derived from the existing type registry's `competencies` /
- * `evidence_required` / `ai_evaluation` flags, fully replaceable when Phase 3 ships.
+ * capeTimelineEvidenceBridge — the evidence-writing integration point for CAPE.
+ * Turns a completed Timeline card into `student_skill_evidence` rows.
+ *
+ * CAPE Phase 3 (T011): rewired to read the card's STAMPED `skill_mapping` (design
+ * doc §7's resolved `LearningPlacementContract` — card override -> week blueprint ->
+ * type default -> AI-suggested draft, stamped at publish time by
+ * `capeCardSkillMappingService.stampIfPublished` / the `backfillCurriculumSkillMaps.ts`
+ * script) instead of the Phase 0-1 placeholder's hardcoded `COMPETENCY_TO_SKILL`
+ * crosswalk. This is the fix for the exact, documented Phase 0-1 gap: several
+ * registered types (`knowledge_check` chief among them) had an EMPTY legacy
+ * `competencies` array and therefore wrote ZERO CAPE evidence, even though design
+ * doc §7 says checks/quizzes should carry real Knowledge/Judgment credit — those
+ * types now have a real T005 type-default `curriculum_skill_maps` row, so a
+ * `knowledge_check` completion writes real, correctly-banded evidence.
+ *
+ * Defensive fallback: if a card was never stamped (should be rare post-backfill —
+ * e.g. a card published through an exotic path before the model hook was wired, or
+ * a race between publish and this read), this module resolves LIVE via
+ * `resolveSkillMapping` and logs the fallback (structured,
+ * `event:'cape_evidence_bridge_unstamped_card_fallback'`) rather than silently
+ * treating the card as zero-credit.
  *
  * Wired into progressionService.onCardCompleted() as a single additive,
  * NON-FATAL call — a CAPE evidence-write failure never blocks card completion,
@@ -18,92 +30,62 @@
  * lock/watch/field-guide/dwell requirements before it's ever called — click,
  * dwell, and streak signals ALONE can never reach this module (design doc §17 AC 7).
  */
-import { CardTypeDef, resolve as resolveType } from '../timeline/typeRegistry';
-import type { ArchitectureSkillId } from '../../constants/architectureSkills';
+import TimelineCard from '../../models/TimelineCard';
 import type { EvidenceBand } from '../../models/StudentSkillEvidence';
+import type { ArchitectureSkillImpact, LearningPlacementContract } from '../../models/CurriculumSkillMap';
 import { recordSkillEvidence, buildIdempotencyKey } from './capeEvidenceLedgerService';
 import { recomputeStudentArchitectureSkill } from './capeProficiencyService';
+import { resolveSkillMapping } from './capeCurriculumSkillMapService';
 
-/**
- * Deterministic, single-valued inverse of the design doc §3 crosswalk table, used
- * ONLY by this placeholder bridge to turn a card's existing (11-domain) promotion
- * competency tags into Architecture Skill ids. Several competencies legitimately
- * crosswalk to more than one Architecture Skill (see capeSeeders.ts); this picks
- * one deterministic primary per competency so a card's evidence distribution is
- * reproducible. Phase 3's real `curriculum_skill_maps` supersedes this entirely.
- */
-const COMPETENCY_TO_SKILL: Record<string, ArchitectureSkillId> = {
-  prompt_engineering: 'prompting',
-  context_engineering: 'context_engineering',
-  architecture: 'system_design',
-  testing: 'eval_guardrails',
-  debugging: 'eval_guardrails',
-  deployment: 'deploy_ops',
-  github: 'deploy_ops',
-  communication: 'governance',
-  leadership: 'governance',
-  security: 'governance',
-  documentation: 'system_design',
-  claude_code: 'agents_mcp',
-  systems_thinking: 'system_design',
-  decision_making: 'system_design',
-  tradeoffs: 'system_design',
-  ai_governance: 'governance',
-};
-
-export interface SkillImpact {
-  skill_id: ArchitectureSkillId;
+export interface SkillImpactWrite {
+  skill_id: ArchitectureSkillImpact['skill_id'];
   band: EvidenceBand;
   credit: number;
+  idempotency_key: string;
+  mapping_version: number | null;
 }
 
 /**
- * design doc §6 credit-speed table, simplified to 3 tiers for this placeholder:
- *   evidence_required (labs/artifacts)         -> application, ~12 (bracket: 10-20)
- *   ai_evaluation only (checks/quizzes)         -> knowledge, ~4   (bracket: 3-5)
- *   everything else with a mapped competency    -> knowledge, ~2   (bracket: 1-2, light exposure)
- *   no mapped competency (system/event/community)-> [] (zero credit, §7 defaults)
- * Credit is split evenly across the resolved (deduped) Architecture Skill ids so a
- * multi-skill card can't inflate any single axis (§6 "distributed by weights that
- * total 1.0").
+ * Expands a resolved `LearningPlacementContract`'s `skill_impacts` into concrete
+ * `student_skill_evidence` writes. An impact naming MULTIPLE bands (e.g. a capstone
+ * type impacting both `application` and `judgment`) writes ONE row per band, each
+ * at the impact's full `max_credit` — this is not "splitting" a fixed budget between
+ * two currencies; `student_skill_evidence`'s bands are summed independently per axis
+ * (`capeProficiencyService.sumBand`), so evidence strong enough to demonstrate both
+ * dimensions legitimately counts toward both (design doc §6: "GitHub-backed
+ * implementation... Strong Application growth" and "Instructor-approved architecture
+ * work... Strong Application/Judgment growth").
+ *
+ * Idempotency-key backward compatibility: a single-band impact (the common case, and
+ * the ONLY shape the Phase 0-1 placeholder ever produced) keeps the exact original
+ * `timeline:<enrollment_id>:<card_id>:<skill_id>` key format, so re-completing a card
+ * that was already evidenced under the placeholder-era writer is still correctly
+ * deduped. Only a SECOND+ band on a multi-band impact (a shape that literally could
+ * not exist before this task) gets a `:<band>`-suffixed key — new information, never
+ * previously recorded, so there is nothing for it to collide with.
  */
-export function defaultSkillImpactForType(typeSlug: string): SkillImpact[] {
-  const def = resolveType(typeSlug);
-  if (!def) return [];
-  const skillIds = resolveSkillIds(def);
-  if (skillIds.length === 0) return [];
-
-  const { band, totalCredit } = bandAndCreditFor(def);
-  if (totalCredit <= 0) return [];
-
-  const perSkill = Math.round((totalCredit / skillIds.length) * 100) / 100;
-  return skillIds.map((skill_id) => ({ skill_id, band, credit: perSkill }));
-}
-
-/**
- * Known Phase 0-1 gap, logged rather than silently accepted: several registered
- * types (e.g. `knowledge_check`) have an EMPTY `competencies` array in
- * typeRegistry.ts today, because that field was authored for the pre-existing
- * 11-domain promotion system and was never required to be populated for every
- * type. Those types resolve to zero Architecture Skill ids here and therefore
- * write zero CAPE evidence, even though design doc §7 says checks/quizzes
- * should carry real Knowledge/Judgment credit. Real per-type/card skill
- * mapping is Phase 3's `curriculum_skill_maps` contract — this placeholder does
- * not attempt to guess a mapping typeRegistry itself doesn't declare.
- */
-function resolveSkillIds(def: CardTypeDef): ArchitectureSkillId[] {
-  const seen = new Set<ArchitectureSkillId>();
-  for (const c of def.competencies || []) {
-    const skill = COMPETENCY_TO_SKILL[c];
-    if (skill) seen.add(skill);
+export function expandContractToWrites(
+  contract: LearningPlacementContract,
+  enrollmentId: string,
+  cardId: string,
+  mappingVersion: number | null,
+): SkillImpactWrite[] {
+  const writes: SkillImpactWrite[] = [];
+  for (const impact of contract.skill_impacts) {
+    if (impact.max_credit <= 0 || impact.bands.length === 0) continue;
+    impact.bands.forEach((band, i) => {
+      const baseKey = buildIdempotencyKey.timeline(enrollmentId, cardId, impact.skill_id);
+      const idempotency_key = i === 0 ? baseKey : `${baseKey}:${band}`;
+      writes.push({
+        skill_id: impact.skill_id,
+        band: band as EvidenceBand,
+        credit: impact.max_credit,
+        idempotency_key,
+        mapping_version: mappingVersion,
+      });
+    });
   }
-  return Array.from(seen);
-}
-
-function bandAndCreditFor(def: CardTypeDef): { band: EvidenceBand; totalCredit: number } {
-  if (def.evidence_required) return { band: 'application', totalCredit: 12 };
-  if (def.ai_evaluation) return { band: 'knowledge', totalCredit: 4 };
-  return { band: 'knowledge', totalCredit: 2 };
+  return writes;
 }
 
 /**
@@ -116,22 +98,45 @@ export async function recordCapeEvidenceForCompletedCard(
   card: { id: string; type: string }
 ): Promise<void> {
   try {
-    const impacts = defaultSkillImpactForType(card.type);
-    if (impacts.length === 0) return;
+    const full = await TimelineCard.findByPk(card.id, {
+      attributes: ['id', 'type', 'week', 'skill_mapping', 'skill_mapping_version'],
+    });
+    if (!full) return; // card was deleted between completion and this read — nothing to credit
+
+    let contract: LearningPlacementContract;
+    let mappingVersion: number | null;
+
+    if (full.skill_mapping && Array.isArray(full.skill_mapping.skill_impacts)) {
+      contract = full.skill_mapping as LearningPlacementContract;
+      mappingVersion = full.skill_mapping_version ?? null;
+    } else {
+      // Defensive fallback — should be rare post-backfill (T010) + live stamp hook (T009).
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+        event: 'cape_evidence_bridge_unstamped_card_fallback', outcome: 'partial',
+        context: { enrollment_id: enrollmentId, card_id: card.id, card_type: card.type },
+      }));
+      const resolved = await resolveSkillMapping({ cardId: full.id, typeSlug: full.type, weekNumber: full.week });
+      contract = resolved.contract;
+      mappingVersion = resolved.version;
+    }
+
+    const writes = expandContractToWrites(contract, enrollmentId, card.id, mappingVersion);
+    if (writes.length === 0) return;
 
     const touchedSkills = new Set<string>();
-    for (const impact of impacts) {
-      const idempotency_key = buildIdempotencyKey.timeline(enrollmentId, card.id, impact.skill_id);
+    for (const write of writes) {
       await recordSkillEvidence({
         enrollment_id: enrollmentId,
-        skill_id: impact.skill_id,
-        band: impact.band,
-        credit: impact.credit,
+        skill_id: write.skill_id,
+        band: write.band,
+        credit: write.credit,
         source: 'timeline',
         source_ref: card.id,
-        idempotency_key,
+        idempotency_key: write.idempotency_key,
+        mapping_version: write.mapping_version,
       });
-      touchedSkills.add(impact.skill_id);
+      touchedSkills.add(write.skill_id);
     }
     for (const skillId of touchedSkills) {
       await recomputeStudentArchitectureSkill(enrollmentId, skillId);
