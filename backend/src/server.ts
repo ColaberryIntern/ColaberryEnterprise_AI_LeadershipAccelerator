@@ -2392,6 +2392,13 @@ async function start(): Promise<void> {
       const { seedCapeConfig } = await import('./services/cape/capeSeeders');
       const cape = await seedCapeConfig();
       console.log(`[CAPE] seeded: ${cape.skillDefinitions} skill definitions, ${cape.weights} weight config`);
+      // CAPE Phase 3: type-default curriculum_skill_maps rows — one per registered
+      // Curriculum Type (50/50, including explicit zero-credit rows for the
+      // system/community/delivery-event policy groups). Idempotent — only inserts
+      // when no current row exists yet for a given type_slug.
+      const { seedTypeSkillMaps } = await import('./services/cape/capeTypeSkillMapSeeds');
+      const typeMaps = await seedTypeSkillMaps();
+      console.log(`[CAPE] type-default skill maps seeded: ${typeMaps.created} created, ${typeMaps.skipped} already current`);
       // Feed Control: re-apply stored type routing to the registry AFTER the seed
       // (typeSeeder re-asserts surface columns from code, so routing must win last).
       const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');

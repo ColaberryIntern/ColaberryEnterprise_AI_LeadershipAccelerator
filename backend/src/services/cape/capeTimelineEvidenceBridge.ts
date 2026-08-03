@@ -23,6 +23,7 @@ import type { ArchitectureSkillId } from '../../constants/architectureSkills';
 import type { EvidenceBand } from '../../models/StudentSkillEvidence';
 import { recordSkillEvidence, buildIdempotencyKey } from './capeEvidenceLedgerService';
 import { recomputeStudentArchitectureSkill } from './capeProficiencyService';
+import { COMPETENCY_TO_SKILL as SHARED_COMPETENCY_TO_SKILL } from '../../constants/competencySkillCrosswalk';
 
 /**
  * Deterministic, single-valued inverse of the design doc §3 crosswalk table, used
@@ -32,24 +33,7 @@ import { recomputeStudentArchitectureSkill } from './capeProficiencyService';
  * one deterministic primary per competency so a card's evidence distribution is
  * reproducible. Phase 3's real `curriculum_skill_maps` supersedes this entirely.
  */
-const COMPETENCY_TO_SKILL: Record<string, ArchitectureSkillId> = {
-  prompt_engineering: 'prompting',
-  context_engineering: 'context_engineering',
-  architecture: 'system_design',
-  testing: 'eval_guardrails',
-  debugging: 'eval_guardrails',
-  deployment: 'deploy_ops',
-  github: 'deploy_ops',
-  communication: 'governance',
-  leadership: 'governance',
-  security: 'governance',
-  documentation: 'system_design',
-  claude_code: 'agents_mcp',
-  systems_thinking: 'system_design',
-  decision_making: 'system_design',
-  tradeoffs: 'system_design',
-  ai_governance: 'governance',
-};
+const COMPETENCY_TO_SKILL: Record<string, ArchitectureSkillId> = SHARED_COMPETENCY_TO_SKILL;
 
 export interface SkillImpact {
   skill_id: ArchitectureSkillId;
