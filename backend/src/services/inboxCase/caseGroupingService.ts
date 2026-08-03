@@ -34,9 +34,18 @@ class UnionFind {
 }
 
 function shareBasecampRef(a: RawCandidateItem, b: RawCandidateItem): boolean {
-  if (a.basecamp_refs.length === 0 || b.basecamp_refs.length === 0) return false;
+  const aIds = new Set(a.basecamp_refs.map((r) => r.recordingId));
   const bIds = new Set(b.basecamp_refs.map((r) => r.recordingId));
-  return a.basecamp_refs.some((r) => bIds.has(r.recordingId));
+  // Asymmetric case: one item IS the specific Basecamp record the other
+  // item's body referenced (e.g. a digest email and the real to-do resolved
+  // from a link inside it). A resolved Basecamp item's own basecamp_refs is
+  // always empty — it doesn't reference itself — so the symmetric check
+  // below alone would never merge this pairing.
+  if (aIds.has(b.source_id) || bIds.has(a.source_id)) return true;
+  if (aIds.size === 0 || bIds.size === 0) return false;
+  // Symmetric case: two independent items (e.g. two separate emails) both
+  // reference the same external Basecamp record.
+  return [...aIds].some((id) => bIds.has(id));
 }
 
 function shareThreadOrReplyChain(a: RawCandidateItem, b: RawCandidateItem): boolean {

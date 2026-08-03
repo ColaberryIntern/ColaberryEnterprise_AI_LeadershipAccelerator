@@ -5,7 +5,7 @@ import InboxCaseItem from '../../models/InboxCaseItem';
 import InboxCaseAction from '../../models/InboxCaseAction';
 import InboxCaseQuestion from '../../models/InboxCaseQuestion';
 import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment } from '../../types/inboxCase';
-import { computeIdempotencyKey } from './textNormalization';
+import { computeIdempotencyKey, isBasecampDigestSender } from './textNormalization';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { logCaseEvent } from './caseEventLog';
 import { postCaseProgressNote } from './caseTicketService';
@@ -211,8 +211,22 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
   // executeEmailSend in caseActionExecutors.ts, which resolves the real
   // send-to address differently for sent_email items (to_addresses, not
   // from_address) to match this.
+  // An email whose body references live Basecamp records (e.g. Basecamp's
+  // own "N to-dos due soon" digest) is never a reply target, even if
+  // resolution of those references later fails — replying to an email that
+  // is fundamentally about specific tracked work items is never the right
+  // default. The real actions for those items are the resolved
+  // basecamp_todo items' own BASECAMP_COMMENT proposals below, or manual
+  // review if resolution didn't find anything. Unconditional on whether
+  // resolution succeeded, per execution-contract.md. Also excludes a
+  // confirmed digest-sender item even when it has zero extracted
+  // basecamp_refs — Basecamp's periodic "N to-dos due soon" rollup embeds no
+  // per-to-do URL at all (confirmed against real production samples), so
+  // the basecamp_refs check alone can't catch it; the sender check does.
   const includedInboundEmail = emailItems
     .filter((i) => i.inclusion_status === 'INCLUDED')
+    .filter((i) => !((i.snapshot as any)?.basecamp_refs?.length > 0))
+    .filter((i) => !isBasecampDigestSender((i.snapshot as any)?.from_address))
     .sort((a, b) => Number(b.match_score) - Number(a.match_score));
   const includedSentEmailWithRecipient = items
     .filter((i) => i.source_type === 'sent_email' && i.inclusion_status === 'INCLUDED' && (i.snapshot as any)?.to_addresses?.length)

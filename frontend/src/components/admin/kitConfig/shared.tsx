@@ -63,9 +63,12 @@ export const EmptyDefaultsNote: React.FC<{ children: React.ReactNode }> = ({ chi
  * `SectionBlueprintCard.tsx` (`bi-chevron-right/down`, collapsed by default). */
 export const CollapsibleOverrideCard: React.FC<{
   index: number; total: number; summary: React.ReactNode;
+  /** Plain-text version of `summary`, shown as a native hover tooltip so a
+   * truncated title can still be read without expanding the card. */
+  summaryText?: string;
   onRemove: () => void; onMoveUp: () => void; onMoveDown: () => void;
   defaultExpanded?: boolean; children: React.ReactNode;
-}> = ({ index, total, summary, onRemove, onMoveUp, onMoveDown, defaultExpanded, children }) => {
+}> = ({ index, total, summary, summaryText, onRemove, onMoveUp, onMoveDown, defaultExpanded, children }) => {
   const [expanded, setExpanded] = useState(!!defaultExpanded);
   const isFirst = index === 0;
   const isLast = index === total - 1;
@@ -81,7 +84,7 @@ export const CollapsibleOverrideCard: React.FC<{
       >
         <div className="d-flex align-items-center gap-2 flex-grow-1" style={{ minWidth: 0 }}>
           <span className="badge bg-dark-subtle text-dark-emphasis rounded-pill flex-shrink-0">{index + 1}</span>
-          <span className="text-truncate small">{summary}</span>
+          <span className="text-truncate small" {...(summaryText ? { title: summaryText } : {})}>{summary}</span>
         </div>
         <div className="d-flex align-items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           <button type="button" className="btn btn-outline-secondary btn-sm" style={{ padding: '.15rem .5rem' }}

@@ -5,7 +5,11 @@ import {
   computeSourceHash,
   extractBasecampReferences,
   termOverlapScore,
+  parseDigestTodoLines,
+  isBasecampDigestSender,
+  DIGEST_SENDER,
 } from '../textNormalization';
+import { DIGEST_SAMPLE_12A, DIGEST_SAMPLE_12B, DIGEST_SAMPLE_42 } from './fixtures/basecampDigestSamples';
 
 describe('normalizeSubject', () => {
   it('strips a single Re: prefix', () => {
@@ -115,5 +119,74 @@ describe('termOverlapScore', () => {
     const a = termOverlapScore('quarterly report deadline', 'deadline for quarterly report');
     const b = termOverlapScore('deadline for quarterly report', 'quarterly report deadline');
     expect(a).toBe(b);
+  });
+});
+
+describe('parseDigestTodoLines — real production Basecamp digest samples', () => {
+  it('parses the first real 12-to-do sample into exactly the to-dos a human would identify', () => {
+    const parsed = parseDigestTodoLines(DIGEST_SAMPLE_12A);
+    expect(parsed).toHaveLength(12);
+    expect(parsed[0]).toEqual({
+      project: 'AI Systems Architect Accelerator',
+      todolist: 'Website - enterprise.colaberry.ai',
+      title: 'Final review and approval of enterprise.colaberry.ai',
+      dueRaw: 'Jul 10',
+    });
+    // Last item, different project section, confirms the parser correctly
+    // resets project/todolist across multiple "From: ... ---" blocks.
+    expect(parsed[parsed.length - 1]).toEqual({
+      project: 'LandJet Growth Engine',
+      todolist: 'Outreach Engine',
+      title: '[Platform] LLM-backed category validation (company vs assigned vertical)',
+      dueRaw: 'Jul 11',
+    });
+  });
+
+  it('parses the second real 12-to-do sample, including multiple todolists under one project', () => {
+    const parsed = parseDigestTodoLines(DIGEST_SAMPLE_12B);
+    expect(parsed).toHaveLength(12);
+    // "Student Platform Build" and "TWC Compliance" are two distinct
+    // todolists both under "AI Systems Architect Accelerator" — the real
+    // case that tests currentTodolist correctly resets mid-project.
+    expect(parsed[0].todolist).toBe('Student Platform Build');
+    expect(parsed[1].todolist).toBe('TWC Compliance');
+    expect(parsed[1].title).toBe('Legal review of TWC compliance documents');
+  });
+
+  it('parses the real 42-to-do sample (the largest, most structurally complex sample) without dropping or miscounting any line', () => {
+    const parsed = parseDigestTodoLines(DIGEST_SAMPLE_42);
+    expect(parsed).toHaveLength(42);
+    expect(parsed.every((t) => t.title.length > 0 && t.project.length > 0)).toBe(true);
+  });
+
+  it('strips a leading emoji glyph from the title', () => {
+    const parsed = parseDigestTodoLines(DIGEST_SAMPLE_12A);
+    const emojiItem = parsed.find((t) => t.title.startsWith('Ali: review ISO 27001'));
+    expect(emojiItem).toBeDefined();
+    expect(emojiItem!.title).not.toMatch(/🧑/);
+  });
+
+  it('returns an empty array for a body with zero ▢ lines (boundary)', () => {
+    expect(parseDigestTodoLines('Just a normal email with no to-dos in it.')).toEqual([]);
+  });
+
+  it('returns an empty array for an empty string', () => {
+    expect(parseDigestTodoLines('')).toEqual([]);
+  });
+});
+
+describe('isBasecampDigestSender', () => {
+  it('matches the real, confirmed digest sender address', () => {
+    expect(isBasecampDigestSender(DIGEST_SENDER)).toBe(true);
+    expect(isBasecampDigestSender('notifications@app.basecamp.com')).toBe(true);
+  });
+
+  it('rejects a normal person\'s address', () => {
+    expect(isBasecampDigestSender('kes@colaberry.com')).toBe(false);
+  });
+
+  it('handles null/undefined', () => {
+    expect(isBasecampDigestSender(null)).toBe(false);
+    expect(isBasecampDigestSender(undefined)).toBe(false);
   });
 });

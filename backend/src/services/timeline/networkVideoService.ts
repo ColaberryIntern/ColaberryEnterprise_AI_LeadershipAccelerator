@@ -33,6 +33,7 @@ interface NetworkVideoRow {
   embed_url: string | null;
   watch_url: string | null;
   thumbnail_url: string | null;
+  duration_seconds: number | null;
   tags: unknown;
 }
 
@@ -56,7 +57,7 @@ export async function buildUserTags(enrollmentId: string): Promise<Set<string>> 
   return tags;
 }
 
-function toFeedVideo(v: NetworkVideoRow): FeedVideo {
+export function toFeedVideo(v: NetworkVideoRow): FeedVideo {
   // Pass the canonical watch URL; the frontend `parseVideoUrl` turns it into the
   // durable in-app embed. Title = this specific video's title (poster overlay).
   const url = (v.watch_url || v.embed_url || '').trim();
@@ -66,7 +67,26 @@ function toFeedVideo(v: NetworkVideoRow): FeedVideo {
   if (!poster && v.host === 'youtube' && v.provider_video_id) {
     poster = `https://img.youtube.com/vi/${v.provider_video_id}/hqdefault.jpg`;
   }
-  return { url, presenter: null, poster, title: v.title || null };
+  const duration = Number(v.duration_seconds);
+  return { url, presenter: null, poster, title: v.title || null, duration_seconds: Number.isFinite(duration) && duration > 0 ? duration : null };
+}
+
+/** The authoritative duration (seconds) for whichever testimonial this student was
+ *  already assigned to this card, or null if unassigned/unknown. Reuses the exact
+ *  "reuse an existing per-card assignment" JOIN from selectTestimonialForEnrollment
+ *  so the watch gate and the feed always agree on which video is "the" video. */
+export async function getAssignedTestimonialDurationS(enrollmentId: string, cardId: string): Promise<number | null> {
+  try {
+    const rows = await sequelize.query<{ duration_seconds: number | null }>(
+      `SELECT v.duration_seconds FROM network_video_views vw JOIN network_videos v ON v.id = vw.video_id
+        WHERE vw.enrollment_id = :eid AND vw.last_timeline_card_id = :cid LIMIT 1`,
+      { replacements: { eid: enrollmentId, cid: cardId }, type: QueryTypes.SELECT },
+    );
+    const d = Number(rows[0]?.duration_seconds);
+    return Number.isFinite(d) && d > 0 ? d : null;
+  } catch {
+    return null;
+  }
 }
 
 function score(v: NetworkVideoRow, userTags: Set<string>): number {

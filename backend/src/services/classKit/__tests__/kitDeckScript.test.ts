@@ -232,3 +232,24 @@ describe('Class Kit deck slide navigation', () => {
     expect(deck.elements.kcounter.textContent).toBe('2 / 2');
   });
 });
+
+describe('Class Kit deck — Live Decision Theater correct-responders reveal (classkit-live-polish)', () => {
+  // No browser-execution harness exists for `renderTheater()`/`renderPoll()`
+  // in this repo (both are only reachable via `pollLive()`'s fetch + DOM
+  // querySelector chain, which `bootDeck()`'s minimal mock DOM doesn't
+  // support — a disclosed, pre-existing limitation, not new to this change).
+  // Verified instead via string-content assertions on the real compiled
+  // script, matching this file's own established convention.
+  const script = deckScript();
+
+  it('renderTheater reads pulse.poll.correctResponders and only shows it once revealed', () => {
+    expect(script).toContain('correctList');
+    expect(script).toContain('correctResponders');
+    expect(script).toContain("st === 'revealed' && names && names.length");
+  });
+
+  it('renderPoll (sidebar rail) also renders the correct-responders line, gated on revealedNow', () => {
+    expect(script).toContain('kpoll-correct');
+    expect(script).toContain('Got it right');
+  });
+});

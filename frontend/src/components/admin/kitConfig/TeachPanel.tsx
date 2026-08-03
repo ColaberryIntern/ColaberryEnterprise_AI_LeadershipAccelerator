@@ -57,6 +57,7 @@ const TeachPanel: React.FC<Props> = ({ config, defaults, dayLabel, onRewrite, on
             slides.map((s, i) => (
               <CollapsibleOverrideCard key={i} index={i} total={slides.length}
                 summary={<><strong>{s.title || '(untitled lesson)'}</strong> <span className="text-muted">· {segmentLabel(s.segment)}</span></>}
+                summaryText={`${s.title || '(untitled lesson)'} · ${segmentLabel(s.segment)}`}
                 defaultExpanded={i === justAddedIndex}
                 onRemove={() => remove(i)} onMoveUp={() => move(i, 'up')} onMoveDown={() => move(i, 'down')}>
                 <div className="row g-2 mb-2">

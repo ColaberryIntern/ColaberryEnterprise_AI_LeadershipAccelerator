@@ -16,6 +16,8 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
+import capePortalRoutes from './routes/capePortalRoutes';
+import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
@@ -40,6 +42,8 @@ import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
+import { ensureCapeSchema } from './db/ensureCapeSchema';
+import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -78,6 +82,8 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+app.use(capePortalRoutes);
+app.use(capeAdminRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);
@@ -2216,6 +2222,10 @@ async function start(): Promise<void> {
   // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
   // additive only).
   await ensureWorkGraphSchema();
+  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
+  // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
+  // additive only, parallel to the existing XP/promotion tables).
+  await ensureCapeSchema();
 
   await ensureCommunityMemberRoleSchema();
   // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
@@ -2234,6 +2244,11 @@ async function start(): Promise<void> {
   await ensureOnboardingProfileSchema();
   // Student Settings: avatar photo + uploaded resume file columns (idempotent).
   await ensurePortalSettingsSchema();
+  // CAPE Phase 2 — resume/LinkedIn placement + adaptive diagnostic: 2 new
+  // onboarding_profiles columns + 2 new tables (idempotent DDL, additive
+  // only). Must run AFTER ensurePortalSettingsSchema() so onboarding_profiles
+  // already exists.
+  await ensureCapePlacementSchema();
   // Unified StudentTask: nullable requirement_key + story-driven columns (idempotent).
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
@@ -2372,6 +2387,10 @@ async function start(): Promise<void> {
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
+      // CAPE Phase 0-1: 10 Architecture Skill definitions + default evidence-band weights.
+      const { seedCapeConfig } = await import('./services/cape/capeSeeders');
+      const cape = await seedCapeConfig();
+      console.log(`[CAPE] seeded: ${cape.skillDefinitions} skill definitions, ${cape.weights} weight config`);
       // Feed Control: re-apply stored type routing to the registry AFTER the seed
       // (typeSeeder re-asserts surface columns from code, so routing must win last).
       const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');

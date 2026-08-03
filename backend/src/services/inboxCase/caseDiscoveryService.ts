@@ -35,7 +35,10 @@ export interface DiscoveredCaseSummary {
 }
 
 const EMAIL_ADAPTERS = [gmailColaberryCaseSource, gmailPersonalCaseSource, hotmailCaseSource];
-const MAX_CANDIDATES_PER_CASE = 60;
+// Exported for reuse by caseAutoSyncService.ts's Basecamp-reference
+// expansion step (same "don't let one pathological input fan out
+// unboundedly" cap applies to resolving many references in one digest).
+export const MAX_CANDIDATES_PER_CASE = 60;
 
 // Counts how many DISTINCT candidates (across every provider) reference each
 // Basecamp recording id. A basecamp_refs match only becomes a positive
@@ -247,16 +250,20 @@ export async function persistClusterAsCase(
         inclusion_status: inclusionStatus,
         disposition: null,
         disposition_reason: null,
-        // thread_id/message_id/in_reply_to exist only on the transient
-        // RawCandidateItem used for grouping — persist them into the
-        // snapshot so a later reply action (Phase 5 executor) can thread
-        // correctly. Losing these at persistence time would silently
-        // break In-Reply-To/References headers on every proposed reply.
+        // thread_id/message_id/in_reply_to/basecamp_refs exist only on the
+        // transient RawCandidateItem used for grouping — persist them into
+        // the snapshot so later steps can use them. Losing thread_id/
+        // message_id/in_reply_to at persistence time would silently break
+        // In-Reply-To/References headers on every proposed reply; losing
+        // basecamp_refs would make it impossible for the planner to know
+        // this item's body references live Basecamp records (see
+        // caseActionPlanner.ts's buildReplyAction).
         snapshot: {
           ...item.snapshot,
           thread_id: item.thread_id,
           message_id: item.message_id,
           in_reply_to: item.in_reply_to,
+          basecamp_refs: item.basecamp_refs,
         },
         source_hash: item.sourceHash,
       } as any);

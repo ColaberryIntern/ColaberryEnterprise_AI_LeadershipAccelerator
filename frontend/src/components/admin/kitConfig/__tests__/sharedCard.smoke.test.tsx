@@ -65,6 +65,24 @@ describe('CollapsibleOverrideCard', () => {
     );
     expect(html).toContain('>5<');
   });
+
+  // classkit-live-polish T002: a hover tooltip shows the full (untruncated)
+  // summary text — CSS truncation only clips the rendered box, never the
+  // underlying DOM text, so this is provable via a plain string assertion.
+  it('summaryText renders as a native title attribute with the full text', () => {
+    const long = 'You just guessed where a repeated task belongs. Almost everyone in this room has typed the same instruction into Claude five times this month without noticing.';
+    const html = renderToStaticMarkup(
+      <CollapsibleOverrideCard index={0} total={1} summary={<strong>Short</strong>} summaryText={long} onRemove={() => {}} onMoveUp={() => {}} onMoveDown={() => {}}><div /></CollapsibleOverrideCard>,
+    );
+    expect(html).toContain(`title="${long}"`);
+  });
+
+  it('omitting summaryText renders no empty title attribute (no dead tooltip)', () => {
+    const html = renderToStaticMarkup(
+      <CollapsibleOverrideCard index={0} total={1} summary={<strong>No tooltip</strong>} onRemove={() => {}} onMoveUp={() => {}} onMoveDown={() => {}}><div /></CollapsibleOverrideCard>,
+    );
+    expect(html).not.toContain('title=""');
+  });
 });
 
 describe('moveItem', () => {

@@ -87,6 +87,62 @@ export function extractBasecampReferences(text: string | null | undefined): Base
   return found;
 }
 
+// Basecamp's own periodic "N to-dos due soon" digest rollup embeds NO
+// per-to-do URL at all (confirmed against 3 real production samples) —
+// unlike an individual notification email ("X commented on Y"), which does.
+// Each to-do is plain text: "▢ {title} • Due: {date} • Assigned to: {names}",
+// grouped under "From: {project} ---" section headers with a todolist-name
+// line before each group. This parses that specific, stable format (it's
+// Basecamp's own fixed notification template, not something this account
+// configures) rather than attempting general free-text extraction.
+export interface ParsedDigestTodo {
+  project: string;
+  todolist: string | null;
+  title: string;
+  dueRaw: string | null;
+}
+
+export function parseDigestTodoLines(bodyText: string): ParsedDigestTodo[] {
+  const lines = bodyText.split('\n').map((l) => l.trim());
+  const results: ParsedDigestTodo[] = [];
+  let currentProject: string | null = null;
+  let currentTodolist: string | null = null;
+
+  for (const line of lines) {
+    if (!line) continue;
+    const projectMatch = line.match(/^From:\s*(.+?)\s*---$/);
+    if (projectMatch) {
+      currentProject = projectMatch[1].trim();
+      currentTodolist = null;
+      continue;
+    }
+    if (line.startsWith('▢')) {
+      const rest = line.slice(1).trim();
+      const dueIdx = rest.indexOf('• Due:');
+      if (dueIdx === -1 || !currentProject) continue;
+      let title = rest.slice(0, dueIdx).trim();
+      title = title.replace(/^[\p{Extended_Pictographic}️‍]+\s*/u, '').trim();
+      const afterDue = rest.slice(dueIdx + '• Due:'.length).trim();
+      const assignedIdx = afterDue.indexOf('• Assigned to:');
+      const dueRaw = (assignedIdx === -1 ? afterDue : afterDue.slice(0, assignedIdx)).trim() || null;
+      if (title) results.push({ project: currentProject, todolist: currentTodolist, title, dueRaw });
+      continue;
+    }
+    if (currentProject) currentTodolist = line;
+  }
+  return results;
+}
+
+// Exported as its own constant (not just embedded in the predicate below) so
+// callers that need the literal string for a SQL query —
+// backfillBasecampDigestReferences.ts's findCandidates() — have one shared
+// source of truth instead of a second hardcoded copy.
+export const DIGEST_SENDER = 'notifications@app.basecamp.com';
+
+export function isBasecampDigestSender(fromAddress: string | null | undefined): boolean {
+  return fromAddress === DIGEST_SENDER;
+}
+
 // Simple bag-of-words overlap used as a bounded, deterministic stand-in for
 // semantic similarity (this repo has no embedding/vector infra). Returns
 // 0-1. Intentionally capped low downstream (see matchScoring.ts) so it can

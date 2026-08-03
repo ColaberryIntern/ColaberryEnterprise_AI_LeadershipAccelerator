@@ -9,7 +9,10 @@ import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
 import ClassKitModal from '../../components/admin/ClassKitModal';
 import KitConfigModal from '../../components/admin/KitConfigModal';
+import { CategoryKey } from '../../components/admin/kitConfig/types';
 import CohortManagementTab from './components/CohortManagementTab';
+import ClassDashboardTab from './components/ClassDashboardTab';
+import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
 
 interface Cohort {
   id: string;
@@ -110,18 +113,33 @@ interface DashboardData {
   enrollments: EnrollmentInfo[];
 }
 
-type TabKey = 'cohorts' | 'sessions' | 'participants' | 'attendance' | 'submissions' | 'readiness' | 'curriculum';
+// 'attendance', 'submissions', and 'readiness' are no longer standalone tabs —
+// Attendance folds into the Sessions drill-down (session/group-level view),
+// Submissions folds into the Participants drill-down (per-person view), and
+// Readiness is absorbed into the new Class Dashboard (adds cohort-wide trend
+// indicators the old flat table never had, rather than living alongside it).
+type TabKey = 'cohorts' | 'sessions' | 'participants' | 'class-dashboard' | 'curriculum';
 
-const TAB_ORDER: TabKey[] = ['cohorts', 'sessions', 'participants', 'attendance', 'submissions', 'readiness', 'curriculum'];
+const TAB_ORDER: TabKey[] = ['cohorts', 'sessions', 'participants', 'class-dashboard', 'curriculum'];
+// Everything except 'cohorts' (the home/landing view) is a cohort-scoped
+// drill-down, rendered via the contextual sub-nav instead of an always-visible
+// top tab bar — "let everything flow through the Cohorts tab."
+const DRILLDOWN_TABS: TabKey[] = ['sessions', 'participants', 'class-dashboard', 'curriculum'];
+const TAB_LABELS: Record<TabKey, string> = {
+  cohorts: 'Cohorts',
+  sessions: 'Sessions',
+  participants: 'Participants',
+  'class-dashboard': 'Class Dashboard',
+  curriculum: 'Curriculum',
+};
 
 function AdminAcceleratorPage() {
   const { showToast } = useToast();
   const [cohorts, setCohorts] = useState<Cohort[]>([]);
   const [selectedCohortId, setSelectedCohortId] = useState('');
-  // Default to Participants — Sessions is empty for most cohorts, so it made the
-  // page look blank on load. A `?tab=cohorts` query param (used by the "Manage"
-  // link on the admin dashboard) overrides this on first load.
-  const [activeTab, setActiveTab] = useState<TabKey>('participants');
+  // Cohorts is the default/home view — everything else is a drill-down reached
+  // from a cohort row's quick-nav buttons or the contextual sub-nav below.
+  const [activeTab, setActiveTab] = useState<TabKey>('cohorts');
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
 
@@ -135,6 +153,9 @@ function AdminAcceleratorPage() {
   const [presentMenu, setPresentMenu] = useState<string | null>(null);
   // Session {id, title} whose Customize (Class Kit config) modal is open, else null.
   const [customizeTarget, setCustomizeTarget] = useState<{ id: string; title: string } | null>(null);
+  // Which category tab the Customize modal should open on — set only via the
+  // ?customizeCategory= deep link below; undefined otherwise (modal's own default).
+  const [customizeCategory, setCustomizeCategory] = useState<CategoryKey | undefined>(undefined);
   // Session id whose Class Details (curriculum/blueprint) modal is open, else null.
   // Cohort days-off (dates a class was skipped) shown as removable chips above the table.
   const [skippedDates, setSkippedDates] = useState<string[]>([]);
@@ -152,13 +173,15 @@ function AdminAcceleratorPage() {
   const [attendanceRecords, setAttendanceRecords] = useState<AttendanceRecord[]>([]);
   const [attendanceLoading, setAttendanceLoading] = useState(false);
 
-  // Submissions state
+  // Submissions state — person-scoped panel, opened from a Participants row.
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [submissionsLoading, setSubmissionsLoading] = useState(false);
+  const [submissionsTarget, setSubmissionsTarget] = useState<{ id: string; name: string } | null>(null);
 
-  // Readiness state
+  // Enrollments for the current cohort, used by the Attendance modal roster and
+  // passed to AdminCurriculumTab. Per-student scores now live in the
+  // self-contained ClassDashboardTab, not here.
   const [enrollments, setEnrollments] = useState<EnrollmentInfo[]>([]);
-  const [readinessLoading, setReadinessLoading] = useState(false);
 
   // Delete confirm
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
@@ -185,47 +208,99 @@ function AdminAcceleratorPage() {
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
+  // Deep-link: /admin/accelerator?customizeSessionId=<id>&customizeCategory=<key>
+  // opens that session's Customize modal directly, on the given category tab —
+  // used by the Timeline page's "click a card -> open Customize in a new tab"
+  // flow (AdminAcceleratorSessionTimelinePage.tsx). Fetches the session's own
+  // title via GET .../sessions/:id rather than requiring the `sessions` list
+  // to already be loaded for the right cohort. Consumes both params once, same
+  // pattern as the enrollment deep-link above. NOTE: this effect does NOT read
+  // or clear `?tab=` — that param is owned exclusively by the `resolveAcceleratorNav`
+  // effect below (a pre-existing, more robust deep-link mechanism that already
+  // handles `?tab=sessions` — e.g. from the Timeline page's "Back to sessions"
+  // link — correctly; duplicating that handling here would race the two effects
+  // over which one clears the param first).
+  useEffect(() => {
+    const customizeSessionId = searchParams.get('customizeSessionId');
+    if (!customizeSessionId) return;
+    const customizeCategoryParam = searchParams.get('customizeCategory');
+
+    api.get(`/api/admin/accelerator/sessions/${customizeSessionId}`)
+      .then((res) => {
+        const title = res.data?.session?.title || 'Session';
+        setCustomizeTarget({ id: customizeSessionId, title });
+        if (customizeCategoryParam) setCustomizeCategory(customizeCategoryParam as CategoryKey);
+      })
+      .catch(() => { /* invalid/missing session id — fail silently, no modal opens */ });
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('customizeSessionId');
+    next.delete('customizeCategory');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   // Reusable so the new Cohorts management tab can refresh this (open-cohorts-only)
-  // selector after a create/edit/delete, not just on first mount. Also honors a
-  // ?cohort=<id> deep link (from the Cohorts tab's per-row quick-nav buttons) even
-  // when that cohort is closed/completed and therefore wouldn't normally appear in
-  // this open-only selector — fetched individually and added to the list so the
-  // deep link actually lands filtered instead of silently falling back to the
-  // default cohort.
+  // selector after a create/edit/delete, not just on first mount. Pure fetch —
+  // deep-link (?tab=/?cohort=) resolution is handled separately below, by an
+  // effect that reacts to searchParams changing at any point, not just at mount.
   const loadCohorts = useCallback(() => {
-    const deepLinkedId = searchParams.get('cohort');
-    return api.get('/api/admin/cohorts').then(async (res) => {
-      let openCohorts: Cohort[] = (res.data.cohorts || []).filter((c: Cohort) => c.status === 'open');
-      if (deepLinkedId && !openCohorts.some((c) => c.id === deepLinkedId)) {
-        try {
-          const detail = await api.get(`/api/admin/cohorts/${deepLinkedId}`);
-          if (detail.data?.cohort) openCohorts = [detail.data.cohort, ...openCohorts];
-        } catch {
-          // Deep-linked cohort id doesn't exist (deleted, bad link) — fall through
-          // to the normal default-cohort behavior rather than blocking the page.
-        }
-      }
-      setCohorts(openCohorts);
-      setSelectedCohortId((prev) => {
-        if (deepLinkedId && openCohorts.some((c) => c.id === deepLinkedId)) return deepLinkedId;
-        return (prev && openCohorts.some((c) => c.id === prev)) ? prev : (openCohorts[0]?.id || '');
+    return api.get('/api/admin/cohorts').then((res) => {
+      const openCohorts: Cohort[] = (res.data.cohorts || []).filter((c: Cohort) => c.status === 'open');
+      setCohorts((prev) => {
+        // Preserve any individually-fetched deep-linked cohort (closed/completed,
+        // so it's not part of the open list) already in state, so a resolved
+        // deep link doesn't get silently dropped by a later refresh.
+        const extra = prev.filter((c) => c.status !== 'open' && !openCohorts.some((o) => o.id === c.id));
+        return [...extra, ...openCohorts];
       });
+      setSelectedCohortId((prev) => (prev && openCohorts.some((c) => c.id === prev)) ? prev : (prev || openCohorts[0]?.id || ''));
     }).catch(() => showToast('Failed to load cohorts', 'error'));
-  }, [showToast]); // eslint-disable-line
+  }, [showToast]);
 
   useEffect(() => {
     loadCohorts().finally(() => setLoading(false));
   }, []); // eslint-disable-line
 
-  // Deep-link: /admin/accelerator?tab=cohorts&cohort=<id> (used by the admin
-  // dashboard's "Manage" link and the Cohorts tab's per-row quick-nav buttons)
-  // opens straight to the given tab, and (via loadCohorts above) the given cohort.
+  // Deep-link: /admin/accelerator?tab=<x>&cohort=<id> (used by the admin
+  // dashboard's "Manage" link and the Cohorts tab's per-row quick-nav buttons).
+  // Reacts to `searchParams`/`cohorts` changing at ANY point after mount, not just
+  // once — the bug this fixes: a same-route <Link> click changes searchParams
+  // without unmounting the page, so a mount-only effect (the original code here)
+  // never re-ran on the second and subsequent clicks. Mirrors the "consume and
+  // clear" pattern the `?enrollment=` deep link above already uses safely: after
+  // acting on the params, they're removed from the URL, which is also what
+  // prevents an infinite loop (the next render's searchParams.get() calls return
+  // null, and resolveAcceleratorNav's early-return makes the effect a no-op).
   useEffect(() => {
-    const tab = searchParams.get('tab');
-    if (tab && (TAB_ORDER as string[]).includes(tab)) {
-      setActiveTab(tab as TabKey);
+    const result = resolveAcceleratorNav(
+      { tab: searchParams.get('tab'), cohort: searchParams.get('cohort') },
+      TAB_ORDER,
+      cohorts.map((c) => c.id),
+      activeTab,
+      selectedCohortId
+    );
+    if (!result.consumedParams) return;
+
+    if (result.nextTab) setActiveTab(result.nextTab as TabKey);
+    if (result.nextCohortId) setSelectedCohortId(result.nextCohortId);
+    if (result.needsCohortFetch) {
+      const fetchId = result.needsCohortFetch;
+      api.get(`/api/admin/cohorts/${fetchId}`).then((detail) => {
+        if (detail.data?.cohort) {
+          setCohorts((prev) => (prev.some((c) => c.id === fetchId) ? prev : [detail.data.cohort, ...prev]));
+          setSelectedCohortId(fetchId);
+        }
+      }).catch(() => {
+        // Deep-linked cohort id doesn't exist (deleted, bad link) — fall through
+        // to whatever is already selected rather than blocking the page.
+      });
     }
-  }, []); // eslint-disable-line
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('tab');
+    next.delete('cohort');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, cohorts, activeTab, selectedCohortId]); // eslint-disable-line
 
   const loadDashboard = useCallback(async () => {
     if (!selectedCohortId) return;
@@ -416,11 +491,13 @@ function AdminAcceleratorPage() {
     setAttendanceLoading(false);
   };
 
+  // Loads whenever the Attendance modal opens (selectedSessionId is set from a
+  // session row's "Attendance" button) — no longer tied to a top-level tab.
   useEffect(() => {
-    if (activeTab === 'attendance' && selectedSessionId) {
+    if (selectedSessionId) {
       loadAttendance(selectedSessionId);
     }
-  }, [activeTab, selectedSessionId]); // eslint-disable-line
+  }, [selectedSessionId]); // eslint-disable-line
 
   const handleAttendanceChange = async (enrollmentId: string, status: string) => {
     try {
@@ -444,22 +521,23 @@ function AdminAcceleratorPage() {
     } catch { showToast('Failed to bulk update', 'error'); }
   };
 
-  // -- Submissions handlers --
-
-  const loadSubmissions = async (sessionId: string) => {
+  // -- Submissions handlers — person-scoped (Submissions folds into
+  // Participants: "you can see it for each person," not a standalone
+  // session-scoped tab). Consumes the already-existing
+  // GET .../enrollments/:id/submissions endpoint for the first time from the
+  // frontend. `submissionsTarget` is the participant whose panel is open.
+  const loadPersonSubmissions = async (enrollmentId: string) => {
     setSubmissionsLoading(true);
     try {
-      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/submissions`);
+      const res = await api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/submissions`);
       setSubmissions(res.data.submissions || []);
     } catch { showToast('Failed to load submissions', 'error'); }
     setSubmissionsLoading(false);
   };
 
   useEffect(() => {
-    if (activeTab === 'submissions' && selectedSessionId) {
-      loadSubmissions(selectedSessionId);
-    }
-  }, [activeTab, selectedSessionId]); // eslint-disable-line
+    if (submissionsTarget) loadPersonSubmissions(submissionsTarget.id);
+  }, [submissionsTarget]); // eslint-disable-line
 
   const handleReviewSubmission = async (subId: string, score: number, notes: string) => {
     try {
@@ -467,20 +545,8 @@ function AdminAcceleratorPage() {
         status: 'reviewed', score, reviewer_notes: notes,
       });
       showToast('Submission reviewed', 'success');
-      if (selectedSessionId) loadSubmissions(selectedSessionId);
+      if (submissionsTarget) loadPersonSubmissions(submissionsTarget.id);
     } catch { showToast('Failed to review submission', 'error'); }
-  };
-
-  // -- Readiness handlers --
-
-  const handleRecomputeAll = async () => {
-    setReadinessLoading(true);
-    try {
-      await api.post(`/api/admin/accelerator/cohorts/${selectedCohortId}/readiness`);
-      showToast('Readiness scores recomputed', 'success');
-      loadDashboard();
-    } catch { showToast('Failed to recompute', 'error'); }
-    setReadinessLoading(false);
   };
 
   // -- Participants / Enrollment handlers --
@@ -558,13 +624,6 @@ function AdminAcceleratorPage() {
       paid: 'Paid', pending_invoice: 'Pending Invoice', failed: 'Failed',
     };
     return <StatusBadge label={labels[status] || status} tone={tones[status]} />;
-  };
-
-  const readinessColor = (score: number | null) => {
-    if (!score) return 'text-muted';
-    if (score >= 70) return 'text-success';
-    if (score >= 40) return 'text-warning';
-    return 'text-danger';
   };
 
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
@@ -662,17 +721,19 @@ function AdminAcceleratorPage() {
         breadcrumb={[{ label: 'Admin', to: '/admin/dashboard' }, { label: 'Accelerator' }]}
         trust={trust}
         actions={
-          <select
-            className="form-select form-select-sm"
-            style={{ width: 'auto' }}
-            value={selectedCohortId}
-            onChange={(e) => setSelectedCohortId(e.target.value)}
-            aria-label="Select cohort"
-          >
-            {cohorts.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          activeTab !== 'cohorts' ? (
+            <select
+              className="form-select form-select-sm"
+              style={{ width: 'auto' }}
+              value={selectedCohortId}
+              onChange={(e) => setSelectedCohortId(e.target.value)}
+              aria-label="Select cohort"
+            >
+              {cohorts.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          ) : undefined
         }
       >
         {activeTab !== 'cohorts' && (
@@ -728,19 +789,27 @@ function AdminAcceleratorPage() {
         )}
       </PageHeader>
 
-      {/* Tabs */}
-      <ul className="nav nav-tabs mb-4">
-        {TAB_ORDER.map((tab) => (
-          <li key={tab} className="nav-item">
-            <button
-              className={`nav-link${activeTab === tab ? ' active' : ''}`}
-              onClick={() => setActiveTab(tab)}
-            >
-              {tab.charAt(0).toUpperCase() + tab.slice(1)}
-            </button>
-          </li>
-        ))}
-      </ul>
+      {/* Contextual sub-nav — only shown once a cohort drill-down is active.
+          Cohorts itself has no tab bar; it IS the home view. */}
+      {activeTab !== 'cohorts' && (
+        <div className="d-flex align-items-center gap-2 mb-4 flex-wrap">
+          <button className="btn btn-sm btn-outline-secondary" onClick={() => setActiveTab('cohorts')}>
+            <i className="ri-arrow-left-line" aria-hidden="true" /> All Cohorts
+          </button>
+          <ul className="nav nav-pills mb-0">
+            {DRILLDOWN_TABS.map((tab) => (
+              <li key={tab} className="nav-item">
+                <button
+                  className={`nav-link${activeTab === tab ? ' active' : ''}`}
+                  onClick={() => setActiveTab(tab)}
+                >
+                  {TAB_LABELS[tab]}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Tab Content */}
       {activeTab === 'cohorts' && (
@@ -839,6 +908,7 @@ function AdminAcceleratorPage() {
                           </div>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => setKitSessionId(s.id)} title="Printable check-in QR + Start Class + roster (a paper backup — the deck already shows the QR)">QR</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>
+                          <button className="btn btn-outline-secondary btn-sm" onClick={() => setSelectedSessionId(s.id)} title="Mark attendance for this session's whole roster">Attendance</button>
                           <button className="btn btn-outline-warning btn-sm" onClick={() => setSkipTarget(s)} title="Mark this date as a day off — this class and all later ones shift forward one slot">Skip</button>
                           {s.status === 'scheduled' && (
                             <button className="btn btn-outline-danger btn-sm" onClick={() => handleStatusChange(s.id, 'completed')}>Complete</button>
@@ -962,6 +1032,13 @@ function AdminAcceleratorPage() {
                             >
                               <i className="ri-eye-line me-1" aria-hidden="true"></i>View as student
                             </button>
+                            <button
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={() => setSubmissionsTarget({ id: e.id, name: e.full_name })}
+                              title="This participant's submissions across the whole cohort"
+                            >
+                              <i className="ri-file-list-3-line me-1" aria-hidden="true"></i>Submissions
+                            </button>
                           </div>
                         </td>
                         <td className="small">
@@ -978,196 +1055,149 @@ function AdminAcceleratorPage() {
         </SectionCard>
       )}
 
-      {activeTab === 'attendance' && (
-        <SectionCard
-          title="Attendance"
-          padded={false}
-          actions={
-            <div className="d-flex gap-2 align-items-center">
-              <select
-                className="form-select form-select-sm"
-                style={{ width: 'auto' }}
-                value={selectedSessionId}
-                onChange={(e) => setSelectedSessionId(e.target.value)}
-              >
-                <option value="">Select session...</option>
-                {sessions.map((s) => (
-                  <option key={s.id} value={s.id}>#{s.session_number} - {s.title}</option>
-                ))}
-              </select>
-              {selectedSessionId && (
-                <>
-                  <button className="btn btn-success btn-sm" onClick={() => handleBulkAttendance('present')}>All Present</button>
-                  <button className="btn btn-outline-danger btn-sm" onClick={() => handleBulkAttendance('absent')}>All Absent</button>
-                </>
-              )}
-            </div>
-          }
-        >
-            {!selectedSessionId ? (
-              <div className="text-center text-muted py-4">Select a session to manage attendance</div>
-            ) : attendanceLoading ? (
-              <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>
-            ) : (
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Participant</th>
-                      <th>Company</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {enrollments.map((e) => {
-                      const record = attendanceRecords.find((r) => r.enrollment_id === e.id);
-                      return (
-                        <tr key={e.id}>
-                          <td className="fw-medium">{e.full_name}</td>
-                          <td>{e.company}</td>
-                          <td>
-                            <select
-                              className="form-select form-select-sm"
-                              style={{ width: 'auto' }}
-                              value={record?.status || 'absent'}
-                              onChange={(ev) => handleAttendanceChange(e.id, ev.target.value)}
-                            >
-                              <option value="present">Present</option>
-                              <option value="absent">Absent</option>
-                              <option value="late">Late</option>
-                              <option value="excused">Excused</option>
-                            </select>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                    {enrollments.length === 0 && (
-                      <tr><td colSpan={3} className="text-center text-muted py-4">No enrollments in this cohort</td></tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            )}
-        </SectionCard>
-      )}
-
-      {activeTab === 'submissions' && (
-        <SectionCard
-          title="Submissions"
-          padded={false}
-          actions={
-            <select
-              className="form-select form-select-sm"
-              style={{ width: 'auto' }}
-              value={selectedSessionId}
-              onChange={(e) => setSelectedSessionId(e.target.value)}
-            >
-              <option value="">Select session...</option>
-              {sessions.map((s) => (
-                <option key={s.id} value={s.id}>#{s.session_number} - {s.title}</option>
-              ))}
-            </select>
-          }
-        >
-            {!selectedSessionId ? (
-              <div className="text-center text-muted py-4">Select a session to view submissions</div>
-            ) : submissionsLoading ? (
-              <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>
-            ) : (
-              <div className="table-responsive">
-                <table className="table table-hover mb-0">
-                  <thead className="table-light">
-                    <tr>
-                      <th>Participant</th>
-                      <th>Assignment</th>
-                      <th>Type</th>
-                      <th>Status</th>
-                      <th>Score</th>
-                      <th>Submitted</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {submissions.length === 0 ? (
-                      <tr><td colSpan={7} className="text-center text-muted py-4">No submissions yet</td></tr>
-                    ) : submissions.map((sub) => (
-                      <tr key={sub.id}>
-                        <td className="fw-medium">{sub.enrollment?.full_name || 'Unknown'}</td>
-                        <td>{sub.title}</td>
-                        <td><StatusBadge label={sub.assignment_type.replace(/_/g, ' ')} tone="neutral" /></td>
-                        <td>{statusBadge(sub.status)}</td>
-                        <td>{sub.score != null ? `${sub.score}/100` : '-'}</td>
-                        <td className="small">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : '-'}</td>
-                        <td>
-                          {sub.status === 'submitted' && (
-                            <button
-                              className="btn btn-outline-success btn-sm"
-                              onClick={() => handleReviewSubmission(sub.id, 80, 'Reviewed')}
-                            >
-                              Review
-                            </button>
+      {/* Attendance modal — opened from a session row in the Sessions drill-down
+          (group/session-level view: an admin picks a session, sees its whole
+          roster). Replaces the old standalone Attendance tab; same handlers/
+          endpoints, relocated. */}
+      {selectedSessionId && (
+        <>
+          <div className="modal-backdrop show" />
+          <div className="modal show d-block" role="dialog" aria-modal="true">
+            <div className="modal-dialog modal-lg">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">
+                    Attendance — {sessions.find((s) => s.id === selectedSessionId)?.title || 'Session'}
+                  </h5>
+                  <button type="button" className="btn-close" onClick={() => setSelectedSessionId('')} />
+                </div>
+                <div className="modal-body">
+                  <div className="d-flex justify-content-end gap-2 mb-3">
+                    <button className="btn btn-success btn-sm" onClick={() => handleBulkAttendance('present')}>All Present</button>
+                    <button className="btn btn-outline-danger btn-sm" onClick={() => handleBulkAttendance('absent')}>All Absent</button>
+                  </div>
+                  {attendanceLoading ? (
+                    <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-hover mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Participant</th>
+                            <th>Company</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {enrollments.map((e) => {
+                            const record = attendanceRecords.find((r) => r.enrollment_id === e.id);
+                            return (
+                              <tr key={e.id}>
+                                <td className="fw-medium">{e.full_name}</td>
+                                <td>{e.company}</td>
+                                <td>
+                                  <select
+                                    className="form-select form-select-sm"
+                                    style={{ width: 'auto' }}
+                                    value={record?.status || 'absent'}
+                                    onChange={(ev) => handleAttendanceChange(e.id, ev.target.value)}
+                                  >
+                                    <option value="present">Present</option>
+                                    <option value="absent">Absent</option>
+                                    <option value="late">Late</option>
+                                    <option value="excused">Excused</option>
+                                  </select>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {enrollments.length === 0 && (
+                            <tr><td colSpan={3} className="text-center text-muted py-4">No enrollments in this cohort</td></tr>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button className="btn btn-outline-secondary btn-sm" onClick={() => setSelectedSessionId('')}>Close</button>
+                </div>
               </div>
-            )}
-        </SectionCard>
+            </div>
+          </div>
+        </>
       )}
 
-      {activeTab === 'readiness' && (
-        <SectionCard
-          title="Executive Readiness"
-          padded={false}
-          actions={
-            <button
-              className="btn btn-primary btn-sm"
-              onClick={handleRecomputeAll}
-              disabled={readinessLoading}
-            >
-              {readinessLoading ? 'Computing...' : 'Recompute All'}
-            </button>
-          }
-        >
-            <div className="table-responsive">
-              <table className="table table-hover mb-0">
-                <thead className="table-light">
-                  <tr>
-                    <th>Participant</th>
-                    <th>Company</th>
-                    <th>Prework</th>
-                    <th>Attendance</th>
-                    <th>Assignments</th>
-                    <th>Readiness</th>
-                    <th>Maturity</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {enrollments.length === 0 ? (
-                    <tr><td colSpan={7} className="text-center text-muted py-4">No enrollments</td></tr>
-                  ) : enrollments.map((e) => (
-                    <tr key={e.id}>
-                      <td className="fw-medium">{e.full_name}</td>
-                      <td>{e.company}</td>
-                      <td className={readinessColor(e.prework_score)}>{e.prework_score != null ? `${e.prework_score}%` : '-'}</td>
-                      <td className={readinessColor(e.attendance_score)}>{e.attendance_score != null ? `${e.attendance_score}%` : '-'}</td>
-                      <td className={readinessColor(e.assignment_score)}>{e.assignment_score != null ? `${e.assignment_score}%` : '-'}</td>
-                      <td>
-                        <span className={`fw-bold ${readinessColor(e.readiness_score)}`}>
-                          {e.readiness_score != null ? `${e.readiness_score}%` : '-'}
-                        </span>
-                      </td>
-                      <td>
-                        <StatusBadge label={`Level ${e.maturity_level || 0}`} tone="primary" />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {/* Submissions panel — opened from a Participants row (person-level view:
+          this person's submissions across the whole cohort, not one session's
+          submissions across all participants). Replaces the old standalone
+          Submissions tab; reuses the existing review action unchanged. */}
+      {submissionsTarget && (
+        <>
+          <div className="modal-backdrop show" />
+          <div className="modal show d-block" role="dialog" aria-modal="true">
+            <div className="modal-dialog modal-lg">
+              <div className="modal-content">
+                <div className="modal-header">
+                  <h5 className="modal-title">Submissions — {submissionsTarget.name}</h5>
+                  <button type="button" className="btn-close" onClick={() => setSubmissionsTarget(null)} />
+                </div>
+                <div className="modal-body">
+                  {submissionsLoading ? (
+                    <div className="text-center py-4"><div className="spinner-border spinner-border-sm" role="status"><span className="visually-hidden">Loading...</span></div></div>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-hover mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Assignment</th>
+                            <th>Session</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Score</th>
+                            <th>Submitted</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {submissions.length === 0 ? (
+                            <tr><td colSpan={7} className="text-center text-muted py-4">No submissions yet</td></tr>
+                          ) : submissions.map((sub) => (
+                            <tr key={sub.id}>
+                              <td className="fw-medium">{sub.title}</td>
+                              <td className="small">{sub.session ? `#${sub.session.session_number} ${sub.session.title}` : '—'}</td>
+                              <td><StatusBadge label={sub.assignment_type.replace(/_/g, ' ')} tone="neutral" /></td>
+                              <td>{statusBadge(sub.status)}</td>
+                              <td>{sub.score != null ? `${sub.score}/100` : '-'}</td>
+                              <td className="small">{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString() : '-'}</td>
+                              <td>
+                                {sub.status === 'submitted' && (
+                                  <button
+                                    className="btn btn-outline-success btn-sm"
+                                    onClick={() => handleReviewSubmission(sub.id, 80, 'Reviewed')}
+                                  >
+                                    Review
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+                <div className="modal-footer">
+                  <button className="btn btn-outline-secondary btn-sm" onClick={() => setSubmissionsTarget(null)}>Close</button>
+                </div>
+              </div>
             </div>
-        </SectionCard>
+          </div>
+        </>
+      )}
+
+      {activeTab === 'class-dashboard' && selectedCohortId && (
+        <ClassDashboardTab cohortId={selectedCohortId} />
       )}
 
       {activeTab === 'curriculum' && (
@@ -1188,7 +1218,8 @@ function AdminAcceleratorPage() {
         <KitConfigModal
           sessionId={customizeTarget.id}
           sessionTitle={customizeTarget.title}
-          onClose={() => setCustomizeTarget(null)}
+          initialCategory={customizeCategory}
+          onClose={() => { setCustomizeTarget(null); setCustomizeCategory(undefined); }}
           showToast={showToast}
         />
       )}

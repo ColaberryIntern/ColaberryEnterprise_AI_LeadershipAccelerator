@@ -103,6 +103,55 @@ function deriveThumb(host, id) {
   return null;
 }
 
+// ---- real duration lookup (YouTube Data API v3) ----
+// Deliberately self-contained rather than importing services/composer/youtubeClient:
+// this script runs as raw piped JS (`node -` via docker exec, per the header above),
+// outside the TS build, so a `.ts` cross-import can't be resolved at that call site.
+function parseIso8601DurationToSeconds(iso) {
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(String(iso || '').trim());
+  if (!m) return null;
+  const [, h, min, s] = m;
+  const seconds = (Number(h || 0) * 3600) + (Number(min || 0) * 60) + Number(s || 0);
+  return seconds > 0 ? seconds : null;
+}
+
+// Batch-fetch real durations for a set of YouTube video ids (YouTube's own API caps
+// `id=` at 50 per call). Never throws: a failed batch (no key, quota, network) just
+// means those ids get no duration this run — safe to re-run later (idempotent), and
+// the row still ingests with duration_seconds left null rather than blocking ingest.
+async function fetchYoutubeDurations(ids, { timeoutMs = 10000, maxAttempts = 2 } = {}) {
+  const out = new Map();
+  const key = process.env.YOUTUBE_API_KEY;
+  const unique = Array.from(new Set(ids.filter(Boolean)));
+  if (!key || !unique.length) return out;
+  for (let i = 0; i < unique.length; i += 50) {
+    const batch = unique.slice(i, i + 50);
+    const url = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${batch.join(',')}&key=${key}`;
+    let lastErr = null;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: ctrl.signal });
+        clearTimeout(timer);
+        if (!res.ok) { lastErr = new Error(`YouTube API ${res.status}`); if (res.status < 500 && res.status !== 429) break; continue; }
+        const body = await res.json();
+        for (const item of body.items || []) {
+          const seconds = parseIso8601DurationToSeconds(item?.contentDetails?.duration);
+          if (seconds != null) out.set(item.id, seconds);
+        }
+        lastErr = null;
+        break;
+      } catch (e) {
+        clearTimeout(timer);
+        lastErr = e;
+      }
+    }
+    if (lastErr) console.warn(`[ingestNetworkVideos] duration fetch failed for a batch of ${batch.length} (continuing): ${lastErr.message}`);
+  }
+  return out;
+}
+
 const DDL = `
 CREATE TABLE IF NOT EXISTS network_videos (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -129,7 +178,7 @@ CREATE INDEX IF NOT EXISTS idx_nvv_enrollment_cat ON network_video_views(enrollm
 CREATE INDEX IF NOT EXISTS idx_nvv_enrollment_card ON network_video_views(enrollment_id, last_timeline_card_id);
 `;
 
-(async () => {
+async function main() {
   const dry = process.env.INGEST_CONFIRM !== 'yes';
   const mcfg = {
     server: process.env.MSSQL_HOST, port: parseInt(process.env.MSSQL_PORT || '1433', 10),
@@ -147,8 +196,12 @@ CREATE INDEX IF NOT EXISTS idx_nvv_enrollment_card ON network_video_views(enroll
     ORDER BY ContentType, ID DESC`);
   await mssqlPool.close();
 
-  const rows = rs.recordset.map(r => {
-    const n = normalizeVideoUrl(r.Url);
+  const normalized = rs.recordset.map(r => ({ r, n: normalizeVideoUrl(r.Url) }));
+  const youtubeIds = normalized.filter(x => x.n.host === 'youtube').map(x => x.n.providerId);
+  const durations = await fetchYoutubeDurations(youtubeIds);
+  console.log(`duration lookup: ${durations.size}/${youtubeIds.length} youtube videos resolved`);
+
+  const rows = normalized.map(({ r, n }) => {
     const needs = n.host === 'vimeo' ? 'vimeo-domain-allowlist'
       : n.host === 'youtube_channel' ? 'channel-link-no-video-id'
       : n.host === 'none' ? 'no-url-in-source'
@@ -159,6 +212,10 @@ CREATE INDEX IF NOT EXISTS idx_nvv_enrollment_card ON network_video_views(enroll
       host: n.host, provider_video_id: n.providerId, embed_url: n.embedUrl, watch_url: n.watchUrl,
       original_url: r.Url,
       thumbnail_url: (r.ContentThumbnail && String(r.ContentThumbnail).trim()) ? r.ContentThumbnail : deriveThumb(n.host, n.providerId),
+      // Real duration when we could resolve it (YouTube only today — no Vimeo API
+      // token exists in this repo, confirmed via `git grep -i vimeo` on .env.example
+      // and backend/src). Left null otherwise; never a guess.
+      duration_seconds: n.host === 'youtube' ? (durations.get(n.providerId) ?? null) : null,
       tags: deriveTags(r.ContentType, r.ContentName, r.ContentDesc),
       playable: n.playable, needs_attention: needs, is_active: r.IsActive === 1 || r.IsActive === true,
     };
@@ -178,22 +235,36 @@ CREATE INDEX IF NOT EXISTS idx_nvv_enrollment_card ON network_video_views(enroll
     const res = await pg.query(`
       INSERT INTO network_videos
         (source, external_source_id, category, title, description, host, provider_video_id,
-         embed_url, watch_url, original_url, thumbnail_url, tags, playable, needs_attention, is_active)
-      VALUES ('colaberrytv',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11::jsonb,$12,$13,$14)
+         embed_url, watch_url, original_url, thumbnail_url, duration_seconds, tags, playable, needs_attention, is_active)
+      VALUES ('colaberrytv',$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13,$14,$15)
       ON CONFLICT (source, external_source_id) DO UPDATE SET
         category=EXCLUDED.category, title=EXCLUDED.title, description=EXCLUDED.description,
         host=EXCLUDED.host, provider_video_id=EXCLUDED.provider_video_id, embed_url=EXCLUDED.embed_url,
         watch_url=EXCLUDED.watch_url, original_url=EXCLUDED.original_url, thumbnail_url=EXCLUDED.thumbnail_url,
+        duration_seconds=EXCLUDED.duration_seconds,
         tags=EXCLUDED.tags, playable=EXCLUDED.playable, needs_attention=EXCLUDED.needs_attention,
         is_active=EXCLUDED.is_active, updated_at=now()
       RETURNING (xmax = 0) AS inserted`,
       [r.external_source_id, r.category, r.title, r.description, r.host, r.provider_video_id,
-       r.embed_url, r.watch_url, r.original_url, r.thumbnail_url, JSON.stringify(r.tags),
+       r.embed_url, r.watch_url, r.original_url, r.thumbnail_url, r.duration_seconds, JSON.stringify(r.tags),
        r.playable, r.needs_attention, r.is_active]);
     res.rows[0].inserted ? ins++ : upd++;
   }
-  const tot = await pg.query(`SELECT category, count(*) n, sum(case when playable then 1 else 0 end) playable FROM network_videos GROUP BY category ORDER BY category`);
+  const tot = await pg.query(`SELECT category, count(*) n, sum(case when playable then 1 else 0 end) playable, sum(case when duration_seconds is not null then 1 else 0 end) with_duration FROM network_videos GROUP BY category ORDER BY category`);
   await pg.end();
   console.log(`\n[WRITE DONE] inserted=${ins} updated=${upd}`);
   tot.rows.forEach(x => console.log('  ' + JSON.stringify(x)));
-})().catch(e => { console.error('FATAL:', e.message); process.exit(1); });
+}
+
+// Run only when invoked directly. Node leaves `require.main` UNDEFINED (not equal
+// to `module`) for `node -e`/`node -` (stdin) execution — this script's own
+// documented invocation is `cat script.js | ssh ... docker exec -i ... node -` — so
+// the guard must accept both "real file" (require.main === module) and "stdin"
+// (require.main === undefined). When `require()`d from a test runner, require.main
+// is the runner's own entry module: neither undefined nor === this module, so the
+// guard correctly stays closed and CCPP/Postgres are never touched.
+if (require.main === module || require.main === undefined) {
+  main().catch(e => { console.error('FATAL:', e.message); process.exit(1); });
+}
+
+module.exports = { normalizeVideoUrl, deriveTags, deriveThumb, parseIso8601DurationToSeconds, fetchYoutubeDurations };

@@ -119,6 +119,8 @@ jest.mock('../sources/hotmailCaseSource', () => ({
     snapshot: {},
   }),
 }));
+const mockFetchExactReference = jest.fn(async (ref: any) => null as any);
+const mockResolveDigestTodoByTitle = jest.fn(async (title: string) => null as any);
 jest.mock('../sources/basecampCaseSource', () => ({
   todoToCandidate: (todo: any) => ({
     source_type: 'basecamp_todo',
@@ -137,13 +139,18 @@ jest.mock('../sources/basecampCaseSource', () => ({
     body_excerpt: '',
     snapshot: { project_id: todo.project_id },
   }),
+  fetchExactReference: (...args: any[]) => mockFetchExactReference(...args),
+  resolveDigestTodoByTitle: (...args: any[]) => mockResolveDigestTodoByTitle(...args),
 }));
 
 let colaberryConfigured = true;
 let personalConfigured = false;
+const mockGmailMessagesGet = jest.fn(async () => ({ data: { payload: {} } } as any));
+const mockExtractBodyText = jest.fn(() => '');
 jest.mock('../../inbox/inboxSyncService', () => ({
-  getColaberryGmailClient: () => (colaberryConfigured ? {} : null),
+  getColaberryGmailClient: () => (colaberryConfigured ? { users: { messages: { get: (...args: any[]) => mockGmailMessagesGet(...args) } } } : null),
   getPersonalGmailClient: () => (personalConfigured ? {} : null),
+  extractBodyText: (...args: any[]) => mockExtractBodyText(...args),
 }));
 
 import { runAutoSync, getSyncStatus } from '../caseAutoSyncService';
@@ -162,6 +169,10 @@ beforeEach(() => {
   fakeInboxCaseEvent.rows.clear();
   mockSearchAndNormalize.mockReset().mockResolvedValue([]);
   mockFetchFolderMessages.mockReset().mockResolvedValue([]);
+  mockFetchExactReference.mockReset().mockResolvedValue(null);
+  mockResolveDigestTodoByTitle.mockReset().mockResolvedValue(null);
+  mockGmailMessagesGet.mockReset().mockResolvedValue({ data: { payload: {} } });
+  mockExtractBodyText.mockReset().mockReturnValue('');
   hotmailConfigured = false;
   colaberryConfigured = true;
   personalConfigured = false;
@@ -224,6 +235,249 @@ describe('runAutoSync — classification filter', () => {
 
     expect(result.newCasesCreated).toBe(0);
     expect(result.emailsSkippedUnclassified).toBe(1);
+  });
+});
+
+describe('runAutoSync — Basecamp-reference expansion (digest decomposition)', () => {
+  const REF_1 = { url: 'https://3.basecamp.com/1/buckets/9/todos/555', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '555' };
+  const REF_2 = { url: 'https://3.basecamp.com/1/buckets/9/todos/556', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '556' };
+
+  function resolvedTodoCandidate(recordingId: string) {
+    return {
+      source_type: 'basecamp_todo' as const,
+      source_id: recordingId,
+      provider: 'basecamp' as const,
+      source_url: `https://3.basecamp.com/1/buckets/9/todos/${recordingId}`,
+      title: `Resolved to-do ${recordingId}`,
+      occurred_at: new Date(),
+      participants: [],
+      subject_normalized: `resolved to-do ${recordingId}`,
+      thread_id: null,
+      message_id: null,
+      in_reply_to: [],
+      basecamp_refs: [],
+      attachment_names: [],
+      body_excerpt: '',
+      snapshot: { exact_reference: true, bucket: { id: 9 } },
+    };
+  }
+
+  it('resolves a digest email\'s Basecamp references into additional candidate items', async () => {
+    const digest = rawEmailCandidate({ basecamp_refs: [REF_1, REF_2] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockFetchExactReference.mockImplementation(async (ref: any) => resolvedTodoCandidate(ref.recordingId));
+
+    const result = await runAutoSync('cron', 'system');
+
+    expect(mockFetchExactReference).toHaveBeenCalledTimes(2);
+    // 1 case created (digest + its 2 resolved todos cluster together via the
+    // T003 asymmetric shareBasecampRef fix), 3 items total.
+    expect(result.newCasesCreated).toBe(1);
+    expect(result.itemsAdded).toBe(3);
+    const items = Array.from(fakeInboxCaseItem.rows.values());
+    expect(items.filter((i) => i.source_type === 'basecamp_todo')).toHaveLength(2);
+  });
+
+  it('keeps the successfully-resolved reference even when a sibling reference fails to resolve', async () => {
+    const digest = rawEmailCandidate({ basecamp_refs: [REF_1, REF_2] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockFetchExactReference.mockImplementation(async (ref: any) =>
+      ref.recordingId === '555' ? resolvedTodoCandidate('555') : null
+    );
+
+    const result = await runAutoSync('cron', 'system');
+
+    expect(result.newCasesCreated).toBe(1); // sync doesn't crash on a partial failure
+    const items = Array.from(fakeInboxCaseItem.rows.values());
+    expect(items.filter((i) => i.source_type === 'basecamp_todo')).toHaveLength(1);
+  });
+
+  it('does not call fetchExactReference at all for an email with no Basecamp references', async () => {
+    const plain = rawEmailCandidate({ basecamp_refs: [] });
+    await seedClassifiedEmail('gmail_colaberry', plain.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([plain]);
+
+    await runAutoSync('cron', 'system');
+
+    expect(mockFetchExactReference).not.toHaveBeenCalled();
+  });
+
+  it('never expands references from an email that was filtered out by classification (AUTOMATION)', async () => {
+    const digest = rawEmailCandidate({ basecamp_refs: [REF_1] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'AUTOMATION');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+
+    const result = await runAutoSync('cron', 'system');
+
+    expect(mockFetchExactReference).not.toHaveBeenCalled();
+    expect(result.newCasesCreated).toBe(0);
+  });
+
+  it('does not create a duplicate item when the referenced todo was already persisted in a prior run', async () => {
+    // Simulate: an earlier sync already resolved and persisted this exact
+    // Basecamp todo (matches on provider+source_id -> source_hash, the same
+    // global dedup every other source already relies on).
+    const { computeSourceHash } = require('../textNormalization');
+    await fakeInboxCaseItem.create({
+      case_id: randomUUID(),
+      provider: 'basecamp',
+      source_id: '555',
+      source_hash: computeSourceHash('basecamp', '555'),
+    });
+
+    const digest = rawEmailCandidate({ basecamp_refs: [REF_1] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockFetchExactReference.mockResolvedValue(resolvedTodoCandidate('555'));
+
+    await runAutoSync('cron', 'system');
+
+    const todoItems = Array.from(fakeInboxCaseItem.rows.values()).filter(
+      (i: any) => i.provider === 'basecamp' && i.source_id === '555'
+    );
+    expect(todoItems).toHaveLength(1); // still just the one seeded row, not two
+  });
+});
+
+describe('runAutoSync — digest text-parsing expansion (run 20260802-093200-digest-text-todo-parsing)', () => {
+  const REF_1 = { url: 'https://3.basecamp.com/1/buckets/9/todos/555', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '555' };
+
+  function resolvedTodoCandidate(recordingId: string) {
+    return {
+      source_type: 'basecamp_todo' as const,
+      source_id: recordingId,
+      provider: 'basecamp' as const,
+      source_url: `https://3.basecamp.com/1/buckets/9/todos/${recordingId}`,
+      title: `Resolved to-do ${recordingId}`,
+      occurred_at: new Date(),
+      participants: [],
+      subject_normalized: `resolved to-do ${recordingId}`,
+      thread_id: null,
+      message_id: null,
+      in_reply_to: [],
+      basecamp_refs: [],
+      attachment_names: [],
+      body_excerpt: '',
+      snapshot: { exact_reference: true, bucket: { id: 9 } },
+    };
+  }
+
+  function digestCandidate(overrides: Partial<any> = {}) {
+    return rawEmailCandidate({
+      // A real Gmail digest always has a real thread_id — thread_id: null
+      // (rawEmailCandidate's default) would make shareThreadOrReplyChain's
+      // truthiness check silently no-op on both sides.
+      thread_id: `thread-${randomUUID()}`,
+      snapshot: { from_address: 'notifications@app.basecamp.com' },
+      basecamp_refs: [],
+      ...overrides,
+    });
+  }
+
+  it('resolves a digest email with zero URL refs via text-parsing, clustering it with the resolved to-dos', async () => {
+    const digest = digestCandidate();
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    // parseDigestTodoLines is the REAL (unmocked) function — this body must
+    // actually be parseable (a "From: ... ---" header before the ▢ line) or
+    // it would correctly find zero to-dos and never call the resolver.
+    mockExtractBodyText.mockReturnValue('From: Test Project ---\n\nTest Todolist\n▢ Some real to-do title • Due: Jul 1 • Assigned to: Ali M.');
+    mockResolveDigestTodoByTitle.mockResolvedValue(resolvedTodoCandidate('700'));
+
+    const result = await runAutoSync('cron', 'system');
+
+    expect(mockGmailMessagesGet).toHaveBeenCalledWith(expect.objectContaining({ id: digest.source_id }));
+    const items = Array.from(fakeInboxCaseItem.rows.values());
+    const digestItem = items.find((i: any) => i.source_id === digest.source_id);
+    const todoItem = items.find((i: any) => i.source_id === '700');
+    expect(digestItem).toBeDefined();
+    expect(todoItem).toBeDefined();
+    expect(todoItem.case_id).toBe(digestItem.case_id); // clustered together, not two separate cases
+    expect(result.newCasesCreated).toBe(1);
+  });
+
+  it('never re-fetches or parses a non-digest-sender email with zero URL refs', async () => {
+    const plain = rawEmailCandidate({ snapshot: {}, basecamp_refs: [] });
+    await seedClassifiedEmail('gmail_colaberry', plain.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([plain]);
+
+    await runAutoSync('cron', 'system');
+
+    expect(mockGmailMessagesGet).not.toHaveBeenCalled();
+  });
+
+  it('skips the text-parse path entirely for a digest-sender item that already has URL refs', async () => {
+    const digest = digestCandidate({ basecamp_refs: [REF_1] });
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockFetchExactReference.mockResolvedValue(resolvedTodoCandidate('555'));
+
+    await runAutoSync('cron', 'system');
+
+    // The URL path's own gmail refetch never happens (it resolves via
+    // fetchExactReference against Basecamp, not Gmail) — confirms the two
+    // expansion paths are mutually exclusive per item, per basecamp_refs.length.
+    expect(mockGmailMessagesGet).not.toHaveBeenCalled();
+    expect(mockResolveDigestTodoByTitle).not.toHaveBeenCalled();
+  });
+
+  it('skips a digest-sender item on an unsupported provider (e.g. hotmail), logging rather than attempting the wrong client', async () => {
+    const digest = rawEmailCandidate({
+      provider: 'hotmail',
+      snapshot: { from_address: 'notifications@app.basecamp.com' },
+      basecamp_refs: [],
+    });
+    await seedClassifiedEmail('hotmail', digest.source_id, 'INBOX');
+    mockFetchFolderMessages.mockResolvedValue([]); // hotmail source unused directly here; item injected via searchAndNormalize path is irrelevant, only provider matters
+    // Directly exercise via mockSearchAndNormalize returning a hotmail-provider item is inconsistent with real wiring (that path only ever returns gmail_* items),
+    // so this test seeds the item through the generic email pool by overriding provider directly — the guard checks item.provider regardless of which adapter it came from.
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await runAutoSync('cron', 'system');
+
+    expect(mockGmailMessagesGet).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('unsupported provider'));
+    errorSpy.mockRestore();
+  });
+
+  it('catches a Gmail re-fetch failure, logs it, and does not crash the sync', async () => {
+    const digest = digestCandidate();
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockGmailMessagesGet.mockRejectedValue(new Error('Gmail rate limit'));
+
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const result = await runAutoSync('cron', 'system');
+
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Digest re-fetch failed'));
+    expect(result.newCasesCreated).toBe(1); // the digest email itself still creates its own case
+    errorSpy.mockRestore();
+  });
+
+  it('dedupes a to-do present in BOTH the fresh Basecamp cursor pull AND text-resolution in the same run, keeping the thread_id-bearing instance', async () => {
+    const digest = digestCandidate();
+    await seedClassifiedEmail('gmail_colaberry', digest.source_id, 'INBOX');
+    mockSearchAndNormalize.mockResolvedValue([digest]);
+    mockExtractBodyText.mockReturnValue('From: Test Project ---\n\nTest Todolist\n▢ Same to-do, different source • Due: Jul 1 • Assigned to: Ali M.');
+    mockResolveDigestTodoByTitle.mockResolvedValue(resolvedTodoCandidate('555'));
+    // Also present via the cursor-based Basecamp fetch — same source_id, no thread_id.
+    await fakeOpsBcTodo.create({
+      bc_id: '555',
+      project_id: '9',
+      title: 'Same to-do, different source',
+      bc_updated_at: new Date(),
+      bc_created_at: new Date(),
+    });
+
+    await runAutoSync('cron', 'system');
+
+    const todoItems = Array.from(fakeInboxCaseItem.rows.values()).filter((i: any) => i.source_id === '555');
+    expect(todoItems).toHaveLength(1); // collapsed to exactly one, not two across two cases
+    const digestItem = Array.from(fakeInboxCaseItem.rows.values()).find((i: any) => i.source_id === digest.source_id);
+    expect(todoItems[0].case_id).toBe(digestItem.case_id); // the surviving instance is the clustering-relevant (thread_id-bearing) one
   });
 });
 

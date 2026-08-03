@@ -14,6 +14,7 @@ import AdminImportPage from '../pages/admin/AdminImportPage';
 import AdminRevenueDashboardPage from '../pages/admin/AdminRevenueDashboardPage';
 import AdminRefundsPage from '../pages/admin/AdminRefundsPage';
 import AdminSettingsPage from '../pages/admin/AdminSettingsPage';
+import AdminCapeSettingsPage from '../pages/admin/AdminCapeSettingsPage';
 import AdminEventLedgerPage from '../pages/admin/AdminEventLedgerPage';
 import AdminCampaignsPage from '../pages/admin/AdminCampaignsPage';
 import AdminCampaignDetailPage from '../pages/admin/AdminCampaignDetailPage';
@@ -84,6 +85,7 @@ const adminRoutes = (
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        <Route path="/admin/cape-settings" element={<AdminCapeSettingsPage />} />
         <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />

@@ -378,6 +378,15 @@ import StudentLevel from './StudentLevel';
 import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
 import ComponentAnalytics from './ComponentAnalytics';
 
+// CAPE — Colaberry Adaptive Path Engine (Phase 0-1: skill ontology + evidence ledger)
+import ArchitectureSkillDefinition from './ArchitectureSkillDefinition';
+import ArchitectureSkillEvidenceBandWeights from './ArchitectureSkillEvidenceBandWeights';
+import StudentSkillEvidence from './StudentSkillEvidence';
+import StudentArchitectureSkill from './StudentArchitectureSkill';
+// CAPE Phase 2: resume/LinkedIn placement + adaptive diagnostic
+import ResumeSkillClaim from './ResumeSkillClaim';
+import DiagnosticAttempt from './DiagnosticAttempt';
+
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
 Enrollment.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
@@ -1380,6 +1389,14 @@ export {
   // Experience Builder (Phase 1)
   ComponentVersion,
   ComponentAnalytics,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 0-1)
+  ArchitectureSkillDefinition,
+  ArchitectureSkillEvidenceBandWeights,
+  StudentSkillEvidence,
+  StudentArchitectureSkill,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 2: resume placement + diagnostic)
+  ResumeSkillClaim,
+  DiagnosticAttempt,
 };
 
 // --- Enrollment Lead associations ---
@@ -1510,3 +1527,22 @@ Enrollment.hasMany(TimelineCardProgress, { foreignKey: 'enrollment_id', as: 'tim
 TimelineCardProgress.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 TimelineEvent.hasMany(TimelineCard, { foreignKey: 'event_id', as: 'cards' });
 TimelineCard.belongsTo(TimelineEvent, { foreignKey: 'event_id', as: 'event' });
+
+// --- CAPE (Colaberry Adaptive Path Engine) associations — Phase 0-1 ---
+// Additive only: parallel to, and independent of, the XpEvent/EvidenceRecord/
+// StudentCompetency promotion graph above. See ensureCapeSchema.ts.
+Enrollment.hasMany(StudentSkillEvidence, { foreignKey: 'enrollment_id', as: 'capeSkillEvidence' });
+StudentSkillEvidence.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(StudentArchitectureSkill, { foreignKey: 'enrollment_id', as: 'capeArchitectureSkills' });
+StudentArchitectureSkill.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 2 (resume placement + adaptive diagnostic) ---
+// Additive only; parallel to the verified ledger above. See
+// ensureCapePlacementSchema.ts. Neither table is ever joined against
+// student_skill_evidence/student_architecture_skill in application code —
+// capePlacementService.ts reads both independently and writes only
+// placement_score.
+Enrollment.hasMany(ResumeSkillClaim, { foreignKey: 'enrollment_id', as: 'resumeSkillClaims' });
+ResumeSkillClaim.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(DiagnosticAttempt, { foreignKey: 'enrollment_id', as: 'diagnosticAttempts' });
+DiagnosticAttempt.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
