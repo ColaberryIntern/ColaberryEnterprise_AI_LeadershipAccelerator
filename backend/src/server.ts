@@ -2399,6 +2399,12 @@ async function start(): Promise<void> {
       const { seedTypeSkillMaps } = await import('./services/cape/capeTypeSkillMapSeeds');
       const typeMaps = await seedTypeSkillMaps();
       console.log(`[CAPE] type-default skill maps seeded: ${typeMaps.created} created, ${typeMaps.skipped} already current`);
+      // CAPE Phase 3: week-level curriculum_skill_maps targets — Weeks 0-12, the
+      // second resolution tier (supersedes a type default for any card with a week
+      // number). Idempotent.
+      const { seedWeekSkillMaps } = await import('./services/cape/capeWeekSkillMapSeeds');
+      const weekMaps = await seedWeekSkillMaps();
+      console.log(`[CAPE] week-target skill maps seeded: ${weekMaps.created} created, ${weekMaps.skipped} already current, ${weekMaps.blueprintGapsLogged} blueprint gaps logged`);
       // Feed Control: re-apply stored type routing to the registry AFTER the seed
       // (typeSeeder re-asserts surface columns from code, so routing must win last).
       const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');
