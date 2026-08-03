@@ -1,5 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createRoot } from 'react-dom/client';
+import { act } from 'react-dom/test-utils';
 import StoryBeatsPanel from '../StoryBeatsPanel';
 import TeachPanel from '../TeachPanel';
 import PromptsPanel from '../PromptsPanel';
@@ -426,5 +428,66 @@ describe('KitConfig panel smoke rendering', () => {
     const defaults: KitConfigDefaults['opening'] = { coldOpen: { title: 'T', body: 'B' }, hook: null, resultPreview: null };
     const html = renderToStaticMarkup(<OpeningPanel opening={opening} defaults={defaults} dayKind="architecture" onChange={noop} />);
     expect(html).toContain('Off');
+  });
+});
+
+describe('InteractionsPanel — "mark correct answer" broadened beyond trivia (classkit-deck-polish T003)', () => {
+  // The answer radio only renders inside a card's EXPANDED body, which
+  // `renderToStaticMarkup` can't reach without a real click (no `useEffect`/
+  // interaction support) — a genuine mounted render + click proves this for
+  // real, now that `react-scripts`/jest actually work in this repo.
+  async function mountExpanded(kind: InteractionPlacement['kind']) {
+    const q: InteractionPlacement = { segment: 'checkin', kind, q: 'Which one?', options: ['A', 'B', 'C'], answer: null };
+    const cfg: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [q] };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <InteractionsPanel config={cfg} defaults={[]} theaterEnabled={true} dayKind="architecture"
+          onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+      );
+    });
+    const header = container.querySelector('.card-header') as HTMLElement;
+    await act(async () => { header.click(); });
+    const html = container.innerHTML;
+    root.unmount();
+    document.body.removeChild(container);
+    return html;
+  }
+
+  it('shows the correct-answer radio for a POLL question (previously trivia-only)', async () => {
+    const html = await mountExpanded('poll');
+    expect(html).toContain('type="radio"');
+    expect(html).toContain('Correct answer');
+  });
+
+  it('shows the correct-answer radio for a PREDICTION question (previously trivia-only)', async () => {
+    const html = await mountExpanded('prediction');
+    expect(html).toContain('type="radio"');
+  });
+
+  it('still shows the correct-answer radio for a TRIVIA question (regression)', async () => {
+    const html = await mountExpanded('trivia');
+    expect(html).toContain('type="radio"');
+  });
+
+  it('shows "Clear answer" only once an answer is actually marked on a non-trivia question', async () => {
+    const q: InteractionPlacement = { segment: 'checkin', kind: 'poll', q: 'Which one?', options: ['A', 'B'], answer: 0 };
+    const cfg: CountAndOverride<InteractionPlacement> = { enabled: true, max: null, overrides: [q] };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <InteractionsPanel config={cfg} defaults={[]} theaterEnabled={true} dayKind="architecture"
+          onChange={noop} onToggleTheater={noop} onGenerateQuestion={noopAsync} />,
+      );
+    });
+    const header = container.querySelector('.card-header') as HTMLElement;
+    await act(async () => { header.click(); });
+    expect(container.innerHTML).toContain('Clear answer');
+    root.unmount();
+    document.body.removeChild(container);
   });
 });
