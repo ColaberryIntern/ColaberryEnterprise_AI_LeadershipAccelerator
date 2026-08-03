@@ -142,6 +142,29 @@ export interface DiscoveredCaseSummary {
   candidateCount: number;
 }
 
+export interface AutoSyncResult {
+  newCasesCreated: number;
+  itemsAdded: number;
+  emailsSkippedUnclassified: number;
+}
+
+export type SyncStage = 'fetching_email' | 'fetching_basecamp' | 'classifying' | 'clustering_and_removing_stale' | null;
+
+export interface SyncStatus {
+  inProgress: boolean;
+  stage: SyncStage;
+  startedAt: string | null;
+  lastCompletedAt: string | null;
+  lastResult: AutoSyncResult | null;
+}
+
+export const SYNC_STAGE_LABELS: Record<Exclude<SyncStage, null>, string> = {
+  fetching_email: 'Checking your email…',
+  fetching_basecamp: 'Checking Basecamp…',
+  classifying: 'Filtering to what needs your attention…',
+  clustering_and_removing_stale: 'Grouping related items and clearing anything deleted…',
+};
+
 export interface CaseStats {
   total: number;
   resolved: number;
@@ -151,12 +174,143 @@ export interface CaseStats {
   state_breakdown: Array<{ state: string; count: number }>;
 }
 
+export interface InboxCaseEventRecord {
+  id: string;
+  case_id: string;
+  item_id: string | null;
+  action_id: string | null;
+  event_type: string;
+  actor_type: string;
+  actor_id: string;
+  previous_state: string | null;
+  new_state: string | null;
+  details: Record<string, any>;
+  correlation_id: string;
+  created_at: string;
+}
+
+// Plain-English labels for the case's real event history — grounded in
+// every event_type actually emitted by backend/src/services/inboxCase/*
+// and backend/src/controllers/inboxCaseController.ts. Anything not listed
+// here (a future event type, or a one-off manual DB entry) falls back to
+// a title-cased version of the raw event_type rather than being hidden.
+const EVENT_LABELS: Record<string, string> = {
+  case_discovery_started: 'Discovery started',
+  case_discovery_completed: 'Discovery completed',
+  assessment_completed: 'Assessment complete',
+  assessment_failed: 'Assessment could not be generated automatically',
+  question_answered: 'A blocking question was answered',
+  candidate_included: 'A candidate item was included',
+  candidate_excluded: 'A candidate item was excluded',
+  candidate_manually_adjusted: 'An item was manually adjusted',
+  item_disposition_changed: 'An item disposition was set',
+  case_ready_to_plan_after_last_question_answered: 'Ready to plan — last question answered',
+  plan_generated: 'Action plan generated',
+  action_proposed: 'An action was proposed',
+  action_approved: 'An action was approved',
+  action_rejected: 'An action was rejected',
+  action_execution_started: 'Execution started',
+  action_execution_succeeded: 'An action succeeded',
+  action_execution_failed: 'An action failed',
+  action_execution_skipped_dependency_failed: 'An action was skipped (a dependency failed)',
+  action_execution_reconciled_as_retryable: 'A stuck action was reset to retry safely',
+  action_execution_reconciled_as_succeeded: 'A stuck action was confirmed already succeeded',
+  case_execution_failed: 'Execution run had at least one failure',
+  action_verified: 'An action was verified',
+  case_verification_completed: 'Verification completed',
+  case_resolved: 'Case closed',
+  case_reopened: 'Case reopened',
+  case_reassessing_after_reopen: 'Re-assessing after reopen',
+  closure_blocked: 'Close Case was blocked — see the checklist',
+  prompt_injection_signals_flagged: 'Unusual instruction-like text was flagged in the evidence (informational only)',
+  knowledge_base_entry_proposed: 'A knowledge base entry was proposed from your answer',
+  item_quick_resolved: 'An item was marked Handled/Ignore',
+  action_override_applied: 'Your instruction replaced the proposed action(s)',
+  action_override_failed: 'Your instruction could not be applied — the AI response was invalid',
+  item_auto_dispositioned: 'An item was automatically marked resolved after its action was verified',
+  item_removed_at_source: 'An item was removed — its source message was deleted from your inbox',
+  case_dismissed: 'Case dismissed — not worth responding to',
+};
+
+export function humanizeCaseEvent(event: InboxCaseEventRecord): string {
+  return EVENT_LABELS[event.event_type] || event.event_type.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+}
+
+const ACTION_EVENT_TYPES = new Set([
+  'action_proposed', 'action_approved', 'action_rejected', 'action_execution_started',
+  'action_execution_succeeded', 'action_execution_failed', 'action_execution_skipped_dependency_failed',
+  'action_execution_reconciled_as_retryable', 'action_execution_reconciled_as_succeeded', 'action_verified',
+]);
+const ITEM_EVENT_TYPES = new Set([
+  'candidate_included', 'candidate_excluded', 'candidate_manually_adjusted', 'item_disposition_changed',
+  'item_quick_resolved', 'item_auto_dispositioned', 'item_removed_at_source',
+]);
+
+/** Every case's Activity feed is correctly scoped to that case already (each
+ *  event's `case_id` is real and distinct) — but `humanizeCaseEvent` alone
+ *  produces a generic lifecycle-stage string that reads identically across
+ *  DIFFERENT cases going through the same stages. This cross-references the
+ *  event's `item_id`/`action_id` against the case's own already-loaded
+ *  `items`/`actions` (no extra network call) plus `event.details`, so two
+ *  cases' Activity lists read distinguishably instead of like a template.
+ *  Falls back to `humanizeCaseEvent` whenever the referenced item/action
+ *  can't be found (e.g. deleted) rather than throwing. */
+export function describeCaseEvent(
+  event: InboxCaseEventRecord,
+  items: InboxCaseItemRecord[],
+  actions: InboxCaseActionRecord[]
+): string {
+  const base = humanizeCaseEvent(event);
+  const item = event.item_id ? items.find((i) => i.id === event.item_id) : undefined;
+  const action = event.action_id ? actions.find((a) => a.id === event.action_id) : undefined;
+
+  if (ACTION_EVENT_TYPES.has(event.event_type) && action) {
+    const target = item ? ` for "${item.title}"` : '';
+    const reason = typeof event.details?.reason === 'string' ? ` — ${event.details.reason}` : '';
+    return `${base}: ${action.action_type}${target}${reason}`;
+  }
+  if (ITEM_EVENT_TYPES.has(event.event_type) && item) {
+    return `${base}: "${item.title}"`;
+  }
+  if (event.event_type === 'case_discovery_started' && event.details?.mode && event.details?.query) {
+    return `${base} — ${String(event.details.mode).toLowerCase()} search: "${event.details.query}"`;
+  }
+  if ((event.event_type === 'action_override_applied' || event.event_type === 'action_override_failed') && typeof event.details?.instruction === 'string') {
+    const reason = event.event_type === 'action_override_failed' && typeof event.details?.reason === 'string' ? ` (${event.details.reason})` : '';
+    return `${base}: "${event.details.instruction}"${reason}`;
+  }
+  return base;
+}
+
+export interface LastRunInfo {
+  status: 'never' | 'success' | 'failed';
+  at: string | null;
+}
+
+/** Most recent event matching either set of types, for a real "last run"
+ *  indicator on a manual lifecycle step (Assess/Plan/Execute). There is no
+ *  scheduled job for any of these — confirmed no cron references this system
+ *  in schedulerService.ts, every step is a button click — so the events log
+ *  is the only record of "when did this actually last run." `failureTypes`
+ *  lets the caller show a distinct failed-attempt light rather than treating
+ *  every matching event as a success. */
+export function lastRunInfo(events: InboxCaseEventRecord[], successTypes: string[], failureTypes: string[] = []): LastRunInfo {
+  const relevant = events.filter((e) => successTypes.includes(e.event_type) || failureTypes.includes(e.event_type));
+  if (relevant.length === 0) return { status: 'never', at: null };
+  const latest = relevant.reduce((a, b) => (new Date(a.created_at).getTime() >= new Date(b.created_at).getTime() ? a : b));
+  return { status: failureTypes.includes(latest.event_type) ? 'failed' : 'success', at: latest.created_at };
+}
+
 export const inboxCaseApi = {
   discover: (mode: CaseMode, query: string, window: DiscoveryWindow = '90d') =>
     api.post<{ cases: DiscoveredCaseSummary[] }>(`${BASE}/discover`, { mode, query, window }).then((r) => r.data),
 
-  list: (params: { state?: CaseState; mode?: CaseMode; page?: number; limit?: number } = {}) =>
+  list: (params: { state?: CaseState; mode?: CaseMode; page?: number; limit?: number; include_resolved?: boolean } = {}) =>
     api.get<{ total: number; cases: InboxCaseRecord[] }>(BASE, { params }).then((r) => r.data),
+
+  syncNow: () => api.post<AutoSyncResult>(`${BASE}/sync-now`).then((r) => r.data),
+
+  getSyncStatus: () => api.get<SyncStatus>(`${BASE}/sync-status`).then((r) => r.data),
 
   stats: () => api.get<CaseStats>(STATS_URL).then((r) => r.data),
 
@@ -186,7 +340,19 @@ export const inboxCaseApi = {
 
   close: (caseId: string) => api.post(`${BASE}/${caseId}/close`).then((r) => r.data),
 
+  // One-click "not worth responding to" from the case list — clears every
+  // blocker it safely can, then defers to the same real closeCase() guard
+  // /close uses. On a 409 the caller's catch block reads
+  // err.response.data.blockers, same shape /close already returns.
+  dismiss: (caseId: string) => api.post<{ closed: boolean }>(`${BASE}/${caseId}/dismiss`).then((r) => r.data),
+
   reopen: (caseId: string, reason: string) => api.post(`${BASE}/${caseId}/reopen`, { reason }).then((r) => r.data),
 
-  audit: (caseId: string) => api.get(`${BASE}/${caseId}/audit`).then((r) => r.data),
+  audit: (caseId: string) => api.get<{ events: InboxCaseEventRecord[] }>(`${BASE}/${caseId}/audit`).then((r) => r.data),
+
+  quickResolve: (caseId: string, itemId: string, resolution: 'HANDLED' | 'IGNORE') =>
+    api.post<{ dispositionSet: ItemDisposition; actionProposed: string | null }>(`${BASE}/${caseId}/items/${itemId}/quick-resolve`, { resolution }).then((r) => r.data),
+
+  overrideActions: (caseId: string, instruction: string) =>
+    api.post<{ rejected: string[]; proposed: string | null; failed?: boolean; failureReason?: string }>(`${BASE}/${caseId}/actions/override`, { instruction }).then((r) => r.data),
 };

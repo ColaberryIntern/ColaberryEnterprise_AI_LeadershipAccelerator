@@ -37,6 +37,8 @@ interface InboxCaseItemAttributes {
   source_hash: string;
   ai_recommendation: AiItemRecommendation | null;
   ai_recommendation_reason: string | null;
+  basecamp_close_recommended: boolean | null;
+  basecamp_close_recommended_reason: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -59,6 +61,8 @@ class InboxCaseItem extends Model<InboxCaseItemAttributes> implements InboxCaseI
   declare source_hash: string;
   declare ai_recommendation: AiItemRecommendation | null;
   declare ai_recommendation_reason: string | null;
+  declare basecamp_close_recommended: boolean | null;
+  declare basecamp_close_recommended_reason: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -82,6 +86,8 @@ InboxCaseItem.init(
     source_hash: { type: DataTypes.STRING(64), allowNull: false },
     ai_recommendation: { type: DataTypes.ENUM(...AI_ITEM_RECOMMENDATIONS), allowNull: true },
     ai_recommendation_reason: { type: DataTypes.TEXT, allowNull: true },
+    basecamp_close_recommended: { type: DataTypes.BOOLEAN, allowNull: true },
+    basecamp_close_recommended_reason: { type: DataTypes.TEXT, allowNull: true },
     created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
     updated_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
   },

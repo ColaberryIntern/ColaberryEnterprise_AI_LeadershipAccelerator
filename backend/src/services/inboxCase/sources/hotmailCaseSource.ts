@@ -46,7 +46,11 @@ function matchesQuery(msg: GraphMessage, params: DiscoveryParams): boolean {
   );
 }
 
-function toCandidate(msg: GraphMessage, sourceType: 'email' | 'sent_email'): RawCandidateItem {
+// Exported for reuse by caseAutoSyncService.ts — the same message-to-
+// RawCandidateItem normalization is needed for a query-less "recent
+// activity" fetch, not just the person/topic-driven search this file's own
+// adapter builds a client-side filter for.
+export function toCandidate(msg: GraphMessage, sourceType: 'email' | 'sent_email'): RawCandidateItem {
   const bodyText = msg.body?.contentType === 'html' ? stripHtml(msg.body.content || '') : msg.body?.content || '';
   const headerMap = new Map((msg.internetMessageHeaders || []).map((h) => [h.name.toLowerCase(), h.value]));
 

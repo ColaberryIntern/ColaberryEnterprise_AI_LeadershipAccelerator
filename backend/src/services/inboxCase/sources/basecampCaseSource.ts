@@ -41,7 +41,10 @@ interface BcComment {
 const MAX_MIRROR_MATCHES = 30;
 const MAX_COMMENTS_PER_ITEM = 20;
 
-function todoToCandidate(todo: OpsBcTodo): RawCandidateItem {
+// Exported for reuse by caseAutoSyncService.ts — the same OpsBcTodo-row-to-
+// RawCandidateItem normalization is needed for the "recent Basecamp
+// activity" auto-sync fetch, not just this file's own mirror-search step.
+export function todoToCandidate(todo: OpsBcTodo): RawCandidateItem {
   return {
     source_type: 'basecamp_todo',
     source_id: todo.bc_id,
@@ -67,7 +70,27 @@ function todoToCandidate(todo: OpsBcTodo): RawCandidateItem {
   };
 }
 
-async function fetchExactReference(
+// Resolves one plain-text to-do title (parsed from Basecamp's own "N to-dos
+// due soon" digest rollup, which embeds no per-to-do URL — see
+// textNormalization.ts's parseDigestTodoLines) to a real Basecamp record via
+// the local mirror. Exact, case-insensitive match ONLY — never fuzzy/partial
+// — and returns null on zero OR multiple matches rather than guess
+// ambiguously, matching this whole feature's "never fabricate, skip rather
+// than guess wrong" design. Observed titles are long and specific enough
+// (confirmed against real production digests) that accidental collisions are
+// unlikely; this null-on-ambiguity behavior is the safety net if that ever
+// isn't true.
+export async function resolveDigestTodoByTitle(title: string): Promise<RawCandidateItem | null> {
+  const matches = await OpsBcTodo.findAll({ where: { title: { [Op.iLike]: title } } });
+  if (matches.length !== 1) return null;
+  return todoToCandidate(matches[0]);
+}
+
+// Exported for reuse by caseAutoSyncService.ts — the same recordingId ->
+// real Basecamp record resolution is needed to decompose a digest email's
+// embedded Basecamp links into real per-to-do candidate items, not just
+// this file's own person/topic discovery flow.
+export async function fetchExactReference(
   ref: { accountId: string; projectId: string; recordingType: string; recordingId: string; url: string }
 ): Promise<RawCandidateItem | null> {
   try {

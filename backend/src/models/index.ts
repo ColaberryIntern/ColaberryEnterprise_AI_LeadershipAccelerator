@@ -119,6 +119,13 @@ import CallbackRequest from './CallbackRequest';
 import DocumentDeliveryLog from './DocumentDeliveryLog';
 import Ticket from './Ticket';
 import TicketActivity from './TicketActivity';
+import WorkContext from './WorkContext';
+import AgentRun from './AgentRun';
+import WorkLedgerEvent from './WorkLedgerEvent';
+import TicketActionLink from './TicketActionLink';
+import EvidenceArtifact from './EvidenceArtifact';
+import EvidenceLink from './EvidenceLink';
+import DecisionRecord from './DecisionRecord';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -367,6 +374,15 @@ import BuilderLevel from './BuilderLevel';
 import StudentLevel from './StudentLevel';
 import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
 import ComponentAnalytics from './ComponentAnalytics';
+
+// CAPE — Colaberry Adaptive Path Engine (Phase 0-1: skill ontology + evidence ledger)
+import ArchitectureSkillDefinition from './ArchitectureSkillDefinition';
+import ArchitectureSkillEvidenceBandWeights from './ArchitectureSkillEvidenceBandWeights';
+import StudentSkillEvidence from './StudentSkillEvidence';
+import StudentArchitectureSkill from './StudentArchitectureSkill';
+// CAPE Phase 2: resume/LinkedIn placement + adaptive diagnostic
+import ResumeSkillClaim from './ResumeSkillClaim';
+import DiagnosticAttempt from './DiagnosticAttempt';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -759,6 +775,39 @@ TicketActivity.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 Ticket.hasMany(Ticket, { foreignKey: 'parent_ticket_id', as: 'subTasks' });
 Ticket.belongsTo(Ticket, { foreignKey: 'parent_ticket_id', as: 'parentTicket' });
 
+// --- ProofDesk Work Ledger associations (Milestone 1 - Foundation, shadow mode) ---
+Ticket.hasMany(WorkContext, { foreignKey: 'ticket_id', as: 'workContexts' });
+WorkContext.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(AgentRun, { foreignKey: 'ticket_id', as: 'agentRuns' });
+AgentRun.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkContext.hasMany(AgentRun, { foreignKey: 'work_context_id', as: 'agentRuns' });
+AgentRun.belongsTo(WorkContext, { foreignKey: 'work_context_id', as: 'workContext' });
+
+Ticket.hasMany(WorkLedgerEvent, { foreignKey: 'ticket_id', as: 'workLedgerEvents' });
+WorkLedgerEvent.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+AgentRun.hasMany(WorkLedgerEvent, { foreignKey: 'run_id', as: 'events' });
+WorkLedgerEvent.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+
+Ticket.hasMany(TicketActionLink, { foreignKey: 'ticket_id', as: 'actionLinks' });
+TicketActionLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkLedgerEvent.hasMany(TicketActionLink, { foreignKey: 'event_id', as: 'ticketLinks' });
+TicketActionLink.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+
+// --- ProofDesk Evidence associations (Milestone 2 - Proof & Ticket Experience) ---
+Ticket.hasMany(EvidenceArtifact, { foreignKey: 'ticket_id', as: 'evidenceArtifacts' });
+EvidenceArtifact.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkLedgerEvent.hasMany(EvidenceArtifact, { foreignKey: 'source_event_id', as: 'evidenceArtifacts' });
+EvidenceArtifact.belongsTo(WorkLedgerEvent, { foreignKey: 'source_event_id', as: 'sourceEvent' });
+
+EvidenceArtifact.hasMany(EvidenceLink, { foreignKey: 'evidence_id', as: 'links' });
+EvidenceLink.belongsTo(EvidenceArtifact, { foreignKey: 'evidence_id', as: 'evidence' });
+Ticket.hasMany(EvidenceLink, { foreignKey: 'ticket_id', as: 'evidenceLinks' });
+EvidenceLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(DecisionRecord, { foreignKey: 'ticket_id', as: 'decisionRecords' });
+DecisionRecord.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -1109,6 +1158,13 @@ export {
   DocumentDeliveryLog,
   Ticket,
   TicketActivity,
+  WorkContext,
+  AgentRun,
+  WorkLedgerEvent,
+  TicketActionLink,
+  EvidenceArtifact,
+  EvidenceLink,
+  DecisionRecord,
   StudentNavigationEvent,
   Alert,
   AlertEvent,
@@ -1309,6 +1365,14 @@ export {
   // Experience Builder (Phase 1)
   ComponentVersion,
   ComponentAnalytics,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 0-1)
+  ArchitectureSkillDefinition,
+  ArchitectureSkillEvidenceBandWeights,
+  StudentSkillEvidence,
+  StudentArchitectureSkill,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 2: resume placement + diagnostic)
+  ResumeSkillClaim,
+  DiagnosticAttempt,
 };
 
 // --- Enrollment Lead associations ---
@@ -1439,3 +1503,22 @@ Enrollment.hasMany(TimelineCardProgress, { foreignKey: 'enrollment_id', as: 'tim
 TimelineCardProgress.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 TimelineEvent.hasMany(TimelineCard, { foreignKey: 'event_id', as: 'cards' });
 TimelineCard.belongsTo(TimelineEvent, { foreignKey: 'event_id', as: 'event' });
+
+// --- CAPE (Colaberry Adaptive Path Engine) associations — Phase 0-1 ---
+// Additive only: parallel to, and independent of, the XpEvent/EvidenceRecord/
+// StudentCompetency promotion graph above. See ensureCapeSchema.ts.
+Enrollment.hasMany(StudentSkillEvidence, { foreignKey: 'enrollment_id', as: 'capeSkillEvidence' });
+StudentSkillEvidence.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(StudentArchitectureSkill, { foreignKey: 'enrollment_id', as: 'capeArchitectureSkills' });
+StudentArchitectureSkill.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 2 (resume placement + adaptive diagnostic) ---
+// Additive only; parallel to the verified ledger above. See
+// ensureCapePlacementSchema.ts. Neither table is ever joined against
+// student_skill_evidence/student_architecture_skill in application code —
+// capePlacementService.ts reads both independently and writes only
+// placement_score.
+Enrollment.hasMany(ResumeSkillClaim, { foreignKey: 'enrollment_id', as: 'resumeSkillClaims' });
+ResumeSkillClaim.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(DiagnosticAttempt, { foreignKey: 'enrollment_id', as: 'diagnosticAttempts' });
+DiagnosticAttempt.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });

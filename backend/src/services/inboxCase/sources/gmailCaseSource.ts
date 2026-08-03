@@ -45,7 +45,11 @@ function buildTopicQuery(exactPhrase: string, subjectVariants: string[], windowD
   return [scope, window].filter(Boolean).join(' ');
 }
 
-async function searchAndNormalize(
+// Exported for reuse by caseAutoSyncService.ts — the same message-to-
+// RawCandidateItem normalization is needed for a query-less "recent
+// activity" fetch, not just the person/topic-driven search this file's own
+// adapter builds queries for.
+export async function searchAndNormalize(
   gmail: gmail_v1.Gmail,
   provider: CaseProvider,
   query: string,

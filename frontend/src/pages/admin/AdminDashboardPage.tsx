@@ -23,6 +23,10 @@ interface CohortSummary {
   start_date: string;
   max_seats: number;
   seats_taken: number;
+  /** Real, live COUNT of active enrollments — the source of truth for "how many
+   *  people are enrolled" (unlike seats_taken, which paid-capacity tracking
+   *  deliberately skips incrementing for Explorer/free signups). */
+  enrolled_count: number;
   status: string;
 }
 
@@ -664,7 +668,7 @@ function AdminDashboardPage() {
             icon="group-2-line"
             padded={false}
             className="h-100"
-            actions={<Link to="/admin/accelerator" className="btn btn-sm btn-outline-secondary">Manage</Link>}
+            actions={<Link to="/admin/accelerator?tab=cohorts" className="btn btn-sm btn-outline-secondary">Manage</Link>}
           >
             <div className="table-responsive">
               <table className="table table-hover mb-0">
@@ -682,7 +686,7 @@ function AdminDashboardPage() {
                       <tr key={c.id}>
                         <td className="small">{c.name}</td>
                         <td className="small">{fmtDate(c.start_date)}</td>
-                        <td className="small text-center">{c.seats_taken}/{c.max_seats}</td>
+                        <td className="small text-center">{c.enrolled_count}/{c.max_seats}</td>
                         <td className="small text-center">
                           <StatusBadge label={c.status} tone={COHORT_STATUS_TONE[c.status] || 'neutral'} />
                         </td>

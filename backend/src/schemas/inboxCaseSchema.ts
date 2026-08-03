@@ -26,12 +26,20 @@ export const listCasesQuerySchema = z.object({
   mode: z.enum(['PERSON', 'TOPIC']).optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
+  // When true (and no explicit `state` filter), the default RESOLVED-hidden
+  // behavior is skipped and every state is returned, matching the frontend's
+  // "All states (incl. resolved)" option.
+  include_resolved: z.coerce.boolean().optional(),
 });
 
 export const caseIdParamSchema = z.object({ caseId: z.string().uuid() });
 export const caseItemParamSchema = z.object({ caseId: z.string().uuid(), itemId: z.string().uuid() });
 export const caseQuestionParamSchema = z.object({ caseId: z.string().uuid(), questionId: z.string().uuid() });
 export const caseActionParamSchema = z.object({ caseId: z.string().uuid(), actionId: z.string().uuid() });
+
+export const quickResolveItemSchema = z.object({ resolution: z.enum(['HANDLED', 'IGNORE']) });
+
+export const overrideActionsSchema = z.object({ instruction: z.string().min(1).max(500) });
 
 export const updateCaseItemSchema = z
   .object({
@@ -77,6 +85,27 @@ export const reopenCaseSchema = z.object({
 });
 
 export const actionTypeEnum = z.enum(ACTION_TYPES);
+
+// AI free-text plan override (root directive extension, this session).
+// The model supplies ONLY these 4 fields for new_action — target_source,
+// target_id, risk_level, and idempotencyParts are always derived by code
+// in caseActionOverrideService.ts, never by the model. risk_level in
+// particular is hardcoded HIGH there regardless of what this schema would
+// otherwise allow, so an override-created action can never be swept into
+// bulk low-risk approval — see that file for the full reasoning.
+export const actionOverrideOutputSchema = z.object({
+  actions_to_reject: z.array(z.string()).default([]),
+  new_action: z
+    .object({
+      item_id: z.string(),
+      action_type: actionTypeEnum,
+      preview: z.string().min(1),
+      payload: z.record(z.string(), z.unknown()).default({}),
+    })
+    .nullable()
+    .default(null),
+});
+export type ActionOverrideOutput = z.infer<typeof actionOverrideOutputSchema>;
 
 // ---- AI assessment structured output (Phase 3: Assess/Teach/Ask) ----
 // Validates the model's JSON response before it is trusted for anything.
@@ -139,6 +168,21 @@ export const caseAssessmentOutputSchema = z.object({
       z.object({
         item_id: z.string(),
         recommendation: z.enum(['INCLUDE', 'EXCLUDE']),
+        reasoning: z.string().min(1),
+      })
+    )
+    .default([]),
+  // Advisory-only: for INCLUDED basecamp_todo items the assessment is about
+  // to propose a comment on, whether the recommended update also finishes
+  // the work — read later by the action planner to decide whether to ALSO
+  // propose a linked BASECAMP_COMPLETE_TODO action. Never executes anything
+  // on its own; the resulting action still always needs Ali's individual
+  // approval like any other Basecamp-writing action.
+  basecamp_close_recommendations: z
+    .array(
+      z.object({
+        item_id: z.string(),
+        recommend_close: z.boolean(),
         reasoning: z.string().min(1),
       })
     )

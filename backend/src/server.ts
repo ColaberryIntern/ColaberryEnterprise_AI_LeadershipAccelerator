@@ -16,6 +16,8 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
+import capePortalRoutes from './routes/capePortalRoutes';
+import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
@@ -37,6 +39,10 @@ import cron from 'node-cron';
 import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } from './intelligence';
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
+import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
+import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureCapeSchema } from './db/ensureCapeSchema';
+import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -75,6 +81,8 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+app.use(capePortalRoutes);
+app.use(capeAdminRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);
@@ -765,6 +773,12 @@ async function ensureEnrollmentColumns() {
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS portal_enabled BOOLEAN NOT NULL DEFAULT FALSE`,
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS active_project_id UUID`,
     `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS enrollment_type VARCHAR(20) NOT NULL DEFAULT 'standard'`,
+    // Nullable future-dated access gate: an enrollment can be active/paid but have
+    // its full-curriculum access deliberately deferred to a later date (e.g. a
+    // postponed cohort move) while retaining free-tier portal access in the
+    // interim. NULL (the default) means no gate — behavior for every existing
+    // enrollment is unchanged. See contentEntitlement.ts.
+    `ALTER TABLE enrollments ADD COLUMN IF NOT EXISTS access_starts_at DATE`,
   ];
   for (const sql of statements) {
     try {
@@ -2197,6 +2211,16 @@ async function start(): Promise<void> {
   await ensureLiveSessionSchema();
   // Inbox Intel — Case Resolution Engine: 6 case-resolution tables (idempotent DDL).
   await ensureInboxCaseSchema();
+  // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
+  // nullable ticket columns (idempotent DDL, shadow mode).
+  await ensureWorkLedgerSchema();
+  // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
+  // tables (idempotent DDL, additive only, no binary storage).
+  await ensureEvidenceSchema();
+  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
+  // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
+  // additive only, parallel to the existing XP/promotion tables).
+  await ensureCapeSchema();
 
   await ensureCommunityMemberRoleSchema();
   // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
@@ -2215,6 +2239,11 @@ async function start(): Promise<void> {
   await ensureOnboardingProfileSchema();
   // Student Settings: avatar photo + uploaded resume file columns (idempotent).
   await ensurePortalSettingsSchema();
+  // CAPE Phase 2 — resume/LinkedIn placement + adaptive diagnostic: 2 new
+  // onboarding_profiles columns + 2 new tables (idempotent DDL, additive
+  // only). Must run AFTER ensurePortalSettingsSchema() so onboarding_profiles
+  // already exists.
+  await ensureCapePlacementSchema();
   // Unified StudentTask: nullable requirement_key + story-driven columns (idempotent).
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
@@ -2353,6 +2382,10 @@ async function start(): Promise<void> {
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
+      // CAPE Phase 0-1: 10 Architecture Skill definitions + default evidence-band weights.
+      const { seedCapeConfig } = await import('./services/cape/capeSeeders');
+      const cape = await seedCapeConfig();
+      console.log(`[CAPE] seeded: ${cape.skillDefinitions} skill definitions, ${cape.weights} weight config`);
       // Feed Control: re-apply stored type routing to the registry AFTER the seed
       // (typeSeeder re-asserts surface columns from code, so routing must win last).
       const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');

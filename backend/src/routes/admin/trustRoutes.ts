@@ -16,6 +16,7 @@ import {
   handleGetRetention,
   handleEnforceRetention,
   handleGetAgentRoster,
+  handleGetRegistryHealth,
   handleGetAgentDetail,
   handleRunAgent,
 } from '../../controllers/trustController';
@@ -33,6 +34,7 @@ router.get('/api/admin/trust/retention', requireAdmin, handleGetRetention);
 router.post('/api/admin/trust/retention/enforce', requireAdmin, handleEnforceRetention);
 router.get('/api/admin/trust/dimension/:key', requireAdmin, handleGetDimension);
 router.get('/api/admin/trust/agents', requireAdmin, handleGetAgentRoster);
+router.get('/api/admin/trust/registry-health', requireAdmin, handleGetRegistryHealth);
 router.get('/api/admin/trust/agents/:slug', requireAdmin, handleGetAgentDetail);
 router.post('/api/admin/trust/agents/:slug/run', requireAdmin, handleRunAgent);
 

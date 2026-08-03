@@ -19,10 +19,28 @@
 import TimelineCard from '../../models/TimelineCard';
 import TimelineCardProgress from '../../models/TimelineCardProgress';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
-import { accumulateWatch, requiredWatchPct, meetsWatchRequirement, WatchBeat, WatchState } from './watchProgressMath';
+import { videoFromMetadata } from '../timeline/timelineService';
+import { getAssignedTestimonialDurationS } from '../timeline/networkVideoService';
+import { getAssignedPodcastDurationS } from '../timeline/podcastMediaService';
+import { accumulateWatch, requiredWatchPct, meetsWatchRequirement, withAuthoritativeDuration, WatchBeat, WatchState } from './watchProgressMath';
 
 export { DEFAULT_WATCH_PCT, MAX_DELTA_PER_BEAT_S, accumulateWatch, requiredWatchPct, meetsWatchRequirement, isWatchableCard } from './watchProgressMath';
 export type { WatchBeat, WatchState } from './watchProgressMath';
+
+/**
+ * Ground truth for this (card, enrollment)'s video, when known: a fixed authored
+ * video's real provider duration, else the specific testimonial/podcast this
+ * student was assigned. Null when nothing authoritative is known yet (Loom/Wistia,
+ * unverified videos, or the card isn't a video at all) — the gate then falls back
+ * to the original client-trust ratchet, unchanged.
+ */
+export async function resolveAuthoritativeDurationS(card: TimelineCard, enrollmentId: string): Promise<number | null> {
+  const fixed = videoFromMetadata(card.metadata);
+  if (fixed?.duration_seconds) return fixed.duration_seconds;
+  if (card.type === 'testimonial') return getAssignedTestimonialDurationS(enrollmentId, card.id);
+  if (card.type === 'podcast') return getAssignedPodcastDurationS(enrollmentId, card.id);
+  return null;
+}
 
 /** Record one heartbeat and return the gate status for the UI. */
 export async function recordWatchBeat(enrollmentId: string, cardId: string, beat: WatchBeat) {
@@ -34,9 +52,11 @@ export async function recordWatchBeat(enrollmentId: string, cardId: string, beat
     defaults: { card_id: cardId, enrollment_id: enrollmentId, status: 'available' },
   });
 
+  const authoritativeDurationS = await resolveAuthoritativeDurationS(card, enrollmentId);
+
   // Read-merge-update the analytics blob (certificateService pattern).
   const analytics = progress.analytics && typeof progress.analytics === 'object' ? { ...progress.analytics } : {};
-  const watch = accumulateWatch(analytics.watch, beat);
+  const watch = accumulateWatch(analytics.watch, beat, undefined, authoritativeDurationS);
   analytics.watch = watch;
   await progress.update({ analytics, started_at: progress.started_at || new Date() });
 
@@ -67,7 +87,13 @@ export async function assertWatchRequirement(enrollmentId: string, card: Timelin
   const progress = await TimelineCardProgress.findOne({ where: { card_id: card.id, enrollment_id: enrollmentId } });
   if (progress?.status === 'completed') return;   // re-complete stays idempotent, never re-gated
 
-  const watch = (progress?.analytics && typeof progress.analytics === 'object' ? progress.analytics.watch : null) as WatchState | null;
+  const storedWatch = (progress?.analytics && typeof progress.analytics === 'object' ? progress.analytics.watch : null) as WatchState | null;
+  // Recompute against ground truth at check time too — not just on the next beat —
+  // so a card poisoned by a stale/incorrect duration self-heals the moment an
+  // authoritative duration is known, even if the student isn't actively watching
+  // right now (e.g. they finished earlier and are completing the card later).
+  const authoritativeDurationS = await resolveAuthoritativeDurationS(card, enrollmentId);
+  const watch = withAuthoritativeDuration(storedWatch, authoritativeDurationS);
   const verdict = meetsWatchRequirement(watch, required);
   if (verdict.met) return;
 

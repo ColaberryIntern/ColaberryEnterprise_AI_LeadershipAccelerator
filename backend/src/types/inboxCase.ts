@@ -25,12 +25,26 @@ export type CaseState = (typeof CASE_STATES)[number];
 // separate explicit reopen operation (see caseStateMachine.ts) rather than
 // being reachable through this table, since reopening is a special reset,
 // not a normal workflow step.
+//
+// Every active state lists RESOLVED as a legal target, not just
+// EXECUTING/WAITING/DELEGATED. evaluateClosureGuard() (caseClosureService.ts)
+// is the real, substantive authority on whether a case is actually done —
+// no open questions, no undispositioned items, no pending/unverified
+// actions. Restricting RESOLVED to only the three post-execution states was
+// redundant with that guard for the normal workflow, but broke Dismiss
+// entirely: Dismiss's whole point is closing a case WITHOUT executing
+// anything (there's nothing to act on), so the common real case being
+// dismissed sits in ASSESSING/READY_TO_PLAN/AWAITING_APPROVAL/NEEDS_ALI —
+// none of which could ever legally reach RESOLVED before, no matter how
+// thoroughly dismissCase() cleared every blocker. Discovered live in
+// production: Dismiss on a READY_TO_PLAN case failed with
+// case_not_in_closable_state even though the guard had already passed.
 export const CASE_STATE_TRANSITIONS: Record<CaseState, CaseState[]> = {
-  DISCOVERING: ['ASSESSING', 'FAILED'],
-  ASSESSING: ['NEEDS_ALI', 'READY_TO_PLAN', 'FAILED'],
-  NEEDS_ALI: ['ASSESSING', 'READY_TO_PLAN', 'FAILED'],
-  READY_TO_PLAN: ['AWAITING_APPROVAL', 'NEEDS_ALI', 'FAILED'],
-  AWAITING_APPROVAL: ['EXECUTING', 'READY_TO_PLAN', 'FAILED'],
+  DISCOVERING: ['ASSESSING', 'RESOLVED', 'FAILED'],
+  ASSESSING: ['NEEDS_ALI', 'READY_TO_PLAN', 'RESOLVED', 'FAILED'],
+  NEEDS_ALI: ['ASSESSING', 'READY_TO_PLAN', 'RESOLVED', 'FAILED'],
+  READY_TO_PLAN: ['AWAITING_APPROVAL', 'NEEDS_ALI', 'RESOLVED', 'FAILED'],
+  AWAITING_APPROVAL: ['EXECUTING', 'READY_TO_PLAN', 'RESOLVED', 'FAILED'],
   EXECUTING: ['WAITING', 'DELEGATED', 'RESOLVED', 'FAILED'],
   WAITING: ['ASSESSING', 'RESOLVED', 'REOPENED', 'FAILED'],
   DELEGATED: ['ASSESSING', 'RESOLVED', 'REOPENED', 'FAILED'],
@@ -39,8 +53,8 @@ export const CASE_STATE_TRANSITIONS: Record<CaseState, CaseState[]> = {
   // retry — without it, one transient action failure (e.g. a Gmail rate
   // limit) permanently locked the case out of ever executing again,
   // since FAILED had no path back into EXECUTING.
-  FAILED: ['ASSESSING', 'READY_TO_PLAN', 'EXECUTING'],
-  REOPENED: ['ASSESSING'],
+  FAILED: ['ASSESSING', 'READY_TO_PLAN', 'EXECUTING', 'RESOLVED'],
+  REOPENED: ['ASSESSING', 'RESOLVED'],
 };
 
 export const ITEM_DISPOSITIONS = [
@@ -164,7 +178,11 @@ export type MatchReasonKind =
   | 'same_basecamp_project'
   | 'semantic_similarity'
   | 'generic_terminology'
-  | 'ambiguous_first_name_only';
+  | 'ambiguous_first_name_only'
+  // Item came from the hourly/manual inbox auto-sync, not a person/topic
+  // search — provenance only, never scored (auto-synced items are always
+  // INCLUDED directly, bypassing the CANDIDATE-review scoring path).
+  | 'auto_synced_from_inbox';
 
 export interface MatchReason {
   kind: MatchReasonKind;

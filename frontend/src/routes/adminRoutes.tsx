@@ -14,6 +14,7 @@ import AdminImportPage from '../pages/admin/AdminImportPage';
 import AdminRevenueDashboardPage from '../pages/admin/AdminRevenueDashboardPage';
 import AdminRefundsPage from '../pages/admin/AdminRefundsPage';
 import AdminSettingsPage from '../pages/admin/AdminSettingsPage';
+import AdminCapeSettingsPage from '../pages/admin/AdminCapeSettingsPage';
 import AdminEventLedgerPage from '../pages/admin/AdminEventLedgerPage';
 import AdminCampaignsPage from '../pages/admin/AdminCampaignsPage';
 import AdminCampaignDetailPage from '../pages/admin/AdminCampaignDetailPage';
@@ -46,6 +47,7 @@ import ContentQueuePage from '../pages/admin/ContentQueuePage';
 import AdminSourcesPage from '../pages/admin/AdminSourcesPage';
 import AdminGeneratorPage from '../pages/admin/AdminGeneratorPage';
 import AdminIngestLogsPage from '../pages/admin/AdminIngestLogsPage';
+import AdminWorkLedgerHealthPage from '../pages/admin/AdminWorkLedgerHealthPage';
 import AdminRoutingRulesPage from '../pages/admin/AdminRoutingRulesPage';
 import AdminAutonomousPage from '../pages/admin/AdminAutonomousPage';
 import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
@@ -83,6 +85,7 @@ const adminRoutes = (
         <Route path="/admin/revenue" element={<AdminRevenueDashboardPage />} />
         <Route path="/admin/refunds" element={<AdminRefundsPage />} />
         <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        <Route path="/admin/cape-settings" element={<AdminCapeSettingsPage />} />
         <Route path="/admin/insights" element={<AdminICPInsightsPage />} />
         <Route path="/admin/events" element={<AdminEventLedgerPage />} />
         <Route path="/admin/accelerator" element={<AdminAcceleratorPage />} />
@@ -112,6 +115,7 @@ const adminRoutes = (
         <Route path="/admin/sources" element={<AdminSourcesPage />} />
         <Route path="/admin/generator/:sourceSlug/:entrySlug" element={<AdminGeneratorPage />} />
         <Route path="/admin/ingest-logs" element={<AdminIngestLogsPage />} />
+        <Route path="/admin/work-ledger-health" element={<AdminWorkLedgerHealthPage />} />
         <Route path="/admin/routing-rules" element={<AdminRoutingRulesPage />} />
         <Route path="/admin/autonomous" element={<AdminAutonomousPage />} />
         <Route path="/admin/automation" element={<AdminAutomationPage />} />

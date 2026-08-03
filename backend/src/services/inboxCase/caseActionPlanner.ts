@@ -5,7 +5,7 @@ import InboxCaseItem from '../../models/InboxCaseItem';
 import InboxCaseAction from '../../models/InboxCaseAction';
 import InboxCaseQuestion from '../../models/InboxCaseQuestion';
 import { ActionRiskLevel, ActionType, ALWAYS_INDIVIDUAL_APPROVAL, CaseAssessment } from '../../types/inboxCase';
-import { computeIdempotencyKey } from './textNormalization';
+import { computeIdempotencyKey, isBasecampDigestSender } from './textNormalization';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { logCaseEvent } from './caseEventLog';
 import { postCaseProgressNote } from './caseTicketService';
@@ -26,7 +26,12 @@ import { redactSensitive } from '../../utils/piiRedaction';
 // trust the dependency graph alone rather than re-deriving "is this an
 // archive action" logic.
 
-interface ProposedAction {
+// Exported: reused by caseQuickResolveService.ts and
+// caseActionOverrideService.ts, which both need to create a single
+// InboxCaseAction with the same idempotency-dedup and sanitization
+// guarantees the full-case planner already relies on, rather than
+// duplicating that logic a second and third time.
+export interface ProposedAction {
   action_type: ActionType;
   item_id: string | null;
   target_source: string;
@@ -103,22 +108,54 @@ function buildWaitingActions(caseRow: InboxCase, assessment: CaseAssessment): Pr
   return actions;
 }
 
-function buildBasecampCommentActions(caseRow: InboxCase, assessment: PlannerAssessment, basecampItems: InboxCaseItem[]): ProposedAction[] {
+interface BasecampCommentPair {
+  comment: ProposedAction;
+  item: InboxCaseItem;
+}
+
+// Returns the comment proposal PAIRED with its source item (not just the
+// flat proposal) so generatePlan() can check item.basecamp_close_recommended
+// afterward and, if true, propose a linked BASECAMP_COMPLETE_TODO action
+// depending on the comment — the checkbox this run adds on the frontend
+// binds to exactly that pairing.
+function buildBasecampCommentActions(caseRow: InboxCase, assessment: PlannerAssessment, basecampItems: InboxCaseItem[]): BasecampCommentPair[] {
   if (!assessment.recommended_next_actions?.length) return [];
   const decision = assessment.teaching_brief_recommended_decision || assessment.recommended_next_actions[0];
 
   return basecampItems
     .filter((item) => item.disposition === null && item.inclusion_status !== 'EXCLUDED')
     .map((item) => ({
-      action_type: 'BASECAMP_COMMENT' as ActionType,
-      item_id: item.id,
-      target_source: 'basecamp',
-      target_id: item.source_id,
-      preview: `Comment on Basecamp item "${item.title}": ${decision}`,
-      payload: { project_id: (item.snapshot as any)?.project_id ?? null, comment: decision },
-      risk_level: 'MEDIUM' as ActionRiskLevel,
-      idempotencyParts: [caseRow.id, 'BASECAMP_COMMENT', item.id],
+      item,
+      comment: {
+        action_type: 'BASECAMP_COMMENT' as ActionType,
+        item_id: item.id,
+        target_source: 'basecamp',
+        target_id: item.source_id,
+        preview: `Comment on Basecamp item "${item.title}": ${decision}`,
+        payload: { project_id: (item.snapshot as any)?.project_id ?? null, comment: decision },
+        risk_level: 'MEDIUM' as ActionRiskLevel,
+        idempotencyParts: [caseRow.id, 'BASECAMP_COMMENT', item.id],
+      },
     }));
+}
+
+// The linked "also close this" action a Basecamp comment can carry, per
+// item.basecamp_close_recommended (set by caseAssessmentService.ts's
+// "deeper look", advisory only). risk_level/requires_individual_approval
+// are computed the normal way — no special-casing — because
+// BASECAMP_COMPLETE_TODO is already in ALWAYS_INDIVIDUAL_APPROVAL, so this
+// can never be bulk-approved regardless.
+function buildLinkedCloseAction(caseRow: InboxCase, item: InboxCaseItem): ProposedAction {
+  return {
+    action_type: 'BASECAMP_COMPLETE_TODO',
+    item_id: item.id,
+    target_source: 'basecamp',
+    target_id: item.source_id,
+    preview: `Close Basecamp item "${item.title}" after the comment above`,
+    payload: { project_id: (item.snapshot as any)?.project_id ?? null },
+    risk_level: 'LOW',
+    idempotencyParts: [caseRow.id, 'BASECAMP_COMPLETE_TODO', item.id],
+  };
 }
 
 function buildArchiveActions(caseRow: InboxCase, emailItems: InboxCaseItem[]): ProposedAction[] {
@@ -174,8 +211,22 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
   // executeEmailSend in caseActionExecutors.ts, which resolves the real
   // send-to address differently for sent_email items (to_addresses, not
   // from_address) to match this.
+  // An email whose body references live Basecamp records (e.g. Basecamp's
+  // own "N to-dos due soon" digest) is never a reply target, even if
+  // resolution of those references later fails — replying to an email that
+  // is fundamentally about specific tracked work items is never the right
+  // default. The real actions for those items are the resolved
+  // basecamp_todo items' own BASECAMP_COMMENT proposals below, or manual
+  // review if resolution didn't find anything. Unconditional on whether
+  // resolution succeeded, per execution-contract.md. Also excludes a
+  // confirmed digest-sender item even when it has zero extracted
+  // basecamp_refs — Basecamp's periodic "N to-dos due soon" rollup embeds no
+  // per-to-do URL at all (confirmed against real production samples), so
+  // the basecamp_refs check alone can't catch it; the sender check does.
   const includedInboundEmail = emailItems
     .filter((i) => i.inclusion_status === 'INCLUDED')
+    .filter((i) => !((i.snapshot as any)?.basecamp_refs?.length > 0))
+    .filter((i) => !isBasecampDigestSender((i.snapshot as any)?.from_address))
     .sort((a, b) => Number(b.match_score) - Number(a.match_score));
   const includedSentEmailWithRecipient = items
     .filter((i) => i.source_type === 'sent_email' && i.inclusion_status === 'INCLUDED' && (i.snapshot as any)?.to_addresses?.length)
@@ -186,8 +237,8 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
   const nonArchiveProposals: ProposedAction[] = [
     ...(replyAction ? [replyAction] : []),
     ...buildWaitingActions(caseRow, flatAssessment),
-    ...buildBasecampCommentActions(caseRow, flatAssessment, basecampItems),
   ];
+  const basecampCommentPairs = buildBasecampCommentActions(caseRow, flatAssessment, basecampItems);
 
   const correlationId = randomUUID();
   const createdIds: string[] = [];
@@ -196,6 +247,28 @@ export async function generatePlan(caseId: string, requestedBy: string): Promise
     const idempotency_key = computeIdempotencyKey(proposal.idempotencyParts);
     const created = await createActionIfNew(caseRow, correlationId, requestedBy, proposal, idempotency_key, []);
     if (created) createdIds.push(created);
+  }
+
+  // Basecamp comment + optional linked "also close this" action: create the
+  // comment first, then — only when the assessment's "deeper look"
+  // recommended closing this item — propose a BASECAMP_COMPLETE_TODO that
+  // depends on the comment's real id (new this run, or already-existing
+  // from a prior plan run on a re-plan), so it can never execute before or
+  // instead of the comment.
+  for (const { comment, item } of basecampCommentPairs) {
+    const commentIdempotencyKey = computeIdempotencyKey(comment.idempotencyParts);
+    const createdCommentId = await createActionIfNew(caseRow, correlationId, requestedBy, comment, commentIdempotencyKey, []);
+    if (createdCommentId) createdIds.push(createdCommentId);
+
+    if (item.basecamp_close_recommended === true) {
+      const commentActionId = createdCommentId || (await InboxCaseAction.findOne({ where: { idempotency_key: commentIdempotencyKey } }))?.id;
+      if (commentActionId) {
+        const closeProposal = buildLinkedCloseAction(caseRow, item);
+        const closeIdempotencyKey = computeIdempotencyKey(closeProposal.idempotencyParts);
+        const createdCloseId = await createActionIfNew(caseRow, correlationId, requestedBy, closeProposal, closeIdempotencyKey, [commentActionId]);
+        if (createdCloseId) createdIds.push(createdCloseId);
+      }
+    }
   }
 
   // Archive actions depend on every non-archive action proposed in THIS
@@ -256,7 +329,7 @@ function sanitizeProposal(proposal: ProposedAction): ProposedAction {
   return { ...proposal, preview: sanitizeText(proposal.preview), payload };
 }
 
-async function createActionIfNew(
+export async function createActionIfNew(
   caseRow: InboxCase,
   correlationId: string,
   requestedBy: string,

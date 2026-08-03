@@ -35,7 +35,10 @@ export interface DiscoveredCaseSummary {
 }
 
 const EMAIL_ADAPTERS = [gmailColaberryCaseSource, gmailPersonalCaseSource, hotmailCaseSource];
-const MAX_CANDIDATES_PER_CASE = 60;
+// Exported for reuse by caseAutoSyncService.ts's Basecamp-reference
+// expansion step (same "don't let one pathological input fan out
+// unboundedly" cap applies to resolving many references in one digest).
+export const MAX_CANDIDATES_PER_CASE = 60;
 
 // Counts how many DISTINCT candidates (across every provider) reference each
 // Basecamp recording id. A basecamp_refs match only becomes a positive
@@ -200,6 +203,109 @@ async function runAdapters(params: DiscoveryParams, providers?: CaseProvider[]):
   return [...emailItems, ...basecampItems];
 }
 
+// Extracted from discoverCases()'s own per-cluster loop (open case, persist
+// items+events, upsert PERSON-mode aliases, transition to ASSESSING) so
+// caseAutoSyncService.ts's query-less hourly sync can create cases through
+// the exact same, already-proven persistence path instead of a second,
+// subtly-different copy. Pure extraction — discoverCases() below is
+// unchanged in behavior, just calls this instead of inlining the body.
+export async function persistClusterAsCase(
+  cluster: ScoredCandidate[],
+  mode: CaseMode,
+  normalizedQueryLabel: string,
+  openedBy: string,
+  sourceQuery: Record<string, unknown>,
+  correlationId: string
+): Promise<DiscoveredCaseSummary> {
+  const bounded = [...cluster].sort((a, b) => b.score - a.score).slice(0, MAX_CANDIDATES_PER_CASE);
+  const title = deriveCaseTitle(bounded);
+
+  const createdCase = await openCase({
+    title,
+    mode,
+    normalized_query: normalizedQueryLabel,
+    source_query: sourceQuery,
+    opened_by: openedBy,
+  });
+
+  let includedCount = 0;
+  let candidateCount = 0;
+
+  for (const item of bounded) {
+    const inclusionStatus = item.inclusionStatus;
+    if (inclusionStatus === 'INCLUDED') includedCount++;
+    if (inclusionStatus === 'CANDIDATE') candidateCount++;
+
+    try {
+      const created = await InboxCaseItem.create({
+        case_id: createdCase.id,
+        source_type: item.source_type,
+        source_id: item.source_id,
+        provider: item.provider,
+        source_url: item.source_url,
+        title: item.title,
+        occurred_at: item.occurred_at,
+        match_score: item.score,
+        match_reasons: item.reasons,
+        inclusion_status: inclusionStatus,
+        disposition: null,
+        disposition_reason: null,
+        // thread_id/message_id/in_reply_to/basecamp_refs exist only on the
+        // transient RawCandidateItem used for grouping — persist them into
+        // the snapshot so later steps can use them. Losing thread_id/
+        // message_id/in_reply_to at persistence time would silently break
+        // In-Reply-To/References headers on every proposed reply; losing
+        // basecamp_refs would make it impossible for the planner to know
+        // this item's body references live Basecamp records (see
+        // caseActionPlanner.ts's buildReplyAction).
+        snapshot: {
+          ...item.snapshot,
+          thread_id: item.thread_id,
+          message_id: item.message_id,
+          in_reply_to: item.in_reply_to,
+          basecamp_refs: item.basecamp_refs,
+        },
+        source_hash: item.sourceHash,
+      } as any);
+
+      await logCaseEvent({
+        case_id: createdCase.id,
+        item_id: created.id,
+        event_type: inclusionStatus === 'EXCLUDED' ? 'candidate_excluded' : 'candidate_included',
+        actor_type: 'system',
+        actor_id: 'case_discovery_service',
+        details: { score: item.score, reasons: item.reasons, source_type: item.source_type },
+        correlation_id: correlationId,
+      });
+    } catch (err: any) {
+      // Unique (case_id, source_hash) violation on a re-run is expected and benign.
+      if (err?.name !== 'SequelizeUniqueConstraintError') {
+        console.error(`[InboxCase] Failed to persist case item: ${err?.message}`);
+      }
+    }
+  }
+
+  // Discover reusable identity aliases from co-occurrence: any participant
+  // email seen inside a PERSON-mode cluster is worth persisting (low
+  // confidence, unverified) so future searches find it without a human
+  // having to re-teach the system the same alias every time.
+  if (mode === 'PERSON') {
+    const emails = new Set(bounded.flatMap((i) => i.participants.map(normalizeEmailAddress)).filter(Boolean));
+    for (const email of emails) {
+      await upsertAlias({ canonicalName: normalizedQueryLabel, aliasType: 'email', aliasValue: email, confidence: 60 });
+    }
+  }
+
+  await transitionCase(createdCase.id, 'ASSESSING', {
+    actor_type: 'system',
+    actor_id: 'case_discovery_service',
+    event_type: 'case_discovery_completed',
+    details: { item_count: bounded.length, included: includedCount, candidates: candidateCount },
+  });
+
+  return { caseId: createdCase.id, title, itemCount: bounded.length, includedCount, candidateCount };
+}
+
 export async function discoverCases(input: DiscoverCasesInput): Promise<DiscoveredCaseSummary[]> {
   const windowDays = DISCOVERY_WINDOW_DAYS[input.window];
   const correlationId = randomUUID();
@@ -260,89 +366,8 @@ export async function discoverCases(input: DiscoverCasesInput): Promise<Discover
   const summaries: DiscoveredCaseSummary[] = [];
 
   for (const cluster of clusters) {
-    const bounded = [...cluster].sort((a, b) => b.score - a.score).slice(0, MAX_CANDIDATES_PER_CASE);
-    const title = deriveCaseTitle(bounded);
-
-    const createdCase = await openCase({
-      title,
-      mode: input.mode,
-      normalized_query: normalizedQueryLabel,
-      source_query: { mode: input.mode, query: input.query, window: input.window, providers: input.providers ?? null },
-      opened_by: input.openedBy,
-    });
-
-    let includedCount = 0;
-    let candidateCount = 0;
-
-    for (const item of bounded) {
-      const inclusionStatus = item.inclusionStatus;
-      if (inclusionStatus === 'INCLUDED') includedCount++;
-      if (inclusionStatus === 'CANDIDATE') candidateCount++;
-
-      try {
-        const created = await InboxCaseItem.create({
-          case_id: createdCase.id,
-          source_type: item.source_type,
-          source_id: item.source_id,
-          provider: item.provider,
-          source_url: item.source_url,
-          title: item.title,
-          occurred_at: item.occurred_at,
-          match_score: item.score,
-          match_reasons: item.reasons,
-          inclusion_status: inclusionStatus,
-          disposition: null,
-          disposition_reason: null,
-          // thread_id/message_id/in_reply_to exist only on the transient
-          // RawCandidateItem used for grouping — persist them into the
-          // snapshot so a later reply action (Phase 5 executor) can thread
-          // correctly. Losing these at persistence time would silently
-          // break In-Reply-To/References headers on every proposed reply.
-          snapshot: {
-            ...item.snapshot,
-            thread_id: item.thread_id,
-            message_id: item.message_id,
-            in_reply_to: item.in_reply_to,
-          },
-          source_hash: item.sourceHash,
-        } as any);
-
-        await logCaseEvent({
-          case_id: createdCase.id,
-          item_id: created.id,
-          event_type: inclusionStatus === 'EXCLUDED' ? 'candidate_excluded' : 'candidate_included',
-          actor_type: 'system',
-          actor_id: 'case_discovery_service',
-          details: { score: item.score, reasons: item.reasons, source_type: item.source_type },
-          correlation_id: correlationId,
-        });
-      } catch (err: any) {
-        // Unique (case_id, source_hash) violation on a re-run is expected and benign.
-        if (err?.name !== 'SequelizeUniqueConstraintError') {
-          console.error(`[InboxCase] Failed to persist case item: ${err?.message}`);
-        }
-      }
-    }
-
-    // Discover reusable identity aliases from co-occurrence: any participant
-    // email seen inside a PERSON-mode cluster is worth persisting (low
-    // confidence, unverified) so future searches find it without a human
-    // having to re-teach the system the same alias every time.
-    if (input.mode === 'PERSON') {
-      const emails = new Set(bounded.flatMap((i) => i.participants.map(normalizeEmailAddress)).filter(Boolean));
-      for (const email of emails) {
-        await upsertAlias({ canonicalName: normalizedQueryLabel, aliasType: 'email', aliasValue: email, confidence: 60 });
-      }
-    }
-
-    await transitionCase(createdCase.id, 'ASSESSING', {
-      actor_type: 'system',
-      actor_id: 'case_discovery_service',
-      event_type: 'case_discovery_completed',
-      details: { item_count: bounded.length, included: includedCount, candidates: candidateCount },
-    });
-
-    summaries.push({ caseId: createdCase.id, title, itemCount: bounded.length, includedCount, candidateCount });
+    const sourceQuery = { mode: input.mode, query: input.query, window: input.window, providers: input.providers ?? null };
+    summaries.push(await persistClusterAsCase(cluster, input.mode, normalizedQueryLabel, input.openedBy, sourceQuery, correlationId));
   }
 
   return summaries;

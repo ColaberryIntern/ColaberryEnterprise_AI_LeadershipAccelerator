@@ -1,11 +1,13 @@
 import { Request, Response } from 'express';
+import { Op } from 'sequelize';
 import InboxCase from '../models/InboxCase';
 import InboxCaseEvent from '../models/InboxCaseEvent';
-import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema } from '../schemas/inboxCaseSchema';
+import { discoverCaseSchema, listCasesQuerySchema, caseIdParamSchema, caseItemParamSchema, updateCaseItemSchema, assessCaseSchema, quickResolveItemSchema } from '../schemas/inboxCaseSchema';
 import { discoverCases } from '../services/inboxCase/caseDiscoveryService';
 import { getCaseWithChildren } from '../services/inboxCase/caseRepository';
 import { getCaseTicketId } from '../services/inboxCase/caseTicketService';
 import { runAssessment } from '../services/inboxCase/caseAssessmentService';
+import { quickResolveItem } from '../services/inboxCase/caseQuickResolveService';
 import InboxCaseItem from '../models/InboxCaseItem';
 import { logCaseEvent } from '../services/inboxCase/caseEventLog';
 import { randomUUID } from 'crypto';
@@ -41,14 +43,23 @@ export async function handleListCases(req: Request, res: Response) {
   if (!parsed.success) {
     return res.status(400).json({ error: 'ValidationError', details: parsed.error.issues });
   }
-  const { state, mode, page, limit } = parsed.data;
+  const { state, mode, page, limit, include_resolved } = parsed.data;
   const where: Record<string, unknown> = {};
-  if (state) where.state = state;
+  if (state) {
+    where.state = state;
+  } else if (!include_resolved) {
+    // Default view hides RESOLVED cases so they don't clutter the active
+    // list — still reachable via state=RESOLVED or include_resolved=true.
+    // An explicit `state` filter above is completely unaffected by this.
+    where.state = { [Op.ne]: 'RESOLVED' };
+  }
   if (mode) where.mode = mode;
 
   const { count, rows } = await InboxCase.findAndCountAll({
     where,
-    order: [['opened_at', 'DESC']],
+    // Oldest-opened first by default, per Ali's request — the reverse of a
+    // normal email inbox's newest-on-top convention.
+    order: [['opened_at', 'ASC']],
     limit,
     offset: (page - 1) * limit,
   });
@@ -102,6 +113,27 @@ export async function handleUpdateCaseItem(req: Request, res: Response) {
   });
 
   res.json({ item: item.toJSON() });
+}
+
+export async function handleQuickResolveItem(req: Request, res: Response) {
+  const paramsParsed = caseItemParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) return res.status(400).json({ error: 'ValidationError', details: paramsParsed.error.issues });
+  const bodyParsed = quickResolveItemSchema.safeParse(req.body);
+  if (!bodyParsed.success) return res.status(400).json({ error: 'ValidationError', details: bodyParsed.error.issues });
+
+  try {
+    const result = await quickResolveItem(
+      paramsParsed.data.caseId,
+      paramsParsed.data.itemId,
+      bodyParsed.data.resolution,
+      (req as any).admin?.email || 'admin'
+    );
+    res.json(result);
+  } catch (err: any) {
+    if (err?.statusCode === 404) return res.status(404).json({ error: err.error_class, message: err.message });
+    console.error('[InboxCase] QuickResolveItem error:', err?.message);
+    res.status(500).json({ error: 'QuickResolveFailedError', message: err?.message });
+  }
 }
 
 export async function handleAssessCase(req: Request, res: Response) {

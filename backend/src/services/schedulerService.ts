@@ -2179,6 +2179,25 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Campaign graduation: every 6 hours');
 
+  // -- Inbox Intel Case Auto-Sync: hourly, on the hour --
+  // Turns Ali's real inbox (email + Basecamp, filtered through Inbox COS's
+  // classification) into Cases without him having to search a person/topic
+  // first. Read-only against mail/Basecamp/Inbox COS; only creates Case/
+  // CaseItem rows in ASSESSING state, same as manual "Discover Related
+  // Work" — never auto-approves or auto-executes anything.
+  cron.schedule('0 * * * *', () => {
+    instrumentCronJob('InboxCaseAutoSync', async () => {
+      const { runAutoSync } = require('./inboxCase/caseAutoSyncService');
+      const result = await runAutoSync('cron', 'system');
+      console.log(
+        `[Scheduler] Inbox case auto-sync: ${result.newCasesCreated} new case(s), ${result.itemsAdded} item(s), ${result.emailsSkippedUnclassified} unclassified skipped`
+      );
+    }).catch((err: any) => {
+      console.error('[Scheduler] Inbox case auto-sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Inbox case auto-sync: hourly, on the hour');
+
   // -- Inbox Chief of Staff --
   try {
     const { startInboxScheduler } = require('./inbox/inboxScheduler');

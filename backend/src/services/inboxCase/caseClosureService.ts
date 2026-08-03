@@ -5,6 +5,7 @@ import InboxCaseEvent from '../../models/InboxCaseEvent';
 import { logCaseEvent } from './caseEventLog';
 import { getCaseOrThrow, transitionCase } from './caseRepository';
 import { postCaseProgressNote } from './caseTicketService';
+import { rejectAction } from './caseApprovalService';
 
 // Closure guard (root directive section 9). Blocks closure and returns
 // EXACTLY what remains — never a generic "cannot close" with no
@@ -135,15 +136,42 @@ export async function closeCase(caseId: string, closedBy: string): Promise<Close
     return { closed: false, blockers: guard.blockers };
   }
 
-  await caseRow.update({ closed_at: new Date(), updated_at: new Date() });
-
+  // Attempt the state transition BEFORE stamping closed_at — every other
+  // guard condition can pass on a case that's still in DISCOVERING/
+  // ASSESSING/NEEDS_ALI/READY_TO_PLAN/AWAITING_APPROVAL (e.g. a fresh
+  // auto-synced case with a single, already-dispositioned item, never
+  // assessed or planned): only EXECUTING/WAITING/DELEGATED have a legal
+  // path to RESOLVED (types/inboxCase.ts's CASE_STATE_TRANSITIONS). A case
+  // in one of those other states genuinely cannot close directly — that is
+  // reported back as a real blocker, not an uncaught exception, and
+  // closed_at is never set on a case that didn't actually resolve
+  // (no partial commit).
   if (caseRow.state !== 'RESOLVED') {
-    await transitionCase(caseId, 'RESOLVED', {
-      actor_type: 'admin',
-      actor_id: closedBy,
-      event_type: 'case_resolved',
-      details: { closed_by: closedBy },
-    });
+    try {
+      await transitionCase(caseId, 'RESOLVED', {
+        actor_type: 'admin',
+        actor_id: closedBy,
+        event_type: 'case_resolved',
+        details: { closed_by: closedBy },
+      });
+    } catch (err: any) {
+      if (err?.name === 'InvalidCaseTransitionError') {
+        const blocker: ClosureBlocker = {
+          condition: 'case_not_in_closable_state',
+          detail: `Case is in ${caseRow.state} state, which cannot close directly — it needs to go through Execute and Verify first.`,
+        };
+        await logCaseEvent({
+          case_id: caseId,
+          event_type: 'closure_blocked',
+          actor_type: 'admin',
+          actor_id: closedBy,
+          details: { blockers: [blocker] },
+          correlation_id: caseRow.correlation_id,
+        });
+        return { closed: false, blockers: [blocker] };
+      }
+      throw err;
+    }
   } else {
     await logCaseEvent({
       case_id: caseId,
@@ -155,7 +183,60 @@ export async function closeCase(caseId: string, closedBy: string): Promise<Close
     });
   }
 
+  await caseRow.update({ closed_at: new Date(), updated_at: new Date() });
   await postCaseProgressNote(caseId, `Case closed by ${closedBy}. All closure conditions met.`);
 
   return { closed: true, blockers: [] };
+}
+
+// One-click "not worth responding to" dismissal from the case list, per
+// Ali's request — clears every blocker this system can SAFELY clear
+// without ever touching an external side effect that already happened or
+// is in flight, then defers to closeCase()'s own real guard for the final
+// answer. Never claims success it didn't achieve: a case with a genuinely
+// in-flight (EXECUTING) or unverified (SUCCEEDED) action is left exactly
+// as-is and reported back via the normal blocker list, since the action
+// state machine has no legal transition away from those statuses — this
+// is a real limit, not an oversight (see the ACTION_STATE_TRANSITIONS
+// check inside rejectAction()/assertActionTransition()).
+export async function dismissCase(caseId: string, requestedBy: string): Promise<CloseCaseResult> {
+  const caseRow = await getCaseOrThrow(caseId);
+  const [questions, actions, items] = await Promise.all([
+    InboxCaseQuestion.findAll({ where: { case_id: caseId, status: 'OPEN' } }),
+    InboxCaseAction.findAll({ where: { case_id: caseId } }),
+    InboxCaseItem.findAll({ where: { case_id: caseId } }),
+  ]);
+
+  for (const question of questions) {
+    await question.update({ status: 'SKIPPED', updated_at: new Date() });
+  }
+
+  // Only PROPOSED and APPROVED have a legal transition to REJECTED — an
+  // action already EXECUTING, SUCCEEDED, or FAILED represents real
+  // external work already in motion or completed, and force-closing over
+  // that would hide a genuine problem rather than dismiss a non-issue.
+  const clearableActions = actions.filter((a) => a.status === 'PROPOSED' || a.status === 'APPROVED');
+  for (const action of clearableActions) {
+    try {
+      await rejectAction(caseId, action.id, requestedBy, 'Dismissed by Ali');
+    } catch (err: any) {
+      console.error(`[InboxCase] Dismiss failed to reject action ${action.id}: ${err?.message}`);
+    }
+  }
+
+  const undispositionedItems = items.filter((i) => i.disposition === null && i.inclusion_status !== 'EXCLUDED');
+  for (const item of undispositionedItems) {
+    await item.update({ disposition: 'NO_ACTION', disposition_reason: 'Dismissed by Ali — not worth responding to.', updated_at: new Date() });
+  }
+
+  await logCaseEvent({
+    case_id: caseId,
+    event_type: 'case_dismissed',
+    actor_type: 'admin',
+    actor_id: requestedBy,
+    details: { questions_skipped: questions.length, actions_rejected: clearableActions.length, items_dispositioned: undispositionedItems.length },
+    correlation_id: caseRow.correlation_id,
+  });
+
+  return closeCase(caseId, requestedBy);
 }

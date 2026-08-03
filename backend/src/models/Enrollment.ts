@@ -39,6 +39,11 @@ export interface EnrollmentAttributes {
   active_project_id?: string | null;
   enrollment_type?: 'standard' | 'explorer';
   avatar_data_url?: string | null;
+  /** Nullable future-dated access gate. NULL = no gate (default, unchanged
+   *  behavior). Set = full curriculum access is deferred until this date even if
+   *  payment_status='paid'; free-tier/Explorer portal access is unaffected. See
+   *  contentEntitlement.ts. Format: 'YYYY-MM-DD'. */
+  access_starts_at?: string | null;
 }
 
 class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttributes {
@@ -78,6 +83,7 @@ class Enrollment extends Model<EnrollmentAttributes> implements EnrollmentAttrib
   declare active_project_id: string | null;
   declare enrollment_type: 'standard' | 'explorer';
   declare avatar_data_url: string | null;
+  declare access_starts_at: string | null;
   declare created_at: Date;
 }
 
@@ -249,6 +255,13 @@ Enrollment.init(
       // Kept in the DB rather than on disk so it survives container redeploys
       // (uploads dir is ephemeral) and needs no static-file serving.
       type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    access_starts_at: {
+      // NULL = no gate. Set = full curriculum access deferred until this date
+      // (see contentEntitlement.ts hasFullCurriculumAccess). Free-tier access is
+      // never affected by this field.
+      type: DataTypes.DATEONLY,
       allowNull: true,
     },
     created_at: {
