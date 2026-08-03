@@ -212,6 +212,37 @@ export async function getCostBreakdown(): Promise<{ windowDays: number; totalUsd
   return { windowDays: 30, totalUsd, rows };
 }
 
+export interface CostByUser { userId: string; calls: number; costUsd: number; totalTokens: number; }
+
+/**
+ * Per-user cost drill-down (T004 / P3-4) — same shape/window as getCostBreakdown, grouped by
+ * user_id instead of workflow_id. Most llm.call events today carry no user_id (visitor/lead
+ * traffic isn't threaded through as an internal user), so '(unattributed)' dominates until more
+ * call sites pass user_id through getInstrumentedOpenAI's context — that's a real, honest gap
+ * this task surfaces rather than papers over; see the per-workflow-cost criterion's live evidence.
+ */
+export async function getCostByUser(): Promise<{ windowDays: number; totalUsd: number; rows: CostByUser[] }> {
+  let rows: CostByUser[] = [];
+  try {
+    rows = (await sequelize.query(
+      `SELECT COALESCE(user_id, '(unattributed)') AS "userId",
+              COUNT(*)::int AS calls,
+              ROUND(COALESCE(SUM(cost_usd), 0)::numeric, 4)::float AS "costUsd",
+              COALESCE(SUM(total_tokens), 0)::int AS "totalTokens"
+       FROM ai_events
+       WHERE created_at >= NOW() - INTERVAL '30 days' AND event_type = 'llm.call'
+       GROUP BY 1
+       ORDER BY 3 DESC NULLS LAST
+       LIMIT 50`,
+      { type: QueryTypes.SELECT }
+    )) as CostByUser[];
+  } catch (err) {
+    structuredError('cost_by_user_query', err);
+  }
+  const totalUsd = Math.round(rows.reduce((sum, r) => sum + Number(r.costUsd || 0), 0) * 100) / 100;
+  return { windowDays: 30, totalUsd, rows };
+}
+
 export async function getActivityMetrics(): Promise<ActivityMetrics> {
   const since = hoursAgo(24);
   let conversations = 0;

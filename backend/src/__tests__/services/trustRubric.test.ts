@@ -23,6 +23,7 @@ const SIGNALS: LiveSignals = {
   vectorRetrievalEvents7d: 4,
   llmCalls7d: 50,
   promptVersionCoveragePct: 40,
+  userAttributedCostPct7d: 0,
   valueUsd30d: 1200,
   hoursSaved30d: 24,
   consentChecks7d: 30,
@@ -83,6 +84,24 @@ describe('trustRubric', () => {
     const openNoTraffic = evaluateDimension('auditability', { ...SIGNALS, llmCalls7d: 0, promptVersionCoveragePct: 0 })!.criteria.find((c) => c.key === 'prompt-version')!;
     expect(openNoTraffic.status).toBe('open');
     expect(openNoTraffic.evidence).toContain('No llm.call events');
+  });
+
+  it('per-workflow-cost criterion reflects real per-user coverage, not just workflow grouping (T004)', () => {
+    const noWorkflow = evaluateDimension('businessImpact', { ...SIGNALS, distinctWorkflows7d: 0 })!.criteria.find((c) => c.key === 'per-workflow-cost')!;
+    expect(noWorkflow.status).toBe('open');
+    expect(noWorkflow.pct).toBe(0);
+
+    const workflowOnlyNoUsers = evaluateDimension('businessImpact', { ...SIGNALS, distinctWorkflows7d: 12, userAttributedCostPct7d: 0 })!.criteria.find((c) => c.key === 'per-workflow-cost')!;
+    expect(workflowOnlyNoUsers.status).toBe('partial');
+    expect(workflowOnlyNoUsers.pct).toBe(50); // matches pre-T004 behavior when user attribution is genuinely zero
+
+    const someUserAttribution = evaluateDimension('businessImpact', { ...SIGNALS, distinctWorkflows7d: 12, userAttributedCostPct7d: 15 })!.criteria.find((c) => c.key === 'per-workflow-cost')!;
+    expect(someUserAttribution.status).toBe('partial');
+    expect(someUserAttribution.pct).toBe(75);
+
+    const fullUserAttribution = evaluateDimension('businessImpact', { ...SIGNALS, distinctWorkflows7d: 12, userAttributedCostPct7d: 60 })!.criteria.find((c) => c.key === 'per-workflow-cost')!;
+    expect(fullUserAttribution.status).toBe('met');
+    expect(fullUserAttribution.pct).toBe(100);
   });
 
   it('returns all dimensions with criteria', () => {

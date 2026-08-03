@@ -74,6 +74,7 @@ export interface LiveSignals {
   vectorRetrievalEvents7d: number;
   llmCalls7d: number;
   promptVersionCoveragePct: number;
+  userAttributedCostPct7d: number;
   valueUsd30d: number;
   hoursSaved30d: number;
   consentChecks7d: number;
@@ -119,6 +120,7 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     vectorRetrievalEvents7d: 0,
     llmCalls7d: 0,
     promptVersionCoveragePct: 0,
+    userAttributedCostPct7d: 0,
     valueUsd30d: 0,
     hoursSaved30d: 0,
     consentChecks7d: 0,
@@ -146,10 +148,11 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'agent.authorization')::int AS abac7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'llm.call')::int AS llm_calls7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'llm.call' AND metadata->>'prompt_version' IS NOT NULL)::int AS llm_calls_versioned7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'llm.call' AND user_id IS NOT NULL)::int AS llm_calls_user_attributed7d,
          COALESCE(SUM(${MINUTES_SAVED_SQL}) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::int AS minutes30d
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; abac7d: number; llm_calls7d: number; llm_calls_versioned7d: number; minutes30d: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; abac7d: number; llm_calls7d: number; llm_calls_versioned7d: number; llm_calls_user_attributed7d: number; minutes30d: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
@@ -167,6 +170,7 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
       s.abacChecks7d = Number(r.abac7d) || 0;
       s.llmCalls7d = Number(r.llm_calls7d) || 0;
       s.promptVersionCoveragePct = s.llmCalls7d > 0 ? Math.round((Number(r.llm_calls_versioned7d) / s.llmCalls7d) * 100) : 0;
+      s.userAttributedCostPct7d = s.llmCalls7d > 0 ? Math.round((Number(r.llm_calls_user_attributed7d) / s.llmCalls7d) * 100) : 0;
       const mins = Number(r.minutes30d) || 0;
       s.hoursSaved30d = Math.round((mins / 60) * 10) / 10;
       s.valueUsd30d = valueUsd(mins);
@@ -360,10 +364,19 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
           : 'No revenue or time-saved attribution to AI actions.',
         remediation: 'Tune the time-saved rates + add direct revenue attribution (v2).' };
     }},
-    { key: 'per-workflow-cost', label: 'Per-workflow / per-user cost analytics', weight: 1, ref: 'P3-4', ev: (s) => ({
-      status: s.distinctWorkflows7d > 0 ? 'partial' : 'open', source: 'live', pct: s.distinctWorkflows7d > 0 ? 50 : 0,
-      evidence: `Cost is grouped by workflow_id (${s.distinctWorkflows7d} workflows seen, 7d); per-user analytics not yet built.`,
-      remediation: 'Add per-user cost grouping + dashboards (P3-4).' })},
+    { key: 'per-workflow-cost', label: 'Per-workflow / per-user cost analytics', weight: 1, ref: 'P3-4', ev: (s) => {
+      const hasWorkflow = s.distinctWorkflows7d > 0;
+      const userPct = s.userAttributedCostPct7d;
+      if (!hasWorkflow) {
+        return { status: 'open', source: 'live', pct: 0,
+          evidence: 'No workflow-attributed llm.call events in the last 7d.',
+          remediation: 'Add per-workflow + per-user cost grouping + dashboards (P3-4).' };
+      }
+      const pct = userPct >= 50 ? 100 : userPct > 0 ? 75 : 50;
+      return { status: pct >= 100 ? 'met' : 'partial', source: 'live', pct,
+        evidence: `Cost is grouped by both workflow_id (getCostBreakdown) and user_id (getCostByUser) (${s.distinctWorkflows7d} workflows, 7d). User attribution: ${userPct}% of llm.call events carry a user_id — most traffic is visitor/lead-driven, not internal-user-driven, so this is expected to stay low until more call sites thread user_id through getInstrumentedOpenAI's context.`,
+        remediation: pct >= 100 ? undefined : 'Thread user_id through more getInstrumentedOpenAI call sites where a real authenticated user initiates the call (P3-4).' };
+    }},
   ]},
 };
 
