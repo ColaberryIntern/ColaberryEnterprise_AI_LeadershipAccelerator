@@ -17,6 +17,7 @@ import { resolvePrompt } from '../components/promptTesterService';
 import { getInstrumentedOpenAI } from '../openaiInstrumented';
 import { DEFAULT_MODEL } from '../components/costEstimationService';
 import { getBlueprintContext } from './blueprintContext';
+import { getVideoDurationSeconds } from '../composer/youtubeClient';
 
 const VIDEO_BANDS = ['media', 'live_class', 'video_feedback'];
 
@@ -37,9 +38,9 @@ export interface VideoDraft {
   title: string | null;               // only set when anchor='video' (generated from the video)
   subtitle: string | null;
   description: string | null;
-  estimated_time: number | null;      // whole minutes (AI estimate — admin can correct)
+  estimated_time: number | null;      // whole minutes — real duration when known, else the AI's best guess
   points: { learning: number; builder: number; community: number } | null; // AI-guessed XP
-  video: { url: string; presenter: string | null; poster: string | null } | null;
+  video: { url: string; presenter: string | null; poster: string | null; duration_seconds: number | null } | null;
   content: { summary?: string; body_html?: string; questions?: string[]; reflection?: string };
   video_verified: boolean;
 }
@@ -95,18 +96,32 @@ async function suggestVideos(title: string, model: string): Promise<Array<{ id: 
     .filter((v: { id: string }) => v.id);
 }
 
-/** Resolve the video: use the provided URL, else find + validate one. */
-async function resolveVideo(title: string, providedUrl: string | null | undefined, model: string): Promise<{ url: string; presenter: string | null; poster: string | null; videoTitle: string; verified: boolean }> {
+/** PURE — real duration wins (rounded to whole minutes) when known; the LLM's guess
+ *  is only ever a last resort for videos we couldn't verify a real duration for. */
+export function deriveEstimatedTime(durationSeconds: number | null, llmGuessMinutes: number): number {
+  return durationSeconds != null ? Math.max(1, Math.round(durationSeconds / 60)) : llmGuessMinutes;
+}
+
+/** Resolve the video: use the provided URL, else find + validate one. Always tries to
+ *  attach the REAL provider duration (YouTube Data API) alongside oEmbed's title/
+ *  thumbnail — oEmbed has no duration field, so this is a separate, additive lookup
+ *  that degrades to null (never blocks card creation) when the id can't be resolved
+ *  or the API is unavailable. */
+export async function resolveVideo(title: string, providedUrl: string | null | undefined, model: string): Promise<{ url: string; presenter: string | null; poster: string | null; videoTitle: string; verified: boolean; duration_seconds: number | null }> {
   const provided = (providedUrl || '').trim();
   if (provided) {
     const id = youtubeId(provided);
-    const meta = await youtubeOembed(provided);
+    const [meta, duration_seconds] = await Promise.all([
+      youtubeOembed(provided),
+      id ? getVideoDurationSeconds(id) : Promise.resolve(null),
+    ]);
     return {
       url: provided,
       presenter: meta?.author_name || null,
       poster: meta?.thumbnail_url || (id ? hqThumb(id) : null),
       videoTitle: meta?.title || '',
       verified: !!meta,
+      duration_seconds,
     };
   }
   const candidates = await suggestVideos(title, model);
@@ -114,14 +129,15 @@ async function resolveVideo(title: string, providedUrl: string | null | undefine
     const url = watchUrl(c.id);
     const meta = await youtubeOembed(url);
     if (meta) {
-      return { url, presenter: meta.author_name || c.presenter || null, poster: meta.thumbnail_url || hqThumb(c.id), videoTitle: meta.title, verified: true };
+      const duration_seconds = await getVideoDurationSeconds(c.id);
+      return { url, presenter: meta.author_name || c.presenter || null, poster: meta.thumbnail_url || hqThumb(c.id), videoTitle: meta.title, verified: true, duration_seconds };
     }
   }
   // None validated (or oEmbed unreachable) — best-effort first candidate, flagged unverified.
   if (candidates[0]) {
-    return { url: watchUrl(candidates[0].id), presenter: candidates[0].presenter || null, poster: hqThumb(candidates[0].id), videoTitle: '', verified: false };
+    return { url: watchUrl(candidates[0].id), presenter: candidates[0].presenter || null, poster: hqThumb(candidates[0].id), videoTitle: '', verified: false, duration_seconds: null };
   }
-  return { url: '', presenter: null, poster: null, videoTitle: '', verified: false };
+  return { url: '', presenter: null, poster: null, videoTitle: '', verified: false, duration_seconds: null };
 }
 
 /** Write the card copy + lesson content around the (real) video. When
@@ -194,13 +210,15 @@ export async function generateVideoDraft(input: VideoDraftInput, model = DEFAULT
   let video: VideoDraft['video'] = null;
   let verified = false;
   let videoTitle = '';
+  let durationSeconds: number | null = null;
   if (isVideo) {
     // title-anchor finds a FRESH video (ignores any pasted URL); video-anchor
     // keeps the pasted URL and reads its real metadata.
     const rv = await resolveVideo(title, anchor === 'video' ? providedUrl : undefined, model);
     videoTitle = rv.videoTitle;
     verified = rv.verified;
-    video = rv.url ? { url: rv.url, presenter: rv.presenter, poster: rv.poster } : null;
+    durationSeconds = rv.duration_seconds;
+    video = rv.url ? { url: rv.url, presenter: rv.presenter, poster: rv.poster, duration_seconds: rv.duration_seconds } : null;
   }
 
   const bp = await getBlueprintContext(input.program_id, input.week);
@@ -212,7 +230,7 @@ export async function generateVideoDraft(input: VideoDraftInput, model = DEFAULT
     title: anchor === 'video' ? (text.title || videoTitle || null) : null,
     subtitle: text.subtitle,
     description: text.description,
-    estimated_time: text.estimated_time,   // AI estimate of the video length (minutes)
+    estimated_time: deriveEstimatedTime(durationSeconds, text.estimated_time),
     points: text.points,                   // AI-guessed learning/builder/community XP
     video,
     content: text.content,

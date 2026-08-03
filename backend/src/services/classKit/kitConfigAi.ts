@@ -69,7 +69,7 @@ function scaffoldQuestion(segment: string, weekTitle: string): InteractionPlacem
     options: ['Not sure yet', 'I can explain it', 'I need a recap', 'Ask me later'],
     answer: 1,
     reveal: 'Edit this question — it is a placeholder scaffold, not AI-generated (no OpenAI key configured, or the request failed).',
-    theater: false,
+    theater: true,
     presenterTip: '',
   };
 }
@@ -122,7 +122,7 @@ export async function generateQuestion(input: GenerateQuestionInput): Promise<Ge
       options,
       answer: kind === 'trivia' && Number.isInteger(parsed.answer) ? parsed.answer : undefined,
       reveal: typeof parsed.reveal === 'string' ? parsed.reveal : '',
-      theater: false,
+      theater: true,
       presenterTip: '',
     };
     return { question, source: 'ai' };

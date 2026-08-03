@@ -232,3 +232,53 @@ describe('Class Kit deck slide navigation', () => {
     expect(deck.elements.kcounter.textContent).toBe('2 / 2');
   });
 });
+
+describe('Class Kit deck — Live Decision Theater correct-responders reveal (classkit-live-polish)', () => {
+  // No browser-execution harness exists for `renderTheater()`/`renderPoll()`
+  // in this repo (both are only reachable via `pollLive()`'s fetch + DOM
+  // querySelector chain, which `bootDeck()`'s minimal mock DOM doesn't
+  // support — a disclosed, pre-existing limitation, not new to this change).
+  // Verified instead via string-content assertions on the real compiled
+  // script, matching this file's own established convention.
+  const script = deckScript();
+
+  it('renderTheater reads pulse.poll.correctResponders and only shows it once revealed', () => {
+    expect(script).toContain('correctList');
+    expect(script).toContain('correctResponders');
+    expect(script).toContain("st === 'revealed' && names && names.length");
+  });
+
+  it('renderPoll (sidebar rail) also renders the correct-responders line, gated on revealedNow', () => {
+    expect(script).toContain('kpoll-correct');
+    expect(script).toContain('Got it right');
+  });
+});
+
+describe('Class Kit deck — reveal control is a toggle, not one-way (classkit-deck-polish T003)', () => {
+  // Same disclosed limitation as above: `.kreveal-btn`'s click handler is
+  // reached via a delegated `document.addEventListener('click', ...)` +
+  // `e.target.closest(...)` chain that `bootDeck()`'s minimal mock DOM
+  // doesn't support. Verified via string-content assertions on the real
+  // compiled script.
+  const script = deckScript();
+
+  it('toggles revealed[sm.id] both ways instead of only ever setting it true', () => {
+    expect(script).toContain('var nowRevealed = !(sm && revealed[sm.id]);');
+    expect(script).toContain('revealed[sm.id] = nowRevealed;');
+  });
+
+  it('toggles the .correct highlight and .kreveal-line visibility both ways via classList.toggle, not .add', () => {
+    expect(script).toContain("line.classList.toggle('show', nowRevealed)");
+    expect(script).toContain("correct.classList.toggle('correct', nowRevealed)");
+  });
+
+  it('restores the reveal button\'s original label on hide instead of leaving it permanently hidden', () => {
+    expect(script).toContain("rb.textContent = nowRevealed ? 'Hide answer' : rb.getAttribute('data-label')");
+    // Regression: the old version permanently hid the button (`rb.style.display = 'none'`).
+    expect(script).not.toContain("rb.style.display = 'none';");
+  });
+
+  it('the R keyboard shortcut still just clicks the same toggling button (works both directions)', () => {
+    expect(script).toContain("e.key === 'r' || e.key === 'R'");
+  });
+});

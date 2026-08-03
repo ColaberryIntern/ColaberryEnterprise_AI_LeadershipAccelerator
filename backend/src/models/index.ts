@@ -127,6 +127,9 @@ import TicketActionLink from './TicketActionLink';
 import EvidenceArtifact from './EvidenceArtifact';
 import EvidenceLink from './EvidenceLink';
 import DecisionRecord from './DecisionRecord';
+import TicketWorkUnit from './TicketWorkUnit';
+import WorkUnitDependency from './WorkUnitDependency';
+import ResourceLease from './ResourceLease';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -375,6 +378,18 @@ import BuilderLevel from './BuilderLevel';
 import StudentLevel from './StudentLevel';
 import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
 import ComponentAnalytics from './ComponentAnalytics';
+
+// CAPE — Colaberry Adaptive Path Engine (Phase 0-1: skill ontology + evidence ledger)
+import ArchitectureSkillDefinition from './ArchitectureSkillDefinition';
+import ArchitectureSkillEvidenceBandWeights from './ArchitectureSkillEvidenceBandWeights';
+import StudentSkillEvidence from './StudentSkillEvidence';
+import StudentArchitectureSkill from './StudentArchitectureSkill';
+// CAPE Phase 2: resume/LinkedIn placement + adaptive diagnostic
+import ResumeSkillClaim from './ResumeSkillClaim';
+import DiagnosticAttempt from './DiagnosticAttempt';
+// CAPE Phase 3: curriculum-to-skill mapping
+import CurriculumSkillMap from './CurriculumSkillMap';
+import ArchitectureSkillPrerequisite from './ArchitectureSkillPrerequisite';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -800,6 +815,24 @@ EvidenceLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 Ticket.hasMany(DecisionRecord, { foreignKey: 'ticket_id', as: 'decisionRecords' });
 DecisionRecord.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 
+// ProofDesk Work Graph (Milestone 3 - Multi-Agent Work Graph) associations.
+Ticket.hasMany(TicketWorkUnit, { foreignKey: 'ticket_id', as: 'workUnits' });
+TicketWorkUnit.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkContext.hasMany(TicketWorkUnit, { foreignKey: 'work_context_id', as: 'workUnits' });
+TicketWorkUnit.belongsTo(WorkContext, { foreignKey: 'work_context_id', as: 'workContext' });
+AgentRun.hasMany(TicketWorkUnit, { foreignKey: 'assigned_run_id', as: 'assignedWorkUnits' });
+TicketWorkUnit.belongsTo(AgentRun, { foreignKey: 'assigned_run_id', as: 'assignedRun' });
+
+TicketWorkUnit.hasMany(WorkUnitDependency, { foreignKey: 'work_unit_id', as: 'dependencies' });
+WorkUnitDependency.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+TicketWorkUnit.hasMany(WorkUnitDependency, { foreignKey: 'depends_on_work_unit_id', as: 'dependents' });
+WorkUnitDependency.belongsTo(TicketWorkUnit, { foreignKey: 'depends_on_work_unit_id', as: 'dependsOnWorkUnit' });
+
+TicketWorkUnit.hasMany(ResourceLease, { foreignKey: 'work_unit_id', as: 'leases' });
+ResourceLease.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+AgentRun.hasMany(ResourceLease, { foreignKey: 'run_id', as: 'leases' });
+ResourceLease.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -1158,6 +1191,9 @@ export {
   EvidenceArtifact,
   EvidenceLink,
   DecisionRecord,
+  TicketWorkUnit,
+  WorkUnitDependency,
+  ResourceLease,
   StudentNavigationEvent,
   Alert,
   AlertEvent,
@@ -1358,6 +1394,17 @@ export {
   // Experience Builder (Phase 1)
   ComponentVersion,
   ComponentAnalytics,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 0-1)
+  ArchitectureSkillDefinition,
+  ArchitectureSkillEvidenceBandWeights,
+  StudentSkillEvidence,
+  StudentArchitectureSkill,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 2: resume placement + diagnostic)
+  ResumeSkillClaim,
+  DiagnosticAttempt,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 3: curriculum-to-skill mapping)
+  CurriculumSkillMap,
+  ArchitectureSkillPrerequisite,
 };
 
 // --- Enrollment Lead associations ---
@@ -1488,3 +1535,29 @@ Enrollment.hasMany(TimelineCardProgress, { foreignKey: 'enrollment_id', as: 'tim
 TimelineCardProgress.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 TimelineEvent.hasMany(TimelineCard, { foreignKey: 'event_id', as: 'cards' });
 TimelineCard.belongsTo(TimelineEvent, { foreignKey: 'event_id', as: 'event' });
+
+// --- CAPE (Colaberry Adaptive Path Engine) associations — Phase 0-1 ---
+// Additive only: parallel to, and independent of, the XpEvent/EvidenceRecord/
+// StudentCompetency promotion graph above. See ensureCapeSchema.ts.
+Enrollment.hasMany(StudentSkillEvidence, { foreignKey: 'enrollment_id', as: 'capeSkillEvidence' });
+StudentSkillEvidence.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(StudentArchitectureSkill, { foreignKey: 'enrollment_id', as: 'capeArchitectureSkills' });
+StudentArchitectureSkill.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 2 (resume placement + adaptive diagnostic) ---
+// Additive only; parallel to the verified ledger above. See
+// ensureCapePlacementSchema.ts. Neither table is ever joined against
+// student_skill_evidence/student_architecture_skill in application code —
+// capePlacementService.ts reads both independently and writes only
+// placement_score.
+Enrollment.hasMany(ResumeSkillClaim, { foreignKey: 'enrollment_id', as: 'resumeSkillClaims' });
+ResumeSkillClaim.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(DiagnosticAttempt, { foreignKey: 'enrollment_id', as: 'diagnosticAttempts' });
+DiagnosticAttempt.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 3 (curriculum-to-skill mapping) ---
+// A card-scoped curriculum_skill_maps row references the TimelineCard it overrides.
+// Type-scoped and week-scoped rows have card_id:null and are not FK-joined to any
+// card — they resolve by (type_slug) / (week_number) directly, not via association.
+TimelineCard.hasMany(CurriculumSkillMap, { foreignKey: 'card_id', as: 'skillMapOverrides' });
+CurriculumSkillMap.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });

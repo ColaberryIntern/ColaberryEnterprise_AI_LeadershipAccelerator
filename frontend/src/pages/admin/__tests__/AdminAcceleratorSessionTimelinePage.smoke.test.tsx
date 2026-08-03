@@ -1,7 +1,7 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
-import AdminAcceleratorSessionTimelinePage from '../AdminAcceleratorSessionTimelinePage';
+import AdminAcceleratorSessionTimelinePage, { buildCustomizeJumpUrl } from '../AdminAcceleratorSessionTimelinePage';
 
 /**
  * T009 (loop-architect run 20260731-195500-classkit-panel-redesign). This
@@ -40,5 +40,22 @@ describe('AdminAcceleratorSessionTimelinePage', () => {
     // a differently-shaped id (e.g. one containing characters a naive
     // lookup might mishandle) still renders the same safe loading state.
     expect(() => renderAt('/admin/accelerator/sessions/not-a-real-session/timeline')).not.toThrow();
+  });
+});
+
+describe('buildCustomizeJumpUrl (classkit-live-polish T006)', () => {
+  // Exported as a pure function specifically so this is testable without a
+  // full render — this page owns its own data fetch, so `renderToStaticMarkup`
+  // never gets past the loading state (no `useEffect` commit phase), meaning
+  // the click-a-card-to-jump behavior can't be proven through a render alone.
+  it('builds a URL with both customizeSessionId and customizeCategory, correctly encoded', () => {
+    const url = buildCustomizeJumpUrl('d9e121ce-8dbe-4fff-a066-d3753534342f', 'storyBeats');
+    expect(url).toBe('/admin/accelerator?customizeSessionId=d9e121ce-8dbe-4fff-a066-d3753534342f&customizeCategory=storyBeats');
+  });
+
+  it('URL-encodes special characters rather than leaving them raw', () => {
+    const url = buildCustomizeJumpUrl('sess 1', 'teach');
+    expect(url).not.toContain('sess 1');
+    expect(url).toMatch(/sess(\+|%20)1/);
   });
 });

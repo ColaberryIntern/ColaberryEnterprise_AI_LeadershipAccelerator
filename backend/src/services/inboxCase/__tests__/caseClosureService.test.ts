@@ -181,17 +181,28 @@ describe('closeCase', () => {
     expect(c.state).toBe('RESOLVED');
   });
 
-  it('reports a real blocker (not an uncaught exception) when the guard passes but the case state has no legal path to RESOLVED — e.g. a fresh ASSESSING case never planned or executed', async () => {
-    const c = await seedCase('ASSESSING');
-    await fakeInboxCaseItem.create({ case_id: c.id, inclusion_status: 'INCLUDED', disposition: 'RESOLVED', title: 'item' });
+  // Regression coverage for a real production bug: CASE_STATE_TRANSITIONS
+  // used to restrict RESOLVED to only EXECUTING/WAITING/DELEGATED, so a case
+  // that had never been executed (the common case for Dismiss, whose whole
+  // point is closing something WITHOUT executing anything) could clear every
+  // evaluateClosureGuard() condition and still fail to close with
+  // case_not_in_closable_state — discovered live when Ali dismissed a
+  // READY_TO_PLAN case. The guard is the real authority on whether a case is
+  // done; the state machine now defers to it for every active state.
+  it.each<[string]>([
+    ['DISCOVERING'], ['ASSESSING'], ['NEEDS_ALI'], ['READY_TO_PLAN'],
+    ['AWAITING_APPROVAL'], ['FAILED'], ['REOPENED'],
+  ])('closes a case sitting in %s once the guard passes (no execution needed)', async (state) => {
+    const c = await seedCase(state);
+    await fakeInboxCaseItem.create({ case_id: c.id, inclusion_status: 'INCLUDED', disposition: 'NO_ACTION', title: 'item' });
     await fakeInboxCaseEvent.create({ case_id: c.id, event_type: 'case_discovery_started' });
 
     const result = await closeCase(c.id, 'ali@colaberry.com');
 
-    expect(result.closed).toBe(false);
-    expect(result.blockers.some((b) => b.condition === 'case_not_in_closable_state')).toBe(true);
-    expect(c.state).toBe('ASSESSING'); // untouched
-    expect(c.closed_at).toBeUndefined(); // never partially stamped
+    expect(result.closed).toBe(true);
+    expect(result.blockers).toEqual([]);
+    expect(c.state).toBe('RESOLVED');
+    expect(c.closed_at).toBeInstanceOf(Date);
   });
 });
 

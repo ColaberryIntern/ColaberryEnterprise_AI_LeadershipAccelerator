@@ -1,6 +1,8 @@
 import { OnboardingProfile } from '../models';
 import type { ProjectDnaInput } from './projectDnaService';
 import { hasReferral } from './friendReferralService';
+import type { RawSkillClaim } from './cape/capeResumeClaimExtraction';
+import { ARCHITECTURE_SKILL_IDS } from '../constants/architectureSkills';
 
 const EXTRACTION_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const MAX_SOURCE_CHARS = 8000;
@@ -28,6 +30,12 @@ export interface ResumeExtraction {
   location?: string;
   goals?: string;           // one-line career/learning goal
   linkedin_url?: string;
+  // CAPE Phase 2 (design doc §5): structured, per-skill evidence claims —
+  // feeds ONLY the placement/dotted-polygon path (capePlacementService.ts),
+  // never the verified student_skill_evidence ledger. Best-effort: the model
+  // omits this entirely when the resume has no architecture-skill-relevant
+  // content (see capeResumeClaimExtraction.ts for validation/scoring).
+  skill_claims?: RawSkillClaim[];
 }
 
 /** Flat profile fields the Settings form prefills from. */
@@ -60,16 +68,33 @@ export interface BackgroundPrefill {
 /** Build the extraction prompt (pure). Asks for strict JSON only. */
 export function buildResumeExtractionPrompt(sourceText: string): string {
   const text = (sourceText || '').slice(0, MAX_SOURCE_CHARS);
+  const skillIds = ARCHITECTURE_SKILL_IDS.join(', ');
   return [
     'Extract a structured professional background from the resume / LinkedIn text below.',
     'Return ONLY minified JSON (no prose, no code fences) with these keys:',
     '{"full_name","title"(their most recent/current job title),"company_name","company_size"(employees, e.g. "51-200"),',
     '"phone","location","linkedin_url","industry","role","seniority","years_experience",',
     '"goals"(one short sentence on their career/learning goal),"target_user","business_problem",',
-    '"industry_track","ai_maturity_level"(0-5 integer),"skills"(string array of the top 6)}.',
+    '"industry_track","ai_maturity_level"(0-5 integer),"skills"(string array of the top 6),',
+    '"skill_claims"(array, see below)}.',
     'ALWAYS provide "title" (their last job title) and "industry" — if the industry is not stated,',
     'infer it from the company and role (e.g. a lending company → "Financial Services", a hospital → "Healthcare").',
     'Only omit a key when there is genuinely no basis to infer it. Do not invent specific facts (names, numbers).',
+    '',
+    'For "skill_claims": one object per AI/software-architecture skill the text gives real evidence for,',
+    `using ONLY these skill_id values: ${skillIds}. Omit "skill_claims" entirely if none apply.`,
+    'Each object: {"skill_id","subskills"(short string array, e.g. ["chunking","retrieval"]),',
+    '"evidence_text"(<=200 chars, a short factual paraphrase of the evidence ONLY — never include the',
+    "person's name, email, phone number, or exact employer name in this field),",
+    '"evidence_kind"(one of: keyword_list, job_bullet, built_owned, measurable_outcome, production,',
+    'led_architecture_decisions — pick the STRONGEST that genuinely applies: keyword_list = only appears',
+    'in a skills list with no context; job_bullet = mentioned in a role description; built_owned = they',
+    'built or owned the system; measurable_outcome = a quantified result is stated; production = it ran',
+    'in production; led_architecture_decisions = they made architecture/governance decisions about it),',
+    '"recency_years"(approx. years since this was current work, 0 if ongoing),',
+    '"ownership"(one of: built, owned, used, led),"scope"(one of: personal, team, production),',
+    '"confidence"(0-1, how certain you are this evidence genuinely supports the skill_id)}.',
+    'Be conservative: do not invent a skill_claim from a single vague keyword with no supporting context.',
     '',
     '--- BACKGROUND TEXT ---',
     text,
@@ -176,6 +201,33 @@ async function saveOnboardingProfile(
   }
 }
 
+/**
+ * CAPE Phase 2 (design doc §5): turns a successful extraction's `skill_claims`
+ * into versioned `resume_skill_claims` rows and recomputes the touched
+ * skills' derived state (so the radar reflects a new upload immediately).
+ * Best-effort and non-fatal by design (mirrors the existing `pointsService`
+ * side-effect pattern in this file) — a CAPE persistence failure never fails
+ * the resume ingest itself. Does nothing on a failed/absent extraction
+ * (`extraction === null`), so `resume_version` only advances on a genuine
+ * successful extraction.
+ */
+async function persistCapeSkillClaimsNonFatal(enrollmentId: string, extraction: ResumeExtraction | null): Promise<void> {
+  if (!extraction) return;
+  try {
+    const { persistResumeSkillClaims } = await import('./cape/capeResumeClaimService');
+    const { touched_skill_ids } = await persistResumeSkillClaims(enrollmentId, extraction.skill_claims ?? []);
+    if (touched_skill_ids.length) {
+      const { recomputeStudentArchitectureSkill } = await import('./cape/capeProficiencyService');
+      for (const skillId of touched_skill_ids) {
+        // eslint-disable-next-line no-await-in-loop -- at most 10 skills; sequential keeps recompute ordering obvious
+        await recomputeStudentArchitectureSkill(enrollmentId, skillId);
+      }
+    }
+  } catch (err: any) {
+    console.warn('[Ingest] CAPE skill-claim persistence (non-fatal):', err?.message);
+  }
+}
+
 export interface IngestInput { resumeText?: string; linkedinUrl?: string; }
 export interface IngestDeps { extract: (sourceText: string) => Promise<string>; }
 export interface IngestResult {
@@ -237,6 +289,10 @@ export async function ingestBackground(
     extracted: extraction ?? undefined,
   });
 
+  // CAPE Phase 2: versioned, provisional skill claims -> placement only
+  // (never verified evidence). Non-fatal.
+  await persistCapeSkillClaimsNonFatal(enrollmentId, extraction);
+
   // Award the one-time "profile set up" points (+25) for a REAL resume/LinkedIn
   // ingest — the "Upload your resume" setup step. Idempotent per enrollment
   // (event_key 'profile_completed'). Gated on meaningful input so a stray short
@@ -276,6 +332,10 @@ export async function ingestResumeFileText(
     extracted: extraction ?? undefined,
   });
 
+  // CAPE Phase 2: versioned, provisional skill claims -> placement only
+  // (never verified evidence). Non-fatal.
+  await persistCapeSkillClaimsNonFatal(enrollmentId, extraction);
+
   return { ok: true, parsed: !!extraction, prefill: projectDna, profile, personalization, variables, linkedin_url: profile.linkedin_url || null };
 }
 
@@ -287,12 +347,23 @@ export async function getOnboardingProfile(enrollmentId: string): Promise<{
   linkedin_url: string | null;
   has_resume: boolean;
   has_referral: boolean;
+  // CAPE Phase 2 (design doc §13): which resume upload + extractor version
+  // produced the learner's current resume_skill_claims / placement state.
+  // Additive fields — not a breaking contract change (no existing consumer
+  // reads a fixed key set from this response).
+  resume_version: number;
+  extractor_version: string | null;
 }> {
   const [row, referred] = await Promise.all([
     OnboardingProfile.findOne({ where: { enrollment_id: enrollmentId } }) as Promise<any>,
     hasReferral(enrollmentId),
   ]);
-  if (!row) return { prefill: {}, profile: {}, personalization: {}, linkedin_url: null, has_resume: false, has_referral: referred };
+  if (!row) {
+    return {
+      prefill: {}, profile: {}, personalization: {}, linkedin_url: null, has_resume: false, has_referral: referred,
+      resume_version: 0, extractor_version: null,
+    };
+  }
   const p = (row.prefill && typeof row.prefill === 'object') ? row.prefill : {};
   return {
     prefill: p,
@@ -304,5 +375,7 @@ export async function getOnboardingProfile(enrollmentId: string): Promise<{
     // the Settings badge agree.
     has_resume: !!(row.resume_text || row.resume_file_name),
     has_referral: referred,
+    resume_version: Number(row.resume_version) || 0,
+    extractor_version: row.extractor_version || null,
   };
 }

@@ -326,7 +326,10 @@ export default function TicketDetailModal({ ticketId, onClose, onUpdate }: Props
       case 'visual-proof':
         return <VisualProofTab ticketId={ticketId} token={token} />;
       case 'work-graph':
-        return <WorkGraphTab />;
+        // ProofDesk Milestone 3: WorkGraphTab went from a static, no-props
+        // placeholder (M2) to a real data-fetching component — same ticketId/
+        // token props DecisionsTab/VisualProofTab already take, two lines away.
+        return <WorkGraphTab ticketId={ticketId} token={token} />;
       case 'decisions':
         return <DecisionsTab ticketId={ticketId} token={token} />;
       case 'references':

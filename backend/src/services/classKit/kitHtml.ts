@@ -100,7 +100,7 @@ function diagramHtml(slide: KitSlide): string {
   );
 }
 
-function interactionHtml(slide: KitSlide): string {
+export function interactionHtml(slide: KitSlide): string {
   const it = slide.interaction;
   if (!it) return '';
   const kindLabel = it.kind === 'trivia' ? 'Trivia' : it.kind === 'prediction' ? 'Predict' : 'Live poll';

@@ -19,13 +19,18 @@ import { buildGateContext, evaluateCardLock, GateCard } from './timelineGatingSe
 import { isFreePreviewTier } from '../access/contentEntitlement';
 import { env } from '../../config/env';
 
-const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
+export const BUCKET_ORDER = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'] as const;
 
 export interface FeedVideo {
   url: string;
   presenter: string | null;
   poster: string | null;
   title?: string | null;   // the specific video's own title — overlaid on the poster (personalized picks)
+  // Real provider duration in seconds, when known (YouTube Data API for fixed video
+  // cards; network_videos/podcasts catalogs for personalized picks). The watch-gate's
+  // ground truth — see watchProgressService.resolveAuthoritativeDurationS. Absent/null
+  // means "not known", never a guess.
+  duration_seconds?: number | null;
 }
 
 /** AI-generated student content saved onto the card (by the Timeline editor's
@@ -110,11 +115,13 @@ export function contentFromMetadata(metadata: any): FeedContent | null {
 export function videoFromMetadata(metadata: any): FeedVideo | null {
   const v = metadata && typeof metadata === 'object' ? metadata.video : null;
   if (!v || typeof v !== 'object' || typeof v.url !== 'string' || !v.url.trim()) return null;
+  const duration = Number(v.duration_seconds);
   return {
     url: v.url.trim(),
     presenter: typeof v.presenter === 'string' && v.presenter.trim() ? v.presenter.trim() : null,
     poster: typeof v.poster === 'string' && v.poster.trim() ? v.poster.trim() : null,
     title: typeof v.title === 'string' && v.title.trim() ? v.title.trim() : null,
+    duration_seconds: Number.isFinite(duration) && duration > 0 ? duration : null,
   };
 }
 

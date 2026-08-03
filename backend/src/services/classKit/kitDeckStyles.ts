@@ -40,17 +40,29 @@ button{font-family:inherit}
 .knav:disabled{opacity:.14;cursor:default;transform:translateY(-50%)}
 .knav.left{left:16px}.knav.right{right:16px}
 .knav{font-size:30px;line-height:1;font-weight:700}
-body.rail-on .knav.right{right:calc(var(--rail-w) + 16px)}
+/* When the Class Pulse rail is showing, the right nav sits INSIDE the rail's
+   own width (not floating over the main slide/video area, which a screen
+   recording of the class would otherwise capture) - anchored near the rail's
+   top so it never drifts into the live stat cards / arrivals list beneath it. */
+body.rail-on .knav.right{right:16px;left:auto;top:78px;transform:none}
+body.rail-on .knav.right:hover,body.rail-on .knav.right:focus-visible{transform:scale(1.04)}
+body.rail-on .knav.right:disabled{transform:none}
 @media(max-width:900px){.knav{width:42px;height:68px;border-radius:13px;font-size:24px}.knav.left{left:6px}.knav.right{right:6px}}
 
 /* ---------- slides ---------- */
 .kstage{position:absolute;inset:0;bottom:var(--pace-h);right:0;overflow:hidden}
 body.rail-on .kstage{right:var(--rail-w)}
-.kslide{position:absolute;inset:0;display:none;flex-direction:column;justify-content:center;
+.kslide{position:absolute;inset:0;display:none;flex-direction:column;
   padding:5vh 4vw;overflow:auto}
 .kslide.active{display:flex;animation:kfade .3s ease}
 @keyframes kfade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-.kinner{width:100%;max-width:1080px;margin:0 auto}
+/* Vertical centering lives on the child via auto margins, not on .kslide via
+   justify-content:center - a flex parent that centers AND clips/scrolls
+   overflow makes content pushed above the fold by centering unreachable by
+   scrolling ("unsafe" centering: the browser only lets you scroll toward the
+   end side). margin:auto degrades to start-alignment once content overflows,
+   so .kslide's overflow:auto can actually reach a tall slide's true top. */
+.kinner{width:100%;max-width:1080px;margin:auto}
 body.compact .kinner{max-width:760px}
 
 .keyebrow{color:var(--cherry-deep);font-weight:800;letter-spacing:2.5px;text-transform:uppercase;
@@ -173,6 +185,7 @@ body.rail-on #krail{display:flex}
 .kpoll-bar i{display:block;height:100%;background:var(--berry);border-radius:5px;transition:width .4s ease}
 .kpoll-row.correct .kpoll-bar i{background:var(--leaf)}
 .kpoll-row.correct .lab{color:var(--leaf)}
+.kpoll-correct{margin-top:8px;font-size:11.5px;font-weight:700;color:var(--leaf)}
 .kpulse{border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:10px 12px}
 .kpulse b{display:block;font-size:26px;line-height:1;color:var(--ink)}
 .kpulse span{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-top:4px}
@@ -251,8 +264,15 @@ pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transpa
 .kdiagram-cap-ico{flex:none;font-size:1.15em;line-height:1}
 .kdiagram--full{cursor:zoom-out;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4vh 4vw;margin:0}
 .kdiagram--full::after{content:"⛶ click to close";top:2vh;right:2vw;background:rgba(255,255,255,.9)}
-.kdiagram--full pre.mermaid{max-width:92vw;max-height:82vh}
-.kdiagram--full pre.mermaid svg{max-width:92vw;max-height:78vh}
+/* Mermaid emits its own explicit width/height (and sometimes inline style) on
+   the svg, so max-width/max-height alone only ever shrinks an oversized
+   diagram - it never scales a small one up to fill the zoomed view. Sizing
+   the container to a fixed viewport-relative box and forcing the svg to
+   100%/100% with object-fit:contain scales genuinely both directions. */
+.kdiagram--full pre.mermaid{width:92vw;height:82vh;max-width:92vw;max-height:82vh;
+  overflow:hidden;display:flex;align-items:center;justify-content:center}
+.kdiagram--full pre.mermaid svg{width:100% !important;height:100% !important;
+  max-width:none;max-height:none;object-fit:contain}
 .kdiagram--full .kdiagram-cap{max-width:80ch}
 
 /* teach-slide "lead with the conclusion" insight card */
@@ -378,6 +398,7 @@ body.mode-story .ktoggles:hover{opacity:1}
 .ktheater-btn.primary{background:var(--cherry)}
 .ktheater-explain{margin-top:2.6vh;background:#101c2e;border:1.5px solid #233650;border-radius:14px;padding:1.8vh 1.8vw;
   font-size:clamp(14px,.5vw + .8vh,19px);color:#dbe6f0;max-width:760px;margin-left:auto;margin-right:auto}
+.ktheater-correct{margin-top:1.4vh;font-size:clamp(13px,.45vw + .7vh,16px);color:#bdeecb;text-align:center;font-weight:600}
 
 #kqr-overlay{position:fixed;inset:0;z-index:80;background:rgba(15,20,25,.92);display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:20px}
 #kqr-overlay.show{display:flex}

@@ -20,6 +20,19 @@ describe('canTransition / assertTransition — happy paths', () => {
     // end — a case that failed once could never execute again.
     ['FAILED', 'EXECUTING'],
     ['REOPENED', 'ASSESSING'],
+    // Regression coverage: Dismiss closes a case WITHOUT executing anything
+    // (there's nothing to act on), so every active state must be able to
+    // reach RESOLVED directly once evaluateClosureGuard() passes — not just
+    // the three post-execution states. Discovered live in production: a
+    // READY_TO_PLAN case failed to Dismiss with case_not_in_closable_state
+    // even though the guard had already cleared it.
+    ['DISCOVERING', 'RESOLVED'],
+    ['ASSESSING', 'RESOLVED'],
+    ['NEEDS_ALI', 'RESOLVED'],
+    ['READY_TO_PLAN', 'RESOLVED'],
+    ['AWAITING_APPROVAL', 'RESOLVED'],
+    ['FAILED', 'RESOLVED'],
+    ['REOPENED', 'RESOLVED'],
   ];
 
   it.each(validPairs)('allows %s -> %s', (from, to) => {
@@ -30,9 +43,7 @@ describe('canTransition / assertTransition — happy paths', () => {
 
 describe('canTransition / assertTransition — rejects invalid transitions', () => {
   const invalidPairs: Array<[CaseState, CaseState]> = [
-    ['DISCOVERING', 'RESOLVED'], // cannot skip straight to resolved
     ['RESOLVED', 'EXECUTING'], // resolved is terminal except via reopen
-    ['AWAITING_APPROVAL', 'RESOLVED'], // must execute first
     ['WAITING', 'EXECUTING'], // must go back through assessing
   ];
 

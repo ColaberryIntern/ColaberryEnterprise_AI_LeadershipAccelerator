@@ -16,6 +16,8 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
+import capePortalRoutes from './routes/capePortalRoutes';
+import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
@@ -39,6 +41,10 @@ import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
+import { ensureCapeSchema } from './db/ensureCapeSchema';
+import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
+import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -77,6 +83,8 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+app.use(capePortalRoutes);
+app.use(capeAdminRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);
@@ -2211,6 +2219,14 @@ async function start(): Promise<void> {
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
+  // ProofDesk Work Graph — Milestone 3 (Multi-Agent Work Graph): 3 work-graph tables
+  // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
+  // additive only).
+  await ensureWorkGraphSchema();
+  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
+  // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
+  // additive only, parallel to the existing XP/promotion tables).
+  await ensureCapeSchema();
 
   await ensureCommunityMemberRoleSchema();
   // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
@@ -2229,10 +2245,20 @@ async function start(): Promise<void> {
   await ensureOnboardingProfileSchema();
   // Student Settings: avatar photo + uploaded resume file columns (idempotent).
   await ensurePortalSettingsSchema();
+  // CAPE Phase 2 — resume/LinkedIn placement + adaptive diagnostic: 2 new
+  // onboarding_profiles columns + 2 new tables (idempotent DDL, additive
+  // only). Must run AFTER ensurePortalSettingsSchema() so onboarding_profiles
+  // already exists.
+  await ensureCapePlacementSchema();
   // Unified StudentTask: nullable requirement_key + story-driven columns (idempotent).
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
   await ensureTimelineEngineSchema();
+  // CAPE Phase 3 — curriculum-to-skill mapping: curriculum_skill_maps +
+  // architecture_skill_prerequisites tables + 5 stamp columns on timeline_cards
+  // (idempotent DDL, additive only). Must run AFTER ensureTimelineEngineSchema() so
+  // timeline_cards already exists before the ALTER TABLE statements run.
+  await ensureCapeCurriculumMapSchema();
   // Network Video Library (Testimonials random personalized mode) — catalog + per-enrollment view ledger.
   await ensureNetworkVideoSchema();
   // Podcast Library (Podcast random personalized mode) — catalog + per-enrollment listen ledger.
@@ -2367,6 +2393,28 @@ async function start(): Promise<void> {
       const { seedProgressionConfig } = await import('./services/progression/seeders');
       const p = await seedProgressionConfig();
       console.log(`[TimelineEngine] progression seeded: ${p.domains} domains, ${p.levels} levels, ${p.points} point defaults`);
+      // CAPE Phase 0-1: 10 Architecture Skill definitions + default evidence-band weights.
+      const { seedCapeConfig } = await import('./services/cape/capeSeeders');
+      const cape = await seedCapeConfig();
+      console.log(`[CAPE] seeded: ${cape.skillDefinitions} skill definitions, ${cape.weights} weight config`);
+      // CAPE Phase 3: type-default curriculum_skill_maps rows — one per registered
+      // Curriculum Type (50/50, including explicit zero-credit rows for the
+      // system/community/delivery-event policy groups). Idempotent — only inserts
+      // when no current row exists yet for a given type_slug.
+      const { seedTypeSkillMaps } = await import('./services/cape/capeTypeSkillMapSeeds');
+      const typeMaps = await seedTypeSkillMaps();
+      console.log(`[CAPE] type-default skill maps seeded: ${typeMaps.created} created, ${typeMaps.skipped} already current`);
+      // CAPE Phase 3: week-level curriculum_skill_maps targets — Weeks 0-12, the
+      // second resolution tier (supersedes a type default for any card with a week
+      // number). Idempotent.
+      const { seedWeekSkillMaps } = await import('./services/cape/capeWeekSkillMapSeeds');
+      const weekMaps = await seedWeekSkillMaps();
+      console.log(`[CAPE] week-target skill maps seeded: ${weekMaps.created} created, ${weekMaps.skipped} already current, ${weekMaps.blueprintGapsLogged} blueprint gaps logged`);
+      // CAPE Phase 3: Architecture Skill prerequisite graph — a small starter seed
+      // (execution-contract.md Assumption 6), consumed by Phase 4's ranker later.
+      const { seedSkillPrerequisites } = await import('./services/cape/capeSkillPrerequisiteSeeds');
+      const prereqs = await seedSkillPrerequisites();
+      console.log(`[CAPE] skill prerequisites seeded: ${prereqs.created} created, ${prereqs.skipped} already existed`);
       // Feed Control: re-apply stored type routing to the registry AFTER the seed
       // (typeSeeder re-asserts surface columns from code, so routing must win last).
       const { applyFeedRoutingToRegistry } = await import('./services/timeline/feedControlService');

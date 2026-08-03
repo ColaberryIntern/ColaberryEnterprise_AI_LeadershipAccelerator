@@ -337,6 +337,129 @@ describe('generatePlan — sent_email reply-target fallback (bug fix: cases with
   });
 });
 
+describe('generatePlan — never reply to an email referencing live Basecamp records (bug fix: digest emails got a wrong generic reply)', () => {
+  it('does not propose EMAIL_SEND against an email whose snapshot has non-empty basecamp_refs, even though it is the only/highest-scoring INCLUDED email', async () => {
+    const c = await seedCase();
+    await seedEmailItem(c.id, {
+      title: '(Colaberry Inc) You have 7 to-dos due soon',
+      match_score: 0.99,
+      snapshot: {
+        from_address: 'notifications@app.basecamp.com',
+        basecamp_refs: [{ url: 'https://3.basecamp.com/1/buckets/9/todos/555', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '555' }],
+      },
+    });
+
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    expect(actions.find((a) => a.action_type === 'EMAIL_SEND')).toBeUndefined();
+  });
+
+  it('still proposes EMAIL_SEND normally for an ordinary email with no Basecamp references (regression)', async () => {
+    const c = await seedCase();
+    const item = await seedEmailItem(c.id, { snapshot: {} });
+
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    const reply = actions.find((a) => a.action_type === 'EMAIL_SEND');
+    expect(reply).toBeDefined();
+    expect(reply.item_id).toBe(item.id);
+  });
+
+  it('skips the reference-bearing item and correctly picks the normal email as the reply target when both are present', async () => {
+    const c = await seedCase();
+    const digestItem = await seedEmailItem(c.id, {
+      match_score: 0.99, // would win on score alone if not excluded
+      snapshot: { basecamp_refs: [{ url: 'https://3.basecamp.com/1/buckets/9/todos/555', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '555' }] },
+    });
+    const normalItem = await seedEmailItem(c.id, { match_score: 0.5, snapshot: {} });
+
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    const reply = actions.find((a) => a.action_type === 'EMAIL_SEND');
+    expect(reply).toBeDefined();
+    expect(reply.item_id).toBe(normalItem.id);
+    expect(reply.item_id).not.toBe(digestItem.id);
+  });
+
+  it('end-to-end: a digest email whose references resolved into real Basecamp items proposes one BASECAMP_COMMENT per resolved item and zero EMAIL_SEND', async () => {
+    const c = await seedCase();
+    await seedEmailItem(c.id, {
+      title: '(Colaberry Inc) You have 2 to-dos due soon',
+      snapshot: {
+        basecamp_refs: [
+          { url: 'https://3.basecamp.com/1/buckets/9/todos/555', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '555' },
+          { url: 'https://3.basecamp.com/1/buckets/9/todos/556', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '556' },
+        ],
+      },
+    });
+    // These represent the items T004's expansion step would have already
+    // resolved and persisted onto this same case before Assess/Plan ran.
+    await seedBasecampItem(c.id, { source_id: '555' });
+    await seedBasecampItem(c.id, { source_id: '556' });
+
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    expect(actions.filter((a) => a.action_type === 'BASECAMP_COMMENT')).toHaveLength(2);
+    expect(actions.find((a) => a.action_type === 'EMAIL_SEND')).toBeUndefined();
+  });
+});
+
+describe('generatePlan — never reply to a Basecamp digest sender even with zero extracted refs (run 20260802-093200-digest-text-todo-parsing)', () => {
+  it('does not propose EMAIL_SEND against a digest-sender email whose body had no extractable URL refs (the periodic "N to-dos due soon" rollup format)', async () => {
+    const c = await seedCase();
+    await seedEmailItem(c.id, {
+      title: '(Colaberry Inc) You have 7 to-dos due soon',
+      match_score: 0.99,
+      snapshot: {
+        from_address: 'notifications@app.basecamp.com',
+        basecamp_refs: [],
+      },
+    });
+
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    expect(actions.find((a) => a.action_type === 'EMAIL_SEND')).toBeUndefined();
+  });
+
+  it('skips the digest-sender item and correctly picks the normal email as the reply target when both are present', async () => {
+    const c = await seedCase();
+    const digestItem = await seedEmailItem(c.id, {
+      match_score: 0.99, // would win on score alone if not excluded
+      snapshot: { from_address: 'notifications@app.basecamp.com', basecamp_refs: [] },
+    });
+    const normalItem = await seedEmailItem(c.id, { match_score: 0.5, snapshot: {} });
+
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    const reply = actions.find((a) => a.action_type === 'EMAIL_SEND');
+    expect(reply).toBeDefined();
+    expect(reply.item_id).toBe(normalItem.id);
+    expect(reply.item_id).not.toBe(digestItem.id);
+  });
+
+  it('still excludes a non-digest-sender email that happens to carry basecamp_refs (existing exclusion path unaffected by the new sender check)', async () => {
+    const c = await seedCase();
+    await seedEmailItem(c.id, {
+      match_score: 0.99,
+      snapshot: {
+        from_address: 'someone-else@example.com',
+        basecamp_refs: [{ url: 'https://3.basecamp.com/1/buckets/9/todos/555', accountId: '1', projectId: '9', recordingType: 'todos', recordingId: '555' }],
+      },
+    });
+
+    await generatePlan(c.id, 'ali@colaberry.com');
+
+    const actions = Array.from(fakeInboxCaseAction.rows.values());
+    expect(actions.find((a) => a.action_type === 'EMAIL_SEND')).toBeUndefined();
+  });
+});
+
 describe('generatePlan — answered-question reply content (bug fix: plan ignored answered blocking questions)', () => {
   it('drafts a reply using the answered blocking question even when the assessment had no recommended next actions', async () => {
     const c = await seedCase({

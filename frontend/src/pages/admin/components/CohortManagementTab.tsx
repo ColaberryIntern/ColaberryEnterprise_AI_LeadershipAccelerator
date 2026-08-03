@@ -13,9 +13,8 @@ const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'S
 const QUICK_NAV_TABS: { key: string; label: string }[] = [
   { key: 'sessions', label: 'Sessions' },
   { key: 'participants', label: 'Participants' },
-  { key: 'attendance', label: 'Attendance' },
-  { key: 'submissions', label: 'Submissions' },
-  { key: 'readiness', label: 'Readiness' },
+  { key: 'class-dashboard', label: 'Class Dashboard' },
+  { key: 'curriculum', label: 'Curriculum' },
 ];
 
 interface Course {
