@@ -12,12 +12,13 @@ import {
 } from './ticketService';
 import * as coryDecisionEngine from './reporting/coryDecisionEngine';
 import type { AgentExecutionResult } from './agents/types';
-import { runCurriculumArchitectAgent } from './agents/curriculumArchitectAgent';
-import { runArtifactGenerationAgent } from './agents/artifactGenerationAgent';
-import { runCurriculumQAAgent } from './agents/curriculumQAAgent';
-import { runPlatformFixAgent } from './agents/platformFixAgent';
 import { emitEvent } from './workLedger/workLedgerService';
 import type { WorkLedgerEventInput } from '../schemas/workLedgerEventSchema';
+// ProofDesk Work Graph (Milestone 3, T009): the agent-runner imports that used to
+// live here (runCurriculumArchitectAgent, runArtifactGenerationAgent,
+// runCurriculumQAAgent, runPlatformFixAgent) moved with AGENT_MAPPINGS to
+// capabilityRegistry.ts, which owns calling them now.
+import { selectAgent } from './workGraph/capabilityRouter';
 
 // ProofDesk Work Ledger (Milestone 1 - Foundation, shadow mode). These three
 // helpers wrap AgentRun/emitEvent writes so a ledger failure can never change
@@ -27,6 +28,10 @@ async function createAgentRunSafe(fields: {
   ticketId: string;
   agentName: string;
   traceId: string;
+  // ProofDesk Work Graph (Milestone 3, T008): when set, this run is a retry of an
+  // earlier failed run, and agent_runs.retry_of_run_id (added in M1, unused until
+  // now) records the lineage. Populated by workCoordinatorService.retryFailedRun().
+  retryOfRunId?: string;
 }): Promise<InstanceType<typeof AgentRun> | null> {
   try {
     return await AgentRun.create({
@@ -34,6 +39,7 @@ async function createAgentRunSafe(fields: {
       agent_name: fields.agentName,
       trace_id: fields.traceId,
       status: 'running',
+      retry_of_run_id: fields.retryOfRunId ?? null,
     } as any);
   } catch (err: any) {
     console.error(
@@ -97,40 +103,13 @@ async function emitLedgerEventSafe(input: WorkLedgerEventInput): Promise<void> {
 }
 
 // ─── Agent Registry Mapping ──────────────────────────────────────────────────
-
-interface AgentMapping {
-  match: (ticket: any) => boolean;
-  agent_name: string;
-  execute: (ticket: any) => Promise<AgentExecutionResult>;
-}
-
-const AGENT_MAPPINGS: AgentMapping[] = [
-  {
-    match: (t) => t.type === 'curriculum' && t.metadata?.action === 'design_module',
-    agent_name: 'CurriculumArchitectAgent',
-    execute: async (ticket) => runCurriculumArchitectAgent(ticket.id, ticket.metadata || {}),
-  },
-  {
-    match: (t) => t.type === 'curriculum' && t.metadata?.action === 'generate_artifact',
-    agent_name: 'ArtifactGenerationAgent',
-    execute: async (ticket) => runArtifactGenerationAgent(ticket.id, ticket.metadata || {}),
-  },
-  {
-    match: (t) => t.type === 'curriculum' && t.metadata?.action === 'qa_check',
-    agent_name: 'CurriculumQAAgent',
-    execute: async () => runCurriculumQAAgent(),
-  },
-  {
-    match: (t) => t.type === 'bug',
-    agent_name: 'PlatformFixAgent',
-    execute: async (ticket) => runPlatformFixAgent(ticket.id, { title: ticket.title, description: ticket.description, ...ticket.metadata }),
-  },
-  {
-    match: (t) => t.type === 'curriculum',
-    agent_name: 'CurriculumArchitectAgent',
-    execute: async (ticket) => runCurriculumArchitectAgent(ticket.id, ticket.metadata || {}),
-  },
-];
+// ProofDesk Work Graph (Milestone 3, T009): the old hard-coded, first-match-wins
+// AGENT_MAPPINGS array has moved to backend/src/services/workGraph/
+// capabilityRegistry.ts as CAPABILITY_REGISTRY (backward-compat seed data — all 5
+// original entries ported verbatim, see that file + its regression test) and is
+// now selected via the scored Capability Router (capabilityRouter.ts's
+// selectAgent()) rather than a plain array .find(). Nothing below this comment
+// changed except the single line that looks the mapping up (see dispatchTicketToAgent).
 
 // ─── Dispatcher ──────────────────────────────────────────────────────────────
 
@@ -157,18 +136,29 @@ export async function onTicketStatusChange(ticketId: string, newStatus: string):
 
 // ─── Dispatcher ──────────────────────────────────────────────────────────────
 
-export async function dispatchTicketToAgent(ticketId: string): Promise<AgentExecutionResult | null> {
+export async function dispatchTicketToAgent(
+  ticketId: string,
+  // ProofDesk Work Graph (Milestone 3, T008): optional retry lineage. The
+  // AGENT_MAPPINGS lookup itself is untouched here on purpose - that swap to the
+  // Capability Router is T009's own, separately-verified change.
+  opts?: { retryOfRunId?: string }
+): Promise<AgentExecutionResult | null> {
   const ticket = await Ticket.findByPk(ticketId);
   if (!ticket) throw new Error(`Ticket ${ticketId} not found`);
 
-  // Find matching agent
-  const mapping = AGENT_MAPPINGS.find((m) => m.match(ticket));
+  // Find matching agent via the Capability Router (T009). `selection` is null
+  // when nothing in the registry is eligible, exactly like the old
+  // AGENT_MAPPINGS.find() returning undefined — the "no agent mapping found"
+  // fallback path below needs no change.
+  const selection = await selectAgent(ticket);
+  const mapping = selection?.mapping ?? null;
 
   const traceId = crypto.randomUUID();
   const agentRun = await createAgentRunSafe({
     ticketId,
     agentName: mapping ? mapping.agent_name : 'unmapped',
     traceId,
+    retryOfRunId: opts?.retryOfRunId,
   });
   const dispatchIdempotencyKey = agentRun ? `ticket-dispatch:${agentRun.id}` : `ticket-dispatch:${traceId}`;
 

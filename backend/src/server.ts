@@ -39,6 +39,7 @@ import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -2211,6 +2212,10 @@ async function start(): Promise<void> {
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
+  // ProofDesk Work Graph — Milestone 3 (Multi-Agent Work Graph): 3 work-graph tables
+  // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
+  // additive only).
+  await ensureWorkGraphSchema();
 
   await ensureCommunityMemberRoleSchema();
   // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
