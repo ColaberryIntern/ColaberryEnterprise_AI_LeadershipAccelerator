@@ -4,18 +4,61 @@ import {
   getSessionAttendance, markAttendance, bulkMarkAttendance, updateAttendanceRecord,
   listSubmissionsByEnrollment, listSubmissionsBySession, createSubmission, updateSubmission,
   computeReadinessScore, computeAllReadinessScores, getCohortDashboard,
-  listCohortEnrollments, setPortalAccess, getPortalLoginUrl,
+  listCohortEnrollments, setPortalAccess, getPortalLoginUrl, getReadOnlyViewAsUrl,
 } from '../services/acceleratorService';
-import { generateMeetLink } from '../services/meetingService';
+import {
+  skipSessionDate, unskipDate, getSessionCurriculum, getCohortSkippedDates,
+} from '../services/sessionScheduleService';
+import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
+import { buildSessionKit } from '../services/sessionKitService';
+import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, KitDocMode } from '../services/sessionKitDocService';
+import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
 import { LiveSession } from '../models';
 
 // -- Sessions --
 
 export async function handleListSessions(req: Request, res: Response, next: NextFunction) {
   try {
-    const sessions = await listSessionsByCohort(req.params.cohortId as string);
-    res.json({ sessions });
+    const cohortId = req.params.cohortId as string;
+    const sessions = await listSessionsByCohort(cohortId);
+    const skipped_dates = await getCohortSkippedDates(cohortId);
+    res.json({ sessions, skipped_dates });
+  } catch (err) { next(err); }
+}
+
+// -- Session schedule management (skip-a-day / un-skip / per-session curriculum) --
+
+// Skip the day this session sits on: adds its date to the cohort's skipped_dates
+// and reflows, pushing this + later sessions to the next open slots. 404 if missing.
+export async function handleSkipSession(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await skipSessionDate(req.params.id as string);
+    if (!result) return res.status(404).json({ error: 'Session not found' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Un-skip a previously skipped date for a cohort, then reflow so sessions compact back.
+export async function handleUnskipDate(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { date } = req.body || {};
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'date (YYYY-MM-DD) is required' });
+    }
+    const result = await unskipDate(req.params.cohortId as string, date);
+    if (!result) return res.status(404).json({ error: 'Cohort not found' });
+    res.json(result);
+  } catch (err) { next(err); }
+}
+
+// Per-session curriculum: the week blueprint parsed from the session title. Never
+// throws on a missing blueprint (returns blueprint: null). 404 only if session missing.
+export async function handleGetSessionCurriculum(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await getSessionCurriculum(req.params.id as string);
+    if (!result) return res.status(404).json({ error: 'Session not found' });
+    res.json(result);
   } catch (err) { next(err); }
 }
 
@@ -60,6 +103,77 @@ export async function handleGenerateMeetLink(req: Request, res: Response, next: 
     const link = await generateMeetLink(session);
     if (!link) return res.status(500).json({ error: 'Failed to generate Meet link' });
     res.json({ meeting_link: link });
+  } catch (err) { next(err); }
+}
+
+// Class Kit: instructor-facing bundle for one session — session facts, meeting
+// link, cohort name, roster count, and a student check-in QR (SVG) that encodes
+// the absolute public check-in URL. 404 if the session does not exist.
+export async function handleGetSessionKit(req: Request, res: Response, next: NextFunction) {
+  try {
+    const kit = await buildSessionKit(req.params.id as string);
+    if (!kit) return res.status(404).json({ error: 'Session not found' });
+    res.json(kit);
+  } catch (err) { next(err); }
+}
+
+// Class Kit deck: the full interactive teaching deck (HTML) an instructor opens
+// in a new tab and shares on screen to run the class. text/html, not JSON. The
+// admin UI fetches this with the admin JWT and opens it in a new tab.
+export async function handleGetSessionKitDoc(req: Request, res: Response, next: NextFunction) {
+  try {
+    const q = req.query.mode;
+    const mode: KitDocMode = q === 'rehearse' || q === 'standalone' ? q : 'live';
+    const html = await renderSessionKitDoc(req.params.id as string, mode);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+// Instructor readiness report (teaching-plan counts + source/evidence ledger + prep).
+export async function handleGetSessionReadiness(req: Request, res: Response, next: NextFunction) {
+  try {
+    const html = await renderSessionReadinessReport(req.params.id as string);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+// Class Outline: a plain-language, one-page teaching plan (segments + time
+// windows + the teaching points) to review/prepare/print. text/html. 404 if missing.
+export async function handleGetSessionOutline(req: Request, res: Response, next: NextFunction) {
+  try {
+    const html = await renderSessionOutline(req.params.id as string);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+// Instructor Class Kit overrides (story-beat count/content, Live Decision
+// Theater on/off, Build Bay detail, evidence sources) — see classKit/kitConfig.ts.
+// GET always returns a full merged config (defaults filled in); PUT saves a
+// full replace, not a patch — the Customize popup always submits the whole form.
+export async function handleGetSessionKitConfig(req: Request, res: Response, next: NextFunction) {
+  try {
+    const config = await getKitConfig(req.params.id as string);
+    res.json({ config });
+  } catch (err) { next(err); }
+}
+
+export async function handleSaveSessionKitConfig(req: Request, res: Response, next: NextFunction) {
+  try {
+    const config = await saveKitConfig(req.params.id as string, req.body?.config);
+    if (!config) return res.status(404).json({ error: 'Session not found' });
+    res.json({ config });
+  } catch (err) { next(err); }
+}
+
+// Batch: generate teaching Meet links for every upcoming session in a cohort
+// that lacks one (backfill + on-demand). Idempotent; best-effort per session.
+export async function handleGenerateCohortMeetLinks(req: Request, res: Response, next: NextFunction) {
+  try {
+    const result = await generateCohortMeetLinks(req.params.cohortId as string);
+    res.json(result);
   } catch (err) { next(err); }
 }
 
@@ -217,6 +331,19 @@ export async function handleSetPortalAccess(req: Request, res: Response, next: N
 export async function handleGetPortalLink(req: Request, res: Response, next: NextFunction) {
   try {
     const url = await getPortalLoginUrl(req.params.id as string);
+    if (!url) return res.status(404).json({ error: 'Enrollment not found' });
+    res.json({ url });
+  } catch (err) { next(err); }
+}
+
+// Returns a READ-ONLY "View as member" URL — mints a read_only participant token
+// (server blocks every write) so an admin can see exactly the member's portal
+// without being able to change anything about their data/progress/recordings.
+export async function handleGetViewAsToken(req: Request, res: Response, next: NextFunction) {
+  try {
+    const admin: any = req.admin;
+    const impersonatedBy = admin?.email || admin?.sub || 'admin';
+    const url = await getReadOnlyViewAsUrl(req.params.id as string, String(impersonatedBy));
     if (!url) return res.status(404).json({ error: 'Enrollment not found' });
     res.json({ url });
   } catch (err) { next(err); }

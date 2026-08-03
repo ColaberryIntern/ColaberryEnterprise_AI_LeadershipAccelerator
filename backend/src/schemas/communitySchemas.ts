@@ -3,9 +3,27 @@ import { z } from 'zod';
 export const CreatePostSchema = z.object({
   body: z.string().min(1, 'Post body cannot be empty').max(10000),
   category: z.string().min(1).max(100).optional(),
-  media_urls: z.array(z.string().url()).max(10).optional(),
+  // http(s) URL (pasted link / YouTube) OR an uploaded community-media path.
+  media_urls: z.array(
+    z.string().refine(
+      (s) => /^https?:\/\//.test(s) || s.startsWith('/api/portal/community/media/'),
+      'must be an http(s) URL or an uploaded community media path'
+    )
+  ).max(10).optional(),
   mentioned_member_ids: z.array(z.string().uuid()).max(20).optional(),
   min_level: z.number().int().min(0).max(10).optional(),
+  // Curriculum tether (Community Rituals). Not set by the public composer — the
+  // ritual service derives these from the card server-side and passes them through
+  // createPost so a ritual post gets the same points/notifications as any post.
+  program_id: z.string().uuid().nullish(),
+  week: z.number().int().min(0).max(52).nullish(),
+  source_card_id: z.string().uuid().nullish(),
+  ritual_meta: z
+    .object({
+      ritual: z.string().max(64),
+      values: z.record(z.string(), z.union([z.string(), z.array(z.string())])),
+    })
+    .nullish(),
 });
 
 export const LeaderboardQuerySchema = z.object({
@@ -14,6 +32,10 @@ export const LeaderboardQuerySchema = z.object({
 
 export const ListPostsQuerySchema = z.object({
   category: z.string().min(1).max(100).optional(),
+  // Opaque keyset cursor from a prior page's next_cursor (Phase 4 pagination).
+  cursor: z.string().min(1).max(500).optional(),
+  // Page size — coerced from the query string; capped in the service too.
+  limit: z.coerce.number().int().min(1).max(50).optional(),
 });
 
 export const TogglePinSchema = z.object({

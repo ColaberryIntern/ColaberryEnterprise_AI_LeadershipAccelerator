@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260721-x4k2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Tuesday, July 21, 2026 at 10:17 AM</div>
+    <div><span class="sid">CC-20260721-x4k2</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Gated `ensureIntelligenceTables()`&#39;s `sync({ alter: true })` behind `DB_BOOT_SYNC` (create-only by default) — stops the every-boot duplicate-unique-index accumulation**</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/intelligence/index.ts` — the boot-time loop over the 8 intelligence models (DatasetRegistry, SystemProcess, IntelligenceConfig, QAHistory, AiSystemEvent, IntelligenceDecision, IntelligenceMemory, AgentPerformanceMetric) called `.sync({ alter: true })` UNGATED on every boot. Sequelize&#39;s alter can&#39;t detect an existing unique index on a `unique:true` column, so it created a fresh duplicate (`&lt;tbl&gt;_&lt;col&gt;_key`, `_key1`, `_key2` …) each boot. Now uses `{ alter: true }` only when `DB_BOOT_SYNC===&#39;true&#39;`, else create-only `{}` — same flag/rationale as the already-gated global sync in `server.ts`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">PR #569 — all 4 CI checks green; admin-squash-merged to main (c6ad36c5); prod backend rebuilt/deployed. Growth STOPPED: after the deploy boot the intel index counts held (dataset_registry 4247, intelligence_config 4225 — no +1). Then the one-time prod cleanup: dropped all 50,713 numbered duplicate UNIQUE constraints across 23 tables (safety-verified `groups_with_no_survivor=0` first; `ALTER TABLE … DROP CONSTRAINT IF EXISTS` with `lock_timeout=4s`, autocommit), 0 remaining; total indexes 52,362→1,649; departments 5,554→4 (kept `departments_name_key`+`departments_slug_key`, uniqueness intact); index disk 3.9 GB→2.0 GB; 0 new &quot;out of shared memory&quot;; PG locks healthy (~1,575 / 25,600 cap); VACUUM ANALYZE&#39;d the catalogs.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">server.ts&#39;s global `sequelize.sync({ alter: true })` was already gated behind DB_BOOT_SYNC (unset in prod) so non-intelligence tables were already frozen; this fix closes the last ungated boot alter-sync. The one-time cleanup of the 50,713 existing duplicate indexes is a separate prod DB operation (not committed code).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Removed the `overview` card TYPE end to end — announcement is the sole section-opener now; the `overview` *render_band* fallback is kept**</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">PR #558 — all 4 GitHub Actions checks green (Backend typecheck, Backend unit tests, Frontend typecheck [authoritative], Secret/route-auth lint); admin-squash-merged to main (63738691). Prod deployed: `docker compose -f docker-compose.production.yml up -d --build backend` on 95.216.199.47 (HEAD=63738691), backend booted clean, /api/health returns 401 (alive/auth-gated). Prod DB cleanup (accelerator_prod, atomic txn): stripped 13 `curriculum_blueprints.published_card_ids` arrays, deleted 928 `timeline_card_progress` + 29 `timeline_cards` + 1 `component_analytics` + 1 `curriculum_type_definitions` row; post-verify type_def/analytics/cards/progress-orphans all 0. Durable: running compiled dist has 0 `slug:&#39;overview&#39;` (seeder can&#39;t recreate) and 4 `|| &#39;overview&#39;` band fallbacks retained. xp_events=0 (no XP impact); unlock_rules/timeline_section_rules had 0 overview refs.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The `overview` *render_band* (the universal fallback band, `def.render_band||&#39;overview&#39;`, `BAND[&#39;overview&#39;]`) is deliberately KEPT — only the card TYPE slug is removed. Prod had NO enforced FKs on `timeline_cards` (no-global-sync boot model), so deletion order was chosen for correctness, not constraints. `xp_events` for overview cards = 0, so there was no earned XP to preserve. 8 `today_feed_impressions` rows still contain an &quot;overview&quot; snapshot; left intact by design — they are append-only, immutable, no-rehydrate history that renders from its own embedded snapshot (same call as the github_sync removal). Also fixed a pre-existing wrong assertion in `sectionCurriculumContext.test.ts` (`prompt_lab` was asserted absent from the roster set but is present).</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260721-x4k2</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

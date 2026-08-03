@@ -7,6 +7,8 @@ import AdminCurriculumTab from './AdminCurriculumTab';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
+import ClassKitModal from '../../components/admin/ClassKitModal';
+import KitConfigModal from '../../components/admin/KitConfigModal';
 
 interface Cohort {
   id: string;
@@ -58,6 +60,8 @@ interface EnrollmentInfo {
   payment_status?: string;
   payment_method?: string;
   amount_paid?: number;
+  paysimple_url?: string | null;
+  subscription?: { plan: string; status: string; amount_cents: number; current_period_end?: string | null } | null;
   portal_enabled?: boolean;
   created_at?: string;
   enrollment_type?: string;
@@ -117,9 +121,22 @@ function AdminAcceleratorPage() {
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [showSessionModal, setShowSessionModal] = useState(false);
   const [editingSession, setEditingSession] = useState<LiveSession | null>(null);
+  // Session id whose Class Kit (QR + start-class panel) is open, else null.
+  const [kitSessionId, setKitSessionId] = useState<string | null>(null);
+  // Session id whose Present dropdown menu is open, else null.
+  const [presentMenu, setPresentMenu] = useState<string | null>(null);
+  // Session {id, title} whose Customize (Class Kit config) modal is open, else null.
+  const [customizeTarget, setCustomizeTarget] = useState<{ id: string; title: string } | null>(null);
+  // Session id whose Class Details (curriculum/blueprint) modal is open, else null.
+  // Cohort days-off (dates a class was skipped) shown as removable chips above the table.
+  const [skippedDates, setSkippedDates] = useState<string[]>([]);
+  // Session pending a "mark as day off" confirm, else null.
+  const [skipTarget, setSkipTarget] = useState<LiveSession | null>(null);
+  // Date pending an "un-skip" (restore day off) confirm, else null.
+  const [unskipTarget, setUnskipTarget] = useState<string | null>(null);
   const [sessionForm, setSessionForm] = useState({
     session_number: 1, title: '', description: '', session_date: '',
-    start_time: '10:00 AM', end_time: '11:30 AM', session_type: 'core' as 'core' | 'lab',
+    start_time: '10:00', end_time: '11:30', session_type: 'core' as 'core' | 'lab',
   });
 
   // Attendance state
@@ -179,12 +196,20 @@ function AdminAcceleratorPage() {
       setDashboard(res.data);
       setSessions(res.data.sessions || []);
       setEnrollments(res.data.enrollments || []);
+      // Only overwrite skipped_dates when the response actually carries the field —
+      // the dashboard endpoint may omit it, and we don't want to clobber the value
+      // just set from a skip/unskip mutation response.
+      if (Array.isArray(res.data.skipped_dates)) setSkippedDates(res.data.skipped_dates);
     } catch {
       showToast('Failed to load dashboard', 'error');
     }
   }, [selectedCohortId]); // eslint-disable-line
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
+
+  // Reset days-off chips when switching cohorts so one cohort's days off never bleed
+  // into another. loadDashboard then repopulates them from the response (when present).
+  useEffect(() => { setSkippedDates([]); }, [selectedCohortId]);
 
   // -- Session handlers --
 
@@ -220,12 +245,101 @@ function AdminAcceleratorPage() {
     } catch { showToast('Failed to delete session', 'error'); }
   };
 
+  // Mark a session's date as a cohort day off: this class and every later one shift
+  // forward one slot. The response carries the re-dated sessions + updated days-off
+  // list, which we apply immediately; loadDashboard then refreshes the rest.
+  const handleSkipSession = async () => {
+    if (!skipTarget) return;
+    try {
+      const res = await api.post(`/api/admin/accelerator/sessions/${skipTarget.id}/skip`);
+      if (Array.isArray(res.data?.sessions)) setSessions(res.data.sessions);
+      if (Array.isArray(res.data?.skipped_dates)) setSkippedDates(res.data.skipped_dates);
+      showToast('Day off marked — schedule shifted forward', 'success');
+      setSkipTarget(null);
+      loadDashboard();
+    } catch { showToast('Failed to mark day off', 'error'); }
+  };
+
+  // Remove a cohort day off: later sessions compact back onto the freed date.
+  const handleUnskip = async () => {
+    if (!unskipTarget || !selectedCohortId) return;
+    try {
+      const res = await api.post(`/api/admin/accelerator/cohorts/${selectedCohortId}/unskip`, { date: unskipTarget });
+      if (Array.isArray(res.data?.sessions)) setSessions(res.data.sessions);
+      if (Array.isArray(res.data?.skipped_dates)) setSkippedDates(res.data.skipped_dates);
+      showToast('Day off removed — schedule restored', 'success');
+      setUnskipTarget(null);
+      loadDashboard();
+    } catch { showToast('Failed to remove day off', 'error'); }
+  };
+
   const handleGenerateMeet = async (sessionId: string) => {
     try {
       const res = await api.post(`/api/admin/accelerator/sessions/${sessionId}/meet-link`);
       showToast(`Meet link generated: ${res.data.meeting_link}`, 'success');
       loadDashboard();
     } catch { showToast('Failed to generate Meet link', 'error'); }
+  };
+
+  // Open the full interactive Class Kit teaching deck in a new tab. The window is
+  // opened synchronously (in the click gesture) to dodge popup blockers, then the
+  // deck HTML — fetched with the admin JWT — is written into it.
+  const handleOpenKitDeck = async (sessionId: string, mode: 'live' | 'rehearse' = 'live') => {
+    const w = window.open('', '_blank');
+    if (!w) { showToast('Allow pop-ups to open the Class Kit deck', 'error'); return; }
+    const label = mode === 'rehearse' ? 'Rehearsal (live sync off)' : 'Class Kit';
+    w.document.write(`<!doctype html><title>Loading…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the ${label}…</body>`);
+    try {
+      const q = mode === 'rehearse' ? '?mode=rehearse' : '';
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/kit-doc${q}`, { responseType: 'text' });
+      w.document.open();
+      w.document.write(res.data as string);
+      w.document.close();
+    } catch {
+      try { w.document.body.innerHTML = '<div style="font-family:system-ui,sans-serif;padding:2rem;color:#c00">Could not load the Class Kit. Close this tab and try again.</div>'; } catch { /* window may be gone */ }
+      showToast('Failed to open the Class Kit deck', 'error');
+    }
+  };
+
+  // Download the standalone (offline) class HTML.
+  const handleDownloadKit = async (sessionId: string, title: string) => {
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/kit-doc?mode=standalone`, { responseType: 'text' });
+      const blob = new Blob([res.data as string], { type: 'text/html' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `class-experience-${(title || 'session').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60)}.html`;
+      a.click();
+      showToast('Downloaded the standalone class file', 'success');
+    } catch { showToast('Failed to download the class file', 'error'); }
+  };
+
+  // Open the instructor readiness report (prep + source ledger).
+  const handleOpenReadiness = async (sessionId: string) => {
+    const w = window.open('', '_blank');
+    if (!w) { showToast('Allow pop-ups to open the readiness report', 'error'); return; }
+    w.document.write('<!doctype html><title>Readiness…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the readiness report…</body>');
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/readiness`, { responseType: 'text' });
+      w.document.open(); w.document.write(res.data as string); w.document.close();
+    } catch {
+      try { w.document.body.innerHTML = '<div style="font-family:system-ui,sans-serif;padding:2rem;color:#c00">Could not load the readiness report.</div>'; } catch { /* window gone */ }
+      showToast('Failed to open the readiness report', 'error');
+    }
+  };
+
+  // Open the plain-language class outline (teaching plan) in a new tab.
+  const handleOpenOutline = async (sessionId: string) => {
+    const w = window.open('', '_blank');
+    if (!w) { showToast('Allow pop-ups to open the outline', 'error'); return; }
+    w.document.write('<!doctype html><title>Loading outline…</title><body style="font-family:system-ui,sans-serif;padding:2rem;color:#334">Loading the class outline…</body>');
+    try {
+      const res = await api.get(`/api/admin/accelerator/sessions/${sessionId}/outline`, { responseType: 'text' });
+      w.document.open(); w.document.write(res.data as string); w.document.close();
+    } catch {
+      try { w.document.body.innerHTML = '<div style="font-family:system-ui,sans-serif;padding:2rem;color:#c00">Could not load the outline. Close this tab and try again.</div>'; } catch { /* window gone */ }
+      showToast('Failed to open the outline', 'error');
+    }
   };
 
   const handleStatusChange = async (sessionId: string, status: string) => {
@@ -239,7 +353,7 @@ function AdminAcceleratorPage() {
   const resetSessionForm = () => {
     setSessionForm({
       session_number: (sessions.length || 0) + 1, title: '', description: '', session_date: '',
-      start_time: '10:00 AM', end_time: '11:30 AM', session_type: 'core',
+      start_time: '10:00', end_time: '11:30', session_type: 'core',
     });
   };
 
@@ -365,7 +479,9 @@ function AdminAcceleratorPage() {
   // does NOT log the admin out of this tab.
   const handleViewAsStudent = async (enrollmentId: string) => {
     try {
-      const res = await api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/portal-link`);
+      // Read-only "View as": mints a read_only token so the admin observes the
+      // student's portal without being able to change anything (server-enforced).
+      const res = await api.get(`/api/admin/accelerator/enrollments/${enrollmentId}/view-as-token`);
       const url = res.data?.url;
       if (!url) { showToast('No portal link available', 'error'); return; }
       window.open(url, '_blank', 'noopener,noreferrer');
@@ -414,6 +530,25 @@ function AdminAcceleratorPage() {
   };
 
   const formatDate = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  // Compact label for day-off chips, e.g. "Jul 27".
+  const formatDayOff = (d: string) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : d;
+  // "18:30:00" -> "6:30 PM". Stored times are already Central wall-clock (no TZ math needed).
+  const formatClock12 = (t: string) => {
+    const m = /^(\d{1,2}):(\d{2})/.exec(t || '');
+    if (!m) return t || '';
+    let h = parseInt(m[1], 10);
+    const min = m[2];
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${min} ${ampm}`;
+  };
+  // "18:30:00", "20:30:00" -> "6:30 - 8:30 PM CT" (drops the repeated AM/PM when both share it).
+  const formatTimeRange = (start: string, end: string) => {
+    const s = formatClock12(start), e = formatClock12(end);
+    const sAmPm = s.split(' ')[1], eAmPm = e.split(' ')[1];
+    const sLabel = sAmPm && sAmPm === eAmPm ? s.replace(` ${sAmPm}`, '') : s;
+    return `${sLabel} - ${e} CT`;
+  };
   const formatDateTime = (d: string) => d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
 
   // "3 days ago" style relative label for when someone registered.
@@ -572,6 +707,24 @@ function AdminAcceleratorPage() {
             </button>
           }
         >
+            {skippedDates.length > 0 && (
+              <div className="d-flex flex-wrap align-items-center gap-2 px-3 pt-3">
+                <span className="text-muted small fw-medium">Days off:</span>
+                {skippedDates.map((d) => (
+                  <span key={d} className="badge rounded-pill text-bg-light text-dark border d-inline-flex align-items-center gap-1" style={{ fontSize: 12.5, fontWeight: 500, paddingRight: 6 }}>
+                    <span aria-hidden="true">📅</span> {formatDayOff(d)}
+                    <button
+                      type="button"
+                      className="btn-close ms-1"
+                      style={{ fontSize: 9, width: 9, height: 9 }}
+                      aria-label={`Remove day off ${formatDayOff(d)}`}
+                      title="Un-skip this day — later sessions compact back"
+                      onClick={() => setUnskipTarget(d)}
+                    />
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="table-responsive">
               <table className="table table-hover mb-0">
                 <thead className="table-light">
@@ -592,9 +745,17 @@ function AdminAcceleratorPage() {
                   ) : sessions.map((s) => (
                     <tr key={s.id}>
                       <td>{s.session_number}</td>
-                      <td className="fw-medium">{s.title}</td>
+                      <td className="fw-medium">
+                        <button
+                          className="btn btn-link p-0 fw-medium text-start text-decoration-none align-baseline"
+                          onClick={() => handleOpenOutline(s.id)}
+                          title="Open the class outline — the minute-by-minute teaching plan. Use ▶ Present to run the slides."
+                        >
+                          {s.title}
+                        </button>
+                      </td>
                       <td>{formatDate(s.session_date)}</td>
-                      <td className="small">{s.start_time} - {s.end_time}</td>
+                      <td className="small">{formatTimeRange(s.start_time, s.end_time)}</td>
                       <td>{statusBadge(s.session_type)}</td>
                       <td>{statusBadge(s.status)}</td>
                       <td>
@@ -610,9 +771,27 @@ function AdminAcceleratorPage() {
                       </td>
                       <td>
                         <div className="d-flex gap-1">
+                          <div className="btn-group" style={{ position: 'relative' }}>
+                            <button className="btn btn-primary btn-sm" onClick={() => handleOpenKitDeck(s.id)} title="Open the interactive Class Kit teaching deck in a new tab — share this on screen to run the class. The check-in QR is on the first slides.">▶ Present</button>
+                            <button className="btn btn-primary btn-sm dropdown-toggle dropdown-toggle-split" onClick={() => setPresentMenu(presentMenu === s.id ? null : s.id)} title="More: Rehearse · Download · Readiness"><span className="visually-hidden">More</span></button>
+                            {presentMenu === s.id && (
+                              <div className="dropdown-menu show" style={{ position: 'absolute', top: '100%', right: 0, zIndex: 1050, display: 'block' }}>
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenKitDeck(s.id, 'rehearse'); }}>🎓 Rehearse (live off)</button>
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleDownloadKit(s.id, s.title); }}>⬇️ Download standalone HTML</button>
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenReadiness(s.id); }}>📋 Readiness report</button>
+                                <div className="dropdown-divider" />
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); setCustomizeTarget({ id: s.id, title: s.title }); }}>⚙️ Customize</button>
+                              </div>
+                            )}
+                          </div>
+                          <button className="btn btn-outline-secondary btn-sm" onClick={() => setKitSessionId(s.id)} title="Printable check-in QR + Start Class + roster (a paper backup — the deck already shows the QR)">QR</button>
                           <button className="btn btn-outline-secondary btn-sm" onClick={() => openEditSession(s)}>Edit</button>
+                          <button className="btn btn-outline-warning btn-sm" onClick={() => setSkipTarget(s)} title="Mark this date as a day off — this class and all later ones shift forward one slot">Skip</button>
                           {s.status === 'scheduled' && (
                             <button className="btn btn-outline-danger btn-sm" onClick={() => handleStatusChange(s.id, 'completed')}>Complete</button>
+                          )}
+                          {s.status === 'completed' && (
+                            <button className="btn btn-outline-secondary btn-sm" onClick={() => handleStatusChange(s.id, 'scheduled')} title="Revert to scheduled — e.g. it was marked complete for testing before the class actually ran">↩ Reopen</button>
                           )}
                           <button className="btn btn-outline-danger btn-sm" onClick={() => setDeleteTarget(s.id)}>Del</button>
                         </div>
@@ -695,6 +874,20 @@ function AdminAcceleratorPage() {
                           {typeof e.amount_paid === 'number' && e.amount_paid > 0 ? (
                             <div className="text-muted" style={{ fontSize: '0.72rem' }}>
                               ${e.amount_paid.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} paid
+                            </div>
+                          ) : null}
+                          {e.subscription && e.subscription.status === 'active' ? (
+                            <div style={{ fontSize: '0.72rem', marginTop: 2 }}>
+                              <span className={`badge ${e.subscription.plan === 'comp' ? 'bg-info' : 'bg-success'}`}>
+                                {e.subscription.plan === 'annual' ? 'Annual' : e.subscription.plan === 'monthly' ? 'Monthly' : e.subscription.plan === 'comp' ? 'Comp' : e.subscription.plan} subscription
+                              </span>
+                            </div>
+                          ) : null}
+                          {e.paysimple_url ? (
+                            <div style={{ fontSize: '0.72rem', marginTop: 2 }}>
+                              <a href={e.paysimple_url} target="_blank" rel="noopener noreferrer">
+                                Payment info <i className="ri-external-link-line" aria-hidden="true"></i>
+                              </a>
                             </div>
                           ) : null}
                         </td>
@@ -932,6 +1125,23 @@ function AdminAcceleratorPage() {
         />
       )}
 
+      {/* Class Kit — projector-friendly QR + start-class panel for a session */}
+      {kitSessionId && (
+        <ClassKitModal sessionId={kitSessionId} onClose={() => setKitSessionId(null)} />
+      )}
+
+      {/* Customize — instructor controls for story beats, Theater, Build Bay detail, evidence */}
+      {customizeTarget && (
+        <KitConfigModal
+          sessionId={customizeTarget.id}
+          sessionTitle={customizeTarget.title}
+          onClose={() => setCustomizeTarget(null)}
+          showToast={showToast}
+        />
+      )}
+
+      {/* Class Details — curriculum / week-blueprint for a session (opened from Title) */}
+
       {/* Session Create/Edit Modal */}
       {showSessionModal && (
         <>
@@ -976,14 +1186,14 @@ function AdminAcceleratorPage() {
                   </div>
                   <div className="row g-2 mb-3">
                     <div className="col">
-                      <label className="form-label small fw-medium">Start Time</label>
-                      <input type="text" className="form-control form-control-sm" value={sessionForm.start_time}
-                        onChange={(e) => setSessionForm({ ...sessionForm, start_time: e.target.value })} placeholder="10:00 AM" />
+                      <label className="form-label small fw-medium">Start Time (CT)</label>
+                      <input type="time" className="form-control form-control-sm" value={sessionForm.start_time.slice(0, 5)}
+                        onChange={(e) => setSessionForm({ ...sessionForm, start_time: e.target.value })} />
                     </div>
                     <div className="col">
-                      <label className="form-label small fw-medium">End Time</label>
-                      <input type="text" className="form-control form-control-sm" value={sessionForm.end_time}
-                        onChange={(e) => setSessionForm({ ...sessionForm, end_time: e.target.value })} placeholder="11:30 AM" />
+                      <label className="form-label small fw-medium">End Time (CT)</label>
+                      <input type="time" className="form-control form-control-sm" value={sessionForm.end_time.slice(0, 5)}
+                        onChange={(e) => setSessionForm({ ...sessionForm, end_time: e.target.value })} />
                     </div>
                   </div>
                 </div>
@@ -1018,6 +1228,32 @@ function AdminAcceleratorPage() {
         confirmVariant="danger"
         onConfirm={handleDeleteSession}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Skip (day off) Confirm */}
+      <ConfirmModal
+        show={!!skipTarget}
+        title="Mark Day Off"
+        message={skipTarget
+          ? `Mark ${formatDate(skipTarget.session_date)} as a day off? This class and all later ones shift forward one slot. You can un-skip later.`
+          : ''}
+        confirmLabel="Mark Day Off"
+        confirmVariant="warning"
+        onConfirm={handleSkipSession}
+        onCancel={() => setSkipTarget(null)}
+      />
+
+      {/* Un-skip (restore day off) Confirm */}
+      <ConfirmModal
+        show={!!unskipTarget}
+        title="Remove Day Off"
+        message={unskipTarget
+          ? `Remove the ${formatDate(unskipTarget)} day off? Later sessions compact back onto that date.`
+          : ''}
+        confirmLabel="Remove Day Off"
+        confirmVariant="primary"
+        onConfirm={handleUnskip}
+        onCancel={() => setUnskipTarget(null)}
       />
     </>
   );

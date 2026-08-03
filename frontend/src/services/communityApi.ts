@@ -6,6 +6,13 @@ export interface CommunityPostMember {
   id: string;
   display_name: string;
   avatar_url: string | null;
+  level: number;
+}
+
+export interface CommunityCommenter {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
 }
 
 export interface CommunityPost {
@@ -16,11 +23,16 @@ export interface CommunityPost {
   pinned: boolean;
   like_count: number;
   comment_count: number;
+  // Server-authenticated per-viewer like state (Phase 4). Render the like
+  // button from this, not from a client-side default — the previous code reset
+  // every post to "not liked" on load, silently losing the viewer's likes.
+  viewer_has_liked: boolean;
   mentioned_member_ids: string[];
   min_level: number;
   locked: boolean;
   created_at: string;
   member: CommunityPostMember;
+  recent_commenters: CommunityCommenter[];
 }
 
 export interface CommunityComment {
@@ -34,16 +46,38 @@ export interface CommunityComment {
   replies: CommunityComment[];
 }
 
+export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
+
+// A member's earned recognition badge (mirrors the backend MemberBadge). Same
+// badges the Rooms recognition Impact panel shows.
+export interface MemberBadge {
+  category: string;
+  label: string;
+  emoji: string;
+  count: number;
+}
+
 export interface CommunityMemberProfile {
   id: string;
+  // Enrollment id — the DM + friend actions on the profile drawer are
+  // enrollment-keyed (openDm, sendFriendRequest).
+  enrollment_id: string;
   display_name: string;
   avatar_url: string | null;
   bio: string | null;
   level: number;
   points: number;
+  role: CommunityMemberRole;
+  badges: MemberBadge[];
   presence: CommunityPresenceStatus;
   created_at: string;
 }
+
+export const MEMBER_ROLE_META: Record<CommunityMemberRole, { label: string; emoji: string }> = {
+  student: { label: 'Member', emoji: '' },
+  mentor: { label: 'Mentor', emoji: '🧭' },
+  staff: { label: 'Staff', emoji: '⭐' },
+};
 
 export const COMMUNITY_CATEGORIES = ['General', 'Wins', 'Support', 'Introductions'] as const;
 
@@ -56,14 +90,14 @@ export interface LeaderboardEntry {
   rank: number;
 }
 
-// Level thresholds mirror communityService.ts's LEVEL_TIERS (backend source of
-// truth). Tier names are a frontend-only display layer over the 4 numeric
-// levels the API actually exposes (approved by Ali, BC #9985689739, 2026-07-16).
+// ONE canonical level ladder (mirrors backend pointsService.LEVELS / frontend
+// onboardingApi.LEVELS). The community profile/leaderboard now report the same
+// canonical points + level as the top-right HUD — a single system everywhere.
 export const LEVEL_TIERS = [
   { level: 1, min: 0, name: 'Apprentice' },
-  { level: 2, min: 1500, name: 'Builder' },
-  { level: 3, min: 2700, name: 'Architect' },
-  { level: 4, min: 4200, name: 'Principal Architect' },
+  { level: 2, min: 150, name: 'Builder' },
+  { level: 3, min: 400, name: 'Architect' },
+  { level: 4, min: 900, name: 'Principal' },
 ] as const;
 
 export function levelName(level: number): string {
@@ -85,14 +119,34 @@ export async function fetchLeaderboard(period: LeaderboardPeriod): Promise<Leade
   return data.entries;
 }
 
-export async function fetchPosts(category?: string): Promise<CommunityPost[]> {
-  const { data } = await portalApi.get<{ posts: CommunityPost[] }>('/api/portal/community/posts', {
-    params: category ? { category } : undefined,
-  });
-  return data.posts;
+export interface CommunityFeedPage {
+  posts: CommunityPost[];
+  next_cursor: string | null;
 }
 
-export async function createPost(input: { body: string; category?: string; mentioned_member_ids?: string[] }): Promise<CommunityPost> {
+// Cursor-paginated feed (Phase 4). Pass the previous page's next_cursor to page
+// forward; omit it for the first page. `next_cursor` is null when the feed is
+// exhausted.
+export async function fetchPosts(
+  params: { category?: string; cursor?: string | null; limit?: number } = {}
+): Promise<CommunityFeedPage> {
+  const query: Record<string, string | number> = {};
+  if (params.category) query.category = params.category;
+  if (params.cursor) query.cursor = params.cursor;
+  if (params.limit) query.limit = params.limit;
+  const { data } = await portalApi.get<{ posts: CommunityPost[]; next_cursor?: string | null }>(
+    '/api/portal/community/posts',
+    { params: Object.keys(query).length ? query : undefined }
+  );
+  return { posts: data.posts, next_cursor: data.next_cursor ?? null };
+}
+
+export async function createPost(input: {
+  body: string;
+  category?: string;
+  media_urls?: string[];
+  mentioned_member_ids?: string[];
+}): Promise<CommunityPost> {
   const { data } = await portalApi.post<{ post: CommunityPost }>('/api/portal/community/posts', input);
   return data.post;
 }
@@ -135,7 +189,103 @@ export async function fetchMembers(): Promise<CommunityMemberProfile[]> {
   return data.members;
 }
 
+export interface DirectoryQuery {
+  search?: string;
+  role?: CommunityMemberRole;
+  minLevel?: number;
+  limit?: number;
+  offset?: number;
+}
+
+export interface DirectoryPage {
+  members: CommunityMemberProfile[];
+  total: number;
+  has_more: boolean;
+}
+
+// Paginated, searchable, filterable People directory. Same endpoint as
+// fetchMembers (which stays for the compact rail); this variant reads the
+// total/has_more the backend now returns.
+export async function fetchDirectory(query: DirectoryQuery = {}): Promise<DirectoryPage> {
+  const params: Record<string, string | number> = {};
+  if (query.search?.trim()) params.search = query.search.trim();
+  if (query.role) params.role = query.role;
+  if (typeof query.minLevel === 'number') params.minLevel = query.minLevel;
+  if (typeof query.limit === 'number') params.limit = query.limit;
+  if (typeof query.offset === 'number') params.offset = query.offset;
+  const { data } = await portalApi.get<{ members: CommunityMemberProfile[]; total?: number; has_more?: boolean }>(
+    '/api/portal/community/members',
+    Object.keys(params).length ? { params } : undefined,
+  );
+  return { members: data.members, total: data.total ?? data.members.length, has_more: data.has_more ?? false };
+}
+
 export async function pingPresence(): Promise<{ presence: CommunityPresenceStatus }> {
   const { data } = await portalApi.post('/api/portal/community/presence/ping');
   return data;
+}
+
+export interface CommunityNotification {
+  id: string;
+  notification_type: 'mention' | 'reply' | 'like' | 'friend_request' | 'friend_accepted' | 'new_message';
+  source_type: 'post' | 'comment' | 'friendship' | 'dm';
+  source_id: string;
+  read: boolean;
+  created_at: string;
+  actor: { id: string; display_name: string; avatar_url: string | null } | null;
+}
+
+export async function fetchNotifications(): Promise<CommunityNotification[]> {
+  const { data } = await portalApi.get<{ notifications: CommunityNotification[] }>('/api/portal/community/notifications');
+  return data.notifications;
+}
+export async function fetchUnreadNotificationCount(): Promise<number> {
+  const { data } = await portalApi.get<{ count: number }>('/api/portal/community/notifications/unread-count');
+  return data.count;
+}
+export async function markNotificationRead(id: string): Promise<void> {
+  await portalApi.post(`/api/portal/community/notifications/${id}/read`);
+}
+export async function markAllNotificationsRead(): Promise<void> {
+  await portalApi.post('/api/portal/community/notifications/read-all');
+}
+
+// Upload a small image from the student's computer; returns a relative media
+// URL to add to a post's media_urls. The backend validates type + size (8MB).
+export async function uploadCommunityMedia(file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file);
+  const { data } = await portalApi.post<{ url: string }>('/api/portal/community/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data.url;
+}
+
+// Cohort-scoped member profile lookup for the profile drawer. The backend
+// returns 404 (not 403) for a member in another cohort, preserving the
+// anti-enumeration behavior — the drawer surfaces that as "member not found".
+export async function fetchMemberProfile(memberId: string): Promise<CommunityMemberProfile> {
+  const { data } = await portalApi.get<{ profile: CommunityMemberProfile }>(
+    `/api/portal/community/members/${memberId}`
+  );
+  return data.profile;
+}
+
+export type CommunityEventSource = 'live_session' | 'open_house' | 'community_event';
+
+export interface CommunityEvent {
+  id: string;
+  source: CommunityEventSource;
+  title: string;
+  event_type: string;
+  starts_at: string;
+  ends_at: string | null;
+  meeting_link: string | null;
+}
+
+// Upcoming cohort events (live sessions + open houses + ad-hoc community
+// events), already merged and sorted soonest-first by the backend.
+export async function fetchCalendar(): Promise<CommunityEvent[]> {
+  const { data } = await portalApi.get<{ events: CommunityEvent[] }>('/api/portal/community/calendar');
+  return data.events;
 }

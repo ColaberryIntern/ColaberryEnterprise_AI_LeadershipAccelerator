@@ -5,6 +5,7 @@ import PodcastView from './PodcastView';
 import TimelineCardComment from './TimelineCardComment';
 import CardSurveyResponse from './CardSurveyResponse';
 import AssessmentAttempt from './AssessmentAttempt';
+import ReflectionEntry from './ReflectionEntry';
 import AdminUser from './AdminUser';
 import Lead from './Lead';
 import AutomationLog from './AutomationLog';
@@ -40,6 +41,7 @@ import UserCurriculumProfile from './UserCurriculumProfile';
 import SessionGate from './SessionGate';
 import MentorConversation from './MentorConversation';
 import SessionChatMessage from './SessionChatMessage';
+import SessionPulse from './SessionPulse';
 import SkillMastery from './SkillMastery';
 import PromptTemplate from './PromptTemplate';
 import SectionConfig from './SectionConfig';
@@ -285,6 +287,7 @@ import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
+import FriendReferral from './FriendReferral';
 import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
 import Subscription from './Subscription';
@@ -309,9 +312,25 @@ import CommunityNotification from './CommunityNotification';
 import CommunityDigestLog from './CommunityDigestLog';
 import CommunityEvent from './CommunityEvent';
 
+// Colaberry Commons — Community Rooms layer (rooms/bookings/rsvp/messages/outbox)
+import CommunityRoom from './CommunityRoom';
+import RoomMembership from './RoomMembership';
+import Friendship from './Friendship'; // portal Contacts rail friend graph
+import RoomBooking from './RoomBooking';
+import RoomBookingAttendee from './RoomBookingAttendee';
+import RoomMessage from './RoomMessage';
+import RoomResource from './RoomResource';
+import RoomOutboxEvent from './RoomOutboxEvent';
+import RoomReport from './RoomReport';
+import RoomPresence from './RoomPresence';
+import ContributionEvent from './ContributionEvent';
+
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
 import SponsorSeat from './SponsorSeat';
+// Free-trial Organization / Manager layer (dual account + team roster).
+import Organization from './Organization';
+import OrgMember from './OrgMember';
 import Challenge from './Challenge';
 import ChallengeParticipant from './ChallengeParticipant';
 import LeaderboardScore from './LeaderboardScore';
@@ -935,6 +954,8 @@ RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'st
 StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
 Enrollment.hasMany(StudentPointsEvent, { foreignKey: 'enrollment_id', as: 'pointsEvents', onDelete: 'CASCADE' });
 StudentPointsEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(FriendReferral, { foreignKey: 'enrollment_id', as: 'friendReferrals', onDelete: 'CASCADE' });
+FriendReferral.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 // Self-serve subscriptions (student billing).
 Enrollment.hasMany(Subscription, { foreignKey: 'enrollment_id', as: 'subscriptions', onDelete: 'CASCADE' });
@@ -993,8 +1014,20 @@ ChallengeParticipant.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'e
 ChallengeParticipant.hasOne(LeaderboardScore, { foreignKey: 'challenge_participant_id', as: 'score', onDelete: 'CASCADE' });
 LeaderboardScore.belongsTo(ChallengeParticipant, { foreignKey: 'challenge_participant_id', as: 'participant' });
 
+// --- Free-trial Organization / Manager associations ---
+// An Organization owns a roster of OrgMembers; each member links (nullable) to
+// the teammate's free student enrollment so metrics roll up over the real ledgers.
+Organization.hasMany(OrgMember, { foreignKey: 'org_id', as: 'members', onDelete: 'CASCADE' });
+OrgMember.belongsTo(Organization, { foreignKey: 'org_id', as: 'organization' });
+
+Organization.belongsTo(Enrollment, { foreignKey: 'owner_enrollment_id', as: 'owner', onDelete: 'CASCADE' });
+Enrollment.hasMany(Organization, { foreignKey: 'owner_enrollment_id', as: 'ownedOrganizations' });
+
+OrgMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment', onDelete: 'SET NULL' });
+Enrollment.hasMany(OrgMember, { foreignKey: 'enrollment_id', as: 'orgMemberships' });
+
 export {
-  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, AdminUser, Lead, AutomationLog,
+  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
@@ -1008,6 +1041,7 @@ export {
   CurriculumModule, CurriculumLesson, LessonInstance,
   UserCurriculumProfile, SessionGate, MentorConversation,
   SessionChatMessage,
+  SessionPulse,
   SkillMastery,
   PromptTemplate,
   SectionConfig,
@@ -1201,6 +1235,9 @@ export {
   Challenge,
   ChallengeParticipant,
   LeaderboardScore,
+  // Free-trial Organization / Manager layer
+  Organization,
+  OrgMember,
   // Curriculum + enrollment + Skilljar sync (from main)
   CurriculumCourseLink,
   EnrollmentLead,
@@ -1222,7 +1259,19 @@ export {
   CommunityNotification,
   CommunityDigestLog,
   CommunityEvent,
+  // Colaberry Commons — Community Rooms layer
+  CommunityRoom,
+  RoomMembership,
+  RoomBooking,
+  RoomBookingAttendee,
+  RoomMessage,
+  RoomResource,
+  RoomOutboxEvent,
+  RoomReport,
+  RoomPresence,
+  ContributionEvent,
   StudentPointsEvent,
+  FriendReferral,
   OpenHouseEvent,
   OnboardingProfile,
   Subscription,
@@ -1287,6 +1336,12 @@ CoraKbEntry.belongsTo(ResponsiblePerson, { foreignKey: 'primary_person_id', as: 
 
 // --- Community + Gamification associations (Epic 4) ---
 Enrollment.hasOne(CommunityMember, { foreignKey: 'enrollment_id', as: 'communityMember' });
+// Friendships — two FKs to Enrollment (requester + addressee), aliased both ways.
+// The service queries Friendship directly (no includes); these register the graph.
+Enrollment.hasMany(Friendship, { foreignKey: 'requester_id', as: 'sentFriendRequests' });
+Enrollment.hasMany(Friendship, { foreignKey: 'addressee_id', as: 'receivedFriendRequests' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'requester_id', as: 'requester' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'addressee_id', as: 'addressee' });
 CommunityMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 Cohort.hasMany(CommunityPost, { foreignKey: 'cohort_id', as: 'communityPosts' });
@@ -1328,6 +1383,28 @@ CommunityDigestLog.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'me
 
 Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
 CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+// --- Colaberry Commons — Community Rooms associations ---
+Cohort.hasMany(CommunityRoom, { foreignKey: 'linked_cohort_id', as: 'communityRooms' });
+CommunityRoom.belongsTo(Cohort, { foreignKey: 'linked_cohort_id', as: 'linkedCohort' });
+
+LiveSession.hasOne(CommunityRoom, { foreignKey: 'linked_live_session_id', as: 'communityRoom' });
+CommunityRoom.belongsTo(LiveSession, { foreignKey: 'linked_live_session_id', as: 'liveSession' });
+
+CommunityRoom.hasMany(RoomMembership, { foreignKey: 'room_id', as: 'memberships', onDelete: 'CASCADE' });
+RoomMembership.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+CommunityRoom.hasMany(RoomBooking, { foreignKey: 'room_id', as: 'bookings', onDelete: 'CASCADE' });
+RoomBooking.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+RoomBooking.hasMany(RoomBookingAttendee, { foreignKey: 'booking_id', as: 'attendees', onDelete: 'CASCADE' });
+RoomBookingAttendee.belongsTo(RoomBooking, { foreignKey: 'booking_id', as: 'booking' });
+
+CommunityRoom.hasMany(RoomMessage, { foreignKey: 'room_id', as: 'messages', onDelete: 'CASCADE' });
+RoomMessage.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+CommunityRoom.hasMany(RoomResource, { foreignKey: 'room_id', as: 'resources', onDelete: 'CASCADE' });
+RoomResource.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
 
 // --- Timeline Engine associations (Classroom rebuild) ---
 TimelineCard.hasMany(TimelineCardProgress, { foreignKey: 'card_id', as: 'progress', onDelete: 'CASCADE' });

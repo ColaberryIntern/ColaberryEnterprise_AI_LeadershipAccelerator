@@ -1,6 +1,7 @@
 import {
   PLANS, planChargeAmount, isSubscriptionRef, isNonPayingCohortName, getSubscription, startCheckout, activateByRef, cancelSubscription, confirmCheckout,
   billingAnchorMs, periodEndMs,
+  grantFreeAccess, revokeFreeAccess, activeCompEnrollmentIds,
 } from '../subscriptionService';
 import { Enrollment, Cohort, Subscription, AccountCredit } from '../../models';
 import { findOrCreateCustomer, createPaymentLink } from '../paysimpleService';
@@ -53,6 +54,77 @@ describe('subscriptionService', () => {
       expect(isNonPayingCohortName('Timeline Demo Cohort')).toBe(true);
       expect(isNonPayingCohortName('Cohort - July 2026')).toBe(false);
       expect(isNonPayingCohortName('Cohort 1 — July 2026')).toBe(false);
+    });
+  });
+
+  describe('free access (comped seats)', () => {
+    it('grantFreeAccess: creates an active comp subscription and flips the enrollment to a paid member', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c1', enrolled_at: null, update });
+      (Subscription.findOne as jest.Mock).mockResolvedValue(null);
+      (Subscription.create as jest.Mock).mockImplementation(async (attrs: any) => ({ id: 'sub1', ...attrs }));
+
+      const sub = await grantFreeAccess('e1', NOW);
+
+      expect(Subscription.create).toHaveBeenCalledWith(expect.objectContaining({
+        enrollment_id: 'e1', plan: 'comp', status: 'active', amount_cents: 0,
+      }));
+      expect((Subscription.create as jest.Mock).mock.calls[0][0].payment_ref).toMatch(/^COMP-e1-/);
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({
+        enrollment_type: 'standard', tier: 'member', payment_status: 'paid', status: 'active', portal_enabled: true, amount_paid: 0,
+      }));
+      expect((sub as any).plan).toBe('comp');
+    });
+
+    it('grantFreeAccess: idempotent — reuses an existing active comp (no new row)', async () => {
+      const update = jest.fn();
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue({ id: 'e1', cohort_id: 'c1', enrolled_at: null, update });
+      (Subscription.findOne as jest.Mock).mockResolvedValue({ id: 'existing', plan: 'comp', status: 'active' });
+
+      const sub = await grantFreeAccess('e1', NOW);
+
+      expect(Subscription.create).not.toHaveBeenCalled();
+      expect((sub as any).id).toBe('existing');
+      expect(update).toHaveBeenCalled(); // membership grant is still (idempotently) applied
+    });
+
+    it('grantFreeAccess: throws NotFoundError when the enrollment is missing', async () => {
+      (Enrollment.findByPk as jest.Mock).mockResolvedValue(null);
+      await expect(grantFreeAccess('nope', NOW)).rejects.toMatchObject({ error_class: 'NotFoundError' });
+      expect(Subscription.create).not.toHaveBeenCalled();
+    });
+
+    it('revokeFreeAccess: cancels an active comp and returns true', async () => {
+      const update = jest.fn();
+      (Subscription.findOne as jest.Mock).mockResolvedValue({ id: 'sub1', update });
+      const ok = await revokeFreeAccess('e1', NOW);
+      expect(ok).toBe(true);
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ status: 'canceled', cancel_reason: 'comp_revoked' }));
+    });
+
+    it('revokeFreeAccess: returns false when there is no active comp', async () => {
+      (Subscription.findOne as jest.Mock).mockResolvedValue(null);
+      await expect(revokeFreeAccess('e1', NOW)).resolves.toBe(false);
+    });
+
+    it('activeCompEnrollmentIds: empty input short-circuits with no query', async () => {
+      const set = await activeCompEnrollmentIds([]);
+      expect(set.size).toBe(0);
+      expect(Subscription.findAll).not.toHaveBeenCalled();
+    });
+
+    it('activeCompEnrollmentIds: returns the enrollments holding an active comp', async () => {
+      (Subscription.findAll as jest.Mock).mockResolvedValue([{ enrollment_id: 'e1' }]);
+      const set = await activeCompEnrollmentIds(['e1', 'e2']);
+      expect(set.has('e1')).toBe(true);
+      expect(set.has('e2')).toBe(false);
+    });
+
+    it('startCheckout rejects the comp plan — comp is admin-granted, never self-serve', async () => {
+      const res = await startCheckout('e1', 'comp' as any, NOW);
+      expect(res).toEqual({ ok: false, reason: 'unknown_plan' });
+      expect(Subscription.create).not.toHaveBeenCalled();
+      expect(createPaymentLink).not.toHaveBeenCalled();
     });
   });
 

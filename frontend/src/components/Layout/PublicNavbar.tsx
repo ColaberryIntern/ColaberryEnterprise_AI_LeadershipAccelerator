@@ -205,21 +205,21 @@ function PublicNavbar() {
             >
               Log in
             </Button>
-            {/* Door B — employers sponsor annual seats (talent discovery). */}
+            {/* Soft secondary — book a guided walkthrough. */}
             <CtaLink
               to={SECONDARY_CTA.path}
               variant="outline"
               onClick={closeAll}
-              data-track="nav_sponsor_team"
+              data-track="nav_book_walkthrough"
             >
               {SECONDARY_CTA.label}
             </CtaLink>
-            {/* Door A — individuals self-serve the $149/mo membership. */}
+            {/* Primary — start a free account (learner + org view). */}
             <CtaLink
               to={PRIMARY_CTA.path}
               variant="primary"
               onClick={closeAll}
-              data-track="nav_join_challenge"
+              data-track="nav_start_free"
             >
               {PRIMARY_CTA.label}
             </CtaLink>
@@ -294,7 +294,7 @@ function PublicNavbar() {
             variant="outline"
             onClick={closeAll}
             className="cb-btn--full"
-            data-track="nav_sponsor_team_mobile"
+            data-track="nav_book_walkthrough_mobile"
           >
             {SECONDARY_CTA.label}
           </CtaLink>
@@ -303,7 +303,7 @@ function PublicNavbar() {
             variant="primary"
             onClick={closeAll}
             className="cb-btn--full"
-            data-track="nav_join_challenge_mobile"
+            data-track="nav_start_free_mobile"
           >
             {PRIMARY_CTA.label}
           </CtaLink>

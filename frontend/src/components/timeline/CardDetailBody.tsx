@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import portalApi from '../../utils/portalApi';
 import { TimelineFeedCard } from './TimelineCard';
 import VideoEmbed, { WatchBeatPayload } from './VideoEmbed';
@@ -6,9 +6,25 @@ import SkillsJarPanel from './SkillsJarPanel';
 import { parseVideoUrl, videoThumbnail } from '../../utils/videoEmbed';
 import { runtimeApi } from '../../pages/portal/runtime/runtimeApi';
 import CardSurveyExperience from './CardSurveyExperience';
+import PeerWinsPanel from './PeerWinsPanel';
 import AssessmentPanel from '../../pages/portal/runtime/AssessmentPanel';
 import { toTitleCase } from '../../utils/titleCase';
 import { useReaderProgress } from './useReaderProgress';
+import { useDeepDiveHost } from './useDeepDiveHost';
+import { useBlogReadGate } from './useBlogReadGate';
+import { useDwellGate, isDwellGatedCard } from './useDwellGate';
+
+/** Tiny stable string hash — varies the dwell Collect button placement per card. */
+function hashStr(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0;
+  return h;
+}
+import SetupLabRender from './SetupLabRender';
+import PromptCatalogRender from './PromptCatalogRender';
+import ArchitectTimeMachine from './ArchitectTimeMachine';
+import BuildArtifactsRender from './BuildArtifactsRender';
+import ReflectionReview from './ReflectionReview';
 
 /**
  * CardDetailBody — the SINGLE source of truth for "what the student sees" for a
@@ -46,6 +62,49 @@ export function lessonDoc(bodyHtml: string): string {
   </style>${bodyHtml}`;
 }
 
+/** Wrap an in-system blog article (fetched + sanitized server-side by blogReaderService)
+ *  in a styled, self-contained reading doc for a SANDBOXED iframe — so a
+ *  training.colaberry.com post reads INSIDE the Workspace (that site sends
+ *  X-Frame-Options: DENY, so its live page can't be framed directly). allow-scripts is
+ *  used only so nested embeds (YouTube/Buzzsprout) play; the doc's origin stays opaque. */
+export function blogReaderDoc(
+  bodyHtml: string,
+  title?: string,
+  opts?: { featuredImage?: string | null; author?: string | null; sourceUrl?: string | null },
+): string {
+  const q = (s: string) => String(s).replace(/"/g, '&quot;');
+  const safeTitle = String(title || 'Blog').replace(/[<>]/g, '');
+  const author = String(opts?.author || '').replace(/[<>]/g, '');
+  const img = String(opts?.featuredImage || '');
+  const src = String(opts?.sourceUrl || '');
+  const hero = /^https?:\/\//i.test(img) ? `<img class="hero" src="${q(img)}" alt="">` : '';
+  const srcLink = /^https?:\/\//i.test(src)
+    ? `<p class="src"><a href="${q(src)}" target="_blank" rel="noopener noreferrer">Read the original on the training site ↗</a></p>`
+    : '';
+  return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
+    body{font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#F7F4EE;color:#1a1a1a;font-size:15.5px;line-height:1.7}
+    .wrap{max-width:720px;margin:0 auto;padding:24px 22px 64px}
+    .eyebrow{font:700 11px/1 Roboto,sans-serif;letter-spacing:.13em;text-transform:uppercase;color:#c20e1e;margin:0 0 10px}
+    h1.tt{font-size:1.7rem;line-height:1.22;margin:0 0 6px;font-weight:800}
+    .byline{color:#6a6a6a;font-size:13px;margin:0 0 16px}
+    img.hero{width:100%;border-radius:14px;margin:6px 0 18px;display:block}
+    h2,h3,h4{line-height:1.3;margin:22px 0 8px}h2{font-size:1.32rem}h3{font-size:1.14rem}h4{font-size:1rem}
+    p{margin:0 0 13px}ul,ol{padding-left:22px;margin:0 0 13px}li{margin-bottom:6px}
+    a{color:#367895}img{max-width:100%;height:auto;border-radius:10px}strong{color:#111}
+    iframe{max-width:100%;width:100%;aspect-ratio:16/9;border:0;border-radius:12px;margin:10px 0}
+    table{border-collapse:collapse;width:100%;margin:14px 0}th,td{border:1px solid #DDD6C9;padding:9px 12px;text-align:left;vertical-align:top}
+    .src{margin-top:26px;padding-top:16px;border-top:1px solid #DDD6C9;font-size:13.5px}
+    @media(prefers-color-scheme:dark){body{background:#231f1b;color:#ece7e0}.eyebrow,.src a{color:#ff6b83}strong{color:#fff}a{color:#7fc4e0}th,td{border-color:#3a342e}}
+  </style><div class="wrap">
+    <p class="eyebrow">Blog · Read in your workspace</p>
+    <h1 class="tt">${safeTitle}</h1>
+    ${author ? `<p class="byline">By ${author}</p>` : ''}
+    ${hero}
+    ${bodyHtml}
+    ${srcLink}
+  </div>`;
+}
+
 /** Immersive Self Study reader: a warm full-height reading with a hero, a STICKY top
  *  tab-nav (built from <section id data-nav>), scrollspy active-highlight, a progress
  *  line, and smooth click-to-scroll. Renders hand-authored rich content (diagrams,
@@ -64,7 +123,7 @@ export function readerDoc(bodyHtml: string, title?: string, opts?: ReaderOpts): 
   // injects term-card icons from data-icon, and renders diagrams from a data-diagram
   // TYPE + data-items labels — so authored/generated content only supplies a type +
   // labels, never fragile SVG geometry. Template literal so the SVG quotes need no escaping.
-  const js = `(function(){var ICONS={brain:'<path d="M4 17l6-6 4 4 6-6"/>',chip:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>',scissors:'<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.5 7.5l11.5 9M8.5 16.5L20 7"/>',window:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',book:'<path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2z"/><path d="M5 18h13"/>',chat:'<path d="M4 5h16v11H8l-4 4z"/>',gauge:'<path d="M4 15a8 8 0 0 1 16 0"/><path d="M12 15l4-4"/>',flag:'<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',check:'<path d="M4 12l5 5L20 6"/>',bulb:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 4 10c-1 1-1 2-1 3H9c0-1 0-2-1-3a6 6 0 0 1 4-10z"/>'};function esc(s){return String(s).replace(/[<>&]/g,function(m){return m==='<'?'&lt;':m==='>'?'&gt;':'&amp;';});}[].forEach.call(document.querySelectorAll('[data-icon]'),function(el){var ic=ICONS[el.getAttribute('data-icon')]||ICONS.bulb;var h=el.querySelector('h3,h4');if(!h)return;var t=document.createElement('span');t.className='tile';t.innerHTML='<svg viewBox="0 0 24 24">'+ic+'</svg>';h.insertBefore(t,h.firstChild);});var ILLUS={'ai-network':'<svg viewBox="0 0 480 210" role="img" aria-label="Neural network"><g stroke="#2E6A86" stroke-width="1.5" opacity=".35"><path d="M96 60L232 46M96 60L232 104M96 105L232 104M96 105L232 162M96 150L232 162M96 150L232 104M232 46L388 84M232 104L388 84M232 104L388 132M232 162L388 132M232 46L388 132M232 162L388 84"/></g><circle cx="96" cy="60" r="13" fill="#2E6A86"/><circle cx="96" cy="105" r="13" fill="#2E6A86"/><circle cx="96" cy="150" r="13" fill="#2E6A86"/><circle cx="232" cy="46" r="15" fill="#5BA63C"/><circle cx="232" cy="104" r="18" fill="#FB2832"/><circle cx="232" cy="162" r="15" fill="#5BA63C"/><circle cx="388" cy="84" r="14" fill="#E8920C"/><circle cx="388" cy="132" r="14" fill="#E8920C"/></svg>','terminal':'<svg viewBox="0 0 480 210" role="img" aria-label="Code terminal"><rect x="72" y="28" width="336" height="154" rx="13" fill="#1c2229"/><line x1="72" y1="60" x2="408" y2="60" stroke="#333d47" stroke-width="2"/><circle cx="92" cy="44" r="5" fill="#FB2832"/><circle cx="110" cy="44" r="5" fill="#E8920C"/><circle cx="128" cy="44" r="5" fill="#5BA63C"/><rect x="94" y="80" width="58" height="9" rx="4" fill="#5BA63C"/><rect x="160" y="80" width="118" height="9" rx="4" fill="#c9d3dc"/><rect x="94" y="102" width="38" height="9" rx="4" fill="#E8920C"/><rect x="140" y="102" width="150" height="9" rx="4" fill="#7d8b98"/><rect x="112" y="124" width="92" height="9" rx="4" fill="#3aa0d8"/><rect x="212" y="124" width="66" height="9" rx="4" fill="#c9d3dc"/><rect x="94" y="146" width="54" height="9" rx="4" fill="#5BA63C"/><rect x="156" y="145" width="11" height="11" rx="2" fill="#fff"/></svg>','pipeline':'<svg viewBox="0 0 480 210" role="img" aria-label="Process pipeline"><g fill="#fff" stroke="#2E6A86" stroke-width="2.5"><rect x="26" y="92" width="82" height="56" rx="11"/><rect x="138" y="92" width="82" height="56" rx="11"/><rect x="250" y="92" width="82" height="56" rx="11"/><rect x="362" y="92" width="82" height="56" rx="11"/></g><g stroke="#8a8178" stroke-width="2.5"><path d="M112 120h18" stroke-linecap="round"/><path d="M128 114l8 6-8 6" fill="none"/><path d="M224 120h18" stroke-linecap="round"/><path d="M240 114l8 6-8 6" fill="none"/><path d="M336 120h18" stroke-linecap="round"/><path d="M352 114l8 6-8 6" fill="none"/></g><circle cx="67" cy="120" r="8" fill="#FB2832"/><circle cx="179" cy="120" r="8" fill="#5BA63C"/><circle cx="291" cy="120" r="8" fill="#E8920C"/><circle cx="403" cy="120" r="8" fill="#2E6A86"/></svg>','documents':'<svg viewBox="0 0 480 210" role="img" aria-label="Documents"><rect x="182" y="36" width="120" height="150" rx="10" fill="#fff" stroke="#DDD6C9" stroke-width="2" transform="rotate(-7 240 110)"/><rect x="176" y="30" width="126" height="152" rx="10" fill="#fff" stroke="#2E6A86" stroke-width="2.5"/><g stroke="#cdc6ba" stroke-width="6" stroke-linecap="round"><path d="M196 64h86"/><path d="M196 86h86"/><path d="M196 108h58"/><path d="M196 130h86"/><path d="M196 152h48"/></g><circle cx="300" cy="152" r="23" fill="#5BA63C"/><path d="M289 152l8 8 14-15" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>','conversation':'<svg viewBox="0 0 480 210" role="img" aria-label="Conversation"><circle cx="42" cy="78" r="20" fill="#5BA63C"/><circle cx="42" cy="72" r="7" fill="#fff"/><path d="M30 94a12 12 0 0 1 24 0z" fill="#fff"/><rect x="74" y="48" width="176" height="60" rx="16" fill="#2E6A86"/><g stroke="#fff" stroke-width="5" stroke-linecap="round"><path d="M96 70h122"/><path d="M96 88h84"/></g><rect x="228" y="118" width="176" height="60" rx="16" fill="#fff" stroke="#FB2832" stroke-width="2.5"/><g stroke="#cdc6ba" stroke-width="5" stroke-linecap="round"><path d="M250 140h130"/><path d="M250 158h92"/></g><rect x="418" y="128" width="42" height="42" rx="11" fill="#FB2832"/><rect x="429" y="139" width="20" height="20" rx="4" fill="#fff"/></svg>','growth':'<svg viewBox="0 0 480 210" role="img" aria-label="Growth"><path d="M84 28v152h316" fill="none" stroke="#cdc6ba" stroke-width="2.5" stroke-linecap="round"/><g fill="#2E6A86" opacity=".22"><rect x="120" y="128" width="34" height="52" rx="4"/><rect x="190" y="102" width="34" height="78" rx="4"/><rect x="260" y="76" width="34" height="104" rx="4"/><rect x="330" y="48" width="34" height="132" rx="4"/></g><path d="M104 150l68-24 70-30 72-36" fill="none" stroke="#FB2832" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M300 66l16-8 2 17" fill="none" stroke="#FB2832" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="104" cy="150" r="5" fill="#FB2832"/><circle cx="172" cy="126" r="5" fill="#FB2832"/><circle cx="242" cy="96" r="5" fill="#FB2832"/></svg>','automation':'<svg viewBox="0 0 480 210" role="img" aria-label="Automation gears"><circle cx="205" cy="104" r="40" fill="none" stroke="#2E6A86" stroke-width="15" stroke-dasharray="11 13"/><circle cx="205" cy="104" r="24" fill="none" stroke="#2E6A86" stroke-width="6"/><circle cx="292" cy="146" r="27" fill="none" stroke="#E8920C" stroke-width="12" stroke-dasharray="9 11"/><circle cx="292" cy="146" r="14" fill="none" stroke="#E8920C" stroke-width="5"/></svg>','idea':'<svg viewBox="0 0 480 210" role="img" aria-label="Idea"><g stroke="#E8920C" stroke-width="5" stroke-linecap="round"><path d="M240 30v-14"/><path d="M303 51l10-10"/><path d="M177 51l-10-10"/><path d="M325 104h15"/><path d="M140 104h15"/></g><circle cx="240" cy="106" r="46" fill="#ffe6ad" stroke="#E8920C" stroke-width="3"/><path d="M226 104a14 14 0 0 1 28 0" fill="none" stroke="#E8920C" stroke-width="3"/><path d="M240 120v-8" stroke="#E8920C" stroke-width="3"/><rect x="222" y="150" width="36" height="12" rx="3" fill="#8a8178"/><rect x="227" y="164" width="26" height="10" rx="3" fill="#8a8178"/></svg>'};[].forEach.call(document.querySelectorAll('[data-illus]'),function(el){var g=ILLUS[el.getAttribute('data-illus')];if(g)el.insertAdjacentHTML('afterbegin',g);});var CB=['#FB2832','#5BA63C','#2E6A86','#E8920C'];function dN(it){var n=it.length,cx=220,cy=140,mx=125,mn=48,s='<svg viewBox="0 0 440 300" role="img" aria-label="'+esc(it.join(' inside '))+'">';for(var i=0;i<n;i++){var r=n>1?mx-i*(mx-mn)/(n-1):mx,cyy=cy+i*20;s+='<circle cx="'+cx+'" cy="'+cyy+'" r="'+r+'" fill="none" stroke="'+CB[i%4]+'" stroke-width="2.5"/><text x="'+cx+'" y="'+(cyy-r+22)+'" text-anchor="middle" class="dg-txt" font-size="'+(13-i)+'" font-weight="700">'+esc(it[i])+'</text>';}return s+'</svg>';}function dL(it){var n=it.length,s='<svg viewBox="0 0 440 '+(n*66+6)+'" role="img" aria-label="'+esc(it.join(', '))+'">';for(var i=0;i<n;i++){var y=6+i*66;s+='<rect x="18" y="'+y+'" width="404" height="54" rx="12" fill="#fff" stroke="'+CB[i%4]+'" stroke-width="2.5"/><text x="36" y="'+(y+32)+'" class="dg-txt" font-size="13" font-weight="700">'+esc(it[i])+'</text>';}return s+'</svg>';}function dF(it){var n=it.length,g=26,w=Math.floor((440-20-(n-1)*g)/n),s='<svg viewBox="0 0 440 92" role="img" aria-label="'+esc(it.join(' then '))+'">',x=10;for(var i=0;i<n;i++){s+='<rect x="'+x+'" y="24" width="'+w+'" height="44" rx="10" fill="#fff" stroke="#2E6A86" stroke-width="2"/><text x="'+(x+w/2)+'" y="50" text-anchor="middle" class="dg-txt" font-size="11">'+esc(it[i])+'</text>';if(i<n-1){var ax=x+w;s+='<path d="M'+ax+' 46h'+(g-6)+'" stroke="#8a8178" stroke-width="2"/><path d="M'+(ax+g-10)+' 41l7 5-7 5" fill="#8a8178"/>';}x+=w+g;}return s+'</svg>';}function dC(it){var n=it.length,cx=220,cy=150,R2=96,s='<svg viewBox="0 0 440 300" role="img" aria-label="'+esc(it.join(' then '))+', repeating">';s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+R2+'" fill="none" stroke="#DDD6C9" stroke-width="2" stroke-dasharray="4 7"/>';for(var j=0;j<n;j++){var b1=(-90+j*360/n),b2=(-90+(j+1)*360/n),am=((b1+b2)/2)*Math.PI/180,mx=cx+R2*Math.cos(am),my=cy+R2*Math.sin(am),td=am+Math.PI/2,dx=Math.cos(td),dy=Math.sin(td);s+='<path d="M'+(mx-dx*8-dy*5)+' '+(my-dy*8+dx*5)+'L'+(mx+dx*8)+' '+(my+dy*8)+'L'+(mx-dx*8+dy*5)+' '+(my-dy*8-dx*5)+'Z" fill="#8a8178"/>';}for(var i=0;i<n;i++){var a=(-90+i*360/n)*Math.PI/180,x=cx+R2*Math.cos(a),y=cy+R2*Math.sin(a);s+='<circle cx="'+x+'" cy="'+y+'" r="31" fill="'+CB[i%4]+'"/><text x="'+x+'" y="'+(y+4)+'" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">'+esc(it[i])+'</text>';}return s+'</svg>';}function dS(it){var n=it.length,s='<svg viewBox="0 0 440 '+(n*70+10)+'" role="img" aria-label="'+esc(it.join(', then '))+'">';for(var i=0;i<n;i++){var y=10+i*70;if(i<n-1)s+='<path d="M42 '+(y+54)+'v16" stroke="#DDD6C9" stroke-width="3"/>';s+='<circle cx="42" cy="'+(y+27)+'" r="21" fill="'+CB[i%4]+'"/><text x="42" y="'+(y+33)+'" text-anchor="middle" fill="#fff" font-size="16" font-weight="800">'+(i+1)+'</text><rect x="80" y="'+y+'" width="344" height="54" rx="12" fill="#fff" stroke="#DDD6C9" stroke-width="2"/><text x="100" y="'+(y+32)+'" fill="#1a1a1a" font-size="13" font-weight="700" class="dg-txt">'+esc(it[i])+'</text>';}return s+'</svg>';}var R={nested:dN,layers:dL,flow:dF,cycle:dC,steps:dS};[].forEach.call(document.querySelectorAll('figure[data-diagram]'),function(f){var it=(f.getAttribute('data-items')||'').split('|').filter(Boolean),fn=R[f.getAttribute('data-diagram')];if(fn&&it.length){var cap=f.querySelector('figcaption');f.insertAdjacentHTML('afterbegin',fn(it));if(cap)f.appendChild(cap);}});var secs=[].slice.call(document.querySelectorAll('section[id]')),nav=document.getElementById('nav');if(!nav)return;if(!secs.length){nav.style.display='none';}var map={};secs.forEach(function(s){var label=s.getAttribute('data-nav');if(!label){var h=s.querySelector('h2,h3');label=h?h.textContent:s.id;}var a=document.createElement('a');a.textContent=label;a.href='#'+s.id;a.addEventListener('click',function(e){e.preventDefault();var el=document.getElementById(s.id);if(!el)return;var navH=nav.getBoundingClientRect().height;var y=(window.pageYOffset||document.documentElement.scrollTop)+el.getBoundingClientRect().top-navH-15;window.scrollTo({top:y,behavior:'smooth'});});nav.appendChild(a);map[s.id]=a;});var bar=document.querySelector('#pbar>i'),t=false;function sc(){var d=document.documentElement,m=d.scrollHeight-d.clientHeight;if(bar)bar.style.width=(m>0?((window.pageYOffset||d.scrollTop)/m*100):0)+'%';t=false;}window.addEventListener('scroll',function(){if(!t){requestAnimationFrame(sc);t=true;}},{passive:true});sc();if('IntersectionObserver' in window){var spy=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){Object.keys(map).forEach(function(k){map[k].classList.remove('active');});var a=map[e.target.id];if(a){a.classList.add('active');}}});},{rootMargin:'-12% 0px -72% 0px',threshold:0});secs.forEach(function(s){spy.observe(s);});}var CARDID=${JSON.stringify(cardId)},NEED=secs.length,DONE={},secT={};function activeSec(){var d=document.documentElement,st=window.pageYOffset||d.scrollTop;if(!secs.length)return null;if(st+d.clientHeight>=d.scrollHeight-4)return secs[secs.length-1];var line=st+d.clientHeight*0.32,cur=secs[0];for(var i=0;i<secs.length;i++){var top=secs[i].getBoundingClientRect().top+st;if(top<=line)cur=secs[i];}return cur;}function ssPost(){var k=Object.keys(DONE);try{window.parent.postMessage({source:'ss-reader',cardId:CARDID,done:k.length,total:NEED,ids:k,complete:NEED>0?k.length>=NEED:true},'*');}catch(e){}}function ssDone(id){if(DONE[id])return;DONE[id]=1;var a=map[id];if(a)a.classList.add('read');var sec=document.getElementById(id);if(sec)sec.classList.add('read');ssPost();}${JSON.stringify(doneIds)}.forEach(function(id){if(map[id])ssDone(id);});ssPost();if(NEED>0){setInterval(function(){var a=activeSec();if(a&&!DONE[a.id]){secT[a.id]=(secT[a.id]||0)+1;if(secT[a.id]>=10)ssDone(a.id);}},1000);}})();`;
+  const js = `(function(){var ICONS={brain:'<path d="M4 17l6-6 4 4 6-6"/>',chip:'<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>',scissors:'<circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><path d="M8.5 7.5l11.5 9M8.5 16.5L20 7"/>',window:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/>',book:'<path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 0-2 2z"/><path d="M5 18h13"/>',chat:'<path d="M4 5h16v11H8l-4 4z"/>',gauge:'<path d="M4 15a8 8 0 0 1 16 0"/><path d="M12 15l4-4"/>',flag:'<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',check:'<path d="M4 12l5 5L20 6"/>',bulb:'<path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 4 10c-1 1-1 2-1 3H9c0-1 0-2-1-3a6 6 0 0 1 4-10z"/>'};function esc(s){return String(s).replace(/[<>&]/g,function(m){return m==='<'?'&lt;':m==='>'?'&gt;':'&amp;';});}[].forEach.call(document.querySelectorAll('[data-icon]'),function(el){var ic=ICONS[el.getAttribute('data-icon')]||ICONS.bulb;var h=el.querySelector('h3,h4');if(!h)return;var t=document.createElement('span');t.className='tile';t.innerHTML='<svg viewBox="0 0 24 24">'+ic+'</svg>';h.insertBefore(t,h.firstChild);});var ILLUS={'ai-network':'<svg viewBox="0 0 480 210" role="img" aria-label="Neural network"><g stroke="#2E6A86" stroke-width="1.5" opacity=".35"><path d="M96 60L232 46M96 60L232 104M96 105L232 104M96 105L232 162M96 150L232 162M96 150L232 104M232 46L388 84M232 104L388 84M232 104L388 132M232 162L388 132M232 46L388 132M232 162L388 84"/></g><circle cx="96" cy="60" r="13" fill="#2E6A86"/><circle cx="96" cy="105" r="13" fill="#2E6A86"/><circle cx="96" cy="150" r="13" fill="#2E6A86"/><circle cx="232" cy="46" r="15" fill="#5BA63C"/><circle cx="232" cy="104" r="18" fill="#FB2832"/><circle cx="232" cy="162" r="15" fill="#5BA63C"/><circle cx="388" cy="84" r="14" fill="#E8920C"/><circle cx="388" cy="132" r="14" fill="#E8920C"/></svg>','terminal':'<svg viewBox="0 0 480 210" role="img" aria-label="Code terminal"><rect x="72" y="28" width="336" height="154" rx="13" fill="#1c2229"/><line x1="72" y1="60" x2="408" y2="60" stroke="#333d47" stroke-width="2"/><circle cx="92" cy="44" r="5" fill="#FB2832"/><circle cx="110" cy="44" r="5" fill="#E8920C"/><circle cx="128" cy="44" r="5" fill="#5BA63C"/><rect x="94" y="80" width="58" height="9" rx="4" fill="#5BA63C"/><rect x="160" y="80" width="118" height="9" rx="4" fill="#c9d3dc"/><rect x="94" y="102" width="38" height="9" rx="4" fill="#E8920C"/><rect x="140" y="102" width="150" height="9" rx="4" fill="#7d8b98"/><rect x="112" y="124" width="92" height="9" rx="4" fill="#3aa0d8"/><rect x="212" y="124" width="66" height="9" rx="4" fill="#c9d3dc"/><rect x="94" y="146" width="54" height="9" rx="4" fill="#5BA63C"/><rect x="156" y="145" width="11" height="11" rx="2" fill="#fff"/></svg>','pipeline':'<svg viewBox="0 0 480 210" role="img" aria-label="Process pipeline"><g fill="#fff" stroke="#2E6A86" stroke-width="2.5"><rect x="26" y="92" width="82" height="56" rx="11"/><rect x="138" y="92" width="82" height="56" rx="11"/><rect x="250" y="92" width="82" height="56" rx="11"/><rect x="362" y="92" width="82" height="56" rx="11"/></g><g stroke="#8a8178" stroke-width="2.5"><path d="M112 120h18" stroke-linecap="round"/><path d="M128 114l8 6-8 6" fill="none"/><path d="M224 120h18" stroke-linecap="round"/><path d="M240 114l8 6-8 6" fill="none"/><path d="M336 120h18" stroke-linecap="round"/><path d="M352 114l8 6-8 6" fill="none"/></g><circle cx="67" cy="120" r="8" fill="#FB2832"/><circle cx="179" cy="120" r="8" fill="#5BA63C"/><circle cx="291" cy="120" r="8" fill="#E8920C"/><circle cx="403" cy="120" r="8" fill="#2E6A86"/></svg>','documents':'<svg viewBox="0 0 480 210" role="img" aria-label="Documents"><rect x="182" y="36" width="120" height="150" rx="10" fill="#fff" stroke="#DDD6C9" stroke-width="2" transform="rotate(-7 240 110)"/><rect x="176" y="30" width="126" height="152" rx="10" fill="#fff" stroke="#2E6A86" stroke-width="2.5"/><g stroke="#cdc6ba" stroke-width="6" stroke-linecap="round"><path d="M196 64h86"/><path d="M196 86h86"/><path d="M196 108h58"/><path d="M196 130h86"/><path d="M196 152h48"/></g><circle cx="300" cy="152" r="23" fill="#5BA63C"/><path d="M289 152l8 8 14-15" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>','conversation':'<svg viewBox="0 0 480 210" role="img" aria-label="Conversation"><circle cx="42" cy="78" r="20" fill="#5BA63C"/><circle cx="42" cy="72" r="7" fill="#fff"/><path d="M30 94a12 12 0 0 1 24 0z" fill="#fff"/><rect x="74" y="48" width="176" height="60" rx="16" fill="#2E6A86"/><g stroke="#fff" stroke-width="5" stroke-linecap="round"><path d="M96 70h122"/><path d="M96 88h84"/></g><rect x="228" y="118" width="176" height="60" rx="16" fill="#fff" stroke="#FB2832" stroke-width="2.5"/><g stroke="#cdc6ba" stroke-width="5" stroke-linecap="round"><path d="M250 140h130"/><path d="M250 158h92"/></g><rect x="418" y="128" width="42" height="42" rx="11" fill="#FB2832"/><rect x="429" y="139" width="20" height="20" rx="4" fill="#fff"/></svg>','growth':'<svg viewBox="0 0 480 210" role="img" aria-label="Growth"><path d="M84 28v152h316" fill="none" stroke="#cdc6ba" stroke-width="2.5" stroke-linecap="round"/><g fill="#2E6A86" opacity=".22"><rect x="120" y="128" width="34" height="52" rx="4"/><rect x="190" y="102" width="34" height="78" rx="4"/><rect x="260" y="76" width="34" height="104" rx="4"/><rect x="330" y="48" width="34" height="132" rx="4"/></g><path d="M104 150l68-24 70-30 72-36" fill="none" stroke="#FB2832" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><path d="M300 66l16-8 2 17" fill="none" stroke="#FB2832" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="104" cy="150" r="5" fill="#FB2832"/><circle cx="172" cy="126" r="5" fill="#FB2832"/><circle cx="242" cy="96" r="5" fill="#FB2832"/></svg>','automation':'<svg viewBox="0 0 480 210" role="img" aria-label="Automation gears"><circle cx="205" cy="104" r="40" fill="none" stroke="#2E6A86" stroke-width="15" stroke-dasharray="11 13"/><circle cx="205" cy="104" r="24" fill="none" stroke="#2E6A86" stroke-width="6"/><circle cx="292" cy="146" r="27" fill="none" stroke="#E8920C" stroke-width="12" stroke-dasharray="9 11"/><circle cx="292" cy="146" r="14" fill="none" stroke="#E8920C" stroke-width="5"/></svg>','idea':'<svg viewBox="0 0 480 210" role="img" aria-label="Idea"><g stroke="#E8920C" stroke-width="5" stroke-linecap="round"><path d="M240 30v-14"/><path d="M303 51l10-10"/><path d="M177 51l-10-10"/><path d="M325 104h15"/><path d="M140 104h15"/></g><circle cx="240" cy="106" r="46" fill="#ffe6ad" stroke="#E8920C" stroke-width="3"/><path d="M226 104a14 14 0 0 1 28 0" fill="none" stroke="#E8920C" stroke-width="3"/><path d="M240 120v-8" stroke="#E8920C" stroke-width="3"/><rect x="222" y="150" width="36" height="12" rx="3" fill="#8a8178"/><rect x="227" y="164" width="26" height="10" rx="3" fill="#8a8178"/></svg>'};[].forEach.call(document.querySelectorAll('[data-illus]'),function(el){var g=ILLUS[el.getAttribute('data-illus')];if(g)el.insertAdjacentHTML('afterbegin',g);});var CB=['#FB2832','#5BA63C','#2E6A86','#E8920C'];function dN(it){var n=it.length,cx=220,cy=140,mx=125,mn=48,s='<svg viewBox="0 0 440 300" role="img" aria-label="'+esc(it.join(' inside '))+'">';for(var i=0;i<n;i++){var r=n>1?mx-i*(mx-mn)/(n-1):mx,cyy=cy+i*20;s+='<circle cx="'+cx+'" cy="'+cyy+'" r="'+r+'" fill="none" stroke="'+CB[i%4]+'" stroke-width="2.5"/><text x="'+cx+'" y="'+(cyy-r+22)+'" text-anchor="middle" class="dg-txt" font-size="'+(13-i)+'" font-weight="700">'+esc(it[i])+'</text>';}return s+'</svg>';}function dL(it){var n=it.length,s='<svg viewBox="0 0 440 '+(n*66+6)+'" role="img" aria-label="'+esc(it.join(', '))+'">';for(var i=0;i<n;i++){var y=6+i*66;s+='<rect x="18" y="'+y+'" width="404" height="54" rx="12" fill="#fff" stroke="'+CB[i%4]+'" stroke-width="2.5"/><text x="36" y="'+(y+32)+'" class="dg-txt" font-size="13" font-weight="700">'+esc(it[i])+'</text>';}return s+'</svg>';}function dF(it){var n=it.length,g=26,w=Math.floor((440-20-(n-1)*g)/n),s='<svg viewBox="0 0 440 92" role="img" aria-label="'+esc(it.join(' then '))+'">',x=10;for(var i=0;i<n;i++){s+='<rect x="'+x+'" y="24" width="'+w+'" height="44" rx="10" fill="#fff" stroke="#2E6A86" stroke-width="2"/><text x="'+(x+w/2)+'" y="50" text-anchor="middle" class="dg-txt" font-size="11">'+esc(it[i])+'</text>';if(i<n-1){var ax=x+w;s+='<path d="M'+ax+' 46h'+(g-6)+'" stroke="#8a8178" stroke-width="2"/><path d="M'+(ax+g-10)+' 41l7 5-7 5" fill="#8a8178"/>';}x+=w+g;}return s+'</svg>';}function dC(it){var n=it.length,cx=220,cy=150,R2=96,s='<svg viewBox="0 0 440 300" role="img" aria-label="'+esc(it.join(' then '))+', repeating">';s+='<circle cx="'+cx+'" cy="'+cy+'" r="'+R2+'" fill="none" stroke="#DDD6C9" stroke-width="2" stroke-dasharray="4 7"/>';for(var j=0;j<n;j++){var b1=(-90+j*360/n),b2=(-90+(j+1)*360/n),am=((b1+b2)/2)*Math.PI/180,mx=cx+R2*Math.cos(am),my=cy+R2*Math.sin(am),td=am+Math.PI/2,dx=Math.cos(td),dy=Math.sin(td);s+='<path d="M'+(mx-dx*8-dy*5)+' '+(my-dy*8+dx*5)+'L'+(mx+dx*8)+' '+(my+dy*8)+'L'+(mx-dx*8+dy*5)+' '+(my-dy*8-dx*5)+'Z" fill="#8a8178"/>';}for(var i=0;i<n;i++){var a=(-90+i*360/n)*Math.PI/180,x=cx+R2*Math.cos(a),y=cy+R2*Math.sin(a);s+='<circle cx="'+x+'" cy="'+y+'" r="31" fill="'+CB[i%4]+'"/><text x="'+x+'" y="'+(y+4)+'" text-anchor="middle" fill="#fff" font-size="11" font-weight="700">'+esc(it[i])+'</text>';}return s+'</svg>';}function dS(it){var n=it.length,s='<svg viewBox="0 0 440 '+(n*70+10)+'" role="img" aria-label="'+esc(it.join(', then '))+'">';for(var i=0;i<n;i++){var y=10+i*70;if(i<n-1)s+='<path d="M42 '+(y+54)+'v16" stroke="#DDD6C9" stroke-width="3"/>';s+='<circle cx="42" cy="'+(y+27)+'" r="21" fill="'+CB[i%4]+'"/><text x="42" y="'+(y+33)+'" text-anchor="middle" fill="#fff" font-size="16" font-weight="800">'+(i+1)+'</text><rect x="80" y="'+y+'" width="344" height="54" rx="12" fill="#fff" stroke="#DDD6C9" stroke-width="2"/><text x="100" y="'+(y+32)+'" fill="#1a1a1a" font-size="13" font-weight="700" class="dg-txt">'+esc(it[i])+'</text>';}return s+'</svg>';}var R={nested:dN,layers:dL,flow:dF,cycle:dC,steps:dS};[].forEach.call(document.querySelectorAll('figure[data-diagram]'),function(f){var it=(f.getAttribute('data-items')||'').split('|').filter(Boolean),fn=R[f.getAttribute('data-diagram')];if(fn&&it.length){var cap=f.querySelector('figcaption');f.insertAdjacentHTML('afterbegin',fn(it));if(cap)f.appendChild(cap);}});var secs=[].slice.call(document.querySelectorAll('section[id]')),nav=document.getElementById('nav');if(!nav)return;if(!secs.length){nav.style.display='none';}var map={};secs.forEach(function(s){var label=s.getAttribute('data-nav');if(!label){var h=s.querySelector('h2,h3');label=h?h.textContent:s.id;}var a=document.createElement('a');a.textContent=label;a.href='#'+s.id;a.addEventListener('click',function(e){e.preventDefault();var el=document.getElementById(s.id);if(!el)return;var navH=nav.getBoundingClientRect().height;var y=(window.pageYOffset||document.documentElement.scrollTop)+el.getBoundingClientRect().top-navH-15;window.scrollTo({top:y,behavior:'smooth'});});nav.appendChild(a);map[s.id]=a;});var bar=document.querySelector('#pbar>i'),t=false;function sc(){var d=document.documentElement,m=d.scrollHeight-d.clientHeight;if(bar)bar.style.width=(m>0?((window.pageYOffset||d.scrollTop)/m*100):0)+'%';t=false;}window.addEventListener('scroll',function(){if(!t){requestAnimationFrame(sc);t=true;}},{passive:true});sc();if('IntersectionObserver' in window){var spy=new IntersectionObserver(function(es){es.forEach(function(e){if(e.isIntersecting){Object.keys(map).forEach(function(k){map[k].classList.remove('active');});var a=map[e.target.id];if(a){a.classList.add('active');}}});},{rootMargin:'-12% 0px -72% 0px',threshold:0});secs.forEach(function(s){spy.observe(s);});}var CARDID=${JSON.stringify(cardId)},NEED=secs.length,DONE={},secT={};function activeSec(){var d=document.documentElement,st=window.pageYOffset||d.scrollTop;if(!secs.length)return null;if(st+d.clientHeight>=d.scrollHeight-4)return secs[secs.length-1];var line=st+d.clientHeight*0.32,cur=secs[0];for(var i=0;i<secs.length;i++){var top=secs[i].getBoundingClientRect().top+st;if(top<=line)cur=secs[i];}return cur;}function ssPost(){var k=Object.keys(DONE);try{window.parent.postMessage({source:'ss-reader',cardId:CARDID,done:k.length,total:NEED,ids:k,complete:NEED>0?k.length>=NEED:true},'*');}catch(e){}}function ssDone(id){if(DONE[id])return;DONE[id]=1;var a=map[id];if(a)a.classList.add('read');var sec=document.getElementById(id);if(sec)sec.classList.add('read');ssPost();}${JSON.stringify(doneIds)}.forEach(function(id){if(map[id])ssDone(id);});ssPost();if(NEED>0){setInterval(function(){var a=activeSec();if(a&&!DONE[a.id]){secT[a.id]=(secT[a.id]||0)+1;if(secT[a.id]>=5)ssDone(a.id);}},1000);}})();`;
   return `<!doctype html><meta name=viewport content="width=device-width,initial-scale=1"><style>
     html{scroll-behavior:smooth}
     body{font-family:Roboto,system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#F7F4EE;color:#1a1a1a;font-size:15px;line-height:1.64}
@@ -184,10 +243,19 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const isSurvey = card.render_band === 'survey';   // bespoke live survey experience
   const isAssessment = card.render_band === 'quiz' || card.render_band === 'evaluation';   // interactive Knowledge Check / Evaluation
   const isReader = card.render_band === 'warmup';   // Self Study: immersive reader (sticky nav + scrollspy + progress)
+  // Deep Dive Command Center: a self-contained HTML artifact rendered in a sandboxed
+  // iframe. `blog` shares the 'deepdive' band, so gate on type to not hijack it.
+  const isDeepDive = card.render_band === 'deepdive' && card.type === 'deep_dive';
+  const isSetupLab = card.render_band === 'setup_lab';   // Claude Code enablement lab: dark native panel + Copy button
+  const isPromptCatalog = card.render_band === 'prompt_catalog';   // Prompt Lab: practice-prompt catalog (categories + reveal + copy)
+  const isArchitectMindset = card.render_band === 'architect_mindset';   // The Architect Time Machine: cinematic decision simulation (bespoke renderer)
+  const isBuildArtifacts = card.render_band === 'build_artifacts';   // Build Artifact(s) Lab: pick artifact + project, build station
+  const isPeerWins = card.render_band === 'peer_wins';   // Community Discussion → Cohort Wins grid (post a win + cheer classmates)
+  const isReflection = card.render_band === 'reflection';   // Week in Review: per-student recap + strategic-signal capture (bespoke renderer)
   const blog = card.type === 'blog' ? card.blog || null : null;   // fixed or auto-matched post
   // Media/external cards carry their own authored title casing; only curriculum
   // content titles get Title-Cased for display.
-  const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast'].includes(card.type);
+  const externalTitle = isVideo || isSkillsJar || ['testimonial', 'blog', 'podcast', 'announcement'].includes(card.type);
   const done = card.status === 'completed';
   const pts = totalPoints(card.points);
   const presenter = card.video?.presenter || null;
@@ -197,6 +265,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   // updates the bar + Mark-complete enablement; the server enforces regardless.
   const [watch, setWatch] = useState<{ watched_pct: number; required_pct: number | null; met: boolean } | null>(null);
   const [gateMsg, setGateMsg] = useState<string | null>(null);
+  const [copyGateMet, setCopyGateMet] = useState(false);   // Claude Code labs (drawer): reveal completion once the prompt(s) are copied — phone users complete here
   useEffect(() => { setWatch(null); setGateMsg(null); }, [card.id]);
   const live = !preview && !done;
   const handleWatchBeat = live
@@ -205,16 +274,38 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
   const completeSafely = onComplete
     ? async () => {
         setGateMsg(null);
-        try { await onComplete(); }
+        try { await onComplete(); if (onClose) window.setTimeout(onClose, 1200); }   // completing takes the student back to the curriculum
         catch (err: any) { setGateMsg(err?.response?.data?.error || 'Not quite yet — keep watching to unlock your points.'); }
       }
     : undefined;
   const gateActive = watch?.required_pct != null;
 
-  // Self Study gating: the reader iframe reports per-section read-progress (>=10s dwell
-  // each); the Mark Complete button appears only once every section is read. Enabled for
-  // live reader cards (not admin preview).
+  // Self Study gating: the reader iframe reports per-section read-progress (>=5s dwell
+  // each); the Mark Complete button appears only once every section is read. Enforced
+  // fresh each open (no persisted completion). Enabled for live reader cards (not preview).
   const readerProg = useReaderProgress(card.id, isReader && !preview);
+
+  // Blog 2-minute read gate: ambient blogs (ref `blog:<id>`) award points once the
+  // student has spent ~2 continuous minutes with the post open. Armed by clicking
+  // "Read the post"; a heartbeat accrues dwell and the server enforces the bar.
+  const blogId = card.type === 'blog' && card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
+  const blogGate = useBlogReadGate(live ? blogId : null);
+  const blogReadPct = Math.min(100, Math.round(((blogGate.state?.read_s ?? 0) / (blogGate.state?.required_s || 120)) * 100));
+
+  // Generic dwell gate: passive-content types (intel / reflection / discussion /
+  // study / Q&A) award points but have no other criteria, so the Collect button
+  // only appears after N continuous seconds with the card open (resets if you
+  // leave). The button placement is varied per card so it can't be muscle-memory'd.
+  const dwellGated = live && isDwellGatedCard(card);
+  const dwell = useDwellGate(dwellGated ? card.id : null, dwellGated);
+  const dwellPct = Math.min(100, Math.round(((dwell?.dwell_s ?? 0) / (dwell?.required_s || 120)) * 100));
+  const dwellAlign = (['flex-start', 'center', 'flex-end'] as const)[Math.abs(hashStr(card.id)) % 3];
+
+  // Deep Dive host bridge: the Field Guide iframe (opaque-origin) can't persist or
+  // reach the API, so the host owns read/copy persistence (restored across reopens),
+  // the +100-point upload, and the Mark-complete gate (dd.complete folds read+copy+upload).
+  const ddIframeRef = useRef<HTMLIFrameElement>(null);
+  const dd = useDeepDiveHost(card.id, isDeepDive && !preview && !done, ddIframeRef);
 
   return (
     <>
@@ -227,13 +318,41 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         )}
       </div>
 
-      <div className={isReader ? 'tld-body tld-body--reader' : 'tld-body'}>
+      <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}${isArchitectMindset ? ' tld-body--architect' : ''}${isBuildArtifacts ? ' tld-body--buildartifacts' : ''}`}>
         {isReader ? (
           content?.body_html
             ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>
+        ) : isDeepDive ? (
+          content?.body_html
+            ? <iframe ref={ddIframeRef} className="tld-lessonframe tld-readerframe" title="Field Guide" sandbox="allow-scripts allow-modals" srcDoc={content.body_html} />
+            : <div className="tld-note" style={{ margin: 20 }}>This Field Guide has not been added yet.</div>
+        ) : isSetupLab ? (
+          content && content.body_html
+            ? <SetupLabRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} estMin={card.estimated_time} points={pts} difficulty={card.difficulty} variant="drawer" onCopied={() => setCopyGateMet(true)} />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This lab has not been generated yet.</div>
+        ) : isPromptCatalog ? (
+          content && content.body_html
+            ? <PromptCatalogRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" onAllCopied={() => setCopyGateMet(true)} />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This prompt catalog has not been generated yet.</div>
+        ) : isArchitectMindset ? (
+          <ArchitectTimeMachine cardId={card.id} variant="drawer" preview={preview} completed={done} onEnterWorkspace={onEnterWorkspace} />
+        ) : isBuildArtifacts ? (
+          content && content.body_html
+            ? <BuildArtifactsRender bodyHtml={content.body_html} title={content.title || card.title} summary={content.summary} variant="drawer" cardId={card.id} completed={done} onComplete={completeSafely} />
+            : generating
+              ? <GeneratingReader />
+              : <div className="tld-note" style={{ margin: 20 }}>This build station has not been generated yet.</div>
+        ) : isPeerWins ? (
+          <PeerWinsPanel cardId={card.id} preview={preview} />
+        ) : isReflection ? (
+          <ReflectionReview cardId={card.id} variant="drawer" preview={preview} />
         ) : (<>
         <div className="tld-chiprow">
           <span className="tl-chip learning"><span className="sw" />{card.student_label}</span>
@@ -288,15 +407,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           </div>
         )}
 
-        {/* The type's fixed picture (Studio thumbnail) as the card hero — every
-            card of the type shares the image; only the title varies. Video-ish
-            bands and Skills Course keep their own visual instead. An explicit
-            card image (blog cover) wins below. */}
-        {!isVideo && !isSkillsJar && !card.image && card.type_thumbnail && (
-          <div className="tld-player">
-            <img src={card.type_thumbnail} alt="" style={{ width: '100%', display: 'block', borderRadius: 12 }} />
-          </div>
-        )}
+        {/* The type's Studio thumbnail is NOT repeated at the top of the drawer —
+            it already shows on the classroom tile, so a hero here is redundant
+            (Ali 2026-07-19). Video/blog keep their own visual below. */}
 
         {/* Non-video items with their OWN image (blog cover etc.) show it as a hero. */}
         {!isVideo && card.image && (
@@ -358,7 +471,22 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
           <div className="tld-lesson">
             <div className="tld-lab">{isVideo ? 'Lesson notes' : 'Lesson'}</div>
             {content.summary && <p className="tld-desc">{content.summary}</p>}
-            {content.body_html && <iframe className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'} title="Lesson content" sandbox={isReader ? 'allow-scripts' : ''} srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)} />}
+            {content.body_html && <iframe
+              className={isReader ? 'tld-lessonframe tld-readerframe' : 'tld-lessonframe'}
+              title="Lesson content"
+              // Generic content: allow-same-origin (no scripts) so we can size the
+              // frame to its content and avoid a second inner scroll — the drawer
+              // is the single scroll. The reader keeps its own scripted scroll.
+              sandbox={isReader ? 'allow-scripts' : 'allow-same-origin'}
+              srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)}
+              onLoad={isReader ? undefined : (e) => {
+                const f = e.currentTarget;
+                try {
+                  const h = f.contentWindow?.document.body?.scrollHeight;
+                  if (h) f.style.height = `${h + 4}px`;
+                } catch { /* cross-origin/measure failed — keep the CSS height fallback */ }
+              }}
+            />}
             {Array.isArray(content.questions) && content.questions.length > 0 && (
               <><div className="tld-sublab">Questions to consider</div>
                 <ul className="tld-alist">{content.questions.map((q, i) => <li key={i}>{q}</li>)}</ul></>
@@ -380,15 +508,44 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
 
         {blog && (
           <div className="tld-note" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            <a className="tl-btn primary sm" href={blog.url} target="_blank" rel="noopener noreferrer">
+            <a className="tl-btn primary sm" href={blog.url} target="_blank" rel="noopener noreferrer" onClick={() => { if (blogId) blogGate.start(); }}>
               Read the post
               <svg viewBox="0 0 24 24" fill="none" width="16" height="16"><path d="M7 17L17 7M9 7h8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </a>
-            <span>Read it on the Colaberry blog, then mark this complete to earn your points.</span>
+            {blogId
+              ? (blogGate.started
+                  ? (blogGate.state?.met
+                      ? <span style={{ color: '#5BA63C', fontWeight: 600 }}>✓ Read — collect your points below</span>
+                      : <span>Keep the post open — {blogGate.state?.read_s ?? 0}s of {blogGate.state?.required_s ?? 120}s read to unlock your points</span>)
+                  : <span>Open the post and read for ~2 minutes, then collect your points below.</span>)
+              : <span>Read it on the Colaberry blog, then mark this complete to earn your points.</span>}
+            {blogId && blogGate.started && !blogGate.state?.met && (
+              <div style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
+                <i style={{ display: 'block', height: '100%', width: `${blogReadPct}%`, background: '#367895', transition: 'width .5s ease' }} />
+              </div>
+            )}
           </div>
         )}
         {card.type === 'blog' && !blog && (
           <div className="tld-note">No blog post is attached to this card yet. It will auto-match once the blog library is loaded.</div>
+        )}
+        {/* Generic dwell gate: passive-content types must be read for N continuous
+            seconds before Collect appears. The button's horizontal placement is
+            varied per card (left/center/right) so it can't be muscle-memory'd —
+            you have to look for it. */}
+        {dwellGated && (
+          <div style={{ display: 'flex', justifyContent: dwell?.met ? dwellAlign : 'stretch', marginTop: 6 }}>
+            {dwell?.met && completeSafely ? (
+              <button type="button" className="tl-btn primary" onClick={completeSafely}>Collect +{pts} pts</button>
+            ) : (
+              <div className="tld-note" style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span>Read through it — {dwell?.dwell_s ?? 0}s of {dwell?.required_s ?? 120}s before you can collect your points.</span>
+                <div style={{ flexBasis: '100%', height: 6, borderRadius: 3, background: 'rgba(0,0,0,.10)', overflow: 'hidden' }}>
+                  <i style={{ display: 'block', height: '100%', width: `${dwellPct}%`, background: '#367895', transition: 'width .5s ease' }} />
+                </div>
+              </div>
+            )}
+          </div>
         )}
         </>)}
       </div>
@@ -397,13 +554,25 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
         {done
           ? <span className="pip done" style={{ fontSize: 14 }}><svg viewBox="0 0 24 24" fill="none"><path d="M5 12l4 4L19 6" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg> Completed · +{pts} pts earned</span>
           : preview
-            ? <span className="tld-note" style={{ padding: '8px 12px' }}>For students, this footer has <b>Close</b> and <b>Enter workspace →</b> (the full activity + AI Mentor).</span>
+            ? (onEnterWorkspace
+                // Admin "Student view": show the SAME "Enter workspace →" CTA the
+                // student gets, in the same footer spot, wired to open the workspace.
+                ? <button type="button" className="tl-btn primary" onClick={onEnterWorkspace}>Enter workspace →</button>
+                : <span className="tld-note" style={{ padding: '8px 12px' }}>For students, this footer has <b>Close</b> and <b>Enter workspace →</b> (the full activity + AI Mentor).</span>)
             : (
               <>
                 {gateMsg && <span className="tld-gatemsg">{gateMsg}</span>}
                 {isReader && !readerProg.complete && readerProg.total > 0 && (
                   <span className="tld-gatemsg">{readerProg.done} of {readerProg.total} sections read</span>
                 )}
+                {isDeepDive && !dd.complete && dd.total > 0 && (
+                  <span className="tld-gatemsg">{dd.done} of {dd.total} sections read</span>
+                )}
+                {isDeepDive && dd.message && <span className="tld-gatemsg">{dd.message}</span>}
+                {(isSetupLab || isPromptCatalog) && !copyGateMet && completeSafely && <span className="tld-gatemsg">{isPromptCatalog ? 'Copy all the prompts to complete this lab' : 'Copy the prompt to complete this lab'}</span>}
+                {/* The guide's "Choose HTML file" button posts to the host; this hidden
+                    input is the real picker the host opens for the +100-point upload. */}
+                {isDeepDive && <input ref={dd.fileInputRef} type="file" accept=".html,.htm,text/html" hidden onChange={dd.onFileChange} />}
                 {onClose && <button type="button" className="tl-btn ghost" onClick={onClose}>Close</button>}
                 {/* Media cards collect points here, gated by the server's watch check.
                     When the gate is active but unmet, the button is disabled with the
@@ -419,13 +588,37 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                     {gateActive && !watch?.met ? `Collect points · ${watch?.watched_pct ?? 0}/${watch?.required_pct}%` : 'Collect points'}
                   </button>
                 )}
+                {/* Blog: collect after the 2-minute read gate is met (server enforces). */}
+                {blog && blogId && completeSafely && (
+                  <button
+                    type="button"
+                    className="tl-btn primary"
+                    onClick={completeSafely}
+                    disabled={!blogGate.state?.met}
+                    title={!blogGate.state?.met ? 'Read the post for ~2 minutes to collect your points' : undefined}
+                  >
+                    {blogGate.state?.met ? `Collect +${pts} pts` : `Read to collect · ${blogGate.state?.read_s ?? 0}/${blogGate.state?.required_s ?? 120}s`}
+                  </button>
+                )}
                 {/* Survey completes in-body via its own Submit; the workspace link
                     stays as a quiet secondary, not the primary CTA. */}
-                {onEnterWorkspace && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {/* Architect Time Machine renders its own "Enter the Time Machine" CTA in-panel (drawer variant). */}
+                {onEnterWorkspace && !isArchitectMindset && <button type="button" className={`tl-btn ${(isVideo && source) || isSurvey || isReader || isDeepDive || isPeerWins || isReflection || !!blog || dwellGated ? 'ghost' : 'primary'}`} onClick={onEnterWorkspace}>Enter workspace →</button>}
+                {/* Peer Wins: posting is optional, so completion stays a plain Mark
+                    complete here (and in the workspace bar) — never gated on posting. */}
+                {isPeerWins && completeSafely && (
+                  <button type="button" className="tl-btn primary" onClick={completeSafely}>Mark complete</button>
+                )}
                 {/* Self Study: the Mark Complete button only appears once every section
-                    has been read (>=10s each), matching the workstation's gate + style. */}
+                    has been read (>=5s each), matching the workstation's gate + style. */}
                 {isReader && readerProg.complete && completeSafely && (
                   <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
+                )}
+                {isDeepDive && dd.complete && completeSafely && (
+                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Mark complete</button>
+                )}
+                {(isSetupLab || isPromptCatalog) && copyGateMet && completeSafely && (
+                  <button type="button" className="ss-complete-btn" onClick={completeSafely}>Complete &amp; generate evidence</button>
                 )}
               </>
             )}

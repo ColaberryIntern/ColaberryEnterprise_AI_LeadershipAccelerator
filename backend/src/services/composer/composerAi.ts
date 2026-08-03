@@ -38,24 +38,23 @@ export async function approvedPalette(): Promise<CardTypeDef[]> {
 }
 
 // ── canonical scaffolds per scope (all deps satisfied by construction) ────────
+// NOTE: the 'overview' card type was retired 2026-07-21 — 'announcement' opens each scope now.
 const SEQ: Record<ComposerScope, string[]> = {
-  lesson: ['overview', 'video', 'knowledge_check'],
-  session: ['announcement', 'overview', 'video', 'warmup', 'prompt_lab', 'reflection'],
+  lesson: ['video', 'knowledge_check'],
+  session: ['announcement', 'video', 'warmup', 'prompt_lab', 'reflection'],
   day: ['warmup', 'video', 'prompt_lab', 'reflection'],
-  week: ['announcement', 'overview', 'warmup', 'video', 'knowledge_check', 'deep_dive', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'reflection', 'community_discussion', 'mock_interview', 'survey', 'evaluation'],
-  sprint: ['announcement', 'overview', 'video', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'demo', 'reflection', 'evaluation'],
-  month: ['announcement', 'overview', 'deep_dive', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'presentation', 'reflection', 'mock_interview', 'evaluation'],
-  certification_module: ['overview', 'deep_dive', 'prompt_lab', 'implementation_task', 'certification_exercise', 'evaluation'],
-  internship: ['announcement', 'implementation_task', 'github_sync', 'artifact_submission', 'presentation', 'evaluation'],
-  program: ['announcement', 'overview', 'video', 'prompt_lab', 'implementation_task', 'github_sync', 'artifact_submission', 'mock_interview', 'evaluation'],
+  week: ['announcement', 'warmup', 'video', 'knowledge_check', 'deep_dive', 'prompt_lab', 'implementation_task', 'artifact_submission', 'reflection', 'community_discussion', 'mock_interview', 'survey', 'evaluation'],
+  sprint: ['announcement', 'video', 'prompt_lab', 'implementation_task', 'artifact_submission', 'demo', 'reflection', 'evaluation'],
+  month: ['announcement', 'deep_dive', 'prompt_lab', 'implementation_task', 'artifact_submission', 'presentation', 'reflection', 'mock_interview', 'evaluation'],
+  certification_module: ['deep_dive', 'prompt_lab', 'implementation_task', 'certification_exercise', 'evaluation'],
+  internship: ['announcement', 'implementation_task', 'artifact_submission', 'presentation', 'evaluation'],
+  program: ['announcement', 'video', 'prompt_lab', 'implementation_task', 'artifact_submission', 'mock_interview', 'evaluation'],
 };
 
-const clampMin = (n: number) => Math.max(3, Math.min(120, Math.round(n)));
+const clampMin = (n: number) => Math.max(3, Math.min(600, Math.round(n)));
+// Single source of truth for a type's default duration: the registry (est_minutes).
 function defaultMinutes(def: CardTypeDef): number {
-  if (def.evidence_required && def.github_required) return 60;
-  if (def.evidence_required) return 40;
-  if (def.render_band === 'media' || def.render_band === 'live_class') return 18;
-  return 15;
+  return def.est_minutes ?? 15;
 }
 function cardFromDef(def: CardTypeDef, topic: string, week: number | null): PlanCard {
   return {

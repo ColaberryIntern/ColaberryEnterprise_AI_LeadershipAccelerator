@@ -292,7 +292,7 @@ function EnrollPage() {
               marginBottom: 'var(--space-3)',
             }}
           >
-            Join the Challenge
+            Get your seat
           </h1>
           <p
             style={{

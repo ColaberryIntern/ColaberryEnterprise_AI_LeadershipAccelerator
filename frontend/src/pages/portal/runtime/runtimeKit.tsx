@@ -39,6 +39,10 @@ export const runtimeCss = `
 .rt-modes{display:flex;gap:6px;padding:0 14px 8px}
 .rt-chip{font-family:var(--mono);font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:5px 11px;border:1px solid var(--line);background:var(--paper);border-radius:999px;cursor:pointer;color:var(--muted)}
 .rt-chip:hover{border-color:var(--berry);color:var(--berry)}.rt-chip:disabled{opacity:.5;cursor:not-allowed}
+.rt-nudge{margin:0 14px 10px;padding:11px 13px;border:1px solid var(--berry);background:var(--berry-soft);border-radius:12px;display:flex;flex-direction:column;gap:9px}
+.rt-nudge-msg{font-size:13.5px;line-height:1.5;color:#1c3d49}
+.rt-nudge-actions{display:flex;gap:7px;flex-wrap:wrap}
+.rt-nudge-actions .rt-btn{font-size:12.5px;padding:7px 12px}
 .rt-ask{display:flex;gap:7px;padding:12px 14px;border-top:1px solid var(--line-soft)}
 .rt-in{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:9px;font-size:13.5px;font-family:inherit;background:var(--paper);color:var(--ink)}
 .rt-in.mono{font-family:var(--mono);font-size:13px}
@@ -72,4 +76,21 @@ export const runtimeCss = `
 .rt-stat .l{font-family:var(--mono);font-size:8.5px;letter-spacing:.09em;text-transform:uppercase;color:#7d8b92}
 .rt-stat .v{font-family:var(--mono);font-size:16px;font-weight:700;color:#fff}.rt-stat .v.sm{font-size:12.5px}.rt-stat .v small{font-size:10px;color:#8b97a0;font-weight:400}
 .rt-gap{margin-left:auto;font-size:12px;color:#AEBDC4}.rt-gap b{color:#F5C25B}
+
+/* ── dark theme — carries over the portal's setting (data-theme is stamped on
+   the .rt root + <html> from localStorage 'te-theme'). Most colors flow through
+   the tokens below; the few that reuse --ink as a DARK surface (user bubble,
+   evidence bar) get explicit overrides so they don't flip to light. ── */
+.rt[data-theme="dark"]{
+  --ink:#F4F4F4; --paper:#1E1E1E; --mist:#151515; --sunken:#272727; --line:#3A3A3A; --line-soft:#2C2C2C;
+  --berry-soft:#22343B; --cherry-soft:#3A1B1E; --leaf-soft:#22331C; --amber-soft:#3A2E12;
+  --muted:#9C9C9C; --muted2:#7E8891;
+}
+.rt[data-theme="dark"] .rt-msg.user{background:var(--berry);color:#fff}
+.rt[data-theme="dark"] .rt-msg.assistant{color:#CFE0E6}
+.rt[data-theme="dark"] .rt-nudge-msg{color:#CFE0E6}
+.rt[data-theme="dark"] .rt-cwho{color:var(--muted)}
+.rt[data-theme="dark"] .rt-bar{background:#0F1214}
+.rt[data-theme="dark"] .rt-list.warn li{color:#E8920C}
+.rt[data-theme="dark"] .rt-readerframe{background:#151515}
 `;

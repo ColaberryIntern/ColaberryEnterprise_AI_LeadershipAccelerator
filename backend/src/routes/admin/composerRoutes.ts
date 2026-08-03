@@ -7,7 +7,7 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handlePalette, handleArchitectJourney, handleQuickGenerate, handleFillCard,
   handleListBlueprints, handleCreateBlueprint, handleGetBlueprint, handleUpdateBlueprint, handleDeleteBlueprint,
-  handleGenerate, handleValidate, handlePublish,
+  handleGenerate, handleValidate, handlePublish, handleCurateVideos, handleApplyVideos,
 } from '../../controllers/composerController';
 
 const router = Router();
@@ -22,6 +22,9 @@ router.post('/api/admin/composer/blueprints', requireAdmin, handleCreateBlueprin
 router.post('/api/admin/composer/blueprints/:id/generate', requireAdmin, handleGenerate);
 router.get('/api/admin/composer/blueprints/:id/validate', requireAdmin, handleValidate);
 router.post('/api/admin/composer/blueprints/:id/publish', requireAdmin, handlePublish);
+// Coverage gap-fill (YouTube): curate = read-only preview; apply = non-destructive add.
+router.post('/api/admin/composer/blueprints/:id/curate-videos', requireAdmin, handleCurateVideos);
+router.post('/api/admin/composer/blueprints/:id/apply-videos', requireAdmin, handleApplyVideos);
 router.get('/api/admin/composer/blueprints/:id', requireAdmin, handleGetBlueprint);
 router.put('/api/admin/composer/blueprints/:id', requireAdmin, handleUpdateBlueprint);
 router.delete('/api/admin/composer/blueprints/:id', requireAdmin, handleDeleteBlueprint);

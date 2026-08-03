@@ -18,7 +18,9 @@ import TimelineSectionRule from '../../models/TimelineSectionRule';
 import CurriculumTypeDefinition from '../../models/CurriculumTypeDefinition';
 import { resolve as resolveType, allTypes, CardTypeDef } from './typeRegistry';
 import { normalizeCapabilities } from './timelineService';
+import { recomputeForCard, recomputeMany, recomputeBlueprintHours } from '../composer/blueprintRollup';
 import { normalizeRules, UnlockPredicate } from './timelineGatingService';
+import { REFLECT_GATED_TYPES, reflectGateFor, reflectSiblingFlags } from './reflectGating';
 
 export const BUCKETS: TimelineBucket[] = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
 const VISIBILITIES = ['draft', 'scheduled', 'published', 'archived'] as const;
@@ -42,7 +44,7 @@ export interface CreateCardInput {
   unlock_rules?: any;   // per-card gating predicates (UnlockPredicate[]) — normalized on write
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
-  course?: { name?: string | null; url?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link
+  course?: { name?: string | null; url?: string | null; completion?: 'certificate' | 'progress' | null; sections?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link + completion mode
   image?: string | null;   // the item's OWN display image (blog cover etc.) — tiles show it over the generic type visual
   testimonial?: { mode?: string | null; category?: string | null } | null;   // Testimonials type: link vs random personalized
   podcast?: { mode?: string | null; category?: string | null } | null;       // Podcast type: link vs random personalized episode
@@ -79,13 +81,17 @@ export function buildContentMeta(content: CreateCardInput['content']): Record<st
 
 /** PURE — normalize a Skills Course link (class name + SkillsJar URL) into the
  *  stored metadata shape, or null when neither is given. */
-export function buildCourseMeta(course: CreateCardInput['course']): { name: string | null; url: string | null } | null {
+export function buildCourseMeta(course: CreateCardInput['course']): { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null {
   if (!course || typeof course !== 'object') return null;
   const str = (s: any) => (typeof s === 'string' && s.trim() ? s.trim() : null);
   const name = str(course.name);
   const url = str(course.url);
   if (!name && !url) return null;
-  return { name, url };
+  // completion mode: 'progress' = interim (upload a progress screenshot, e.g. a
+  // split course's first part); default/omitted = 'certificate' (whole-course cert).
+  const completion = course.completion === 'progress' ? 'progress' : undefined;
+  const sections = str(course.sections) || undefined;
+  return { name, url, ...(completion ? { completion } : {}), ...(sections ? { sections } : {}) };
 }
 
 /** PURE — normalize the Testimonials source config into the stored metadata
@@ -150,7 +156,7 @@ export function composeCardAttributes(
     visibility: input.visibility ?? 'draft',
     release_date: input.release_date ? new Date(input.release_date) : null,
     difficulty: input.difficulty ?? def.difficulty,
-    estimated_time: input.estimated_time ?? (def.evidence_required ? 45 : 15),
+    estimated_time: input.estimated_time ?? def.est_minutes ?? 15,
     points,
     competencies,
     ref_kind: 'none',
@@ -263,6 +269,24 @@ async function assertTypeLaunched(slug: string): Promise<void> {
   }
 }
 
+/**
+ * Auto-apply the reflect-chain gate to a newly created eval/survey/reflection
+ * card, unless the author explicitly supplied unlock_rules (an explicit choice
+ * — including a deliberate `[]` — is never overridden). Cross-sibling drift
+ * (e.g. an evaluation added after its week's survey already existed) is swept
+ * up by the boot-time reflectGatingReconciler, not here.
+ */
+async function autoGateReflectCard(card: TimelineCard, input: CreateCardInput): Promise<void> {
+  if (input.unlock_rules !== undefined) return;
+  if (card.bucket !== 'reflect' || !(REFLECT_GATED_TYPES as readonly string[]).includes(card.type)) return;
+  const siblings = await TimelineCard.findAll({
+    where: { cohort_id: null, program_id: card.program_id, week: card.week, bucket: 'reflect' },
+    attributes: ['type'],
+  });
+  const rules = reflectGateFor(card.type, reflectSiblingFlags(siblings));
+  if (rules) await card.update({ unlock_rules: rules });
+}
+
 export async function createCard(input: CreateCardInput): Promise<TimelineCard> {
   const def = resolveType(input.type);
   if (!def) throw Object.assign(new Error(`Unknown card type "${input.type}"`), { status: 400 });
@@ -281,7 +305,10 @@ export async function createCard(input: CreateCardInput): Promise<TimelineCard> 
     const enriched = await lookupBlogByUrl(bmeta.url);
     if (enriched) (attrs.metadata as any).blog = enriched;
   }
-  return TimelineCard.create(attrs as any);
+  const card = await TimelineCard.create(attrs as any);
+  await recomputeForCard(card); // keep the week's blueprint est_hours in sync
+  await autoGateReflectCard(card, input); // wire the reflect-chain lock so new eval/survey/reflection cards aren't born ungated
+  return card;
 }
 
 const EDITABLE_FIELDS = [
@@ -293,6 +320,7 @@ const EDITABLE_FIELDS = [
 export async function updateCard(id: string, patch: Record<string, any>): Promise<TimelineCard> {
   const card = await TimelineCard.findByPk(id);
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
+  const before = { program_id: card.program_id, week: card.week }; // week/estimated_time may change
   if (patch.bucket && !BUCKETS.includes(patch.bucket)) throw Object.assign(new Error(`Invalid bucket "${patch.bucket}"`), { status: 400 });
   if (patch.visibility && !VISIBILITIES.includes(patch.visibility)) throw Object.assign(new Error(`Invalid visibility "${patch.visibility}"`), { status: 400 });
 
@@ -356,18 +384,22 @@ export async function updateCard(id: string, patch: Record<string, any>): Promis
     clean.metadata = meta;
   }
   await card.update(clean);
+  // Recompute both the old and (possibly changed) new week's blueprint total.
+  await recomputeMany([before, { program_id: card.program_id, week: card.week }]);
   return card;
 }
 
 export async function deleteCard(id: string): Promise<void> {
   const card = await TimelineCard.findByPk(id);
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
+  const owner = { program_id: card.program_id, week: card.week };
   // Schema has no DB-level FK cascade (tables are raw-created), so clear the
   // student progress rows explicitly to avoid orphans.
   await sequelize.transaction(async (t) => {
     await TimelineCardProgress.destroy({ where: { card_id: id }, transaction: t });
     await card.destroy({ transaction: t });
   });
+  await recomputeBlueprintHours(owner.program_id, owner.week);
 }
 
 /**
@@ -376,7 +408,16 @@ export async function deleteCard(id: string): Promise<void> {
  * a partial drag never leaves the board half-ordered.
  */
 export async function reorderCards(items: Array<{ id: string; order: number; week?: number | null; bucket?: string }>): Promise<{ updated: number }> {
-  return sequelize.transaction(async (t) => {
+  // Capture each card's current (program_id, week) so a cross-week drag recomputes
+  // both the source and destination week totals.
+  const before = (await TimelineCard.findAll({
+    where: { id: items.map((i) => i.id) },
+    attributes: ['id', 'program_id', 'week'],
+    raw: true,
+  })) as unknown as Array<{ id: string; program_id: string | null; week: number | null }>;
+  const beforeById = new Map(before.map((b) => [b.id, b]));
+
+  const result = await sequelize.transaction(async (t) => {
     let updated = 0;
     for (const it of items) {
       if (it.bucket && !BUCKETS.includes(it.bucket as TimelineBucket)) {
@@ -390,6 +431,19 @@ export async function reorderCards(items: Array<{ id: string; order: number; wee
     }
     return { updated };
   });
+
+  // Recompute the union of source weeks + any new destination weeks (only cards
+  // that actually moved week matter, but recomputeMany de-dups the rest).
+  const keys: Array<{ program_id?: string | null; week?: number | null }> = [];
+  for (const b of before) keys.push({ program_id: b.program_id, week: b.week });
+  for (const it of items) {
+    if ('week' in it) {
+      const b = beforeById.get(it.id);
+      keys.push({ program_id: b?.program_id ?? null, week: it.week ?? null });
+    }
+  }
+  await recomputeMany(keys);
+  return result;
 }
 
 /** Clone a card to the tail of its lane, as a draft. */
@@ -399,10 +453,12 @@ export async function cloneCard(id: string): Promise<TimelineCard> {
   const order = await nextOrderInLane(src.week, src.bucket);
   const attrs = src.toJSON() as any;
   delete attrs.id; delete attrs.created_at; delete attrs.updated_at;
-  return TimelineCard.create({
+  const card = await TimelineCard.create({
     ...attrs,
     title: `${src.title} (copy)`,
     visibility: 'draft',
     order,
   });
+  await recomputeForCard(card);
+  return card;
 }

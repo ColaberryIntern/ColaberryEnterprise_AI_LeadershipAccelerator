@@ -12,6 +12,8 @@ export interface SponsorAttributes {
   plan?: string;
   billing_status: 'pending' | 'invoiced' | 'paid' | 'cancelled';
   paysimple_invoice_id?: string | null;
+  portal_token?: string | null;
+  portal_token_expires_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -24,6 +26,8 @@ class Sponsor extends Model<SponsorAttributes> implements SponsorAttributes {
   declare plan: string;
   declare billing_status: 'pending' | 'invoiced' | 'paid' | 'cancelled';
   declare paysimple_invoice_id: string | null;
+  declare portal_token: string | null;
+  declare portal_token_expires_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -62,6 +66,14 @@ Sponsor.init(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
+    portal_token: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    portal_token_expires_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
     created_at: {
       type: DataTypes.DATE,
       defaultValue: DataTypes.NOW,
@@ -79,6 +91,7 @@ Sponsor.init(
       { fields: ['contact_lead_id'], name: 'idx_sponsors_contact_lead_id' },
       { fields: ['billing_status'], name: 'idx_sponsors_billing_status' },
       { fields: ['created_at'], name: 'idx_sponsors_created_at' },
+      { fields: ['portal_token'], name: 'idx_sponsors_portal_token' },
     ],
   }
 );

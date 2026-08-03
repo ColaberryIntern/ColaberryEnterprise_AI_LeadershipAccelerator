@@ -15,17 +15,19 @@ import {
  */
 const SUPPORTED_RENDER_BANDS = new Set<string>([
   'media', 'live_class', 'video_feedback', 'event', 'overview', 'deepdive', 'reading',
+  'intel',   // Intelligence Pipeline types (news/research/tools/…) render via the generic intel body
   'question', 'announcement', 'discussion', 'community', 'study', 'warmup', 'survey',
   'reflection', 'quiz', 'exam', 'evaluation', 'promptlab', 'task', 'artifact',
   'presentation', 'demo', 'interview', 'build_story', 'github', 'skills_jar',
-  'milestone', 'achievement', 'badge', 'streak',
+  'milestone', 'achievement', 'badge', 'streak', 'setup_lab', 'prompt_catalog', 'build_artifacts',
+  'architect_mindset',
 ]);
 
 describe('typeRegistry', () => {
-  it('registers the 39 canonical curriculum types', () => {
-    // 36 originals + testimonial, podcast, blog (Week-0 lead-magnet content).
-    expect(CARD_TYPES.length).toBe(39);
-    expect(allTypes().length).toBeGreaterThanOrEqual(39);
+  it('registers the 51 canonical curriculum types', () => {
+    // 38 base (35 + testimonial/podcast/blog; 'overview' retired 2026-07-21) + setup_lab (Claude Code enablement) + 11 intelligence-pipeline types (community_live_session + 10 generators) + architect_mindset (The Architect Time Machine).
+    expect(CARD_TYPES.length).toBe(51);
+    expect(allTypes().length).toBeGreaterThanOrEqual(51);
   });
 
   it('resolves a known type with its metadata', () => {
@@ -47,13 +49,13 @@ describe('typeRegistry', () => {
 
   it('maps legacy curriculum types onto the new taxonomy', () => {
     expect(mapLegacyType('prompt_template')).toEqual({ slug: 'prompt_lab', fallback: false });
-    expect(mapLegacyType('executive_reality_check').slug).toBe('overview');
+    expect(mapLegacyType('executive_reality_check').slug).toBe('announcement');
     expect(mapLegacyType('knowledge_check')).toEqual({ slug: 'knowledge_check', fallback: false });
   });
 
-  it('maps unknown legacy types to overview with a fallback flag', () => {
+  it('maps unknown legacy types to announcement with a fallback flag', () => {
     const r = mapLegacyType('some_weird_legacy_type');
-    expect(r.slug).toBe('overview');
+    expect(r.slug).toBe('announcement');
     expect(r.fallback).toBe(true);
     expect(mapLegacyType(null).fallback).toBe(true);
   });
@@ -71,6 +73,19 @@ describe('typeRegistry', () => {
       expect(t.render_band).toBeTruthy();
       expect(t.bucket).toBeTruthy();
     }
+  });
+
+  it('every type declares a non-negative default duration (est_minutes)', () => {
+    for (const t of CARD_TYPES) {
+      expect(typeof t.est_minutes).toBe('number');
+      expect(Number.isFinite(t.est_minutes)).toBe(true);
+      expect(t.est_minutes).toBeGreaterThanOrEqual(0);
+    }
+    // System types have no duration; content/live types have a positive default.
+    for (const t of CARD_TYPES.filter((x) => x.system)) expect(t.est_minutes).toBe(0);
+    expect(resolve('live_class')!.est_minutes).toBe(120);
+    expect(resolve('anthropic_skills_jar')!.est_minutes).toBeGreaterThan(0);
+    expect(resolve('blog')!.est_minutes).toBeGreaterThan(0);
   });
 
   it('every render_band is one the Classroom can render (so the Studio demo == the timeline event)', () => {

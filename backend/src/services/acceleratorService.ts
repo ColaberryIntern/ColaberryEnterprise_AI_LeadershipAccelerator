@@ -1,9 +1,14 @@
 import crypto from 'crypto';
 import { Op } from 'sequelize';
 import {
-  Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail,
+  Cohort, Enrollment, LiveSession, AttendanceRecord, AssignmentSubmission, Lead, CampaignLead, ScheduledEmail, Subscription,
 } from '../models';
 import { env } from '../config/env';
+import { centralWallClockToInstant } from './centralDate';
+
+// PaySimple dashboard base for the admin "open this payer in PaySimple" deep link.
+// Override with PAYSIMPLE_DASHBOARD_BASE if the account uses a different host.
+const PAYSIMPLE_DASHBOARD_BASE = process.env.PAYSIMPLE_DASHBOARD_BASE || 'https://app.paysimple.com';
 
 export async function listSessionsByCohort(cohortId: string) {
   return LiveSession.findAll({
@@ -35,7 +40,20 @@ export async function createSession(data: {
   curriculum_json?: any;
   materials_json?: any;
 }) {
-  return LiveSession.create(data as any);
+  const session = await LiveSession.create(data as any);
+  // Colaberry Commons — auto-create the linked cohort room for this official
+  // session (acceptance criterion #1). Best-effort, idempotent, and flag-gated:
+  // it never blocks or fails session creation, and does nothing when the feature
+  // is off. Lazily imported so the community-rooms tree only loads when enabled.
+  if (env.communityRoomsEnabled) {
+    try {
+      const { ensureRoomForSession } = await import('./communityRooms/roomService');
+      await ensureRoomForSession(session);
+    } catch (err: any) {
+      console.warn('[CommunityRooms] ensureRoomForSession failed (non-fatal):', err?.message);
+    }
+  }
+  return session;
 }
 
 export async function updateSession(sessionId: string, data: Partial<{
@@ -60,9 +78,14 @@ export async function updateSession(sessionId: string, data: Partial<{
 export async function deleteSession(sessionId: string) {
   const session = await LiveSession.findByPk(sessionId);
   if (!session) return false;
+  const cohortId = session.cohort_id; // capture before delete so we can compact after
   await AttendanceRecord.destroy({ where: { session_id: sessionId } });
   await AssignmentSubmission.destroy({ where: { session_id: sessionId } });
   await session.destroy();
+  // Compact the remaining sessions up (renumber + re-date) so there is no gap.
+  // Lazy import avoids any import cycle with sessionScheduleService.
+  const { reflowCohortSchedule } = await import('./sessionScheduleService');
+  await reflowCohortSchedule(cohortId);
   return true;
 }
 
@@ -302,6 +325,9 @@ export async function getCohortDashboard(cohortId: string) {
     next_session: nextSession,
     sessions,
     enrollments,
+    // Days off (skipped class dates) so the admin sessions view can show/un-skip
+    // them on initial load — the page loads sessions via this dashboard endpoint.
+    skipped_dates: ((cohort as any).settings_json?.schedule?.skipped_dates) || [],
   };
 }
 
@@ -365,12 +391,64 @@ export async function detectAbsentParticipants(sessionId: string) {
   return absent;
 }
 
+// Live class times are entered and stored as Central wall-clock ("18:30"), but
+// this runs in a UTC container — a naive `new Date(dateStr + "T" + timeStr)`
+// silently parses that wall-clock AS UTC, running the whole session lifecycle
+// (live/completed transitions, recap generation, reminder timing, join windows)
+// 5-6 hours off from the real Central class time. classInstant recovers the
+// true UTC instant via the shared DST-aware Central-time helper. Root-caused
+// 2026-07-23 (Session CC-20260723-t7n4): tonight's Orientation was auto-marked
+// 'completed' hours before its real 6:30pm CT start, blocking check-in.
+// Takes the RAW stored time string (e.g. "18:30:00") — normalizes via
+// convertTo24h internally so every caller gets the seconds-format fix for
+// free instead of having to remember to pre-convert.
+export function classInstant(sessionDate: string, rawTime: string): Date {
+  const naive = new Date(`${sessionDate}T${convertTo24h(rawTime)}:00Z`);
+  return centralWallClockToInstant(naive);
+}
+
+/** Pure: is `session` due to start within (now, cutoff]? Exported for testing. */
+export function isSessionUpcoming(
+  session: { session_date: string; start_time: string },
+  now: Date,
+  cutoff: Date,
+): boolean {
+  const sessionDateTime = classInstant(session.session_date, session.start_time);
+  return sessionDateTime > now && sessionDateTime <= cutoff;
+}
+
+/** Pure: should a still-'scheduled' session flip to 'live' at `now`? Exported for testing. */
+export function isSessionDueLive(
+  session: { session_date: string; start_time: string },
+  now: Date,
+): boolean {
+  const startTime = classInstant(session.session_date, session.start_time);
+  const fifteenMinBefore = new Date(startTime.getTime() - 15 * 60 * 1000);
+  // Upper bound guards against a session left 'scheduled' well past its own
+  // start (e.g. a manual status reset) being re-flagged live long after the
+  // fact once the day-window query below picks it up again the next day.
+  const sixHoursAfterStart = new Date(startTime.getTime() + 6 * 60 * 60 * 1000);
+  return now >= fifteenMinBefore && now < sixHoursAfterStart;
+}
+
+/** Pure: should a 'live' session flip to 'completed' at `now`? Exported for testing. */
+export function isSessionDueCompleted(
+  session: { session_date: string; end_time: string },
+  now: Date,
+): boolean {
+  const endTime = classInstant(session.session_date, session.end_time);
+  const thirtyMinAfterEnd = new Date(endTime.getTime() + 30 * 60 * 1000);
+  return now >= thirtyMinAfterEnd;
+}
+
 export async function getUpcomingSessions(hoursAhead: number) {
   const now = new Date();
   const cutoff = new Date(now.getTime() + hoursAhead * 60 * 60 * 1000);
 
-  const todayStr = now.toISOString().split('T')[0];
-  const cutoffStr = cutoff.toISOString().split('T')[0];
+  // Widen the DB date-window by a day on each side to absorb the Central/UTC
+  // calendar-date skew — isSessionUpcoming() below does the precise comparison.
+  const todayStr = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+  const cutoffStr = new Date(cutoff.getTime() + 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const sessions = await LiveSession.findAll({
     where: {
@@ -382,26 +460,19 @@ export async function getUpcomingSessions(hoursAhead: number) {
     include: [{ model: Cohort, as: 'cohort' }],
   });
 
-  // Filter by actual time comparison
-  return sessions.filter((s) => {
-    const sessionDateTime = new Date(`${s.session_date}T${convertTo24h(s.start_time)}:00`);
-    return sessionDateTime > now && sessionDateTime <= cutoff;
-  });
+  return sessions.filter((s) => isSessionUpcoming(s, now, cutoff));
 }
 
 export async function getSessionsToMarkLive() {
   const now = new Date();
   const todayStr = now.toISOString().split('T')[0];
+  const yesterdayStr = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
   const sessions = await LiveSession.findAll({
-    where: { status: 'scheduled', session_date: todayStr },
+    where: { status: 'scheduled', session_date: { [Op.in]: [todayStr, yesterdayStr] } },
   });
 
-  return sessions.filter((s) => {
-    const startTime = new Date(`${s.session_date}T${convertTo24h(s.start_time)}:00`);
-    const fifteenMinBefore = new Date(startTime.getTime() - 15 * 60 * 1000);
-    return now >= fifteenMinBefore;
-  });
+  return sessions.filter((s) => isSessionDueLive(s, now));
 }
 
 export async function getSessionsToMarkCompleted() {
@@ -416,15 +487,17 @@ export async function getSessionsToMarkCompleted() {
     },
   });
 
-  return sessions.filter((s) => {
-    const endTime = new Date(`${s.session_date}T${convertTo24h(s.end_time)}:00`);
-    const thirtyMinAfterEnd = new Date(endTime.getTime() + 30 * 60 * 1000);
-    return now >= thirtyMinAfterEnd;
-  });
+  return sessions.filter((s) => isSessionDueCompleted(s, now));
 }
 
-function convertTo24h(timeStr: string): string {
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+export function convertTo24h(timeStr: string): string {
+  // Sequelize TIME columns (session start_time/end_time) come back as
+  // "HH:MM:SS" — the trailing seconds must be optional or every call falls
+  // through to the '10:00' default, silently discarding the real time.
+  // Found live 2026-07-23 (Session CC-20260723-t7n4): this masked bug meant
+  // getSessionsToMarkLive/Completed were evaluating every session against a
+  // hardcoded 10am Central instead of its real start/end time.
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
   if (!match) return '10:00';
   let hours = parseInt(match[1], 10);
   const minutes = match[2];
@@ -463,12 +536,25 @@ export async function listCohortEnrollments(cohortId: string) {
     if (!prev || new Date(l.created_at ?? 0) < new Date(prev.created_at ?? 0)) leadByEmail.set(key, l);
   }
 
+  // Subscription enrichment: the student's self-serve paid plan (monthly/annual/comp)
+  // so the admin can see who is actually on a paid subscription vs a one-off/none.
+  // Latest subscription per enrollment; one query, no N+1.
+  const enrollmentIds = enrollments.map((e) => e.id);
+  const subs = enrollmentIds.length
+    ? await Subscription.findAll({ where: { enrollment_id: { [Op.in]: enrollmentIds } }, order: [['created_at', 'DESC']] })
+    : [];
+  const subByEnrollment = new Map<string, Subscription>();
+  for (const s of subs) if (!subByEnrollment.has(s.enrollment_id)) subByEnrollment.set(s.enrollment_id, s);
+
   return enrollments.map((e) => {
     const lead = leadByEmail.get((e.email || '').toLowerCase().trim());
     const json = e.toJSON() as any;
     // Never leak the reusable portal login token into the list payload.
     delete json.portal_token;
     delete json.portal_token_expires_at;
+    const sub = subByEnrollment.get(e.id);
+    // PaySimple customer id lives on the enrollment and/or the subscription.
+    const psCustomerId = json.paysimple_customer_id || sub?.paysimple_customer_id || null;
     return {
       ...json,
       lead_source: lead?.source ?? null,
@@ -476,6 +562,12 @@ export async function listCohortEnrollments(cohortId: string) {
       utm_source: lead?.utm_source ?? null,
       utm_campaign: lead?.utm_campaign ?? null,
       page_url: lead?.page_url ?? null,
+      // Paid-subscription visibility for the admin roster.
+      subscription: sub
+        ? { plan: sub.plan, status: sub.status, amount_cents: sub.amount_cents, current_period_end: sub.current_period_end }
+        : null,
+      // Deep link to the payer's record in PaySimple (best-effort; base is overridable).
+      paysimple_url: psCustomerId ? `${PAYSIMPLE_DASHBOARD_BASE}/#/customer/${psCustomerId}` : null,
     };
   });
 }
@@ -503,6 +595,25 @@ export async function getPortalLoginUrl(enrollmentId: string): Promise<string | 
 
   const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
   return `${base}/portal/verify?token=${token}`;
+}
+
+/**
+ * Read-only "View as member" portal URL. Mints a `read_only` participant JWT
+ * (server blocks every write) and returns a `/portal/view-as` link carrying it
+ * in the URL HASH (kept out of query strings / server logs / referrers). Unlike
+ * getPortalLoginUrl this does NOT mint a real login session — it's a scoped,
+ * observe-only token. Returns null if the enrollment is missing.
+ */
+export async function getReadOnlyViewAsUrl(enrollmentId: string, impersonatedBy: string): Promise<string | null> {
+  const enrollment = await Enrollment.findByPk(enrollmentId);
+  if (!enrollment) return null;
+  const { signReadOnlyParticipantJwt } = await import('./participantService');
+  const token = signReadOnlyParticipantJwt(
+    { id: enrollment.id, email: enrollment.email, cohort_id: enrollment.cohort_id },
+    impersonatedBy,
+  );
+  const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/$/, '');
+  return `${base}/portal/view-as#t=${token}`;
 }
 
 export async function setPortalAccess(enrollmentId: string, enabled: boolean) {

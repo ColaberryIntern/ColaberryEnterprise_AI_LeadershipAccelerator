@@ -7,7 +7,9 @@ export async function listOpenCohorts() {
   return Cohort.findAll({
     where: {
       status: 'open',
-      // Only show cohorts with seats available
+      // Private business/owner workspaces (cohort_type='business') are never shown
+      // in the public/student cohort list.
+      cohort_type: { [Op.ne]: 'business' },
     },
     attributes: ['id', 'name', 'start_date', 'core_day', 'core_time', 'optional_lab_day', 'max_seats', 'seats_taken'],
     order: [['start_date', 'ASC']],

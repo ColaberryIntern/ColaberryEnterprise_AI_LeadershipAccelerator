@@ -4,25 +4,28 @@ import {
   awardCardCompletionPoints,
   awardLessonCompletionPoints,
 } from '../cardPointsService';
-import { award } from '../../pointsService';
+import { award, sumPointsTodayByEventTypes } from '../../pointsService';
 import PointsConfig from '../../../models/PointsConfig';
 import { resolve as resolveType } from '../../timeline/typeRegistry';
 import { env } from '../../../config/env';
 
-jest.mock('../../pointsService', () => ({ award: jest.fn() }));
+jest.mock('../../pointsService', () => ({ award: jest.fn(), sumPointsTodayByEventTypes: jest.fn() }));
 jest.mock('../../../models/PointsConfig', () => ({ __esModule: true, default: { findOne: jest.fn() } }));
 jest.mock('../../timeline/typeRegistry', () => ({ resolve: jest.fn() }));
-jest.mock('../../../config/env', () => ({ env: { portalPointsAwardEnabled: true } }));
+jest.mock('../../../config/env', () => ({ env: { portalPointsAwardEnabled: true, pointsDailyCapsEnabled: false } }));
 
 const mockAward = award as jest.Mock;
+const mockSumToday = sumPointsTodayByEventTypes as jest.Mock;
 const mockFindOne = (PointsConfig as any).findOne as jest.Mock;
 const mockResolveType = resolveType as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
   (env as any).portalPointsAwardEnabled = true;
+  (env as any).pointsDailyCapsEnabled = false;
   mockFindOne.mockResolvedValue(null);         // no config override by default
   mockResolveType.mockReturnValue(undefined);  // unknown type by default
+  mockSumToday.mockResolvedValue(0);           // nothing banked today by default
 });
 
 describe('eventTypeForCard', () => {
@@ -58,24 +61,20 @@ describe('resolveCardEngagementPoints', () => {
     expect(await resolveCardEngagementPoints({ id: 'c1', type: 'reading' })).toBe(7);
   });
 
-  it('uses the band fallback map when no config exists (survey=10, quiz=15, evaluation=20)', async () => {
-    mockResolveType.mockReturnValue({ render_band: 'survey' });
-    expect(await resolveCardEngagementPoints({ id: 'c1', type: 'warmup' })).toBe(10);
-    mockResolveType.mockReturnValue({ render_band: 'quiz' });
-    expect(await resolveCardEngagementPoints({ id: 'c2', type: 'quiz' })).toBe(15);
-    mockResolveType.mockReturnValue({ render_band: 'evaluation' });
-    expect(await resolveCardEngagementPoints({ id: 'c3', type: 'evaluation' })).toBe(20);
+  it('awards the sum of card.points (the exact badge value) when no config override exists', async () => {
+    expect(await resolveCardEngagementPoints({ id: 'c1', type: 'knowledge_check', points: { learning: 15 } })).toBe(15);
+    expect(await resolveCardEngagementPoints({ id: 'c2', type: 'prompt_challenge', points: { builder: 50, learning: 5 } })).toBe(55);
+    expect(await resolveCardEngagementPoints({ id: 'c3', type: 'reflection', points: { learning: 5, community: 5 } })).toBe(10);
   });
 
-  it('defaults an unknown band/type to 5', async () => {
-    mockResolveType.mockReturnValue({ render_band: 'mystery' });
-    expect(await resolveCardEngagementPoints({ id: 'c1', type: 'mystery' })).toBe(5);
+  it('is 0 when the card has no points (badge hidden → nothing to award)', async () => {
+    expect(await resolveCardEngagementPoints({ id: 'c1', type: 'announcement', points: { learning: 0, builder: 0, community: 0 } })).toBe(0);
+    expect(await resolveCardEngagementPoints({ id: 'c2', type: 'announcement' })).toBe(0);
   });
 
-  it('never throws — a config read error falls back to the code map', async () => {
+  it('never throws — a config read error falls back to the badge value', async () => {
     mockFindOne.mockRejectedValue(new Error('db down'));
-    mockResolveType.mockReturnValue({ render_band: 'survey' });
-    await expect(resolveCardEngagementPoints({ id: 'c1', type: 'warmup' })).resolves.toBe(10);
+    await expect(resolveCardEngagementPoints({ id: 'c1', type: 'quiz', points: { learning: 15 } })).resolves.toBe(15);
   });
 });
 
@@ -86,10 +85,10 @@ describe('awardCardCompletionPoints', () => {
     expect(mockAward).not.toHaveBeenCalled();
   });
 
-  it('awards the resolved points, keyed idempotently by card, and returns the amount', async () => {
+  it('awards the sum of card.points, keyed idempotently by card, and returns the amount', async () => {
     mockResolveType.mockReturnValue({ render_band: 'quiz' });
     mockAward.mockResolvedValue({ awarded: true, points: 15 });
-    const got = await awardCardCompletionPoints('enr-1', { id: 'card-9', type: 'quiz' });
+    const got = await awardCardCompletionPoints('enr-1', { id: 'card-9', type: 'quiz', points: { learning: 15 } });
     expect(got).toBe(15);
     const arg = mockAward.mock.calls[0];
     expect(arg[0]).toBe('enr-1');
@@ -99,7 +98,7 @@ describe('awardCardCompletionPoints', () => {
   it('returns 0 on an idempotent re-completion (award reports not-created)', async () => {
     mockResolveType.mockReturnValue({ render_band: 'survey' });
     mockAward.mockResolvedValue({ awarded: false, points: 0 });
-    expect(await awardCardCompletionPoints('enr-1', { id: 'card-9', type: 'warmup' })).toBe(0);
+    expect(await awardCardCompletionPoints('enr-1', { id: 'card-9', type: 'warmup', points: { learning: 10 } })).toBe(0);
   });
 
   it('does not award when the resolved amount is 0', async () => {
@@ -112,7 +111,67 @@ describe('awardCardCompletionPoints', () => {
   it('never throws — an award failure is swallowed and returns 0 (non-fatal)', async () => {
     mockResolveType.mockReturnValue({ render_band: 'quiz' });
     mockAward.mockRejectedValue(new Error('write failed'));
-    await expect(awardCardCompletionPoints('enr-1', { id: 'c1', type: 'quiz' })).resolves.toBe(0);
+    await expect(awardCardCompletionPoints('enr-1', { id: 'c1', type: 'quiz', points: { learning: 15 } })).resolves.toBe(0);
+  });
+});
+
+describe('awardCardCompletionPoints — ambient daily cap (POINTS_DAILY_CAPS_ENABLED)', () => {
+  const ambientCard = { id: 'amb-1', type: 'ai_news_flash', points: { learning: 5 } };
+
+  it('flag OFF: awards full value, never queries today\'s total, records as card_complete (byte-identical to today)', async () => {
+    (env as any).pointsDailyCapsEnabled = false;
+    mockAward.mockResolvedValue({ awarded: true, points: 5 });
+
+    const got = await awardCardCompletionPoints('enr-1', ambientCard);
+
+    expect(got).toBe(5);
+    expect(mockSumToday).not.toHaveBeenCalled();
+    expect(mockAward.mock.calls[0][1]).toMatchObject({ eventType: 'card_complete', eventKey: 'card:amb-1', points: 5 });
+  });
+
+  it('flag ON, under cap: awards full value, banked under the dedicated ambient event type', async () => {
+    (env as any).pointsDailyCapsEnabled = true;
+    mockSumToday.mockResolvedValue(40); // 40 banked today, cap 100
+    mockAward.mockResolvedValue({ awarded: true, points: 5 });
+
+    const got = await awardCardCompletionPoints('enr-1', ambientCard);
+
+    expect(got).toBe(5);
+    expect(mockSumToday).toHaveBeenCalledWith('enr-1', ['ambient_learning'], expect.any(String));
+    expect(mockAward.mock.calls[0][1]).toMatchObject({ eventType: 'ambient_learning', eventKey: 'card:amb-1', points: 5 });
+  });
+
+  it('flag ON, partial room: clamps the award to the cap remainder', async () => {
+    (env as any).pointsDailyCapsEnabled = true;
+    mockSumToday.mockResolvedValue(97); // only 3 left under cap 100
+    mockAward.mockResolvedValue({ awarded: true, points: 3 });
+
+    const got = await awardCardCompletionPoints('enr-1', ambientCard);
+
+    expect(mockAward.mock.calls[0][1].points).toBe(3);
+    expect(got).toBe(3);
+  });
+
+  it('flag ON, at the cap: awards nothing and writes no points row (idempotency untouched)', async () => {
+    (env as any).pointsDailyCapsEnabled = true;
+    mockSumToday.mockResolvedValue(100);
+
+    const got = await awardCardCompletionPoints('enr-1', ambientCard);
+
+    expect(got).toBe(0);
+    expect(mockAward).not.toHaveBeenCalled();
+  });
+
+  it('flag ON: a non-ambient card is never capped (real coursework is unaffected)', async () => {
+    (env as any).pointsDailyCapsEnabled = true;
+    mockResolveType.mockReturnValue({ render_band: 'quiz' });
+    mockAward.mockResolvedValue({ awarded: true, points: 15 });
+
+    const got = await awardCardCompletionPoints('enr-1', { id: 'kc-1', type: 'knowledge_check', points: { learning: 15 } });
+
+    expect(got).toBe(15);
+    expect(mockSumToday).not.toHaveBeenCalled();
+    expect(mockAward.mock.calls[0][1]).toMatchObject({ eventType: 'knowledge_check', eventKey: 'card:kc-1', points: 15 });
   });
 });
 

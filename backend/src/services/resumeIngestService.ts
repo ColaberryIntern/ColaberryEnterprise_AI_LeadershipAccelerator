@@ -1,5 +1,6 @@
 import { OnboardingProfile } from '../models';
 import type { ProjectDnaInput } from './projectDnaService';
+import { hasReferral } from './friendReferralService';
 import { award } from './pointsService';
 
 const EXTRACTION_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
@@ -279,9 +280,13 @@ export async function getOnboardingProfile(enrollmentId: string): Promise<{
   personalization: PersonalizationPrefill;
   linkedin_url: string | null;
   has_resume: boolean;
+  has_referral: boolean;
 }> {
-  const row: any = await OnboardingProfile.findOne({ where: { enrollment_id: enrollmentId } });
-  if (!row) return { prefill: {}, profile: {}, personalization: {}, linkedin_url: null, has_resume: false };
+  const [row, referred] = await Promise.all([
+    OnboardingProfile.findOne({ where: { enrollment_id: enrollmentId } }) as Promise<any>,
+    hasReferral(enrollmentId),
+  ]);
+  if (!row) return { prefill: {}, profile: {}, personalization: {}, linkedin_url: null, has_resume: false, has_referral: referred };
   const p = (row.prefill && typeof row.prefill === 'object') ? row.prefill : {};
   return {
     prefill: p,
@@ -292,5 +297,6 @@ export async function getOnboardingProfile(enrollmentId: string): Promise<{
     // or an uploaded resume file (Settings), so the Today onboarding step and
     // the Settings badge agree.
     has_resume: !!(row.resume_text || row.resume_file_name),
+    has_referral: referred,
   };
 }

@@ -30,6 +30,7 @@ export async function seedCurriculumTypeDefinitions(): Promise<TypeSeedResult> {
         applicable_prompt_pairs: t.prompt_pairs,
         bucket_default: t.bucket,
         render_band: t.render_band,
+        estimated_time: t.est_minutes,
         learning_xp: t.learning_xp,
         builder_xp: t.builder_xp,
         community_xp: t.community_xp,
@@ -40,6 +41,9 @@ export async function seedCurriculumTypeDefinitions(): Promise<TypeSeedResult> {
         ai_evaluation: t.ai_evaluation,
         instructor_review: t.instructor_review,
         portfolio_eligible: t.portfolio_eligible,
+        home_surface: t.home_surface,
+        feed_mode: t.feed_mode,
+        today_eligible: t.today_eligible,
       },
     });
 
@@ -52,6 +56,7 @@ export async function seedCurriculumTypeDefinitions(): Promise<TypeSeedResult> {
         {
           bucket_default: t.bucket,
           render_band: t.render_band,
+          estimated_time: t.est_minutes,
           learning_xp: t.learning_xp,
           builder_xp: t.builder_xp,
           community_xp: t.community_xp,
@@ -63,6 +68,9 @@ export async function seedCurriculumTypeDefinitions(): Promise<TypeSeedResult> {
           instructor_review: t.instructor_review,
           portfolio_eligible: t.portfolio_eligible,
           applicable_prompt_pairs: t.prompt_pairs,
+          home_surface: t.home_surface,
+          feed_mode: t.feed_mode,
+          today_eligible: t.today_eligible,
         },
         { where: { slug: t.slug } }
       );

@@ -2,6 +2,9 @@ import * as sql from 'mssql';
 import { env } from '../config/env';
 import { OpenHouseEvent } from '../models';
 import { OpenHouseView } from './openHouseTypes';
+import { centralWallClockToInstant } from './centralDate';
+
+export { centralWallClockToInstant };
 
 /**
  * Public events for the portal: the calendar feed and the "Next event" countdown
@@ -77,31 +80,10 @@ async function connectCcpp(): Promise<sql.ConnectionPool> {
 
 const EVENT_TZ = 'America/Chicago';
 
-/**
- * CCPP stores `EventBrite_Events` datetimes as CENTRAL wall-clock, but the mssql
- * driver reads them as UTC (so 6:30 PM Central arrives as 18:30Z). Re-interpret
- * the naive wall-clock as America/Chicago to recover the true instant, DST-aware.
- */
-export function centralWallClockToInstant(driverDate: Date): Date {
-  // The driver placed the naive wall-clock into the UTC fields.
-  const guess = Date.UTC(
-    driverDate.getUTCFullYear(), driverDate.getUTCMonth(), driverDate.getUTCDate(),
-    driverDate.getUTCHours(), driverDate.getUTCMinutes(), driverDate.getUTCSeconds(),
-  );
-  // How far ahead of UTC is Central at that instant? (negative — Central is behind)
-  const parts: Record<string, string> = {};
-  for (const p of new Intl.DateTimeFormat('en-US', {
-    timeZone: EVENT_TZ, hour12: false,
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date(guess))) {
-    if (p.type !== 'literal') parts[p.type] = p.value;
-  }
-  let hour = Number(parts.hour); if (hour === 24) hour = 0;
-  const asCentral = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day), hour, Number(parts.minute), Number(parts.second));
-  const offset = asCentral - guess;
-  return new Date(guess - offset);
-}
+// CCPP stores `EventBrite_Events` datetimes as CENTRAL wall-clock, but the mssql
+// driver reads them as UTC (so 6:30 PM Central arrives as 18:30Z). Re-interpreting
+// the naive wall-clock as America/Chicago (centralWallClockToInstant, imported
+// above from centralDate.ts) recovers the true instant, DST-aware.
 
 /** Map a CCPP `EventBrite_Events` row to the shared OpenHouseView contract (pure). */
 export function ccppRowToView(r: CcppEventRow): OpenHouseView {

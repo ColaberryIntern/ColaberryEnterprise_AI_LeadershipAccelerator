@@ -9,8 +9,10 @@ import CurriculumBlueprint from '../../models/CurriculumBlueprint';
 import { createCard, CreateCardInput } from '../timeline/timelineAdminService';
 import { assessPlan } from './blueprintService';
 import { approvedSlugs } from './composerAi';
+import { recomputeBlueprintHours } from './blueprintRollup';
 import { PlanCard, CurriculumPlan } from './types';
-import { TimelineBucket } from '../../models/TimelineCard';
+import TimelineCard, { TimelineBucket } from '../../models/TimelineCard';
+import { weekBlueprint, CANONICAL_PROGRAM_ID } from '../../data/weekBlueprints';
 
 function toCardInput(c: PlanCard): CreateCardInput {
   return {
@@ -63,11 +65,59 @@ export async function publishBlueprint(id: string, force = false): Promise<Publi
     return { published: true, created: 0, card_ids: existing, already: true, quality: validation.quality };
   }
 
+  // The Anthropic Skilljar course is "outside work" — its card carries the real
+  // course duration (from data/weekBlueprints), not the generic type default.
+  const courseMinutes =
+    bp.program_id === CANONICAL_PROGRAM_ID && bp.week != null
+      ? weekBlueprint(bp.week)?.anthropic_course_minutes ?? null
+      : null;
+
   const cardIds: string[] = [];
   for (const c of plan.cards) {
-    const card = await createCard(toCardInput(c));
+    const input = toCardInput(c);
+    if (c.type === 'anthropic_skills_jar' && courseMinutes != null) {
+      input.estimated_time = courseMinutes;
+    }
+    const card = await createCard(input);
     cardIds.push(card.id);
   }
   await bp.update({ published_card_ids: [...existing, ...cardIds], status: 'published' });
+  // estimated_hours becomes the live sum of the week's cards.
+  await recomputeBlueprintHours(bp.program_id, bp.week);
   return { published: true, created: cardIds.length, card_ids: cardIds, quality: validation.quality };
+}
+
+/**
+ * ADD-ONLY publish of the plan's video cards to the live Timeline. Unlike
+ * publishBlueprint(force) — which re-creates the WHOLE plan and would duplicate
+ * existing curriculum — this creates ONLY the `video` cards that aren't already
+ * published for the week (de-duped by title), scoped to the blueprint's program.
+ * Idempotent: re-running creates nothing new. Used to push curated gap-fill /
+ * topic-pack videos live without touching the rest of the week.
+ */
+export async function publishNewVideoCards(id: string): Promise<{ created: number; skipped: number; card_ids: string[] }> {
+  const bp = await CurriculumBlueprint.findByPk(id);
+  if (!bp) throw Object.assign(new Error('Blueprint not found'), { status: 404 });
+  const plan: CurriculumPlan | null = bp.generated_plan || null;
+  const videoCards = (plan?.cards || []).filter((c) => c.type === 'video' && c.video_url);
+  if (!videoCards.length) return { created: 0, skipped: 0, card_ids: [] };
+
+  const existing = await TimelineCard.findAll({ where: { week: bp.week, type: 'video', visibility: 'published' } });
+  const existingTitles = new Set(existing.map((c: any) => String(c.title || '').trim()));
+
+  const created: string[] = [];
+  let skipped = 0;
+  for (const c of videoCards) {
+    const title = String(c.title).trim();
+    if (existingTitles.has(title)) { skipped++; continue; }
+    const card = await createCard({ ...toCardInput(c), program_id: bp.program_id });
+    created.push(card.id);
+    existingTitles.add(title);
+  }
+  if (created.length) {
+    const prev: string[] = Array.isArray(bp.published_card_ids) ? bp.published_card_ids : [];
+    await bp.update({ published_card_ids: [...prev, ...created] });
+    await recomputeBlueprintHours(bp.program_id, bp.week);
+  }
+  return { created: created.length, skipped, card_ids: created };
 }

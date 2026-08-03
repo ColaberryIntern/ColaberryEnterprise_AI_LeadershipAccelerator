@@ -1,5 +1,5 @@
 /**
- * mentorService — the AI Mentor, the heart of the Runtime. A Senior AI Systems
+ * mentorService — Cory, the student mentor and heart of the Runtime. A Senior AI Systems
  * Architect who coaches during every activity: explains, hints, reviews work,
  * and asks Socratic questions — but NEVER hands over answers to graded work.
  * Also generates AI-guided reflection prompts and video augmentations. Mentor
@@ -7,16 +7,24 @@
  */
 import { chatText, chatJson } from './runtimeAi';
 import MentorTurn from '../../models/MentorTurn';
+import { buildMentorContext, MentorContext } from './mentorContext';
+import { getLearnerContext } from '../learnerContextService';
+import { renderLearnerContext } from '../learnerContextFormat';
+import { loadConversation } from './mentorMemory';
+import { adaptiveInstruction } from './mentorAdaptive';
 
 export type MentorMode = 'ask' | 'hint' | 'explain' | 'review';
 
-interface CardCtx { id: string; type: string; title: string; description?: string | null; student_label?: string; metadata?: any }
+interface CardCtx { id: string; type: string; title: string; description?: string | null; student_label?: string; metadata?: any; program_id?: string | null; week?: number | null }
 
 const SYSTEM =
-  'You are a Senior AI Systems Architect acting as a warm, sharp personal mentor to a student in an AI Systems ' +
-  'Architect Accelerator. Coach like a great senior engineer: explain concepts clearly, give HINTS and guiding ' +
+  'You are Cory, a Senior AI Systems Architect acting as a warm, sharp personal mentor to a student in an AI Systems ' +
+  'Architect Accelerator. If asked who you are, you are Cory, their mentor (stay ungendered — no gendered self-reference). ' +
+  'Coach like a great senior engineer: explain concepts clearly, give HINTS and guiding ' +
   'questions, review the student\'s work and name specific strengths + one concrete next step. NEVER hand over a ' +
-  'full answer to graded work — lead them to it. Keep replies tight (2-5 sentences). Encourage without flattery.';
+  'full answer to graded work — lead them to it. Keep replies tight (2-5 sentences). Encourage without flattery. ' +
+  'Be personal: address the student by their FIRST NAME when you know it, speak to them directly, and weave in ' +
+  'their goal and situation from the profile when it helps — this should feel like their own mentor, not a generic bot.';
 
 function modeInstruction(mode: MentorMode): string {
   switch (mode) {
@@ -28,8 +36,57 @@ function modeInstruction(mode: MentorMode): string {
 }
 
 export async function coach(enrollmentId: string, card: CardCtx, mode: MentorMode, message: string, history: Array<{ role: 'user' | 'assistant'; content: string }> = []) {
-  const system = `${SYSTEM}\n\nActivity: "${card.title}" (${card.student_label || card.type}). ${card.description ? `Context: ${card.description}` : ''}\n${modeInstruction(mode)}`;
-  const msgs = [...history.slice(-6), { role: 'user' as const, content: message || 'Help me get started.' }];
+  // Assignment-aware context: the student's actual work on this card (answers,
+  // score, saved work, section growth). Degrade gracefully — a context-assembly
+  // failure must NOT 500 the chat; the mentor just falls back to card-only coaching.
+  // The shared learner-360 (persona, competency, assessment history, project) —
+  // this is what makes the mentor smarter over time. Never throws (returns '' on
+  // failure). Kick it off in parallel with the card-scoped context below.
+  // Typed learner-360 (persona, competency, assessment history, project, distilled
+  // memory) — fetched once so we can both RENDER it and read maturity/mastery for
+  // adaptive tone. Never breaks the turn (falls back to no-360 on error).
+  const ctxP = getLearnerContext(enrollmentId).catch((e: any) => {
+    console.warn(JSON.stringify({ level: 'warn', service: 'runtime_mentor', event: 'learner_360_failed', enrollment_id: enrollmentId, error_class: e?.name || 'Error', message: String(e?.message || e) }));
+    return null;
+  });
+  // Durable conversation memory: read prior MentorTurns back so context survives
+  // page reloads and return visits (never throws — empty window on failure).
+  const memoryP = loadConversation(enrollmentId, card.id);
+  let learner: MentorContext = { block: '', graded_lock: false, has_work: false };
+  try {
+    learner = await buildMentorContext(enrollmentId, card);
+  } catch (e: any) {
+    console.warn(JSON.stringify({ level: 'warn', service: 'runtime_mentor', event: 'context_assembly_failed', card_id: card.id, error_class: e?.name || 'Error', message: String(e?.message || e) }));
+  }
+  const ctx = await ctxP;
+  const convo = await memoryP;
+  const profile = ctx ? renderLearnerContext(ctx) : '';
+  const profileBlock = profile ? `\n\n${profile}` : '';
+  const memoryBlock = convo.summary ? `\n\nEARLIER IN THIS CONVERSATION: ${convo.summary}.` : '';
+  const work = learner.block
+    ? `\n\nWHAT THE STUDENT HAS DONE ON THIS ACTIVITY (this is their real work — reference it specifically, never say you can't see it):\n${learner.block}`
+    : '';
+  const lock = learner.graded_lock
+    ? '\nThis is a graded Evaluation the student can retake: do NOT reveal the correct option for any question they missed — coach them toward it with a question or a hint.'
+    : '';
+  // Adaptive coaching register: meet the student at their level, and get extra
+  // supportive when they look stuck (many prior turns on this card, or a graded lock).
+  const priorTurns = Math.floor((convo.recent.length || 0) / 2);
+  const struggling = priorTurns >= 4 || learner.graded_lock;
+  const adaptive = adaptiveInstruction({
+    aiMaturity: ctx?.persona?.ai_maturity ?? null,
+    proficiencyPct: ctx?.competency?.proficiency_pct ?? null,
+    struggling,
+  });
+  const adaptiveBlock = adaptive ? `\n${adaptive}` : '';
+  // Personalization: greet + address the student by their first name.
+  const firstName = (ctx?.identity?.full_name || '').trim().split(/\s+/)[0] || '';
+  const personal = firstName ? `\nThe student's first name is ${firstName} — address them by it, warmly and personally.` : '';
+  const system = `${SYSTEM}${personal}${profileBlock}${memoryBlock}\n\nActivity: "${card.title}" (${card.student_label || card.type}). ${card.description ? `Context: ${card.description}` : ''}${work}${lock}${adaptiveBlock}\n${modeInstruction(mode)}`;
+  // Prefer the DB-durable conversation (survives reloads); fall back to the
+  // client-sent history only when there are no stored turns yet.
+  const priorMsgs = convo.recent.length ? convo.recent : history.slice(-6);
+  const msgs = [...priorMsgs, { role: 'user' as const, content: message || 'Help me get started.' }];
   const r = await chatText('runtime_mentor', system, msgs, undefined, 500);
   await MentorTurn.create({ enrollment_id: enrollmentId, card_id: card.id, mode, question: message, reply: r.text }).catch(() => {});
   return { reply: r.text, kind: mode, cost_usd: r.cost_usd, runtime_ms: r.runtime_ms };

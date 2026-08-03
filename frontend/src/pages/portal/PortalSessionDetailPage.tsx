@@ -3,6 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import AnthropicCoursesBento from '../../components/portal/anthropic-bento/AnthropicCoursesBento';
 import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
+import { useCountdown } from '../../hooks/useCountdown';
+import { joinSession, leaveMeetingBeacon } from '../../services/onboardingApi';
+import { emitPointsEarned } from '../../services/pointsFx';
 import { canJoinRoom, JOIN_ROOM_WINDOW_MS, parseSessionStartMs } from '../../utils/sessionJoinWindow';
 
 /* ------------------------------------------------------------------ */
@@ -43,34 +46,6 @@ function relativeTime(iso: string): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return `${Math.floor(diff / 86_400_000)}d ago`;
-}
-
-/* ------------------------------------------------------------------ */
-/*  useCountdown hook                                                  */
-/* ------------------------------------------------------------------ */
-
-function useCountdown(targetDate: string | null): { days: number; hours: number; minutes: number; seconds: number; totalMs: number } | null {
-  const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number; totalMs: number } | null>(null);
-
-  useEffect(() => {
-    if (!targetDate) return;
-    const update = () => {
-      const diff = new Date(targetDate).getTime() - Date.now();
-      if (diff <= 0) { setTimeLeft(null); return; }
-      setTimeLeft({
-        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
-        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
-        minutes: Math.floor((diff / (1000 * 60)) % 60),
-        seconds: Math.floor((diff / 1000) % 60),
-        totalMs: diff,
-      });
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [targetDate]);
-
-  return timeLeft;
 }
 
 /* ------------------------------------------------------------------ */
@@ -349,6 +324,45 @@ function PortalSessionDetailPage() {
   const countdown = useCountdown(countdownTarget);
   const isUnder5Min = countdown ? countdown.totalMs < 5 * 60 * 1000 : false;
 
+  // Open the meeting synchronously (popup-blocker safe), then record attendance
+  // best-effort. The credit call must never block or break joining the class;
+  // the HUD "+N" burst (emitPointsEarned) is the on-success confirmation.
+  // source:'meet' tells the instructor deck's ticker to say "entering the
+  // Virtual Building" (vs the QR check-in's "entering the classroom").
+  const joinedMeetRef = useRef(false);
+  const handleJoinMeeting = () => {
+    const link = s?.meeting_link;
+    if (!link) return;
+    window.open(link, '_blank', 'noopener,noreferrer');
+    if (id) {
+      joinedMeetRef.current = true;
+      joinSession(id, 'meet')
+        .then((r) => { if (r.awarded) emitPointsEarned(r.points); })
+        .catch(() => { /* attendance credit is best-effort */ });
+    }
+  };
+
+  // Best-effort "left the Virtual Building" signal: fires once, the first time
+  // this tab is hidden/closed after a Join click. This is a proxy for actually
+  // leaving the Meet call (no real presence webhook is available), so it can
+  // miss or misfire on a quick tab-switch — a ticker flourish, not an
+  // attendance record.
+  useEffect(() => {
+    if (!id) return;
+    let fired = false;
+    const maybeLeave = () => {
+      if (fired || !joinedMeetRef.current) return;
+      if (document.visibilityState === 'hidden') { fired = true; leaveMeetingBeacon(id); }
+    };
+    const onPageHide = () => { if (!fired && joinedMeetRef.current) { fired = true; leaveMeetingBeacon(id); } };
+    document.addEventListener('visibilitychange', maybeLeave);
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      document.removeEventListener('visibilitychange', maybeLeave);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [id]);
+
   // "Join Room" gate — enabled 30 min before start through 30 min after,
   // independent of `status` (a slower backend cron flips status on a
   // different schedule and also drives attendance tracking; this only
@@ -514,7 +528,7 @@ function PortalSessionDetailPage() {
                     </div>
                     <button
                       className="btn btn-sm px-5 py-2"
-                      onClick={() => window.open(s.meeting_link, '_blank', 'noopener,noreferrer')}
+                      onClick={handleJoinMeeting}
                       style={{
                         background: '#ef4444', color: '#fff',
                         borderRadius: 10, border: 'none',
