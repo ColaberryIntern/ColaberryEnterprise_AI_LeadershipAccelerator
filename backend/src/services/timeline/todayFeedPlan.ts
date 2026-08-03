@@ -74,6 +74,25 @@ export function anchoredWeekAllowed(week: number | null, isExplorer: boolean): b
   return week === 0;              // free: Week 0 curriculum only
 }
 
+/**
+ * PURE — should this card even be subject to week-based Today gating at all?
+ * Only week-bound cards (`week != null`) are, REGARDLESS of surface.
+ *
+ * REGRESSION GUARD (2026-08-03): the call site used to gate on
+ * `surfaceOf(c.type) === 'class'` instead of this — but `announcement`
+ * (`home_surface: 'today'`), `implementation_task`/`artifact_submission`
+ * (`home_surface: 'project'`), and some `community_discussion` cards all
+ * carry a real `week` despite living on a non-'class' surface, so the week
+ * gate silently never ran for them at all, no matter what
+ * `anchoredWeekAllowed`/`weekStartedForToday` themselves returned. Evergreen
+ * Today content (news/tools/quotes) has `week: null` and must never be
+ * gated, or free users see none of it (null !== 0) — that's the actual
+ * invariant this protects, not surface.
+ */
+export function isWeekGated(week: number | null): boolean {
+  return week != null;
+}
+
 /** The minimal card shape `weekStartedForToday` needs — a subset of `FeedCard`. */
 export interface WeekGateCard { id: string; type: string; bucket: string; week: number | null; order: number; status: string | null }
 
@@ -90,15 +109,37 @@ function bucketRank(bucket: string): number {
 }
 
 /**
- * TODAY-ONLY gate (env.timelineWeekStartGateEnabled): within class curriculum,
- * a week's cards (1-12) show on the Today timeline only once the student has
- * completed >=1 completable card in that same week. Every week always shows
- * its own "entry card" (the earliest-in-sequence completable card in that
- * week, by bucket then order then id) so there's always something to start;
- * non-completable types (announcements/events/system) are never gated by this
- * rule at all. Evaluations/reflections/etc. (reflect/share/advance buckets)
- * can never be mistaken for a week's entry point, since they always rank
- * after pre_class/learn/practice/build.
+ * PURE — the student's single "current" week among 1-12: the lowest week
+ * number that is NOT fully complete (i.e. has at least one completable card
+ * whose status isn't 'completed'). A week with zero completable cards is
+ * treated as not-yet-done (never silently skipped). Returns Infinity if every
+ * week 1-12 is fully complete.
+ */
+function currentIncompleteWeek(allCards: WeekGateCard[]): number {
+  const weeks = Array.from(new Set(allCards.filter((c) => c.week != null && c.week > 0).map((c) => c.week as number))).sort((a, b) => a - b);
+  for (const w of weeks) {
+    const completableInWeek = allCards.filter((c) => c.week === w && isCompletableType(c.type));
+    const fullyDone = completableInWeek.length > 0 && completableInWeek.every((c) => c.status === 'completed');
+    if (!fullyDone) return w;
+  }
+  return Infinity;
+}
+
+/**
+ * TODAY-ONLY gate (env.timelineWeekStartGateEnabled): only the student's
+ * SINGLE current week (the lowest week 1-12 that isn't fully complete —
+ * see `currentIncompleteWeek`) ever shows anything on the Today timeline;
+ * every other week 1-12 shows nothing at all, not even its announcement.
+ * Week 0 is always exempt (the free onboarding week).
+ *
+ * Within the current week, the existing same-week self-unlock rule still
+ * applies: the week's own "entry card" (the earliest-in-sequence completable
+ * card, by bucket then order then id — see `bucketRank`) is always visible so
+ * there's something to start; the rest of that week's cards unlock once the
+ * student completes >=1 completable card in it. Non-completable types
+ * (announcements/events/system) are only ever shown for the current week —
+ * they don't get a blanket exemption across all weeks, or every un-started
+ * week's "Welcome to Week N!" would clutter Today simultaneously.
  *
  * This is Today-timeline-specific — it narrows what Today displays among
  * cards Classroom already marked 'available'. It never touches a card's
@@ -108,6 +149,7 @@ function bucketRank(bucket: string): number {
  */
 export function weekStartedForToday(card: WeekGateCard, allCards: WeekGateCard[]): boolean {
   if (card.week == null || card.week <= 0) return true;
+  if (card.week !== currentIncompleteWeek(allCards)) return false;
   if (!isCompletableType(card.type)) return true;
   const completableInWeek = allCards.filter((c) => c.week === card.week && isCompletableType(c.type));
   const entry = [...completableInWeek].sort((a, b) =>

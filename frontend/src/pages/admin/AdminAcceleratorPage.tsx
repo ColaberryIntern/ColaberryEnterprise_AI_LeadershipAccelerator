@@ -9,6 +9,7 @@ import { TrustSignal } from '../../components/admin/shell/trust';
 import PersonHistoryDrawer from '../../components/admin/PersonHistoryDrawer';
 import ClassKitModal from '../../components/admin/ClassKitModal';
 import KitConfigModal from '../../components/admin/KitConfigModal';
+import { CategoryKey } from '../../components/admin/kitConfig/types';
 import CohortManagementTab from './components/CohortManagementTab';
 import ClassDashboardTab from './components/ClassDashboardTab';
 import { resolveAcceleratorNav } from './utils/resolveAcceleratorNav';
@@ -152,6 +153,9 @@ function AdminAcceleratorPage() {
   const [presentMenu, setPresentMenu] = useState<string | null>(null);
   // Session {id, title} whose Customize (Class Kit config) modal is open, else null.
   const [customizeTarget, setCustomizeTarget] = useState<{ id: string; title: string } | null>(null);
+  // Which category tab the Customize modal should open on — set only via the
+  // ?customizeCategory= deep link below; undefined otherwise (modal's own default).
+  const [customizeCategory, setCustomizeCategory] = useState<CategoryKey | undefined>(undefined);
   // Session id whose Class Details (curriculum/blueprint) modal is open, else null.
   // Cohort days-off (dates a class was skipped) shown as removable chips above the table.
   const [skippedDates, setSkippedDates] = useState<string[]>([]);
@@ -201,6 +205,37 @@ function AdminAcceleratorPage() {
     const next = new URLSearchParams(searchParams);
     next.delete('enrollment');
     next.delete('name');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  // Deep-link: /admin/accelerator?customizeSessionId=<id>&customizeCategory=<key>
+  // opens that session's Customize modal directly, on the given category tab —
+  // used by the Timeline page's "click a card -> open Customize in a new tab"
+  // flow (AdminAcceleratorSessionTimelinePage.tsx). Fetches the session's own
+  // title via GET .../sessions/:id rather than requiring the `sessions` list
+  // to already be loaded for the right cohort. Consumes both params once, same
+  // pattern as the enrollment deep-link above. NOTE: this effect does NOT read
+  // or clear `?tab=` — that param is owned exclusively by the `resolveAcceleratorNav`
+  // effect below (a pre-existing, more robust deep-link mechanism that already
+  // handles `?tab=sessions` — e.g. from the Timeline page's "Back to sessions"
+  // link — correctly; duplicating that handling here would race the two effects
+  // over which one clears the param first).
+  useEffect(() => {
+    const customizeSessionId = searchParams.get('customizeSessionId');
+    if (!customizeSessionId) return;
+    const customizeCategoryParam = searchParams.get('customizeCategory');
+
+    api.get(`/api/admin/accelerator/sessions/${customizeSessionId}`)
+      .then((res) => {
+        const title = res.data?.session?.title || 'Session';
+        setCustomizeTarget({ id: customizeSessionId, title });
+        if (customizeCategoryParam) setCustomizeCategory(customizeCategoryParam as CategoryKey);
+      })
+      .catch(() => { /* invalid/missing session id — fail silently, no modal opens */ });
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('customizeSessionId');
+    next.delete('customizeCategory');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -1183,7 +1218,8 @@ function AdminAcceleratorPage() {
         <KitConfigModal
           sessionId={customizeTarget.id}
           sessionTitle={customizeTarget.title}
-          onClose={() => setCustomizeTarget(null)}
+          initialCategory={customizeCategory}
+          onClose={() => { setCustomizeTarget(null); setCustomizeCategory(undefined); }}
           showToast={showToast}
         />
       )}

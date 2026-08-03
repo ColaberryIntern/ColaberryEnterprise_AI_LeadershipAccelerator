@@ -41,7 +41,9 @@ describe('generateQuestion', () => {
       answer: 1, reveal: 'It gives Claude your project conventions.',
       // Always present (never undefined) so the field survives JSON
       // serialization — a real bug this test caught during Phase 1 review.
-      theater: false, presenterTip: '',
+      // Defaults to true (Live Decision Theater on) since the classkit-live-
+      // polish run — every new-question path starts in Theater mode.
+      theater: true, presenterTip: '',
     });
   });
 

@@ -29,6 +29,12 @@ interface Props {
   sessionTitle: string;
   onClose: () => void;
   showToast: (msg: string, kind?: 'success' | 'error') => void;
+  /** Which category tab to open on first render — used when this modal is
+   * auto-opened from the Timeline page's "jump to this card's category" flow
+   * (a new browser tab, `?customizeSessionId=&customizeCategory=`). Defaults
+   * to `'storyBeats'`, matching the modal's normal in-app "Customize" entry
+   * point unchanged. */
+  initialCategory?: CategoryKey;
 }
 
 interface CategoryDef { key: CategoryKey; icon: string; label: string; }
@@ -50,13 +56,13 @@ const DAY_LABEL: Record<KitConfigDefaults['dayKind'], string> = {
   orientation: 'Orientation', architecture: 'Architecture Day (Monday)', build: 'Build Day (Thursday)',
 };
 
-const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, showToast }) => {
+const KitConfigModal: React.FC<Props> = ({ sessionId, sessionTitle, onClose, showToast, initialCategory }) => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState<KitConfig | null>(null);
   const [defaults, setDefaults] = useState<KitConfigDefaults | null>(null);
-  const [active, setActive] = useState<CategoryKey>('storyBeats');
+  const [active, setActive] = useState<CategoryKey>(initialCategory ?? 'storyBeats');
 
   const openTimeline = () => {
     navigate(`/admin/accelerator/sessions/${sessionId}/timeline`, { state: { sessionTitle } });
