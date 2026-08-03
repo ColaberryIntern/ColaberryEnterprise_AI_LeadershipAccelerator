@@ -43,6 +43,7 @@ import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
+import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -2248,6 +2249,11 @@ async function start(): Promise<void> {
   await ensureStudentTaskMergeSchema();
   // Timeline Engine (Classroom rebuild) — explicit idempotent table creation + type/registry ALTERs.
   await ensureTimelineEngineSchema();
+  // CAPE Phase 3 — curriculum-to-skill mapping: curriculum_skill_maps +
+  // architecture_skill_prerequisites tables + 5 stamp columns on timeline_cards
+  // (idempotent DDL, additive only). Must run AFTER ensureTimelineEngineSchema() so
+  // timeline_cards already exists before the ALTER TABLE statements run.
+  await ensureCapeCurriculumMapSchema();
   // Network Video Library (Testimonials random personalized mode) — catalog + per-enrollment view ledger.
   await ensureNetworkVideoSchema();
   // Podcast Library (Podcast random personalized mode) — catalog + per-enrollment listen ledger.
