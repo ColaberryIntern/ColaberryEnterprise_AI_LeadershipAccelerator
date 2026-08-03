@@ -124,6 +124,22 @@ class TimelineCard extends Model<TimelineCardAttributes> implements TimelineCard
   declare updated_at: Date;
 }
 
+/**
+ * CAPE Phase 3 (design doc §7) afterCreate/afterUpdate handler — see the `hooks:`
+ * block in `TimelineCard.init()` below for the full rationale (dynamic import,
+ * recursion safety, non-fatal). A named export so it is directly unit-testable
+ * (`models/__tests__/timelineCardSkillMappingHook.test.ts`) without needing
+ * Sequelize to actually execute it.
+ */
+export async function capeSkillMappingHook(instance: TimelineCard): Promise<void> {
+  try {
+    const { stampIfPublished } = await import('../services/cape/capeCardSkillMappingService');
+    await stampIfPublished({ id: instance.id, type: instance.type, week: instance.week, visibility: instance.visibility });
+  } catch (err: any) {
+    console.warn('[TimelineCard] CAPE skill-mapping stamp hook failed (non-fatal):', err?.message);
+  }
+}
+
 TimelineCard.init(
   {
     id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
@@ -176,6 +192,24 @@ TimelineCard.init(
     timestamps: true,
     createdAt: 'created_at',
     updatedAt: 'updated_at',
+    // CAPE Phase 3 (design doc §7) — stamp the resolved skill mapping onto ANY card
+    // that ends up visibility:'published', from ANY creation/update path (not just
+    // timelineAdminService.createCard/updateCard — plan-audit cycle 1 found several
+    // other direct TimelineCard.create() call sites, including the entire
+    // Intelligence Pipeline). Dynamic import (mirrors progressionService.ts's own
+    // pattern for the CAPE evidence bridge) avoids a static circular dependency with
+    // capeCardSkillMappingService.ts, which imports THIS model. Defense-in-depth
+    // try/catch here is on top of stampIfPublished's own internal non-fatal
+    // try/catch — a hook failure must never abort the create/update it's attached to.
+    // Recursion-safe: stampIfPublished writes via the STATIC TimelineCard.update()
+    // (bulk update -> beforeBulkUpdate/afterBulkUpdate, hooks this model does not
+    // register), never instance .save()/.update(), so it cannot re-trigger afterUpdate.
+    // The handler is a named, exported function (not an inline closure) specifically
+    // so it is unit-testable directly, without needing Sequelize to actually run it.
+    hooks: {
+      afterCreate: capeSkillMappingHook,
+      afterUpdate: capeSkillMappingHook,
+    },
     indexes: [
       { fields: ['cohort_id', 'week', 'bucket', 'order'] },
       { fields: ['type'] },
