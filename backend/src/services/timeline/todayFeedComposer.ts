@@ -32,6 +32,7 @@ import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from '
 import { orderForVisit } from './todayFeedShuffle';
 import { env } from '../../config/env';
 import { getFeedPolicy } from './feedConfigService';
+import { rankLearningValue } from '../cape/capeLearningValueRanker';
 
 /** Legacy default: inject one ambient item after every CADENCE anchored items.
  *  When FEED_CONTROL_ENABLED, cadence + the active ambient providers come from
@@ -115,20 +116,82 @@ async function loadImpressions(enrollmentId: string): Promise<ImpressionRow[]> {
   );
 }
 
-async function persistImpression(enrollmentId: string, it: TodayFeedItem, provider: string | null): Promise<void> {
+/** CAPE Phase 4 Stage 5 explanation (design doc §9 Stage 5, §13) — present only
+ * when `env.capeLearningValueRankerEnabled` is on and ranking succeeded for
+ * this item; absent (all 4 columns stay NULL/[]) otherwise, including every
+ * flag-off write. */
+export interface CapeExplanation {
+  rank_score: number;
+  reasons: string[];
+  policy_version: number;
+  learner_state_version: string;
+}
+
+export async function persistImpression(enrollmentId: string, it: TodayFeedItem, provider: string | null, explanation?: CapeExplanation): Promise<void> {
   await sequelize.query(
     `INSERT INTO today_feed_impressions
-       (id, enrollment_id, position, kind, ref, provider, card_id, item, served_at)
-     VALUES (:id, :eid, :pos, :kind, :ref, :provider, :card_id, :item::jsonb, NOW())
+       (id, enrollment_id, position, kind, ref, provider, card_id, item, served_at, rank_score, reasons, policy_version, learner_state_version)
+     VALUES (:id, :eid, :pos, :kind, :ref, :provider, :card_id, :item::jsonb, NOW(), :rank_score, :reasons::jsonb, :policy_version, :learner_state_version)
      ON CONFLICT (enrollment_id, position) DO NOTHING`,
     {
       replacements: {
         id: randomUUID(), eid: enrollmentId, pos: it.position, kind: it.kind, ref: it.ref,
         provider, card_id: it.card_id, item: JSON.stringify(it),
+        rank_score: explanation?.rank_score ?? null,
+        reasons: JSON.stringify(explanation?.reasons ?? []),
+        policy_version: explanation?.policy_version ?? null,
+        learner_state_version: explanation?.learner_state_version ?? null,
       },
       type: QueryTypes.INSERT,
     },
   );
+}
+
+/** Extracts a CAPE explanation from a ranked candidate, if present. Ranked
+ * items carry `rank_score`/`reasons`/`policy_version`/`learner_state_version`
+ * at runtime (stamped by `capeLearningValueRanker.rankLearningValue`) even
+ * though `TodayFeedItem`'s own type doesn't declare them — this is the one
+ * place that bridges the two, via an explicit runtime check
+ * (`typeof rank_score === 'number'`), never an unchecked cast. Returns
+ * `undefined` for every flag-off item, so `persistImpression` writes NULL/[]
+ * for all 4 new columns exactly as it did before this task. */
+export function extractCapeExplanation(cand: TodayFeedItem): CapeExplanation | undefined {
+  const c = cand as TodayFeedItem & Partial<CapeExplanation>;
+  if (typeof c.rank_score !== 'number') return undefined;
+  return {
+    rank_score: c.rank_score,
+    reasons: Array.isArray(c.reasons) ? c.reasons : [],
+    policy_version: c.policy_version ?? 0,
+    learner_state_version: c.learner_state_version ?? '',
+  };
+}
+
+/**
+ * CAPE Phase 4 flag-ON ranking step (design doc §9, §16 Phase 4). Applied
+ * AFTER `selectAnchoredOrder` (which stays a pure passthrough — see its own
+ * doc comment) so the flag-off contract that function's tests prove is
+ * completely unaffected by this function's existence. A ranking failure
+ * (thrown `CapeLearnerStateError`, a DB blip, anything) is caught and logged
+ * here — the feed falls back to the unranked `gatherAnchored` order rather
+ * than breaking, matching this file's own "fail-soft throughout" contract.
+ */
+export async function applyCapeRankingIfEnabled(enrollmentId: string, anchoredQueue: TodayFeedItem[]): Promise<TodayFeedItem[]> {
+  if (!env.capeLearningValueRankerEnabled || !anchoredQueue.length) return anchoredQueue;
+  try {
+    const ranked = await rankLearningValue(enrollmentId, anchoredQueue, new Date());
+    return ranked.items;
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'warn',
+      service: 'backend',
+      event: 'cape_learning_value_ranking_failed',
+      error_class: err?.name || 'Error',
+      outcome: 'failure',
+      context: { enrollment_id: enrollmentId, candidate_count: anchoredQueue.length, message: err?.message },
+    }));
+    return anchoredQueue;
+  }
 }
 
 /**
@@ -167,7 +230,10 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   const cadence = policy ? policy.todayCadence : CADENCE;
   const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
 
-  const anchoredQueue = selectAnchoredOrder(await gatherAnchored(enrollmentId, placedRefs), env.capeLearningValueRankerEnabled);
+  const anchoredQueue = await applyCapeRankingIfEnabled(
+    enrollmentId,
+    selectAnchoredOrder(await gatherAnchored(enrollmentId, placedRefs), env.capeLearningValueRankerEnabled),
+  );
   const plan = planSlots({
     count: need,
     anchoredAvailable: anchoredQueue.length,
@@ -191,15 +257,19 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   for (const slot of plan.slots) {
     let item: TodayFeedItem | null = null;
     let provider: string | null = null;
+    let explanation: CapeExplanation | undefined;
     if (slot.kind === 'anchored') {
       const cand = anchoredQueue[anchoredCur++];
-      if (cand) item = { ...cand, position: pos };
+      if (cand) {
+        item = { ...cand, position: pos };
+        explanation = extractCapeExplanation(cand);
+      }
     } else if (slot.provider) {
       const a = ambientQueues[slot.provider].shift();
       if (a) { item = ambientItemFrom(a, pos); provider = slot.provider; }
     }
     if (!item) continue; // source ran dry (e.g. empty pool) — skip the slot
-    await persistImpression(enrollmentId, item, provider);
+    await persistImpression(enrollmentId, item, provider, explanation);
     out.push(item);
     pos++;
   }
@@ -271,7 +341,10 @@ async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed
  */
 async function composeReadOnlyPage(enrollmentId: string, from: number, size: number, seed?: number): Promise<TodayFeedItem[]> {
   const targetEnd = from + size;
-  const anchored = selectAnchoredOrder(await gatherAnchored(enrollmentId, new Set<string>()), env.capeLearningValueRankerEnabled);
+  const anchored = await applyCapeRankingIfEnabled(
+    enrollmentId,
+    selectAnchoredOrder(await gatherAnchored(enrollmentId, new Set<string>()), env.capeLearningValueRankerEnabled),
+  );
   const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
   const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
   const perProvider = Math.max(6, Math.ceil((targetEnd + 8) / Math.max(1, providers.length)));

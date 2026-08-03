@@ -14,7 +14,18 @@
  * this file's flag-off assertions must keep passing unchanged through every
  * subsequent task in this run.
  */
-import { selectAnchoredOrder, type TodayFeedItem } from '../todayFeedComposer';
+// T008 addition (does not alter any T001 assertion above/below): mocked so
+// the new flag-off test for `applyCapeRankingIfEnabled` can assert
+// rankLearningValue is NEVER called when the flag is off — the exact gate a
+// task-verifier sabotage run proved was otherwise uncovered (removing the
+// `!env.capeLearningValueRankerEnabled` check left every existing test in
+// this file AND in capeFlagOn.test.ts fully green).
+jest.mock('../../cape/capeLearningValueRanker', () => ({ rankLearningValue: jest.fn() }));
+
+import { selectAnchoredOrder, applyCapeRankingIfEnabled, type TodayFeedItem } from '../todayFeedComposer';
+import { rankLearningValue } from '../../cape/capeLearningValueRanker';
+
+const mockRankLearningValue = rankLearningValue as unknown as jest.Mock;
 
 function mkItem(ref: string): TodayFeedItem {
   return {
@@ -91,5 +102,44 @@ describe('env.capeLearningValueRankerEnabled — default OFF', () => {
     process.env.CAPE_LEARNING_VALUE_RANKER_ENABLED = '1';
     const { env } = require('../../../config/env');
     expect(env.capeLearningValueRankerEnabled).toBe(false);
+  });
+});
+
+/**
+ * T008 addition. `applyCapeRankingIfEnabled` (added in T008) is the function
+ * that actually decides, at runtime, whether to call the CAPE ranker at all.
+ * Unlike `selectAnchoredOrder` above (a pure passthrough regardless of the
+ * flag — real ranking never lived there), THIS is the real gate. This suite
+ * uses the REAL `env` singleton this file already imports at module load
+ * (unmocked — `CAPE_LEARNING_VALUE_RANKER_ENABLED` is not set in the test
+ * process, so `env.capeLearningValueRankerEnabled` is false here exactly as
+ * it is in production by default), so this exercises the actual default
+ * production code path, not a mocked stand-in for it.
+ */
+describe('applyCapeRankingIfEnabled — flag OFF (real default env, not mocked)', () => {
+  function mkItem(ref: string): TodayFeedItem {
+    return {
+      position: 0, kind: 'anchored', ref, surface: 'today', type: 'implementation_task', render_band: 'task',
+      card_id: `card-${ref}`, title: ref, subtitle: null, description: null, image: null, video: null, blog: null,
+      content: null, week: 1, estimated_time: 15, status: null, interacted: false,
+    };
+  }
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('returns the exact same array reference as the input (no ranking applied)', async () => {
+    const queue = [mkItem('a'), mkItem('b'), mkItem('c')];
+    const result = await applyCapeRankingIfEnabled('enr-1', queue);
+    expect(result).toBe(queue);
+  });
+
+  it('NEVER calls rankLearningValue when the flag is off — this is the exact check a sabotage run (task verification) proved was otherwise missing: removing the flag gate left every other test in this file and in todayFeedComposer.capeFlagOn.test.ts fully green', async () => {
+    await applyCapeRankingIfEnabled('enr-1', [mkItem('a'), mkItem('b')]);
+    expect(mockRankLearningValue).not.toHaveBeenCalled();
+  });
+
+  it('still short-circuits before calling rankLearningValue for an empty queue (belt-and-suspenders with the flag check)', async () => {
+    await applyCapeRankingIfEnabled('enr-1', []);
+    expect(mockRankLearningValue).not.toHaveBeenCalled();
   });
 });
