@@ -126,6 +126,9 @@ import TicketActionLink from './TicketActionLink';
 import EvidenceArtifact from './EvidenceArtifact';
 import EvidenceLink from './EvidenceLink';
 import DecisionRecord from './DecisionRecord';
+import TicketWorkUnit from './TicketWorkUnit';
+import WorkUnitDependency from './WorkUnitDependency';
+import ResourceLease from './ResourceLease';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -811,6 +814,24 @@ EvidenceLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 Ticket.hasMany(DecisionRecord, { foreignKey: 'ticket_id', as: 'decisionRecords' });
 DecisionRecord.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 
+// ProofDesk Work Graph (Milestone 3 - Multi-Agent Work Graph) associations.
+Ticket.hasMany(TicketWorkUnit, { foreignKey: 'ticket_id', as: 'workUnits' });
+TicketWorkUnit.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkContext.hasMany(TicketWorkUnit, { foreignKey: 'work_context_id', as: 'workUnits' });
+TicketWorkUnit.belongsTo(WorkContext, { foreignKey: 'work_context_id', as: 'workContext' });
+AgentRun.hasMany(TicketWorkUnit, { foreignKey: 'assigned_run_id', as: 'assignedWorkUnits' });
+TicketWorkUnit.belongsTo(AgentRun, { foreignKey: 'assigned_run_id', as: 'assignedRun' });
+
+TicketWorkUnit.hasMany(WorkUnitDependency, { foreignKey: 'work_unit_id', as: 'dependencies' });
+WorkUnitDependency.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+TicketWorkUnit.hasMany(WorkUnitDependency, { foreignKey: 'depends_on_work_unit_id', as: 'dependents' });
+WorkUnitDependency.belongsTo(TicketWorkUnit, { foreignKey: 'depends_on_work_unit_id', as: 'dependsOnWorkUnit' });
+
+TicketWorkUnit.hasMany(ResourceLease, { foreignKey: 'work_unit_id', as: 'leases' });
+ResourceLease.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+AgentRun.hasMany(ResourceLease, { foreignKey: 'run_id', as: 'leases' });
+ResourceLease.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -1168,6 +1189,9 @@ export {
   EvidenceArtifact,
   EvidenceLink,
   DecisionRecord,
+  TicketWorkUnit,
+  WorkUnitDependency,
+  ResourceLease,
   StudentNavigationEvent,
   Alert,
   AlertEvent,
