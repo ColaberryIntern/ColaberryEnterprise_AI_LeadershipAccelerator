@@ -19,6 +19,7 @@
  * version; they never double-replay historical credit").
  */
 import CurriculumSkillMap, { LearningPlacementContract } from '../../models/CurriculumSkillMap';
+import TimelineCard from '../../models/TimelineCard';
 import { curriculumSkillMapCreateSchema, CurriculumSkillMapCreateInput } from '../../schemas/capeSchema';
 
 export class CapeCurriculumSkillMapValidationError extends Error {
@@ -132,6 +133,36 @@ export async function createOrVersionMapping(input: CurriculumSkillMapCreateInpu
   } as any);
 
   return created;
+}
+
+export class CapeCurriculumSkillMapNotFoundError extends Error {
+  error_class = 'NotFoundError';
+  status = 404;
+  constructor(message: string) { super(message); this.name = 'CapeCurriculumSkillMapNotFoundError'; }
+}
+
+/**
+ * Look up a real card's type + week and resolve its mapping through the full
+ * hierarchy (card override -> week -> type). The single function admin endpoints
+ * (T008) and the publish-time stamp (T009) both call, so "what does this card
+ * currently resolve to" always answers identically everywhere it's asked.
+ */
+export async function resolveMappingForCard(cardId: string): Promise<ResolvedMapping> {
+  const card = await TimelineCard.findByPk(cardId, { attributes: ['id', 'type', 'week'] });
+  if (!card) {
+    throw new CapeCurriculumSkillMapNotFoundError(`Timeline card "${cardId}" not found`);
+  }
+  return resolveSkillMapping({ cardId: card.id, typeSlug: card.type, weekNumber: card.week });
+}
+
+/** Throws CapeCurriculumSkillMapNotFoundError (404-shaped) if the card doesn't exist.
+ * Used before a card-scoped write so a PUT against an unknown cardId fails clean
+ * rather than surfacing a raw FK-constraint DB error. */
+export async function assertCardExists(cardId: string): Promise<void> {
+  const card = await TimelineCard.findByPk(cardId, { attributes: ['id'] });
+  if (!card) {
+    throw new CapeCurriculumSkillMapNotFoundError(`Timeline card "${cardId}" not found`);
+  }
 }
 
 /** All versions (current + historical) for a scope key — used by admin history views. */

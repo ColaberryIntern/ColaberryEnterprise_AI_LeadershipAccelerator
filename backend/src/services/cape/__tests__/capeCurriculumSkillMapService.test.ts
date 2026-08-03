@@ -10,14 +10,21 @@ jest.mock('../../../models/CurriculumSkillMap', () => ({
     create: jest.fn(),
   },
 }));
+jest.mock('../../../models/TimelineCard', () => ({
+  __esModule: true,
+  default: { findByPk: jest.fn() },
+}));
 
 import CurriculumSkillMap from '../../../models/CurriculumSkillMap';
+import TimelineCard from '../../../models/TimelineCard';
 import {
-  resolveSkillMapping, createOrVersionMapping, listPendingAiDrafts, CapeCurriculumSkillMapValidationError,
+  resolveSkillMapping, createOrVersionMapping, listPendingAiDrafts, resolveMappingForCard,
+  assertCardExists, CapeCurriculumSkillMapValidationError, CapeCurriculumSkillMapNotFoundError,
 } from '../capeCurriculumSkillMapService';
 
 const findOne = CurriculumSkillMap.findOne as unknown as jest.Mock;
 const findAll = CurriculumSkillMap.findAll as unknown as jest.Mock;
+const findByPk = TimelineCard.findByPk as unknown as jest.Mock;
 const create = CurriculumSkillMap.create as unknown as jest.Mock;
 
 const validImpacts = [{ skill_id: 'agents_mcp', weight: 1, bands: ['application'], credit_strength: 'high', evidence_required: true, max_credit: 15 }];
@@ -141,5 +148,34 @@ describe('listPendingAiDrafts', () => {
     await listPendingAiDrafts();
     const [arg] = findAll.mock.calls[0];
     expect(arg.where).toEqual({ source: 'ai_suggested', approved: false, is_current: true });
+  });
+});
+
+describe('resolveMappingForCard', () => {
+  it('happy path: looks up the card\'s type + week, then resolves through the full hierarchy', async () => {
+    findByPk.mockResolvedValueOnce({ id: 'c1', type: 'knowledge_check', week: 4 });
+    findOne.mockResolvedValueOnce(mockRow({ id: 'card-map' })); // card-scoped lookup resolves
+    const result = await resolveMappingForCard('c1');
+    expect(result.source).toBe('card_override');
+    const [whereArg] = findOne.mock.calls[0];
+    expect(whereArg.where.card_id).toBe('c1');
+  });
+
+  it('failure: throws CapeCurriculumSkillMapNotFoundError (404-shaped) for an unknown card', async () => {
+    findByPk.mockResolvedValueOnce(null);
+    await expect(resolveMappingForCard('bogus')).rejects.toThrow(CapeCurriculumSkillMapNotFoundError);
+    expect(findOne).not.toHaveBeenCalled();
+  });
+});
+
+describe('assertCardExists', () => {
+  it('happy path: resolves without throwing when the card exists', async () => {
+    findByPk.mockResolvedValueOnce({ id: 'c1' });
+    await expect(assertCardExists('c1')).resolves.toBeUndefined();
+  });
+
+  it('failure: throws a 404-shaped error for an unknown card', async () => {
+    findByPk.mockResolvedValueOnce(null);
+    await expect(assertCardExists('bogus')).rejects.toThrow(CapeCurriculumSkillMapNotFoundError);
   });
 });
