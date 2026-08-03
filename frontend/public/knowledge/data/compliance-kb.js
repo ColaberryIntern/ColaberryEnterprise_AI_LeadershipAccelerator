@@ -54,8 +54,8 @@ window.COMPLIANCE_DATA = {
     { category:"transparency", tags:["claims","honesty","proof","no invented facts"],
       q:"How does Colaberry decide what it claims publicly?",
       a:"We lead with proof and we do not invent facts, metrics, or outcomes. Where a detail is still being finalized, we say so plainly rather than state it as final." },
-    { category:"transparency", tags:["refund","cancellation","terms","drafted","not final"],
+    { category:"transparency", tags:["refund","cancellation","terms","deposit","approved"],
       q:"Are the refund and cancellation terms final?",
-      a:"Not yet. The specific refund and cancellation terms are drafted and pending final approval, so we do not quote them as final. Ask at the Open House for the current terms before you enroll." }
+      a:"Yes. Monthly membership cancels anytime with access through the paid month, no partial-month refund. Annual membership has a 14-day money-back window from the cohort kickoff, then is non-refundable but stays active the full year at the locked founding rate. The separate $50 Open House seat deposit is refundable, or creditable toward another cohort, if the prospect doesn't attend; an unclaimed reservation past its start date lapses to an account credit automatically." }
   ]
 };

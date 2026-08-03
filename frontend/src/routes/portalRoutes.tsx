@@ -32,13 +32,19 @@ import RoomsPage from '../pages/portal/rooms/RoomsPage';
 import GlobalLibraryPage from '../pages/portal/library/GlobalLibraryPage';
 import CompanyPage from '../pages/portal/company/CompanyPage';
 import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
+import ArchitectDashboard from '../pages/portal/ArchitectDashboard';
+import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
 
-// The old AI Project Builder ("Cory") portal surfaces — CoryHome, Blueprint,
-// System, Critique / visual-workspace, RequirementsBuilder, walk-caps, the DNA
-// wizard, architect dashboard, etc. — were removed from the frontend on
+// Most of the old AI Project Builder ("Cory") portal surfaces — CoryHome,
+// Blueprint, System, Critique / visual-workspace, RequirementsBuilder,
+// walk-caps, the DNA wizard, etc. — were removed from the frontend on
 // 2026-07-18 so students only ever see the Design E student platform.
 // `/portal/home` and `/portal/dashboard` now redirect to the student home
-// (Today); every other retired builder URL simply 404s.
+// (Today); every other retired builder URL simply 404s. ArchitectDashboard
+// and ProjectBuilderFlow are the exception: ongoing dev work on them
+// (GitHub Activity widget, PR #720) survived the removal per explicit
+// decision, so those two stayed live at /portal/architect-dashboard and
+// /portal/project/builder.
 
 const portalRoutes = (
   <Route element={<ParticipantAuthProvider><ReadOnlyBanner /><Outlet /></ParticipantAuthProvider>}>
@@ -87,6 +93,8 @@ const portalRoutes = (
         <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
         <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
         <Route path="/portal/progress" element={<PortalProgressPage />} />
+        <Route path="/portal/architect-dashboard" element={<ArchitectDashboard />} />
+        <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
       </Route>
     </Route>
   </Route>

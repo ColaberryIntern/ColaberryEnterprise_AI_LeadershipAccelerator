@@ -91,6 +91,22 @@ import { runCoryStrategicCycle, runSelfEvolution } from './cory/coryBrain';
 import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
 import { resolveAllCronSchedules, ResolvedCronSchedule } from './governanceResolutionService';
 import { expireStaleProposals } from './proposalCleanupService';
+import { instrumentCronJob } from './cronInstrumentation';
+
+// BC #10099862873 P1 item 1: SCHEDULE_REGISTRY runners for these agents call
+// their target module directly and never touch the AiAgent registry — unlike
+// most entries below, whose runners (imported from aiOrchestrator.ts) already
+// self-track via a private runAgent() helper. Wrapping every entry here in
+// instrumentCronJob() as well would double-count run_count/error_count for
+// those already-tracked ~55 agents, so only these known gaps are wrapped.
+const UNINSTRUMENTED_AGENTS = new Set([
+  'AutonomousRequirementExpansion',
+  'AutonomousEngine',
+  'AICOOStrategicCycle',
+  'MetaAgentLoop',
+  'ProposalCleanupService',
+  'CoryEvolutionCycle',
+]);
 
 // ─── Schedule Registry ──────────────────────────────────────────────────────
 // Maps agent_name (matching cron_schedule_configs rows) to runner + hardcoded default.
@@ -229,11 +245,15 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'CoryEvolutionCycle', hardcodedSchedule: '20 */6 * * *', runner: async () => { await runSelfEvolution(); return null as any; }, label: 'Cory self-evolution cycle' },
 ];
 
-// Executive briefings use dynamic imports, registered separately
+// Executive briefings use dynamic imports, registered separately.
+// BC #10099862873 P1 item 1: dynamicImport is now async (returns a Promise
+// instead of firing an internal .then()/.catch()) so the registration loop
+// below can wrap each call in instrumentCronJob() — none of these self-track
+// against the AiAgent registry the way the SCHEDULE_REGISTRY runners above do.
 interface DynamicScheduleEntry {
   agentName: string;
   hardcodedSchedule: string;
-  dynamicImport: () => void;
+  dynamicImport: () => Promise<void>;
   label: string;
 }
 
@@ -241,24 +261,18 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
   {
     agentName: 'DailyExecutiveBriefing',
     hardcodedSchedule: '45 6 * * *',
-    dynamicImport: () => {
-      import('./executiveBriefingService').then(({ generateDailyBriefing }) => {
-        generateDailyBriefing().catch((err) => {
-          console.error('[AI Ops] Daily briefing cron error:', err);
-        });
-      });
+    dynamicImport: async () => {
+      const { generateDailyBriefing } = await import('./executiveBriefingService');
+      await generateDailyBriefing();
     },
     label: 'Executive daily briefing',
   },
   {
     agentName: 'WeeklyStrategicBriefing',
     hardcodedSchedule: '45 6 * * 1',
-    dynamicImport: () => {
-      import('./executiveBriefingService').then(({ generateWeeklyStrategicBriefing }) => {
-        generateWeeklyStrategicBriefing().catch((err) => {
-          console.error('[AI Ops] Weekly briefing cron error:', err);
-        });
-      });
+    dynamicImport: async () => {
+      const { generateWeeklyStrategicBriefing } = await import('./executiveBriefingService');
+      await generateWeeklyStrategicBriefing();
     },
     label: 'Executive weekly briefing',
   },
@@ -270,85 +284,73 @@ const DYNAMIC_SCHEDULE_REGISTRY: DynamicScheduleEntry[] = [
   {
     agentName: 'ExecutiveAwarenessEveningDigest',
     hardcodedSchedule: '0 18 * * *',
-    dynamicImport: () => {
-      import('./executiveBriefingService').then(({ generateExecutiveDigest }) => {
-        generateExecutiveDigest('evening').catch((err) => {
-          console.error('[AI Ops] Executive evening digest cron error:', err);
-        });
-      });
+    dynamicImport: async () => {
+      const { generateExecutiveDigest } = await import('./executiveBriefingService');
+      await generateExecutiveDigest('evening');
     },
     label: 'Executive awareness evening digest',
   },
   {
     agentName: 'StrategicMetricCapture',
     hardcodedSchedule: '*/15 * * * *',
-    dynamicImport: () => {
-      import('./strategic-intelligence/strategicStateStore').then(({ captureStrategicSnapshot }) => {
-        captureStrategicSnapshot().catch((err) => {
-          console.error('[AI Ops] Strategic snapshot cron error:', err);
-        });
-      });
+    dynamicImport: async () => {
+      const { captureStrategicSnapshot } = await import('./strategic-intelligence/strategicStateStore');
+      await captureStrategicSnapshot();
     },
     label: 'Strategic metric capture (15min)',
   },
   {
     agentName: 'StrategicTrendAnalysis',
     hardcodedSchedule: '5,35 * * * *',
-    dynamicImport: () => {
-      import('./strategic-intelligence/anomalyDetectionEngine').then(({ detectAndEmitAnomalies }) => {
-        detectAndEmitAnomalies().catch((err) => {
-          console.error('[AI Ops] Strategic trend/anomaly cron error:', err);
-        });
-      });
+    dynamicImport: async () => {
+      const { detectAndEmitAnomalies } = await import('./strategic-intelligence/anomalyDetectionEngine');
+      await detectAndEmitAnomalies();
     },
     label: 'Strategic trend + anomaly analysis',
   },
   {
     agentName: 'StrategicRecommendationCycle',
     hardcodedSchedule: '10,40 * * * *',
-    dynamicImport: () => {
-      Promise.all([
+    dynamicImport: async () => {
+      const [
+        { getStrategicMetrics },
+        { analyzeStrategicTrends },
+        { detectAnomalies },
+        { generateInferences },
+        { generateRecommendations, persistRecommendations },
+      ] = await Promise.all([
         import('./strategic-intelligence/metricCollector'),
         import('./strategic-intelligence/trendAnalyzer'),
         import('./strategic-intelligence/anomalyDetectionEngine'),
         import('./strategic-intelligence/strategicInferenceEngine'),
         import('./strategic-intelligence/recommendationEngine'),
-      ]).then(async ([{ getStrategicMetrics }, { analyzeStrategicTrends }, { detectAnomalies }, { generateInferences }, { generateRecommendations, persistRecommendations }]) => {
-        const [metrics, trends, anomalies] = await Promise.all([
-          getStrategicMetrics(),
-          analyzeStrategicTrends(),
-          detectAnomalies(),
-        ]);
-        const inferences = await generateInferences(trends, anomalies, metrics);
-        const recommendations = await generateRecommendations(inferences, metrics);
-        await persistRecommendations(recommendations);
-      }).catch((err) => {
-        console.error('[AI Ops] Strategic recommendation cron error:', err);
-      });
+      ]);
+      const [metrics, trends, anomalies] = await Promise.all([
+        getStrategicMetrics(),
+        analyzeStrategicTrends(),
+        detectAnomalies(),
+      ]);
+      const inferences = await generateInferences(trends, anomalies, metrics);
+      const recommendations = await generateRecommendations(inferences, metrics);
+      await persistRecommendations(recommendations);
     },
     label: 'Strategic inference + recommendation cycle',
   },
   {
     agentName: 'CampaignTrafficEnforcement',
     hardcodedSchedule: '0 */2 * * *',
-    dynamicImport: () => {
-      import('./campaignLinkService').then(({ flagUnregisteredTraffic }) => {
-        flagUnregisteredTraffic().catch((err) => {
-          console.error('[AI Ops] Campaign traffic enforcement cron error:', err);
-        });
-      });
+    dynamicImport: async () => {
+      const { flagUnregisteredTraffic } = await import('./campaignLinkService');
+      await flagUnregisteredTraffic();
     },
     label: 'Campaign traffic enforcement',
   },
   {
     agentName: 'IntelligenceRetentionCycle',
     hardcodedSchedule: '15 3 * * *',
-    dynamicImport: () => {
-      import('./cory/intelligenceRetention').then(({ runRetentionCycle }) => {
-        runRetentionCycle().catch((err) => {
-          console.error('[AI Ops] Intelligence retention cron error:', err);
-        });
-      });
+    dynamicImport: async () => {
+      const { runRetentionCycle } = await import('./cory/intelligenceRetention');
+      await runRetentionCycle();
     },
     label: 'Intelligence data retention (daily 03:15)',
   },
@@ -374,6 +376,13 @@ export async function startAIOpsScheduler(): Promise<void> {
   // Seed admissions knowledge base on startup (idempotent)
   seedAdmissionsKnowledge().catch((err) => {
     console.error('[AI Ops] Failed to seed admissions knowledge:', err.message);
+  });
+
+  // Seed ops alert channel routing on startup (idempotent, BC #10099862873 P0)
+  import('./opsAlertSubscriptionSeed').then(({ seedOpsAlertSubscriptions }) => {
+    seedOpsAlertSubscriptions().catch((err) => {
+      console.error('[AI Ops] Failed to seed ops alert subscriptions:', err.message);
+    });
   });
 
   // Seed AI Company layer (idempotent, behind feature flag)
@@ -418,7 +427,10 @@ export async function startAIOpsScheduler(): Promise<void> {
     }
 
     cron.schedule(schedule, () => {
-      entry.runner().catch((err) => {
+      const execute = UNINSTRUMENTED_AGENTS.has(entry.agentName)
+        ? () => instrumentCronJob(entry.agentName, async () => { await entry.runner(); })
+        : () => entry.runner();
+      execute().catch((err) => {
         console.error(`[AI Ops] ${entry.label} cron error:`, err);
       });
     }, { timezone: 'America/Chicago' });
@@ -440,7 +452,11 @@ export async function startAIOpsScheduler(): Promise<void> {
       continue;
     }
 
-    cron.schedule(schedule, entry.dynamicImport, { timezone: 'America/Chicago' });
+    cron.schedule(schedule, () => {
+      instrumentCronJob(entry.agentName, entry.dynamicImport).catch((err) => {
+        console.error(`[AI Ops] ${entry.label} cron error:`, err);
+      });
+    }, { timezone: 'America/Chicago' });
 
     console.log(`[AI Ops]   ${entry.label}: ${schedule} [${source}]`);
     scheduledCount++;

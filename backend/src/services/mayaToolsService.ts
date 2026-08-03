@@ -17,6 +17,7 @@ import { createAppointment } from './appointmentService';
 import { sendStrategyCallConfirmation } from './emailService';
 import { findRelevantKnowledge } from './admissionsKnowledgeService';
 import AdmissionsKnowledgeEntry from '../models/AdmissionsKnowledgeEntry';
+import { getCourseBySlug, getActiveCohort, listEntries, resolveMergeTags } from './kbService';
 import { routeLeadToCampaign, addMayaInteractionTag } from './mayaCampaignRouter';
 import {
   generateConversationSummary,
@@ -29,6 +30,36 @@ import type { MayaActionResult } from './mayaActionService';
 import { updateBookingState } from './mayaConversationIntelligenceService';
 
 const { Op } = require('sequelize');
+
+// Same DB-backed KB Cora reads from (cora_kb_entries) — kept in sync with
+// coraAgentService.ts's CORA_COURSE_SLUG so Maya and Cora never diverge.
+const MAYA_COURSE_SLUG = process.env.CORA_ACTIVE_COURSE_SLUG || 'ai-architect';
+
+/**
+ * Build Maya's voice-call program/pricing facts live from the DB-backed KB
+ * (cora_kb_entries), replacing the old hardcoded $4,500 corporate-track block.
+ * Never invents a fact if the KB or active cohort is unavailable — returns ''
+ * and the caller instructs Maya to defer rather than guess.
+ */
+export async function buildMayaProgramFacts(): Promise<string> {
+  try {
+    const course = await getCourseBySlug(MAYA_COURSE_SLUG);
+    if (!course) return '';
+    const active = await getActiveCohort(course.id);
+    if (!active) {
+      return `- Program name: ${course.name}\n- No active cohort is currently loaded — do not state a price or start date. Direct the lead to enterprise.colaberry.ai or offer an Admissions follow-up.`;
+    }
+
+    const entries = await listEntries({ courseId: course.id, category: 'Pricing & Enrollment', activeOnly: true });
+    const facts = entries
+      .map((e: any) => `- ${e.question_pattern}: ${resolveMergeTags(e.answer_template, active.cohort, active.course)}`)
+      .join('\n');
+
+    return `- Program name: ${active.course.name}\n${facts}`;
+  } catch {
+    return '';
+  }
+}
 
 // ─── Internal Helpers ──────────────────────────────────────────────────────────
 
@@ -361,9 +392,12 @@ export async function initiateVoiceCall(
         .map((m: any) => `${m.role === 'visitor' ? 'Visitor' : 'Maya'}: ${m.content}`)
         .join('\n');
     } catch {
-      conversationContext = 'Visitor expressed interest in the AI Leadership Accelerator.';
+      conversationContext = 'Visitor expressed interest in the AI Systems Architect Accelerator.';
     }
   }
+
+  // Live pricing/program facts from the same DB-backed KB Cora uses (cora_kb_entries)
+  const programFacts = await buildMayaProgramFacts();
 
   // Fetch high-priority knowledge entries so the voice agent has accurate facts
   let knowledgeFacts = '';
@@ -382,18 +416,13 @@ export async function initiateVoiceCall(
     // Non-fatal — fall back to static facts only
   }
 
-  const callPrompt = `You ARE Maya, Director of Admissions at Colaberry. You are calling ${leadName}. Introduce yourself as "Hi ${leadName.split(' ')[0]}, this is Maya from Colaberry." They were just chatting with you online about the AI Leadership Accelerator program.
+  const callPrompt = `You ARE Maya, Director of Admissions at Colaberry. You are calling ${leadName}. Introduce yourself as "Hi ${leadName.split(' ')[0]}, this is Maya from Colaberry." They were just chatting with you online about the AI Systems Architect Accelerator program.
 
-CRITICAL PROGRAM FACTS — use these exact figures, never approximate or guess:
-- Program name: Enterprise AI Leadership Accelerator
-- Price: $4,500 per participant (NOT $5,000 — always say forty-five hundred or four thousand five hundred)
-- Duration: 3 weeks, 5 live sessions
-- Format: Live, hands-on, with expert-guided project work
-- Payment: Credit card or corporate invoice
-- Corporate group pricing available
-- What participants get: Enterprise AI architecture templates, governance frameworks, production-ready AI proof of capability, 90-day expansion roadmap
-- Target audience: Directors and VPs of Engineering, Technology, or Data; CTOs and CDOs; Senior Technical Architects responsible for AI adoption; any technical leader whose team is being asked to deliver AI outcomes — this program is for builders and decision-makers at every level, not just C-suite executives
-- ROI framing: Organizations typically invest 6-12 months to achieve similar outcomes through traditional approaches. The Accelerator compresses this to 3 weeks
+CRITICAL PROGRAM FACTS — sourced live from the knowledge base; use these exact figures, never approximate or guess a price, date, or figure that isn't listed here:
+${programFacts || '- Program facts are temporarily unavailable. Do NOT guess a price, duration, or date — tell the lead an Admissions teammate will follow up with exact figures, and offer to book a strategy call instead.'}
+- Format: Two live sessions per week (Monday Architecture Day + Thursday Build Day, 2 hours each), fully online, all sessions recorded
+- What participants get: A deployed AI system, a GitHub portfolio of real projects, and Anthropic Architect certification (CCA-F) prep
+- Target audience: Working professionals in tech, operations, product, or leadership who want hands-on experience building real AI agents — no prior AI experience required, but comfort with git/command line helps
 ${knowledgeFacts ? `\nADDITIONAL KNOWLEDGE BASE FACTS:\n${knowledgeFacts}` : ''}
 
 CONVERSATION CONTEXT (what was discussed in the chat before this call):

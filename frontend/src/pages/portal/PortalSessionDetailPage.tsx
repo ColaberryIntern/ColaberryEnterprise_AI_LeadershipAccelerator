@@ -6,6 +6,7 @@ import { parseSessionTimeToHHMM } from '../../utils/sessionTime';
 import { useCountdown } from '../../hooks/useCountdown';
 import { joinSession, leaveMeetingBeacon } from '../../services/onboardingApi';
 import { emitPointsEarned } from '../../services/pointsFx';
+import { canJoinRoom, JOIN_ROOM_WINDOW_MS, parseSessionStartMs } from '../../utils/sessionJoinWindow';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -362,6 +363,20 @@ function PortalSessionDetailPage() {
     };
   }, [id]);
 
+  // "Join Room" gate — enabled 30 min before start through 30 min after,
+  // independent of `status` (a slower backend cron flips status on a
+  // different schedule and also drives attendance tracking; this only
+  // gates the button). Ticks every 30s, plenty of precision for a 30-min gate.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
+  const sessionStartMs = s ? parseSessionStartMs(s.session_date, s.start_time) : null;
+  const canJoinNow = s ? canJoinRoom(s.session_date, s.start_time, now) : false;
+  const joinNotYetOpen = !!(sessionStartMs != null && now < sessionStartMs - JOIN_ROOM_WINDOW_MS);
+  const joinWindowClosed = !!(sessionStartMs != null && now > sessionStartMs + JOIN_ROOM_WINDOW_MS);
+
   if (loading) {
     return (
       <div className="text-center py-5">
@@ -474,8 +489,8 @@ function PortalSessionDetailPage() {
             <div className="card border-0 shadow-sm mb-4">
               <div className="card-body" style={{ padding: '20px 24px' }}>
 
-                {/* Scheduled — Waiting Room */}
-                {isUpcoming && (
+                {/* Not joinable yet — before the 30-min-before-start window opens */}
+                {!isCompleted && !canJoinNow && joinNotYetOpen && (
                   <div className="text-center">
                     <i className="bi bi-camera-video" style={{ fontSize: 36, color: '#94a3b8' }}></i>
                     <h6 className="fw-semibold mt-2 mb-1" style={{ color: '#475569' }}>Waiting Room</h6>
@@ -497,8 +512,9 @@ function PortalSessionDetailPage() {
                   </div>
                 )}
 
-                {/* Live — Join Now */}
-                {isLive && (
+                {/* Joinable — within 30 min before start through 30 min after,
+                    regardless of the backend `status` cron's own timing */}
+                {!isCompleted && canJoinNow && (
                   <div className="text-center">
                     <div className="d-flex align-items-center justify-content-center gap-2 mb-3">
                       <span style={{
@@ -523,6 +539,19 @@ function PortalSessionDetailPage() {
                     </button>
                     <p className="small mt-2 mb-0" style={{ color: '#94a3b8', fontSize: 11 }}>
                       Opens in a new window
+                    </p>
+                  </div>
+                )}
+
+                {/* Join window closed — more than 30 min past start, but the
+                    backend hasn't marked it completed yet (its own cron runs
+                    30 min after the session's END time, not start) */}
+                {!isCompleted && !canJoinNow && joinWindowClosed && (
+                  <div className="text-center">
+                    <i className="bi bi-camera-video-off" style={{ fontSize: 36, color: '#94a3b8' }}></i>
+                    <h6 className="fw-semibold mt-2 mb-1" style={{ color: '#475569' }}>Join Window Closed</h6>
+                    <p className="small mb-0" style={{ color: '#94a3b8' }}>
+                      The join window for this session has ended.
                     </p>
                   </div>
                 )}

@@ -7,10 +7,13 @@
  */
 
 jest.mock('../../kbService', () => ({
-  buildCoraSystemPromptFromDB: jest.fn().mockResolvedValue('system prompt'),
   getCourseBySlug: jest.fn().mockResolvedValue({ id: 'course-1' }),
+  listEntries: jest.fn().mockResolvedValue([]),
+  getActiveCohort: jest.fn().mockResolvedValue(null),
+  resolveMergeTags: jest.fn((template: string) => template),
 }));
 jest.mock('../inboxAuditService', () => ({ logAuditEvent: jest.fn() }));
+jest.mock('../../alertService', () => ({ emitAlert: jest.fn().mockResolvedValue({ id: 'alert-1' }) }));
 jest.mock('../../../models/CoraReplyLog', () => ({ findOrCreate: jest.fn() }));
 jest.mock('../../../models/InboxAuditLog', () => ({ count: jest.fn() }));
 
@@ -33,9 +36,11 @@ import { handleCoraInquiry } from '../coraAgentService';
 import CoraReplyLog from '../../../models/CoraReplyLog';
 import InboxAuditLog from '../../../models/InboxAuditLog';
 import { logAuditEvent } from '../inboxAuditService';
+import { emitAlert } from '../../alertService';
 
 const findOrCreateReplyLog = CoraReplyLog.findOrCreate as jest.Mock;
 const countAuditLogs = InboxAuditLog.count as jest.Mock;
+const mockEmitAlert = emitAlert as jest.Mock;
 
 const baseEmail = {
   id: 'email-1',
@@ -124,6 +129,31 @@ describe('handleCoraInquiry — live mode (CORA_DRY_RUN=false)', () => {
     expect(result).toEqual({ archive: false, handoffReason: 'cora_circuit_breaker_tripped' });
   });
 
+  it('ops alerting (BC #10099862873): a trip emits a critical alert with a plain-English impact statement', async () => {
+    countAuditLogs.mockResolvedValue(20);
+
+    await handleCoraInquiry(baseEmail);
+
+    expect(mockEmitAlert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'critical',
+        title: 'Circuit Breaker Tripped: cora_circuit_breaker',
+        description: expect.stringContaining('Cora has stopped auto-replying'),
+        sourceType: 'system',
+        impactArea: 'support_inbox',
+      })
+    );
+  });
+
+  it('ops alerting: a failure emitting the alert does not affect the circuit breaker\'s handoff decision', async () => {
+    countAuditLogs.mockResolvedValue(20);
+    mockEmitAlert.mockRejectedValueOnce(new Error('DB unavailable'));
+
+    const result = await handleCoraInquiry(baseEmail);
+
+    expect(result).toEqual({ archive: false, handoffReason: 'cora_circuit_breaker_tripped' });
+  });
+
   it('circuit breaker: does not trip below the ceiling', async () => {
     countAuditLogs.mockResolvedValue(19);
     findOrCreateReplyLog.mockResolvedValue([{ id: 'log-1' }, true]);
@@ -132,6 +162,7 @@ describe('handleCoraInquiry — live mode (CORA_DRY_RUN=false)', () => {
 
     expect(mockGmailSend).toHaveBeenCalledTimes(1);
     expect(result.archive).toBe(true);
+    expect(mockEmitAlert).not.toHaveBeenCalled();
   });
 
   it('failure path: a send failure still leaves the thread reserved (no automatic re-send loop) and routes to a human', async () => {

@@ -6,6 +6,7 @@ import { OnboardingProfile } from '../../models';
 jest.mock('../../models', () => ({
   OnboardingProfile: { findOne: jest.fn(), create: jest.fn() },
 }));
+jest.mock('../pointsService', () => ({ award: jest.fn().mockResolvedValue({ awarded: true, points: 25 }) }));
 
 describe('resumeIngestService', () => {
   beforeEach(() => jest.clearAllMocks());

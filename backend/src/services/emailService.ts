@@ -1720,6 +1720,50 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
   console.log(`[Email] Alert email sent to: ${r.to} | type: ${alert.type} | msgId: ${info.messageId}`);
 }
 
+// ─── Generic Send (EmailSendFn adapter) ────────────────────────────────────
+// Matches intelligence/systemStateEngine/incidents/subscribers/emailSubscriber.ts's
+// injected send_fn shape — lets any {to, subject, html, text} caller ride the
+// same guarded/kill-switch-aware transport as every purpose-built sender above,
+// without needing to know about Mandrill/nodemailer directly.
+
+export async function sendRawEmail(input: {
+  to: string[];
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  if (!transporter) {
+    console.warn('[Email] SMTP not configured. Skipping send to:', input.to.join(', '));
+    return { ok: false, error: 'SMTP not configured' };
+  }
+  if (input.to.length === 0) {
+    return { ok: false, error: 'No recipients' };
+  }
+
+  try {
+    const info = await guardedSendMail({
+      from: `"Cory - AI Operations" <${env.emailFrom}>`,
+      to: input.to.join(', '),
+      subject: input.subject,
+      html: input.html,
+      text: input.text,
+      headers: emailHeaders('incident-notification'),
+    });
+    // guardedSendMail resolves (doesn't throw) when the kill switch blocks the
+    // send — callers of this adapter (e.g. the incident subscriber) treat
+    // ok:true as "actually delivered," so a blocked send must report false,
+    // not silently look like success.
+    if (info.response === 'blocked_by_kill_switch') {
+      return { ok: false, error: 'blocked by kill switch' };
+    }
+    console.log(`[Email] Raw send to: ${input.to.join(', ')} | msgId: ${info.messageId}`);
+    return { ok: true };
+  } catch (err: any) {
+    console.error(`[Email] Raw send failed to ${input.to.join(', ')}: ${err.message}`);
+    return { ok: false, error: err.message };
+  }
+}
+
 // ─── Executive Briefing Email ─────────────────────────────────────────────
 
 import type { ExecutiveBriefingData } from './executiveBriefingService';

@@ -15,7 +15,15 @@ const router = Router();
 
 // SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
 // endpoints publicly callable. Require an authenticated admin for every route below.
-router.use(requireAdmin);
+// Scoped to '/intelligence/autonomy' — this router is mounted with no prefix inside
+// adminRoutes (itself mounted with no prefix at the app root), so an unscoped
+// `router.use(requireAdmin)` was gating every unmatched request in the whole app
+// (any path not matched by an earlier-mounted router fell through into this
+// unconditional guard), not just this file's own routes. Discovered 2026-08-03:
+// it was silently 401-ing the public chat widget's /api/chat/* endpoints, mounted
+// much later in server.ts. See PROGRESS.md for the sitewide-scope note — the same
+// unscoped pattern exists in ~15 other admin/*.ts sub-routers and needs the same fix.
+router.use('/intelligence/autonomy', requireAdmin);
 
 // GET /intelligence/autonomy/decisions — List decisions
 router.get('/intelligence/autonomy/decisions', async (req: Request, res: Response) => {

@@ -2,7 +2,7 @@
 **Program:** AI Systems Architect Accelerator  
 **Agent:** Cora — Unified Inbound Assistant  
 **Call types handled:** Admissions · Support · IPBC (current DA bootcamp students)  
-**Last updated:** 2026-07-06 (CC-20260706-h4k9)
+**Last updated:** 2026-08-03 (CC-20260803-q7v2) — added $50 seat-deposit / access-timing / refund language to Section 3
 
 ---
 
@@ -96,6 +96,8 @@ If the caller is interested in enrolling, explain conversationally:
 >
 > - *Annual Plan: $149 per month — billed annually. This founding member rate is permanently locked in for you.*
 > - *Month-to-Month: $199 per month, cancel anytime.*
+>
+> *If you register through the Open House, a $50 deposit holds your seat and is credited straight toward your first payment — you're not paying it on top of the plan cost. Full program access starts the day your cohort kicks off, and that's also when your first payment is charged, with each following payment landing on that same date each month after. And if it turns out you can't make it, that $50 is fully refundable, or we can apply it as a credit toward a future cohort instead.*
 >
 > *There's also a small Anthropic tooling cost paid directly to Anthropic — about $20 per month for Claude Code and roughly $10 per month for API usage as you build your projects.*
 >

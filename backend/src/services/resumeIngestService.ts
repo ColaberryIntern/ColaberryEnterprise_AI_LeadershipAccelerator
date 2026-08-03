@@ -1,6 +1,7 @@
 import { OnboardingProfile } from '../models';
 import type { ProjectDnaInput } from './projectDnaService';
 import { hasReferral } from './friendReferralService';
+import { award } from './pointsService';
 
 const EXTRACTION_MODEL = process.env.AI_MODEL || 'gpt-4o-mini';
 const MAX_SOURCE_CHARS = 8000;
@@ -237,17 +238,10 @@ export async function ingestBackground(
     extracted: extraction ?? undefined,
   });
 
-  // Award the one-time "profile set up" points (+25) for a REAL resume/LinkedIn
-  // ingest — the "Upload your resume" setup step. Idempotent per enrollment
-  // (event_key 'profile_completed'). Gated on meaningful input so a stray short
-  // placeholder can never earn it. Best-effort — never fail the ingest.
-  if (resumeText.length > 40 || linkedinUrl) {
-    try {
-      const { award } = await import('./pointsService');
-      await award(enrollmentId, { eventType: 'profile_completed' });
-    } catch (err: any) {
-      console.warn('[Ingest] resume points award (non-fatal):', err?.message);
-    }
+  // "Upload resume / LinkedIn" onboarding step — idempotent per enrollment
+  // (award() dedupes on eventKey), so re-ingesting never double-awards.
+  if (resumeText || linkedinUrl || profile.linkedin_url) {
+    await award(enrollmentId, { eventType: 'profile_completed' });
   }
 
   return { ok: true, parsed: !!extraction, prefill: projectDna, profile, personalization, variables, linkedin_url: linkedinUrl || profile.linkedin_url || null };
