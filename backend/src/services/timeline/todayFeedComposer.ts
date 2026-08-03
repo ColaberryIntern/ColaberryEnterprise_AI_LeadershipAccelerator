@@ -131,6 +131,22 @@ async function persistImpression(enrollmentId: string, it: TodayFeedItem, provid
   );
 }
 
+/**
+ * CAPE Phase 4 wiring seam (design doc §9, §16 Phase 4). The single call site
+ * both `extendFeed` and `composeReadOnlyPage` route the anchored queue through
+ * before consumption. Flag OFF (the default, everywhere including production)
+ * returns the SAME array, SAME order `gatherAnchored` produced — a pure
+ * passthrough, proven by identity (`toBe`, not just `toEqual`) in
+ * `todayFeedComposer.capeFlagOff.test.ts`, so this is byte-identical to
+ * pre-Phase-4 behavior. Flag ON delegates to the CAPE learning-value ranker
+ * (wired in a later Phase 4 task); until then this stays a passthrough even
+ * when the flag is on, so partial Phase 4 work never half-changes production
+ * ranking behavior.
+ */
+export function selectAnchoredOrder(anchoredQueue: TodayFeedItem[], capeEnabled: boolean): TodayFeedItem[] {
+  return anchoredQueue;
+}
+
 /** Extend the materialised feed by up to `need` items (append-only). Returns them in order. */
 async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need: number): Promise<TodayFeedItem[]> {
   const anchoredPlaced = existing.filter((r) => r.kind === 'anchored').length;
@@ -151,7 +167,7 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   const cadence = policy ? policy.todayCadence : CADENCE;
   const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
 
-  const anchoredQueue = await gatherAnchored(enrollmentId, placedRefs);
+  const anchoredQueue = selectAnchoredOrder(await gatherAnchored(enrollmentId, placedRefs), env.capeLearningValueRankerEnabled);
   const plan = planSlots({
     count: need,
     anchoredAvailable: anchoredQueue.length,
@@ -255,7 +271,7 @@ async function buildServed(enrollmentId: string, existing: ImpressionRow[], seed
  */
 async function composeReadOnlyPage(enrollmentId: string, from: number, size: number, seed?: number): Promise<TodayFeedItem[]> {
   const targetEnd = from + size;
-  const anchored = await gatherAnchored(enrollmentId, new Set<string>());
+  const anchored = selectAnchoredOrder(await gatherAnchored(enrollmentId, new Set<string>()), env.capeLearningValueRankerEnabled);
   const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
   const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
   const perProvider = Math.max(6, Math.ceil((targetEnd + 8) / Math.max(1, providers.length)));
