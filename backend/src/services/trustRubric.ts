@@ -327,7 +327,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
   reliability: { label: 'Reliability', criteria: [
     { key: 'retry-timeout', label: 'Retry / timeout / safe-mode on LLM calls', weight: 2, ev: shipped('Audit wrapper enforces retry, timeout, and safe-mode guards.') },
     { key: 'circuit-breaker', label: 'Circuit breaker on external boundaries', weight: 1, ev: partial(50, 'Circuit breaker present for OpenClaw only.', 'Extend the circuit-breaker pattern to other external boundaries.') },
-    { key: 'metrics-alerting', label: 'Metrics + alerting backend', weight: 2, ref: 'P1-5', ev: open('No metrics/alerting; no queue durability for fire-and-forget jobs.', 'Add metrics + alerting; durable queue for background jobs (P1-5).') },
+    { key: 'metrics-alerting', label: 'Metrics + alerting backend', weight: 2, ref: 'P1-5', ev: shipped('Rolling ai_events error-rate check alerts ali@colaberry.com on breach (reliabilityAlertingService.ts); dead_letter_jobs captures background jobs that fail 3x consecutively instead of silent console.error (deadLetterService.ts, wired into every aiOpsScheduler.ts SCHEDULE_REGISTRY agent).') },
     { key: 'ci', label: 'CI pipeline (typecheck/tests/scan)', weight: 1, ref: 'P3-1', ev: shipped('GitHub Actions CI runs typecheck (backend + frontend) + unit tests + secret-scan + route-auth lint on every PR.') },
   ]},
   businessImpact: { label: 'Business Impact', criteria: [

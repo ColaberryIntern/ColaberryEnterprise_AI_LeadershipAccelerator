@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { wrapWithDeadLetter } from './deadLetterService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import { seedDepartments } from './departmentSeed';
 import { seedAdmissionsKnowledge } from './admissionsKnowledgeSeed';
@@ -439,8 +440,10 @@ export async function startAIOpsScheduler(): Promise<void> {
     }
 
     cron.schedule(schedule, () => {
-      entry.runner().catch((err) => {
-        console.error(`[AI Ops] ${entry.label} cron error:`, err);
+      wrapWithDeadLetter(entry.agentName, entry.label, entry.runner).catch((err) => {
+        // wrapWithDeadLetter itself never throws (it swallows both the job's error and
+        // its own DLQ-write error) — this catch exists only as a last-resort guard.
+        console.error(`[AI Ops] ${entry.label} cron error (dead-letter wrapper itself threw):`, err);
       });
     }, { timezone: 'America/Chicago' });
 
