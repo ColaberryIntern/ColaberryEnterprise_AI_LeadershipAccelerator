@@ -56,6 +56,7 @@ const StoryBeatsPanel: React.FC<Props> = ({ config, defaults, onRewrite, onChang
             beats.map((b, i) => (
               <CollapsibleOverrideCard key={i} index={i} total={beats.length}
                 summary={<>{b.icon} <strong>{b.title || '(untitled beat)'}</strong> <span className="text-muted">· {segmentLabel(b.segment)}</span></>}
+                summaryText={`${b.icon} ${b.title || '(untitled beat)'} · ${segmentLabel(b.segment)}`}
                 defaultExpanded={i === justAddedIndex}
                 onRemove={() => remove(i)} onMoveUp={() => move(i, 'up')} onMoveDown={() => move(i, 'down')}>
                 <div className="row g-2 mb-2">

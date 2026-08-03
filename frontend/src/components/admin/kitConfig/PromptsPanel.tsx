@@ -74,6 +74,7 @@ const PromptsPanel: React.FC<Props> = ({ config, defaults, buildBayDetail, onTog
             prompts.map((p, i) => (
               <CollapsibleOverrideCard key={i} index={i} total={prompts.length}
                 summary={<><strong>{p.label || '(untitled prompt)'}</strong> {p.ccMode && <span className="text-muted">· {p.ccMode}</span>}</>}
+                summaryText={`${p.label || '(untitled prompt)'}${p.ccMode ? ' · ' + p.ccMode : ''}`}
                 defaultExpanded={i === justAddedIndex}
                 onRemove={() => remove(i)} onMoveUp={() => move(i, 'up')} onMoveDown={() => move(i, 'down')}>
                 <div className="row g-2 mb-2">

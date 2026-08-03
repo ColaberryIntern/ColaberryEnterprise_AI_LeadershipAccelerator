@@ -150,7 +150,7 @@ export const blankTeach = (): TeachSlideOverride => ({ segment: 'guided-build', 
 export const blankPrompt = (): PromptOverride => ({ label: '', prompt: '', pasteWhere: 'Claude Code', ccMode: 'Plan Mode', expectedResult: '', stopCondition: '', rescue: '' });
 export const blankInteraction = (segment: string, kind: InteractionPlacement['kind'] = 'trivia'): InteractionPlacement => ({
   segment, kind, eyebrow: '🗳️ Survey', title: 'Quick check', q: '', options: ['', ''],
-  answer: kind === 'trivia' ? 0 : null, reveal: '', theater: false, presenterTip: '',
+  answer: kind === 'trivia' ? 0 : null, reveal: '', theater: true, presenterTip: '',
 });
 
 /** What "Write my own" seeds the editable list from: a copy of the real

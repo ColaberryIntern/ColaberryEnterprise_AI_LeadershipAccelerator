@@ -10,7 +10,7 @@
 // changes never duplicate. Questions reuse session_chat_messages.
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
-import { getRecentPresenceEvents, PresenceEvent } from './sessionPresenceService';
+import { getRecentPresenceEvents, PresenceEvent, formatDisplayName } from './sessionPresenceService';
 
 export type PulseState = 'here' | 'building' | 'stuck' | 'finished';
 const VALID_STATES: PulseState[] = ['here', 'building', 'stuck', 'finished'];
@@ -142,6 +142,25 @@ export async function getPollTally(sessionId: string, pollKey: string): Promise<
   return tally;
 }
 
+/**
+ * Names of participants who chose the correct option for a Live Decision
+ * Theater question — only meaningful once the instructor has revealed the
+ * answer (the caller gates that). Names are redacted via `formatDisplayName`
+ * ("Ali Muwwakkil" -> "Ali M.") — the same convention this repo already uses
+ * for any name shown on the shared/projected Class Kit deck
+ * (`session_presence_events.display_name`), never the raw `full_name`.
+ */
+export async function getPollCorrectResponders(sessionId: string, pollKey: string, correctChoice: number): Promise<string[]> {
+  const rows = await sequelize.query<{ full_name: string }>(
+    `SELECT e.full_name FROM session_poll_responses r
+       JOIN enrollments e ON e.id = r.enrollment_id
+      WHERE r.session_id = :sid AND r.poll_key = :key AND r.choice = :choice
+      ORDER BY e.full_name`,
+    { replacements: { sid: sessionId, key: pollKey, choice: correctChoice }, type: QueryTypes.SELECT },
+  );
+  return rows.map((r) => formatDisplayName(r.full_name));
+}
+
 // ---- reads ----
 
 export interface LiveQuestion { name: string; text: string; at: string; }
@@ -153,7 +172,14 @@ export interface LiveState {
   stuck: number;
   finished: number;
   questions: LiveQuestion[];
-  poll: { key: string; options: string[]; tally: number[]; total: number } | null;
+  poll: {
+    key: string; options: string[]; tally: number[]; total: number;
+    /** Redacted names ("First L.") of participants who chose the correct
+     * option — only populated once a Live Decision Theater question has been
+     * revealed and has a numeric answer; `null` otherwise (voting/locked, a
+     * non-theater question, or a poll with no single correct answer). */
+    correctResponders: string[] | null;
+  } | null;
   recentEvents: PresenceEvent[]; // the deck's live "who's here" ticker
 }
 
@@ -192,7 +218,11 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
     const opts = Array.isArray(bc.question.options) ? bc.question.options : [];
     const tally = await getPollTally(sessionId, bc.question.key);
     const filled = opts.map((_, i) => tally[i] || 0);
-    poll = { key: bc.question.key, options: opts, tally: filled, total: filled.reduce((a, b) => a + b, 0) };
+    const revealedTheater = !!bc.question.theater && bc.question.revealed;
+    const correctResponders = revealedTheater && typeof bc.question.answer === 'number'
+      ? await getPollCorrectResponders(sessionId, bc.question.key, bc.question.answer)
+      : null;
+    poll = { key: bc.question.key, options: opts, tally: filled, total: filled.reduce((a, b) => a + b, 0), correctResponders };
   }
 
   const recentEvents = await getRecentPresenceEvents(sessionId);

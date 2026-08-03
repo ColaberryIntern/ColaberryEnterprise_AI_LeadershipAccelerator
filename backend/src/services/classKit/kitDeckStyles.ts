@@ -173,6 +173,7 @@ body.rail-on #krail{display:flex}
 .kpoll-bar i{display:block;height:100%;background:var(--berry);border-radius:5px;transition:width .4s ease}
 .kpoll-row.correct .kpoll-bar i{background:var(--leaf)}
 .kpoll-row.correct .lab{color:var(--leaf)}
+.kpoll-correct{margin-top:8px;font-size:11.5px;font-weight:700;color:var(--leaf)}
 .kpulse{border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:10px 12px}
 .kpulse b{display:block;font-size:26px;line-height:1;color:var(--ink)}
 .kpulse span{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-top:4px}
@@ -378,6 +379,7 @@ body.mode-story .ktoggles:hover{opacity:1}
 .ktheater-btn.primary{background:var(--cherry)}
 .ktheater-explain{margin-top:2.6vh;background:#101c2e;border:1.5px solid #233650;border-radius:14px;padding:1.8vh 1.8vw;
   font-size:clamp(14px,.5vw + .8vh,19px);color:#dbe6f0;max-width:760px;margin-left:auto;margin-right:auto}
+.ktheater-correct{margin-top:1.4vh;font-size:clamp(13px,.45vw + .7vh,16px);color:#bdeecb;text-align:center;font-weight:600}
 
 #kqr-overlay{position:fixed;inset:0;z-index:80;background:rgba(15,20,25,.92);display:none;flex-direction:column;align-items:center;justify-content:center;color:#fff;gap:20px}
 #kqr-overlay.show{display:flex}

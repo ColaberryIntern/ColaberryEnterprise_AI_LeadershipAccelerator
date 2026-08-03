@@ -34,6 +34,7 @@ export function theaterHtml(slide: KitSlide): string {
     '<button class="ktheater-btn" data-action="reopen" type="button" style="display:none">↩ Reopen Vote</button>' +
     '</div>' +
     (it.reveal ? `<div class="ktheater-explain" data-role="explain" style="display:none">${esc(it.reveal)}</div>` : '') +
+    '<div class="ktheater-correct" data-role="correct-list" style="display:none"></div>' +
     '</div>'
   );
 }
