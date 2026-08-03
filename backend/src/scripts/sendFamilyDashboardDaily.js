@@ -2,19 +2,21 @@
 // sendFamilyDashboardDaily — weekday 5:00 AM CT Family Dashboard email.
 //
 // Replaces sendFamilyCommandCenterDaily.js. Compiles LIVE data from the
-// Family Goals & Life Planning Basecamp project (bucket 33392153), renders
-// the full interactive dashboard (Chart.js + Mermaid + dark mode + search),
-// and emails it to Ali (To) / Addie (Cc) as a short summary body with the
-// rich dashboard attached as an .html file (email clients strip <script> and
-// block CDN loads, so the interactive version can't render inline).
+// Family Goals & Life Planning Basecamp project (bucket 33392153) and emails
+// it to Ali (To) / Addie (Cc) as an email-safe, table-based HTML body (same
+// construction pattern as the retired renderFamilyBriefingEmail.js, so it
+// renders inline in Outlook/Gmail/Apple Mail instead of needing an
+// attachment). The richer interactive version (Chart.js + Mermaid + dark
+// mode + search) is still attached as a bonus .html file for anyone who
+// wants to open it in a browser, since email clients strip <script> tags.
 //
 // Idempotency: deduplicates same-day sends via a date-keyed lock file in
 // the OS temp dir. Weekday guard: skips Saturday/Sunday (cadence is
 // weekdays only). Failure path: any error exits non-zero and leaves no
 // lock file, so the next cron tick (or a manual re-run) retries cleanly.
 //
-// Run: node backend/src/scripts/sendFamilyDashboardDaily.js [--dry-run] [--test]
-// Session originator: CC-20260803-fdb1
+// Run: node backend/src/scripts/sendFamilyDashboardDaily.js [--dry-run] [--test] [--render-only[=path]]
+// Session originator: CC-20260803-p9r4 (reformat pass after Ali's review)
 
 const path = require('path');
 const fs = require('fs');
@@ -25,6 +27,7 @@ const { sendWithBcAttach } = require(path.resolve(__dirname, './lib/sendWithBcAt
 const { getBasecampToken } = require(path.resolve(__dirname, './lib/basecampToken'));
 const { compileFamilyDashboardData } = require(path.resolve(__dirname, './lib/familyDashboardData'));
 const { renderFamilyDashboardHtml } = require(path.resolve(__dirname, './lib/renderFamilyDashboardHtml'));
+const { renderFamilyDashboardEmail, renderFamilyDashboardEmailText } = require(path.resolve(__dirname, './lib/renderFamilyDashboardEmail'));
 
 const BUCKET_ID = 33392153;
 const BC_BASE = 'https://3.basecampapi.com/3945211';
@@ -33,6 +36,8 @@ const ANCHOR_TITLE_PATTERN = /family (command center|dashboard).*anchor/i;
 const DRY_RUN = process.argv.includes('--dry-run');
 const TEST = process.argv.includes('--test');
 const FORCE = process.argv.includes('--force'); // bypass weekday guard + lock, for manual testing
+const RENDER_ONLY_ARG = process.argv.find((a) => a.startsWith('--render-only'));
+const RENDER_ONLY_PATH = RENDER_ONLY_ARG && RENDER_ONLY_ARG.includes('=') ? RENDER_ONLY_ARG.split('=')[1] : RENDER_ONLY_ARG ? path.join(os.tmpdir(), 'family-dashboard-preview.html') : null;
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const LOCK_DIR = path.join(os.tmpdir(), 'family-dashboard');
@@ -69,43 +74,6 @@ async function findAnchorTodo() {
   throw new Error('Anchor todo not found (expected a todo matching "family command center/dashboard ... anchor")');
 }
 
-function buildSummaryHtml(data) {
-  const overdueGood = data.kpis.overdue === 0;
-  const row = (label, value) => `<tr><td style="padding:6px 14px 6px 0;color:#475569;font-size:13px">${label}</td><td style="padding:6px 0;font-weight:700;color:#0f172a;font-size:13px">${value}</td></tr>`;
-  return `<div style="font-family:'Segoe UI',system-ui,-apple-system,sans-serif;max-width:560px">
-<div style="background:#1a365d;color:#fff;padding:20px 24px;border-radius:10px 10px 0 0">
-  <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#c9d8ee">Colaberry Family Ops</div>
-  <div style="font-size:20px;font-weight:800;margin-top:6px">Family Dashboard — ${data.todayLabel}</div>
-</div>
-<div style="background:#f7fafc;border:1px solid #e2e8f0;border-top:none;padding:20px 24px;border-radius:0 0 10px 10px">
-  <p style="margin:0 0 14px;font-size:14px;color:#2d3748">The full interactive dashboard (charts, search, dark mode) is attached as <strong>family-dashboard.html</strong> &mdash; open it in a browser. Quick summary below:</p>
-  <table style="border-collapse:collapse">
-    ${row('Due this week', data.kpis.dueThisWeek)}
-    ${row('Overdue', overdueGood ? '0 ✓' : data.kpis.overdue)}
-    ${row('New since yesterday', data.kpis.newSinceYesterday)}
-    ${row('Money pending', `$${data.kpis.moneyPendingTotal.toFixed(2)}`)}
-    ${row('Data sources live', `${data.kpis.sourcesConnected} / ${data.kpis.sourcesTotal}`)}
-  </table>
-  ${data.risks.length ? `<p style="margin:14px 0 0;font-size:13px;color:#9b2c2c">⚠ ${data.risks.map((r) => r.title).join('; ')}</p>` : ''}
-</div>
-</div>`;
-}
-
-function buildSummaryText(data) {
-  return `Family Dashboard — ${data.todayLabel}
-
-Full interactive dashboard attached (family-dashboard.html) — open in a browser for charts/search/dark mode.
-
-Due this week: ${data.kpis.dueThisWeek}
-Overdue: ${data.kpis.overdue}
-New since yesterday: ${data.kpis.newSinceYesterday}
-Money pending: $${data.kpis.moneyPendingTotal.toFixed(2)}
-Data sources live: ${data.kpis.sourcesConnected} / ${data.kpis.sourcesTotal}
-${data.risks.length ? `\nFlags: ${data.risks.map((r) => r.title).join('; ')}` : ''}
-
-Sent from the Family Dashboard pipeline. Reply to ali@colaberry.com to adjust.`;
-}
-
 async function run() {
   const dow = new Date().getDay(); // 0 Sun .. 6 Sat
   if (!FORCE && (dow === 0 || dow === 6)) {
@@ -122,20 +90,28 @@ async function run() {
   const data = await compileFamilyDashboardData();
   console.log(`[Family Dashboard] KPIs: ${JSON.stringify(data.kpis)}`);
 
+  const emailHtml = renderFamilyDashboardEmail(data);
+
+  if (RENDER_ONLY_PATH) {
+    fs.writeFileSync(RENDER_ONLY_PATH, emailHtml);
+    console.log(`[Family Dashboard] RENDER ONLY - wrote email-safe HTML to ${RENDER_ONLY_PATH} (no send, no Basecamp lookup).`);
+    return;
+  }
+
   console.log('[Family Dashboard] Looking up anchor todo...');
   const anchor = await findAnchorTodo();
   console.log(`[Family Dashboard] Anchor todo: ${anchor.id}`);
 
-  const html = renderFamilyDashboardHtml(data);
+  const interactiveHtml = renderFamilyDashboardHtml(data);
   const today = new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const subject = TEST ? `[TEST] Family Dashboard - ${today}` : `Family Dashboard - ${today}`;
 
   if (DRY_RUN) {
-    console.log(`[Family Dashboard] DRY RUN - would send "${subject}" with ${html.length}-byte HTML attachment.`);
+    console.log(`[Family Dashboard] DRY RUN - would send "${subject}" (${emailHtml.length}-byte inline email + ${interactiveHtml.length}-byte interactive attachment).`);
     return;
   }
 
-  const attachmentBuf = Buffer.from(html, 'utf8');
+  const attachmentBuf = Buffer.from(interactiveHtml, 'utf8');
   const sendOpts = TEST
     ? { to: 'ali@colaberry.com', bcSummary: `<p>[TEST] Family Dashboard email-safe send. Recipients: Ali only.</p>` }
     : {
@@ -151,14 +127,14 @@ async function run() {
     from: '"Ali Muwwakkil" <ali@colaberry.com>',
     replyTo: 'ali@colaberry.com',
     subject,
-    html: buildSummaryHtml(data),
-    text: buildSummaryText(data),
-    attachments: [{ filename: 'family-dashboard.html', content: attachmentBuf, contentType: 'text/html' }],
+    html: emailHtml,
+    text: renderFamilyDashboardEmailText(data),
+    attachments: [{ filename: 'family-dashboard-interactive.html', content: attachmentBuf, contentType: 'text/html' }],
     vaultAttachments: [{
       filename: `family-dashboard-${TODAY}.html`,
       content: attachmentBuf,
       contentType: 'text/html',
-      vaultDescription: `Family Dashboard snapshot, ${today}`,
+      vaultDescription: `Family Dashboard interactive snapshot, ${today}`,
     }],
     ...sendOpts,
   });
