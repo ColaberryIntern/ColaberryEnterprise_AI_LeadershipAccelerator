@@ -106,6 +106,18 @@ describe('getKitConfigDefaults', () => {
     expect(d.storyBeats.find((b) => b.segment === 'checkin')?.title).toContain('repeated task');
   });
 
+  it('resolves Week 2\'s designChoice poll with its answer intact (classkit-deck-polish T004)', () => {
+    // Confirms the content fix survives the resolution pipeline, not just the
+    // raw data file — designChoice is spread into two segments (checkin,
+    // challenge), both must carry the same answer.
+    const d = getKitConfigDefaults(week2Monday);
+    const checkin = d.interactions.find((it) => it.segment === 'checkin');
+    const challenge = d.interactions.find((it) => it.segment === 'challenge');
+    expect(checkin?.answer).toBe(1);
+    expect(challenge?.answer).toBe(1);
+    expect(checkin?.options[1]).toContain('A Skill');
+  });
+
   it('scales segment lane widths to a session\'s actual (non-120-min) duration, proportionally', () => {
     const d = getKitConfigDefaults(shortBuildDay); // 90 min actual vs. 120 min nominal, factor 0.75
     const reset = d.segments.find((s) => s.id === 'reset');

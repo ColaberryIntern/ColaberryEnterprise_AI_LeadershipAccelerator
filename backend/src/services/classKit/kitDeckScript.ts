@@ -403,11 +403,19 @@ export function deckScript(): string {
     if (rb){
       e.stopPropagation();
       var wrap = rb.closest('.kinner');
-      var line = wrap.querySelector('.kreveal-line'); if (line) line.classList.add('show');
-      var correct = wrap.querySelector('.kopt[data-correct="1"]'); if (correct) correct.classList.add('correct');
-      rb.style.display = 'none';
-      // tell the phones the answer is revealed too
-      var sm = (K.slides || [])[i]; if (sm) { revealed[sm.id] = true; broadcastCurrent(); }
+      var line = wrap.querySelector('.kreveal-line');
+      var correct = wrap.querySelector('.kopt[data-correct="1"]');
+      var sm = (K.slides || [])[i];
+      // Toggle: a second click on the same control reverses the reveal (hides the
+      // explanation + the highlighted correct option, restores the button's own
+      // original label) rather than being a one-way action with no way back.
+      var nowRevealed = !(sm && revealed[sm.id]);
+      if (!rb.getAttribute('data-label')) rb.setAttribute('data-label', rb.textContent);
+      if (line) line.classList.toggle('show', nowRevealed);
+      if (correct) correct.classList.toggle('correct', nowRevealed);
+      rb.textContent = nowRevealed ? 'Hide answer' : rb.getAttribute('data-label');
+      // tell the phones the reveal state too
+      if (sm) { revealed[sm.id] = nowRevealed; broadcastCurrent(); }
       return;
     }
     var cb = e.target.closest('.kcopy');

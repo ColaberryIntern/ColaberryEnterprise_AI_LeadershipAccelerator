@@ -41,6 +41,7 @@ import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
+import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
@@ -2218,6 +2219,10 @@ async function start(): Promise<void> {
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
+  // ProofDesk Work Graph — Milestone 3 (Multi-Agent Work Graph): 3 work-graph tables
+  // + FK from M1's pre-existing work_ledger_events.work_unit_id (idempotent DDL,
+  // additive only).
+  await ensureWorkGraphSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).

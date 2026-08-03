@@ -462,6 +462,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         kind: 'poll',
         q: 'A task repeats in three places. Skill, CLAUDE.md, or subagent?',
         options: ['CLAUDE.md — always', 'A Skill — reusable, scoped, invocable on demand', 'A subagent — always', 'Copy-paste the prompt each time'],
+        answer: 1,
         reveal: 'A repeated, self-contained capability is a Skill. CLAUDE.md is standing context; subagents are for delegated, isolated work.',
       },
       trivia: {

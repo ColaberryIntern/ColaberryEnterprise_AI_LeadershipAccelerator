@@ -15,6 +15,14 @@ import type { TicketStatus, TicketPriority, TicketType } from '../../models/Tick
 import { getEvidenceForTicket } from '../../services/evidence/evidenceService';
 import { getDecisionsForTicket, recordDecision, DecisionRecordValidationError } from '../../services/evidence/decisionRecordService';
 import { generateTicketSummary } from '../../services/workLedger/summaryGeneratorService';
+import {
+  createWorkUnit,
+  listWorkUnitsForTicket,
+  addWorkUnitDependency,
+  getWorkGraphForTicket,
+  WorkGraphValidationError,
+} from '../../services/workGraph/workGraphService';
+import { retryFailedRun } from '../../services/workGraph/workCoordinatorService';
 
 import { requireAdmin } from '../../middlewares/authMiddleware';
 
@@ -241,6 +249,71 @@ router.post('/api/admin/tickets/:id/decisions', async (req: Request, res: Respon
       return res.status(400).json({ error: err.message });
     }
     res.status(400).json({ error: err.message });
+  }
+});
+
+// ── ProofDesk Milestone 3 (Multi-Agent Work Graph) ──────────────────────────
+// Work-unit CRUD, dependency edges, the unified Work Graph tab read, and retry.
+// All routes below sit behind this router's existing `requireAdmin` (line ~25).
+
+// ── Work units ────────────────────────────────────────────────────────────
+router.get('/api/admin/tickets/:id/work-units', async (req: Request, res: Response) => {
+  try {
+    const workUnits = await listWorkUnitsForTicket(String(req.params.id));
+    res.json({ workUnits });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/admin/tickets/:id/work-units', async (req: Request, res: Response) => {
+  try {
+    const workUnit = await createWorkUnit(String(req.params.id), req.body);
+    res.status(201).json(workUnit);
+  } catch (err: any) {
+    if (err instanceof WorkGraphValidationError) {
+      return res.status(400).json({ error: err.message });
+    }
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── Dependency edges ─────────────────────────────────────────────────────
+router.post(
+  '/api/admin/tickets/:id/work-units/:workUnitId/dependencies',
+  async (req: Request, res: Response) => {
+    try {
+      const dependency = await addWorkUnitDependency(String(req.params.workUnitId), req.body);
+      res.status(201).json(dependency);
+    } catch (err: any) {
+      if (err instanceof WorkGraphValidationError) {
+        return res.status(400).json({ error: err.message });
+      }
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+// ── Unified Work Graph read (Work Graph tab) ────────────────────────────
+router.get('/api/admin/tickets/:id/work-graph', async (req: Request, res: Response) => {
+  try {
+    const graph = await getWorkGraphForTicket(String(req.params.id));
+    res.json(graph);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Retry (T008's retry/handoff lineage, wired to a route) ──────────────
+router.post('/api/admin/tickets/:id/retry', async (req: Request, res: Response) => {
+  try {
+    const result = await retryFailedRun(String(req.params.id));
+    if (result === null) {
+      return res.status(404).json({ error: 'No failed run found to retry for this ticket' });
+    }
+    res.json({ retried: true, result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 
