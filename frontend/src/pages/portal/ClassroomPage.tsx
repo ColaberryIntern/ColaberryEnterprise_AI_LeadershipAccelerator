@@ -15,6 +15,7 @@ import { GATED_FEATURES } from '../../components/paywall/gatedFeatures';
 import { useNextLiveSession } from './today/useNextLiveSession';
 import { useCountdown } from '../../hooks/useCountdown';
 import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTimeRange } from '../../utils/sessionTime';
+import type { Band } from '../../services/bandLadder';
 
 /**
  * ClassroomPage — the student Classroom as a Colaberry Design E timeline feed.
@@ -27,6 +28,12 @@ interface Progression {
   xp: { learning: number; builder: number; community: number };
   competencies: Array<{ domain_id: string; confidence: number; evidence_count: number }>;
   level: { slug: string; rank: number; readiness: number };
+  // Canonical 5-band identity (AI Aware -> AI Enabled -> AI Builder -> AI Architect),
+  // the SAME field Settings' points/level page reads. `level.slug` is the raw,
+  // unpromoted build-competency ladder slug ("builder" by default for everyone who
+  // hasn't shipped a build promotion yet) and must never be shown as the student's
+  // displayed level -- see band.rungName below for the one the HUD/Settings use.
+  band?: Band;
 }
 interface Feed {
   cohort_id: string | null;
@@ -307,7 +314,7 @@ const ClassroomPage: React.FC = () => {
           {prog && (
             <div className="tl-card side-card tl-ac-leaf">
               <h3><svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg> Your status</h3>
-              <div className="side-stat"><span className="lab">Level</span><span className="num">{titleCase(prog.level.slug)}</span></div>
+              <div className="side-stat"><span className="lab">Level</span><span className="num">{prog.band?.rungName ?? titleCase(prog.level.slug)}</span></div>
               <div className="side-stat"><span className="lab">Architect readiness</span><span className="num">{readinessPct}%</span></div>
               <div className="ribbon"><i style={{ width: `${readinessPct}%`, background: 'var(--cherry)' }} /></div>
               <div className="side-stat"><span className="lab">Builder XP</span><span className="num">{prog.xp.builder}</span></div>
