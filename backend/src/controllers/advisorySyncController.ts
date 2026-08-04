@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { logActivity } from '../services/activityService';
 import { verifyHmacSignature } from '../utils/hmac';
+import { redactForLogs } from '../utils/piiRedaction';
 
 const ADVISORY_WEBHOOK_SECRET = process.env.ADVISORY_WEBHOOK_SECRET || '';
 
@@ -99,7 +100,7 @@ export async function handleAdvisoryWebhook(req: Request, res: Response): Promis
           }
         }
 
-        console.log(`[AdvisorySync] Lead ${lead.id} (${lead.name}): ${created ? 'created' : 'updated'}, offer: ${score?.recommended_offer}`);
+        console.log(`[AdvisorySync] Lead ${lead.id} (${redactForLogs(lead.name)}): ${created ? 'created' : 'updated'}, offer: ${score?.recommended_offer}`);
         res.json({ success: true, lead_id: lead.id, offer: score?.recommended_offer });
         return;
       }
@@ -172,7 +173,7 @@ export async function handleAdvisoryWebhook(req: Request, res: Response): Promis
               notes: prepNotes,
               lead_id: bookedLead.id,
             });
-            console.log(`[AdvisorySync] Strategy call created for ${bookedLead.name} (lead ${bookedLead.id})`);
+            console.log(`[AdvisorySync] Strategy call created for ${redactForLogs(bookedLead.name)} (lead ${bookedLead.id})`);
           } catch (bookErr: any) {
             console.warn(`[AdvisorySync] Strategy call creation failed: ${bookErr.message}`);
           }
@@ -211,7 +212,7 @@ export async function handleAdvisoryWebhook(req: Request, res: Response): Promis
           } catch { /* non-blocking */ }
         }
 
-        console.log(`[AdvisorySync] Booking synced for lead ${bookedLead.id}: ${bookedLead.name}`);
+        console.log(`[AdvisorySync] Booking synced for lead ${bookedLead.id}: ${redactForLogs(bookedLead.name)}`);
         res.json({ success: true, lead_id: bookedLead.id });
         return;
       }

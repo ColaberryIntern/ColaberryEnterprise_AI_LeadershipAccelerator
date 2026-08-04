@@ -7,21 +7,22 @@ import { generateMessage } from '../services/aiMessageService';
 import { respondAsLead } from '../services/testing/campaignSimulator';
 import { checkLeadSendable } from '../services/communicationSafetyService';
 import { detectStopKeyword, processOptOut } from '../services/unsubscribeEnforcementService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 export async function handleGhlSmsReply(req: Request, res: Response): Promise<void> {
   try {
     // Log full payload for debugging GHL variable mapping
-    console.log(`[GHL Webhook] Raw payload:`, JSON.stringify(req.body, null, 2));
+    console.log(`[GHL Webhook] Raw payload:`, redactForLogs(JSON.stringify(req.body, null, 2)));
 
     const { contactId, phone, message, campaignTag } = req.body;
 
     if (!contactId || !message) {
-      console.warn(`[GHL Webhook] Missing fields — contactId: "${contactId || ''}", message: "${message || ''}", keys: ${Object.keys(req.body).join(', ')}`);
+      console.warn(`[GHL Webhook] Missing fields — contactId: "${contactId || ''}", message: "${redactForLogs(message) || ''}", keys: ${Object.keys(req.body).join(', ')}`);
       res.status(400).json({ error: 'contactId and message are required' });
       return;
     }
 
-    console.log(`[GHL Webhook] SMS reply from ${contactId}: ${message.substring(0, 100)}`);
+    console.log(`[GHL Webhook] SMS reply from ${contactId}: ${redactForLogs(message).substring(0, 100)}`);
 
     // Find lead by ghl_contact_id
     const lead = await Lead.findOne({ where: { ghl_contact_id: contactId } });
@@ -211,7 +212,7 @@ export async function handleGhlSmsReply(req: Request, res: Response): Promise<vo
       // Non-fatal — the inbound SMS is still logged even if we can't auto-reply
     }
 
-    console.log(`[GHL Webhook] Reply processed for lead ${lead.id} (${lead.name})`);
+    console.log(`[GHL Webhook] Reply processed for lead ${lead.id} (${redactForLogs(lead.name)})`);
     res.status(200).json({
       received: true,
       matched: true,

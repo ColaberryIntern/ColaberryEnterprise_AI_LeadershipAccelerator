@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { getTestOverrides, getSetting } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -37,7 +38,7 @@ const transporter = env.mandrillApiKey
 async function guardedSendMail(options: nodemailer.SendMailOptions): Promise<nodemailer.SentMessageInfo> {
   if (await isKillSwitchActive()) {
     const to = Array.isArray(options.to) ? options.to.join(',') : String(options.to ?? '');
-    console.warn(`[Email] BLOCKED by kill switch — not sending to ${to} (subject: ${options.subject ?? ''})`);
+    console.warn(`[Email] BLOCKED by kill switch — not sending to ${redactForLogs(to)} (subject: ${options.subject ?? ''})`);
     return {
       messageId: '',
       accepted: [],
@@ -57,7 +58,7 @@ async function resolveEmailRecipient(
   try {
     const test = await getTestOverrides();
     if (test.enabled && test.email) {
-      console.log(`[Email] TEST MODE: redirecting from ${intended} to ${test.email}`);
+      console.log(`[Email] TEST MODE: redirecting from ${redactForLogs(intended)} to ${redactForLogs(test.email)}`);
       return { to: test.email, subject: `[TEST \u2192 ${intended}] ${subject}` };
     }
   } catch {
@@ -192,7 +193,7 @@ export function buildTrainingWelcomeHtml(data: TrainingWelcomeData): string {
 
 export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ sent: boolean; messageId?: string }> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping training welcome to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping training welcome to:', redactForLogs(data.to));
     return { sent: false };
   }
   const subject = 'Welcome to Colaberry — your AI journey starts now';
@@ -216,7 +217,7 @@ export async function sendTrainingWelcome(data: TrainingWelcomeData): Promise<{ 
   // the send — treat that as not-sent so callers can log/retry instead of assuming
   // delivery.
   const sent = Boolean(info.messageId);
-  console.log(`[Email] Training welcome ${sent ? 'sent' : 'BLOCKED (kill switch)'} to: ${r.to} | msgId: ${info.messageId} | rejected: ${info.rejected}`);
+  console.log(`[Email] Training welcome ${sent ? 'sent' : 'BLOCKED (kill switch)'} to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | rejected: ${info.rejected}`);
   return { sent, messageId: info.messageId };
 }
 
@@ -232,8 +233,8 @@ interface EnrollmentConfirmationData {
 
 export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured (SMTP_USER/SMTP_PASS missing). Skipping email to:', data.to);
-    console.log('[Email] Would have sent enrollment confirmation to:', data.to, 'for cohort:', data.cohortName);
+    console.warn('[Email] SMTP not configured (SMTP_USER/SMTP_PASS missing). Skipping email to:', redactForLogs(data.to));
+    console.log('[Email] Would have sent enrollment confirmation to:', redactForLogs(data.to), 'for cohort:', data.cohortName);
     return;
   }
 
@@ -249,7 +250,7 @@ export async function sendEnrollmentConfirmation(data: EnrollmentConfirmationDat
     headers: emailHeaders('enrollment-confirmation'),
   });
 
-  console.log(`[Email] Enrollment confirmation sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Enrollment confirmation sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 interface InvoiceRequestConfirmationData {
@@ -264,7 +265,7 @@ interface InvoiceRequestConfirmationData {
 
 export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirmationData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping invoice confirmation to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping invoice confirmation to:', redactForLogs(data.to));
     return;
   }
 
@@ -327,7 +328,7 @@ export async function sendInvoiceRequestConfirmation(data: InvoiceRequestConfirm
     headers: emailHeaders('invoice-request-confirmation'),
   });
 
-  console.log(`[Email] Invoice request confirmation sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Invoice request confirmation sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 interface InterestEmailData {
@@ -338,7 +339,7 @@ interface InterestEmailData {
 export async function sendInterestEmail(data: InterestEmailData): Promise<string> {
   const html = buildInterestHtml(data);
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping interest email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping interest email to:', redactForLogs(data.to));
     return html;
   }
 
@@ -353,7 +354,7 @@ export async function sendInterestEmail(data: InterestEmailData): Promise<string
     headers: emailHeaders('interest-email'),
   });
 
-  console.log(`[Email] Interest email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Interest email sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
   return html;
 }
 
@@ -365,7 +366,7 @@ interface ExecutiveOverviewEmailData {
 export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailData): Promise<string> {
   const html = buildExecutiveOverviewHtml(data);
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping executive overview email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping executive overview email to:', redactForLogs(data.to));
     return html;
   }
 
@@ -380,7 +381,7 @@ export async function sendExecutiveOverviewEmail(data: ExecutiveOverviewEmailDat
     headers: emailHeaders('executive-overview'),
   });
 
-  console.log(`[Email] Executive overview email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Executive overview email sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
   return html;
 }
 
@@ -396,7 +397,7 @@ interface HighIntentAlertData {
 
 export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping high-intent alert for:', data.name);
+    console.warn('[Email] SMTP not configured. Skipping high-intent alert for:', redactForLogs(data.name));
     return;
   }
 
@@ -414,7 +415,7 @@ export async function sendHighIntentAlert(data: HighIntentAlertData): Promise<vo
     headers: emailHeaders('high-intent-alert'),
   });
 
-  console.log(`[Email] High-intent alert sent for: ${data.name} (score: ${data.score}) | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] High-intent alert sent for: ${redactForLogs(data.name)} (score: ${data.score}) | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 interface SponsorshipKitEmailData {
@@ -428,7 +429,7 @@ export async function sendSponsorshipKitEmail(data: SponsorshipKitEmailData): Pr
   const html = buildSponsorshipKitHtml(data);
 
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping sponsorship kit email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping sponsorship kit email to:', redactForLogs(data.to));
     return;
   }
 
@@ -443,7 +444,7 @@ export async function sendSponsorshipKitEmail(data: SponsorshipKitEmailData): Pr
     headers: emailHeaders('sponsorship-kit'),
   });
 
-  console.log(`[Email] Sponsorship kit email sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Sponsorship kit email sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 function buildSponsorshipKitHtml(data: SponsorshipKitEmailData): string {
@@ -522,7 +523,7 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
   const html = buildStrategyCallConfirmationHtml(data);
 
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping strategy call confirmation to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping strategy call confirmation to:', redactForLogs(data.to));
     return html;
   }
 
@@ -537,7 +538,7 @@ export async function sendStrategyCallConfirmation(data: StrategyCallConfirmatio
     headers: emailHeaders('strategy-call-confirmation'),
   });
 
-  console.log(`[Email] Strategy call confirmation sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Strategy call confirmation sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
   return html;
 }
 
@@ -626,7 +627,7 @@ export interface IntelligenceBriefData {
 
 export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping intelligence brief for:', data.name);
+    console.warn('[Email] SMTP not configured. Skipping intelligence brief for:', redactForLogs(data.name));
     return;
   }
 
@@ -644,7 +645,7 @@ export async function sendIntelligenceBrief(data: IntelligenceBriefData): Promis
     headers: emailHeaders('intelligence-brief'),
   });
 
-  console.log(`[Email] Intelligence brief sent for: ${data.name} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] Intelligence brief sent for: ${redactForLogs(data.name)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 function buildIntelligenceBriefHtml(data: IntelligenceBriefData): string {
@@ -1044,7 +1045,7 @@ export async function sendDigestEmail(data: DigestData): Promise<void> {
     headers: emailHeaders('admin-digest'),
   });
 
-  console.log(`[Email] ${periodLabel} digest sent to: ${r.to} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
+  console.log(`[Email] ${periodLabel} digest sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId} | accepted: ${info.accepted} | rejected: ${info.rejected}`);
 }
 
 function buildDigestHtml(data: DigestData): string {
@@ -1236,7 +1237,7 @@ interface SessionReminderData {
 
 export async function sendSessionReminder(data: SessionReminderData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping session reminder to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping session reminder to:', redactForLogs(data.to));
     return;
   }
 
@@ -1256,7 +1257,7 @@ export async function sendSessionReminder(data: SessionReminderData): Promise<vo
     headers: emailHeaders('accelerator-session-reminder'),
   });
 
-  console.log(`[Email] Session reminder sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Session reminder sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 function buildSessionReminderHtml(data: SessionReminderData): string {
@@ -1323,7 +1324,7 @@ interface MissedSessionData {
 
 export async function sendMissedSessionEmail(data: MissedSessionData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping missed session email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping missed session email to:', redactForLogs(data.to));
     return;
   }
 
@@ -1342,7 +1343,7 @@ export async function sendMissedSessionEmail(data: MissedSessionData): Promise<v
     headers: emailHeaders('accelerator-missed-session'),
   });
 
-  console.log(`[Email] Missed session email sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Missed session email sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 function buildMissedSessionHtml(data: MissedSessionData): string {
@@ -1405,7 +1406,7 @@ interface AbsenceAlertData {
 
 export async function sendAbsenceAlert(data: AbsenceAlertData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping absence alert for:', data.enrollmentName);
+    console.warn('[Email] SMTP not configured. Skipping absence alert for:', redactForLogs(data.enrollmentName));
     return;
   }
 
@@ -1458,7 +1459,7 @@ export async function sendAbsenceAlert(data: AbsenceAlertData): Promise<void> {
     headers: emailHeaders('accelerator-absence-alert'),
   });
 
-  console.log(`[Email] Absence alert sent for: ${data.enrollmentName} | msgId: ${info.messageId}`);
+  console.log(`[Email] Absence alert sent for: ${redactForLogs(data.enrollmentName)} | msgId: ${info.messageId}`);
 }
 
 
@@ -1484,7 +1485,7 @@ export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<vo
     // shows the student "Check your email" for a mail that was never sent.
     // Logged loudly here; fixing the silent-success contract is tracked
     // separately (see the QR check-in audit, 2026-07-27).
-    console.warn('[Email] SMTP not configured. Skipping magic link email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping magic link email to:', redactForLogs(data.to));
     return;
   }
 
@@ -1509,7 +1510,7 @@ export async function sendPortalMagicLink(data: PortalMagicLinkData): Promise<vo
     headers: emailHeaders('accelerator-portal-magic-link'),
   });
 
-  console.log(`[Email] Portal magic link sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Portal magic link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 // --- Organization Invite Email (free member account, magic-link style) ---
@@ -1523,7 +1524,7 @@ interface OrgInviteData {
 
 export async function sendOrgInviteEmail(data: OrgInviteData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping org invite to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping org invite to:', redactForLogs(data.to));
     return;
   }
 
@@ -1545,7 +1546,7 @@ export async function sendOrgInviteEmail(data: OrgInviteData): Promise<void> {
     headers: emailHeaders('accelerator-org-invite'),
   });
 
-  console.log(`[Email] Org invite sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Org invite sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 function buildOrgInviteHtml(data: OrgInviteData, magicLink: string): string {
@@ -1605,7 +1606,7 @@ interface AdmissionsDocumentParams {
 
 export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping admissions document to:', params.to);
+    console.warn('[Email] SMTP not configured. Skipping admissions document to:', redactForLogs(params.to));
     return;
   }
 
@@ -1671,14 +1672,14 @@ export async function sendAdmissionsDocument(params: AdmissionsDocumentParams): 
     headers: emailHeaders('admissions-document'),
   });
 
-  console.log(`[Email] Admissions document (${params.documentType}) sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Admissions document (${params.documentType}) sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 // ─── Alert Email ──────────────────────────────────────────────────────────
 
 export async function sendAlertEmail(to: string, alert: { type: string; severity: number; title: string; description?: string; impact_area?: string; source_type?: string; urgency?: string; created_at?: Date }): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping alert email to:', to);
+    console.warn('[Email] SMTP not configured. Skipping alert email to:', redactForLogs(to));
     return;
   }
 
@@ -1731,7 +1732,7 @@ export async function sendAlertEmail(to: string, alert: { type: string; severity
     headers: emailHeaders('alert-notification'),
   });
 
-  console.log(`[Email] Alert email sent to: ${r.to} | type: ${alert.type} | msgId: ${info.messageId}`);
+  console.log(`[Email] Alert email sent to: ${redactForLogs(r.to)} | type: ${alert.type} | msgId: ${info.messageId}`);
 }
 
 // ─── AI Workforce Ticket Approval Email ────────────────────────────────────
@@ -1810,7 +1811,7 @@ export async function sendTicketApprovalEmail(data: {
     headers: emailHeaders('ai-workforce-ticket-approval'),
   });
 
-  console.log(`[Email] Ticket approval email sent to: ${r.to} | ticket: ${data.ticketId} | msgId: ${info.messageId}`);
+  console.log(`[Email] Ticket approval email sent to: ${redactForLogs(r.to)} | ticket: ${data.ticketId} | msgId: ${info.messageId}`);
 }
 
 /** Brief plain-text confirmation that an email-reply approve/reject registered — closes
@@ -1835,7 +1836,7 @@ export async function sendTicketReplyConfirmation(data: {
     text,
     headers: emailHeaders('ai-workforce-ticket-reply-confirmation'),
   });
-  console.log(`[Email] Ticket reply confirmation sent to: ${r.to} | ticket #${data.ticketNumber} | msgId: ${info.messageId}`);
+  console.log(`[Email] Ticket reply confirmation sent to: ${redactForLogs(r.to)} | ticket #${data.ticketNumber} | msgId: ${info.messageId}`);
 }
 
 // ─── Executive Briefing Email ─────────────────────────────────────────────
@@ -1844,7 +1845,7 @@ import type { ExecutiveBriefingData } from './executiveBriefingService';
 
 export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping briefing email to:', to);
+    console.warn('[Email] SMTP not configured. Skipping briefing email to:', redactForLogs(to));
     return;
   }
 
@@ -1950,7 +1951,7 @@ export async function sendBriefingEmail(to: string, data: ExecutiveBriefingData)
     headers: emailHeaders('executive-briefing'),
   });
 
-  console.log(`[Email] ${isWeekly ? 'Weekly' : 'Daily'} briefing sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] ${isWeekly ? 'Weekly' : 'Daily'} briefing sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }
 
 function buildPortalMagicLinkHtml(data: PortalMagicLinkData, magicLink: string): string {
@@ -2011,7 +2012,7 @@ export async function sendCurriculumImpactDigest(
   items: CurriculumImpactItem[],
 ): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping curriculum impact digest to:', to);
+    console.warn('[Email] SMTP not configured. Skipping curriculum impact digest to:', redactForLogs(to));
     return;
   }
 
@@ -2085,7 +2086,7 @@ export async function sendCurriculumImpactDigest(
   });
 
   console.log(
-    `[Email] Curriculum impact digest sent to: ${r.to} | items: ${items.length} | msgId: ${info.messageId}`,
+    `[Email] Curriculum impact digest sent to: ${redactForLogs(r.to)} | items: ${items.length} | msgId: ${info.messageId}`,
   );
 }
 
@@ -2101,7 +2102,7 @@ export interface InterviewResultEmailData {
 
 export async function sendInterviewResult(data: InterviewResultEmailData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping interview result email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping interview result email to:', redactForLogs(data.to));
     return;
   }
 
@@ -2136,7 +2137,7 @@ export async function sendInterviewResult(data: InterviewResultEmailData): Promi
     headers: emailHeaders('accelerator-interview-result'),
   });
 
-  console.log(`[Email] Interview result sent to: ${r.to} | week: ${data.week_number} | score: ${data.total_score} | msgId: ${info.messageId}`);
+  console.log(`[Email] Interview result sent to: ${redactForLogs(r.to)} | week: ${data.week_number} | score: ${data.total_score} | msgId: ${info.messageId}`);
 }
 
 export interface CommunityDigestEmailEvent {
@@ -2159,7 +2160,7 @@ export interface CommunityDigestEmailData {
 // communityDigestService.ts, not by anything in this function.
 export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping community digest to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping community digest to:', redactForLogs(data.to));
     return;
   }
 
@@ -2199,7 +2200,7 @@ export async function sendCommunityDigestEmail(data: CommunityDigestEmailData): 
     headers: emailHeaders('community-digest'),
   });
 
-  console.log(`[Email] Community digest sent to: ${r.to} | date: ${data.digestDate} | msgId: ${info.messageId}`);
+  console.log(`[Email] Community digest sent to: ${redactForLogs(r.to)} | date: ${data.digestDate} | msgId: ${info.messageId}`);
 }
 
 // --- Sponsor (Door B employer) Portal Magic Link Email ---
@@ -2255,7 +2256,7 @@ function buildSponsorMagicLinkHtml(data: SponsorMagicLinkData, magicLink: string
 
 export async function sendSponsorMagicLink(data: SponsorMagicLinkData): Promise<void> {
   if (!transporter) {
-    console.warn('[Email] SMTP not configured. Skipping sponsor magic link email to:', data.to);
+    console.warn('[Email] SMTP not configured. Skipping sponsor magic link email to:', redactForLogs(data.to));
     return;
   }
 
@@ -2277,5 +2278,5 @@ export async function sendSponsorMagicLink(data: SponsorMagicLinkData): Promise<
     headers: emailHeaders('accelerator-sponsor-magic-link'),
   });
 
-  console.log(`[Email] Sponsor magic link sent to: ${r.to} | msgId: ${info.messageId}`);
+  console.log(`[Email] Sponsor magic link sent to: ${redactForLogs(r.to)} | msgId: ${info.messageId}`);
 }

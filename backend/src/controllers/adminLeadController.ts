@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
 import { updateLeadSchema, leadFilterSchema } from '../schemas/leadAdminSchema';
+import { redactForLogs } from '../utils/piiRedaction';
 import {
   listLeads,
   getLeadDetail,
@@ -395,7 +396,7 @@ export async function handleDeleteLead(
     await Activity.destroy({ where: { lead_id: id } });
     await lead.destroy();
 
-    console.log(`[Admin] Lead ${id} (${lead.name}) deleted by admin`);
+    console.log(`[Admin] Lead ${id} (${redactForLogs(lead.name)}) deleted by admin`);
     res.json({ success: true });
   } catch (error) {
     next(error);

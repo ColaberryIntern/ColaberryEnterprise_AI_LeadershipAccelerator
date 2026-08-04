@@ -18,6 +18,7 @@ import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
+import { redactForLogs } from '../utils/piiRedaction';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
@@ -1774,6 +1775,18 @@ export function startScheduler(): void {
     });
   });
 
+  // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
+  // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see
+  // reliabilityAlertingService.ts). Cadence matches the check's own window.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('ReliabilityAlerting', async () => {
+      const { runReliabilityAlertCheck } = await import('./reliabilityAlertingService');
+      await runReliabilityAlertCheck();
+    }).catch((err) => {
+      console.error('[Scheduler] Reliability alerting error:', err);
+    });
+  });
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(
@@ -2266,7 +2279,7 @@ export function startScheduler(): void {
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: false,
-          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${e.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
           sentReminders.add(dedupKey);
@@ -2293,7 +2306,7 @@ export function startScheduler(): void {
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: true,
-          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${e.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
           sentReminders.add(dedupKey1h);
@@ -2352,7 +2365,7 @@ export function startScheduler(): void {
             recordingUrl: session.recording_url || null,
             materialsJson: session.materials_json || null,
             consecutiveMisses,
-          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${enrollment.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${redactForLogs(enrollment.email)}:`, err.message));
 
           // Alert admin if 2+ consecutive absences
           if (consecutiveMisses >= 2) {
@@ -2511,7 +2524,7 @@ export function startScheduler(): void {
 
           // Skip voice call if no phone — still mark as hot
           if (!lead.phone) {
-            console.log(`[HotLead] Marked ${lead.name} as hot (no phone — email-only lead)`);
+            console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot (no phone — email-only lead)`);
             continue;
           }
 
@@ -2527,7 +2540,7 @@ export function startScheduler(): void {
               LIMIT 1
             `, { replacements: { leadId: lead.lead_id }, type: QueryTypes.SELECT }) as any[];
             if (recentAliEmail) {
-              console.log(`[HotLead] Skipping ${lead.name} — Ali emailed in last 48h (Maya/Ali coordination)`);
+              console.log(`[HotLead] Skipping ${redactForLogs(lead.name)} — Ali emailed in last 48h (Maya/Ali coordination)`);
               continue;
             }
           } catch { /* non-critical — proceed with call if check fails */ }
@@ -2645,12 +2658,12 @@ export function startScheduler(): void {
                 goal: 'Book 30-min strategy call with Business Development team',
               },
             }).catch(() => {});
-            console.log(`[HotLead] 📞 Called ${lead.name} (${lead.phone})`);
+            console.log(`[HotLead] 📞 Called ${redactForLogs(lead.name)} (${redactForLogs(lead.phone)})`);
             callsToday++;
             await settingsSvc.setSetting('hot_lead_calls_today', String(callsToday));
           }
         } catch (err: any) {
-          console.warn(`[HotLead] Failed to call ${lead.name}: ${err.message}`);
+          console.warn(`[HotLead] Failed to call ${redactForLogs(lead.name)}: ${err.message}`);
         }
 
         // 60s between calls — spread calls throughout the cycle

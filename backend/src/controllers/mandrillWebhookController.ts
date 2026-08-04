@@ -10,6 +10,7 @@ import { respondAsLead } from '../services/testing/campaignSimulator';
 import { processOptOut } from '../services/unsubscribeEnforcementService';
 import ScheduledEmail from '../models/ScheduledEmail';
 import { handleTicketReplyEmail } from '../services/workforce/ticketReplyService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -124,7 +125,7 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
       if (!scheduledEmailId) {
         // Log what we're skipping for debugging
         if (event.event === 'open' || event.event === 'click') {
-          console.log(`[MandrillWebhook] Skipping ${event.event} for ${event.msg?.email || 'unknown'} — no scheduled_email_id in metadata: ${JSON.stringify(event.msg?.metadata || {})}`);
+          console.log(`[MandrillWebhook] Skipping ${event.event} for ${redactForLogs(event.msg?.email) || 'unknown'} — no scheduled_email_id in metadata: ${JSON.stringify(event.msg?.metadata || {})}`);
         }
         skipped++;
         continue;
@@ -360,14 +361,14 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
         console.warn(`[MandrillInbound] Failed to resume simulation:`, simErr.message);
       }
 
-      console.log(`[MandrillInbound] Reply processed for lead ${lead.id} (${lead.name})`);
+      console.log(`[MandrillInbound] Reply processed for lead ${lead.id} (${redactForLogs(lead.name)})`);
 
       // Auto-detect unsubscribe keywords — broad matching anywhere in message body
       const bodyLower = body.toLowerCase().trim();
       const unsubExactKeywords = ['unsubscribe', 'stop', 'remove me', 'opt out', 'opt-out', 'take me off', 'no more emails', 'stop emailing', 'don\'t email', 'dont email', 'don\'t contact', 'dont contact'];
       const isUnsubscribe = unsubExactKeywords.some(kw => bodyLower.includes(kw));
       if (isUnsubscribe) {
-        console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${(lead as any).name}): "${bodyLower.substring(0, 80)}"`);
+        console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${redactForLogs((lead as any).name)}): "${redactForLogs(bodyLower).substring(0, 80)}"`);
         await processOptOut(lead.id, 'email', `Inbound email opt-out: "${bodyLower.substring(0, 100)}"`, 'inbound_reply');
         // Do NOT auto-reply to someone who asked to unsubscribe
         console.log(`[MandrillInbound] Skipping auto-reply — lead requested unsubscribe`);
@@ -438,7 +439,7 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
               metadata: { auto_reply: true, in_reply_to: inReplyTo || null },
             }).catch(() => {});
 
-            console.log(`[MandrillInbound] Auto-replied to ${(lead as any).name} (${fromEmail})`);
+            console.log(`[MandrillInbound] Auto-replied to ${redactForLogs((lead as any).name)} (${redactForLogs(fromEmail)})`);
           }
         } else {
           console.log(`[MandrillInbound] Skipping auto-reply — Ali personal outreach (Ali handles personally)`);
