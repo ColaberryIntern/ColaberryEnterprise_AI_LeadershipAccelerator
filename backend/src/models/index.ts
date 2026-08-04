@@ -96,6 +96,7 @@ import CampaignHealth from './CampaignHealth';
 import CampaignError from './CampaignError';
 import AiSystemEvent from './AiSystemEvent';
 import AiEvent from './AiEvent';
+import DeadLetterJob from './DeadLetterJob';
 import DatasetRegistry from './DatasetRegistry';
 import SystemProcess from './SystemProcess';
 import EntitySummary from './EntitySummary';
@@ -1153,6 +1154,7 @@ export {
   AiAgent,
   AiAgentActivityLog,
   AiEvent,
+  DeadLetterJob,
   CampaignHealth,
   CampaignError,
   AiSystemEvent,

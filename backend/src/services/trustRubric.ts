@@ -15,6 +15,7 @@
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import AgentWriteAudit from '../models/AgentWriteAudit';
+import AiEvent from '../models/AiEvent';
 import { isKillSwitchActive } from './launchSafety';
 import { isSafeModeActive } from './systemControlService';
 import { MINUTES_SAVED_SQL, valueUsd } from './aiValueService';
@@ -72,6 +73,10 @@ export interface LiveSignals {
   toolEvents7d: number;
   retrievalEvents7d: number;
   vectorRetrievalEvents7d: number;
+  llmCalls7d: number;
+  promptVersionCoveragePct: number;
+  userAttributedCostPct7d: number;
+  retentionEnforcedEventsEver: number;
   valueUsd30d: number;
   hoursSaved30d: number;
   consentChecks7d: number;
@@ -115,6 +120,10 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     toolEvents7d: 0,
     retrievalEvents7d: 0,
     vectorRetrievalEvents7d: 0,
+    llmCalls7d: 0,
+    promptVersionCoveragePct: 0,
+    userAttributedCostPct7d: 0,
+    retentionEnforcedEventsEver: 0,
     valueUsd30d: 0,
     hoursSaved30d: 0,
     consentChecks7d: 0,
@@ -140,10 +149,13 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'retrieval' AND metadata->>'method' = 'vector')::int AS vec_retrieval7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'consent.check')::int AS consent7d,
          COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'agent.authorization')::int AS abac7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'llm.call')::int AS llm_calls7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'llm.call' AND metadata->>'prompt_version' IS NOT NULL)::int AS llm_calls_versioned7d,
+         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND event_type = 'llm.call' AND user_id IS NOT NULL)::int AS llm_calls_user_attributed7d,
          COALESCE(SUM(${MINUTES_SAVED_SQL}) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days'), 0)::int AS minutes30d
        FROM ai_events`,
       { type: QueryTypes.SELECT }
-    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; abac7d: number; minutes30d: number }>;
+    )) as Array<{ cost7d: number; workflows7d: number; total7d: number; traced7d: number; failures7d: number; p50: number | null; p95: number | null; events24h: number; tool7d: number; retrieval7d: number; vec_retrieval7d: number; consent7d: number; abac7d: number; llm_calls7d: number; llm_calls_versioned7d: number; llm_calls_user_attributed7d: number; minutes30d: number }>;
     const r = rows[0];
     if (r) {
       s.costUsd7d = Math.round(Number(r.cost7d) * 100) / 100;
@@ -159,6 +171,9 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
       s.vectorRetrievalEvents7d = Number(r.vec_retrieval7d) || 0;
       s.consentChecks7d = Number(r.consent7d) || 0;
       s.abacChecks7d = Number(r.abac7d) || 0;
+      s.llmCalls7d = Number(r.llm_calls7d) || 0;
+      s.promptVersionCoveragePct = s.llmCalls7d > 0 ? Math.round((Number(r.llm_calls_versioned7d) / s.llmCalls7d) * 100) : 0;
+      s.userAttributedCostPct7d = s.llmCalls7d > 0 ? Math.round((Number(r.llm_calls_user_attributed7d) / s.llmCalls7d) * 100) : 0;
       const mins = Number(r.minutes30d) || 0;
       s.hoursSaved30d = Math.round((mins / 60) * 10) / 10;
       s.valueUsd30d = valueUsd(mins);
@@ -172,6 +187,16 @@ export async function collectLiveSignals(): Promise<LiveSignals> {
     });
   } catch (err) {
     logErr('live_signals_blocked_writes', err);
+  }
+  try {
+    // All-time, not windowed: retention enforcement (retentionEnforcementService.ts) is an
+    // occasional admin-triggered action, not continuous traffic — a 7d window would show zero
+    // between runs even once it's genuinely been exercised for real (T006 / P2-5).
+    s.retentionEnforcedEventsEver = await AiEvent.count({
+      where: { event_type: 'governance.retention_enforced' } as any,
+    });
+  } catch (err) {
+    logErr('live_signals_retention_enforced', err);
   }
   try {
     await isKillSwitchActive();
@@ -235,7 +260,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
   privacy: { label: 'Privacy', criteria: [
     { key: 'pii-redaction', label: 'PII redacted before LLM/voice', weight: 3, ref: 'P0-3', ev: shipped('SSN/payment-card redacted at the LLM boundary on TS + cron paths (PR #50/#54).') },
     { key: 'suppression', label: 'Unsubscribe / suppression honored', weight: 1, ev: shipped('Unsubscribe + suppression handling present (audit offset).') },
-    { key: 'pii-logs', label: 'PII minimized in logs', weight: 1, ev: partial(50, 'redactForLogs helper added (PR #50) but not yet applied at every log site.', 'Apply redactForLogs across all structured log call sites.') },
+    { key: 'pii-logs', label: 'PII minimized in logs', weight: 1, ev: shipped('redactForLogs applied across all identified lead/student/visitor PII-risk log call sites (emailService, synthflow voice, GHL/Mandrill/Apollo webhooks, calendar, enrollment, scheduler hot-lead escalation, GDPR erasure endpoint — ~95 sites across 24 files). inbox/inboxCase subsystem intentionally out of scope pending a dedicated audit.') },
     { key: 'consent', label: 'Affirmative consent on outbound voice/email', weight: 3, ref: 'P0-3', ev: (s) => {
       // Gate is SHIPPED (consentService + consent_records + send-path hook). Live state:
       // enforcing+checks → met; shadowing with traffic → partial (exposure quantified, capture pending);
@@ -253,7 +278,14 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
         evidence: 'Consent gate shipped (shadow) — consent_records + assertConsentForSend wired into the send chokepoint; no outbound sends in the last 7d to evaluate.',
         remediation: 'Add opt-in capture (Phase 2) + flip consent_enforcement=enforce when granted records exist (P0-3).' };
     } },
-    { key: 'retention', label: 'Data-retention / purge policy', weight: 2, ref: 'P2-5', ev: partial(50, 'A 24-month retention policy is defined for the PII data classes (chat/call transcripts, comms, sessions, leads) with a live dry-run report (/admin/trust/retention); purge enforcement is gated pending sign-off.', 'Review the dry-run, confirm scope (leads → anonymize, not delete), then enable the scheduled purge (P2-5).') },
+    { key: 'retention', label: 'Data-retention / purge policy', weight: 2, ref: 'P2-5', ev: (s) => {
+      const hasRun = s.retentionEnforcedEventsEver > 0;
+      return { status: hasRun ? 'met' : 'partial', source: 'live', pct: hasRun ? 100 : 60,
+        evidence: hasRun
+          ? `Retention enforcement is live and has run for real — ${s.retentionEnforcedEventsEver} governance.retention_enforced events recorded (enabled 2026-07-31 per sign-off; anonymizes leads, purges chat/call/comms/session records past the 24-month TTL).`
+          : 'Retention enforcement is deployed and enabled (2026-07-31 sign-off, no longer gated) with a live dry-run report (/admin/trust/retention) and an admin POST route to trigger it, but no enforce cycle has run yet.',
+        remediation: hasRun ? undefined : 'Trigger the retention enforcement cycle via the admin POST route (P2-5).' };
+    }},
   ]},
   observability: { label: 'Observability', criteria: [
     { key: 'unified-events', label: 'Unified ai_events model', weight: 2, ref: 'P1-1', ev: shipped('ai_events + emitAiEvent() unify the event stream (PR #50).') },
@@ -306,7 +338,15 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
       status: 'partial', source: 'shipped', pct: 85,
       evidence: `~58/60 LLM call sites logged to ai_events (PR #50/#54); ${s.events24h} events in the last 24h.`,
       remediation: 'Route the few remaining call sites through the audited client (P1-2).' }) },
-    { key: 'prompt-version', label: 'Prompt/model version in the audit record', weight: 1, ref: 'P2-3', ev: open('Prompts hardcoded; no promptTemplateId/version logged.', 'Version prompts + log promptTemplateId/version on each event (P2-3).') },
+    { key: 'prompt-version', label: 'Prompt/model version in the audit record', weight: 1, ref: 'P2-3', ev: (s) => {
+      const has = s.llmCalls7d > 0;
+      const pct = s.promptVersionCoveragePct;
+      return { status: pct >= 70 ? 'met' : pct >= 30 ? 'partial' : 'open', source: 'live', pct,
+        evidence: has
+          ? `${pct}% of llm.call events in the last 7d carry a prompt_version (Maya + assistant pipelines emit it; other call sites not yet versioned).`
+          : 'No llm.call events in the last 7d to check for prompt_version coverage.',
+        remediation: pct >= 70 ? undefined : 'Thread prompt_version through the remaining getInstrumentedOpenAI call sites (P2-3).' };
+    }},
   ]},
   explainability: { label: 'Explainability', criteria: [
     { key: 'decision-reasoning', label: 'Decision reasoning + confidence captured', weight: 2, ev: shipped('IntelligenceDecision persists reasoning + confidence for the autonomous engine.') },
@@ -327,7 +367,7 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
   reliability: { label: 'Reliability', criteria: [
     { key: 'retry-timeout', label: 'Retry / timeout / safe-mode on LLM calls', weight: 2, ev: shipped('Audit wrapper enforces retry, timeout, and safe-mode guards.') },
     { key: 'circuit-breaker', label: 'Circuit breaker on external boundaries', weight: 1, ev: partial(50, 'Circuit breaker present for OpenClaw only.', 'Extend the circuit-breaker pattern to other external boundaries.') },
-    { key: 'metrics-alerting', label: 'Metrics + alerting backend', weight: 2, ref: 'P1-5', ev: open('No metrics/alerting; no queue durability for fire-and-forget jobs.', 'Add metrics + alerting; durable queue for background jobs (P1-5).') },
+    { key: 'metrics-alerting', label: 'Metrics + alerting backend', weight: 2, ref: 'P1-5', ev: shipped('Rolling ai_events error-rate check alerts ali@colaberry.com on breach (reliabilityAlertingService.ts); dead_letter_jobs captures background jobs that fail 3x consecutively instead of silent console.error (deadLetterService.ts, wired into every aiOpsScheduler.ts SCHEDULE_REGISTRY agent).') },
     { key: 'ci', label: 'CI pipeline (typecheck/tests/scan)', weight: 1, ref: 'P3-1', ev: shipped('GitHub Actions CI runs typecheck (backend + frontend) + unit tests + secret-scan + route-auth lint on every PR.') },
   ]},
   businessImpact: { label: 'Business Impact', criteria: [
@@ -344,10 +384,19 @@ const RUBRIC: Record<string, { label: string; criteria: CritDef[] }> = {
           : 'No revenue or time-saved attribution to AI actions.',
         remediation: 'Tune the time-saved rates + add direct revenue attribution (v2).' };
     }},
-    { key: 'per-workflow-cost', label: 'Per-workflow / per-user cost analytics', weight: 1, ref: 'P3-4', ev: (s) => ({
-      status: s.distinctWorkflows7d > 0 ? 'partial' : 'open', source: 'live', pct: s.distinctWorkflows7d > 0 ? 50 : 0,
-      evidence: `Cost is grouped by workflow_id (${s.distinctWorkflows7d} workflows seen, 7d); per-user analytics not yet built.`,
-      remediation: 'Add per-user cost grouping + dashboards (P3-4).' })},
+    { key: 'per-workflow-cost', label: 'Per-workflow / per-user cost analytics', weight: 1, ref: 'P3-4', ev: (s) => {
+      const hasWorkflow = s.distinctWorkflows7d > 0;
+      const userPct = s.userAttributedCostPct7d;
+      if (!hasWorkflow) {
+        return { status: 'open', source: 'live', pct: 0,
+          evidence: 'No workflow-attributed llm.call events in the last 7d.',
+          remediation: 'Add per-workflow + per-user cost grouping + dashboards (P3-4).' };
+      }
+      const pct = userPct >= 50 ? 100 : userPct > 0 ? 75 : 50;
+      return { status: pct >= 100 ? 'met' : 'partial', source: 'live', pct,
+        evidence: `Cost is grouped by both workflow_id (getCostBreakdown) and user_id (getCostByUser) (${s.distinctWorkflows7d} workflows, 7d). User attribution: ${userPct}% of llm.call events carry a user_id — most traffic is visitor/lead-driven, not internal-user-driven, so this is expected to stay low until more call sites thread user_id through getInstrumentedOpenAI's context.`,
+        remediation: pct >= 100 ? undefined : 'Thread user_id through more getInstrumentedOpenAI call sites where a real authenticated user initiates the call (P3-4).' };
+    }},
   ]},
 };
 
