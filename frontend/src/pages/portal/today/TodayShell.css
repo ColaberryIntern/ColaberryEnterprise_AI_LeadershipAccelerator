@@ -280,6 +280,12 @@
    feed never shrinks (always 1fr). */
 @media(max-width:1300px){.te-grid{grid-template-columns:1fr}}
 
+/* sticky right rail, same pattern as Classroom's .tl-side (timeline.css) --
+   stays in view while the middle column scrolls; drops back to normal flow
+   once the grid collapses to one column so it doesn't stick mid-stack. */
+.te-side{position:sticky;top:20px;align-self:start}
+@media(max-width:1300px){.te-side{position:static;top:auto}}
+
 .te-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-16);box-shadow:var(--shadow-md)}
 .te-side .te-card{margin-bottom:16px}
 
