@@ -2,7 +2,7 @@
  * Pure planner invariants for the Today Timeline v2 engagement engine (Phase 1).
  * No I/O — exercises todayFeedPlan.planSlots directly.
  */
-import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, interleaveByType, groupByType, interleaveGroups, isPrecedenceImpression, isWithinAmbientCooldown, WeekGateCard } from '../todayFeedPlan';
+import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, interleaveByType, groupByType, interleaveGroups, weightedInterleaveGroups, resolveWeight, isPrecedenceImpression, isWithinAmbientCooldown, WeekGateCard } from '../todayFeedPlan';
 import type { AmbientProviderSlug } from '../ambientPool';
 
 const P3: AmbientProviderSlug[] = ['blog', 'podcast', 'testimonial'];
@@ -399,5 +399,126 @@ describe('isWithinAmbientCooldown — small-pool exhaustion fix (2026-08-04)', (
   it('cooldown of 0 excludes nothing (everything has aged out immediately)', () => {
     const servedAt = new Date('2026-08-03T23:59:59Z');
     expect(isWithinAmbientCooldown(servedAt, 0, now)).toBe(false);
+  });
+});
+
+describe('resolveWeight — slider value validation (2026-08-04)', () => {
+  it('a valid in-range weight passes through unchanged', () => {
+    expect(resolveWeight(75)).toBe(75);
+  });
+
+  it('missing/undefined defaults to 50 (neutral)', () => {
+    expect(resolveWeight(undefined)).toBe(50);
+  });
+
+  it('null defaults to 50 (neutral)', () => {
+    expect(resolveWeight(null)).toBe(50);
+  });
+
+  it('clamps below the minimum up to 1, never rejects', () => {
+    expect(resolveWeight(0)).toBe(1);
+    expect(resolveWeight(-40)).toBe(1);
+  });
+
+  it('clamps above the maximum down to 100, never rejects', () => {
+    expect(resolveWeight(500)).toBe(100);
+  });
+
+  it('non-finite input (NaN/Infinity) defaults to 50, does not throw', () => {
+    expect(resolveWeight(NaN)).toBe(50);
+    expect(resolveWeight(Infinity)).toBe(50);
+  });
+
+  it('rounds a fractional weight to the nearest integer', () => {
+    expect(resolveWeight(60.6)).toBe(61);
+  });
+});
+
+describe('planSlots — weighted variety selection (2026-08-04)', () => {
+  // REGRESSION context: the Today feed used to give every ambient provider +
+  // evergreen curriculum type an equal share by design. This is a real,
+  // admin-requested feature (a weight slider per type) — equal weights (the
+  // default, `weights` omitted) MUST reproduce the exact prior round-robin
+  // order, proven here by direct comparison against a weights-free call, not
+  // just re-asserting the old expected arrays.
+
+  it('equal weights (an explicit Map of all-1s) produces IDENTICAL output to weights omitted entirely', () => {
+    const equalWeights = new Map(P3.map((p) => [p, 1]));
+    const withWeights = planSlots({ ...base, count: 12, anchoredAvailable: 0, providers: P3, weights: equalWeights });
+    const withoutWeights = planSlots({ ...base, count: 12, anchoredAvailable: 0, providers: P3 });
+    expect(withWeights).toEqual(withoutWeights);
+  });
+
+  it('a heavily-weighted key gets a proportionally larger share over many ticks', () => {
+    const weights = new Map([['heavy', 90], ['light', 10]]);
+    const r = planSlots({ ...base, count: 100, anchoredAvailable: 0, providers: ['heavy', 'light'], weights });
+    const heavyCount = r.slots.filter((s) => s.provider === 'heavy').length;
+    const lightCount = r.slots.filter((s) => s.provider === 'light').length;
+    expect(heavyCount).toBeGreaterThan(lightCount * 4); // roughly 90:10, generous margin
+    expect(heavyCount + lightCount).toBe(100);
+  });
+
+  it('a key with no weight entry defaults to neutral (50), not starved to 0', () => {
+    // 'weighted' explicitly boosted; 'default' has no entry at all — must still get turns.
+    const weights = new Map([['weighted', 80]]);
+    const r = planSlots({ ...base, count: 40, anchoredAvailable: 0, providers: ['weighted', 'default'], weights });
+    const defaultCount = r.slots.filter((s) => s.provider === 'default').length;
+    expect(defaultCount).toBeGreaterThan(0);
+  });
+
+  it('ambientPlaced continuity is weight-aware across pages (skewed weights keep favoring the heavy key on the next page too)', () => {
+    const weights = new Map([['heavy', 90], ['light', 10]]);
+    const page1 = planSlots({ ...base, count: 20, anchoredAvailable: 0, providers: ['heavy', 'light'], weights });
+    const page2 = planSlots({ ...base, ambientPlaced: page1.ambientUsed, count: 20, anchoredAvailable: 0, providers: ['heavy', 'light'], weights });
+    const heavyCount = page2.slots.filter((s) => s.provider === 'heavy').length;
+    expect(heavyCount).toBeGreaterThan(10); // still skewed on the second page, not reset to even
+  });
+
+  it('deterministic: same weighted inputs produce identical output', () => {
+    const weights = new Map([['a', 30], ['b', 70]]);
+    const args = { ...base, count: 25, anchoredAvailable: 5, providers: ['a', 'b'], weights };
+    expect(planSlots({ ...args })).toEqual(planSlots({ ...args }));
+  });
+});
+
+describe('weightedInterleaveGroups — admin preview parity with the real weighted feed (2026-08-04)', () => {
+  const item = (type: string, n: number) => ({ type, n });
+
+  it('an empty weight map reproduces interleaveGroups exactly (regression guard)', () => {
+    const groups = new Map([
+      ['A', [item('A', 0), item('A', 1), item('A', 2)]],
+      ['B', [item('B', 0), item('B', 1)]],
+      ['C', [item('C', 0)]],
+    ]);
+    expect(weightedInterleaveGroups(groups)).toEqual(interleaveGroups(groups));
+  });
+
+  it('a heavily-weighted group is front-loaded relative to an unweighted one', () => {
+    const groups = new Map([
+      ['heavy', Array.from({ length: 10 }, (_, i) => item('heavy', i))],
+      ['light', Array.from({ length: 10 }, (_, i) => item('light', i))],
+    ]);
+    const out = weightedInterleaveGroups(groups, new Map([['heavy', 90], ['light', 10]]));
+    const firstFive = out.slice(0, 5).map((i) => i.type);
+    expect(firstFive.filter((t) => t === 'heavy').length).toBeGreaterThan(firstFive.filter((t) => t === 'light').length);
+  });
+
+  it('preserves each group\'s own internal relative order regardless of weight', () => {
+    const groups = new Map([
+      ['A', [item('A', 0), item('A', 1), item('A', 2)]],
+      ['B', [item('B', 0), item('B', 1)]],
+    ]);
+    const out = weightedInterleaveGroups(groups, new Map([['A', 95], ['B', 5]]));
+    expect(out.filter((i) => i.type === 'A').map((i) => i.n)).toEqual([0, 1, 2]);
+    expect(out.filter((i) => i.type === 'B').map((i) => i.n)).toEqual([0, 1]);
+  });
+
+  it('a group with no weight entry still gets included (defaults to neutral, not excluded)', () => {
+    const groups = new Map([
+      ['known', [item('known', 0)]],
+      ['unknown', [item('unknown', 0)]],
+    ]);
+    const out = weightedInterleaveGroups(groups, new Map([['known', 100]]));
+    expect(out.map((i) => i.type).sort()).toEqual(['known', 'unknown']);
   });
 });

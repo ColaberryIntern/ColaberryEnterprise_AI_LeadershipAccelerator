@@ -8,6 +8,15 @@
  * sets the cadence/providers/caps the transparent ranker consumes. All writes go
  * to /api/admin/feed-control/*; the whole feed engine is flag-gated by
  * FEED_CONTROL_ENABLED (this UI configures it regardless).
+ *
+ * WEIGHT (2026-08-04): every type gets a 1-100 weight slider (drawer, default
+ * 50/neutral) shown across all 5 lanes per an explicit product decision — but
+ * it only changes real selection frequency for types the server marks
+ * `weight_live` (the ambient providers, community's dynamic stream, and any
+ * type with a published evergreen/week:null card). For sequenced, assigned
+ * curriculum (most of Class/Project), the slider is present but inert — the
+ * UI says so (line-through + "(inert)" on the card, an explanatory note in
+ * the drawer) rather than silently implying full control everywhere.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
@@ -18,6 +27,18 @@ interface FCType {
   home_surface: string; feed_mode: string; today_eligible: boolean;
   bucket: string; render_band: string; difficulty: string;
   cadence: number | null; frequency_cap: number | null; cooldown_days: number | null;
+  /** 1-100, null = unset (treated as neutral 50). Real (not preview) for
+   *  types where `weight_live` is true — see `weight_live`'s own comment. */
+  weight: number | null;
+  /** Computed server-side per type (NOT per lane — a lane can mix rotating
+   *  and sequenced types, e.g. Today's own `announcement` is one-shot, not
+   *  rotated). True when this type's slider actually changes real selection
+   *  frequency right now: the 3 ambient providers, community's dynamic
+   *  stream, or any type with at least one published evergreen (week:null)
+   *  card. False for assigned, week-bound curriculum — dragging that slider
+   *  is a documented no-op (that content is sequenced, not rotated, by
+   *  design), and the UI says so rather than implying full control. */
+  weight_live: boolean;
 }
 interface Lane { surface: SurfaceDef; types: FCType[]; }
 interface Policy {
@@ -202,9 +223,9 @@ export default function FeedControlTab() {
 
       <div className={`fc-mode ${board.feedControlEnabled ? 'live' : 'preview'}`}>
         {board.feedControlEnabled ? (
-          <span><b className="fc-mode-b">● LIVE</b> Feed Control is ON — the <b>checkbox</b> (in/out of the timeline), lane, cadence, priority, caps and scheduling all govern the real student feed.</span>
+          <span><b className="fc-mode-b">● LIVE</b> Feed Control is ON — the <b>checkbox</b> (in/out of the timeline), <b>lane</b>, and <b>weight</b> (for types marked weight-live — the rotating ambient providers, community, and evergreen curriculum types) govern the real student feed. Cadence, frequency cap, cooldown, priority and exploration are still <Badge kind="preview" /> — they only change the simulator below, not yet read by the live feed.</span>
         ) : (
-          <span><b className="fc-mode-b">◐ PREVIEW MODE</b> Two levers reach students right now: a type's <b>lane</b> and its <b>checkbox</b> (in/out of the timeline) (both badged <Badge kind="live" />). Cadence, priority, caps, rotation and the Global Policy are <Badge kind="preview" /> — they change the simulator below, not the live feed, until Feed Control is switched on.</span>
+          <span><b className="fc-mode-b">◐ PREVIEW MODE</b> Two levers reach students right now: a type's <b>lane</b> and its <b>checkbox</b> (in/out of the timeline) (both badged <Badge kind="live" />). Weight, cadence, priority, caps, rotation and the Global Policy are <Badge kind="preview" /> — they change the simulator below, not the live feed, until Feed Control is switched on.</span>
         )}
       </div>
 
@@ -236,6 +257,12 @@ export default function FeedControlTab() {
                       <span className={`fc-tag ${t.feed_mode === 'ambient' ? 'amb' : 'anc'}`}>{t.feed_mode === 'ambient' ? 'rotates' : 'anchored'}</span>
                       <span className="fc-mut">{t.bucket}</span>
                       {t.cadence != null && <span className="fc-mut">cad {t.cadence}</span>}
+                      {t.weight != null && (() => {
+                        const weightLive = board.feedControlEnabled && t.weight_live;
+                        return (
+                          <span className={`fc-mut ${weightLive ? '' : 'fc-wt-inert'}`} title={weightLive ? 'Rotation weight' : 'Weight set, but has no effect right now (Feed Control off, or this type is sequenced not rotated)'}>wt {t.weight}{!weightLive && ' (inert)'}</span>
+                        );
+                      })()}
                     </div>
                   </div>
                   <button className="fc-gear" onClick={() => setDrawer(t)} aria-label="Settings">⚙</button>
@@ -358,6 +385,7 @@ function TypeDrawer({ t, buckets, surfaces, busy, live, onClose, onSave }: {
   const [cadence, setCadence] = useState<string>(t.cadence != null ? String(t.cadence) : '');
   const [cap, setCap] = useState<string>(t.frequency_cap != null ? String(t.frequency_cap) : '');
   const [cool, setCool] = useState<string>(t.cooldown_days != null ? String(t.cooldown_days) : '');
+  const [weight, setWeight] = useState<number>(t.weight ?? 50);
   const num = (s: string) => (s.trim() === '' ? null : Math.max(0, parseInt(s, 10) || 0));
   return (
     <div className="fc-scrim" onClick={onClose}>
@@ -375,12 +403,16 @@ function TypeDrawer({ t, buckets, surfaces, busy, live, onClose, onSave }: {
           <label className="fc-f">Freq cap <Badge kind={soft} /><input type="number" min={0} placeholder="policy" value={cap} onChange={(e) => setCap(e.target.value)} /></label>
           <label className="fc-f">Cooldown d <Badge kind={soft} /><input type="number" min={0} placeholder="policy" value={cool} onChange={(e) => setCool(e.target.value)} /></label>
         </div>
-        <p className="fc-hint">Blank = inherit the Global Policy default. Cadence = curriculum items between this being injected; freq cap = max times a student sees it; cooldown = days before it can reappear.{!live && ' Fields marked PREVIEW change the simulator only until Feed Control is switched on.'}</p>
+        <label className="fc-f">Weight ({weight}) — relative share vs. every other rotating type <Badge kind={live && t.weight_live ? 'live' : 'preview'} />
+          <input type="range" min={1} max={100} value={weight} onChange={(e) => setWeight(parseInt(e.target.value, 10) || 1)} /></label>
+        {live && !t.weight_live && <p className="fc-hint fc-wt-inert-hint">This type is sequenced, assigned curriculum (or has no evergreen instances yet) — there's nothing to rotate, so the weight has no effect right now. It will start working automatically if an evergreen instance of this type is ever published.</p>}
+        <p className="fc-hint">Blank = inherit the Global Policy default. Cadence = curriculum items between this being injected; freq cap = max times a student sees it; cooldown = days before it can reappear. Weight controls how often this type is picked relative to every other rotating type (50 = neutral/equal share; higher = more often) — it follows the SAME Feed Control on/off flag as cadence (governed by the same {live ? 'LIVE' : 'PREVIEW'} state above), it just additionally only has an effect for types marked weight-live.{!live && ' All of cadence/freq-cap/cooldown/weight change the simulator only until Feed Control is switched on.'}</p>
         <div className="fc-drawer-foot">
           <button className="fc-btn ghost" onClick={onClose}>Cancel</button>
           <button className="fc-btn" disabled={busy} onClick={() => onSave({
             home_surface: surface, feed_mode: feedMode, today_eligible: todayEligible, bucket_default: bucket,
             feed_cadence: num(cadence), feed_frequency_cap: num(cap), feed_cooldown_days: num(cool),
+            feed_weight: weight,
           })}>{busy ? 'Saving…' : 'Save routing'}</button>
         </div>
       </aside>
@@ -456,6 +488,9 @@ const CSS = `
 .fc-tag.anc{background:#dbeafe;color:#1d4ed8} .fc-tag.amb{background:#ede9fe;color:#6d28d9} .fc-tag.today{background:#fef3c7;color:#b45309}
 @media (prefers-color-scheme: dark){.fc-tag.anc{background:#1e3a8a55;color:#93c5fd}.fc-tag.amb{background:#4c1d9555;color:#c4b5fd}.fc-tag.today{background:#78350f55;color:#fcd34d}}
 .fc-mut{font-size:11px;color:var(--fc-sub)}
+.fc-wt-inert{text-decoration:line-through;opacity:.7}
+.fc-wt-inert-hint{color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 10px}
+@media(prefers-color-scheme:dark){.fc-wt-inert-hint{color:#fcd34d;background:#78350f22;border-color:#78350f}}
 .fc-gear{background:transparent;border:0;cursor:pointer;color:var(--fc-sub);font-size:14px;padding:2px}
 .fc-sim{margin-top:16px;background:var(--fc-soft);border:1px solid var(--fc-bd);border-radius:14px;padding:14px}
 .fc-sim-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px}

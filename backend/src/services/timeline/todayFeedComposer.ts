@@ -8,12 +8,15 @@
  *     consumed in order. Gets first billing at the configured cadence.
  *   • VARIETY (`kind: 'ambient'` slots, bottomless) — once precedence content
  *     runs out (or between injections, per cadence), EVERY evergreen curriculum
- *     type (ai_news_flash, market_intelligence, ai_tool_of_the_day, …) and every
- *     ambient provider (blog/podcast/testimonial, raw content from ambientPool)
- *     round-robin together as PEERS, one flat rotation — so no single type gets
- *     a bigger per-type share just because it's one of only 3 "providers"
- *     while the others split ~14 ways (the "way too many blogs" bug this fixed
- *     on 2026-08-04: see interleaveGroups/groupByType in ./todayFeedPlan).
+ *     type (ai_news_flash, market_intelligence, ai_tool_of_the_day, …),
+ *     community_discussion's dynamic stream, and every ambient provider
+ *     (blog/podcast/testimonial, raw content from ambientPool) round-robin
+ *     together as PEERS via a WEIGHTED selection (`planSlots`, SWRR — see
+ *     `todayFeedPlan.swrrTick`) — so no single type gets a bigger per-type
+ *     share just because it's one of only 3 "providers" while the others
+ *     split ~14 ways (the "way too many blogs" bug fixed 2026-08-03), and an
+ *     admin-configurable weight (default equal/neutral for everyone) can
+ *     tilt the proportion deliberately (2026-08-04, Feed Control board).
  *
  * The feed is materialised as an APPEND-ONLY sequence of `today_feed_impressions`
  * rows per enrollment, which buys three properties:
@@ -36,11 +39,16 @@ import { sequelize } from '../../config/database';
 import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineService';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
-import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
+import { planSlots, weightedInterleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
 import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
 import { env } from '../../config/env';
 import { getFeedPolicy } from './feedConfigService';
+// Type-only reverse dependency (feedControlService imports `type TodayFeedItem`
+// from this file) — importing a VALUE here does not create a runtime circular
+// import, since the reverse import is erased at compile (see backend/CLAUDE.md's
+// no-circular-imports rule; confirmed safe via a clean tsc pass).
+import { getTypeWeights } from './feedControlService';
 import { rankLearningValue } from '../cape/capeLearningValueRanker';
 
 /** Legacy default: inject one ambient item after every CADENCE anchored items.
@@ -252,10 +260,16 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
 
   // Cadence + active ambient providers come from the editable policy when the
   // Feed Control plane is on; otherwise the legacy hardcoded constants (flag-off
-  // ≡ byte-identical to before).
+  // ≡ byte-identical to before). Per-type weights (2026-08-04) are read the
+  // same way — confirmed FEED_CONTROL_ENABLED=true live in prod, so this goes
+  // live on deploy, not silently inert behind an unset flag. An empty weight
+  // map (flag off, or no type has an explicit weight set) makes planSlots'
+  // SWRR selection behave IDENTICALLY to the old equal-share round-robin —
+  // proven in todayFeedPlan.test.ts, not just asserted.
   const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
   const cadence = policy ? policy.todayCadence : CADENCE;
   const ambientProviders: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
+  const weights = env.feedControlEnabled ? await getTypeWeights() : new Map<string, number>();
 
   const { weekBound: gatheredWeekBound, evergreenByType } = await gatherAnchored(enrollmentId, placedRefs);
   // CAPE Phase 4: reorder the PRECEDENCE/week-bound queue only (design doc §9,
@@ -265,9 +279,12 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     enrollmentId,
     selectAnchoredOrder(gatheredWeekBound, env.capeLearningValueRankerEnabled),
   );
-  // The variety pool: every evergreen curriculum type is a peer of every
-  // ambient provider — one flat round-robin, so no single type (whether it's
-  // "blog" or "market_intelligence") gets a bigger per-type share than another.
+  // The variety pool: every evergreen curriculum type (now including
+  // community_discussion — see gatherAnchored) is a peer of every ambient
+  // provider — one flat, WEIGHTED round-robin, so no single type gets a
+  // bigger per-type share than another just by being one of only 3
+  // "providers" — share is now driven by admin-configurable weight, default
+  // equal (neutral 50 for everyone).
   const varietyKeys: string[] = [...ambientProviders, ...evergreenByType.keys()];
   const plan = planSlots({
     count: need,
@@ -276,6 +293,7 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     cadence,
     anchoredPlaced,
     ambientPlaced,
+    weights,
   });
 
   // Fetch/assemble what each variety key needs for this batch: real ambient
@@ -409,17 +427,19 @@ async function composeReadOnlyPage(enrollmentId: string, from: number, size: num
   );
   const policy = env.feedControlEnabled ? await getFeedPolicy() : null;
   const providers: AmbientProviderSlug[] = policy ? policy.ambientProviders : AMBIENT_PROVIDERS;
+  const weights = env.feedControlEnabled ? await getTypeWeights() : new Map<string, number>();
   const perProvider = Math.max(6, Math.ceil((targetEnd + 8) / Math.max(1, providers.length)));
   const ambientBatches = await Promise.all(
     providers.map((p) => pickAmbientBatch(enrollmentId, p, perProvider, [], { readOnly: true, seed })),
   );
   const ambient = ambientBatches.flat().map((a) => ambientItemFrom(a, 0));
-  // Same variety-tier merge as the real path (extendFeed): evergreen curriculum
-  // types round-robin evenly alongside the ambient providers rather than each
-  // clumping together, so the admin "view as" preview matches what a student's
-  // real feed actually looks like.
+  // Same weighted variety-tier merge as the real path (extendFeed): evergreen
+  // curriculum types (incl. community_discussion) round-robin proportionally
+  // alongside the ambient providers per the SAME admin weights, so the admin
+  // "view as" preview never silently diverges from what a student's real feed
+  // actually looks like.
   const varietyGroups = new Map([...evergreenByType, ...groupByType(ambient, (i) => i.type)]);
-  const combined = [...weekBound, ...interleaveGroups(varietyGroups)];
+  const combined = [...weekBound, ...weightedInterleaveGroups(varietyGroups, weights)];
   const ordered = (seed != null ? orderForVisit(combined, seed) : combined)
     .map((it, i): TodayFeedItem => ({ ...it, position: i, interacted: false }));
   const [completed, collectedBlogs] = await Promise.all([

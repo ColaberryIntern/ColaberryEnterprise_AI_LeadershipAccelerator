@@ -12,13 +12,64 @@ export type TodayItemKind = 'anchored' | 'ambient';
 export interface PlannedSlot { kind: TodayItemKind; provider?: string; }
 
 /**
+ * PURE — one step of the smooth weighted round-robin (SWRR) selection
+ * algorithm (the same accumulator-based approach nginx uses for weighted load
+ * balancing): every key's counter increases by its own weight each tick; the
+ * key with the highest counter is selected, then decremented by the total
+ * weight sum. Ties break on `keys`' own order (stable), which is what makes
+ * EQUAL weights reproduce plain round-robin order exactly — see
+ * `weightedInterleaveGroups`'s "equal weights ≡ unweighted" regression test.
+ * Unequal weights naturally allow a heavily-weighted key to repeat
+ * back-to-back sometimes (correct: that IS what a 90-vs-10 weight means over
+ * a long run) — no separate anti-repeat rule is layered on top; SWRR's own
+ * math already guarantees no back-to-back repeat when weights are equal.
+ * `state` is threaded explicitly (never mutated) so callers can carry
+ * continuity across many ticks (a live plan) or discard it (a one-shot
+ * interleave of a fixed list).
+ */
+function swrrTick(keys: string[], weights: Map<string, number>, state: Map<string, number>): { key: string; state: Map<string, number> } {
+  const next = new Map(state);
+  let total = 0;
+  for (const k of keys) {
+    const w = Math.max(0, weights.get(k) ?? 1);
+    total += w;
+    next.set(k, (next.get(k) ?? 0) + w);
+  }
+  let best = keys[0];
+  let bestVal = next.get(best) ?? 0;
+  for (const k of keys) {
+    const v = next.get(k) ?? 0;
+    if (v > bestVal) { best = k; bestVal = v; }
+  }
+  next.set(best, (next.get(best) ?? 0) - total);
+  return { key: best, state: next };
+}
+
+/**
+ * PURE — resolve a raw stored weight to a valid slider value (1-100),
+ * defaulting to 50 ("neutral") for anything absent, non-finite, or
+ * out-of-range. This is the SINGLE source of truth for weight validation —
+ * called both when WRITING (feedControlService.routeType, clamps on save)
+ * and when READING (todayFeedComposer, resolves at selection time) so the
+ * two can never drift out of sync with each other.
+ */
+export function resolveWeight(raw: number | null | undefined): number {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return 50;
+  return Math.max(1, Math.min(100, Math.round(raw)));
+}
+
+/**
  * Decide the kind (and ambient/variety key) for the next `count` feed slots.
  * Cadence = anchored (precedence) items between variety injections; `providers`
  * (the variety keys — real ambient providers PLUS evergreen curriculum types,
- * see `todayAnchoredSources.gatherAnchored`) round-robin and never repeat
- * back-to-back when more than one is available. When anchored is exhausted the
+ * see `todayAnchoredSources.gatherAnchored`) round-robin via SWRR (see
+ * `swrrTick`) — equal weights (the default, `weights` omitted) reproduce the
+ * exact plain round-robin order this function always used; unequal weights
+ * proportionally favor the heavier keys. When anchored is exhausted the
  * remainder is pure variety (bottomless). `anchoredPlaced` / `ambientPlaced`
- * carry cadence + round-robin continuity across pages.
+ * carry cadence + round-robin continuity across pages — the SWRR `state` is
+ * recovered by replaying `ambientPlaced` ticks from a fresh start (cheap:
+ * bounded by realistic feed lengths, a few hundred at most, not persisted).
  */
 export function planSlots(opts: {
   count: number;
@@ -27,16 +78,32 @@ export function planSlots(opts: {
   cadence: number;
   anchoredPlaced: number;
   ambientPlaced: number;
+  weights?: Map<string, number>;
 }): { slots: PlannedSlot[]; anchoredUsed: number; ambientUsed: number } {
   const cad = Math.max(1, Math.floor(opts.cadence));
   const providers = opts.providers;
+  // Resolve every provider's weight through resolveWeight (absent → neutral
+  // 50, not a raw fallback of 1) — the same resolution `weightedInterleaveGroups`
+  // applies, so the two never drift: a provider with no explicit weight set
+  // must be "neutral," not "starved."
+  const rawWeights = opts.weights ?? new Map<string, number>();
+  const weights = new Map<string, number>(providers.map((p) => [p, resolveWeight(rawWeights.get(p))]));
   let anchoredRem = Math.max(0, opts.anchoredAvailable);
   let sinceAmbient = ((opts.anchoredPlaced % cad) + cad) % cad;
-  let providerIdx = Math.max(0, opts.ambientPlaced);
   const slots: PlannedSlot[] = [];
   let anchoredUsed = 0;
   let ambientUsed = 0;
-  let lastProvider: string | undefined;
+
+  // Recover SWRR continuity: replay the accumulator forward from a fresh
+  // start for every ambient slot already placed on prior pages, discarding
+  // the outputs, to land on the exact state this call should continue from.
+  let swrrState = new Map<string, number>();
+  if (providers.length > 0) {
+    const replayTicks = Math.max(0, Math.floor(opts.ambientPlaced));
+    for (let i = 0; i < replayTicks; i++) {
+      swrrState = swrrTick(providers, weights, swrrState).state;
+    }
+  }
 
   for (let i = 0; i < opts.count; i++) {
     const wantAnchored = anchoredRem > 0 && sinceAmbient < cad;
@@ -50,14 +117,10 @@ export function planSlots(opts: {
       slots.push({ kind: 'anchored' });
       anchoredRem--; anchoredUsed++; sinceAmbient++;
     } else {
-      let provider = providers[providerIdx % providers.length];
-      if (providers.length > 1 && provider === lastProvider) {
-        providerIdx++;
-        provider = providers[providerIdx % providers.length];
-      }
-      slots.push({ kind: 'ambient', provider });
-      lastProvider = provider;
-      providerIdx++; ambientUsed++; sinceAmbient = 0;
+      const tick = swrrTick(providers, weights, swrrState);
+      swrrState = tick.state;
+      slots.push({ kind: 'ambient', provider: tick.key });
+      ambientUsed++; sinceAmbient = 0;
     }
   }
   return { slots, anchoredUsed, ambientUsed };
@@ -147,6 +210,38 @@ export function interleaveGroups<T>(groups: Map<string, T[]>): T[] {
  */
 export function interleaveByType<T>(items: T[], keyOf: (item: T) => string): T[] {
   return interleaveGroups(groupByType(items, keyOf));
+}
+
+/**
+ * PURE — same contract as `interleaveGroups`, but each group's per-tick share
+ * is proportional to its weight (via `swrrTick`) instead of strictly equal.
+ * A group missing from `weights` defaults to 50 (via `resolveWeight`'s
+ * neutral default) — so calling this with an EMPTY weight map reproduces
+ * `interleaveGroups`'s exact output (every key gets the same default,
+ * proven in tests, not just asserted). Used by the admin "view as" preview
+ * (`todayFeedComposer.composeReadOnlyPage`) so it doesn't silently diverge
+ * from the real weighted student feed (`planSlots`, which uses the same
+ * `swrrTick` primitive for the live path).
+ */
+export function weightedInterleaveGroups<T>(groups: Map<string, T[]>, weights: Map<string, number> = new Map()): T[] {
+  const keys = Array.from(groups.keys());
+  const resolvedWeights = new Map(keys.map((k) => [k, resolveWeight(weights.get(k))]));
+  const cursors = new Map<string, number>(keys.map((k) => [k, 0]));
+  let state = new Map<string, number>();
+  const out: T[] = [];
+  let remaining = 0;
+  for (const list of groups.values()) remaining += list.length;
+  while (remaining > 0) {
+    const avail = keys.filter((k) => (cursors.get(k) ?? 0) < (groups.get(k)?.length ?? 0));
+    if (!avail.length) break; // defensive: remaining should already be 0 here
+    const tick = swrrTick(avail, resolvedWeights, state);
+    state = tick.state;
+    const idx = cursors.get(tick.key)!;
+    out.push(groups.get(tick.key)![idx]);
+    cursors.set(tick.key, idx + 1);
+    remaining--;
+  }
+  return out;
 }
 
 /**

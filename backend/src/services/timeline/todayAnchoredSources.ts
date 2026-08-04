@@ -10,6 +10,7 @@
  * feed stays Class-only until enabled. Each source is fail-soft (errors → []),
  * so one surface can never break the feed.
  */
+import { Op } from 'sequelize';
 import { getFeed, type FeedCard, type FeedVideo } from './timelineService';
 import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
 import { anchoredWeekAllowed, weekStartedForToday, isWeekGated, groupByType } from './todayFeedPlan';
@@ -20,6 +21,7 @@ import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
 import LiveSession from '../../models/LiveSession';
 import AttendanceRecord from '../../models/AttendanceRecord';
+import Enrollment from '../../models/Enrollment';
 import { resolveCohortId } from '../communityService';
 import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
@@ -300,19 +302,43 @@ async function projectCandidates(enrollmentId: string, placedRefs: Set<string>):
   }
 }
 
+/**
+ * Community's permanent-exhaustion fix (2026-08-04): this used to fetch only
+ * the CANDIDATE_CAP=20 MOST-RECENT cohort posts, then filter out already-
+ * placed ones — so once a student had seen the current top-20 window, this
+ * returned [] FOREVER (no expiry on `placedRefs`, and no fallback to older
+ * unseen posts), even though the cohort might have hundreds of older posts
+ * the student never saw. Confirmed live: `community_discussion` measured at
+ * only 8 of 2398 anchored impressions platform-wide over 30 days.
+ *
+ * Fix: exclude already-placed posts IN THE QUERY (`id NOT IN`) instead of
+ * after fetching, so CANDIDATE_CAP applies to the FETCH BATCH, not the
+ * lifetime pool — a student who's exhausted the current top-20 keeps
+ * reaching further back into their own unseen backlog instead of going dark.
+ * Bounded by `enrolled_at` (not "every post the cohort has ever made") so a
+ * late-joining student never surfaces pre-enrollment, contextually stale
+ * discussion — the backlog is "everything since I joined," not "everything
+ * ever." Community posts are NOT recycled the way ambient content is (no
+ * cooldown/reshow) — they're unique, dated content; once genuinely exhausted
+ * (every post since enrollment seen), this correctly returns [].
+ */
 async function communityCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
   try {
-    const cohortId = await resolveCohortId(enrollmentId);
+    const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['cohort_id', 'enrolled_at'] });
+    if (!enrollment?.cohort_id) return [];
+    const placedPostIds = Array.from(placedRefs)
+      .filter((r) => r.startsWith('community:'))
+      .map((r) => r.slice('community:'.length));
+    const where: any = { cohort_id: enrollment.cohort_id, status: 'visible' };
+    if (enrollment.enrolled_at) where.created_at = { [Op.gte]: enrollment.enrolled_at };
+    if (placedPostIds.length) where.id = { [Op.notIn]: placedPostIds };
     const posts = await CommunityPost.findAll({
-      where: { cohort_id: cohortId, status: 'visible' },
+      where,
       include: [{ model: CommunityMember, as: 'member', attributes: ['display_name', 'avatar_url', 'level'] }],
       order: [['created_at', 'DESC']],
       limit: CANDIDATE_CAP,
     });
-    return posts
-      .map((p) => p.get({ plain: true }) as any)
-      .filter((p: any) => !placedRefs.has(`community:${p.id}`))
-      .map((p: any) => communityItem(p));
+    return posts.map((p) => communityItem(p.get({ plain: true }) as any));
   } catch (err: any) {
     console.warn('[todayAnchoredSources] community failed:', err?.message?.split('\n')[0]);
     return [];
@@ -353,19 +379,25 @@ async function missedSessionCandidates(enrollmentId: string, placedRefs: Set<str
  * The Today feed's two candidate tiers:
  *  - `weekBound`: real, precedence-worthy work — the student's current-week
  *    curriculum blended (round-robin, via blendSurfaces) with Project tasks /
- *    Community posts / missed-session replays when those surfaces are on.
- *    This is what the composer treats as "anchored" for cadence purposes —
- *    curriculum (and curriculum-adjacent work) gets first billing.
+ *    missed-session replays when those surfaces are on. This is what the
+ *    composer treats as "anchored" for cadence purposes — curriculum (and
+ *    curriculum-adjacent ASSIGNED work) gets first billing.
  *  - `evergreenByType`: the intel-pipeline/curriculum evergreen types
- *    (ai_news_flash, market_intelligence, ai_tool_of_the_day, …), grouped by
- *    type. The composer merges this with the ambient providers
- *    (blog/podcast/testimonial) into ONE flat round-robin "variety" pool —
- *    see todayFeedComposer.extendFeed. Kept SEPARATE from weekBound (rather
- *    than concatenated onto it, as before 2026-08-04) because lumping a
- *    ~14-type evergreen pool in with a 3-provider ambient pool gave each
- *    ambient provider (blog/testimonial/podcast) a much bigger individual
- *    share than any single evergreen type — the exact "too many blogs"
- *    imbalance this split fixes.
+ *    (ai_news_flash, market_intelligence, ai_tool_of_the_day, …) PLUS
+ *    (2026-08-04) `community_discussion`'s dynamic community_posts-backed
+ *    stream, grouped by type. The composer merges this with the ambient
+ *    providers (blog/podcast/testimonial) into ONE flat, WEIGHTED round-robin
+ *    "variety" pool — see todayFeedComposer.extendFeed. Kept SEPARATE from
+ *    weekBound (rather than concatenated onto it, as before 2026-08-03)
+ *    because lumping a ~14-type evergreen pool in with a 3-provider ambient
+ *    pool gave each ambient provider (blog/testimonial/podcast) a much
+ *    bigger individual share than any single evergreen type — the exact "too
+ *    many blogs" imbalance that split fixed. `community_discussion` joined
+ *    this tier (rather than staying in weekBound) because it's PASSIVE
+ *    DISCOVERY content, not assigned work — a peer of blog/ai_news_flash,
+ *    not of a real curriculum card — and the variety pool's round-robin is
+ *    what gives it a sustained fair share instead of the one-time top-20
+ *    trickle it had before (see communityCandidates' docstring).
  */
 export interface AnchoredCandidates {
   weekBound: TodayFeedItem[];
@@ -377,16 +409,32 @@ export async function gatherAnchored(enrollmentId: string, placedRefs: Set<strin
   // Each extra surface is gated by its own flag; when all are off this returns
   // the class-only weekBound queue unchanged (flag-off ≡ byte-identical to before).
   const extras: TodayFeedItem[][] = [];
+  let community: TodayFeedItem[] = [];
   if (env.todayAggregateSources) {
-    const [project, community] = await Promise.all([
+    const [project, communityFetched] = await Promise.all([
       projectCandidates(enrollmentId, placedRefs),
       communityCandidates(enrollmentId, placedRefs),
     ]);
-    extras.push(project, community);
+    // `project_task` stays in the PRECEDENCE tier (blended below) — it's
+    // assigned/actionable student work, not passive discovery, so it should
+    // never become probabilistically less likely to surface because of a low
+    // weight (see execution-contract.md Assumption 3/5). `community_discussion`
+    // moves OUT of the precedence blend and INTO the weighted variety pool
+    // (below) — it's passive discovery content, a peer of blog/ai_news_flash/
+    // etc, and this is also the fix for its permanent-exhaustion bug (see
+    // communityCandidates' docstring): the variety pool's round-robin is what
+    // actually gives it a fair, sustained share instead of a one-time trickle.
+    extras.push(project);
+    community = communityFetched;
   }
   if (env.todaySessionReplays) {
     extras.push(await missedSessionCandidates(enrollmentId, placedRefs));
   }
   const weekBound = extras.length ? blendSurfaces([cls.weekBound, ...extras]) : cls.weekBound;
-  return { weekBound, evergreenByType: cls.evergreenByType };
+
+  const evergreenByType = new Map(cls.evergreenByType);
+  if (community.length) {
+    evergreenByType.set('community_discussion', [...(evergreenByType.get('community_discussion') ?? []), ...community]);
+  }
+  return { weekBound, evergreenByType };
 }

@@ -23,6 +23,7 @@ import { SURFACE_ORDER } from './surfaces';
 import { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigService';
 import { rankCandidates, type RankCandidate } from './feedRanker';
 import { getFeed } from './timelineService';
+import { resolveWeight } from './todayFeedPlan';
 import { env } from '../../config/env';
 import { rankLearningValue } from '../cape/capeLearningValueRanker';
 import type { TodayFeedItem } from './todayFeedComposer';
@@ -41,11 +42,32 @@ export interface TypeRouting {
   feed_cadence?: number | null;
   feed_frequency_cap?: number | null;
   feed_cooldown_days?: number | null;
+  /** 1-100 slider value, real (not simulator-only) for types whose live
+   *  instances are rotation-eligible — see getBoard()'s `weight_live` and
+   *  todayFeedComposer.extendFeed's weighted variety-pool selection. Stored
+   *  ONLY in this SystemSetting map (no CurriculumTypeDefinition mirror, no
+   *  migration — unlike feed_cadence/feed_frequency_cap/feed_cooldown_days,
+   *  which predate this field and already have their own DB columns). */
+  feed_weight?: number | null;
 }
 
 async function getRoutingMap(): Promise<Record<string, TypeRouting>> {
   const raw = await getSetting(ROUTING_KEY);
   return raw && typeof raw === 'object' ? raw : {};
+}
+
+/** Every type's resolved weight (1-100), for types that have one explicitly
+ *  set — absent from the map means "use the neutral default" (resolveWeight
+ *  handles that at the READ site, e.g. todayFeedComposer, not here) so this
+ *  function never has to know which keys will actually be looked up. */
+export async function getTypeWeights(): Promise<Map<string, number>> {
+  const map = await getRoutingMap();
+  const weights = new Map<string, number>();
+  for (const slug of Object.keys(map)) {
+    const w = map[slug].feed_weight;
+    if (w != null) weights.set(slug, resolveWeight(w));
+  }
+  return weights;
 }
 
 /** Apply one type's stored routing onto the in-memory registry (makes it live). */
@@ -96,8 +118,17 @@ export async function routeType(slug: string, patch: TypeRouting, adminId?: stri
   if (!resolveType(slug)) throw Object.assign(new Error(`unknown type ${slug}`), { status: 404 });
   if (patch.home_surface && !SURFACES.includes(patch.home_surface)) throw Object.assign(new Error('bad surface'), { status: 400 });
   if (patch.bucket_default && !BUCKETS.includes(patch.bucket_default)) throw Object.assign(new Error('bad bucket'), { status: 400 });
+  // Deliberately a CLAMP, not a reject (unlike home_surface/bucket_default
+  // above): feed_weight is a slider-bound numeric range, not an enum — a
+  // stray out-of-range value (or a client bug) should land on a valid
+  // in-range weight, not 400 the whole request. `null` explicitly clears a
+  // set weight back to "unset" (neutral default), distinct from omitting the
+  // field (leaves any existing stored value untouched).
+  const cleanPatch: TypeRouting = patch.feed_weight === undefined || patch.feed_weight === null
+    ? patch
+    : { ...patch, feed_weight: resolveWeight(patch.feed_weight) };
   const map = await getRoutingMap();
-  const merged: TypeRouting = { ...map[slug], ...patch };
+  const merged: TypeRouting = { ...map[slug], ...cleanPatch };
   map[slug] = merged;
   await setSetting(ROUTING_KEY, map, adminId);
   applyOne(slug, merged); // live
@@ -140,9 +171,43 @@ export async function bulkRouteTypes(slugs: string[], patch: TypeRouting, adminI
   return { routed };
 }
 
+/** Community's dynamic, community_posts-backed stream (see
+ *  todayAnchoredSources.communityCandidates) always counts as weight-live —
+ *  it has no `timeline_cards` rows of its own to detect via the query below. */
+const ALWAYS_WEIGHT_LIVE_SLUGS = new Set<string>(['community_discussion']);
+
+/**
+ * PER-TYPE (not per-lane — see execution-contract.md Assumption 3 and the
+ * `announcement` counterexample plan-audit cycle 1 caught: it's Today-lane
+ * but week-bound/one-shot, so a lane-level flag would have wrongly marked it
+ * live) — does this type's weight slider actually change real behavior right
+ * now? True for the 3 ambient providers, the community dynamic stream, and
+ * any type with at least one PUBLISHED evergreen (`week IS NULL`) card —
+ * i.e. exactly the types eligible for todayFeedComposer's weighted variety
+ * pool. False for everything else (assigned, week-bound curriculum) — the
+ * slider is still shown (every non-system type on every lane gets one, per
+ * the user's explicit "all 5 lanes" choice), just inert, and the frontend
+ * uses this flag to say so honestly instead of implying full control.
+ */
+async function computeWeightLiveSlugs(ambientSlugs: string[]): Promise<Set<string>> {
+  const live = new Set<string>([...ambientSlugs, ...ALWAYS_WEIGHT_LIVE_SLUGS]);
+  try {
+    const rows = await sequelize.query<{ type: string }>(
+      `SELECT DISTINCT type FROM timeline_cards WHERE week IS NULL AND visibility = 'published'`,
+      { type: QueryTypes.SELECT },
+    );
+    for (const r of rows) live.add(r.type);
+  } catch (err: any) {
+    console.warn('[FeedControl] computeWeightLiveSlugs failed (weight_live will undercount):', err?.message);
+  }
+  return live;
+}
+
 /** The board payload: surfaces + the types grouped under their effective surface + policy. */
 export async function getBoard(): Promise<any> {
   const [policy, routing] = await Promise.all([getFeedPolicy(), getRoutingMap()]);
+  const ambientSlugs = allTypes().filter((t) => t.feed_mode === 'ambient' && !t.system).map((t) => t.slug);
+  const weightLiveSlugs = await computeWeightLiveSlugs(ambientSlugs);
   const lanes = SURFACE_ORDER.map((s) => ({
     surface: s,
     types: allTypes()
@@ -154,11 +219,15 @@ export async function getBoard(): Promise<any> {
         cadence: routing[t.slug]?.feed_cadence ?? null,
         frequency_cap: routing[t.slug]?.feed_frequency_cap ?? null,
         cooldown_days: routing[t.slug]?.feed_cooldown_days ?? null,
+        weight: routing[t.slug]?.feed_weight ?? null,
+        weight_live: weightLiveSlugs.has(t.slug),
       })),
   }));
   // feedControlEnabled tells the UI which knobs actually reach students right now.
-  // When false (default), routing + today-eligibility are live but cadence/priority/
-  // policy are preview-only (the live composer uses legacy constants); see todayFeedComposer.
+  // Checkbox (today_eligible) + lane (home_surface) are always live. Weight is
+  // live for weight_live:true types when feedControlEnabled is on (confirmed
+  // ON in prod). Cadence/frequency-cap/cooldown/priority/exploration remain
+  // preview-only (the live composer never reads them) — see todayFeedComposer.
   return { lanes, policy, buckets: BUCKETS, feedControlEnabled: env.feedControlEnabled };
 }
 
