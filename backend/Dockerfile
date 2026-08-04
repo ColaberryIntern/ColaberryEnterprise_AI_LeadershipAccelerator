@@ -24,7 +24,7 @@ WORKDIR /app
 # on every commit) was copied first, so xvfb/git/curl/gnupg, the Docker CLI +
 # compose plugin, and the Playwright Chromium download were all re-fetched on
 # every single build — multiple minutes of unrelated work per rebuild.
-RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc git ca-certificates curl gnupg && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc git ca-certificates curl gnupg poppler-utils && rm -rf /var/lib/apt/lists/*
 # Install docker CLI + compose plugin so the backend can provision preview stacks
 # via the mounted /var/run/docker.sock. Only the CLI — the daemon lives on the host.
 RUN install -m 0755 -d /etc/apt/keyrings \
