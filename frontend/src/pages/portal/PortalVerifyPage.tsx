@@ -11,6 +11,15 @@ function PortalVerifyPage() {
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(true);
 
+  // A verify call can fail on a stale/expired token (e.g. a student requested
+  // a second link, silently invalidating the first, then clicked the old
+  // email). "Request New Link" must carry the same `next` through to
+  // PortalLoginPage so a retry still lands back on the class check-in page
+  // instead of silently losing the QR intent — same rationale as the happy
+  // path below.
+  const nextParam = safeNextPath(searchParams.get('next'));
+  const retryLoginHref = nextParam ? `/portal/login?next=${encodeURIComponent(nextParam)}` : '/portal/login';
+
   useEffect(() => {
     const token = searchParams.get('token');
     if (!token) {
@@ -62,7 +71,7 @@ function PortalVerifyPage() {
               </div>
               <h2 className="h5 fw-semibold">Verification Failed</h2>
               <p className="text-muted small">{error}</p>
-              <a href="/portal/login" className="btn btn-sm" style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}>
+              <a href={retryLoginHref} className="btn btn-sm" style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}>
                 Request New Link
               </a>
             </>
