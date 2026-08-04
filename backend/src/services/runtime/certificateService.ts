@@ -96,8 +96,17 @@ const SYSTEM = 'You verify whether an uploaded file is a genuine course/exam COM
 
 function userText(className?: string | null): string {
   return `Is this a real completion/achievement CERTIFICATE (issued to a person for finishing a course or exam)?` +
-    `${className ? ` The expected course is "${className}" (an Anthropic / SkillsJar course).` : ''}\n` +
-    `Return json { "is_certificate": boolean, "matches_course": boolean (does it plausibly reference the expected course or Anthropic/SkillsJar — if no course was specified, set true), "recipient": string (name on it, or ""), "reason": string (one short sentence for the student explaining the decision) }.`;
+    `${className ? ` The expected course is "${className}" (an Anthropic / SkillsJar course). ` +
+      `Note: this app sometimes gives a course its own internal display name, or splits one external ` +
+      `SkillsJar course into multiple internal parts/weeks (e.g. "Part 1" / "Part 2") — the certificate ` +
+      `itself is issued by Anthropic/SkillsJar for the external course and will very likely use different, ` +
+      `official wording than this internal title (e.g. an internal title "Building with the Claude API · Part 2" ` +
+      `may correspond to a real certificate titled "Claude with the Anthropic API"). Do NOT require the ` +
+      `certificate's title to textually match the expected course name — set matches_course true whenever the ` +
+      `certificate is clearly an Anthropic/Claude/SkillsJar course certificate on a plausibly related topic; ` +
+      `only set it false if the certificate is obviously for a wholly unrelated subject or platform (e.g. an ` +
+      `Excel or PMP certification when a Claude course was expected).` : ''}\n` +
+    `Return json { "is_certificate": boolean, "matches_course": boolean (see guidance above — if no course was specified, set true), "recipient": string (name on it, or ""), "reason": string (one short sentence for the student explaining the decision) }.`;
 }
 
 async function classify(messages: any[]): Promise<CertVerifyResult> {
