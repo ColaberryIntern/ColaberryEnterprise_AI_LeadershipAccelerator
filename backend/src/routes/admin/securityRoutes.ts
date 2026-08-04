@@ -12,6 +12,7 @@ import {
   runAiSafetyMonitor,
   runAgentBehaviorMonitor,
 } from '../../services/aiOrchestrator';
+import { redactForLogs } from '../../utils/piiRedaction';
 
 const router = Router();
 
@@ -241,7 +242,7 @@ router.delete('/api/admin/security/data-subject/:email', requireAdmin, async (re
       activitiesDeleted = await Activity.destroy({ where: { lead_id: { [Op.in]: leadIds } } });
     }
 
-    console.log(`[Security] GDPR erasure for ${email}: ${leadsAnonymized} leads, ${enrollmentsAnonymized} enrollments, ${activitiesDeleted} activities`);
+    console.log(`[Security] GDPR erasure for ${redactForLogs(email)}: ${leadsAnonymized} leads, ${enrollmentsAnonymized} enrollments, ${activitiesDeleted} activities`);
 
     res.json({
       message: 'Data subject erasure completed',
