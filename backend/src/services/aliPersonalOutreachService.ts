@@ -8,6 +8,7 @@ import { QueryTypes } from 'sequelize';
 import { sequelize } from '../config/database';
 import { Campaign } from '../models';
 import { enrollLeadsInCampaign } from './campaignService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 const MAX_ENROLL_PER_DAY = 50;
 const CAMPAIGN_NAME = 'Ali Personal Outreach';
@@ -146,7 +147,7 @@ export async function runAliPersonalOutreach(): Promise<void> {
       });
 
       if (originalCampaignType !== 'unknown') {
-        console.log(`[AliOutreach] Stamped original_campaign_type=${originalCampaignType} on lead ${lead.lead_id} (${lead.email})`);
+        console.log(`[AliOutreach] Stamped original_campaign_type=${originalCampaignType} on lead ${lead.lead_id} (${redactForLogs(lead.email)})`);
       }
     } catch (err: any) {
       console.warn(`[AliOutreach] Failed to stamp campaign type for lead ${lead.lead_id}: ${err.message}`);

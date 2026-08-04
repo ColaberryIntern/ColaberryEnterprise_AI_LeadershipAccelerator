@@ -450,7 +450,7 @@ function executeBuildChart(
   return { error: 'Chart validation failed — data shape does not fit chart type.' };
 }
 
-async function executeGetDepartmentContext(departmentName: string): Promise<any> {
+export async function executeGetDepartmentContext(departmentName: string): Promise<any> {
   try {
     const dept = await Department.findOne({
       where: sequelize.where(
@@ -482,7 +482,7 @@ async function executeGetDepartmentContext(departmentName: string): Promise<any>
   }
 }
 
-async function executeSearchKnowledge(query: string, topK?: number): Promise<any> {
+export async function executeSearchKnowledge(query: string, topK?: number): Promise<any> {
   try {
     const { executeVectorSearch } = await import('./vectorExecutor');
     const results = await executeVectorSearch(['semantic_entity_search'], query);

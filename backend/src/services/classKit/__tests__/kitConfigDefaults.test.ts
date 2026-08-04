@@ -96,26 +96,45 @@ describe('getKitConfigDefaults', () => {
     expect(d.checkpoints.every((cp) => cp.segment === 'build-map')).toBe(true);
   });
 
-  it('resolves Week 2\'s Story Beats (the Timeline-page redesign\'s worked example)', () => {
+  it('resolves Week 2\'s Story Beats (the data-incident redesign\'s worked example, week2-architecture-day-redesign)', () => {
     const d = getKitConfigDefaults(week2Monday);
     expect(d.dayKind).toBe('architecture');
     expect(d.week).toBe(2);
     expect(d.storyBeats.length).toBe(4);
-    expect(d.storyBeats.map((b) => b.segment).sort()).toEqual(['architecture', 'business-problem', 'checkin', 'deconstruct']);
+    expect(d.storyBeats.map((b) => b.segment).sort()).toEqual(['business-problem', 'checkin', 'deconstruct', 'micro-build']);
     expect(d.storyBeats.every((b) => typeof b.body === 'string' && b.body.length > 20)).toBe(true);
-    expect(d.storyBeats.find((b) => b.segment === 'checkin')?.title).toContain('repeated task');
+    expect(d.storyBeats.find((b) => b.segment === 'checkin')?.title).toContain('analyst');
+    expect(d.storyBeats.find((b) => b.segment === 'micro-build')?.title).toContain('Leadership');
   });
 
-  it('resolves Week 2\'s designChoice poll with its answer intact (classkit-deck-polish T004)', () => {
+  it('resolves Week 2\'s designChoice poll with its answer intact (week2-architecture-day-redesign)', () => {
     // Confirms the content fix survives the resolution pipeline, not just the
     // raw data file — designChoice is spread into two segments (checkin,
     // challenge), both must carry the same answer.
     const d = getKitConfigDefaults(week2Monday);
     const checkin = d.interactions.find((it) => it.segment === 'checkin');
     const challenge = d.interactions.find((it) => it.segment === 'challenge');
-    expect(checkin?.answer).toBe(1);
-    expect(challenge?.answer).toBe(1);
-    expect(checkin?.options[1]).toContain('A Skill');
+    expect(checkin?.answer).toBe(2);
+    expect(challenge?.answer).toBe(2);
+    expect(checkin?.options[2]).toContain('data-quality contract');
+  });
+
+  it('resolves Week 2\'s extraInteractions spliced into the architecture-day default list (week2-architecture-day-redesign)', () => {
+    const d = getKitConfigDefaults(week2Monday);
+    // 3 fixed slots (checkin, challenge, trivia) + 4 extras = 7 total.
+    expect(d.interactions.length).toBe(7);
+    const deconstructPoll = d.interactions.find((it) => it.segment === 'deconstruct');
+    expect(deconstructPoll?.options).toContain('Skill description');
+    const microBuildPolls = d.interactions.filter((it) => it.segment === 'micro-build');
+    expect(microBuildPolls.length).toBe(2);
+    const triviaQs = d.interactions.filter((it) => it.segment === 'trivia');
+    expect(triviaQs.length).toBe(2);
+    expect(triviaQs.some((q) => q.q.includes('allowed-tools'))).toBe(true);
+  });
+
+  it('does not leak Week 2\'s extraInteractions into any other week (week2-architecture-day-redesign)', () => {
+    const d1 = getKitConfigDefaults(week1Monday);
+    expect(d1.interactions.length).toBe(3);
   });
 
   it('scales segment lane widths to a session\'s actual (non-120-min) duration, proportionally', () => {

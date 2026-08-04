@@ -141,6 +141,15 @@ export const env = {
   // per-card/type routing. Default OFF; flag-off keeps the legacy hardcoded
   // CADENCE=2 + fixed provider list + week→bucket→order behavior byte-identical.
   feedControlEnabled: process.env.FEED_CONTROL_ENABLED === 'true',
+  // CAPE Phase 4 — the learning-value ranker (design doc §9, §16 Phase 4). Reorders
+  // the ANCHORED candidate queue in todayFeedComposer.ts by an explainable
+  // skill-gap/prerequisite/goal-fit score instead of raw gatherAnchored() order.
+  // Default OFF everywhere including production — flag-off keeps Today feed
+  // ranking byte-identical to pre-Phase-4 behavior (see
+  // todayFeedComposer.capeFlagOff.test.ts). Not documented in .env.example,
+  // matching the established convention for this flag family (FEED_CONTROL_ENABLED/
+  // TODAY_FEED_V2_ENABLED/TODAY_AGGREGATE_SOURCES are likewise inline-only).
+  capeLearningValueRankerEnabled: process.env.CAPE_LEARNING_VALUE_RANKER_ENABLED === 'true',
   // Content paywall — gate the full 12-week curriculum behind PAYMENT (paid /
   // admin-comp / staff / business-workspace), not just enrollment_type='explorer'.
   // Default OFF: flag-off preserves the legacy explorer-only Week-0 gate byte-for-

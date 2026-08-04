@@ -10,6 +10,7 @@ import OpenAI from 'openai';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { env } from '../config/env';
 import { getTestOverrides } from '../services/settingsService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /**
  * POST /api/webhook/synthflow/call-complete
@@ -19,7 +20,7 @@ import { getTestOverrides } from '../services/settingsService';
 export async function handleSynthflowCallComplete(req: Request, res: Response): Promise<void> {
   try {
     // Log raw payload to diagnose Synthflow's field names
-    console.log('[Synthflow Webhook] Raw payload:', JSON.stringify(req.body).slice(0, 2000));
+    console.log('[Synthflow Webhook] Raw payload:', redactForLogs(JSON.stringify(req.body)).slice(0, 2000));
 
     const body = req.body || {};
 
@@ -231,7 +232,7 @@ export async function handleSynthflowCallComplete(req: Request, res: Response): 
               // Enroll in Strategy Call Readiness
               const { enrollLeadInSequence } = require('../services/sequenceService');
               await enrollLeadInSequence(commLog.lead_id, strategyCampaignId);
-              console.log(`[Synthflow Webhook] Hot lead ${(lead as any)?.name} moved to Strategy Call Readiness (interest: ${interestArea})`);
+              console.log(`[Synthflow Webhook] Hot lead ${redactForLogs((lead as any)?.name)} moved to Strategy Call Readiness (interest: ${interestArea})`);
 
               // ── Maya→Ali Handoff: auto-enroll interested leads in Ali Personal Outreach ──
               try {
@@ -330,7 +331,7 @@ async function sendPostCallSms(leadId: number, transcript: string, callId: strin
 
   // Summarize transcript via AI
   const smsBody = await summarizeTranscriptForSms(firstName, transcript);
-  console.log(`[PostCallSMS] Sending SMS to lead ${leadId} (${smsBody.length} chars): ${smsBody.substring(0, 80)}...`);
+  console.log(`[PostCallSMS] Sending SMS to lead ${leadId} (${smsBody.length} chars): ${redactForLogs(smsBody).substring(0, 80)}...`);
 
   const result = await sendSmsViaGhl(ghlContactId, smsBody);
   if (result.success) {
@@ -427,7 +428,7 @@ async function sendVoicemailFallbackSms(leadId: number): Promise<void> {
 
   const result = await sendSmsViaGhl(ghlContactId, smsBody);
   if (result.success) {
-    console.log(`[VM-SMS] Voicemail fallback SMS sent to lead ${leadId} (${firstName})`);
+    console.log(`[VM-SMS] Voicemail fallback SMS sent to lead ${leadId} (${redactForLogs(firstName)})`);
   } else {
     console.error(`[VM-SMS] SMS failed for lead ${leadId}: ${result.error}`);
   }

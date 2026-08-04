@@ -46,6 +46,7 @@ import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema'
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
+import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValueRankerSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -2284,6 +2285,7 @@ async function start(): Promise<void> {
   // then a NON-BLOCKING one-time populate for fresh environments (weekly cron keeps it current).
   await ensureBlogSchema();
   await ensureTodayFeedSchema();
+  await ensureCapeLearningValueRankerSchema(); // CAPE Phase 4 (T007) — additive columns; must run AFTER ensureTodayFeedSchema
   await ensureFeedControlSchema();
   await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
@@ -2609,6 +2611,21 @@ async function start(): Promise<void> {
     import('./services/architectBuildPollerService')
       .then(({ pollArchitectBuilds }) => pollArchitectBuilds())
       .catch((err) => console.warn('[ArchitectPoller] scheduled run failed:', err?.message));
+  });
+
+  // Cory health canary — exercises real read-only Cory tool executors every 4h so
+  // tool.call + retrieval observability (Trust Center P1-6) stays live even during
+  // weeks with no organic Cory investigation traffic. Read-only, no LLM involved,
+  // no write tools exposed. See services/observability/coryHealthCanaryService.ts.
+  cron.schedule('0 */4 * * *', () => {
+    import('./services/observability/coryHealthCanaryService')
+      .then(({ runCoryHealthCanary }) => runCoryHealthCanary())
+      .then((result) => {
+        if (result.errors.length > 0) {
+          console.warn('[CoryHealthCanary] completed with errors:', result.errors);
+        }
+      })
+      .catch((err) => console.warn('[CoryHealthCanary] scheduled run failed:', err?.message));
   });
 
   // Colaberry Commons — drain the community-rooms outbox every minute (Meet-link

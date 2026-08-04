@@ -1,6 +1,7 @@
 import { env } from '../config/env';
 import { getTestOverrides } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
+import { redactForLogs } from '../utils/piiRedaction';
 
 interface VoiceCallParams {
   name: string;
@@ -72,7 +73,7 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
   try {
     const test = await getTestOverrides();
     if (test.enabled && test.phone) {
-      console.log(`[Synthflow] TEST MODE: redirecting call from ${params.phone} to ${test.phone}`);
+      console.log(`[Synthflow] TEST MODE: redirecting call from ${redactForLogs(params.phone)} to ${redactForLogs(test.phone)}`);
       actualPhone = test.phone;
     }
   } catch {
@@ -124,7 +125,7 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('[Synthflow] API error:', response.status, data);
+      console.error('[Synthflow] API error:', response.status, redactForLogs(JSON.stringify(data)));
       return { success: false, error: JSON.stringify(data) };
     }
 
@@ -132,9 +133,9 @@ export async function triggerVoiceCall(params: VoiceCallParams): Promise<Synthfl
     const d = data as Record<string, any>;
     const callId = d.call_id || d.id || d._id || d.data?.call_id || d.data?.id || null;
     if (!callId) {
-      console.warn('[Synthflow] call_id is null after extraction. Full response:', JSON.stringify(d));
+      console.warn('[Synthflow] call_id is null after extraction. Full response:', redactForLogs(JSON.stringify(d)));
     }
-    console.log(`[Synthflow] ${params.callType} call initiated for ${params.name}. call_id: ${callId}. Response keys: ${Object.keys(d).join(',')}`);
+    console.log(`[Synthflow] ${params.callType} call initiated for ${redactForLogs(params.name)}. call_id: ${callId}. Response keys: ${Object.keys(d).join(',')}`);
     return { success: true, data: { ...d, call_id: callId } };
   } catch (error: any) {
     console.error('[Synthflow] Request failed:', error.message);

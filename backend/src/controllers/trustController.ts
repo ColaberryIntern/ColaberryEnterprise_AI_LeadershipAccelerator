@@ -3,6 +3,7 @@
  * Read-only. Validates nothing (no inputs); calls trustMetricsService and returns typed JSON.
  */
 import { Request, Response } from 'express';
+import { z } from 'zod';
 import {
   getTrustOverview,
   getActivityMetrics,
@@ -14,6 +15,11 @@ import {
   getAgentRoster,
   getAgentDetail,
   getRegistryHealth,
+  getCompositeBreakdown,
+  getActivityDetail,
+  getActivityDetailForDay,
+  getBlockedWrites,
+  getAgentRegistryDetail,
 } from '../services/trustMetricsService';
 import { runDirectorBySlug } from '../services/workforce/directorActions';
 import { getAiValue } from '../services/aiValueService';
@@ -171,5 +177,81 @@ export async function handleRunAgent(req: Request, res: Response): Promise<void>
     res.json(result);
   } catch (err) {
     fail(res, 'trust_agent_run', err);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase B — Trust 90+ drill-down (T008-T013). See trustMetricsService.ts for the
+// PII-scoping rule and the T012 extend-vs-sibling-route decision.
+// ---------------------------------------------------------------------------
+
+/** T008: drill-down for the composite-score tile. */
+export async function handleGetCompositeBreakdown(_req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await getCompositeBreakdown());
+  } catch (err) {
+    fail(res, 'trust_composite_breakdown', err);
+  }
+}
+
+const activityKindSchema = z.enum(['conversations', 'generations', 'agent-runs', 'errors']);
+
+/** T009: drill-down for one 24h StatCard (Conversations/Generations/Agent runs/Errors).
+ *  `kind` is Zod-validated against a fixed enum; an invalid kind is a 400, not a 500. */
+export async function handleGetActivityDetail(req: Request, res: Response): Promise<void> {
+  try {
+    const kind = activityKindSchema.parse(req.params.kind);
+    res.json(await getActivityDetail(kind));
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid activity kind — expected one of: conversations, generations, agent-runs, errors' });
+      return;
+    }
+    fail(res, 'trust_activity_detail', err);
+  }
+}
+
+const activityDayDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD')
+  .refine((s) => !Number.isNaN(Date.parse(s)), 'Invalid calendar date');
+
+/** T011: drill-down for one day of the 7-day activity trend chart. `date` is Zod-validated
+ *  as a YYYY-MM-DD calendar date; anything else is a 400, not a 500. */
+export async function handleGetActivityDetailForDay(req: Request, res: Response): Promise<void> {
+  try {
+    const date = activityDayDateSchema.parse(req.params.date);
+    res.json(await getActivityDetailForDay(date));
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      res.status(400).json({ error: 'Invalid date — expected YYYY-MM-DD' });
+      return;
+    }
+    fail(res, 'trust_activity_detail_day', err);
+  }
+}
+
+/** T010: drill-down for Governance's "Blocked agent writes 24h" tile. */
+export async function handleGetBlockedWrites(_req: Request, res: Response): Promise<void> {
+  try {
+    res.json(await getBlockedWrites());
+  } catch (err) {
+    fail(res, 'trust_blocked_writes', err);
+  }
+}
+
+/** T012: drill-down for any row in the full ai_agents registry (not just the 10 Workforce
+ *  directors handleGetAgentDetail covers). Unknown names return 404, matching that handler's
+ *  existing convention. `name` is never interpolated into SQL — see getAgentRegistryDetail. */
+export async function handleGetAgentRegistryDetail(req: Request, res: Response): Promise<void> {
+  try {
+    const detail = await getAgentRegistryDetail(String(req.params.name || ''));
+    if (!detail) {
+      res.status(404).json({ error: 'Unknown agent' });
+      return;
+    }
+    res.json(detail);
+  } catch (err) {
+    fail(res, 'trust_agent_registry_detail', err);
   }
 }
