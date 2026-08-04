@@ -65,6 +65,8 @@ async function zoomApiRequest<T>(method: string, path: string, body?: unknown): 
     console.error(`[Zoom] API error ${res.status} ${method} ${path}: ${errBody}`);
     throw new Error(`Zoom API error ${res.status}: ${errBody}`);
   }
+  // PATCH/DELETE meeting calls return 204 with no body — res.json() would throw.
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -118,6 +120,14 @@ export interface ZoomMeetingResult {
   meetingId: string;
 }
 
+export interface CreateZoomMeetingInput {
+  topic: string;
+  agenda?: string;
+  startDateTime: string; // e.g. "2026-08-04T18:30:00"
+  durationMinutes: number;
+  timezone?: string;
+}
+
 // Creates a meeting under ZOOM_HOST_EMAIL with cloud auto-recording, so
 // capture never depends on a human remembering to click Record — the
 // specific failure mode that left 2 real classes unrecorded under the old
@@ -125,18 +135,19 @@ export interface ZoomMeetingResult {
 // Zoom account's own "Automatic recording" admin setting is off (a
 // documented Zoom quirk: the API call succeeds but doesn't actually apply)
 // — that account-level toggle is a one-time prerequisite done outside code.
-export async function createMeetingForSession(
-  session: LiveSession,
-  opts: { startDateTime: string; durationMinutes: number },
-): Promise<ZoomMeetingResult> {
+// The generic entry point — both meetingService.ts (official class sessions)
+// and communityRooms/meetingProvider.ts's ZoomMeetAdapter (general Room
+// bookings) go through this one function, so the settings that matter
+// (auto_recording chief among them) can't drift between the two call sites.
+export async function createMeeting(input: CreateZoomMeetingInput): Promise<ZoomMeetingResult> {
   assertConfigured();
   const data = await zoomApiRequest<any>('POST', `/users/${encodeURIComponent(env.zoomHostEmail)}/meetings`, {
-    topic: `[Accelerator] ${session.title}`,
-    agenda: session.description || `Session ${session.session_number}`,
+    topic: input.topic,
+    agenda: input.agenda || '',
     type: 2, // scheduled
-    start_time: opts.startDateTime,
-    duration: opts.durationMinutes,
-    timezone: 'America/Chicago',
+    start_time: input.startDateTime,
+    duration: input.durationMinutes,
+    timezone: input.timezone || 'America/Chicago',
     settings: {
       auto_recording: 'cloud',
       join_before_host: true,
@@ -144,6 +155,61 @@ export async function createMeetingForSession(
     },
   });
   return { joinUrl: data.join_url, meetingId: String(data.id) };
+}
+
+export async function createMeetingForSession(
+  session: LiveSession,
+  opts: { startDateTime: string; durationMinutes: number },
+): Promise<ZoomMeetingResult> {
+  return createMeeting({
+    topic: `[Accelerator] ${session.title}`,
+    agenda: session.description || `Session ${session.session_number}`,
+    startDateTime: opts.startDateTime,
+    durationMinutes: opts.durationMinutes,
+  });
+}
+
+export interface UpdateZoomMeetingInput {
+  topic?: string;
+  agenda?: string;
+  startDateTime?: string;
+  durationMinutes?: number;
+  timezone?: string;
+}
+
+// Reschedule/rename an existing meeting. Not currently called by anything in
+// this codebase (the general Room-booking flow doesn't yet support editing a
+// published booking's time) — implemented for MeetingProvider interface
+// parity with GoogleMeetAdapter. Needs the `meeting:update:meeting:admin`
+// scope added to the Zoom app before first real use.
+export async function updateMeeting(meetingId: string, patch: UpdateZoomMeetingInput): Promise<void> {
+  assertConfigured();
+  const body: Record<string, unknown> = {};
+  if (patch.topic !== undefined) body.topic = patch.topic;
+  if (patch.agenda !== undefined) body.agenda = patch.agenda;
+  if (patch.startDateTime !== undefined) body.start_time = patch.startDateTime;
+  if (patch.durationMinutes !== undefined) body.duration = patch.durationMinutes;
+  if (patch.timezone !== undefined) body.timezone = patch.timezone;
+  await zoomApiRequest('PATCH', `/meetings/${encodeURIComponent(meetingId)}`, body);
+}
+
+// Not currently called by anything in this codebase (no "cancel booking also
+// cancels the Zoom meeting" wiring exists yet). Interface parity with
+// GoogleMeetAdapter; needs `meeting:delete:meeting:admin` scope before first
+// real use.
+export async function cancelMeeting(meetingId: string): Promise<void> {
+  assertConfigured();
+  await zoomApiRequest('DELETE', `/meetings/${encodeURIComponent(meetingId)}`);
+}
+
+// Not currently called by anything in this codebase — the join URL is
+// already stored on the booking/session at creation time, so nothing needs
+// to re-fetch it. Interface parity with GoogleMeetAdapter; needs
+// `meeting:read:meeting:admin` scope before first real use.
+export async function getMeetingJoinUrl(meetingId: string): Promise<string | null> {
+  assertConfigured();
+  const data = await zoomApiRequest<any>('GET', `/meetings/${encodeURIComponent(meetingId)}`);
+  return data?.join_url || null;
 }
 
 // ---- Recording lookup ----

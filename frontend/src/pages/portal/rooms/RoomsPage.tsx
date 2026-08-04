@@ -179,7 +179,7 @@ const NewRoomModal: React.FC<{ onClose: () => void; onCreated: (id: string) => v
           </div>
           <label className={`rm-toggle${isVideo ? ' on' : ''}`}>
             <input type="checkbox" checked={isVideo} onChange={(e) => setIsVideo(e.target.checked)} />
-            <span className="rm-toggle-txt"><b>📹 Video room</b><span>A Google Meet everyone can jump into.</span></span>
+            <span className="rm-toggle-txt"><b>📹 Video room</b><span>A video call everyone can jump into.</span></span>
           </label>
         </div>
         <div className="rm-modal-foot">

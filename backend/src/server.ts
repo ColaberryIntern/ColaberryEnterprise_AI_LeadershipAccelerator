@@ -2009,7 +2009,7 @@ async function ensureCommunityRoomsSchema() {
        audience_rules JSONB NOT NULL DEFAULT '{}'::jsonb,
        capacity INTEGER,
        approval_required BOOLEAN NOT NULL DEFAULT false,
-       meeting_provider VARCHAR(30) NOT NULL DEFAULT 'google_meet',
+       meeting_provider VARCHAR(30) NOT NULL DEFAULT 'zoom',
        meeting_link VARCHAR(600),
        google_event_id VARCHAR(255),
        external_ids JSONB NOT NULL DEFAULT '{}'::jsonb,

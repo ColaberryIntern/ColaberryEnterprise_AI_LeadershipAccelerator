@@ -103,6 +103,44 @@ describe('createMeetingForSession', () => {
   });
 });
 
+describe('updateMeeting / cancelMeeting / getMeetingJoinUrl (used by communityRooms/meetingProvider.ts)', () => {
+  it('updateMeeting PATCHes only the provided fields and handles a 204 no-content response', async () => {
+    const { updateMeeting } = loadZoomService();
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce({ ok: true, status: 204, text: async () => '' });
+    global.fetch = fetchMock as any;
+
+    await updateMeeting('123', { topic: 'New title', durationMinutes: 45 });
+
+    const patchCall = fetchMock.mock.calls.find(([url]: any[]) => String(url).includes('/meetings/123'));
+    expect(patchCall[1].method).toBe('PATCH');
+    expect(JSON.parse(patchCall[1].body)).toEqual({ topic: 'New title', duration: 45 });
+  });
+
+  it('cancelMeeting DELETEs the meeting and handles a 204 no-content response', async () => {
+    const { cancelMeeting } = loadZoomService();
+    const fetchMock = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce({ ok: true, status: 204, text: async () => '' });
+    global.fetch = fetchMock as any;
+
+    await cancelMeeting('123');
+
+    const delCall = fetchMock.mock.calls.find(([url]: any[]) => String(url).includes('/meetings/123'));
+    expect(delCall[1].method).toBe('DELETE');
+  });
+
+  it('getMeetingJoinUrl returns the join_url from a real (non-204) meeting lookup', async () => {
+    const { getMeetingJoinUrl } = loadZoomService();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ id: 123, join_url: 'https://zoom.us/j/123' })) as any;
+
+    await expect(getMeetingJoinUrl('123')).resolves.toBe('https://zoom.us/j/123');
+  });
+});
+
 describe('findRecordingForSession', () => {
   it('returns null without an API call when the session has no zoom_meeting_id yet', async () => {
     const { findRecordingForSession } = loadZoomService();
