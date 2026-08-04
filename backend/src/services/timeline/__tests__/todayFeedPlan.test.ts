@@ -2,7 +2,7 @@
  * Pure planner invariants for the Today Timeline v2 engagement engine (Phase 1).
  * No I/O — exercises todayFeedPlan.planSlots directly.
  */
-import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, interleaveByType, WeekGateCard } from '../todayFeedPlan';
+import { planSlots, anchoredWeekAllowed, weekStartedForToday, isWeekGated, interleaveByType, groupByType, interleaveGroups, isPrecedenceImpression, isWithinAmbientCooldown, WeekGateCard } from '../todayFeedPlan';
 import type { AmbientProviderSlug } from '../ambientPool';
 
 const P3: AmbientProviderSlug[] = ['blog', 'podcast', 'testimonial'];
@@ -302,5 +302,102 @@ describe('interleaveByType — fair round-robin exposure for evergreen content (
     ];
     const out = interleaveByType(input, (i) => i.type);
     expect(out.map((i) => i.type)).toEqual(['A', 'B', 'C', 'A', 'B', 'C', 'A', 'B', 'C']);
+  });
+});
+
+describe('groupByType + interleaveGroups — merging pre-partitioned pools (2026-08-04)', () => {
+  // REGRESSION context: the Today feed used to treat "ambient" (blog/podcast/
+  // testimonial, 3 providers) and "evergreen curriculum" (~14 intel-pipeline
+  // types) as two separate pools, each getting its OWN slot-share — so any
+  // single ambient provider got a much bigger per-type share than any single
+  // evergreen type, purely because it was one of 3 instead of one of 14. The
+  // fix merges externally-fetched groups (e.g. ambient providers) with
+  // internally-grouped ones (e.g. groupByType's evergreen output) into one
+  // flat round-robin via interleaveGroups, so every type is a peer.
+  const item = (type: string, n: number) => ({ type, n });
+
+  it('groupByType buckets items preserving first-seen group order and internal order', () => {
+    const input = [item('blog', 0), item('ai_news_flash', 0), item('blog', 1), item('market_intelligence', 0)];
+    const groups = groupByType(input, (i) => i.type);
+    expect(Array.from(groups.keys())).toEqual(['blog', 'ai_news_flash', 'market_intelligence']);
+    expect(groups.get('blog')!.map((i) => i.n)).toEqual([0, 1]);
+  });
+
+  it('interleaveGroups gives a merged pool of 3 ambient + 11 evergreen types an even per-type turn, not a 3-vs-11 split', () => {
+    const ambientGroups = groupByType(
+      ['blog', 'podcast', 'testimonial'].flatMap((t) => Array.from({ length: 20 }, (_, i) => item(t, i))),
+      (i) => i.type,
+    );
+    const evergreenTypes = ['ai_news_flash', 'market_intelligence', 'ai_tool_of_the_day', 'ai_quote_of_the_day', 'claude_code_technique', 'mcp_server_spotlight', 'ai_research_digest', 'ai_architecture_breakdown', 'build_breakdown', 'anthropic_skills_jar', 'ai_video_stream'];
+    const evergreenGroups = groupByType(
+      evergreenTypes.flatMap((t) => Array.from({ length: 20 }, (_, i) => item(t, i))),
+      (i) => i.type,
+    );
+    const merged = new Map([...evergreenGroups, ...ambientGroups]);
+    const out = interleaveGroups(merged);
+    // Every one of the 14 types (3 ambient + 11 evergreen) must appear within
+    // its first 14 slots — none can be starved by the 3-provider pool having
+    // fewer distinct groups than the 11-type evergreen pool.
+    const totalTypes = evergreenTypes.length + 3;
+    for (const key of merged.keys()) {
+      const firstIdx = out.findIndex((i) => i.type === key);
+      expect(firstIdx).toBeLessThan(totalTypes);
+    }
+    // And over the first `totalTypes` slots, counts should be near-equal (each
+    // type gets exactly 1 turn per full cycle) — no type gets 2 before another gets 1.
+    const firstCycle = out.slice(0, totalTypes).map((i) => i.type);
+    expect(new Set(firstCycle).size).toBe(totalTypes);
+  });
+
+  it('interleaveByType is exactly groupByType + interleaveGroups composed', () => {
+    const input = [item('A', 0), item('B', 0), item('A', 1), item('C', 0), item('B', 1)];
+    expect(interleaveByType(input, (i) => i.type)).toEqual(interleaveGroups(groupByType(input, (i) => i.type)));
+  });
+});
+
+describe('isPrecedenceImpression — cadence-cursor classification (2026-08-04)', () => {
+  it('a real week-bound curriculum card is precedence-tier', () => {
+    expect(isPrecedenceImpression({ kind: 'anchored', week: 3 })).toBe(true);
+  });
+
+  it('an evergreen (week:null) card, even though kind==="anchored", is NOT precedence-tier', () => {
+    expect(isPrecedenceImpression({ kind: 'anchored', week: null })).toBe(false);
+  });
+
+  it('an ambient-provider pick is never precedence-tier', () => {
+    expect(isPrecedenceImpression({ kind: 'ambient', week: null })).toBe(false);
+  });
+
+  it('week 0 (free-tier onboarding) still counts as real precedence curriculum', () => {
+    expect(isPrecedenceImpression({ kind: 'anchored', week: 0 })).toBe(true);
+  });
+});
+
+describe('isWithinAmbientCooldown — small-pool exhaustion fix (2026-08-04)', () => {
+  // REGRESSION context: a real production account placed 488 impressions in
+  // 11 days and fully exhausted blog (89/89) and podcast (24/24) — the OLD
+  // all-time exclusion made pickAmbientBatch return [] forever for that
+  // account. This is the pure predicate the composer uses to only exclude
+  // RECENT placements, letting old ones become re-eligible.
+  const now = new Date('2026-08-04T00:00:00Z');
+
+  it('a placement from 1 day ago is still within a 7-day cooldown', () => {
+    const servedAt = new Date('2026-08-03T00:00:00Z');
+    expect(isWithinAmbientCooldown(servedAt, 7, now)).toBe(true);
+  });
+
+  it('a placement from exactly 8 days ago has aged out of a 7-day cooldown', () => {
+    const servedAt = new Date('2026-07-27T00:00:00Z');
+    expect(isWithinAmbientCooldown(servedAt, 7, now)).toBe(false);
+  });
+
+  it('a placement exactly at the cooldown boundary is still excluded (inclusive)', () => {
+    const servedAt = new Date('2026-07-28T00:00:00Z'); // exactly 7 days before `now`
+    expect(isWithinAmbientCooldown(servedAt, 7, now)).toBe(true);
+  });
+
+  it('cooldown of 0 excludes nothing (everything has aged out immediately)', () => {
+    const servedAt = new Date('2026-08-03T23:59:59Z');
+    expect(isWithinAmbientCooldown(servedAt, 0, now)).toBe(false);
   });
 });

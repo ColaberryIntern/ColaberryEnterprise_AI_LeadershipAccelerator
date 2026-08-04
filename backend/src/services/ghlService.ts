@@ -1,6 +1,7 @@
 import { getSetting, getTestOverrides } from './settingsService';
 import { logActivity } from './activityService';
 import Lead from '../models/Lead';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -279,7 +280,7 @@ export async function syncLeadToGhl(
       const phoneMatch = await findContactByPhone(lead.phone);
       if (phoneMatch) {
         contactId = phoneMatch.id;
-        console.log(`[GHL] Found existing contact by phone ${lead.phone}: ${contactId} (email: ${phoneMatch.email})`);
+        console.log(`[GHL] Found existing contact by phone ${redactForLogs(lead.phone)}: ${contactId} (email: ${redactForLogs(phoneMatch.email ?? '')})`);
         if (interestGroup) {
           await addContactTag(contactId, interestGroup);
           await updateContact(contactId, { customField: { interestgroup: interestGroup } });

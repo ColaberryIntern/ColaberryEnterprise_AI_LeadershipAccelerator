@@ -11,6 +11,7 @@ import { advancePipelineStage } from '../services/pipelineService';
 import { syncNewLeadToGhl } from '../services/ghlService';
 import { recordOutcome } from '../services/interactionService';
 import { logActivity } from '../services/activityService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 export async function handleGetAvailability(
   req: Request,
@@ -184,7 +185,7 @@ export async function handleBookCall(
             urgency: 'high',
             created_at: new Date(),
           });
-          console.log(`[Calendar] Admin notification sent to ${adminEmail} for ${data.name}`);
+          console.log(`[Calendar] Admin notification sent to ${adminEmail} for ${redactForLogs(data.name)}`);
         }
       } catch (notifErr: any) {
         console.warn('[Calendar] Admin notification failed:', notifErr.message);

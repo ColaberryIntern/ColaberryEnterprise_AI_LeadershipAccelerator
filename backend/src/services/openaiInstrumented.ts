@@ -22,6 +22,8 @@ export interface LlmCallContext {
   agent_id?: string;
   user_id?: string;
   trace_id?: string;
+  /** TBI T003 / P2-3 — which hardcoded/DB-backed prompt this client's calls use, e.g. "maya-chat-v1". */
+  prompt_version?: string;
 }
 
 export function getInstrumentedOpenAI(
@@ -58,6 +60,7 @@ export function getInstrumentedOpenAI(
         workflow_id: context.workflow_id ?? null, agent_id: context.agent_id ?? null,
         user_id: context.user_id ?? null, trace_id: traceId,
         model, duration_ms: Date.now() - t0, cache_hit: false, metadata: { streamed: true },
+        prompt_version: context.prompt_version ?? null,
       }).catch(() => {});
       return stream;
     }
@@ -79,6 +82,7 @@ export function getInstrumentedOpenAI(
           ? computeCostUsd(model, promptTokens, completionTokens)
           : null,
         duration_ms: Date.now() - t0, cache_hit: false,
+        prompt_version: context.prompt_version ?? null,
       }).catch(() => {});
       return resp;
     } catch (err: any) {
@@ -88,6 +92,7 @@ export function getInstrumentedOpenAI(
         user_id: context.user_id ?? null, trace_id: traceId,
         model, duration_ms: Date.now() - t0,
         error_class: err?.name || 'Error', metadata: { message: err?.message },
+        prompt_version: context.prompt_version ?? null,
       }).catch(() => {});
       throw err;
     }

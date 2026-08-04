@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import Lead from '../models/Lead';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /**
  * POST /api/webhook/apollo/phone-reveal
@@ -8,7 +9,7 @@ import Lead from '../models/Lead';
  */
 export async function handleApolloPhoneReveal(req: Request, res: Response): Promise<void> {
   try {
-    console.log('[Apollo Webhook] Phone reveal payload:', JSON.stringify(req.body).slice(0, 2000));
+    console.log('[Apollo Webhook] Phone reveal payload:', redactForLogs(JSON.stringify(req.body)).slice(0, 2000));
 
     const body = req.body || {};
     const people = body.people || [];
@@ -49,7 +50,7 @@ export async function handleApolloPhoneReveal(req: Request, res: Response): Prom
       }
 
       await lead.update({ phone } as any);
-      console.log(`[Apollo Webhook] Updated lead ${lead.id} (${(lead as any).email}) with phone: ${phone}`);
+      console.log(`[Apollo Webhook] Updated lead ${lead.id} (${redactForLogs((lead as any).email)}) with phone: ${redactForLogs(phone)}`);
       updated++;
     }
 

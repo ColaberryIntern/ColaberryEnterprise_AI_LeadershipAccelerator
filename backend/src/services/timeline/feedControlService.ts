@@ -24,6 +24,8 @@ import { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigServi
 import { rankCandidates, type RankCandidate } from './feedRanker';
 import { getFeed } from './timelineService';
 import { env } from '../../config/env';
+import { rankLearningValue } from '../cape/capeLearningValueRanker';
+import type { TodayFeedItem } from './todayFeedComposer';
 
 export { getFeedPolicy, setFeedPolicy, type FeedPolicy } from './feedConfigService';
 
@@ -160,13 +162,82 @@ export async function getBoard(): Promise<any> {
   return { lanes, policy, buckets: BUCKETS, feedControlEnabled: env.feedControlEnabled };
 }
 
+/** Uniform shape both ranking paths (legacy feedRanker + CAPE Phase 4) reduce
+ * to before the shared ambient-interleave loop below. */
+interface SimulatedRankedCard {
+  type: string; student_label: string; title: string | null; card_id: string;
+  render_band: string; surface: string; week: number | null; thumbnail: string | null;
+  score: number; reasons: string[]; components?: Record<string, number>;
+}
+
+/** The existing transparent rule-based ranker (unchanged behavior — this is
+ * exactly the body `simulate()` had before CAPE Phase 4 T009). */
+function rankWithLegacyRanker(anchored: any[], seenByRef: Map<string, any>, policy: FeedPolicy, now: Date): SimulatedRankedCard[] {
+  const cands: (RankCandidate & { title: string | null; render_band: string; card_id: string; student_label: string; week: number | null; thumbnail: string | null })[] = anchored.map((c: any) => {
+    const s = seenByRef.get(`card:${c.id}`);
+    const def = resolveType(c.type);
+    return {
+      ref: `card:${c.id}`, type: c.type, surface: def?.home_surface ?? 'class', card_id: c.id,
+      priority: c.priority ?? 0, pinned_until: c.pinned_until ? new Date(c.pinned_until) : null,
+      released_at: c.release_date ? new Date(c.release_date) : (c.created_at ? new Date(c.created_at) : null),
+      frequency_cap: c.feed_frequency_cap ?? null, // null → ranker uses policy.defaultFrequencyCap
+      cooldown_days: c.feed_cooldown_days ?? null, // null → ranker uses policy.defaultCooldownDays
+      seen_count: s?.n ?? 0, last_seen_at: s?.last ? new Date(s.last) : null, dismissed: !!s?.dismissed,
+      title: c.title, render_band: c.render_band,
+      student_label: c.student_label || c.type, week: c.week ?? null, thumbnail: c.type_thumbnail ?? null,
+    };
+  });
+  return rankCandidates(cands, policy, now).map((r) => ({
+    type: r.type, student_label: r.student_label, title: r.title, card_id: r.card_id, render_band: r.render_band,
+    surface: r.surface, week: r.week, thumbnail: r.thumbnail, score: Number(r.score.toFixed(3)), reasons: r.reasons,
+  }));
+}
+
+/** CAPE Phase 4 (design doc §17 AC 9): "Feed Control can simulate a specific
+ * learner and explain every inclusion, exclusion, score, and rerank." Builds
+ * `TodayFeedItem`-shaped candidates from the same `anchored` list the legacy
+ * path uses, runs them through the real `rankLearningValue` pipeline (Stages
+ * 1-5), and returns both the ranked items (with their Stage 3 component
+ * breakdown) AND the Stage 2 exclusions with reasons — read-only, never
+ * writes an impression. */
+async function rankWithCapeRanker(enrollmentId: string, anchored: any[], now: Date): Promise<{ ranked: SimulatedRankedCard[]; excluded: Array<{ ref: string; reason: string }> }> {
+  const candidates: TodayFeedItem[] = anchored.map((c: any) => {
+    const def = resolveType(c.type);
+    return {
+      position: 0, kind: 'anchored', ref: `card:${c.id}`, surface: def?.home_surface ?? 'class', type: c.type,
+      render_band: c.render_band, card_id: c.id, title: c.title, subtitle: null, description: null, image: null,
+      video: null, blog: null, content: null, week: c.week ?? null, estimated_time: c.estimated_time ?? null,
+      status: c.status ?? null, interacted: false,
+    };
+  });
+  const result = await rankLearningValue(enrollmentId, candidates, now);
+  const ranked: SimulatedRankedCard[] = result.items.map((r) => ({
+    type: r.type, student_label: (r as any).student_label || r.type, title: r.title, card_id: r.card_id || '',
+    render_band: r.render_band, surface: r.surface, week: r.week, thumbnail: null,
+    score: Number(r.rank_score.toFixed(3)), reasons: r.reasons, components: r.components,
+  }));
+  return { ranked, excluded: result.excluded };
+}
+
 /**
  * READ-ONLY simulator: what would this student see next in Today, and WHY.
- * Ranks the student's today-eligible anchored cards with the transparent ranker
- * and interleaves ambient placeholders per the policy cadence. No side effects
- * (never persists impressions) — it mirrors the live composer's inputs.
+ * Ranks the student's today-eligible anchored cards and interleaves ambient
+ * placeholders per the policy cadence. No side effects (never persists
+ * impressions) — it mirrors the live composer's inputs.
+ *
+ * `useCapeRanker` (CAPE Phase 4, T009): when true, OR when
+ * `env.capeLearningValueRankerEnabled` is already on, routes ranking through
+ * the CAPE learning-value ranker instead of the legacy `feedRanker` — a
+ * preview path admins can use to see real CAPE output for a real enrollment
+ * even while the global flag stays off in production (this function never
+ * writes regardless of which ranker it uses).
  */
-export async function simulate(enrollmentId: string, limit = 12, includeTypes?: string[]): Promise<{ items: any[]; policy: FeedPolicy; context?: any; sandbox?: boolean }> {
+export async function simulate(
+  enrollmentId: string,
+  limit = 12,
+  includeTypes?: string[],
+  opts: { useCapeRanker?: boolean } = {},
+): Promise<{ items: any[]; policy: FeedPolicy; context?: any; sandbox?: boolean; excluded?: Array<{ ref: string; reason: string }>; ranker?: 'legacy' | 'cape' }> {
   const now = new Date();
   const policy = await getFeedPolicy();
   // Sandbox / what-if: when includeTypes is provided (even an empty array), treat ONLY
@@ -191,24 +262,20 @@ export async function simulate(enrollmentId: string, limit = 12, includeTypes?: 
     return active && def?.feed_mode !== 'ambient' && c.status !== 'locked' && c.status !== 'completed';
   });
 
-  const cands: (RankCandidate & { title: string | null; render_band: string; card_id: string; student_label: string; week: number | null; thumbnail: string | null })[] = anchored.map((c: any) => {
-    const s = seenByRef.get(`card:${c.id}`);
-    const def = resolveType(c.type);
-    return {
-      ref: `card:${c.id}`, type: c.type, surface: def?.home_surface ?? 'class', card_id: c.id,
-      priority: c.priority ?? 0, pinned_until: c.pinned_until ? new Date(c.pinned_until) : null,
-      released_at: c.release_date ? new Date(c.release_date) : (c.created_at ? new Date(c.created_at) : null),
-      frequency_cap: c.feed_frequency_cap ?? null, // null → ranker uses policy.defaultFrequencyCap
-      cooldown_days: c.feed_cooldown_days ?? null, // null → ranker uses policy.defaultCooldownDays
-      seen_count: s?.n ?? 0, last_seen_at: s?.last ? new Date(s.last) : null, dismissed: !!s?.dismissed,
-      title: c.title, render_band: c.render_band,
-      student_label: c.student_label || c.type, week: c.week ?? null, thumbnail: c.type_thumbnail ?? null,
-    };
-  });
+  const useCape = opts.useCapeRanker === true || env.capeLearningValueRankerEnabled;
+  let ranked: SimulatedRankedCard[];
+  let excluded: Array<{ ref: string; reason: string }> = [];
+  if (useCape) {
+    const capeResult = await rankWithCapeRanker(enrollmentId, anchored, now);
+    ranked = capeResult.ranked;
+    excluded = capeResult.excluded;
+  } else {
+    ranked = rankWithLegacyRanker(anchored, seenByRef, policy, now);
+  }
 
-  const ranked = rankCandidates(cands, policy, now);
-
-  // Interleave ambient placeholders on the policy cadence.
+  // Interleave ambient placeholders on the policy cadence — identical for
+  // both ranking paths (Phase 4 reorders the anchored queue only; ambient
+  // cadence/interleave is untouched, see execution-contract.md Assumption 3).
   const items: any[] = [];
   const cad = Math.max(1, policy.todayCadence);
   // In sandbox, only rotate the ambient providers the user has actually included.
@@ -216,7 +283,7 @@ export async function simulate(enrollmentId: string, limit = 12, includeTypes?: 
   let sinceAmbient = 0;
   let ai = 0;
   for (const r of ranked) {
-    items.push({ kind: 'anchored', type: r.type, student_label: r.student_label, title: r.title, card_id: r.card_id, render_band: r.render_band, surface: r.surface, week: r.week, thumbnail: r.thumbnail, score: Number(r.score.toFixed(3)), reasons: r.reasons });
+    items.push({ kind: 'anchored', type: r.type, student_label: r.student_label, title: r.title, card_id: r.card_id, render_band: r.render_band, surface: r.surface, week: r.week, thumbnail: r.thumbnail, score: r.score, reasons: r.reasons, ...(r.components ? { components: r.components } : {}) });
     sinceAmbient++;
     if (activeProviders.length && sinceAmbient >= cad) {
       const provider = activeProviders[ai % activeProviders.length];
@@ -238,7 +305,7 @@ export async function simulate(enrollmentId: string, limit = 12, includeTypes?: 
     already_seen: seen.length,
     max_week: cards.filter((c) => c.status !== 'locked' && c.week != null).reduce((m, c) => Math.max(m, c.week), 0),
   };
-  return { items: items.slice(0, limit), policy, context, sandbox };
+  return { items: items.slice(0, limit), policy, context, sandbox, ...(useCape ? { excluded, ranker: 'cape' as const } : { ranker: 'legacy' as const }) };
 }
 
 export interface EnrollmentOption { id: string; label: string; cohort_id: string | null; type: string; status: string }
