@@ -117,6 +117,35 @@ describe('verifyCertificate — image path', () => {
       await fs.unlink(imgPath).catch(() => {});
     }
   });
+
+  // Real-world bug (Farhat Beig, Week 4, 2026-08-04): her actual Anthropic
+  // certificate is titled "Claude with the Anthropic API" but the Week 4
+  // card's internal display name is "Building with the Claude API · Part 2
+  // (Prompt, Retrieval & Integration)" — Colaberry splits one external
+  // SkillsJar course into internal parts with paraphrased titles. The prompt
+  // must tell the classifier not to require textual title matching, or a
+  // genuine certificate gets rejected as "a different course." This doesn't
+  // assert on real LLM judgment (mocked) — it asserts the actual prompt sent
+  // contains the leniency instruction, so a regression that drops it fails.
+  it('instructs the classifier not to require the certificate title to textually match a paraphrased/split internal course name', async () => {
+    mockChatCreate.mockResolvedValue({
+      choices: [{ message: { content: JSON.stringify({ is_certificate: true, matches_course: true, reason: 'Looks legit.' }) } }],
+    });
+    const imgPath = path.join(os.tmpdir(), `cert-test-match-${Date.now()}.png`);
+    await fs.writeFile(imgPath, await sharp({ create: { width: 20, height: 20, channels: 3, background: { r: 1, g: 2, b: 3 } } }).png().toBuffer());
+
+    try {
+      await verifyCertificate(imgPath, 'image/png', 'Building with the Claude API · Part 2 (Prompt, Retrieval & Integration)');
+
+      const content = mockChatCreate.mock.calls[0][0].messages[1].content;
+      const promptText = content.find((c: any) => c.type === 'text').text as string;
+      expect(promptText).toContain('Building with the Claude API · Part 2 (Prompt, Retrieval & Integration)');
+      expect(promptText).toMatch(/do not require.*textually match/i);
+      expect(promptText).toMatch(/split.*internal parts/i);
+    } finally {
+      await fs.unlink(imgPath).catch(() => {});
+    }
+  });
 });
 
 describe('verifyCertificate — PDF path', () => {
