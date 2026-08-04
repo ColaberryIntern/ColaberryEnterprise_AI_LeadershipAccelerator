@@ -18,6 +18,10 @@ const ALLOWED_MIMES: Record<string, string> = {
   'text/plain': '.txt',
   'text/markdown': '.md',
   'text/csv': '.csv',
+  'image/png': '.png',
+  'image/jpeg': '.jpg',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
 };
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
@@ -40,7 +44,7 @@ function fileFilter(
   if (ALLOWED_MIMES[file.mimetype]) {
     cb(null, true);
   } else {
-    cb(new Error('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV'));
+    cb(new Error('Accepted file types: PDF, Word, PowerPoint, Excel, RTF, Text, Markdown, CSV, PNG, JPG, GIF, WEBP'));
   }
 }
 
