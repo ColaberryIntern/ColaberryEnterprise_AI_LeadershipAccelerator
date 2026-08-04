@@ -25,18 +25,10 @@ import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
-import { readViewSnapshot, restoreScroll, usePersistScrollOnScroll } from '../../../hooks/useScrollRestore';
 import SkillMeter from '../SkillMeter';
 import SetupModal from './SetupModal';
 import { useReferralForm } from './useReferralForm';
 import { fetchSkillProfile, LearnerSkillProfile } from '../../../services/capeApi';
-
-// Persist the Today feed's scroll position so leaving for a card's runtime
-// workspace and coming back — via its Back button OR the browser's own back
-// button — returns the student to the same spot instead of resetting to the
-// top. Same proven pattern as Classroom's 'classroom-view' key; see
-// hooks/useScrollRestore for the restore/persist mechanics.
-const TODAY_VIEW_KEY = 'today-view';
 
 const TodayShell: React.FC = () => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
@@ -96,18 +88,6 @@ const TodayShell: React.FC = () => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
-
-  // Restore scroll once the feed has loaded (restoreScroll itself waits for the
-  // page to actually grow tall enough — thumbnails load after mount — so it's
-  // safe to call as soon as we have cards to render). Runs once.
-  const restoredScrollRef = React.useRef(false);
-  useEffect(() => {
-    if (restoredScrollRef.current || curriculum.length === 0) return;
-    restoredScrollRef.current = true;
-    const snap = readViewSnapshot<Record<string, never>>(TODAY_VIEW_KEY);
-    if (snap) restoreScroll(snap.scrollY || 0);
-  }, [curriculum]);
-  usePersistScrollOnScroll<Record<string, never>>(TODAY_VIEW_KEY, curriculum.length > 0, () => ({}));
 
   const flash = (msg: string) => { setToast(msg); window.setTimeout(() => setToast(''), 2600); };
 
