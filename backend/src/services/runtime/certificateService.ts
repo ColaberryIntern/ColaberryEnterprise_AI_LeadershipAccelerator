@@ -2,12 +2,17 @@
  * certificateService — verify an uploaded Anthropic Skills Course completion
  * certificate is REAL (not a random screenshot) before it counts as completion.
  *
- * Images are checked with OpenAI vision; PDFs have their text extracted
- * (pdf-parse) and checked. The check is lenient on the exact course match (so a
- * genuine cert isn't rejected on a wording mismatch) but strict on "is this
- * actually a completion certificate at all."
+ * Images are checked with OpenAI vision. PDFs are rasterized (page 1, via
+ * poppler's pdftoppm) and checked the same way, since a real certificate PDF
+ * renders its content as a visual template rather than searchable text —
+ * text extraction (pdf-parse) is kept only as a fallback for the rare PDF
+ * that's genuinely text-based. The check is lenient on the exact course match
+ * (so a genuine cert isn't rejected on a wording mismatch) but strict on "is
+ * this actually a completion certificate at all."
  */
+import { spawn } from 'child_process';
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
 import TimelineCard from '../../models/TimelineCard';
@@ -54,6 +59,39 @@ async function extractPdfText(buf: Buffer): Promise<string> {
   }
 }
 
+/**
+ * Real Anthropic/SkillsJar certificate PDFs render the certificate body as a
+ * visual template — the recipient's name is the only real text layer (e.g.
+ * pdf-parse on a genuine cert extracts just "Jane Doe\n\n-- 1 of 1 --"), so
+ * text extraction alone can never see the course name, "Certificate of
+ * Completion" wording, or issuer — every PDF failed verification in prod
+ * (confirmed: 0 of 5 real student PDF uploads ever passed, going back to
+ * July). Rasterize page 1 to a PNG via poppler's `pdftoppm` (installed in the
+ * backend Docker image) and route it through the same proven vision path
+ * already used for image uploads. Returns null (caller falls back to text
+ * extraction) if `pdftoppm` is missing or the PDF can't be rasterized.
+ */
+async function rasterizePdfFirstPage(buf: Buffer): Promise<Buffer | null> {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'cert-pdf-'));
+  const inPath = path.join(tmpDir, 'in.pdf');
+  const outPrefix = path.join(tmpDir, 'page');
+  try {
+    await fs.writeFile(inPath, buf);
+    await new Promise<void>((resolve, reject) => {
+      const proc = spawn('pdftoppm', ['-png', '-r', '150', '-f', '1', '-l', '1', '-singlefile', inPath, outPrefix]);
+      let stderr = '';
+      proc.stderr.on('data', (d) => { stderr += d; });
+      proc.on('error', reject);
+      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`pdftoppm exited ${code}: ${stderr}`))));
+    });
+    return await fs.readFile(`${outPrefix}.png`);
+  } catch {
+    return null;
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 const SYSTEM = 'You verify whether an uploaded file is a genuine course/exam COMPLETION or ACHIEVEMENT certificate issued to a person. Be strict about it actually being a certificate; do not accept random screenshots, photos, invoices, or unrelated documents. Return STRICT json.';
 
 function userText(className?: string | null): string {
@@ -77,7 +115,7 @@ async function classify(messages: any[]): Promise<CertVerifyResult> {
   return { valid: is_certificate && matches, is_certificate, matches, reason };
 }
 
-/** Verify a certificate file (image via vision, PDF via extracted text). */
+/** Verify a certificate file (image or rasterized PDF via vision, falling back to extracted text if rasterization fails). */
 export async function verifyCertificate(filePath: string, mime: string, className?: string | null): Promise<CertVerifyResult> {
   const ext = path.extname(filePath).toLowerCase();
   const isImage = mime.startsWith('image/') || ext in IMAGE_MIME_BY_EXT;
@@ -90,8 +128,20 @@ export async function verifyCertificate(filePath: string, mime: string, classNam
         { role: 'user', content: [{ type: 'text', text: userText(className) }, { type: 'image_url', image_url: { url: dataUrl } }] },
       ]);
     }
-    // PDF → extract text (pdf-parse v2 class API), then verify by text.
+    // PDF → rasterize page 1 and verify via vision, same as an image upload
+    // (see rasterizePdfFirstPage's comment for why text extraction alone
+    // can't see a visually-rendered certificate template).
     const buf = await fs.readFile(filePath);
+    const page = await rasterizePdfFirstPage(buf);
+    if (page) {
+      const { dataUrl } = await normalizeImageForVision(page);
+      return await classify([
+        { role: 'system', content: SYSTEM },
+        { role: 'user', content: [{ type: 'text', text: userText(className) }, { type: 'image_url', image_url: { url: dataUrl } }] },
+      ]);
+    }
+    // Rasterization unavailable/failed — fall back to text extraction (still
+    // catches genuinely text-based PDF certs).
     const text = (await extractPdfText(buf)).slice(0, 6000);
     if (!text.trim()) {
       return { valid: false, is_certificate: false, matches: false, reason: 'Could not read that PDF — please upload a clear image (PNG/JPG) of your certificate.' };
@@ -133,7 +183,7 @@ async function classifyProgress(messages: any[]): Promise<{ valid: boolean; reas
   return { valid, reason };
 }
 
-/** Verify a course-progress screenshot (image via vision, PDF via extracted text). */
+/** Verify a course-progress screenshot (image or rasterized PDF via vision, falling back to extracted text if rasterization fails). */
 export async function verifyProgress(filePath: string, mime: string, className?: string | null): Promise<{ valid: boolean; reason: string }> {
   const ext = path.extname(filePath).toLowerCase();
   const isImage = mime.startsWith('image/') || ext in IMAGE_MIME_BY_EXT;
@@ -147,6 +197,14 @@ export async function verifyProgress(filePath: string, mime: string, className?:
       ]);
     }
     const buf = await fs.readFile(filePath);
+    const page = await rasterizePdfFirstPage(buf);
+    if (page) {
+      const { dataUrl } = await normalizeImageForVision(page);
+      return await classifyProgress([
+        { role: 'system', content: PROGRESS_SYSTEM },
+        { role: 'user', content: [{ type: 'text', text: progressUserText(className) }, { type: 'image_url', image_url: { url: dataUrl } }] },
+      ]);
+    }
     const text = (await extractPdfText(buf)).slice(0, 6000);
     if (!text.trim()) {
       return { valid: false, reason: 'Could not read that file — please upload a clear screenshot (PNG/JPG) of your course progress.' };
