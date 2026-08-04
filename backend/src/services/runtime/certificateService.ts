@@ -27,6 +27,20 @@ const IMAGE_MIME_BY_EXT: Record<string, string> = { '.png': 'image/png', '.jpg':
 export interface CertVerifyResult { valid: boolean; is_certificate: boolean; matches: boolean; reason: string }
 
 /**
+ * PURE — the course name to hand the vision model as "the expected course."
+ * Prefers `certName` (the name as it actually appears on the issued
+ * certificate) over the timeline's display `name`, since a card can be
+ * renamed for the student-facing timeline (e.g. a course split across weeks,
+ * "Building with the Claude API · Part 2 (Prompt, Retrieval & Integration)")
+ * without Anthropic's actual certificate ever using that wording — which
+ * otherwise makes a genuine certificate fail the course-match check.
+ */
+export function resolveCertClassName(course: { name?: string | null; certName?: string | null } | null | undefined): string | null {
+  if (!course) return null;
+  return course.certName || course.name || null;
+}
+
+/**
  * OpenAI vision rejects some uploaded bytes outright — e.g. "You uploaded an
  * unsupported image" — even when the browser labeled them image/png, because
  * screenshot tools and some phone cameras write non-standard encodings (seen
@@ -232,7 +246,7 @@ export async function uploadCertificate(enrollmentId: string, cardId: string, fi
   if (!card) throw Object.assign(new Error('Card not found'), { status: 404 });
   const meta = card.metadata && typeof card.metadata === 'object' ? card.metadata : {};
   const course = meta.course && typeof meta.course === 'object' ? meta.course : null;
-  const className = course ? (course.name || null) : null;
+  const className = resolveCertClassName(course);
 
   // Progress mode: verify an interim progress screenshot, record it, no cert branding.
   if (course && course.completion === 'progress') {

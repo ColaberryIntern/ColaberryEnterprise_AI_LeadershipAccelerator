@@ -61,7 +61,7 @@ import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
 import sharp from 'sharp';
-import { verifyCertificate } from '../../services/runtime/certificateService';
+import { verifyCertificate, resolveCertClassName } from '../../services/runtime/certificateService';
 
 function fakeProc(): any {
   const proc = new EventEmitter() as any;
@@ -230,5 +230,39 @@ describe('verifyCertificate — PDF rasterization path (the real-world bug: visu
     } finally {
       await fs.unlink(pdfPath).catch(() => {});
     }
+  });
+});
+
+/**
+ * resolveCertClassName — the 2026-08-04 prod bug: Week 4's SkillsJar card
+ * displays as "Building with the Claude API · Part 2 (Prompt, Retrieval &
+ * Integration)" (a Colaberry-authored, week-split rename) but the actual
+ * Anthropic certificate a student uploads says "Claude with the Anthropic
+ * API." Passing the display name to the vision model as "the expected
+ * course" made it correctly (from its perspective) reject a genuine
+ * certificate as "references a different course than expected." certName
+ * lets a card declare what the real certificate says, independent of its
+ * display title.
+ */
+describe('resolveCertClassName', () => {
+  it('prefers certName over the display name when both are set', () => {
+    expect(resolveCertClassName({ name: 'Building with the Claude API · Part 2', certName: 'Claude with the Anthropic API' }))
+      .toBe('Claude with the Anthropic API');
+  });
+
+  it('falls back to name when certName is absent (every pre-existing card, unaffected)', () => {
+    expect(resolveCertClassName({ name: 'Claude Code 101' })).toBe('Claude Code 101');
+  });
+
+  it('falls back to name when certName is an empty string', () => {
+    expect(resolveCertClassName({ name: 'Claude Code 101', certName: '' })).toBe('Claude Code 101');
+  });
+
+  it('returns null for a null course (no course configured on the card)', () => {
+    expect(resolveCertClassName(null)).toBeNull();
+  });
+
+  it('returns null when neither name nor certName is set', () => {
+    expect(resolveCertClassName({})).toBeNull();
   });
 });
