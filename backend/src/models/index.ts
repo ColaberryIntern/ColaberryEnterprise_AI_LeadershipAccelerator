@@ -131,6 +131,7 @@ import TicketWorkUnit from './TicketWorkUnit';
 import WorkUnitDependency from './WorkUnitDependency';
 import ResourceLease from './ResourceLease';
 import ApprovalRequest from './ApprovalRequest';
+import OutcomeMeasurement from './OutcomeMeasurement';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -843,6 +844,9 @@ AgentRun.hasMany(ApprovalRequest, { foreignKey: 'run_id', as: 'approvalRequests'
 ApprovalRequest.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
 WorkLedgerEvent.hasOne(ApprovalRequest, { foreignKey: 'event_id', as: 'approvalRequest' });
 ApprovalRequest.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+// ProofDesk Milestone 5 (Outcomes & Learning)
+Ticket.hasMany(OutcomeMeasurement, { foreignKey: 'ticket_id', as: 'outcomeMeasurements' });
+OutcomeMeasurement.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
@@ -1206,6 +1210,7 @@ export {
   WorkUnitDependency,
   ResourceLease,
   ApprovalRequest,
+  OutcomeMeasurement,
   StudentNavigationEvent,
   Alert,
   AlertEvent,

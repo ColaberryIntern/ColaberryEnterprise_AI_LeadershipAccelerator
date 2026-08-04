@@ -1787,6 +1787,22 @@ export function startScheduler(): void {
     });
   });
 
+  // ProofDesk Outcomes & Learning (Milestone 5, spec 20.4): once a day, resolve any
+  // outcome_measurements row whose 7-day observation window has elapsed (scheduled by
+  // ticketService.ts's done-hook). Daily cadence is enough for a 7-day window — no
+  // need for the 5/15-min cadences used above.
+  cron.schedule('0 4 * * *', () => {
+    instrumentCronJob('ProofDeskOutcomeMeasurements', async () => {
+      const { processDueOutcomeMeasurements } = await import('./outcomes/outcomeMeasurementService');
+      const result = await processDueOutcomeMeasurements();
+      if (result.processed > 0) {
+        console.log('[Scheduler] ProofDesk outcome measurements processed:', result);
+      }
+    }).catch((err) => {
+      console.error('[Scheduler] ProofDesk outcome measurements error:', err);
+    });
+  });
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(

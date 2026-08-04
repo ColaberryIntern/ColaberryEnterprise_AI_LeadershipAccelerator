@@ -43,6 +43,7 @@ import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
+import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
@@ -2231,6 +2232,10 @@ async function start(): Promise<void> {
   // Nothing that reads this table gates a real action yet — see
   // agentActionAuthorizationBridge.ts's header.
   await ensureApprovalRequestsSchema();
+  // ProofDesk Outcomes & Learning — Milestone 5: 1 outcome_measurements table
+  // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
+  // processed by schedulerService.ts's daily cron.
+  await ensureOutcomeMeasurementsSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).

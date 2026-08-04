@@ -48,6 +48,7 @@ import AdminSourcesPage from '../pages/admin/AdminSourcesPage';
 import AdminGeneratorPage from '../pages/admin/AdminGeneratorPage';
 import AdminIngestLogsPage from '../pages/admin/AdminIngestLogsPage';
 import AdminWorkLedgerHealthPage from '../pages/admin/AdminWorkLedgerHealthPage';
+import AdminExecutiveNarrativePage from '../pages/admin/AdminExecutiveNarrativePage';
 import AdminRoutingRulesPage from '../pages/admin/AdminRoutingRulesPage';
 import AdminAutonomousPage from '../pages/admin/AdminAutonomousPage';
 import AdminAutomationPage from '../pages/admin/AdminAutomationPage';
@@ -116,6 +117,7 @@ const adminRoutes = (
         <Route path="/admin/generator/:sourceSlug/:entrySlug" element={<AdminGeneratorPage />} />
         <Route path="/admin/ingest-logs" element={<AdminIngestLogsPage />} />
         <Route path="/admin/work-ledger-health" element={<AdminWorkLedgerHealthPage />} />
+        <Route path="/admin/executive-narrative" element={<AdminExecutiveNarrativePage />} />
         <Route path="/admin/routing-rules" element={<AdminRoutingRulesPage />} />
         <Route path="/admin/autonomous" element={<AdminAutonomousPage />} />
         <Route path="/admin/automation" element={<AdminAutomationPage />} />
