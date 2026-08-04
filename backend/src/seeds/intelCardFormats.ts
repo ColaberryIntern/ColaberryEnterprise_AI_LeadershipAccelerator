@@ -67,7 +67,7 @@ const news: IntelFormat = {
     <div class="nf-mean"><b>Why an AI Systems Architect should care</b>${esc(d.architect)}</div>
     <p><strong>Do this next:</strong> ${esc(d.next)}</p>
     <div class="chips">${d.tags.map((t: string) => `<span class="chip">${esc(t)}</span>`).join('')}</div>
-    <div class="foot">Source: ${esc(d.source)}${d.url ? ` · <a href="${esc(d.url)}">link</a>` : ''}<span class="conf"><span class="dot" style="background:#e11d48"></span>Confidence: ${esc(d.confidence)}</span></div>
+    <div class="foot">Source: ${esc(d.source)}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">link</a>` : ''}<span class="conf"><span class="dot" style="background:#e11d48"></span>Confidence: ${esc(d.confidence)}</span></div>
   </div>`,
   structure: 'A news-brief (the card title is shown above by the app — do NOT repeat it as a headline): a red source badge + date ribbon (.nf-rib); a "The gist" callout (.nf-gist); a 3-cell Business/Technical/Enterprise impact grid (.nf-imp); a dark "Why an architect should care" panel (.nf-mean); a "Do this next" line; related tag chips; a source footer with a confidence dot.',
   sample: {
@@ -112,7 +112,7 @@ const research: IntelFormat = {
     <div class="rd-meter"><i style="width:${esc(d.readiness)}%"></i></div>
     <small>${esc(d.readinessNote)}</small>
     <div class="chips">${d.tags.map((t: string) => `<span class="chip">${esc(t)}</span>`).join('')}</div>
-    <div class="foot">Source: ${esc(d.venue)}${d.url ? ` · <a href="${esc(d.url)}">paper</a>` : ''}<span class="conf"><span class="dot" style="background:#4f46e5"></span>Confidence: ${esc(d.confidence)}</span></div>
+    <div class="foot">Source: ${esc(d.venue)}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">paper</a>` : ''}<span class="conf"><span class="dot" style="background:#4f46e5"></span>Confidence: ${esc(d.confidence)}</span></div>
   </div>`,
   structure: 'A paper card: a venue badge (.rd-badge, e.g. arXiv); a plain-English abstract box (.rd-abs); a 3-card row Innovation / Business value / Architecture impact (.rd-grid); an "Implementation idea" left-rule note (.rd-idea); an enterprise-readiness meter bar (.rd-meter); tag chips; source footer.',
   sample: {
@@ -156,7 +156,7 @@ const tool: IntelFormat = {
       <div class="con"><h3>Cons</h3><ul>${li(d.cons)}</ul></div></div>
     <p><strong>Alternatives:</strong> ${d.alternatives.map((a: string) => `<span class="chip">${esc(a)}</span>`).join(' ')}</p>
     <p><strong>Suggested project:</strong> ${esc(d.project)}</p>
-    <div class="foot">Source: ${esc(d.source)}${d.url ? ` · <a href="${esc(d.url)}">site</a>` : ''}<span class="conf"><span class="dot" style="background:#0d9488"></span>Confidence: ${esc(d.confidence)}</span></div>
+    <div class="foot">Source: ${esc(d.source)}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">site</a>` : ''}<span class="conf"><span class="dot" style="background:#0d9488"></span>Confidence: ${esc(d.confidence)}</span></div>
   </div>`,
   structure: 'A product spec sheet: a logo tile + name/tagline header (.tl-head); a one-line "what it does"; a 4-tile stat grid Pricing / Enterprise / Popularity / Stack (.tl-stats); a two-column Pros (✓) vs Cons (✕) block (.tl-pc); an Alternatives chip row; a Suggested project line; source footer.',
   sample: {
@@ -301,7 +301,7 @@ const build: IntelFormat = {
     <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:#16a34a;margin:12px 0 2px">Lessons learned</h3>
     <ul class="bd-les">${li(d.lessons)}</ul>
     <p><strong>Prompt techniques:</strong> ${d.techniques.map((t: string) => `<span class="chip">${esc(t)}</span>`).join(' ')}</p>
-    <p>${d.url ? `<a class="bd-repo" href="${esc(d.url)}">⎇ View repository</a>` : ''}</p>
+    <p>${d.url ? `<a class="bd-repo" href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">⎇ View repository</a>` : ''}</p>
     <div class="foot">Source: ${esc(d.source)}<span class="conf"><span class="dot" style="background:#16a34a"></span>Confidence: ${esc(d.confidence)}</span></div>
   </div>`,
   structure: 'A build showcase: a "screenshot" frame with a window bar + a big highlight (.bd-shot); a "what was built" lead; a horizontal architecture strip (.bd-arch); a ✓ "Lessons learned" checklist (.bd-les); a Prompt-techniques chip row; a dark "View repository" button (.bd-repo).',
@@ -336,7 +336,7 @@ const mcp: IntelFormat = {
     <div class="mc-val"><strong>Business value.</strong> ${esc(d.value)}</div>
     <p><strong>Integrates with:</strong> ${d.integrations.map((t: string) => `<span class="chip">${esc(t)}</span>`).join(' ')}</p>
     <p><strong>Try it:</strong> ${esc(d.tryit)}</p>
-    <div class="foot">Source: ${esc(d.source)}${d.url ? ` · <a href="${esc(d.url)}">repo</a>` : ''}<span class="conf"><span class="dot" style="background:#7c3aed"></span>Confidence: ${esc(d.confidence)}</span></div>
+    <div class="foot">Source: ${esc(d.source)}${d.url ? ` · <a href="${esc(d.url)}" target="_blank" rel="noopener noreferrer">repo</a>` : ''}<span class="conf"><span class="dot" style="background:#7c3aed"></span>Confidence: ${esc(d.confidence)}</span></div>
   </div>`,
   structure: 'A server card: an icon + name/tagline header (.mc-h); a "what it does" lead; an install command in a terminal block (.term); a "▸" architecture list (.mc-arch); a "Business value" callout (.mc-val); an Integrations chip row; a "Try it" line.',
   sample: {
