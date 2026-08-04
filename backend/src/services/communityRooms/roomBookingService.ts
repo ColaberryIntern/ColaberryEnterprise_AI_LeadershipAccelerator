@@ -103,7 +103,7 @@ export async function createBooking(ctx: RoomAccessContext, input: CreateBooking
     privacy: input.privacy || 'public',
     capacity: input.capacity ?? null,
     approval_required: approvalRequired,
-    meeting_provider: input.meeting_provider || 'google_meet',
+    meeting_provider: input.meeting_provider || 'zoom',
     related_module_id: input.related_module_id ?? null,
     related_live_session_id: input.related_live_session_id ?? null,
     related_project_id: input.related_project_id ?? null,

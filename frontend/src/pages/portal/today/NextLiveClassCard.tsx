@@ -9,7 +9,7 @@ import { emitPointsEarned } from '../../../services/pointsFx';
 // live_sessions-driven /api/portal/next-session payload. TodayShell gates on a
 // non-null session, so this component assumes `session` is present.
 //   scheduled → Days/Hrs/Min/Sec countdown + "Open the classroom"
-//   live      → pulsing dot + "Join Google Meet" (opens the meeting in a new tab)
+//   live      → pulsing dot + "Join Class" (opens the meeting in a new tab)
 const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) => {
   const isLive = session.status === 'live';
 
@@ -66,7 +66,7 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
               <path d="M15 10l4.5-2.5v9L15 14M4 7h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
             </svg>
-            Join Google Meet
+            Join Class
           </button>
         </>
       ) : (

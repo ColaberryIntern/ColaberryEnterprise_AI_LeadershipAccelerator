@@ -115,7 +115,7 @@ RoomBooking.init(
     audience_rules: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },
     capacity: { type: DataTypes.INTEGER, allowNull: true },
     approval_required: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-    meeting_provider: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'google_meet' },
+    meeting_provider: { type: DataTypes.STRING(30), allowNull: false, defaultValue: 'zoom' },
     meeting_link: { type: DataTypes.STRING(600), allowNull: true },
     google_event_id: { type: DataTypes.STRING(255), allowNull: true },
     external_ids: { type: DataTypes.JSONB, allowNull: false, defaultValue: {} },

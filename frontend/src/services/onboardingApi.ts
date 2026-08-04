@@ -223,10 +223,10 @@ export async function joinSession(sessionId: string, source: 'classroom' | 'meet
   return data;
 }
 
-/** Best-effort "left the Meet tab" beacon, fired on page hide/unload. Uses a
+/** Best-effort "left the call tab" beacon, fired on page hide/unload. Uses a
  * manual keepalive fetch (not axios) so the request can survive the page
  * unloading — this is a proxy signal for the deck's ticker, not a reliable
- * presence system (no real Google Meet join/leave webhook is available to us). */
+ * presence system (no real join/leave webhook is wired up for this). */
 export function leaveMeetingBeacon(sessionId: string): void {
   const token = getParticipantToken();
   if (!token) return;
