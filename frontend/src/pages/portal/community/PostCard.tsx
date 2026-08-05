@@ -4,17 +4,19 @@ import LevelBadge from './LevelBadge';
 import { timeAgo, isVideoUrl, youtubeId, youtubeThumb } from './communityUtils';
 import {
   fetchComments, createComment, togglePin as apiTogglePin,
-  togglePostLike, toggleCommentLike,
+  togglePostLike, toggleCommentLike, removePost as apiRemovePost, removeComment as apiRemoveComment,
   CommunityPost, CommunityComment,
 } from '../../../services/communityApi';
 
 const CommentRow: React.FC<{
   comment: CommunityComment;
   isReply?: boolean;
+  canModerate?: boolean;
   onLike: (id: string) => void;
   onReply?: (parentId: string) => void;
   onOpenProfile?: (memberId: string) => void;
-}> = ({ comment, isReply, onLike, onReply, onOpenProfile }) => (
+  onRemove?: (id: string) => void;
+}> = ({ comment, isReply, canModerate, onLike, onReply, onOpenProfile, onRemove }) => (
   <div className={`cm-comment${isReply ? ' reply' : ''}`}>
     <Avatar name={comment.member.display_name} src={comment.member.avatar_url} size="sm"
       onClick={onOpenProfile ? () => onOpenProfile(comment.member.id) : undefined} />
@@ -29,6 +31,9 @@ const CommentRow: React.FC<{
           {comment.viewer_has_liked ? 'Liked' : 'Like'}{comment.like_count > 0 ? ` (${comment.like_count})` : ''}
         </button>
         {!isReply && onReply && <button type="button" onClick={() => onReply(comment.id)}>Reply</button>}
+        {canModerate && onRemove && (
+          <button type="button" className="cm-comment-remove" onClick={() => onRemove(comment.id)}>Delete</button>
+        )}
       </div>
     </div>
   </div>
@@ -77,9 +82,11 @@ const MediaGrid: React.FC<{ urls: string[] }> = ({ urls }) => {
 const PostCard: React.FC<{
   post: CommunityPost;
   myMemberId: string | null;
+  canModerate?: boolean;
   onChanged: (updated: CommunityPost) => void;
+  onRemoved?: (postId: string) => void;
   onOpenProfile?: (memberId: string) => void;
-}> = ({ post, myMemberId, onChanged, onOpenProfile }) => {
+}> = ({ post, myMemberId, canModerate, onChanged, onRemoved, onOpenProfile }) => {
   // Initial like state comes from the server (viewer_has_liked), not a hardcoded
   // false — the previous bug reset every post to "unliked" on each load.
   const [liked, setLiked] = useState(post.viewer_has_liked);
@@ -147,6 +154,23 @@ const PostCard: React.FC<{
     } catch { /* no-op — pin stays as-is on failure */ }
   };
 
+  const doRemovePost = async () => {
+    if (!window.confirm('Delete this post? This cannot be undone from here.')) return;
+    try {
+      await apiRemovePost(post.id);
+      onRemoved?.(post.id);
+    } catch { /* leave the post visible on failure */ }
+  };
+
+  const doRemoveComment = async (commentId: string) => {
+    if (!window.confirm('Delete this comment? This cannot be undone from here.')) return;
+    try {
+      await apiRemoveComment(commentId);
+      await loadThread();
+      onChanged({ ...post, comment_count: Math.max(0, post.comment_count - 1) });
+    } catch { /* leave the comment visible on failure */ }
+  };
+
   const isAuthor = !!myMemberId && myMemberId === post.member.id;
   const openAuthor = onOpenProfile ? () => onOpenProfile(post.member.id) : undefined;
 
@@ -168,6 +192,11 @@ const PostCard: React.FC<{
         {isAuthor && (
           <button type="button" className={`cm-pin${post.pinned ? ' pinned' : ''}`} onClick={doTogglePin} title={post.pinned ? 'Unpin' : 'Pin'}>
             <svg viewBox="0 0 24 24" fill="none"><path d="M12 2v8m0 0-4 4h8l-4-4zm0 8v8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          </button>
+        )}
+        {canModerate && (
+          <button type="button" className="cm-delete" onClick={doRemovePost} title="Delete post">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-9 0 1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
         )}
       </div>
@@ -208,8 +237,8 @@ const PostCard: React.FC<{
           {comments !== null && comments.length === 0 && <div className="cm-empty">No comments yet — be the first to reply.</div>}
           {comments?.map((c) => (
             <React.Fragment key={c.id}>
-              <CommentRow comment={c} onLike={doCommentLike} onReply={setReplyTo} onOpenProfile={onOpenProfile} />
-              {c.replies.map((r) => <CommentRow key={r.id} comment={r} isReply onLike={doCommentLike} onOpenProfile={onOpenProfile} />)}
+              <CommentRow comment={c} canModerate={canModerate} onLike={doCommentLike} onReply={setReplyTo} onOpenProfile={onOpenProfile} onRemove={doRemoveComment} />
+              {c.replies.map((r) => <CommentRow key={r.id} comment={r} isReply canModerate={canModerate} onLike={doCommentLike} onOpenProfile={onOpenProfile} onRemove={doRemoveComment} />)}
             </React.Fragment>
           ))}
           <div className="cm-comment-input">

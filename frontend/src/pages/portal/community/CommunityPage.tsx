@@ -86,6 +86,10 @@ const CommunityPage: React.FC = () => {
     setPosts((prev) => (prev ? prev.map((p) => (p.id === updated.id ? updated : p)) : prev));
   };
 
+  const handlePostRemoved = (postId: string) => {
+    setPosts((prev) => (prev ? prev.filter((p) => p.id !== postId) : prev));
+  };
+
   const onlineCount = members?.filter((m) => m.presence === 'online').length ?? 0;
   // Join roster onto the leaderboard so each ranked row can show avatar/presence/level.
   const memberById = new Map((members ?? []).map((m) => [m.id, m]));
@@ -122,7 +126,15 @@ const CommunityPage: React.FC = () => {
               <div className="fc-empty">No posts yet in {category || 'this cohort'} — start the conversation.</div>
             )}
             {posts?.map((p) => (
-              <PostCard key={p.id} post={p} myMemberId={myProfile?.id ?? null} onChanged={handlePostChanged} onOpenProfile={setProfileMemberId} />
+              <PostCard
+                key={p.id}
+                post={p}
+                myMemberId={myProfile?.id ?? null}
+                canModerate={!!myProfile?.can_moderate_community}
+                onChanged={handlePostChanged}
+                onRemoved={handlePostRemoved}
+                onOpenProfile={setProfileMemberId}
+              />
             ))}
             {posts !== null && nextCursor && (
               <button type="button" className="cm-load-more" onClick={loadMore} disabled={loadingMore}>
