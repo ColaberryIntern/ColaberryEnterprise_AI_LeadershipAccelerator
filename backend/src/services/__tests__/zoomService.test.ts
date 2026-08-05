@@ -206,6 +206,38 @@ describe('findRecordingForSession', () => {
   });
 });
 
+describe('findRecordingByMeetingId (the generic entry point behind findRecordingForSession, and used directly by ingestRecordingForBooking for general Room bookings)', () => {
+  it('matches by meeting ID + a date hint with no LiveSession involved at all', async () => {
+    const { findRecordingByMeetingId } = loadZoomService();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        meetings: [{ id: 456, topic: 'Study Group', recording_files: [{ file_type: 'MP4', file_size: 300, download_url: 'https://zoom.us/rec/booking' }] }],
+      })) as any;
+
+    const match = await findRecordingByMeetingId('456', '2026-08-04', 'fallback title');
+
+    expect(match).toEqual({
+      downloadUrl: 'https://zoom.us/rec/booking',
+      name: 'Study Group.mp4', // Zoom's own topic wins over the fallback when present
+      mimeType: 'video/mp4',
+      sizeBytes: 300,
+    });
+  });
+
+  it('falls back to the provided name when Zoom has no topic on the meeting', async () => {
+    const { findRecordingByMeetingId } = loadZoomService();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        meetings: [{ id: 456, topic: '', recording_files: [{ file_type: 'MP4', file_size: 300, download_url: 'https://zoom.us/rec/booking' }] }],
+      })) as any;
+
+    const match = await findRecordingByMeetingId('456', '2026-08-04', 'Study Group (fallback)');
+    expect(match?.name).toBe('Study Group (fallback).mp4');
+  });
+});
+
 describe('streamZoomFile', () => {
   it('uses the webhook-supplied download_token as a query param when present (no extra OAuth call)', async () => {
     const { streamZoomFile } = loadZoomService();

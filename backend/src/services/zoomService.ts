@@ -261,11 +261,18 @@ function addDays(dateStr: string, days: number): string {
 // createMeetingForSession / meetingService.ts) instead of Drive's old
 // timestamp-proximity guess. Never throws for "not found" — recording is
 // still effectively a per-meeting setting that could be off; only real
-// API/config failures throw.
-export async function findRecordingForSession(session: LiveSession): Promise<ZoomRecordingMatch | null> {
-  if (!session.zoom_meeting_id) return null;
-  const meetings = await listRecordings(session.session_date, addDays(session.session_date, 1));
-  const meeting = meetings.find((m) => String(m.id) === session.zoom_meeting_id);
+// API/config failures throw. The generic entry point — both
+// findRecordingForSession (official class sessions) and
+// sessionRecordingService.ingestRecordingForBooking (general Room bookings)
+// go through this, since matching only ever needs a meeting ID + a date to
+// pick the right day-window, never the whole LiveSession/RoomBooking shape.
+export async function findRecordingByMeetingId(
+  meetingId: string,
+  dateHint: string,
+  fallbackName?: string,
+): Promise<ZoomRecordingMatch | null> {
+  const meetings = await listRecordings(dateHint, addDays(dateHint, 1));
+  const meeting = meetings.find((m) => String(m.id) === meetingId);
   if (!meeting || !meeting.recording_files?.length) return null;
 
   const mp4s = meeting.recording_files.filter((f) => f.file_type === 'MP4');
@@ -276,10 +283,15 @@ export async function findRecordingForSession(session: LiveSession): Promise<Zoo
 
   return {
     downloadUrl: best.download_url,
-    name: `${meeting.topic || session.title}.mp4`,
+    name: `${meeting.topic || fallbackName || 'recording'}.mp4`,
     mimeType: 'video/mp4',
     sizeBytes: best.file_size ?? null,
   };
+}
+
+export async function findRecordingForSession(session: LiveSession): Promise<ZoomRecordingMatch | null> {
+  if (!session.zoom_meeting_id) return null;
+  return findRecordingByMeetingId(session.zoom_meeting_id, session.session_date, session.title);
 }
 
 // Streams a Zoom recording's bytes — never buffers the whole file in memory
