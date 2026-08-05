@@ -13507,3 +13507,28 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     versioned-vs-no-op distinction reads the real API flag).
   - Notes: Matches T011's now-established pattern of pairing every new panel
     with a lightweight no-browser smoke test.
+
+- [x] **T013 — pacing controls panel (real implementation, replaces T010 placeholder)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/pages/admin/governance/PacingControls.tsx`
+    replaced with the real panel - the 8 T002 governance-policy fields (Stage-4
+    rerank caps + Today Plan pacing knobs) with Zod-bound-matching numeric
+    input ranges, PLUS the existing `explorationPct` field reused (not
+    duplicated) via the pre-existing `GET/PUT /api/admin/feed-control/policy`
+    endpoint, matching `FeedControlTab.tsx`'s own inline `api.get/put`
+    convention. Two fully separate, explicit Save actions (governance policy
+    vs exploration reserve) - neither autosaves, and the initial load only
+    calls GET endpoints. Added `PacingControls.smoke.test.tsx`.
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh
+    evidence: tsc clean, smoke test passing, confirmed all 8 fields map
+    correctly to the real T009 typed interface, confirmed the `explorationPct`
+    reuse claim against the actual pre-existing `feedConfigService.ts` - not a
+    duplicated field, confirmed Save is split into 2 independent explicit
+    actions with no autosave anywhere, confirmed numeric bounds match the real
+    T002 Zod schema, confirmed the help text describing trim-order and
+    slot-share semantics matches T005's actual implementation, not just
+    self-consistent frontend prose).
+  - Notes: This panel edits values that feed the currently-live production
+    ranker/plan (T004/T005 wiring) - verified with the same scrutiny as a
+    live-path change even though this task is "only" the frontend form.
