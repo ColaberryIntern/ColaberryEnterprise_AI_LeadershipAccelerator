@@ -37,7 +37,9 @@ import { postLiveClassQrToRoom } from './liveClassQrService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
-import { ingestRecordingForSession, ingestRecordingForBooking } from './sessionRecordingService';
+import CommunityRoom from '../models/CommunityRoom';
+import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom } from './sessionRecordingService';
+import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 
 /**
  * Instrumentation wrapper for cron jobs.
@@ -2435,8 +2437,8 @@ export function startScheduler(): void {
       // loop above). "Completed" here means the booking's own scheduled end
       // has passed, not that a host clicked Complete — that's a manual,
       // easily-forgotten step this shouldn't depend on. Always-open
-      // persistent video rooms (Grape Gallery etc.) are deliberately not
-      // swept here — see sessionRecordingService.ts's header comment.
+      // persistent video rooms are swept separately below (no "completed"
+      // state applies to them).
       const bookingCandidates = await RoomBooking.findAll({
         where: {
           meeting_provider: 'zoom',
@@ -2459,11 +2461,40 @@ export function startScheduler(): void {
           console.error(`[Scheduler] Recording ingest failed for booking ${booking.id}:`, err.message);
         }
       }
+
+      // Same sweep, for always-open persistent video Rooms (e.g. a cohort's
+      // main class room — is_video + always_open). No "completed" state to
+      // filter on here (the room never closes), so this just re-scans a
+      // 7-day recordings window per room every tick — bounded work since
+      // there are only ever a handful of these rooms, unlike bookings/sessions.
+      // Found live 2026-08-05: a cohort's actual teaching happens in one of
+      // these, not a scheduled LiveSession, so this sweep exists to cover
+      // real classes, not just drop-in social use.
+      const alwaysOpenRooms = await CommunityRoom.findAll({
+        where: { is_video: true, always_open: true, meeting_link: { [Op.ne]: null } },
+      });
+      const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const to = new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      for (const room of alwaysOpenRooms) {
+        const meetingId = extractZoomMeetingId(room.meeting_link);
+        if (!meetingId) continue;
+        try {
+          const instances = await findRecordingInstancesByMeetingId(meetingId, from, to, room.name);
+          for (const instance of instances) {
+            const result = await ingestRecordingForRoom(room, instance.uuid, instance.match);
+            if (result.status === 'ingested') {
+              console.log(`[Scheduler] Recording ingested for room ${room.id} "${room.name}" (instance ${instance.uuid})`);
+            }
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for room ${room.id}:`, err.message);
+        }
+      }
     }).catch((err: any) => {
       console.error('[Scheduler] Session recording ingest error:', err.message);
     });
   });
-  console.log('[Scheduler] Accelerator: session + room-booking recording ingestion every 30 min');
+  console.log('[Scheduler] Accelerator: session + room-booking + always-open-room recording ingestion every 30 min');
 
   // ── Alumni Lifecycle Processor (daily 6 AM CT / 11 UTC) ──────────────
   const { detectInactiveLeads, detectReengagementComplete } = require('./campaignLifecycleService');

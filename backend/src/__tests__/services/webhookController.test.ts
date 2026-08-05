@@ -43,10 +43,13 @@ jest.mock('../../services/zoomService', () => ({
 
 jest.mock('../../models/LiveSession', () => ({ findOne: jest.fn() }));
 jest.mock('../../models/RoomBooking', () => ({ findOne: jest.fn() }));
+jest.mock('../../models/CommunityRoom', () => ({}));
 
 jest.mock('../../services/sessionRecordingService', () => ({
   ingestRecordingForSession: jest.fn(),
   ingestRecordingForBooking: jest.fn(),
+  ingestRecordingForRoom: jest.fn(),
+  findAlwaysOpenRoomForZoomMeeting: jest.fn(),
 }));
 
 import { handlePaySimpleWebhook, handleZoomWebhook } from '../../controllers/webhookController';
@@ -58,7 +61,12 @@ import { activateByRef, isSubscriptionRef } from '../../services/subscriptionSer
 import { verifyZoomWebhookSignature, computeZoomWebhookEncryptedToken } from '../../services/zoomService';
 import LiveSession from '../../models/LiveSession';
 import RoomBooking from '../../models/RoomBooking';
-import { ingestRecordingForSession, ingestRecordingForBooking } from '../../services/sessionRecordingService';
+import {
+  ingestRecordingForSession,
+  ingestRecordingForBooking,
+  ingestRecordingForRoom,
+  findAlwaysOpenRoomForZoomMeeting,
+} from '../../services/sessionRecordingService';
 
 function mockRequest(body: any, headers: Record<string, string> = {}): Partial<Request> {
   return { body, headers };
@@ -450,10 +458,11 @@ describe('handleZoomWebhook', () => {
     expect(LiveSession.findOne).not.toHaveBeenCalled();
   });
 
-  it('benign-acks recording.completed for a meeting that matches neither a LiveSession nor a RoomBooking (account-wide subscription, non-class/booking meeting)', async () => {
+  it('benign-acks recording.completed for a meeting that matches neither a LiveSession, a RoomBooking, nor an always-open Room (account-wide subscription, non-class/booking/room meeting)', async () => {
     (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
     (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
     (RoomBooking.findOne as jest.Mock).mockResolvedValue(null);
+    (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue(null);
 
     const event = { event: 'recording.completed', payload: { object: { id: 999, topic: 'Unrelated 1:1', recording_files: [] } } };
     const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
@@ -465,6 +474,57 @@ describe('handleZoomWebhook', () => {
     expect(res.json).toHaveBeenCalledWith({ received: true, matched: false });
     expect(ingestRecordingForSession).not.toHaveBeenCalled();
     expect(ingestRecordingForBooking).not.toHaveBeenCalled();
+    expect(ingestRecordingForRoom).not.toHaveBeenCalled();
+  });
+
+  it('falls back to matching an always-open Room by meeting_link when neither a LiveSession nor a RoomBooking matches, and ingests via ingestRecordingForRoom with the recording instance uuid', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
+    (RoomBooking.findOne as jest.Mock).mockResolvedValue(null);
+    const room = { id: 'room-always-open-1', name: 'July 2026 - AI Systems Architect', meeting_link: 'https://colaberry.zoom.us/j/89581408269' };
+    (findAlwaysOpenRoomForZoomMeeting as jest.Mock).mockResolvedValue(room);
+    (ingestRecordingForRoom as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r3' });
+
+    const event = {
+      event: 'recording.completed',
+      payload: {
+        object: {
+          id: 89581408269,
+          uuid: 'instance-uuid-xyz',
+          topic: 'Colaberry Rooms — July 2026 - AI Systems Architect',
+          recording_files: [{ file_type: 'MP4', file_size: 1200, download_url: 'https://zoom.us/rec/room' }],
+        },
+      },
+    };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(findAlwaysOpenRoomForZoomMeeting).toHaveBeenCalledWith('89581408269');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ received: true, matched: true });
+    expect(ingestRecordingForRoom).toHaveBeenCalledWith(room, 'instance-uuid-xyz', expect.objectContaining({
+      downloadUrl: 'https://zoom.us/rec/room',
+    }));
+    expect(ingestRecordingForSession).not.toHaveBeenCalled();
+    expect(ingestRecordingForBooking).not.toHaveBeenCalled();
+  });
+
+  it('does not look up an always-open Room at all when a RoomBooking already matched (avoids a redundant query)', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
+    const booking = { id: 'booking-1', title: 'Study Group', google_event_id: '456' };
+    (RoomBooking.findOne as jest.Mock).mockResolvedValue(booking);
+    (ingestRecordingForBooking as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r2' });
+
+    const event = { event: 'recording.completed', payload: { object: { id: 456, recording_files: [{ file_type: 'MP4', file_size: 500, download_url: 'https://zoom.us/rec/x' }] } } };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(findAlwaysOpenRoomForZoomMeeting).not.toHaveBeenCalled();
   });
 
   it('falls back to matching a RoomBooking by google_event_id when no LiveSession matches, and ingests via ingestRecordingForBooking', async () => {

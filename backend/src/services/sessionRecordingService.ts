@@ -4,9 +4,11 @@ import path from 'path';
 import { Readable } from 'stream';
 import type { Transaction } from 'sequelize';
 import { sequelize } from '../config/database';
+import { Op } from 'sequelize';
 import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import RoomResource from '../models/RoomResource';
+import CommunityRoom from '../models/CommunityRoom';
 import { ROOM_RECORDING_DIR, MAX_ROOM_RECORDING_SIZE } from '../config/upload';
 import { ensureRoomForSession } from './communityRooms/roomService';
 import { emitRoomEvent } from './communityRooms/roomOutboxService';
@@ -16,23 +18,31 @@ import { findRecordingForSession as findDriveRecording, streamDriveFile, DriveRe
 import {
   findRecordingForSession as findZoomRecording,
   findRecordingByMeetingId as findZoomRecordingByMeetingId,
+  extractZoomMeetingId,
   streamZoomFile,
   ZoomRecordingMatch,
 } from './zoomService';
 
-// Bridges the accelerator's LiveSession lifecycle (official class sessions)
-// AND the general Rooms domain (RoomBooking — the "+ Book a session" flow)
-// to a downloadable "recording" RoomResource, automatically. Two entry
-// points share the same download/attach core below:
+// Bridges the accelerator's LiveSession lifecycle (official class sessions),
+// the general Rooms domain (RoomBooking — the "+ Book a session" flow), AND
+// always-open persistent video Rooms (linked_cohort_id-scoped rooms like a
+// cohort's main "class" room — is_video + always_open, one Zoom meeting
+// reused indefinitely) to a downloadable "recording" RoomResource,
+// automatically. Three entry points share the same download/attach core
+// below:
 //   ingestRecordingForSession — official LiveSession-backed classes, both
 //     Google Meet/Drive and Zoom providers.
 //   ingestRecordingForBooking — general Room bookings. Zoom-only (all new
 //     bookings default to Zoom as of the provider migration; building this
-//     for legacy Google Meet ad-hoc bookings isn't worth it). Deliberately
-//     does NOT cover the always-open persistent video rooms (Grape Gallery
-//     etc.) — those reuse the same Zoom meeting ID indefinitely with no
-//     single-session boundary, so "one meeting = one recording" doesn't
-//     hold; that's a different feature, not built here.
+//     for legacy Google Meet ad-hoc bookings isn't worth it).
+//   ingestRecordingForRoom — always-open Rooms. Zoom-only. Unlike the two
+//     above, there's no single "did this end" boundary and no per-booking
+//     row to key idempotency off of, since the same meeting ID is reused
+//     forever (found live 2026-08-05: a cohort's actual class room is one of
+//     these, not a scheduled LiveSession — a wrong assumption in the initial
+//     scope cut here excluded it). Idempotency instead keys off Zoom's own
+//     per-recording instance uuid (distinct per start/stop even though the
+//     numeric meeting id stays constant), stored in RoomResource.metadata.
 
 type RecordingMatch = DriveRecordingMatch | ZoomRecordingMatch;
 
@@ -102,16 +112,22 @@ export interface IngestResult {
 // and — because the idempotency guard above short-circuits on "a resource
 // already exists" — a retry would never revisit that update, permanently
 // stranding the session pointing nowhere even though the recording exists.
-async function attachRecordingToBooking(
-  booking: RoomBooking,
+//
+// Takes roomId/bookingId as plain values, not a RoomBooking, so a bare
+// always-open Room (no booking at all — ingestRecordingForRoom below) can
+// share this same core with bookingId: null.
+async function attachRecording(
+  roomId: string,
+  bookingId: string | null,
   match: RecordingMatch,
   streamFile: (match: RecordingMatch) => Promise<Readable>,
   resourceTitle: string,
   eventPayloadExtra: Record<string, unknown>,
+  metadata?: Record<string, unknown>,
   onCreated?: (resource: RoomResource, transaction: Transaction) => Promise<void>,
 ): Promise<IngestResult> {
   if (match.sizeBytes && match.sizeBytes > MAX_ROOM_RECORDING_SIZE) {
-    log('warn', 'recording_exceeds_size_cap', { booking_id: booking.id, size: match.sizeBytes, cap: MAX_ROOM_RECORDING_SIZE });
+    log('warn', 'recording_exceeds_size_cap', { room_id: roomId, booking_id: bookingId, size: match.sizeBytes, cap: MAX_ROOM_RECORDING_SIZE });
     return { status: 'not_found' };
   }
 
@@ -134,8 +150,8 @@ async function attachRecordingToBooking(
   try {
     const resource = await RoomResource.create(
       {
-        room_id: booking.room_id,
-        booking_id: booking.id,
+        room_id: roomId,
+        booking_id: bookingId,
         resource_type: 'recording',
         title: resourceTitle,
         url: null,
@@ -143,6 +159,7 @@ async function attachRecordingToBooking(
         size_bytes: sizeBytes,
         storage_key: storageKey,
         created_by_enrollment_id: null,
+        ...(metadata ? { metadata } : {}),
       },
       { transaction: t },
     );
@@ -153,9 +170,9 @@ async function attachRecordingToBooking(
       eventType: ROOM_EVENTS.RecordingAttached,
       aggregateType: 'resource',
       aggregateId: resource.id,
-      payload: { room_id: booking.room_id, booking_id: booking.id, resource_type: 'recording', ...eventPayloadExtra },
+      payload: { room_id: roomId, booking_id: bookingId, resource_type: 'recording', ...eventPayloadExtra },
     });
-    log('info', 'recording_ingested', { booking_id: booking.id, resource_id: resource.id, size_bytes: sizeBytes });
+    log('info', 'recording_ingested', { room_id: roomId, booking_id: bookingId, resource_id: resource.id, size_bytes: sizeBytes });
     return { status: 'ingested', resourceId: resource.id };
   } catch (err) {
     await t.rollback();
@@ -192,17 +209,19 @@ export async function ingestRecordingForSession(
   const match = preResolvedMatch ?? await provider.findRecording(session);
   if (!match) return { status: 'not_found' };
 
-  return attachRecordingToBooking(
-    booking,
+  return attachRecording(
+    booking.room_id,
+    booking.id,
     match,
     provider.streamFile,
     session.title || `Session ${session.session_number} recording`,
     { session_id: session.id },
+    undefined,
     // Kept in sync for the existing Portal "Watch Recording" button
     // (PortalSessionDetailPage.tsx), which reads LiveSession.recording_url —
     // point it at the same authenticated download route rather than a raw
     // provider link, since the file is now hosted on our own disk. Runs in
-    // the same transaction as the resource insert — see attachRecordingToBooking's
+    // the same transaction as the resource insert — see attachRecording's
     // own comment for why that matters.
     async (resource, transaction) => {
       await session.update(
@@ -237,11 +256,58 @@ export async function ingestRecordingForBooking(
   const match = preResolvedMatch ?? await findZoomRecordingByMeetingId(booking.google_event_id, dateHint, booking.title);
   if (!match) return { status: 'not_found' };
 
-  return attachRecordingToBooking(
-    booking,
+  return attachRecording(
+    booking.room_id,
+    booking.id,
     match,
     (m) => streamZoomFile(m as ZoomRecordingMatch),
     booking.title || 'Room session recording',
     { booking_id: booking.id },
   );
+}
+
+// Always-open persistent video Rooms (is_video + always_open — e.g. a
+// cohort's main class room). Zoom-only, same as ingestRecordingForBooking.
+// No RoomBooking exists for these at all, so idempotency can't key off a
+// booking_id the way the other two paths do — it keys off Zoom's own
+// per-recording-instance uuid instead (constant meeting id, distinct uuid
+// per start/stop), stored in RoomResource.metadata.zoom_uuid. A JSONB
+// containment query (not a dedicated column) because this is the one place
+// in the schema that needs it; adding a column for a single query site isn't
+// worth it.
+export async function ingestRecordingForRoom(
+  room: CommunityRoom,
+  instanceUuid: string,
+  match: ZoomRecordingMatch,
+): Promise<IngestResult> {
+  const existing = await RoomResource.findOne({
+    where: {
+      room_id: room.id,
+      resource_type: 'recording',
+      metadata: { [Op.contains]: { zoom_uuid: instanceUuid } } as unknown as Record<string, unknown>,
+    },
+  });
+  if (existing) return { status: 'already_present', resourceId: existing.id };
+
+  return attachRecording(
+    room.id,
+    null,
+    match,
+    (m) => streamZoomFile(m as ZoomRecordingMatch),
+    `${room.name} — recording`,
+    { room_id: room.id },
+    { zoom_uuid: instanceUuid, source: 'always_open_room' },
+  );
+}
+
+// Finds the always-open Room a Zoom meeting/webhook event belongs to, if
+// any. Only is_video + always_open rooms are eligible — a scheduled class
+// Room (room_type: 'scheduled', linked to one LiveSession) is handled by
+// ingestRecordingForSession instead, keyed off LiveSession.zoom_meeting_id,
+// never reached via this path.
+export async function findAlwaysOpenRoomForZoomMeeting(meetingId: string): Promise<CommunityRoom | null> {
+  const rooms = await CommunityRoom.findAll({
+    where: { is_video: true, always_open: true, meeting_link: { [Op.ne]: null } },
+  });
+  return rooms.find((r) => extractZoomMeetingId(r.meeting_link) === meetingId) || null;
 }
