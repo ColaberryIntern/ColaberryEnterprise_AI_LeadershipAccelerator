@@ -8,7 +8,7 @@ import {
 import { loadSchedule } from '../scheduleCache';
 import PortalShell from './PortalShell';
 import OpenOnPhone from './OpenOnPhone';
-import CondensedHeaderCard from './CondensedHeaderCard';
+import CondensedHeaderCard, { CondensedTone } from './CondensedHeaderCard';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
 import {
   readParticipant, countdown, firstClassTargetMs,
@@ -34,6 +34,8 @@ import SkillMeter from '../SkillMeter';
 import SetupModal from './SetupModal';
 import { useReferralForm } from './useReferralForm';
 import { fetchSkillProfile, LearnerSkillProfile } from '../../../services/capeApi';
+import { useTodayNextStep } from './useTodayNextStep';
+import TodayNextStepBanner from './TodayNextStepBanner';
 
 const TodayShell: React.FC = () => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
@@ -52,6 +54,10 @@ const TodayShell: React.FC = () => {
   const fileRef = React.useRef<HTMLInputElement>(null);
   const [streak, setStreak] = useState<StreakView | null>(null);
   const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
+  // Section-bucket order for the whole curriculum feed (pre_class -> learn ->
+  // ... -> advance) — needed to find the "active next step" the same way
+  // Classroom itself orders a week's cards (see findActiveNextCard).
+  const [curriculumBuckets, setCurriculumBuckets] = useState<string[]>([]);
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
   // CAPE Phase 0-1 profile (drives SkillMeter + Readiness); Phase 5 filter-chip counts + skill-drawer selection.
   const [capeProfile, setCapeProfile] = useState<LearnerSkillProfile | null>(null);
@@ -84,7 +90,10 @@ const TodayShell: React.FC = () => {
     if (p.status === 'fulfilled') setPoints(p.value);
     if (s.status === 'fulfilled') setSchedule(s.value);
     if (pr.status === 'fulfilled') setProfile(pr.value);
-    if (cl.status === 'fulfilled') setCurriculum(((cl.value.data?.cards as TimelineFeedCard[]) || []).sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || a.order - b.order));
+    if (cl.status === 'fulfilled') {
+      setCurriculum(((cl.value.data?.cards as TimelineFeedCard[]) || []).sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || a.order - b.order));
+      setCurriculumBuckets((cl.value.data?.buckets as string[]) || []);
+    }
     if (st.status === 'fulfilled') setStreak(st.value);
     if (cp.status === 'fulfilled') setCapeProfile(cp.value);
   }, []);
@@ -106,6 +115,9 @@ const TodayShell: React.FC = () => {
   // hardcoded 0/100 literal. Rounds the same overall_proficiency SkillMeter renders,
   // so the ring and the radar can never disagree (design doc §2, §11, §17 AC 10).
   const readiness = capeProfile ? Math.round(capeProfile.overall_proficiency) : 0;
+  // Banding for the condensed-header readiness chip — same thresholds a
+  // student would read as "on track" / "building" / "just starting".
+  const readinessTone: CondensedTone = readiness >= 70 ? 'leaf' : readiness >= 40 ? 'amber' : 'cherry';
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
@@ -199,9 +211,21 @@ const TodayShell: React.FC = () => {
   const setupPct = Math.round((setupDone / steps.length) * 100);
   const streakCount = streak?.count ?? 0;
   const streakWeek = streak?.week ?? [];
-  // State-aware "what's next" for the command band — reflects the real setup state.
-  const nextStepLabel = !hasBackground ? 'upload your résumé to personalize everything' : null;
-
+  // The single "what should I do right now" answer the Command Center leads
+  // with — see useTodayNextStep.ts for the enrolled-vs-explorer branching.
+  const nextSetupStep = steps.find((s) => !s.done) ?? null;
+  const nextStep = useTodayNextStep({
+    isExplorer: !!schedule?.is_explorer,
+    curriculum,
+    buckets: curriculumBuckets,
+    setupRemaining,
+    nextSetupStepTitle: nextSetupStep?.title ?? null,
+    planFlagOn: !!flags?.cape_today_plan,
+    refreshToken: points,
+  });
+  const scrollToAnchor = (id: string) => () => {
+    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   // Shared collect handler for TodayFeedV2 + TodayPlan (CAPE Phase 5) — one
   // implementation so the two surfaces never drift. Throws on the server
@@ -221,10 +245,18 @@ const TodayShell: React.FC = () => {
       todayBadge={setupRemaining}
       condensedSlot={(
         <CondensedHeaderCard
+          icon={<svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>}
+          tone="leaf"
           visual={<div className="te-ring mini" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b></div></div>}
           label="Next tier"
           title={lvl.next ? lvl.next.name : 'Max level'}
           sub={lvl.next ? `${lvl.next.min - total} pts to go` : 'Top tier reached'}
+          stats={[{
+            icon: <span className="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg></span>,
+            value: `${readiness}`,
+            tone: readinessTone,
+            title: `Architect readiness — ${readiness}/100`,
+          }]}
           action={<OpenOnPhone />}
         />
       )}
@@ -240,20 +272,13 @@ const TodayShell: React.FC = () => {
           <div>
             <div className="crumb">◆ {schedule?.is_explorer ? 'Free AI Preview' : 'Command Center'}</div>
             <h2>{firstName ? `Welcome back, ${firstName} 👋` : 'Welcome back 👋'}</h2>
-            <p className="statline">
-              {nextStepLabel
-                ? (total > 0
-                    ? <>You've earned <b>{total.toLocaleString()} points</b>. Next up — {nextStepLabel}.</>
-                    : <>You're one step from your first points — <b>{nextStepLabel}</b>.</>)
-                : <><b>{total.toLocaleString()} points</b> and set up — we're personalizing the rest in the background.</>}
-            </p>
-            <div className="ctas">
-              {!hasBackground && (
-                <button className="te-btn cherry" type="button" onClick={openUpload}>Upload résumé / LinkedIn</button>
-              )}
-              <Link className="te-btn ghost" to="/portal/path">See your path</Link>
-              <Link className="te-btn ghost" to="/portal/points">Break down my points</Link>
-            </div>
+            <TodayNextStepBanner
+              nextStep={nextStep}
+              total={total}
+              hasBackground={hasBackground}
+              onOpenUpload={openUpload}
+              onScrollTo={scrollToAnchor}
+            />
           </div>
           <div className="te-cluster">
             <div className="te-ringwrap lf">
@@ -373,18 +398,23 @@ const TodayShell: React.FC = () => {
             />
           )}
 
-          {/* CAPE Phase 5 finite Today Plan — flag-gated, see useTodayPlanGate.ts */}
+          {/* CAPE Phase 5 finite Today Plan — flag-gated, see useTodayPlanGate.ts.
+              id is the "Jump to Today's Plan" scroll target from the command
+              band's `nextStep.kind === 'plan'` CTA above. */}
           {flags?.cape_today_plan && (
-            <TodayPlan
-              onRefs={setPlanRefs}
-              onOpen={setSelectedCard}
-              onWorkspace={setSelectedCard}
-              onComplete={handleCardComplete}
-            />
+            <div id="te-today-plan-anchor">
+              <TodayPlan
+                onRefs={setPlanRefs}
+                onOpen={setSelectedCard}
+                onWorkspace={setSelectedCard}
+                onComplete={handleCardComplete}
+              />
+            </div>
           )}
 
-          {/* ── aggregated timeline — the big feed pulling from every page ── */}
-          <div className="te-feed">
+          {/* ── aggregated timeline — the big feed pulling from every page ──
+              id is the "See your timeline" scroll target above. */}
+          <div className="te-feed" id="te-timeline-anchor">
             <div className="te-feed-head">
               <span className="h">
                 <svg viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l2.5 2.5M16.5 16.5L19 19M19 5l-2.5 2.5M7.5 16.5L5 19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /><circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="2" /></svg>

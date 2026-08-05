@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Avatar from './Avatar';
 import { isVideoUrl, youtubeId, youtubeThumb } from './communityUtils';
 import { CommunityMemberProfile, uploadCommunityMedia } from '../../../services/communityApi';
@@ -18,7 +18,10 @@ const Composer: React.FC<{
   categories: readonly string[];
   defaultCategory: string;
   onSubmit: (input: ComposerSubmit) => Promise<boolean>;
-}> = ({ me, categories, defaultCategory, onSubmit }) => {
+  /** Bump this (e.g. a click counter) to expand the composer from outside —
+   *  e.g. the "Share" action in the scroll-condensed header slot. */
+  expandSignal?: number;
+}> = ({ me, categories, defaultCategory, onSubmit, expandSignal }) => {
   const [expanded, setExpanded] = useState(false);
   const [body, setBody] = useState('');
   const [category, setCategory] = useState(defaultCategory);
@@ -35,6 +38,12 @@ const Composer: React.FC<{
     // Focus after the textarea has actually mounted.
     setTimeout(() => textareaRef.current?.focus(), 0);
   };
+
+  // External expand trigger — expandSignal starts undefined/0 (falsy) on
+  // mount so this only fires on an actual increment, not the initial render.
+  useEffect(() => {
+    if (expandSignal) expand();
+  }, [expandSignal]);
 
   const reset = () => {
     setBody('');

@@ -44,7 +44,7 @@ export interface CreateCardInput {
   unlock_rules?: any;   // per-card gating predicates (UnlockPredicate[]) — normalized on write
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
-  course?: { name?: string | null; url?: string | null; completion?: 'certificate' | 'progress' | null; sections?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link + completion mode
+  course?: { name?: string | null; url?: string | null; completion?: 'certificate' | 'progress' | null; sections?: string | null; certName?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link + completion mode. certName: the name AS IT APPEARS ON THE ACTUAL CERTIFICATE, when it differs from the display `name` (e.g. a split course renamed per-week for the timeline) — used only for AI cert-match verification.
   image?: string | null;   // the item's OWN display image (blog cover etc.) — tiles show it over the generic type visual
   testimonial?: { mode?: string | null; category?: string | null } | null;   // Testimonials type: link vs random personalized
   podcast?: { mode?: string | null; category?: string | null } | null;       // Podcast type: link vs random personalized episode
@@ -81,7 +81,7 @@ export function buildContentMeta(content: CreateCardInput['content']): Record<st
 
 /** PURE — normalize a Skills Course link (class name + SkillsJar URL) into the
  *  stored metadata shape, or null when neither is given. */
-export function buildCourseMeta(course: CreateCardInput['course']): { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null {
+export function buildCourseMeta(course: CreateCardInput['course']): { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string; certName?: string } | null {
   if (!course || typeof course !== 'object') return null;
   const str = (s: any) => (typeof s === 'string' && s.trim() ? s.trim() : null);
   const name = str(course.name);
@@ -91,7 +91,8 @@ export function buildCourseMeta(course: CreateCardInput['course']): { name: stri
   // split course's first part); default/omitted = 'certificate' (whole-course cert).
   const completion = course.completion === 'progress' ? 'progress' : undefined;
   const sections = str(course.sections) || undefined;
-  return { name, url, ...(completion ? { completion } : {}), ...(sections ? { sections } : {}) };
+  const certName = str(course.certName) || undefined;
+  return { name, url, ...(completion ? { completion } : {}), ...(sections ? { sections } : {}), ...(certName ? { certName } : {}) };
 }
 
 /** PURE — normalize the Testimonials source config into the stored metadata

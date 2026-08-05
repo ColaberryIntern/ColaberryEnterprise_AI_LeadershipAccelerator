@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
@@ -9,6 +9,7 @@ import '../../components/timeline/timeline.css';
 import './today/TodayShell.css';
 import PortalShell from './today/PortalShell';
 import ClassroomNextStepHero from '../../components/timeline/ClassroomNextStepHero';
+import { bySectionOrder } from './classroomNextStep';
 import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../services/pointsFx';
 import { filterCardsByQuery, tokenizeQuery } from '../../utils/classroomSearch';
 import { readViewSnapshot, restoreScroll, usePersistScrollOnScroll } from '../../hooks/useScrollRestore';
@@ -62,6 +63,9 @@ interface ClassroomExtra { week: number | null }
 
 const ClassroomPage: React.FC = () => {
   const navigate = useNavigate();
+  // Deep link from Today's "next step" CTA: /portal/classroom?open=<cardId>
+  // opens that exact card's drawer directly — see the restore effect below.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [feed, setFeed] = useState<Feed | null>(null);
   const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'gated' | 'error'>('loading');
   const [week, setWeek] = useState<number | null>(null);
@@ -119,6 +123,17 @@ const ClassroomPage: React.FC = () => {
     if (!feed || weeks.length === 0) return;
     if (!restoredRef.current) {
       restoredRef.current = true;
+      // Deep link takes priority over the session-restored view: Today's
+      // "next step" CTA sends a student here to open ONE specific card, not
+      // to resume wherever they last scrolled.
+      const openId = searchParams.get('open');
+      const openCard = openId ? feed.cards.find((c) => c.id === openId) : null;
+      if (openCard) {
+        if (openCard.week != null) setWeek(openCard.week);
+        setSelectedCard(openCard);
+        setSearchParams((prev) => { prev.delete('open'); return prev; }, { replace: true });
+        return;
+      }
       const snap = readViewSnapshot<ClassroomExtra>(VIEW_KEY);
       // snap.extra can be missing if a stale pre-refactor sessionStorage blob
       // (old shape was {week, scrollY} with no wrapping `extra`) survives across
@@ -136,7 +151,7 @@ const ClassroomPage: React.FC = () => {
       const firstOpen = weeks.find((w) => feed.cards.some((c) => c.week === w && c.status !== 'completed'));
       setWeek(firstOpen ?? weeks[0]);
     }
-  }, [feed, weeks, week]);
+  }, [feed, weeks, week, searchParams, setSearchParams]);
 
   // Continuously remember the current scroll position (and week) so returning
   // from the workspace can restore it — see hooks/useScrollRestore for why this
@@ -148,9 +163,8 @@ const ClassroomPage: React.FC = () => {
     // Sort by SECTION order (pre_class → learn → … → reflect → share → advance)
     // then by the card's order in its lane — matches the Timeline tab, so e.g.
     // the reflect feedback survey reads at the END, not interleaved at the top.
-    const bIdx = (b: string) => { const i = feed.buckets.indexOf(b); return i < 0 ? feed.buckets.length : i; };
-    const bySection = (a: typeof feed.cards[number], b: typeof feed.cards[number]) =>
-      bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order;
+    // Shared with Today's "active next step" derivation (classroomNextStep.ts)
+    // so the two pages can never pick a different "next" card.
     // weeks.length===0 now means this enrollment has NO week-1+ content — either a
     // free-preview/explorer-tier student (whose entire feed is week-0-only, which
     // now belongs to Today, not here) or a cohort with no week-tagged cards at all.
@@ -159,7 +173,7 @@ const ClassroomPage: React.FC = () => {
     // free-tier student's week-0 content back into Classroom. Show nothing instead;
     // the empty state below directs them to Today, where that content actually lives.
     if (weeks.length === 0) return [];
-    return feed.cards.filter((c) => c.week === week).sort(bySection);
+    return feed.cards.filter((c) => c.week === week).sort(bySectionOrder(feed.buckets));
   }, [feed, weeks, week]);
 
   const done = weekCards.filter((c) => c.status === 'completed').length;
@@ -206,11 +220,26 @@ const ClassroomPage: React.FC = () => {
   const prog = feed.progression;
   const readinessPct = prog ? Math.round(prog.level.readiness * 100) : 0;
   const wkIdx = week != null ? weeks.indexOf(week) : -1;
+  const canPrevWeek = wkIdx > 0;
+  const canNextWeek = wkIdx >= 0 && wkIdx < weeks.length - 1;
+  const goPrevWeek = () => { if (canPrevWeek) setWeek(weeks[wkIdx - 1]); };
+  const goNextWeek = () => { if (canNextWeek) setWeek(weeks[wkIdx + 1]); };
   const seg = (n: number, l: string) => <div className="cd-seg"><b>{String(n).padStart(2, '0')}</b><span>{l}</span></div>;
 
   return (
     <PortalShell
-      condensedSlot={<ClassroomNextStepHero weekCards={weekCards} variant="condensed" onOpen={openCard} />}
+      condensedSlot={(
+        <ClassroomNextStepHero
+          weekCards={weekCards}
+          variant="condensed"
+          onOpen={openCard}
+          week={week}
+          canPrevWeek={canPrevWeek}
+          canNextWeek={canNextWeek}
+          onPrevWeek={goPrevWeek}
+          onNextWeek={goNextWeek}
+        />
+      )}
     >
     {(condensed) => (
     <div className="tl-de">
@@ -237,26 +266,25 @@ const ClassroomPage: React.FC = () => {
 
       {weeks.length > 1 && (
         <div className="tl-weeknav">
-          <button type="button" className="tl-arrow" disabled={wkIdx <= 0} onClick={() => setWeek(weeks[wkIdx - 1])} aria-label="Previous week"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+          <button type="button" className="tl-arrow" disabled={!canPrevWeek} onClick={goPrevWeek} aria-label="Previous week"><svg viewBox="0 0 24 24" fill="none"><path d="M15 6l-6 6 6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
           <div className="tl-wkmid"><div className="tl-wklbl">{`Week ${week} of ${weeks[weeks.length - 1]}`}</div></div>
-          <button type="button" className="tl-arrow" disabled={wkIdx >= weeks.length - 1} onClick={() => setWeek(weeks[wkIdx + 1])} aria-label="Next week"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
+          <button type="button" className="tl-arrow" disabled={!canNextWeek} onClick={goNextWeek} aria-label="Next week"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
         </div>
       )}
 
-      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
-        <ClassroomNextStepHero weekCards={weekCards} variant="full" onOpen={openCard} />
-      </div>
-
       <div className="tl-grid">
         <div className="tl-feedcol">
-          <div className="tl-card tl-banner tl-ac-berry">
-            <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
-            <div className="pr">
-              <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
-              <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
-              <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
-              <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
-            </div>
+          <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+            <ClassroomNextStepHero
+              weekCards={weekCards}
+              variant="full"
+              onOpen={openCard}
+              week={week}
+              canPrevWeek={canPrevWeek}
+              canNextWeek={canNextWeek}
+              onPrevWeek={goPrevWeek}
+              onNextWeek={goNextWeek}
+            />
           </div>
 
           {weekCards.length > 0 && (
