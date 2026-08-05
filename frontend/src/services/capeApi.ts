@@ -185,6 +185,37 @@ export async function startTestOut(ref: string): Promise<DiagnosticStartResult> 
   return data;
 }
 
+/** Skill-first "Test out" entry point (design doc §11 skill-detail drawer) —
+ * calls the EXISTING Phase 2 diagnostic route directly
+ * (`GET /api/portal/cape/diagnostic/:skillId`, already live since Phase 2),
+ * no new backend plumbing. Distinct from `startTestOut(ref)` above, which is
+ * the card-first entry point from a Today Plan card. */
+export async function fetchDiagnosticForSkill(skillId: string): Promise<DiagnosticStartResult> {
+  const { data } = await portalApi.get<DiagnosticStartResult>(`/api/portal/cape/diagnostic/${encodeURIComponent(skillId)}`);
+  return data;
+}
+
+export interface DiagnosticSubmitResult {
+  outcome: 'confirmed' | 'partial' | 'not_confirmed';
+  bridge_recommended: boolean;
+  created: boolean;
+}
+
+/** Submits answers for either a system-prompted diagnostic or a "test out"
+ * attempt — the EXISTING Phase 2 route, unchanged by Phase 5. */
+export async function submitDiagnosticForSkill(
+  skillId: string,
+  attemptId: string,
+  answers: Array<{ item_id: string; selected_option: string }>,
+  trigger: 'diagnostic_prompt' | 'test_out' = 'test_out',
+): Promise<DiagnosticSubmitResult> {
+  const { data } = await portalApi.post<DiagnosticSubmitResult>(
+    `/api/portal/cape/diagnostic/${encodeURIComponent(skillId)}/submit`,
+    { attempt_id: attemptId, answers, trigger },
+  );
+  return data;
+}
+
 // ── Portal: CAPE Phase 5 — skill-detail drawer evidence history ────────────
 
 export interface SkillEvidenceRow {

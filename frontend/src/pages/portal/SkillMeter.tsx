@@ -19,6 +19,14 @@ import { LearnerSkillProfile } from '../../services/capeApi';
 interface Props {
   /** null while the profile is loading; the caller (TodayShell) owns the fetch. */
   profile: LearnerSkillProfile | null;
+  /** CAPE Phase 5 (design doc §11 "AI Architecture Skills radar" click-
+   * through, §16 Phase 5). OPTIONAL — when omitted (every other caller, and
+   * this same caller when CAPE_TODAY_PLAN_ENABLED is off), the radar renders
+   * byte-identical to pre-Phase-5: no click handlers, no `role`/`tabIndex`
+   * attributes added anywhere. When provided, each axis's vertex + label
+   * become a real keyboard-accessible click target opening the skill-detail
+   * drawer. */
+  onSkillClick?: (skillId: string) => void;
 }
 
 const CX = 180;
@@ -44,7 +52,7 @@ function axisPoint(n: number, i: number, r: number): [number, number] {
   return [CX + r * Math.cos(ang), CY + r * Math.sin(ang)];
 }
 
-const SkillMeter: React.FC<Props> = ({ profile }) => {
+const SkillMeter: React.FC<Props> = ({ profile, onSkillClick }) => {
   const skills = profile?.skills ?? [];
   const n = skills.length;
   const overall = profile ? Math.round(profile.overall_proficiency) : 0;
@@ -108,23 +116,40 @@ const SkillMeter: React.FC<Props> = ({ profile }) => {
 
         {/* verified proficiency — solid */}
         <polygon points={proficiencyPts} fill="url(#sr-fill)" stroke="#367895" strokeWidth={2} strokeLinejoin="round" filter="url(#sr-glow)" style={{ transition: 'all .6s ease' }} />
-        {/* vertex nodes — cherry accent once a skill has real evidence */}
+        {/* vertex nodes — cherry accent once a skill has real evidence.
+            CAPE Phase 5: clickable only when onSkillClick is supplied — every
+            attribute below is spread conditionally so the flag-off/no-prop
+            render stays byte-identical to before this task. */}
         {skills.map((s, i) => {
           const [x, y] = axisPoint(n, i, R * Math.max(0.02, Math.min(1, s.proficiency / 100)));
           const hasEvidence = s.confidence > 0;
-          return <circle key={i} cx={x} cy={y} r={hasEvidence ? 3.4 : 2} fill={hasEvidence ? '#FB2832' : 'currentColor'} fillOpacity={hasEvidence ? 1 : 0.35} />;
+          const clickable = onSkillClick ? {
+            role: 'button' as const, tabIndex: 0, style: { cursor: 'pointer' },
+            onClick: () => onSkillClick(s.skill_id),
+            onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSkillClick(s.skill_id); } },
+            'aria-label': `View ${s.name} skill details`,
+          } : undefined;
+          return <circle key={i} cx={x} cy={y} r={hasEvidence ? 3.4 : 2} fill={hasEvidence ? '#FB2832' : 'currentColor'} fillOpacity={hasEvidence ? 1 : 0.35} {...clickable} />;
         })}
         <circle cx={CX} cy={CY} r={2.4} fill="currentColor" fillOpacity={0.4} />
 
-        {/* labels + per-KPI value */}
+        {/* labels + per-KPI value — same conditional-click pattern as the
+            vertex nodes above. */}
         {skills.map((s, i) => {
           const [lx, ly] = axisPoint(n, i, R + 20);
           const c = Math.cos(-Math.PI / 2 + (2 * Math.PI * i) / n);
           const anchor = c > 0.3 ? 'start' : c < -0.3 ? 'end' : 'middle';
           const dx = c > 0.3 ? 2 : c < -0.3 ? -2 : 0;
           const hasEvidence = s.confidence > 0;
+          const clickable = onSkillClick ? {
+            role: 'button' as const, tabIndex: 0,
+            onClick: () => onSkillClick(s.skill_id),
+            onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSkillClick(s.skill_id); } },
+            'aria-label': `View ${s.name} skill details`,
+          } : undefined;
+          const textStyle = onSkillClick ? { letterSpacing: '.03em', cursor: 'pointer' } : { letterSpacing: '.03em' };
           return (
-            <text key={i} x={lx + dx} y={ly} textAnchor={anchor} dominantBaseline="middle" fontSize={9.2} style={{ letterSpacing: '.03em' }}>
+            <text key={i} x={lx + dx} y={ly} textAnchor={anchor} dominantBaseline="middle" fontSize={9.2} style={textStyle} {...clickable}>
               <tspan fill="currentColor" fillOpacity={0.72} fontWeight={600}>{s.name}</tspan>
               <tspan fill={hasEvidence ? '#2E6A86' : 'currentColor'} fillOpacity={hasEvidence ? 1 : 0.5} fontWeight={800} dx={5}>{Math.round(s.proficiency)}%</tspan>
             </text>

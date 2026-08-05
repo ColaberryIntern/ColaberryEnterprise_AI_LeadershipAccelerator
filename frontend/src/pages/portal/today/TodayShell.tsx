@@ -2,8 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './TodayShell.css';
 import {
-  fetchPoints, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
-  fetchStreak, claimDailyStreak,
+  fetchPoints, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground, fetchStreak, claimDailyStreak,
   levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
 } from '../../../services/onboardingApi';
 import { loadSchedule } from '../scheduleCache';
@@ -24,6 +23,7 @@ import TodayPlan from './TodayPlan';
 import { useTodayPlanGate } from './useTodayPlanGate';
 import type { Category } from './todayCategoryFilter';
 import TimelineFilterChips from './TimelineFilterChips';
+import SkillDetailDrawer from './SkillDetailDrawer';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
@@ -52,20 +52,16 @@ const TodayShell: React.FC = () => {
   const [streak, setStreak] = useState<StreakView | null>(null);
   const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
-  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — the ONE backend learner-skill
-  // profile that drives both the radar (SkillMeter) and the Readiness ring below.
-  // null while loading; the ring/radar render their own loading states off that.
+  // CAPE Phase 0-1 profile (drives SkillMeter + Readiness); Phase 5 filter-chip counts + skill-drawer selection.
   const [capeProfile, setCapeProfile] = useState<LearnerSkillProfile | null>(null);
-  // CAPE Phase 5 real filter chips — live counts of loaded items/category.
   const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
   const [categoryCounts, setCategoryCounts] = useState<Record<Category, number>>({ my_path: 0, ai_pulse: 0, classroom: 0, projects: 0, community: 0, review: 0 });
+  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+  const selectedSkill = capeProfile?.skills.find((s) => s.skill_id === selectedSkillId);
 
   const me = useMemo(readParticipant, []);
   const { flags } = usePortalFlags();
-  // CAPE Phase 5 (design doc §10, §16 Phase 5) — the Today-Plan/Explore-feed
-  // mount gate. See useTodayPlanGate.ts for the full rationale (extracted
-  // from this file once it crossed CLAUDE.md's 500-line hard ceiling).
-  // `<TodayFeedV2>` must be rendered only once `planRefs !== null`.
+  // CAPE Phase 5 — Today-Plan/Explore-feed mount gate; see useTodayPlanGate.ts.
   const { planRefs, setPlanRefs } = useTodayPlanGate(flags);
   // Next live class (from live_sessions). Null for Explorers/guests with no
   // scheduled session — the shell then falls back to the first-class card.
@@ -335,7 +331,7 @@ const TodayShell: React.FC = () => {
               <span className="go">→</span>
             </button>
           )}
-          <SkillMeter profile={capeProfile} />
+          <SkillMeter profile={capeProfile} onSkillClick={flags?.cape_today_plan ? setSelectedSkillId : undefined} />
 
           {showSetupModal && (
             <SetupModal
@@ -359,8 +355,7 @@ const TodayShell: React.FC = () => {
             />
           )}
 
-          {/* CAPE Phase 5 — finite Today Plan, mounted only when the flag is
-              on; reports consumed refs via onRefs (see useTodayPlanGate.ts). */}
+          {/* CAPE Phase 5 finite Today Plan — flag-gated, see useTodayPlanGate.ts */}
           {flags?.cape_today_plan && (
             <TodayPlan
               onRefs={setPlanRefs}
@@ -384,8 +379,7 @@ const TodayShell: React.FC = () => {
               counts={categoryCounts}
               onChange={setCategoryFilter}
             />
-            {/* Gated on planRefs !== null (useTodayPlanGate.ts) — closes the
-                CAPE Phase 5 mount-order race; flag-off adds no latency. */}
+            {/* Gated on planRefs !== null — closes the mount-order race. */}
             {planRefs !== null && (
               <TodayFeedV2
                 fallbackCards={curriculum}
@@ -491,6 +485,13 @@ const TodayShell: React.FC = () => {
           emitPointsEarned(res?.points_awarded ?? 0);   // HUD burst + chime
           emitCardCollected(card.id);                   // drop it off the feed
         }}
+      />
+      <SkillDetailDrawer
+        skillId={selectedSkillId}
+        skillName={selectedSkill?.name ?? null}
+        placement={selectedSkill?.placement ?? 0}
+        verified={selectedSkill?.proficiency ?? 0}
+        onClose={() => setSelectedSkillId(null)}
       />
     </PortalShell>
   );
