@@ -46,6 +46,7 @@ import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
 import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValueRankerSchema';
+import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -2279,6 +2280,7 @@ async function start(): Promise<void> {
   await ensureBlogSchema();
   await ensureTodayFeedSchema();
   await ensureCapeLearningValueRankerSchema(); // CAPE Phase 4 (T007) — additive columns; must run AFTER ensureTodayFeedSchema
+  await ensureCapeTodayPlanSchema(); // CAPE Phase 5 (T003) — new today_plan_feedback table, references enrollments(id)
   await ensureFeedControlSchema();
   await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')

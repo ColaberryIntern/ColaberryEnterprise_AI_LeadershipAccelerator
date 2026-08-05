@@ -390,6 +390,8 @@ import DiagnosticAttempt from './DiagnosticAttempt';
 // CAPE Phase 3: curriculum-to-skill mapping
 import CurriculumSkillMap from './CurriculumSkillMap';
 import ArchitectureSkillPrerequisite from './ArchitectureSkillPrerequisite';
+// CAPE Phase 5: Today Plan learner feedback controls
+import TodayPlanFeedback from './TodayPlanFeedback';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1405,6 +1407,8 @@ export {
   // CAPE — Colaberry Adaptive Path Engine (Phase 3: curriculum-to-skill mapping)
   CurriculumSkillMap,
   ArchitectureSkillPrerequisite,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 5: Today Plan learner feedback)
+  TodayPlanFeedback,
 };
 
 // --- Enrollment Lead associations ---
@@ -1561,3 +1565,6 @@ DiagnosticAttempt.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enro
 // card — they resolve by (type_slug) / (week_number) directly, not via association.
 TimelineCard.hasMany(CurriculumSkillMap, { foreignKey: 'card_id', as: 'skillMapOverrides' });
 CurriculumSkillMap.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });
+
+Enrollment.hasMany(TodayPlanFeedback, { foreignKey: 'enrollment_id', as: 'todayPlanFeedback' });
+TodayPlanFeedback.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
