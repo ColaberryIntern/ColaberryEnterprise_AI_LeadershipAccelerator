@@ -13601,3 +13601,31 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     bare "no token available" statement, but explicitly NOT a substitute for
     an authenticated screenshot showing real governance data. Repeated in
     `handoff.md` for Ali/Dhee.
+
+- [x] **T016 — RAG/Vectors + AI-Pulse-freshness deferral documentation**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: Documentation-only (no code). Confirmed and finalized the 2
+    explicit scope deferrals this run logged from the start (in the run's
+    `verification-log.md` and `execution-contract.md` Out-of-scope section):
+    (1) RAG/Vectors 6-lesson content pathway (design doc §8/§16) - content
+    authoring, not an engineering task, same deferral pattern Phase 3 used;
+    (2) AI Pulse freshness/source-quality/expiry policy wiring - a real,
+    scoped, buildable engineering gap (`freshness_days` exists in the
+    `LearningPlacementContract` type/schema but is read by zero
+    filtering/scoring logic today, re-confirmed via fresh grep after T001-T015
+    landed - still 17 files, still zero consumption logic), deferred purely
+    for priority (the governance board was the explicit priority for this
+    run), with named real follow-up targets (`capeEligibilityFilter.ts`
+    Stage 2, `capeLearningValueScorer.ts`'s `freshnessFieldImportance()`
+    Stage 3).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent -
+    re-ran the freshness_days grep fresh rather than trusting the earlier
+    count, confirmed the RAG/Vectors 6-item list matches the design doc
+    verbatim, confirmed both named follow-up files/functions are real,
+    confirmed no contradiction between `verification-log.md` and
+    `execution-contract.md`, confirmed specificity matches Phase 3's own
+    precedent).
+  - Notes: **All 16 planned tasks for this run are now complete and
+    independently verified.** Proceeding to Phase G (quality gate), Phase H
+    (PR open, no deploy), and Phase J (handoff.md).
