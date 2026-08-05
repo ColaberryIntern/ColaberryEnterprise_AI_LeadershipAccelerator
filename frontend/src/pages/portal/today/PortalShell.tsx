@@ -21,6 +21,7 @@ import { useIsOrgManager } from '../useIsOrgManager';
 import { useMgmtStatus } from '../useMgmtStatus';
 import ConfettiCelebration from '../../../components/ConfettiCelebration';
 import type { GatedFeatureKey } from '../../../components/paywall/gatedFeatures';
+import { useScrollCondense } from '../../../hooks/useScrollCondense';
 
 // Sidebar nav — mirrors the Design E mockup: three grouped sections, one SVG
 // icon per item. Today / Path / Schedule / Projects / Classroom / Community /
@@ -109,9 +110,15 @@ const MGMT_NAV_GROUP: NavGroup = {
 };
 
 type PortalShellProps = {
-  children: React.ReactNode;
+  /** Plain node for pages that don't condense; a function form for pages that
+   *  need the live condensed boolean to sync their body hero's animation with
+   *  the header slot (Today/Projects/Classroom). */
+  children: React.ReactNode | ((condensed: boolean) => React.ReactNode);
   /** Count badge shown on the Today nav item (open onboarding steps). */
   todayBadge?: number;
+  /** Condensed content shown in the header gap once scrolled past the
+   *  threshold. Falsy = the slot stays zero-width regardless of scroll state. */
+  condensedSlot?: React.ReactNode;
 };
 
 /**
@@ -120,8 +127,12 @@ type PortalShellProps = {
  * region for the page. Points + schedule are fetched here purely to drive the
  * topbar; each page fetches whatever else it needs.
  */
-const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
+const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condensedSlot }) => {
   const location = useLocation();
+  // Single shared scroll signal — the header slot and whichever page's body
+  // hero is condensing both animate off this one boolean so they can never
+  // drift a frame apart. See useScrollCondense.ts for the hysteresis logic.
+  const condensed = useScrollCondense();
   const { isStaff, hasFullAccess } = useEntitlement();   // drives the nav lock badge on gated items
   const isOrgManager = useIsOrgManager(); // manager = also sees a "Your company" nav group
   const mgmt = useMgmtStatus();           // employee with a mgmt role = "Management Portal" link
@@ -376,6 +387,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
           <img className="te-mark" src="/colaberry-icon.png" alt="Colaberry" />
           <div><b><span className="cc">C</span>olaberry</b><span>AI Systems Architect Accelerator</span></div>
         </div>
+        {/* Scroll-condensed slot — whatever the current page hands us via
+            condensedSlot "sucks up" into this gap once condensed is true.
+            Falsy condensedSlot keeps this at zero width regardless of scroll. */}
+        <div className={`te-condensed-slot${condensed && condensedSlot ? ' is-visible' : ''}`}>
+          <div className="te-condensed-inner">{condensedSlot}</div>
+        </div>
         <div className="te-top-right">
           <div className="te-rail">
             {(() => {
@@ -467,7 +484,7 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
       </nav>
 
       {/* ── main ── */}
-      <main className="te-main">{children}</main>
+      <main className="te-main">{typeof children === 'function' ? children(condensed) : children}</main>
 
       {/* ── right contacts rail (Facebook-style cohort presence) ──
           Shell-level, so it appears on every PortalShell page. On narrow

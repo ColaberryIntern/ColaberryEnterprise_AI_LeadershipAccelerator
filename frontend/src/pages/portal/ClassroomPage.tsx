@@ -6,7 +6,9 @@ import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
 import CardDetailDrawer from '../../components/timeline/CardDetailDrawer';
 import { runtimeApi } from './runtime/runtimeApi';
 import '../../components/timeline/timeline.css';
+import './today/TodayShell.css';
 import PortalShell from './today/PortalShell';
+import ClassroomNextStepHero from '../../components/timeline/ClassroomNextStepHero';
 import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../services/pointsFx';
 import { filterCardsByQuery, tokenizeQuery } from '../../utils/classroomSearch';
 import { readViewSnapshot, restoreScroll, usePersistScrollOnScroll } from '../../hooks/useScrollRestore';
@@ -207,7 +209,10 @@ const ClassroomPage: React.FC = () => {
   const seg = (n: number, l: string) => <div className="cd-seg"><b>{String(n).padStart(2, '0')}</b><span>{l}</span></div>;
 
   return (
-    <PortalShell>
+    <PortalShell
+      condensedSlot={<ClassroomNextStepHero weekCards={weekCards} variant="condensed" onOpen={openCard} />}
+    >
+    {(condensed) => (
     <div className="tl-de">
       <div className="tl-top">
         <div>
@@ -237,6 +242,10 @@ const ClassroomPage: React.FC = () => {
           <button type="button" className="tl-arrow" disabled={wkIdx >= weeks.length - 1} onClick={() => setWeek(weeks[wkIdx + 1])} aria-label="Next week"><svg viewBox="0 0 24 24" fill="none"><path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg></button>
         </div>
       )}
+
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+        <ClassroomNextStepHero weekCards={weekCards} variant="full" onOpen={openCard} />
+      </div>
 
       <div className="tl-grid">
         <div className="tl-feedcol">
@@ -333,6 +342,7 @@ const ClassroomPage: React.FC = () => {
 
       <CardDetailDrawer card={selectedCard} onClose={() => setSelectedCard(null)} onComplete={completeCard} />
     </div>
+    )}
     </PortalShell>
   );
 };
