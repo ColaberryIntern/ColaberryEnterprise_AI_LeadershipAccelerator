@@ -548,16 +548,40 @@ async function ensureCommunityMemberRoleSchema() {
     `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_role`,
     `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_role CHECK (role IN ('student', 'mentor', 'staff'))`,
     // Management-portal role for staff (Owner/Admin/Curriculum/Revenue/Admissions/
-    // Support). NULL = not a mgmt user. Gates admin sections via mgmtRoles.ts.
+    // Support/Community Organizer). NULL = not a mgmt user. Gates admin sections
+    // via mgmtRoles.ts.
     `ALTER TABLE community_members ADD COLUMN IF NOT EXISTS mgmt_role VARCHAR(20)`,
     `ALTER TABLE community_members DROP CONSTRAINT IF EXISTS ck_community_members_mgmt_role`,
-    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_mgmt_role CHECK (mgmt_role IS NULL OR mgmt_role IN ('owner','admin','curriculum','revenue','admissions','support'))`,
+    `ALTER TABLE community_members ADD CONSTRAINT ck_community_members_mgmt_role CHECK (mgmt_role IS NULL OR mgmt_role IN ('owner','admin','curriculum','revenue','admissions','support','community_organizer'))`,
   ];
   for (const sql of statements) {
     try {
       await sequelize.query(sql);
     } catch (err: any) {
       console.warn('[DB] community member role schema stmt skipped:', err?.message);
+    }
+  }
+}
+
+async function ensureCommunityCommentModerationSchema() {
+  // Comment moderation (Community Organizer role, Ali 2026-08-05): mirrors the
+  // existing community_posts status/removed_at/removed_by soft-delete pattern
+  // (20260713_add_community_moderation.sql) so a removed comment stays in the
+  // DB for audit but drops out of the thread. Idempotent DDL (sequelize.sync
+  // is disabled on this graph) so a deploy adds the columns without a manual
+  // migration step.
+  const statements = [
+    `ALTER TABLE community_comments ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'visible'`,
+    `ALTER TABLE community_comments ADD COLUMN IF NOT EXISTS removed_at TIMESTAMPTZ`,
+    `ALTER TABLE community_comments ADD COLUMN IF NOT EXISTS removed_by UUID`,
+    `ALTER TABLE community_comments DROP CONSTRAINT IF EXISTS ck_community_comments_status`,
+    `ALTER TABLE community_comments ADD CONSTRAINT ck_community_comments_status CHECK (status IN ('visible', 'removed'))`,
+  ];
+  for (const sql of statements) {
+    try {
+      await sequelize.query(sql);
+    } catch (err: any) {
+      console.warn('[DB] community comment moderation schema stmt skipped:', err?.message);
     }
   }
 }
@@ -2240,6 +2264,9 @@ async function start(): Promise<void> {
   await ensureCommunityMemberRoleSchema();
   // Peer Wins — community_posts curriculum tether columns (idempotent, additive).
   await ensureCommunityWinsSchema();
+  // Comment moderation (Community Organizer role) — status/removed_at/removed_by
+  // on community_comments, mirroring the existing post-moderation columns.
+  await ensureCommunityCommentModerationSchema();
   // Free-trial Organization / Manager layer — org + roster tables (idempotent).
   await ensureOrgSchema();
   // Student self-serve subscriptions (idempotent).

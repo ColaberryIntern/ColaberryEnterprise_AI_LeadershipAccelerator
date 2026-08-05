@@ -5,11 +5,12 @@ import api from '../utils/api';
 export type CommunityMemberRole = 'student' | 'mentor' | 'staff';
 
 // Management-portal roles a staff member can hold. Empty string = no mgmt role.
-export type MgmtRole = 'owner' | 'admin' | 'curriculum' | 'revenue' | 'admissions' | 'support';
-export const MGMT_ROLES: MgmtRole[] = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support'];
+export type MgmtRole = 'owner' | 'admin' | 'curriculum' | 'revenue' | 'admissions' | 'support' | 'community_organizer';
+export const MGMT_ROLES: MgmtRole[] = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer'];
 export const MGMT_ROLE_LABEL: Record<MgmtRole, string> = {
   owner: 'Owner', admin: 'Admin', curriculum: 'Curriculum',
   revenue: 'Revenue', admissions: 'Admissions', support: 'Support',
+  community_organizer: 'Community Organizer',
 };
 
 export interface AdminCommunityMember {

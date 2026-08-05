@@ -31,6 +31,10 @@ img.cm-avatar-btn{background:var(--sunken,#F1F1F0)}
 .cm-pin.pinned{color:var(--amber-deep,#B5710A)}
 .cm-pin svg{width:16px;height:16px}
 .cm-pinned-badge{font-family:var(--mono,monospace);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;background:rgba(232,146,12,.16);color:var(--amber-deep,#B5710A)}
+.cm-delete{border:none;background:none;cursor:pointer;color:var(--muted,#6B6B6B);display:flex;align-items:center}
+.cm-delete:hover{color:var(--cherry-text,#E5121D)}
+.cm-delete svg{width:16px;height:16px}
+.cm-comment-remove:hover{color:var(--cherry-text,#E5121D)}
 
 .cm-thread{border-top:1px solid var(--border-subtle,#E4E4E3);padding:10px 14px 14px;display:flex;flex-direction:column;gap:12px}
 .cm-comment{display:flex;gap:9px}

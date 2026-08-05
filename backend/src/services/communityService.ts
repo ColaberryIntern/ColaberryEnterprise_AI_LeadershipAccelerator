@@ -17,6 +17,7 @@ import OrgMember from '../models/OrgMember';
 import { env } from '../config/env';
 import { activeCompEnrollmentIds } from './subscriptionService';
 import { isStaffOrMgmt } from './access/staffAccess';
+import { isCommunityModeratorRole } from './access/mgmtRoles';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
 // Lite poll-presence (P0 per the approved design mockup — real-time websocket
@@ -576,6 +577,37 @@ export async function togglePin(
   };
 }
 
+// ─── Moderation (Community Organizer role, Owner/Admin) ────────────────────
+// Entry points for the Belong feed's own delete-any-message controls (Ali
+// 2026-08-05) — distinct from togglePin's author-only check above. Any member
+// whose mgmt_role is in COMMUNITY_MODERATOR_ROLES may remove ANY post/comment
+// in the feed, cross-cohort (staff moderate the whole community, not just
+// their own cohort — same exception DMs/friend-requests already carry for
+// staff/mgmt). The actual soft-delete lives in communityModerationService.ts
+// (shared with the admin console's reports queue); this just gates who may
+// call it from the portal.
+export async function removePostAsModerator(enrollmentId: string, postId: string) {
+  const member = await getOrCreateMember(enrollmentId);
+  if (!isCommunityModeratorRole(member.mgmt_role)) {
+    throw forbiddenError('Only community moderators can remove a post');
+  }
+  const { removePost } = await import('./communityModerationService');
+  const result = await removePost(member.id, postId);
+  log('info', 'post_removed_by_moderator', { post_id: postId, member_id: member.id, outcome: 'success' });
+  return result;
+}
+
+export async function removeCommentAsModerator(enrollmentId: string, commentId: string) {
+  const member = await getOrCreateMember(enrollmentId);
+  if (!isCommunityModeratorRole(member.mgmt_role)) {
+    throw forbiddenError('Only community moderators can remove a comment');
+  }
+  const { removeComment } = await import('./communityModerationService');
+  const result = await removeComment(member.id, commentId);
+  log('info', 'comment_removed_by_moderator', { comment_id: commentId, member_id: member.id, outcome: 'success' });
+  return result;
+}
+
 // ─── Comments ───────────────────────────────────────────────────────────
 
 export interface CommentItem {
@@ -680,7 +712,7 @@ export async function listComments(enrollmentId: string, postId: string): Promis
   assertLevelUnlocked(post, member.id, member.level);
 
   const comments = await CommunityComment.findAll({
-    where: { post_id: postId },
+    where: { post_id: postId, status: 'visible' },
     include: [{ model: CommunityMember, as: 'member', attributes: ['id', 'display_name', 'avatar_url', 'level', 'enrollment_id'] }],
     order: [['created_at', 'ASC']],
   });
@@ -948,6 +980,10 @@ export interface MemberProfile {
   badges: MemberBadge[];
   presence: CommunityPresenceStatus;
   created_at: Date;
+  // True for Owner/Admin/Community Organizer (COMMUNITY_MODERATOR_ROLES) —
+  // gates the delete-any-post/comment controls in the Belong feed UI. Server
+  // still re-checks on every remove call; this is a UI hint, not the contract.
+  can_moderate_community: boolean;
 }
 
 // Batch a set of enrollments -> their earned badges (grouped ContributionEvent
@@ -989,6 +1025,7 @@ function toMemberProfile(member: CommunityMember, canonicalPoints: number, badge
     badges,
     presence: derivePresence(member.last_active_at),
     created_at: member.created_at,
+    can_moderate_community: isCommunityModeratorRole(member.mgmt_role),
   };
 }
 
