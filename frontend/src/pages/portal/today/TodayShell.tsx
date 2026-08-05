@@ -8,6 +8,7 @@ import {
 import { loadSchedule } from '../scheduleCache';
 import PortalShell from './PortalShell';
 import OpenOnPhone from './OpenOnPhone';
+import CondensedHeaderCard from './CondensedHeaderCard';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
 import {
   readParticipant, countdown, firstClassTargetMs,
@@ -216,9 +217,23 @@ const TodayShell: React.FC = () => {
   }, [loadAll]);
 
   return (
-    <PortalShell todayBadge={setupRemaining}>
+    <PortalShell
+      todayBadge={setupRemaining}
+      condensedSlot={(
+        <CondensedHeaderCard
+          visual={<div className="te-ring mini" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b></div></div>}
+          label="Next tier"
+          title={lvl.next ? lvl.next.name : 'Max level'}
+          sub={lvl.next ? `${lvl.next.min - total} pts to go` : 'Top tier reached'}
+          action={<OpenOnPhone />}
+        />
+      )}
+    >
+      {(condensed) => (
+        <>
       {toast && <div className="te-toast">{toast}</div>}
 
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
       {redesign ? (
         /* command band — greeting + primary next step + the three meters in one row */
         <div className="te-band">
@@ -245,10 +260,12 @@ const TodayShell: React.FC = () => {
               <div className="te-ring" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b><span>pts</span></div></div>
               <div className="cap">{lvl.name}</div>
             </div>
-            <div className="te-ringwrap">
-              <div className="te-ring" style={{ '--p': setupPct, '--c': 'var(--berry)' } as React.CSSProperties}><div className="v"><b>{setupDone}/{steps.length}</b><span>setup</span></div></div>
-              <div className="cap">Setup</div>
-            </div>
+            {setupRemaining > 0 && (
+              <div className="te-ringwrap">
+                <div className="te-ring" style={{ '--p': setupPct, '--c': 'var(--berry)' } as React.CSSProperties}><div className="v"><b>{setupDone}/{steps.length}</b><span>setup</span></div></div>
+                <div className="cap">Setup</div>
+              </div>
+            )}
             <div className="te-ringwrap">
               <div className="te-ring" style={{ '--p': Math.max(2, readiness), '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>{readiness}</b><span>/100</span></div></div>
               <div className="cap">Readiness</div>
@@ -273,6 +290,7 @@ const TodayShell: React.FC = () => {
             : "Let's get you set up. A few quick steps unlock your first points and your seat."}</div>
         </div>
       )}
+      </div>
 
       {schedule?.is_explorer && (
         <div className="te-card" style={{ background: 'linear-gradient(135deg,#2E6A86,#367895)', color: '#fff', padding: '20px 22px', marginBottom: 18, border: 'none' }}>
@@ -493,6 +511,8 @@ const TodayShell: React.FC = () => {
         verified={selectedSkill?.proficiency ?? 0}
         onClose={() => setSelectedSkillId(null)}
       />
+        </>
+      )}
     </PortalShell>
   );
 };

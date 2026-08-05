@@ -5,6 +5,7 @@ import { useIsExplorer } from '../useIsExplorer';
 import ProjectPreview from './ProjectPreview';
 import ProjectInterior from './ProjectInterior';
 import NextSessionStrip from './NextSessionStrip';
+import ProjectsNextStepHero from './ProjectsNextStepHero';
 import FeedCard, { FeedItem } from '../feed/FeedCard';
 import {
   useProjectsList, createProjectFromAnswers, projectProgress, reqVerified, nextTask,
@@ -74,6 +75,9 @@ const ProjectsPage: React.FC = () => {
   // primary build + hero next-step
   const primary = projects[0] || null;
   const primaryNext = primary ? nextTask(primary) : null;
+  const openBuildPrimary = () => { if (primary) openInterior(primary.id); };
+  const copyPrompt = () => { if (navigator.clipboard && primaryNext?.task.prompt) navigator.clipboard.writeText(primaryNext.task.prompt); };
+  const startBuild = () => setView({ kind: 'wizard' });
 
   // landing timeline: the next open tasks across all builds
   const feed: FeedItem[] = [];
@@ -123,7 +127,21 @@ const ProjectsPage: React.FC = () => {
 
   // ── overview (Today-shaped) ──
   return (
-    <PortalShell><div className="pj-root">
+    <PortalShell
+      condensedSlot={(
+        <ProjectsNextStepHero
+          variant="condensed"
+          primary={primary}
+          primaryNext={primaryNext}
+          demo={demo}
+          onOpenBuild={openBuildPrimary}
+          onCopyPrompt={copyPrompt}
+          onStartBuild={startBuild}
+        />
+      )}
+    >
+      {(condensed) => (
+    <div className="pj-root">
       <div className="page-h">
         <div className="crumbs0">Build and learn</div>
         <h1>Projects</h1>
@@ -143,34 +161,17 @@ const ProjectsPage: React.FC = () => {
       <div className="te-grid">
         <div>
           {/* hero: your next step */}
-          {primary && primaryNext ? (
-            <div className="te-hero">
-              <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next step · {primary.name}</div>
-              <h2>{primaryNext.task.title}</h2>
-              <p>{primaryNext.task.what || 'Pick this up next to keep your build moving.'}</p>
-              <div className="pjw-actions" style={{ marginTop: 0 }}>
-                <button className="te-btn cherry" onClick={() => openInterior(primary.id)}>Open your build</button>
-                {primaryNext.task.prompt && <button className="te-btn ghost" onClick={() => { if (navigator.clipboard) navigator.clipboard.writeText(primaryNext.task.prompt!); }} disabled={demo} title={demo ? 'Demo — enroll to build for real' : undefined}>Copy prompt</button>}
-              </div>
-            </div>
-          ) : primary ? (
-            <div className="te-hero">
-              <div className="eyebrow">Your next step</div>
-              <h2>{primary.name} is complete</h2>
-              <p>Every task on your build is done. Start another build, or review what you shipped.</p>
-              <div className="pjw-actions" style={{ marginTop: 0 }}>
-                <button className="te-btn cherry" onClick={() => setView({ kind: 'wizard' })}>Start a new build</button>
-                <button className="te-btn ghost" onClick={() => openInterior(primary.id)}>Open your build</button>
-              </div>
-            </div>
-          ) : (
-            <div className="te-hero">
-              <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next step</div>
-              <h2>Create your first build</h2>
-              <p>Describe an idea and we'll shape it into a scheduled build with lists and tasks — assembled in the background while you keep exploring.</p>
-              <button className="te-btn cherry" onClick={() => setView({ kind: 'wizard' })}>Create a project</button>
-            </div>
-          )}
+          <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+            <ProjectsNextStepHero
+              variant="full"
+              primary={primary}
+              primaryNext={primaryNext}
+              demo={demo}
+              onOpenBuild={openBuildPrimary}
+              onCopyPrompt={copyPrompt}
+              onStartBuild={startBuild}
+            />
+          </div>
 
           <NextSessionStrip />
 
@@ -221,7 +222,9 @@ const ProjectsPage: React.FC = () => {
           </div>
         </aside>
       </div>
-    </div></PortalShell>
+    </div>
+      )}
+    </PortalShell>
   );
 };
 
