@@ -13368,3 +13368,27 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     doc's exact wording, confirmed a zero-weight cell is never flagged as a gap,
     confirmed the fail-soft fallback still produces a real 10-column matrix).
   - Notes: Read-only, no live-production wiring - standard-scrutiny verification.
+
+- [x] **T007 — persona + enrollment lookup service (read-only)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeGovernancePersonaService.ts` (new)
+    - `listPersonas()` maps the 5 design-doc §12 simulator personas onto real
+    accounts by reusing Phase 5's already-shipped `getLifecycleMode()` classifier
+    (mode foundation/experienced_cold_start/active_builder/returning_after_absence/
+    architect_track), scanning the 50 most recently created enrollments once and
+    bucketing the first match per mode - a documented, honest, bounded best-effort,
+    never fabricated data. A persona with no real match returns
+    `enrollment_id: null` + an explicit note, never a made-up row.
+    `lookupEnrollment(query)` does a plain, fully parameterized email/ID search
+    (UUID-shaped input queries by id, else email ILIKE).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh evidence:
+    tsc clean, 12/12 tests, confirmed the anti-fabrication guarantee is real code
+    behavior not just a comment, confirmed `lookupEnrollment` is genuinely
+    parameterized against SQL injection by reading the actual SQL template
+    construction, confirmed fail-soft behavior at both the per-candidate and
+    total-DB-failure levels, confirmed the bounded scan is honestly disclosed).
+  - Notes: Read-only. The "Active Week 5 learner" persona maps to the classifier's
+    `active_builder` mode as the closest real signal available (the classifier has
+    no week-number granularity yet) - this approximation is logged here and will
+    be repeated in `handoff.md`.
