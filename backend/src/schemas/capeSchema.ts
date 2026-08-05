@@ -205,3 +205,68 @@ export const updateEvidenceBandWeightsSchema = z.object({
   return Math.abs(sum - 1) < 0.001;
 }, { message: 'claim_weight + knowledge_weight + application_weight + judgment_weight must sum to 1.0' });
 export type UpdateEvidenceBandWeightsInput = z.infer<typeof updateEvidenceBandWeightsSchema>;
+
+/**
+ * CAPE Phase 5 (design doc §10, §11, §16 Phase 5) — Today Plan + learner
+ * controls contracts.
+ */
+
+/** Response contract for GET /api/portal/cape/today-plan. Loosely typed
+ * (passthrough-friendly) on the TodayFeedItem-derived fields — this schema's
+ * job is to validate the Phase 5 ADDITIONS (slot, chips), not to re-declare
+ * the entire TodayFeedItem shape a second time (that type already lives in
+ * todayFeedComposer.ts and is not duplicated here per DRY). */
+export const todayPlanSlotSchema = z.enum(['next_best', 'foundation', 'practice', 'ai_pulse', 'review']);
+export const cardLevelSchema = z.enum(['Foundation', 'Working', 'Stretch', 'Architect']);
+export const cardProofSchema = z.enum(['Learn', 'Check', 'Build', 'Decide']);
+export const cardChipsSchema = z.object({
+  why_this: z.string().min(1),
+  level: cardLevelSchema,
+  proof: cardProofSchema,
+});
+export const todayPlanItemSchema = z.object({
+  slot: todayPlanSlotSchema,
+  chips: cardChipsSchema,
+}).passthrough();
+export const lifecycleModeSchema = z.enum([
+  'foundation', 'experienced_cold_start', 'active_builder', 'architect_track', 'returning_after_absence',
+]);
+export const todayPlanResponseSchema = z.object({
+  mode: lifecycleModeSchema,
+  items: z.array(todayPlanItemSchema).max(5),
+  estimated_total_minutes: z.number().min(0),
+});
+export type TodayPlanResponse = z.infer<typeof todayPlanResponseSchema>;
+
+/** Body contract for POST /api/portal/cape/today-plan/feedback. */
+export const todayPlanFeedbackActionSchema = z.enum([
+  'more_like_this', 'less_like_this', 'already_know', 'too_easy', 'too_advanced', 'not_interested',
+]);
+export const todayPlanFeedbackInputSchema = z.object({
+  ref: z.string().min(1).max(255),
+  action: todayPlanFeedbackActionSchema,
+});
+export type TodayPlanFeedbackInput = z.infer<typeof todayPlanFeedbackInputSchema>;
+
+/** Body contract for POST /api/portal/cape/today-plan/test-out. */
+export const todayPlanTestOutInputSchema = z.object({
+  ref: z.string().min(1).max(255),
+});
+export type TodayPlanTestOutInput = z.infer<typeof todayPlanTestOutInputSchema>;
+
+/** Response contract for GET /api/portal/cape/skill-profile/:skillId/evidence. */
+export const skillEvidenceRowSchema = z.object({
+  band: evidenceBandSchema,
+  credit: z.number(),
+  source: z.string(),
+  created_at: z.string(),
+});
+export const skillEvidenceHistoryResponseSchema = z.object({
+  skill_id: architectureSkillIdSchema,
+  placement: z.number(),
+  verified: z.number(),
+  evidence: z.array(skillEvidenceRowSchema).max(50),
+  next_review_at: z.string().nullable(),
+  next_recommended_proof: z.string().nullable(),
+});
+export type SkillEvidenceHistoryResponse = z.infer<typeof skillEvidenceHistoryResponseSchema>;

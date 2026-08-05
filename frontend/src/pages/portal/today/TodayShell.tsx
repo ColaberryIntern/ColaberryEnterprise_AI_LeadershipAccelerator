@@ -20,6 +20,8 @@ import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi'
 import { runtimeApi } from '../runtime/runtimeApi';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayFeedV2 from './TodayFeedV2';
+import TodayPlan from './TodayPlan';
+import { useTodayPlanGate } from './useTodayPlanGate';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
@@ -55,6 +57,11 @@ const TodayShell: React.FC = () => {
 
   const me = useMemo(readParticipant, []);
   const { flags } = usePortalFlags();
+  // CAPE Phase 5 (design doc §10, §16 Phase 5) — the Today-Plan/Explore-feed
+  // mount gate. See useTodayPlanGate.ts for the full rationale (extracted
+  // from this file once it crossed CLAUDE.md's 500-line hard ceiling).
+  // `<TodayFeedV2>` must be rendered only once `planRefs !== null`.
+  const { planRefs, setPlanRefs } = useTodayPlanGate(flags);
   // Next live class (from live_sessions). Null for Explorers/guests with no
   // scheduled session — the shell then falls back to the first-class card.
   const { session: nextLiveSession } = useNextLiveSession();
@@ -193,11 +200,22 @@ const TodayShell: React.FC = () => {
   // State-aware "what's next" for the command band — reflects the real setup state.
   const nextStepLabel = !hasBackground ? 'upload your résumé to personalize everything' : null;
 
-  // The Today timeline mirrors the Classroom curriculum — an endless FB-style
-  // feed of the real cards (Week 0 for a free Explorer). Cycles as you scroll so
-  // the total is never shown. Category chips are labels-only for now (0) — the
-  // other feed sources light up later.
+  // Endless FB-style feed (Week 0 for a free Explorer); category chips are
+  // labels-only for now (0) — other feed sources light up later.
   const CATEGORY_LABELS = ['Your setup', 'Projects', 'Schedule', 'Your path', 'Classroom', 'Cert Prep', 'Community'];
+
+  // Shared collect handler for TodayFeedV2 + TodayPlan (CAPE Phase 5) — one
+  // implementation so the two surfaces never drift. Throws on the server
+  // watch/read/lock gate (422); ambient blogs (`blog:<id>`) use the read gate.
+  const handleCardComplete = useCallback(async (card: TimelineFeedCard) => {
+    const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
+    const res = blogId
+      ? await runtimeApi.blogCollect(blogId)
+      : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
+    await loadAll();
+    emitPointsEarned(res?.points_awarded ?? 0); // HUD burst + chime
+    emitCardCollected(card.id);                 // drop it off the feed
+  }, [loadAll]);
 
   return (
     <PortalShell todayBadge={setupRemaining}>
@@ -339,6 +357,17 @@ const TodayShell: React.FC = () => {
             />
           )}
 
+          {/* CAPE Phase 5 — finite Today Plan, mounted only when the flag is
+              on; reports consumed refs via onRefs (see useTodayPlanGate.ts). */}
+          {flags?.cape_today_plan && (
+            <TodayPlan
+              onRefs={setPlanRefs}
+              onOpen={setSelectedCard}
+              onWorkspace={setSelectedCard}
+              onComplete={handleCardComplete}
+            />
+          )}
+
           {/* ── aggregated timeline — the big feed pulling from every page ── */}
           <div className="te-feed">
             <div className="te-feed-head">
@@ -352,23 +381,17 @@ const TodayShell: React.FC = () => {
                 <span key={label} className="fchip"><span>{label}</span> <span className="ct">0</span></span>
               ))}
             </div>
-            <TodayFeedV2
-              fallbackCards={curriculum}
-              onOpen={setSelectedCard}
-              onWorkspace={setSelectedCard}
-              onComplete={async (card) => {
-                // Collect points straight from the timeline card. Throws on the
-                // server watch/read/lock gate (422) so the card surfaces the reason.
-                // Ambient blogs (ref `blog:<id>`) collect via the blog read gate.
-                const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
-                const res = blogId
-                  ? await runtimeApi.blogCollect(blogId)
-                  : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
-                await loadAll();
-                emitPointsEarned(res?.points_awarded ?? 0); // HUD burst + chime
-                emitCardCollected(card.id);                 // drop it off the feed
-              }}
-            />
+            {/* Gated on planRefs !== null (useTodayPlanGate.ts) — closes the
+                CAPE Phase 5 mount-order race; flag-off adds no latency. */}
+            {planRefs !== null && (
+              <TodayFeedV2
+                fallbackCards={curriculum}
+                onOpen={setSelectedCard}
+                onWorkspace={setSelectedCard}
+                onComplete={handleCardComplete}
+                excludeRefs={planRefs}
+              />
+            )}
           </div>
         </div>
 
