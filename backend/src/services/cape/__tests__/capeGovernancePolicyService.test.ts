@@ -62,6 +62,16 @@ describe('getCurrentGovernancePolicy / getCurrentGovernancePolicyRow', () => {
     expect(values).toEqual(DEFAULTS);
   });
 
+  it('hardening: a row that resolves successfully but has an undefined/non-numeric field (malformed data, not a thrown error) falls back per-field to the safe default rather than propagating the bad value — a share field silently reading as undefined must NEVER be treated as falsy/0 (0 has real "never show this slot" meaning)', async () => {
+    findOne.mockResolvedValue(makeCurrentRow({ review_slot_share: undefined, ai_pulse_slot_share: NaN, crowd_out_window: 'not-a-number' as any }));
+    const values = await getCurrentGovernancePolicy();
+    expect(values.review_slot_share).toBe(1);
+    expect(values.ai_pulse_slot_share).toBe(1);
+    expect(values.crowd_out_window).toBe(5);
+    // Fields that WERE valid on this same malformed row still pass through untouched.
+    expect(values.same_type_max_streak).toBe(2);
+  });
+
   it('failure path: getCurrentGovernancePolicyRow (the admin-facing read) DOES throw GovernancePolicyNotFoundError when no row exists', async () => {
     findOne.mockResolvedValue(null);
     await expect(getCurrentGovernancePolicyRow()).rejects.toThrow(GovernancePolicyNotFoundError);

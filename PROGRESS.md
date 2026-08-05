@@ -13319,3 +13319,33 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     currently-off flag) still gates whether the new governance policy is fetched
     at all; until BOTH flip and an admin edits a value, output is provably
     identical to pre-Phase-6 behavior (see the "backward-compat identity" test).
+
+- [x] **T005 — wire Today Plan pacing knobs (second live-in-production surface)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeTodayPlanService.ts` — `review_slot_share`
+    / `ai_pulse_slot_share` (0 deterministically omits that slot, including the cohort
+    fallback pick, not just the primary pick — default 1 reproduces the exact prior
+    unconditional-attempt behavior) and `daily_plan_target_minutes` (trims trailing
+    slots — review, then ai_pulse, then practice; `next_best`/`foundation` never
+    dropped; strict `>` boundary so an exactly-at-target plan is untouched; default 999
+    is a no-op for any realistic plan). **Mid-task hardening fix** to T002's
+    `capeGovernancePolicyService.ts`: `getCurrentGovernancePolicy()`'s fail-soft only
+    guarded a THROWN error, not a successfully-resolved-but-malformed row (a real bug
+    surfaced by a pre-existing test failure) — a silently-`undefined` share field has
+    real behavioral meaning ("never show this slot"), so a new `safeNumber()`
+    per-field coercion (preserves legitimate `0`, only overrides genuinely
+    non-numeric/undefined values) now guards every field individually, not just the
+    whole-row read.
+  - Verification: `loop-task-verifier` PASS 12/12 — verified as a second live-production
+    surface with the same scrutiny as T004: confirmed the share gating covers BOTH the
+    primary pick and the cohort fallback, confirmed the hardening fix preserves
+    legitimate admin-set `0` values while only catching malformed data, confirmed
+    line-by-line no pre-existing test assertion was weakened, re-ran T002's original 9
+    tests unmodified and passing, re-derived the trim loop's drop order/boundary
+    condition from the actual code. `tsc --noEmit` clean; 27/27 tests passing across
+    2 files.
+  - Notes: Zero behavior change for real students today — `CAPE_TODAY_PLAN_ENABLED`
+    stays untouched; default pacing values reproduce the exact prior fixed-5-slot
+    output (explicit identity test), and the hardening fix makes the fail-soft
+    contract MORE robust than before, not less.

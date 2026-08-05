@@ -38,16 +38,41 @@ export interface GovernancePolicyValues {
   ai_pulse_slot_share: number;
 }
 
+/** Canonical fallback — byte-identical to the hardcoded constants this table
+ * replaces. Used both by `getCurrentGovernancePolicy()`'s catch branch AND
+ * per-field by `toValues()` below, so a partially-malformed row (e.g. a
+ * column read back as `undefined`/`NaN` from an unexpected query shape, not
+ * just an outright thrown error) can never silently produce a falsy/zero
+ * value for a field that should default to a safe non-zero cap — a 0 for
+ * `review_slot_share`/`ai_pulse_slot_share` has real behavioral meaning
+ * ("never show this slot"), so this field must never come from a corrupted
+ * read by accident. */
+const SAFE_DEFAULTS: GovernancePolicyValues = {
+  same_type_max_streak: 2,
+  passive_max_streak: 2,
+  crowd_out_max_per_skill: 2,
+  crowd_out_window: 5,
+  stretch_cap_first_five: 1,
+  daily_plan_target_minutes: 999,
+  review_slot_share: 1,
+  ai_pulse_slot_share: 1,
+};
+
+function safeNumber(v: unknown, fallback: number): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function toValues(row: CapeGovernancePolicy): GovernancePolicyValues {
   return {
-    same_type_max_streak: row.same_type_max_streak,
-    passive_max_streak: row.passive_max_streak,
-    crowd_out_max_per_skill: row.crowd_out_max_per_skill,
-    crowd_out_window: row.crowd_out_window,
-    stretch_cap_first_five: row.stretch_cap_first_five,
-    daily_plan_target_minutes: row.daily_plan_target_minutes,
-    review_slot_share: row.review_slot_share,
-    ai_pulse_slot_share: row.ai_pulse_slot_share,
+    same_type_max_streak: safeNumber(row.same_type_max_streak, SAFE_DEFAULTS.same_type_max_streak),
+    passive_max_streak: safeNumber(row.passive_max_streak, SAFE_DEFAULTS.passive_max_streak),
+    crowd_out_max_per_skill: safeNumber(row.crowd_out_max_per_skill, SAFE_DEFAULTS.crowd_out_max_per_skill),
+    crowd_out_window: safeNumber(row.crowd_out_window, SAFE_DEFAULTS.crowd_out_window),
+    stretch_cap_first_five: safeNumber(row.stretch_cap_first_five, SAFE_DEFAULTS.stretch_cap_first_five),
+    daily_plan_target_minutes: safeNumber(row.daily_plan_target_minutes, SAFE_DEFAULTS.daily_plan_target_minutes),
+    review_slot_share: safeNumber(row.review_slot_share, SAFE_DEFAULTS.review_slot_share),
+    ai_pulse_slot_share: safeNumber(row.ai_pulse_slot_share, SAFE_DEFAULTS.ai_pulse_slot_share),
   };
 }
 
@@ -67,16 +92,7 @@ export async function getCurrentGovernancePolicy(): Promise<GovernancePolicyValu
     const row = await getCurrentGovernancePolicyRow();
     return toValues(row);
   } catch {
-    return {
-      same_type_max_streak: 2,
-      passive_max_streak: 2,
-      crowd_out_max_per_skill: 2,
-      crowd_out_window: 5,
-      stretch_cap_first_five: 1,
-      daily_plan_target_minutes: 999,
-      review_slot_share: 1,
-      ai_pulse_slot_share: 1,
-    };
+    return { ...SAFE_DEFAULTS };
   }
 }
 
