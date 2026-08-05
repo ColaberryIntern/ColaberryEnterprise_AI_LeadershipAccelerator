@@ -1,7 +1,7 @@
 import React from 'react';
 import CondensedHeaderCard from '../../pages/portal/today/CondensedHeaderCard';
 import { TimelineFeedCard, visualFor } from './TimelineCard';
-import { nextIncompleteCard } from '../../pages/portal/classroomNextStep';
+import { nextIncompleteCard, sumCardPoints } from '../../pages/portal/classroomNextStep';
 
 type Props = {
   weekCards: TimelineFeedCard[];
@@ -21,6 +21,7 @@ const ClassroomNextStepHero: React.FC<Props> = ({ weekCards, variant, onOpen }) 
   if (weekCards.length === 0) return null; // the existing .tl-empty state already covers this
 
   const nextCard = nextIncompleteCard(weekCards);
+  const pts = nextCard ? sumCardPoints(nextCard.points) : 0;
 
   if (variant === 'condensed') {
     if (!nextCard) return <CondensedHeaderCard icon={SPARKLE} tone="leaf" label="This week" title="All caught up 🎉" />;
@@ -30,6 +31,7 @@ const ClassroomNextStepHero: React.FC<Props> = ({ weekCards, variant, onOpen }) 
         tone="berry"
         label={`Your next step · ${nextCard.student_label}`}
         title={nextCard.title}
+        sub={pts > 0 ? `+${pts} pts` : undefined}
         action={<button className="te-btn ghost sm" type="button" onClick={() => onOpen(nextCard)}>Open →</button>}
       />
     );
@@ -48,7 +50,11 @@ const ClassroomNextStepHero: React.FC<Props> = ({ weekCards, variant, onOpen }) 
   const visual = visualFor(nextCard.render_band);
   return (
     <div className="tl-hero" style={{ borderTopColor: visual.color }}>
-      <div className="eyebrow">Your next step · {nextCard.student_label}</div>
+      <div className="eyebrow">
+        Your next step · {nextCard.student_label}
+        {/* Make finishing it enticing — the points on offer, not just the task name. */}
+        {pts > 0 && <span className="te-pts" style={{ marginLeft: 8 }}>+{pts} pts</span>}
+      </div>
       <h2>{nextCard.title}</h2>
       {nextCard.subtitle && <p>{nextCard.subtitle}</p>}
       <button type="button" className="tl-btn primary" onClick={() => onOpen(nextCard)}>Open</button>

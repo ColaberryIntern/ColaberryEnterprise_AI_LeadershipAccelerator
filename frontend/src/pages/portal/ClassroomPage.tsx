@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import TimelineFeed from '../../components/timeline/TimelineFeed';
 import { TimelineFeedCard } from '../../components/timeline/TimelineCard';
@@ -9,6 +9,7 @@ import '../../components/timeline/timeline.css';
 import './today/TodayShell.css';
 import PortalShell from './today/PortalShell';
 import ClassroomNextStepHero from '../../components/timeline/ClassroomNextStepHero';
+import { bySectionOrder } from './classroomNextStep';
 import { emitPointsEarned, onPointsEarned, emitCardCollected } from '../../services/pointsFx';
 import { filterCardsByQuery, tokenizeQuery } from '../../utils/classroomSearch';
 import { readViewSnapshot, restoreScroll, usePersistScrollOnScroll } from '../../hooks/useScrollRestore';
@@ -62,6 +63,9 @@ interface ClassroomExtra { week: number | null }
 
 const ClassroomPage: React.FC = () => {
   const navigate = useNavigate();
+  // Deep link from Today's "next step" CTA: /portal/classroom?open=<cardId>
+  // opens that exact card's drawer directly — see the restore effect below.
+  const [searchParams, setSearchParams] = useSearchParams();
   const [feed, setFeed] = useState<Feed | null>(null);
   const [uiState, setUiState] = useState<'loading' | 'ready' | 'disabled' | 'gated' | 'error'>('loading');
   const [week, setWeek] = useState<number | null>(null);
@@ -119,6 +123,17 @@ const ClassroomPage: React.FC = () => {
     if (!feed || weeks.length === 0) return;
     if (!restoredRef.current) {
       restoredRef.current = true;
+      // Deep link takes priority over the session-restored view: Today's
+      // "next step" CTA sends a student here to open ONE specific card, not
+      // to resume wherever they last scrolled.
+      const openId = searchParams.get('open');
+      const openCard = openId ? feed.cards.find((c) => c.id === openId) : null;
+      if (openCard) {
+        if (openCard.week != null) setWeek(openCard.week);
+        setSelectedCard(openCard);
+        setSearchParams((prev) => { prev.delete('open'); return prev; }, { replace: true });
+        return;
+      }
       const snap = readViewSnapshot<ClassroomExtra>(VIEW_KEY);
       // snap.extra can be missing if a stale pre-refactor sessionStorage blob
       // (old shape was {week, scrollY} with no wrapping `extra`) survives across
@@ -136,7 +151,7 @@ const ClassroomPage: React.FC = () => {
       const firstOpen = weeks.find((w) => feed.cards.some((c) => c.week === w && c.status !== 'completed'));
       setWeek(firstOpen ?? weeks[0]);
     }
-  }, [feed, weeks, week]);
+  }, [feed, weeks, week, searchParams, setSearchParams]);
 
   // Continuously remember the current scroll position (and week) so returning
   // from the workspace can restore it — see hooks/useScrollRestore for why this
@@ -148,9 +163,8 @@ const ClassroomPage: React.FC = () => {
     // Sort by SECTION order (pre_class → learn → … → reflect → share → advance)
     // then by the card's order in its lane — matches the Timeline tab, so e.g.
     // the reflect feedback survey reads at the END, not interleaved at the top.
-    const bIdx = (b: string) => { const i = feed.buckets.indexOf(b); return i < 0 ? feed.buckets.length : i; };
-    const bySection = (a: typeof feed.cards[number], b: typeof feed.cards[number]) =>
-      bIdx(a.bucket) - bIdx(b.bucket) || a.order - b.order;
+    // Shared with Today's "active next step" derivation (classroomNextStep.ts)
+    // so the two pages can never pick a different "next" card.
     // weeks.length===0 now means this enrollment has NO week-1+ content — either a
     // free-preview/explorer-tier student (whose entire feed is week-0-only, which
     // now belongs to Today, not here) or a cohort with no week-tagged cards at all.
@@ -159,7 +173,7 @@ const ClassroomPage: React.FC = () => {
     // free-tier student's week-0 content back into Classroom. Show nothing instead;
     // the empty state below directs them to Today, where that content actually lives.
     if (weeks.length === 0) return [];
-    return feed.cards.filter((c) => c.week === week).sort(bySection);
+    return feed.cards.filter((c) => c.week === week).sort(bySectionOrder(feed.buckets));
   }, [feed, weeks, week]);
 
   const done = weekCards.filter((c) => c.status === 'completed').length;
