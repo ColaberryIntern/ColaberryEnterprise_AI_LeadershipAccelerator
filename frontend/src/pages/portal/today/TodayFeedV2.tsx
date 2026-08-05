@@ -11,6 +11,7 @@ import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/Tim
 import { todayFeedApi, type TodayFeedItem } from './todayFeedApi';
 import { onCardCollected } from '../../../services/pointsFx';
 import { filterExcluded } from './todayFeedDedupe';
+import { classifyCategories, countByCategory, type Category } from './todayCategoryFilter';
 
 const PAGE = 10;
 // CAPE Phase 5 defense-in-depth (design doc §10, §16 Phase 5): if excluding
@@ -71,9 +72,19 @@ interface Props {
    * appears in both surfaces on the same load. `undefined`/empty = no-op,
    * byte-identical to pre-Phase-5 behavior. */
   excludeRefs?: Set<string>;
+  /** CAPE Phase 5 real filter chips (design doc §11 "Timeline header").
+   * Filters the RENDERED rows only — never triggers a re-fetch and never
+   * resets `cursor`/`done`/loaded `rows`, so switching chips (including back
+   * to 'all') never loses scroll progress. `undefined`/`'all'` = no filtering,
+   * byte-identical to pre-Phase-5 behavior. */
+  filter?: Category | 'all';
+  /** Fired whenever the loaded `rows` set changes, with live counts of
+   * CURRENTLY LOADED items per category (not an all-time total across the
+   * bottomless feed — execution-contract.md Assumption 7). */
+  onCounts?: (counts: Record<Category, number>) => void;
 }
 
-const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onComplete, excludeRefs }) => {
+const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onComplete, excludeRefs, filter, onCounts }) => {
   const [mode, setMode] = useState<'loading' | 'v2' | 'fallback'>('loading');
   const [rows, setRows] = useState<Array<{ item: TodayFeedItem; card: TimelineFeedCard }>>([]);
   const [cursor, setCursor] = useState(0);
@@ -175,6 +186,14 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
   }), []);
   const collectHandler = onComplete;
 
+  // CAPE Phase 5 real filter chips: report live counts whenever the loaded
+  // set changes (never on a filter change — that only affects what's
+  // rendered below, not what's counted or fetched).
+  useEffect(() => { onCounts?.(countByCategory(rows.map((r) => r.item))); }, [rows, onCounts]);
+  const visibleRows = !filter || filter === 'all'
+    ? rows
+    : rows.filter((r) => classifyCategories(r.item).includes(filter));
+
   const looped: TimelineFeedCard[] = fallbackCards.length
     ? Array.from({ length: Math.min(visible, fallbackCards.length * 12) }, (_, i) => fallbackCards[i % fallbackCards.length])
     : [];
@@ -183,7 +202,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
     <div className="tl-de" data-theme="light">
       {mode === 'loading' && <div className="fc-empty">Loading your feed…</div>}
 
-      {mode === 'v2' && rows.map(({ item, card }, i) => (
+      {mode === 'v2' && visibleRows.map(({ item, card }, i) => (
         <TimelineCard
           key={`${item.ref}-${i}`}
           card={card}

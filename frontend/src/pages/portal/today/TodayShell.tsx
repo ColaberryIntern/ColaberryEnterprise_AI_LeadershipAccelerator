@@ -22,6 +22,8 @@ import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayFeedV2 from './TodayFeedV2';
 import TodayPlan from './TodayPlan';
 import { useTodayPlanGate } from './useTodayPlanGate';
+import type { Category } from './todayCategoryFilter';
+import TimelineFilterChips from './TimelineFilterChips';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
@@ -54,6 +56,9 @@ const TodayShell: React.FC = () => {
   // profile that drives both the radar (SkillMeter) and the Readiness ring below.
   // null while loading; the ring/radar render their own loading states off that.
   const [capeProfile, setCapeProfile] = useState<LearnerSkillProfile | null>(null);
+  // CAPE Phase 5 real filter chips — live counts of loaded items/category.
+  const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
+  const [categoryCounts, setCategoryCounts] = useState<Record<Category, number>>({ my_path: 0, ai_pulse: 0, classroom: 0, projects: 0, community: 0, review: 0 });
 
   const me = useMemo(readParticipant, []);
   const { flags } = usePortalFlags();
@@ -200,9 +205,6 @@ const TodayShell: React.FC = () => {
   // State-aware "what's next" for the command band — reflects the real setup state.
   const nextStepLabel = !hasBackground ? 'upload your résumé to personalize everything' : null;
 
-  // Endless FB-style feed (Week 0 for a free Explorer); category chips are
-  // labels-only for now (0) — other feed sources light up later.
-  const CATEGORY_LABELS = ['Your setup', 'Projects', 'Schedule', 'Your path', 'Classroom', 'Cert Prep', 'Community'];
 
   // Shared collect handler for TodayFeedV2 + TodayPlan (CAPE Phase 5) — one
   // implementation so the two surfaces never drift. Throws on the server
@@ -376,11 +378,12 @@ const TodayShell: React.FC = () => {
                 Your timeline · everything in one place
               </span>
             </div>
-            <div className="te-feed-filter">
-              {CATEGORY_LABELS.map((label) => (
-                <span key={label} className="fchip"><span>{label}</span> <span className="ct">0</span></span>
-              ))}
-            </div>
+            <TimelineFilterChips
+              enabled={!!flags?.cape_today_plan}
+              filter={categoryFilter}
+              counts={categoryCounts}
+              onChange={setCategoryFilter}
+            />
             {/* Gated on planRefs !== null (useTodayPlanGate.ts) — closes the
                 CAPE Phase 5 mount-order race; flag-off adds no latency. */}
             {planRefs !== null && (
@@ -390,6 +393,8 @@ const TodayShell: React.FC = () => {
                 onWorkspace={setSelectedCard}
                 onComplete={handleCardComplete}
                 excludeRefs={planRefs}
+                filter={flags?.cape_today_plan ? categoryFilter : undefined}
+                onCounts={flags?.cape_today_plan ? setCategoryCounts : undefined}
               />
             )}
           </div>
