@@ -305,7 +305,10 @@ export async function fetchOnboardingProfile(): Promise<OnboardingProfileView> {
 }
 
 // ── Portal feature flags (server-authoritative; picks the Today experience) ──
-export interface PortalFlags { today_redesign: boolean; }
+// cape_today_plan — CAPE Phase 5 (design doc §16 Phase 5). Default false;
+// when true, TodayShell mounts the finite Today Plan + real filter chips +
+// skill-detail drawer. See backend/src/services/portalFlagsService.ts.
+export interface PortalFlags { today_redesign: boolean; cape_today_plan?: boolean; }
 export async function fetchPortalFlags(): Promise<PortalFlags> {
   const { data } = await portalApi.get<PortalFlags>('/api/portal/flags');
   return data;

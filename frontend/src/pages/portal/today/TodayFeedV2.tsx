@@ -10,8 +10,16 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import TimelineCard, { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import { todayFeedApi, type TodayFeedItem } from './todayFeedApi';
 import { onCardCollected } from '../../../services/pointsFx';
+import { filterExcluded } from './todayFeedDedupe';
+import { classifyCategories, countByCategory, type Category } from './todayCategoryFilter';
 
 const PAGE = 10;
+// CAPE Phase 5 defense-in-depth (design doc §10, §16 Phase 5): if excluding
+// the Today Plan's refs from a fetched page drops it below PAGE, fetch up to
+// this many EXTRA rounds to backfill — bounded so a pathological all-excluded
+// run can never spin unbounded, mirroring todayFeedComposer.getTodayPage's
+// own `guard++ < 6` server-side bound.
+const MAX_BACKFILL_ROUNDS = 3;
 const STATUSES: readonly string[] = ['locked', 'available', 'in_progress', 'completed'];
 const LABELS: Record<string, string> = { blog: 'Blog', podcast: 'Podcast', testimonial: 'Testimonial' };
 
@@ -22,8 +30,10 @@ function toStatus(s: string | null): TimelineFeedCard['status'] {
   return STATUSES.includes(s || '') ? (s as TimelineFeedCard['status']) : 'available';
 }
 
-/** Adapt a Today feed item into the shape TimelineCard renders. */
-function adapt(item: TodayFeedItem): TimelineFeedCard {
+/** Adapt a Today feed item into the shape TimelineCard renders. Exported so
+ * TodayPlanCard.tsx (CAPE Phase 5) can reuse the SAME adapter for the finite
+ * Today Plan's cards instead of duplicating this logic. */
+export function adapt(item: TodayFeedItem): TimelineFeedCard {
   return {
     id: item.card_id ?? item.ref,
     type: item.type,
@@ -57,9 +67,24 @@ interface Props {
   onOpen: (card: TimelineFeedCard) => void;
   onWorkspace: (card: TimelineFeedCard) => void;
   onComplete?: (card: TimelineFeedCard) => Promise<void> | void;
+  /** CAPE Phase 5 (design doc §10, §16 Phase 5) — refs already shown in the
+   * finite Today Plan, excluded from every fetched page here so a card never
+   * appears in both surfaces on the same load. `undefined`/empty = no-op,
+   * byte-identical to pre-Phase-5 behavior. */
+  excludeRefs?: Set<string>;
+  /** CAPE Phase 5 real filter chips (design doc §11 "Timeline header").
+   * Filters the RENDERED rows only — never triggers a re-fetch and never
+   * resets `cursor`/`done`/loaded `rows`, so switching chips (including back
+   * to 'all') never loses scroll progress. `undefined`/`'all'` = no filtering,
+   * byte-identical to pre-Phase-5 behavior. */
+  filter?: Category | 'all';
+  /** Fired whenever the loaded `rows` set changes, with live counts of
+   * CURRENTLY LOADED items per category (not an all-time total across the
+   * bottomless feed — execution-contract.md Assumption 7). */
+  onCounts?: (counts: Record<Category, number>) => void;
 }
 
-const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onComplete }) => {
+const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onComplete, excludeRefs, filter, onCounts }) => {
   const [mode, setMode] = useState<'loading' | 'v2' | 'fallback'>('loading');
   const [rows, setRows] = useState<Array<{ item: TodayFeedItem; card: TimelineFeedCard }>>([]);
   const [cursor, setCursor] = useState(0);
@@ -71,12 +96,33 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
   // Per-visit seed: fresh each mount so every visit is a different lineup, but held
   // stable for the whole session so pagination never repeats or skips.
   const seedRef = useRef<number>((Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0);
+  // Captured once at mount — TodayShell only mounts this component AFTER
+  // `excludeRefs` is fully known (see its `planRefs` gate), so the value is
+  // stable for this component's whole lifetime; a ref avoids re-triggering
+  // effects on an object identity that never meaningfully changes.
+  const excludeRefsRef = useRef(excludeRefs);
+
+  /** Fetch one page starting at `cursor`, filtering out `excludeRefsRef`
+   * (CAPE Phase 5 defense-in-depth), backfilling with extra rounds — bounded
+   * by MAX_BACKFILL_ROUNDS — when filtering drops the page below PAGE. */
+  const fetchFilteredPage = useCallback(async (
+    startCursor: number,
+    roundsLeft = MAX_BACKFILL_ROUNDS,
+  ): Promise<{ items: TodayFeedItem[]; nextCursor: number; exhausted: boolean }> => {
+    const page = await todayFeedApi.list(startCursor, PAGE, seedRef.current);
+    const filtered = filterExcluded(page.items, excludeRefsRef.current);
+    if (filtered.length >= page.items.length || page.exhausted || roundsLeft <= 0) {
+      return { items: filtered, nextCursor: page.nextCursor, exhausted: page.exhausted };
+    }
+    const more = await fetchFilteredPage(page.nextCursor, roundsLeft - 1);
+    return { items: [...filtered, ...more.items], nextCursor: more.nextCursor, exhausted: more.exhausted };
+  }, []);
 
   // Initial load: prefer the real cursor feed; fall back to the looped classroom
   // when the flag is off (endpoint 404s) or on any error.
   useEffect(() => {
     let alive = true;
-    todayFeedApi.list(0, PAGE, seedRef.current)
+    fetchFilteredPage(0)
       .then((page) => {
         if (!alive) return;
         setRows(page.items.map((item) => ({ item, card: adapt(item) })));
@@ -86,14 +132,14 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
       })
       .catch(() => { if (alive) setMode('fallback'); });
     return () => { alive = false; };
-  }, []);
+  }, [fetchFilteredPage]);
 
   const loadMore = useCallback(async () => {
     if (done || loadingRef.current) return;
     loadingRef.current = true;
     setError(false);
     try {
-      const page = await todayFeedApi.list(cursor, PAGE, seedRef.current);
+      const page = await fetchFilteredPage(cursor);
       // Dedup by ref — a repeated page (e.g. a stalled cursor) must not stack
       // duplicate cards.
       setRows((prev) => {
@@ -112,7 +158,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
     } finally {
       loadingRef.current = false;
     }
-  }, [cursor, done]);
+  }, [cursor, done, fetchFilteredPage]);
 
   // Infinite-scroll sentinel — real pages in v2, reveal-more in fallback.
   useEffect(() => {
@@ -140,6 +186,14 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
   }), []);
   const collectHandler = onComplete;
 
+  // CAPE Phase 5 real filter chips: report live counts whenever the loaded
+  // set changes (never on a filter change — that only affects what's
+  // rendered below, not what's counted or fetched).
+  useEffect(() => { onCounts?.(countByCategory(rows.map((r) => r.item))); }, [rows, onCounts]);
+  const visibleRows = !filter || filter === 'all'
+    ? rows
+    : rows.filter((r) => classifyCategories(r.item).includes(filter));
+
   const looped: TimelineFeedCard[] = fallbackCards.length
     ? Array.from({ length: Math.min(visible, fallbackCards.length * 12) }, (_, i) => fallbackCards[i % fallbackCards.length])
     : [];
@@ -148,7 +202,7 @@ const TodayFeedV2: React.FC<Props> = ({ fallbackCards, onOpen, onWorkspace, onCo
     <div className="tl-de" data-theme="light">
       {mode === 'loading' && <div className="fc-empty">Loading your feed…</div>}
 
-      {mode === 'v2' && rows.map(({ item, card }, i) => (
+      {mode === 'v2' && visibleRows.map(({ item, card }, i) => (
         <TimelineCard
           key={`${item.ref}-${i}`}
           card={card}

@@ -2,8 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import './TodayShell.css';
 import {
-  fetchPoints, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground,
-  fetchStreak, claimDailyStreak,
+  fetchPoints, fetchOnboardingProfile, rsvpOpenHouse, ingestBackground, fetchStreak, claimDailyStreak,
   levelFor, PointsSummary, OnboardingSchedule, OnboardingProfileView, StreakView,
 } from '../../../services/onboardingApi';
 import { loadSchedule } from '../scheduleCache';
@@ -20,6 +19,11 @@ import { uploadResume, fileToBase64 } from '../../../services/portalSettingsApi'
 import { runtimeApi } from '../runtime/runtimeApi';
 import { TimelineFeedCard } from '../../../components/timeline/TimelineCard';
 import TodayFeedV2 from './TodayFeedV2';
+import TodayPlan from './TodayPlan';
+import { useTodayPlanGate } from './useTodayPlanGate';
+import type { Category } from './todayCategoryFilter';
+import TimelineFilterChips from './TimelineFilterChips';
+import SkillDetailDrawer from './SkillDetailDrawer';
 import CardDetailDrawer from '../../../components/timeline/CardDetailDrawer';
 import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
@@ -48,13 +52,17 @@ const TodayShell: React.FC = () => {
   const [streak, setStreak] = useState<StreakView | null>(null);
   const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
-  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — the ONE backend learner-skill
-  // profile that drives both the radar (SkillMeter) and the Readiness ring below.
-  // null while loading; the ring/radar render their own loading states off that.
+  // CAPE Phase 0-1 profile (drives SkillMeter + Readiness); Phase 5 filter-chip counts + skill-drawer selection.
   const [capeProfile, setCapeProfile] = useState<LearnerSkillProfile | null>(null);
+  const [categoryFilter, setCategoryFilter] = useState<Category | 'all'>('all');
+  const [categoryCounts, setCategoryCounts] = useState<Record<Category, number>>({ my_path: 0, ai_pulse: 0, classroom: 0, projects: 0, community: 0, review: 0 });
+  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+  const selectedSkill = capeProfile?.skills.find((s) => s.skill_id === selectedSkillId);
 
   const me = useMemo(readParticipant, []);
   const { flags } = usePortalFlags();
+  // CAPE Phase 5 — Today-Plan/Explore-feed mount gate; see useTodayPlanGate.ts.
+  const { planRefs, setPlanRefs } = useTodayPlanGate(flags);
   // Next live class (from live_sessions). Null for Explorers/guests with no
   // scheduled session — the shell then falls back to the first-class card.
   const { session: nextLiveSession } = useNextLiveSession();
@@ -193,11 +201,19 @@ const TodayShell: React.FC = () => {
   // State-aware "what's next" for the command band — reflects the real setup state.
   const nextStepLabel = !hasBackground ? 'upload your résumé to personalize everything' : null;
 
-  // The Today timeline mirrors the Classroom curriculum — an endless FB-style
-  // feed of the real cards (Week 0 for a free Explorer). Cycles as you scroll so
-  // the total is never shown. Category chips are labels-only for now (0) — the
-  // other feed sources light up later.
-  const CATEGORY_LABELS = ['Your setup', 'Projects', 'Schedule', 'Your path', 'Classroom', 'Cert Prep', 'Community'];
+
+  // Shared collect handler for TodayFeedV2 + TodayPlan (CAPE Phase 5) — one
+  // implementation so the two surfaces never drift. Throws on the server
+  // watch/read/lock gate (422); ambient blogs (`blog:<id>`) use the read gate.
+  const handleCardComplete = useCallback(async (card: TimelineFeedCard) => {
+    const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
+    const res = blogId
+      ? await runtimeApi.blogCollect(blogId)
+      : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
+    await loadAll();
+    emitPointsEarned(res?.points_awarded ?? 0); // HUD burst + chime
+    emitCardCollected(card.id);                 // drop it off the feed
+  }, [loadAll]);
 
   return (
     <PortalShell todayBadge={setupRemaining}>
@@ -315,7 +331,7 @@ const TodayShell: React.FC = () => {
               <span className="go">→</span>
             </button>
           )}
-          <SkillMeter profile={capeProfile} />
+          <SkillMeter profile={capeProfile} onSkillClick={flags?.cape_today_plan ? setSelectedSkillId : undefined} />
 
           {showSetupModal && (
             <SetupModal
@@ -339,6 +355,16 @@ const TodayShell: React.FC = () => {
             />
           )}
 
+          {/* CAPE Phase 5 finite Today Plan — flag-gated, see useTodayPlanGate.ts */}
+          {flags?.cape_today_plan && (
+            <TodayPlan
+              onRefs={setPlanRefs}
+              onOpen={setSelectedCard}
+              onWorkspace={setSelectedCard}
+              onComplete={handleCardComplete}
+            />
+          )}
+
           {/* ── aggregated timeline — the big feed pulling from every page ── */}
           <div className="te-feed">
             <div className="te-feed-head">
@@ -347,28 +373,24 @@ const TodayShell: React.FC = () => {
                 Your timeline · everything in one place
               </span>
             </div>
-            <div className="te-feed-filter">
-              {CATEGORY_LABELS.map((label) => (
-                <span key={label} className="fchip"><span>{label}</span> <span className="ct">0</span></span>
-              ))}
-            </div>
-            <TodayFeedV2
-              fallbackCards={curriculum}
-              onOpen={setSelectedCard}
-              onWorkspace={setSelectedCard}
-              onComplete={async (card) => {
-                // Collect points straight from the timeline card. Throws on the
-                // server watch/read/lock gate (422) so the card surfaces the reason.
-                // Ambient blogs (ref `blog:<id>`) collect via the blog read gate.
-                const blogId = card.id.startsWith('blog:') ? card.id.slice('blog:'.length) : null;
-                const res = blogId
-                  ? await runtimeApi.blogCollect(blogId)
-                  : (await portalApi.post(`/api/portal/classroom/cards/${card.id}/complete`)).data;
-                await loadAll();
-                emitPointsEarned(res?.points_awarded ?? 0); // HUD burst + chime
-                emitCardCollected(card.id);                 // drop it off the feed
-              }}
+            <TimelineFilterChips
+              enabled={!!flags?.cape_today_plan}
+              filter={categoryFilter}
+              counts={categoryCounts}
+              onChange={setCategoryFilter}
             />
+            {/* Gated on planRefs !== null — closes the mount-order race. */}
+            {planRefs !== null && (
+              <TodayFeedV2
+                fallbackCards={curriculum}
+                onOpen={setSelectedCard}
+                onWorkspace={setSelectedCard}
+                onComplete={handleCardComplete}
+                excludeRefs={planRefs}
+                filter={flags?.cape_today_plan ? categoryFilter : undefined}
+                onCounts={flags?.cape_today_plan ? setCategoryCounts : undefined}
+              />
+            )}
           </div>
         </div>
 
@@ -463,6 +485,13 @@ const TodayShell: React.FC = () => {
           emitPointsEarned(res?.points_awarded ?? 0);   // HUD burst + chime
           emitCardCollected(card.id);                   // drop it off the feed
         }}
+      />
+      <SkillDetailDrawer
+        skillId={selectedSkillId}
+        skillName={selectedSkill?.name ?? null}
+        placement={selectedSkill?.placement ?? 0}
+        verified={selectedSkill?.proficiency ?? 0}
+        onClose={() => setSelectedSkillId(null)}
       />
     </PortalShell>
   );

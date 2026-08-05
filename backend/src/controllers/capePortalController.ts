@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { getLearnerSkillProfile } from '../services/cape/capeProficiencyService';
-import { skillProfileResponseSchema } from '../schemas/capeSchema';
+import { getSkillEvidenceHistory } from '../services/cape/capeSkillEvidenceHistoryService';
+import { skillProfileResponseSchema, architectureSkillIdSchema, skillEvidenceHistoryResponseSchema } from '../schemas/capeSchema';
 
 const eid = (req: Request) => req.participant!.sub;
 
@@ -35,5 +36,32 @@ export async function handleGetSkillProfile(req: Request, res: Response, next: N
       }
     }
     res.json(profile);
+  } catch (e) { fail(res, e, next); }
+}
+
+/**
+ * GET /api/portal/cape/skill-profile/:skillId/evidence — CAPE Phase 5 skill-
+ * detail drawer (design doc §11 radar click-through, §16 Phase 5): current
+ * placement/verified level, evidence history, next recommended proof.
+ */
+export async function handleGetSkillEvidenceHistory(req: Request, res: Response, next: NextFunction) {
+  const parsedSkill = architectureSkillIdSchema.safeParse(req.params.skillId);
+  if (!parsedSkill.success) {
+    res.status(400).json({ ok: false, error: `unknown skill_id: ${req.params.skillId}` });
+    return;
+  }
+  try {
+    const history = await getSkillEvidenceHistory(eid(req), parsedSkill.data);
+    if (process.env.NODE_ENV !== 'production') {
+      const parsed = skillEvidenceHistoryResponseSchema.safeParse(history);
+      if (!parsed.success) {
+        console.warn(JSON.stringify({
+          timestamp: new Date().toISOString(), level: 'warn', service: 'backend',
+          event: 'cape_skill_evidence_history_contract_violation', outcome: 'partial',
+          context: { issues: parsed.error.issues.map((i) => i.message) },
+        }));
+      }
+    }
+    res.json(history);
   } catch (e) { fail(res, e, next); }
 }

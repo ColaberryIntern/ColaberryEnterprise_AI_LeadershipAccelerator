@@ -3,13 +3,23 @@ import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env';
 import { getLearnerSkillProfile } from '../../services/cape/capeProficiencyService';
+import { getSkillEvidenceHistory } from '../../services/cape/capeSkillEvidenceHistoryService';
 import capePortalRoutes from '../../routes/capePortalRoutes';
 
 jest.mock('../../services/cape/capeProficiencyService', () => ({
   getLearnerSkillProfile: jest.fn(),
 }));
+jest.mock('../../services/cape/capeSkillEvidenceHistoryService', () => ({
+  getSkillEvidenceHistory: jest.fn(),
+}));
+// The route file also mounts the Phase 5 Today Plan routes — stub their
+// services too so this suite exercises the skill-profile/evidence routes in
+// isolation without depending on unrelated real DB reads.
+jest.mock('../../services/cape/capeTodayPlanService', () => ({ getTodayPlan: jest.fn() }));
+jest.mock('../../services/cape/capeTodayPlanFeedbackService', () => ({ recordFeedback: jest.fn(), startTestOut: jest.fn() }));
 
 const mockGetProfile = getLearnerSkillProfile as unknown as jest.Mock;
+const mockGetEvidenceHistory = getSkillEvidenceHistory as unknown as jest.Mock;
 
 function buildApp() {
   const app = express();
@@ -69,5 +79,49 @@ describe('GET /api/portal/cape/skill-profile — failure path', () => {
       .set('Authorization', `Bearer ${participantToken('enr-1')}`);
     expect(res.status).toBe(500);
     expect(JSON.stringify(res.body)).not.toMatch(/db unavailable/);
+  });
+});
+
+describe('GET /api/portal/cape/skill-profile/:skillId/evidence — CAPE Phase 5 skill-detail drawer', () => {
+  it('401s an unauthenticated request', async () => {
+    const app = buildApp();
+    const res = await request(app).get('/api/portal/cape/skill-profile/rag/evidence');
+    expect(res.status).toBe(401);
+    expect(mockGetEvidenceHistory).not.toHaveBeenCalled();
+  });
+
+  it('400s an unknown/invalid skillId before calling the service', async () => {
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/portal/cape/skill-profile/not_a_real_skill/evidence')
+      .set('Authorization', `Bearer ${participantToken('enr-1')}`);
+    expect(res.status).toBe(400);
+    expect(mockGetEvidenceHistory).not.toHaveBeenCalled();
+  });
+
+  it('200s with the history for a valid skillId + authenticated participant, scoped to the AUTHENTICATED enrollment', async () => {
+    mockGetEvidenceHistory.mockResolvedValue({
+      skill_id: 'rag', placement: 20, verified: 10, evidence: [], next_review_at: null, next_recommended_proof: null,
+    });
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/portal/cape/skill-profile/rag/evidence')
+      .set('Authorization', `Bearer ${participantToken('enr-1')}`);
+    expect(res.status).toBe(200);
+    expect(res.body.skill_id).toBe('rag');
+    expect(mockGetEvidenceHistory).toHaveBeenCalledWith('enr-1', 'rag');
+  });
+
+  it('a zero-evidence brand-new learner gets a real 200 with an empty evidence array, not an error', async () => {
+    mockGetEvidenceHistory.mockResolvedValue({
+      skill_id: 'rag', placement: 0, verified: 0, evidence: [], next_review_at: null, next_recommended_proof: 'Try a Prompt Lab to build verified evidence for this skill',
+    });
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/portal/cape/skill-profile/rag/evidence')
+      .set('Authorization', `Bearer ${participantToken('enr-new')}`);
+    expect(res.status).toBe(200);
+    expect(res.body.evidence).toEqual([]);
+    expect(res.body.next_recommended_proof).toMatch(/Prompt Lab/);
   });
 });
