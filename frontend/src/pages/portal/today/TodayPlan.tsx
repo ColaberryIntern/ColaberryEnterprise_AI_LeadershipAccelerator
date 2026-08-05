@@ -57,23 +57,39 @@ const TodayPlan: React.FC<Props> = ({ onRefs, onOpen, onWorkspace, onComplete })
 
   const minutesLabel = plan.estimated_total_minutes > 0 ? `~${plan.estimated_total_minutes} min` : null;
 
+  // `.tl-de` is the CSS scope wrapper every other <TimelineCard> call site in
+  // this repo mounts under (TodayFeedV2.tsx, TimelineEditorTab.tsx x2,
+  // CardDetailDrawer.tsx, TimelineFeed.tsx) — every sizing/color rule for a
+  // card's icon badge and media tile in components/timeline/timeline.css is
+  // written as a `.tl-de <selector>` descendant rule. TodayPlanCard nests a
+  // real <TimelineCard> (see TodayPlanCard.tsx), so without this wrapper here
+  // it rendered completely unstyled: the icon badge's SVG fell back to the
+  // browser's unconstrained default size with default black text/stroke
+  // color, and the media tile lost its 100%-width/16:9-aspect/block layout —
+  // the "huge black rectangular and circular blocks" reported in production
+  // when CAPE_TODAY_PLAN_ENABLED was flipped on (2026-08-04/05 incident).
+  // `data-theme="light"` matches TodayFeedV2's wrapper so Today's plan always
+  // renders in the same light card theme regardless of the ambient portal
+  // theme. See TodayPlan.cssScope.test.tsx for the regression proof.
   return (
-    <div className="today-plan tl-card" style={{ padding: '14px 16px', marginBottom: 16 }}>
-      <div className="d-flex justify-content-between align-items-baseline flex-wrap mb-2" style={{ gap: 8 }}>
-        <h3 style={{ margin: 0, fontSize: 15, letterSpacing: '.02em' }}>Today's plan</h3>
-        {minutesLabel && <span className="tl-small" style={{ opacity: 0.75 }}>{minutesLabel}</span>}
+    <div className="tl-de" data-theme="light">
+      <div className="today-plan tl-card" style={{ padding: '14px 16px', marginBottom: 16 }}>
+        <div className="d-flex justify-content-between align-items-baseline flex-wrap mb-2" style={{ gap: 8 }}>
+          <h3 style={{ margin: 0, fontSize: 15, letterSpacing: '.02em' }}>Today's plan</h3>
+          {minutesLabel && <span className="tl-small" style={{ opacity: 0.75 }}>{minutesLabel}</span>}
+        </div>
+        {plan.items.map((item) => (
+          <TodayPlanCard
+            key={item.ref}
+            item={item}
+            onOpen={onOpen}
+            onWorkspace={onWorkspace}
+            onComplete={onComplete}
+            onFeedback={handleFeedback}
+            onTestOut={handleTestOut}
+          />
+        ))}
       </div>
-      {plan.items.map((item) => (
-        <TodayPlanCard
-          key={item.ref}
-          item={item}
-          onOpen={onOpen}
-          onWorkspace={onWorkspace}
-          onComplete={onComplete}
-          onFeedback={handleFeedback}
-          onTestOut={handleTestOut}
-        />
-      ))}
     </div>
   );
 };

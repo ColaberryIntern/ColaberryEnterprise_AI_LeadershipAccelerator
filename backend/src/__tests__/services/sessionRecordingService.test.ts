@@ -10,12 +10,14 @@
 
 jest.mock('../../models/RoomBooking', () => ({ findOrCreate: jest.fn() }));
 jest.mock('../../models/RoomResource', () => ({ findOne: jest.fn(), create: jest.fn() }));
+jest.mock('../../models/CommunityRoom', () => ({ findOne: jest.fn(), findAll: jest.fn() }));
 jest.mock('../../services/communityRooms/roomService', () => ({ ensureRoomForSession: jest.fn() }));
 jest.mock('../../services/communityRooms/roomOutboxService', () => ({ emitRoomEvent: jest.fn() }));
 jest.mock('../../services/driveService', () => ({ findRecordingForSession: jest.fn(), streamDriveFile: jest.fn() }));
 jest.mock('../../services/zoomService', () => ({
   findRecordingForSession: jest.fn(),
   findRecordingByMeetingId: jest.fn(),
+  extractZoomMeetingId: jest.fn(),
   streamZoomFile: jest.fn(),
 }));
 jest.mock('../../config/upload', () => ({ ROOM_RECORDING_DIR: '/fake/room-recordings', MAX_ROOM_RECORDING_SIZE: 4 * 1024 * 1024 * 1024 }));
@@ -25,22 +27,26 @@ import { EventEmitter } from 'events';
 import fs from 'fs';
 import RoomBooking from '../../models/RoomBooking';
 import RoomResource from '../../models/RoomResource';
+import CommunityRoom from '../../models/CommunityRoom';
 import { ensureRoomForSession } from '../../services/communityRooms/roomService';
 import { emitRoomEvent } from '../../services/communityRooms/roomOutboxService';
 import { findRecordingForSession as findDriveMatch, streamDriveFile } from '../../services/driveService';
-import { findRecordingForSession as findZoomMatch, findRecordingByMeetingId, streamZoomFile } from '../../services/zoomService';
+import { findRecordingForSession as findZoomMatch, findRecordingByMeetingId, extractZoomMeetingId, streamZoomFile } from '../../services/zoomService';
 import { sequelize } from '../../config/database';
-import { ingestRecordingForSession, ingestRecordingForBooking } from '../../services/sessionRecordingService';
+import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom, findAlwaysOpenRoomForZoomMeeting } from '../../services/sessionRecordingService';
 
 const findOrCreateBooking = RoomBooking.findOrCreate as jest.Mock;
 const findOneResource = RoomResource.findOne as jest.Mock;
 const createResource = RoomResource.create as jest.Mock;
+const findOneRoom = CommunityRoom.findOne as jest.Mock;
+const findAllRooms = CommunityRoom.findAll as jest.Mock;
 const ensureRoomMock = ensureRoomForSession as jest.Mock;
 const emitMock = emitRoomEvent as jest.Mock;
 const findDriveMatchMock = findDriveMatch as jest.Mock;
 const streamDriveMock = streamDriveFile as jest.Mock;
 const findZoomMatchMock = findZoomMatch as jest.Mock;
 const findByMeetingIdMock = findRecordingByMeetingId as jest.Mock;
+const extractZoomMeetingIdMock = extractZoomMeetingId as jest.Mock;
 const streamZoomMock = streamZoomFile as jest.Mock;
 const transactionMock = sequelize.transaction as jest.Mock;
 
@@ -282,5 +288,88 @@ describe('ingestRecordingForBooking — general Room bookings (the "+ Book a ses
     expect(result).toEqual({ status: 'not_found' });
     expect(streamZoomMock).not.toHaveBeenCalled();
     expect(createResource).not.toHaveBeenCalled();
+  });
+});
+
+describe('ingestRecordingForRoom — always-open persistent video Rooms (found live 2026-08-05: a cohort\'s real class room is one of these)', () => {
+  const alwaysOpenRoom = {
+    id: 'room-always-open-1',
+    name: 'July 2026 - AI Systems Architect',
+    is_video: true,
+    always_open: true,
+    meeting_link: 'https://colaberry.zoom.us/j/89581408269?pwd=abc.1',
+  } as any;
+
+  const match = { downloadUrl: 'https://zoom.us/rec/download/room', name: 'room-recording.mp4', mimeType: 'video/mp4', sizeBytes: 1200 };
+
+  it('idempotency keys off the Zoom recording instance uuid, not booking_id (there is no booking for these rooms)', async () => {
+    findOneResource.mockResolvedValue({ id: 'existing-room-resource' });
+
+    const result = await ingestRecordingForRoom(alwaysOpenRoom, 'instance-uuid-1', match);
+
+    expect(result).toEqual({ status: 'already_present', resourceId: 'existing-room-resource' });
+    expect(findOneResource).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ room_id: 'room-always-open-1', resource_type: 'recording' }),
+    }));
+    expect(streamZoomMock).not.toHaveBeenCalled();
+  });
+
+  it('downloads, attaches with booking_id null, stores the instance uuid in metadata, and emits RecordingAttached', async () => {
+    findOneResource.mockResolvedValue(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'room-resource-1' });
+
+    const result = await ingestRecordingForRoom(alwaysOpenRoom, 'instance-uuid-2', match);
+
+    expect(result).toEqual({ status: 'ingested', resourceId: 'room-resource-1' });
+    expect(createResource.mock.calls[0][0]).toMatchObject({
+      room_id: 'room-always-open-1',
+      booking_id: null,
+      resource_type: 'recording',
+      metadata: { zoom_uuid: 'instance-uuid-2', source: 'always_open_room' },
+    });
+    expect(emitMock).toHaveBeenCalledWith(expect.objectContaining({
+      aggregateId: 'room-resource-1',
+      payload: expect.objectContaining({ room_id: 'room-always-open-1' }),
+    }));
+  });
+
+  it('two different instances of the same persistent meeting both ingest as separate resources (not deduped against each other)', async () => {
+    findOneResource.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValueOnce({ id: 'room-resource-a' }).mockResolvedValueOnce({ id: 'room-resource-b' });
+
+    const first = await ingestRecordingForRoom(alwaysOpenRoom, 'uuid-a', match);
+    const second = await ingestRecordingForRoom(alwaysOpenRoom, 'uuid-b', match);
+
+    expect(first).toEqual({ status: 'ingested', resourceId: 'room-resource-a' });
+    expect(second).toEqual({ status: 'ingested', resourceId: 'room-resource-b' });
+    expect(createResource).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('findAlwaysOpenRoomForZoomMeeting', () => {
+  it('matches a room whose meeting_link resolves to the given Zoom meeting id', async () => {
+    const rooms = [
+      { id: 'room-a', meeting_link: 'https://colaberry.zoom.us/j/111' },
+      { id: 'room-b', meeting_link: 'https://colaberry.zoom.us/j/89581408269' },
+    ];
+    findAllRooms.mockResolvedValue(rooms);
+    extractZoomMeetingIdMock.mockImplementation((link: string) => link?.match(/\/j\/(\d+)/)?.[1] || null);
+
+    const room = await findAlwaysOpenRoomForZoomMeeting('89581408269');
+
+    expect(room).toBe(rooms[1]);
+    expect(findAllRooms).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ is_video: true, always_open: true }),
+    }));
+  });
+
+  it('returns null when no always-open room matches (a 1:1 call, a class session, or an ad-hoc booking on the same account)', async () => {
+    findAllRooms.mockResolvedValue([{ id: 'room-a', meeting_link: 'https://colaberry.zoom.us/j/111' }]);
+    extractZoomMeetingIdMock.mockImplementation((link: string) => link?.match(/\/j\/(\d+)/)?.[1] || null);
+
+    const room = await findAlwaysOpenRoomForZoomMeeting('999999');
+    expect(room).toBeNull();
   });
 });

@@ -6,8 +6,14 @@ import { runEnrollmentAutomation } from '../services/automationService';
 import { activateByRef, isSubscriptionRef } from '../services/subscriptionService';
 import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
+import CommunityRoom from '../models/CommunityRoom';
 import { verifyZoomWebhookSignature, computeZoomWebhookEncryptedToken } from '../services/zoomService';
-import { ingestRecordingForSession, ingestRecordingForBooking } from '../services/sessionRecordingService';
+import {
+  ingestRecordingForSession,
+  ingestRecordingForBooking,
+  ingestRecordingForRoom,
+  findAlwaysOpenRoomForZoomMeeting,
+} from '../services/sessionRecordingService';
 
 export async function handlePaySimpleWebhook(req: Request, res: Response): Promise<void> {
   // PaySimple sends signature in 'paysimple-hmac-sha256' header, computed over
@@ -206,15 +212,21 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
     const booking = !session && meetingId
       ? await RoomBooking.findOne({ where: { google_event_id: meetingId, related_live_session_id: null } })
       : null;
+    // Last fallback: an always-open persistent video Room (a cohort's main
+    // "class" room, always_open + is_video — no RoomBooking exists for
+    // these, so the room's meeting_link itself, not any booking field, is
+    // the only place the Zoom meeting id is recorded).
+    const room = !session && !booking && meetingId
+      ? await findAlwaysOpenRoomForZoomMeeting(meetingId)
+      : null;
 
     // No match at all is a normal, benign outcome — this webhook
-    // subscription is account-wide, so any non-class, non-booking Zoom
-    // meeting on the same account (a 1:1 call, a personal meeting, one of
-    // the always-open persistent video rooms — not covered here, see
-    // sessionRecordingService.ts's header comment for why) also fires this
-    // event. Acking 200 avoids Zoom retrying something that was never going
-    // to match anything, and avoids log noise for a "failure" that isn't one.
-    if (!session && !booking) {
+    // subscription is account-wide, so any non-class, non-booking, non-room
+    // Zoom meeting on the same account (a 1:1 call, a personal meeting) also
+    // fires this event. Acking 200 avoids Zoom retrying something that was
+    // never going to match anything, and avoids log noise for a "failure"
+    // that isn't one.
+    if (!session && !booking && !room) {
       res.status(200).json({ received: true, matched: false });
       return;
     }
@@ -229,7 +241,7 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
     // largest file is the real one, not necessarily whichever comes first.
     const best = mp4s.reduce((a: any, b: any) => (b.file_size > a.file_size ? b : a));
 
-    const fallbackTitle = session ? session.title : (booking as RoomBooking).title;
+    const fallbackTitle = session ? session.title : booking ? booking.title : (room as CommunityRoom).name;
     const preResolvedMatch = {
       downloadUrl: best.download_url,
       downloadToken: event.download_token as string | undefined,
@@ -251,6 +263,11 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
     } else if (booking) {
       ingestRecordingForBooking(booking, preResolvedMatch).catch((err: any) => {
         console.error(`[Webhook] Zoom recording ingest failed for booking ${booking.id}:`, err.message);
+      });
+    } else if (room) {
+      const instanceUuid = String(event.payload?.object?.uuid || '');
+      ingestRecordingForRoom(room, instanceUuid, preResolvedMatch).catch((err: any) => {
+        console.error(`[Webhook] Zoom recording ingest failed for room ${room.id}:`, err.message);
       });
     }
   } catch (err: any) {

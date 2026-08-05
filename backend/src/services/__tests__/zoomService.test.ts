@@ -238,6 +238,69 @@ describe('findRecordingByMeetingId (the generic entry point behind findRecording
   });
 });
 
+describe('findRecordingInstancesByMeetingId (always-open Rooms — same numeric meeting id reused across many distinct recording instances)', () => {
+  it('returns every matching instance in the window, each with its own uuid, ignoring non-matching meetings', async () => {
+    const { findRecordingInstancesByMeetingId } = loadZoomService();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        meetings: [
+          { id: 89581408269, uuid: 'uuid-first', topic: 'Colaberry Rooms — July 2026', recording_files: [{ file_type: 'MP4', file_size: 100, download_url: 'https://zoom.us/rec/1' }] },
+          { id: 11111111, uuid: 'uuid-unrelated', topic: 'Other', recording_files: [{ file_type: 'MP4', file_size: 50, download_url: 'https://zoom.us/rec/2' }] },
+          { id: 89581408269, uuid: 'uuid-second', topic: 'Colaberry Rooms — July 2026', recording_files: [{ file_type: 'MP4', file_size: 200, download_url: 'https://zoom.us/rec/3' }] },
+        ],
+      })) as any;
+
+    const instances = await findRecordingInstancesByMeetingId('89581408269', '2026-07-31', '2026-08-06', 'fallback');
+
+    expect(instances).toHaveLength(2);
+    expect(instances.map((i) => i.uuid)).toEqual(['uuid-first', 'uuid-second']);
+    expect(instances[1].match.downloadUrl).toBe('https://zoom.us/rec/3');
+  });
+
+  it('skips an instance that has no MP4 file yet, without throwing', async () => {
+    const { findRecordingInstancesByMeetingId } = loadZoomService();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({
+        meetings: [
+          { id: 456, uuid: 'uuid-transcript-only', topic: 'x', recording_files: [{ file_type: 'TRANSCRIPT', file_size: 5, download_url: 'https://zoom.us/rec/vtt' }] },
+        ],
+      })) as any;
+
+    const instances = await findRecordingInstancesByMeetingId('456', '2026-08-01', '2026-08-02');
+    expect(instances).toEqual([]);
+  });
+
+  it('returns an empty array (not an error) when nothing in the window matches the meeting id', async () => {
+    const { findRecordingInstancesByMeetingId } = loadZoomService();
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(jsonResponse({ access_token: 'tok-1', expires_in: 3600 }))
+      .mockResolvedValueOnce(jsonResponse({ meetings: [] })) as any;
+
+    const instances = await findRecordingInstancesByMeetingId('999', '2026-08-01', '2026-08-02');
+    expect(instances).toEqual([]);
+  });
+});
+
+describe('extractZoomMeetingId', () => {
+  it('extracts the numeric meeting id from a Zoom join URL', () => {
+    const { extractZoomMeetingId } = loadZoomService();
+    expect(extractZoomMeetingId('https://colaberry.zoom.us/j/89581408269?pwd=abc.1')).toBe('89581408269');
+  });
+
+  it('returns null for a non-Zoom link (e.g. a legacy Google Meet link)', () => {
+    const { extractZoomMeetingId } = loadZoomService();
+    expect(extractZoomMeetingId('https://meet.google.com/jda-mjtm-sgm')).toBeNull();
+  });
+
+  it('returns null for null/undefined input', () => {
+    const { extractZoomMeetingId } = loadZoomService();
+    expect(extractZoomMeetingId(null)).toBeNull();
+    expect(extractZoomMeetingId(undefined)).toBeNull();
+  });
+});
+
 describe('streamZoomFile', () => {
   it('uses the webhook-supplied download_token as a query param when present (no extra OAuth call)', async () => {
     const { streamZoomFile } = loadZoomService();
