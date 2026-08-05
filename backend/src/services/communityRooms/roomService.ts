@@ -113,8 +113,8 @@ export async function createRoom(ctx: RoomAccessContext, input: CreateRoomInput)
     linked_cohort_id: ctx.cohortId ?? null,
     linked_project_id: input.linked_project_id ?? null,
     linked_module_id: input.linked_module_id ?? null,
-    // Video rooms are always-open: anyone eligible can jump into the same Meet
-    // anytime. The Meet link is minted lazily on first join (see joinVideoRoom).
+    // Video rooms are always-open: anyone eligible can jump into the same call
+    // anytime. The link is minted lazily on first join (see joinVideoRoom).
     is_video: input.is_video ?? false,
     always_open: input.is_video ?? false,
     is_system: false,
@@ -237,7 +237,7 @@ export async function updateRoom(
 }
 
 // Join an always-open video room. Entitlement is re-checked server-side EVERY
-// time; the Google Meet link is minted lazily on first join and then shared by
+// time; the video call link is minted lazily on first join and then shared by
 // everyone who jumps in (that's what makes it a persistent "room").
 export async function joinVideoRoom(
   ctx: RoomAccessContext,
@@ -251,9 +251,12 @@ export async function joinVideoRoom(
 
   if (room.meeting_link) return { join_url: room.meeting_link };
 
-  // First join provisions a persistent Meet link (1-year window; the link stays
-  // joinable). Best-effort — surface no link rather than error if Google is down.
-  const provider = getMeetingProvider('google_meet');
+  // First join provisions a persistent video-call link (1-year window; the
+  // link stays joinable). Best-effort — surface no link rather than error if
+  // the provider is down. No provider name passed — defer to the factory's
+  // default (Zoom) rather than hardcoding one, which is what silently kept
+  // minting Google Meet links here even after the rest of the app switched.
+  const provider = getMeetingProvider();
   const now = new Date();
   const end = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
   const result = await provider.createMeeting({
