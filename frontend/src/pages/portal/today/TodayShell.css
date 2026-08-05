@@ -501,6 +501,15 @@
 .te-cmini-stat.tone-cherry b{color:var(--cherry-text)}
 .te-cmini-stat.tone-berry{color:var(--berry)}
 @media(max-width:1250px){.te-cmini-stats{display:none}}
+/* Week prev/next for the condensed slot (e.g. Classroom's sticky next-step
+   card) — a .tl-arrow equivalent that resolves this file's own tokens,
+   since the condensed slot renders inside the header (.te-shell), outside
+   any .tl-de ancestor .tl-arrow depends on. */
+.te-weekarrow{width:26px;height:26px;border-radius:50%;border:1px solid var(--border);background:var(--surface);
+  color:var(--body);display:flex;align-items:center;justify-content:center;flex:none;cursor:pointer}
+.te-weekarrow:hover:not(:disabled){border-color:var(--berry);color:var(--berry)}
+.te-weekarrow:disabled{opacity:.4;cursor:default}
+.te-weekarrow svg{width:14px;height:14px}
 .te-ring.mini{width:32px;height:32px}
 .te-ring.mini .v b{font-size:9px}
 .te-ring.mini .v span{display:none}
