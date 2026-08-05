@@ -243,19 +243,20 @@ const ClassroomPage: React.FC = () => {
         </div>
       )}
 
-      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
-        <ClassroomNextStepHero weekCards={weekCards} variant="full" onOpen={openCard} />
-      </div>
-
       <div className="tl-grid">
         <div className="tl-feedcol">
-          <div className="tl-card tl-banner tl-ac-berry">
-            <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
-            <div className="pr">
-              <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
-              <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
-              <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
-              <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
+          <div className="tl-row1">
+            <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+              <ClassroomNextStepHero weekCards={weekCards} variant="full" onOpen={openCard} />
+            </div>
+            <div className="tl-card tl-banner tl-ac-berry">
+              <div className="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M4 7h16v12H4zM4 7l3-3h10l3 3M9 12h6" stroke="#fff" strokeWidth="2" strokeLinejoin="round" /></svg></div>
+              <div className="pr">
+                <h3>{week != null ? `Week ${week}` : 'Your timeline'}</h3>
+                <div className="tl-small" style={{ margin: '6px 0 8px' }}>{weekCards.length} item{weekCards.length === 1 ? '' : 's'} this week</div>
+                <div className="tl-prog"><i style={{ width: `${pct}%` }} /></div>
+                <div className="tl-small" style={{ marginTop: 6 }}><b>{done}</b> of <b>{weekCards.length}</b> complete</div>
+              </div>
             </div>
           </div>
 

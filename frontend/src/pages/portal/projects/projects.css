@@ -210,6 +210,15 @@
 .pj-prog .meter>i{display:block;height:100%;border-radius:var(--r-pill)}
 .pj-prog .pct{font-family:var(--mono);font-size:13px;font-weight:700;color:var(--text-strong)}
 
+/* Inside a single build (ProjectInterior), the header-condense mechanism is
+   deliberately OFF — you've already committed to one build, so the "what's
+   next across everything" header summary doesn't apply. Instead, THIS build's
+   next-action hero stays pinned near the top of the viewport as the task list
+   scrolls, same offset/sticky pattern as .te-side, so the one thing to do next
+   never scrolls out of reach. */
+.pj-nexthero-pinned{position:sticky;top:20px;z-index:5}
+@media(max-width:1300px){.pj-nexthero-pinned{position:static;top:auto}}
+
 /* next action */
 .pj-next{position:relative;background:var(--surface-page);border:1px solid var(--border-default);border-left:5px solid var(--cherry);border-radius:var(--r-16);padding:20px 22px;box-shadow:var(--shadow-md);margin-bottom:18px}
 .pj-next.today{border-left-color:var(--amber)}

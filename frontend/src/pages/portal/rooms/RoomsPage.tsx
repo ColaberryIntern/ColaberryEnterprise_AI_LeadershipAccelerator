@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
+import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import '../today/TodayShell.css';
 import '../feed/feed.css';
 import '../community/community.css';
@@ -267,7 +268,26 @@ const RoomsPage: React.FC = () => {
   const totalHere = items.reduce((n, i) => n + (i.here_count ?? 0), 0);
 
   return (
-    <PortalShell>
+    <PortalShell
+      condensedSlot={(
+        <CondensedHeaderCard
+          icon={<svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="14" height="12" rx="2" stroke="currentColor" strokeWidth="2" /><path d="M17 9l4-2v10l-4-2" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>}
+          tone="berry"
+          label="Belong"
+          title="Rooms"
+          sub={`${totalHere} here now`}
+          action={(
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="te-btn ghost sm" onClick={() => setModal('new')}>+ New room</button>
+              <button type="button" className="te-btn cherry sm" onClick={() => setModal('book')}>+ Book a session</button>
+            </div>
+          )}
+        />
+      )}
+    >
+      {(condensed) => (
+        <>
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
       <div className="page-h" style={{ marginBottom: 12 }}>
         <div className="crumbs0">Belong</div>
         <div className="rm-titlerow">
@@ -277,6 +297,7 @@ const RoomsPage: React.FC = () => {
           <button type="button" className="te-btn ghost sm" onClick={() => setModal('new')}>+ New room</button>
           <button type="button" className="te-btn cherry sm" onClick={() => setModal('book')}>+ Book a session</button>
         </div>
+      </div>
       </div>
 
       <div className="rm-shell">
@@ -320,6 +341,8 @@ const RoomsPage: React.FC = () => {
 
       {modal === 'book' && <BookRoomModal onClose={() => setModal('none')} onCreated={() => { loadRooms().catch(() => {}); loadHome().catch(() => {}); }} />}
       {modal === 'new' && <NewRoomModal onClose={() => setModal('none')} onCreated={(id) => { loadRooms().catch(() => {}); navigate(`/portal/rooms/${id}`); }} />}
+        </>
+      )}
     </PortalShell>
   );
 };

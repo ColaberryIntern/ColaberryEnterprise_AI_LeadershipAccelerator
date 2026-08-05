@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import PortalShell from '../today/PortalShell';
+import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import '../today/TodayShell.css';
 import '../feed/feed.css';
 import './community.css';
@@ -30,6 +31,13 @@ const CommunityPage: React.FC = () => {
   const [events, setEvents] = useState<CommunityEvent[] | null>(null);
   const [profileMemberId, setProfileMemberId] = useState<string | null>(null);
   const pingRef = useRef<number | null>(null);
+  // Bumped by the condensed header's "Share" button — scrolls back to the
+  // composer and expands it (see Composer's expandSignal prop).
+  const [expandTick, setExpandTick] = useState(0);
+  const openComposer = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setExpandTick((t) => t + 1);
+  };
 
   const loadPosts = useCallback(async (cat: string) => {
     setPosts(null);
@@ -95,11 +103,25 @@ const CommunityPage: React.FC = () => {
   const memberById = new Map((members ?? []).map((m) => [m.id, m]));
 
   return (
-    <PortalShell>
+    <PortalShell
+      condensedSlot={(
+        <CondensedHeaderCard
+          icon={<svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="2" /><path d="M3 19c0-3 3-5 6-5s6 2 6 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
+          tone="berry"
+          label="Belong"
+          title="Community"
+          action={<button className="te-btn cherry sm" type="button" onClick={openComposer}>Share →</button>}
+        />
+      )}
+    >
+      {(condensed) => (
+        <>
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
       <div className="page-h">
         <div className="crumbs0">Belong</div>
         <h1>Community</h1>
         <div className="sub">Post a win, ask for help, or cheer someone on — everyone in your cohort is here.</div>
+      </div>
       </div>
 
       <div className="cm-layout">
@@ -109,6 +131,7 @@ const CommunityPage: React.FC = () => {
             categories={COMMUNITY_CATEGORIES}
             defaultCategory={COMMUNITY_CATEGORIES[0]}
             onSubmit={submitPost}
+            expandSignal={expandTick}
           />
 
           <EventStrip events={events} />
@@ -234,6 +257,8 @@ const CommunityPage: React.FC = () => {
       </div>
 
       <MemberProfileDrawer memberId={profileMemberId} onClose={() => setProfileMemberId(null)} />
+        </>
+      )}
     </PortalShell>
   );
 };

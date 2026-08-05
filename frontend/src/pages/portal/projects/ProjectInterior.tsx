@@ -239,9 +239,10 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
       {/* Today-shaped two-column body */}
       <div className="te-grid">
         <div>
-          {/* hero: your next action */}
+          {/* hero: your next action — pinned (not header-condensed) once
+              you're inside a single build, see .pj-nexthero-pinned above */}
           {nx ? (
-            <div className="te-hero">
+            <div className="te-hero pj-nexthero-pinned">
               <div className="eyebrow"><svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg> Your next action on this build</div>
               <h2>{nx.task.title}</h2>
               <p>{nx.task.what || 'Pick this up next — it keeps the walking skeleton moving.'}</p>
@@ -250,7 +251,7 @@ const ProjectInterior: React.FC<{ project: StudentProject; onBack: () => void }>
               </div>
             </div>
           ) : (
-            <div className="te-hero"><div className="eyebrow">This build</div><h2>Every open task is done</h2><p>Nice work — nothing else queued on this build right now.</p></div>
+            <div className="te-hero pj-nexthero-pinned"><div className="eyebrow">This build</div><h2>Every open task is done</h2><p>Nice work — nothing else queued on this build right now.</p></div>
           )}
 
           <NextSessionStrip />

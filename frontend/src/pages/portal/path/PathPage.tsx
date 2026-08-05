@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import PortalShell from '../today/PortalShell';
+import CondensedHeaderCard, { CondensedTone } from '../today/CondensedHeaderCard';
 import { fetchSchedule, fetchPoints, levelFor, OnboardingSchedule } from '../../../services/onboardingApi';
 import './PathPage.css';
 
@@ -139,9 +140,24 @@ const PathPage: React.FC = () => {
   const i4 = intensiveState(10, 12, currentWeek);
 
   const started = currentWeek > 0;
+  // Same banding Today uses for its readiness chip, so "on track / building /
+  // just starting" reads consistently everywhere it shows up condensed.
+  const readinessTone: CondensedTone = readiness >= 70 ? 'leaf' : readiness >= 40 ? 'amber' : 'cherry';
 
   return (
-    <PortalShell>
+    <PortalShell
+      condensedSlot={(
+        <CondensedHeaderCard
+          icon={<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="2" /><path d="M12 8v4l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>}
+          tone={readinessTone}
+          label="Architect readiness"
+          title={`Week ${currentWeek} / 12`}
+          sub={`${lvl.name} · ${readiness}%`}
+        />
+      )}
+    >
+      {(condensed) => (
+        <>
       <div className="te-page-h">
         <div className="crumb">The Spine</div>
         <h1>Your path to AI Systems Architect</h1>
@@ -153,7 +169,8 @@ const PathPage: React.FC = () => {
 
       <div className="pp-root">
         <div className="pathwrap">
-          <div className="pathhead">
+        <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
+        <div className="pathhead">
             <div className="ring-wrap" style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
               <svg width="70" height="70" viewBox="0 0 70 70">
                 <circle cx="35" cy="35" r="27" fill="none" stroke="var(--surface-sunken)" strokeWidth="7" />
@@ -195,6 +212,7 @@ const PathPage: React.FC = () => {
               <span className="chip internship"><span className="sw" />Internship</span>
               <span className="chip cert"><span className="sw" />Cert · CCA-F</span>
             </div>
+          </div>
           </div>
 
           <svg
@@ -427,6 +445,8 @@ const PathPage: React.FC = () => {
           </div>
         </div>
       </div>
+        </>
+      )}
     </PortalShell>
   );
 };

@@ -472,11 +472,35 @@
   transition:max-width .38s cubic-bezier(.22,1,.36,1),opacity .25s ease .06s}
 .te-condensed-slot.is-visible{max-width:420px;opacity:1}
 .te-condensed-inner{white-space:nowrap}
-.te-condensed{display:flex;align-items:center;gap:10px}
+.te-condensed{display:flex;align-items:center;gap:10px;padding-left:10px;border-left:2px solid var(--border-sub)}
+.te-condensed.tone-leaf{border-left-color:var(--leaf)}
+.te-condensed.tone-berry{border-left-color:var(--berry)}
+.te-condensed.tone-cherry{border-left-color:var(--cherry)}
+.te-condensed.tone-amber{border-left-color:var(--amber)}
+.te-cmini-icon{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none;
+  font-size:13px;background:var(--sunken);color:var(--berry)}
+.te-cmini-icon svg{width:14px;height:14px}
+.te-condensed.tone-leaf .te-cmini-icon{background:rgba(91,166,60,.14);color:var(--leaf-text)}
+.te-condensed.tone-cherry .te-cmini-icon{background:rgba(251,40,50,.12);color:var(--cherry-text)}
+.te-condensed.tone-amber .te-cmini-icon{background:rgba(232,146,12,.14);color:var(--amber-deep)}
+.te-condensed.tone-berry .te-cmini-icon{background:rgba(54,120,149,.14);color:var(--berry)}
 .te-cmini-tx{display:flex;flex-direction:column;line-height:1.15;min-width:0}
 .te-cmini-tx .lab{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .te-cmini-tx .val{font-size:13px;font-weight:700;color:var(--strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 .te-cmini-tx .sub{font-size:11px;color:var(--muted)}
+.te-cmini-stats{display:flex;align-items:center;gap:12px;padding-left:12px;margin-left:2px;border-left:1px solid var(--border-sub)}
+.te-cmini-stat{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+.te-cmini-stat .ic{width:14px;height:14px;flex:none;display:flex}
+.te-cmini-stat .ic svg{width:14px;height:14px}
+.te-cmini-stat b{font-family:var(--mono);color:var(--strong);font-size:12px}
+.te-cmini-stat.tone-leaf{color:var(--leaf-text)}
+.te-cmini-stat.tone-leaf b{color:var(--leaf-text)}
+.te-cmini-stat.tone-amber{color:var(--amber-deep)}
+.te-cmini-stat.tone-amber b{color:var(--amber-deep)}
+.te-cmini-stat.tone-cherry{color:var(--cherry-text)}
+.te-cmini-stat.tone-cherry b{color:var(--cherry-text)}
+.te-cmini-stat.tone-berry{color:var(--berry)}
+@media(max-width:1250px){.te-cmini-stats{display:none}}
 .te-ring.mini{width:32px;height:32px}
 .te-ring.mini .v b{font-size:9px}
 .te-ring.mini .v span{display:none}
