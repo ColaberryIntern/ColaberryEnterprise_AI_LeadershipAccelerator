@@ -13417,3 +13417,23 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Notes: This is the last backend task before the frontend build begins (T009+).
     All 4 governance-board service layers (T002/T003/T006/T007) are now reachable
     over HTTP, admin-authenticated, Zod-validated at the boundary.
+
+- [x] **T009 — frontend API client additions**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/services/capeApi.ts` (edit) - typed wrapper
+    functions for all 9 T008 routes (governance policy GET/history/PUT,
+    lifecycle-mode policy GET/history/PUT, heatmap GET, personas GET, lookup GET),
+    appended as a "Phase 6 additions" section (same convention as the file's
+    existing "Phase 5 additions" marker). Reuses the existing `LifecycleMode` type
+    (not redefined). `lookupGovernanceEnrollment` matches the file's own
+    established `fetchTodayPlan` null-on-404 convention exactly.
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh
+    evidence: `cd frontend && tsc --noEmit` completely clean - the authoritative
+    frontend CI gate, no known-gap tolerance needed here - cross-checked all 9 URL
+    paths against T008's real route file, spot-checked all 9 response-shape types
+    against the real backend controller/service return shapes field-for-field,
+    confirmed no test file was expected per this repo's own convention for pure
+    API-client wrapper functions).
+  - Notes: Pure client-side typing/plumbing, no UI yet - the page/panels land in
+    T010-T014.
