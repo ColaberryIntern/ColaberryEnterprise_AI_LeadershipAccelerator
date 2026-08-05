@@ -13570,3 +13570,34 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     complete and independently verified. Reading/simulating on this panel
     never mutates production ranking - only T012's/T013's explicit Save
     buttons ever write anything, and every such write is versioned.
+
+- [x] **T015 — local visual verification (honest, partial evidence)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: Verification-only, no code shipped. This environment has no
+    reachable local Postgres (`ECONNREFUSED`), no Docker, and no valid admin
+    JWT (`scripts/.ali_jwt.txt` absent) - stated honestly per the run's
+    explicit anti-fabrication requirement rather than skipped or faked.
+    Partial real evidence WAS captured via a one-off Playwright script
+    (`scripts/capePhase6VisualCheck.js`, deleted after use, never committed):
+    (1) an unauthenticated screenshot proving `/admin/feed-control-governance`
+    correctly redirects to the real login page - no crash at the routing
+    layer; (2) a screenshot with a placeholder token injected into
+    `localStorage` (clearing `AuthContext`'s presence-only client-side gate,
+    confirmed via source read - no backend session actually validated)
+    showing the REAL page shell: title/subtitle, back-link, all 4 section
+    tabs, and one panel's real rendered error state - proving the component
+    tree and error-handling code execute correctly in an actual browser,
+    though NOT proving the panels render correct live data (no backend was
+    reachable to serve any).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent - opened
+    all 3 screenshots directly and confirmed pixel content, cross-checked
+    rendered text against the actual T010/T011 source byte-for-byte,
+    independently confirmed the `AuthContext.tsx` presence-only-check claim,
+    confirmed the one-off script has zero trace in git history, confirmed the
+    screenshots directory is genuinely gitignored, confirmed no overclaiming
+    anywhere in the write-up).
+  - Notes: This is real, bounded, honestly-scoped evidence - stronger than a
+    bare "no token available" statement, but explicitly NOT a substitute for
+    an authenticated screenshot showing real governance data. Repeated in
+    `handoff.md` for Ali/Dhee.
