@@ -13205,3 +13205,41 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Why: Ali's explicit, direct instruction not to accept an unverified claim of "fixed" a second time — the first re-enable in the earlier entry was based on a passing Jest `getComputedStyle` assertion plus infra-level health checks, which is real evidence for the specific CSS rule it tested but is not the same claim as "the page renders correctly," and this gap is exactly what let a false "verified" report go out.
   - Verification: Direct API responses (`/api/portal/flags`, `/api/portal/cape/today-plan`) captured during the exact flag-on window, not inferred. Scrolled, flag-confirmed-on screenshot at `docs/screenshots/cape-incident-check/02-today-plan-scrolled.png` (this worktree only, not committed — contains live account data, not added to git) shows the corrected render directly. Live bundle hash re-checked twice during this investigation (`main.4885e6f9.js` then `main.ef501b7b.js` — an unrelated concurrent deploy rebuilt the frontend in between; both bundles independently confirmed via `grep` to contain the CAPE Phase 5 fix code) — ruled out "wrong bundle being served" as a cause. `cf-cache-status: DYNAMIC` and explicit `Cache-Control: no-cache, no-store, must-revalidate` on `index.html` ruled out CDN caching as the cause of what Ali saw. Working theory for Ali's second screenshot, not proven but consistent with all evidence: a client-rendered SPA keeps running whatever JS was loaded into the tab at page-load time; if that tab wasn't hard-refreshed between the pre-fix and post-fix deploys, it would keep showing pre-fix behavior indefinitely regardless of what's redeployed server-side. Total live flag-on exposure across all three test cycles: under 5 minutes combined, each immediately followed by rollback-and-reconfirm before the next.
   - Notes: Flags are back on (`CAPE_LEARNING_VALUE_RANKER_ENABLED=true`, `CAPE_TODAY_PLAN_ENABLED=true`), confirmed via `docker exec printenv`, health, and external site check, per Ali's explicit go-ahead after seeing the real screenshot evidence — Ali was asked to hard-refresh before checking again himself. **Process lesson for future CAPE/production incidents, logged for reuse**: when a user reports a visual bug is not fixed, do not re-assert "fixed" from unit tests or infra checks alone — get real rendered evidence (this repo's existing `scripts/captureHelpers.js` Playwright pipeline against production, with a participant token) before making the claim again. A second false "it's fixed" costs more trust than the extra few minutes visual verification takes. Session CC-20260802-r4q9 PROGRESS.md audit: 11 entries this session across the full CAPE Phase 4/5/incident arc, all session-tagged, audit clean.
+
+### CAPE Phase 6 — Feed Control governance board (loop-architect run, build+PR only, not deployed)
+- [x] **T001 — governance policy + lifecycle-mode-policy schema and Sequelize models**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: New additive-only tables `cape_governance_policy` (single global
+    versioned settings row — the Stage-4 rerank caps + Today Plan pacing knobs, seeded
+    byte-identical to the hardcoded constants they will replace) and
+    `cape_lifecycle_mode_policy` (5 versioned rows, one per `LifecycleMode`, seeded
+    with design doc §10's recommended mix percentages for the 4 modes that have a real
+    numeric split; `returning_after_absence` seeded as an explicit, logged first-cut
+    even split since §10 gives no number for that mode). New files:
+    `backend/src/db/ensureCapeGovernanceSchema.ts`,
+    `backend/src/models/CapeGovernancePolicy.ts`,
+    `backend/src/models/CapeLifecycleModePolicy.ts`,
+    `backend/src/db/__tests__/ensureCapeGovernanceSchema.test.ts`. Wired into
+    `backend/src/server.ts` (2-line addition: import + call after
+    `ensureCapeTodayPlanSchema()`) and registered both new models in
+    `backend/src/models/index.ts` (matching this repo's own established convention for
+    new CAPE models, per the task-verifier's review).
+  - Verification: `loop-task-verifier` PASS 11/12 (independent agent, fresh evidence:
+    re-ran `tsc --noEmit`, re-ran the new test file, cross-checked seed values against
+    the actual hardcoded constants in `capeLearningValuePolicy.ts`/
+    `capeTodayPlanService.ts`, cross-checked the `returning_after_absence` deferral
+    against design doc §10's real text). `cd backend && node
+    node_modules/typescript/bin/tsc --noEmit` clean except the pre-existing documented
+    `interviewService.ts`/`@anthropic-ai/sdk` gap. 9/9 new tests passing (`node
+    ../node_modules/jest/bin/jest.js --config jest.config.ts --testPathPattern
+    "ensureCapeGovernanceSchema"`); sibling schema tests
+    (`ensureCapeCurriculumMapSchema`, `ensureCapeTodayPlanSchema`) re-run clean,
+    12/12, confirming no regression.
+  - Notes: Part of the CAPE Phase 6 governance-board `loop-architect` run (plan audit
+    PASS 19/20, run directory
+    `.loop-architect/runs/20260805-140000-cape-phase6-feed-control-governance/`).
+    Build+PR only this run — no deploy. Seed values are deliberately chosen so this
+    table changes NOTHING about live production ranking/pacing behavior until an
+    admin explicitly edits a value through the Phase 6 board (verified by the task
+    verifier against the actual pre-existing hardcoded constants, not just asserted).

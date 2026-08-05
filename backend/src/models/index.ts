@@ -393,6 +393,9 @@ import CurriculumSkillMap from './CurriculumSkillMap';
 import ArchitectureSkillPrerequisite from './ArchitectureSkillPrerequisite';
 // CAPE Phase 5: Today Plan learner feedback controls
 import TodayPlanFeedback from './TodayPlanFeedback';
+// CAPE Phase 6: Feed Control governance board (rerank caps, pacing knobs, lifecycle mixes)
+import CapeGovernancePolicy from './CapeGovernancePolicy';
+import CapeLifecycleModePolicy from './CapeLifecycleModePolicy';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -1421,6 +1424,9 @@ export {
   ArchitectureSkillPrerequisite,
   // CAPE — Colaberry Adaptive Path Engine (Phase 5: Today Plan learner feedback)
   TodayPlanFeedback,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 6: Feed Control governance board)
+  CapeGovernancePolicy,
+  CapeLifecycleModePolicy,
 };
 
 // --- Enrollment Lead associations ---
