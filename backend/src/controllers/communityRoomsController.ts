@@ -38,6 +38,21 @@ function ctxOf(req: Request): RoomAccessContext {
   return { enrollmentId: req.participant!.sub, cohortId: req.participant!.cohort_id, isAdmin: req.participant!.isStaff === true };
 }
 
+// HTTP headers only accept Latin-1 bytes — a raw filename containing an
+// em-dash, middle-dot, emoji, or accented character (all routine in this
+// app's session/room titles, e.g. "Week 1 · Build Day — Foundations")
+// throws ERR_INVALID_CHAR out of Node's http module and 500s the whole
+// download. Found live 2026-08-05: every recording/file download with a
+// non-ASCII title was broken this way, not just the one that got reported.
+// RFC 6266/5987 fixes it: an ASCII-sanitized `filename=` for old clients,
+// plus a UTF-8 percent-encoded `filename*=` that every modern browser
+// prefers and renders correctly.
+export function contentDispositionHeader(rawTitle: string): string {
+  const name = rawTitle.replace(/[\r\n]/g, '');
+  const asciiName = name.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '');
+  return `attachment; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+}
+
 function fail(res: Response, err: any): void {
   const status = typeof err?.status === 'number' ? err.status : 500;
   if (status >= 500) {
@@ -379,7 +394,7 @@ export async function downloadResource(req: Request, res: Response): Promise<voi
     const resource = await resourceSvc.getResourceForDownload(ctxOf(req), String(req.params.id), String(req.params.resourceId));
     const baseDir = resource.resource_type === 'recording' ? ROOM_RECORDING_DIR : ROOM_RESOURCE_DIR;
     res.setHeader('Content-Type', resource.mime_type || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${(resource.title || resource.storage_key || 'file').replace(/["\r\n]/g, '')}"`);
+    res.setHeader('Content-Disposition', contentDispositionHeader(resource.title || resource.storage_key || 'file'));
     // sendFile natively honors Range requests, so large recordings also get
     // in-browser scrubbing for free — the route stays the same "download".
     res.sendFile(path.join(baseDir, resource.storage_key as string));
