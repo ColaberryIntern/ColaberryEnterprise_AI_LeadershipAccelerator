@@ -13532,3 +13532,41 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Notes: This panel edits values that feed the currently-live production
     ranker/plan (T004/T005 wiring) - verified with the same scrutiny as a
     live-path change even though this task is "only" the frontend form.
+
+- [x] **T014 — explanation simulator panel (real implementation, replaces T010 placeholder; includes a small backend gap fix)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: Discovered mid-task that `GET /api/admin/feed-control/simulate`
+    never forwarded a `useCapeRanker` option to `simulate()` despite that
+    service function supporting it since Phase 4 - the plan's assumption that
+    this panel could simply reuse the existing endpoint "as-is" to force CAPE
+    output was wrong. Fixed with a small, additive, backward-compatible
+    `use_cape_ranker` query-param passthrough in
+    `backend/src/routes/admin/feedControlRoutes.ts` (default `false`,
+    provably identical to the old 3-argument call every existing caller,
+    including `FeedControlTab.tsx`, still makes). Added
+    `feedControlRoutes.simulateUseCapeRanker.test.ts` (this router's first-ever
+    route-level test, supertest-mounted). `frontend/src/pages/admin/governance/ExplanationSimulator.tsx`
+    replaced with the real panel - email/ID lookup (T007) or persona picker
+    (T007, correctly disabling/labeling any persona with no real match rather
+    than allowing a simulation against a fabricated ID), then a fully
+    read-only "Run simulation" call rendering Stage 2 exclusions, Stage 3
+    score breakdown (`components`), and the final Stage 4 rerank order - with
+    an honest note that Stage 4 reorders without attaching its own per-item
+    reason string (verified against the real `applyPolicyRerank` return
+    shape, not fabricated). Added `ExplanationSimulator.smoke.test.tsx`,
+    including a real read-only guarantee test that greps the component's own
+    source for any mutating HTTP verb.
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh
+    evidence: backend + frontend tsc clean, new route test passing (5/5), the
+    2 pre-existing `feedControlService.simulate*.test.ts` suites re-run
+    unmodified and still green (regression proof), backward-compat identity
+    independently re-derived from the actual `simulate()` source, param-name
+    cross-check between route and panel, confirmed the read-only guarantee is
+    real not superficial, confirmed the persona/lookup anti-fabrication
+    behavior, confirmed `excluded`/`components`/`ranker` are real shipped
+    fields not invented).
+  - Notes: All 4 CAPE Phase 6 governance-board panels (T011-T014) are now
+    complete and independently verified. Reading/simulating on this panel
+    never mutates production ranking - only T012's/T013's explicit Save
+    buttons ever write anything, and every such write is versioned.
