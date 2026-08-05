@@ -18,6 +18,7 @@ import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
+import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
@@ -89,6 +90,7 @@ app.use(enrollmentRoutes);
 app.use(participantRoutes);
 app.use(capePortalRoutes);
 app.use(capeAdminRoutes);
+app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);

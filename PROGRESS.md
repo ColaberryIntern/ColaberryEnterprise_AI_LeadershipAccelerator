@@ -13392,3 +13392,28 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     `active_builder` mode as the closest real signal available (the classifier has
     no week-number granularity yet) - this approximation is logged here and will
     be repeated in `handoff.md`.
+
+- [x] **T008 — admin routes + controller (9 endpoints, all requireAdmin)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/routes/admin/capeGovernanceRoutes.ts` (new, 9 routes:
+    GET/history/PUT governance policy, GET/history/PUT lifecycle-mode policy, GET
+    heatmap, GET personas, GET lookup - every route individually carries
+    `requireAdmin`, matching `capeAdminRoutes.ts`'s exact pattern). New
+    `backend/src/controllers/capeGovernanceController.ts` validates every mutating
+    body with T002/T003's real Zod schemas before calling the service (never a
+    re-declared schema), and validates the `:mode` URL param against T003's real
+    `ALL_LIFECYCLE_MODES` list. Mounted in `server.ts` (2-line addition next to the
+    existing `capeAdminRoutes` mount).
+  - Verification: `loop-task-verifier` PASS 11/12 on first pass, one real deviation
+    found (unknown `:mode` returned 400 instead of the plan's stated 404) - fixed
+    immediately (404 for a missing URL resource, matching `:cardId`-style admin
+    route conventions elsewhere in this repo) and re-verified locally: tsc clean,
+    17/17 controller tests pass (including the corrected 404 assertions),
+    `node scripts/lint-route-auth.js` reports all 88 admin route files
+    auth-guarded, and the verifier's own regression check (`capeAdminController` +
+    all `capeGovernance*` suites, 48 tests) confirmed the new mount didn't break
+    the sibling Phase 0-1 controller.
+  - Notes: This is the last backend task before the frontend build begins (T009+).
+    All 4 governance-board service layers (T002/T003/T006/T007) are now reachable
+    over HTTP, admin-authenticated, Zod-validated at the boundary.
