@@ -9,6 +9,10 @@ type Props = {
   onOpen: (card: TimelineFeedCard) => void;
 };
 
+const SPARKLE = (
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.4L12 16.8 5.8 21.3l2.4-7.4L2 9.4h7.6z" /></svg>
+);
+
 // Single source of truth for Classroom's "your next step" hero — the same
 // nextIncompleteCard derivation renders two presentations (full body card vs.
 // condensed header slot), and both open the SAME CardDetailDrawer pipeline
@@ -19,9 +23,11 @@ const ClassroomNextStepHero: React.FC<Props> = ({ weekCards, variant, onOpen }) 
   const nextCard = nextIncompleteCard(weekCards);
 
   if (variant === 'condensed') {
-    if (!nextCard) return <CondensedHeaderCard label="This week" title="All caught up 🎉" />;
+    if (!nextCard) return <CondensedHeaderCard icon={SPARKLE} tone="leaf" label="This week" title="All caught up 🎉" />;
     return (
       <CondensedHeaderCard
+        icon={SPARKLE}
+        tone="berry"
         label={`Your next step · ${nextCard.student_label}`}
         title={nextCard.title}
         action={<button className="te-btn ghost sm" type="button" onClick={() => onOpen(nextCard)}>Open →</button>}

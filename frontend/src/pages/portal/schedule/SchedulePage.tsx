@@ -1,9 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import PortalShell from '../today/PortalShell';
+import CondensedHeaderCard from '../today/CondensedHeaderCard';
 import portalApi from '../../../utils/portalApi';
-import { fetchSchedule, fetchPublicEvents, fetchPoints, OpenHouseView, FirstClassView, PointsEvent } from '../../../services/onboardingApi';
+import { fetchSchedule, fetchPublicEvents, fetchPoints, joinSession, OpenHouseView, FirstClassView, PointsEvent } from '../../../services/onboardingApi';
 import { fmtCentralTime, centralParts } from '../today/shellUtils';
+import { useNextLiveSession } from '../today/useNextLiveSession';
+import { useCountdown } from '../../../hooks/useCountdown';
+import { parseSessionTimeToHHMM } from '../../../utils/sessionTime';
+import { emitPointsEarned } from '../../../services/pointsFx';
 import './SchedulePage.css';
 
 /**
@@ -446,12 +451,47 @@ const SchedulePage: React.FC = () => {
     return <>{blocks}</>;
   };
 
+  // Condensed-header content — the same real live_sessions source the Today
+  // shell and the header's own "Next class" pill trust (see useNextLiveSession).
+  const { session: nextLiveSession } = useNextLiveSession();
+  const nlsTarget = (!nextLiveSession || nextLiveSession.status === 'live' || !nextLiveSession.session_date)
+    ? null
+    : (() => {
+        const hhmm = parseSessionTimeToHHMM(nextLiveSession.start_time || '09:00');
+        return hhmm ? `${nextLiveSession.session_date}T${hhmm}:00` : null;
+      })();
+  const nlsCd = useCountdown(nlsTarget);
+  const handleJoinNext = () => {
+    if (!nextLiveSession?.meeting_link) return;
+    window.open(nextLiveSession.meeting_link, '_blank', 'noopener,noreferrer');
+    joinSession(nextLiveSession.id).then((r) => { if (r.awarded) emitPointsEarned(r.points); }).catch(() => { /* best-effort */ });
+  };
+
   return (
-    <PortalShell>
+    <PortalShell
+      condensedSlot={nextLiveSession ? (
+        <CondensedHeaderCard
+          icon={<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" /><path d="M12 7v5l3 2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>}
+          tone={nextLiveSession.status === 'live' ? 'cherry' : 'berry'}
+          label={nextLiveSession.status === 'live' ? 'Live now' : 'Next class'}
+          title={`Session ${nextLiveSession.session_number} · ${nextLiveSession.title}`}
+          sub={nextLiveSession.status !== 'live' && nlsCd ? `${nlsCd.days}d ${nlsCd.hours}h` : undefined}
+          action={nextLiveSession.status === 'live'
+            ? <button className="te-btn cherry sm" type="button" onClick={handleJoinNext}>Join →</button>
+            : nextLiveSession.room_id
+              ? <Link className="te-btn ghost sm" to={`/portal/rooms/${nextLiveSession.room_id}`}>Open →</Link>
+              : undefined}
+        />
+      ) : undefined}
+    >
+      {(condensed) => (
+        <>
+      <div className={`te-condense-body${condensed ? ' is-condensed' : ''}`}>
       <div className="te-page-h">
         <div className="crumb">One Spine</div>
         <h1>Your schedule</h1>
         <div className="sub">Your cohort's live classes and program events on one timeline. Scroll back through completed sessions or ahead to what's coming.</div>
+      </div>
       </div>
 
       <div className="sch-root">
@@ -500,6 +540,8 @@ const SchedulePage: React.FC = () => {
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><PointsIcon /> points earned that day</span>
         </div>
       </div>
+        </>
+      )}
     </PortalShell>
   );
 };
