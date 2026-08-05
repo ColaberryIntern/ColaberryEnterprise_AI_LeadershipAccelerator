@@ -13286,3 +13286,36 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     phase — view+versioned-edit only, per execution-contract.md's logged scope
     decision. Wiring it into actual Today Plan/ranker slot selection is deferred to a
     future phase.
+
+- [x] **T004 — wire Stage-4 rerank caps into the live ranker (highest-stakes task this run)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeLearningValuePolicy.ts` — the 4
+    module constants (`SAME_TYPE_MAX_STREAK`, `PASSIVE_MAX_STREAK`,
+    `CROWD_OUT_MAX_PER_SKILL`, `CROWD_OUT_WINDOW`) plus the previously-unnamed
+    inline `position < 5` stretch-cap literal (2 call sites) are now a single
+    optional `caps: RerankCaps = DEFAULT_RERANK_CAPS` parameter on
+    `applyPolicyRerank` — `DEFAULT_RERANK_CAPS` is byte-identical to the values it
+    replaces (2/2/2/5/1), so every pre-existing call site that omits the 5th arg
+    (including every test written before this phase) is provably unchanged.
+    `backend/src/services/cape/capeLearningValueRanker.ts` fetches
+    `getCurrentGovernancePolicy()` (T002) and maps it to `RerankCaps`, gated behind
+    the SAME `env.feedControlEnabled` conditional the existing `getFeedPolicy()`
+    fetch already uses (no new unconditional DB call on the flag-off path).
+  - Verification: `loop-task-verifier` PASS 12/12 — the run's most scrutinized
+    verification pass given this touches code live in production right now. The
+    verifier independently re-traced 2 of the new hand-built test fixtures against
+    the actual `violatesCaps`/`applyPick` logic (not trusting the test's own
+    asserted values), confirmed line-by-line that no pre-existing test assertion
+    was weakened or changed (only additive diffs), confirmed both previously-inline
+    `position < 5` literals were parametrized (not just the named constant's
+    usages — the specific gap this run's plan audit flagged), and confirmed the
+    flag-off path never calls the new governance-policy fetch. `tsc --noEmit`
+    clean; 38/38 tests passing across 5 suites (2 pre-existing files extended, 1
+    new isolated flag-on test file added following the repo's established
+    `*FlagOn.test.ts` convention).
+  - Notes: Zero behavior change for real students today — `CAPE_LEARNING_VALUE_RANKER_ENABLED`
+    stays untouched, and even when it's on, `env.feedControlEnabled` (a separate,
+    currently-off flag) still gates whether the new governance policy is fetched
+    at all; until BOTH flip and an admin edits a value, output is provably
+    identical to pre-Phase-6 behavior (see the "backward-compat identity" test).

@@ -29,6 +29,17 @@
  * candidate would violate a soft cap, the least-bad one is taken rather than
  * stalling (mirrors `feedRanker.rankCandidates`'s own `idx < 0 -> 0`
  * fallback), so this can never infinite-loop or under-return.
+ *
+ * CAPE Phase 6 (design doc §12 "Pacing controls"): the 4 cap values below were
+ * plain module constants through Phase 4/5. They are now the DEFAULT values of
+ * an optional `caps: RerankCaps` parameter, sourced live from
+ * `capeGovernancePolicyService.getCurrentGovernancePolicy()` by the caller
+ * (`capeLearningValueRanker.ts`) when the governance table has been
+ * initialized. `DEFAULT_RERANK_CAPS` below is BYTE-IDENTICAL to the original
+ * hardcoded values, so any existing call site that omits the 5th argument
+ * (including every test written before this phase) keeps its exact prior
+ * behavior — this function's own pure/no-I/O contract is unchanged; it still
+ * never reads config itself, it only accepts it as a parameter.
  */
 import type { LearningValueCandidate } from './capeCandidateFeatureService';
 import type { LearnerState } from './capeLearnerStateService';
@@ -38,10 +49,32 @@ import type { FeedPolicy } from '../timeline/feedConfigService';
 
 export type RankedLearningValueItem = LearningValueCandidate & LearningValueScoreResult;
 
-const CROWD_OUT_WINDOW = 5;
-const CROWD_OUT_MAX_PER_SKILL = 2;
-const SAME_TYPE_MAX_STREAK = 2;
-const PASSIVE_MAX_STREAK = 2;
+/** CAPE Phase 6 governable Stage-4 rerank caps. Field names match
+ * `GovernancePolicyValues` in `capeGovernancePolicyService.ts` 1:1 (minus the
+ * pacing-only fields that file also carries) so the ranker orchestrator can
+ * pass the governance-policy read straight through without remapping. */
+export interface RerankCaps {
+  sameTypeMaxStreak: number;
+  passiveMaxStreak: number;
+  crowdOutMaxPerSkill: number;
+  /** Also controls the "max 1 stretch item in first N" position boundary —
+   * see execution-contract.md Assumption 4: both checks shared the same
+   * value (5) before this phase, one as a named constant, one as 2 separate
+   * inline literals; both are now driven by this single field. */
+  crowdOutWindow: number;
+  stretchCapFirstFive: number;
+}
+
+/** Byte-identical to the original hardcoded constants
+ * (CROWD_OUT_WINDOW=5, CROWD_OUT_MAX_PER_SKILL=2, SAME_TYPE_MAX_STREAK=2,
+ * PASSIVE_MAX_STREAK=2, and the inline stretch-cap literal `>= 1`). */
+export const DEFAULT_RERANK_CAPS: RerankCaps = {
+  sameTypeMaxStreak: 2,
+  passiveMaxStreak: 2,
+  crowdOutMaxPerSkill: 2,
+  crowdOutWindow: 5,
+  stretchCapFirstFive: 1,
+};
 
 function primarySkillId(c: LearningValueCandidate): string | null {
   return c.skill_mapping.skill_impacts[0]?.skill_id ?? null;
@@ -85,23 +118,23 @@ interface RerankState {
   skillCountsInFirst5: Map<string, number>;
 }
 
-function violatesCaps(c: LearningValueCandidate, state: RerankState, position: number, learnerState: LearnerState, recentFailure: boolean): boolean {
-  if (c.type === state.lastType && state.typeStreak >= SAME_TYPE_MAX_STREAK) return true;
-  if (!ACTIVE_TYPES.has(c.type) && state.passiveStreak >= PASSIVE_MAX_STREAK) return true;
-  if (position < 5 && recentFailure && isStretchItem(c, learnerState) && state.stretchUsedInFirst5 >= 1) return true;
-  if (position < CROWD_OUT_WINDOW) {
+function violatesCaps(c: LearningValueCandidate, state: RerankState, position: number, learnerState: LearnerState, recentFailure: boolean, caps: RerankCaps): boolean {
+  if (c.type === state.lastType && state.typeStreak >= caps.sameTypeMaxStreak) return true;
+  if (!ACTIVE_TYPES.has(c.type) && state.passiveStreak >= caps.passiveMaxStreak) return true;
+  if (position < caps.crowdOutWindow && recentFailure && isStretchItem(c, learnerState) && state.stretchUsedInFirst5 >= caps.stretchCapFirstFive) return true;
+  if (position < caps.crowdOutWindow) {
     const skillId = primarySkillId(c);
-    if (skillId && (state.skillCountsInFirst5.get(skillId) ?? 0) >= CROWD_OUT_MAX_PER_SKILL) return true;
+    if (skillId && (state.skillCountsInFirst5.get(skillId) ?? 0) >= caps.crowdOutMaxPerSkill) return true;
   }
   return false;
 }
 
-function applyPick(c: LearningValueCandidate, state: RerankState, position: number, learnerState: LearnerState) {
+function applyPick(c: LearningValueCandidate, state: RerankState, position: number, learnerState: LearnerState, caps: RerankCaps) {
   state.typeStreak = c.type === state.lastType ? state.typeStreak + 1 : 1;
   state.lastType = c.type;
   state.passiveStreak = ACTIVE_TYPES.has(c.type) ? 0 : state.passiveStreak + 1;
-  if (position < 5 && isStretchItem(c, learnerState)) state.stretchUsedInFirst5 += 1;
-  if (position < CROWD_OUT_WINDOW) {
+  if (position < caps.crowdOutWindow && isStretchItem(c, learnerState)) state.stretchUsedInFirst5 += 1;
+  if (position < caps.crowdOutWindow) {
     const skillId = primarySkillId(c);
     if (skillId) state.skillCountsInFirst5.set(skillId, (state.skillCountsInFirst5.get(skillId) ?? 0) + 1);
   }
@@ -113,12 +146,17 @@ function applyPick(c: LearningValueCandidate, state: RerankState, position: numb
  * `getFeedPolicy()`'s result when `env.feedControlEnabled`, else
  * `DEFAULT_FEED_POLICY`, exactly like the composer already does for the
  * legacy ranker.
+ *
+ * `caps` (CAPE Phase 6, optional, defaults to `DEFAULT_RERANK_CAPS`) supplies
+ * the 4 previously-hardcoded Stage-4 caps. Omitting it (every call site/test
+ * written before Phase 6) reproduces the exact prior behavior.
  */
 export function applyPolicyRerank(
   scored: RankedLearningValueItem[],
   learnerState: LearnerState,
   policy: FeedPolicy,
   now: Date,
+  caps: RerankCaps = DEFAULT_RERANK_CAPS,
 ): RankedLearningValueItem[] {
   const byScoreDesc = [...scored].sort((a, b) => b.score - a.score);
   const lowerHalf = new Set(byScoreDesc.slice(Math.ceil(byScoreDesc.length / 2)).map((c) => c.ref));
@@ -146,16 +184,16 @@ export function applyPolicyRerank(
     // Exploration pull: due, and a lower-half candidate exists that doesn't
     // violate any cap — surface it instead of always taking the top score.
     if (sincePick >= explorationEvery) {
-      idx = pool.findIndex((c) => lowerHalf.has(c.ref) && !violatesCaps(c, state, position, learnerState, learnerState.recent_failure));
+      idx = pool.findIndex((c) => lowerHalf.has(c.ref) && !violatesCaps(c, state, position, learnerState, learnerState.recent_failure, caps));
       if (idx >= 0) wasExplorationPick = true;
     }
     // Normal pass: highest-scored candidate (pool is score-sorted, urgent-first) that respects caps.
-    if (idx < 0) idx = pool.findIndex((c) => !violatesCaps(c, state, position, learnerState, learnerState.recent_failure));
+    if (idx < 0) idx = pool.findIndex((c) => !violatesCaps(c, state, position, learnerState, learnerState.recent_failure, caps));
     // Relax: every remaining candidate violates a soft cap — take the best remaining rather than stall.
     if (idx < 0) idx = 0;
 
     const picked = pool.splice(idx, 1)[0];
-    applyPick(picked, state, position, learnerState);
+    applyPick(picked, state, position, learnerState, caps);
     out.push(picked);
     sincePick = wasExplorationPick ? 0 : sincePick + 1;
   }
