@@ -18,6 +18,8 @@ export interface RoomMembershipAttributes {
   joined_at?: Date | null;
   left_at?: Date | null;
   last_read_at?: Date | null; // DM unread cursor (added by ensureMessagingSchema)
+  last_delivered_at?: Date | null; // DM delivery-tick cursor: last time this member polled the thread (added by ensureMessagingSchema)
+  typing_at?: Date | null; // DM typing indicator: last keystroke touch, freshness-windowed (added by ensureMessagingSchema)
   created_at?: Date;
   updated_at?: Date;
 }
@@ -33,6 +35,8 @@ class RoomMembership extends Model<RoomMembershipAttributes> implements RoomMemb
   declare joined_at: Date | null;
   declare left_at: Date | null;
   declare last_read_at: Date | null;
+  declare last_delivered_at: Date | null;
+  declare typing_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -49,6 +53,8 @@ RoomMembership.init(
     joined_at: { type: DataTypes.DATE, allowNull: true },
     left_at: { type: DataTypes.DATE, allowNull: true },
     last_read_at: { type: DataTypes.DATE, allowNull: true },
+    last_delivered_at: { type: DataTypes.DATE, allowNull: true },
+    typing_at: { type: DataTypes.DATE, allowNull: true },
   },
   {
     sequelize,

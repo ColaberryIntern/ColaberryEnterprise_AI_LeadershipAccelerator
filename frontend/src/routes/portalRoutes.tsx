@@ -6,6 +6,7 @@ import PortalLayout from '../components/Layout/PortalLayout';
 import PortalLoginPage from '../pages/portal/PortalLoginPage';
 import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
+import DevLoginPage from '../pages/portal/DevLoginPage';
 import PortalViewAsPage from '../pages/portal/PortalViewAsPage';
 import PortalMgmtEnterPage from '../pages/portal/PortalMgmtEnterPage';
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
@@ -51,6 +52,7 @@ const portalRoutes = (
     <Route path="/portal/login" element={<PortalLoginPage />} />
     <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
+    <Route path="/portal/dev-login" element={<DevLoginPage />} />
     {/* Admin "View as member" — read-only impersonation landing (token in the URL hash). */}
     <Route path="/portal/view-as" element={<PortalViewAsPage />} />
     {/* Phone handoff — public: exchanges a one-time QR code for a session, then lands on Today. */}
