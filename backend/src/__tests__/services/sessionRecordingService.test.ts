@@ -13,7 +13,11 @@ jest.mock('../../models/RoomResource', () => ({ findOne: jest.fn(), create: jest
 jest.mock('../../services/communityRooms/roomService', () => ({ ensureRoomForSession: jest.fn() }));
 jest.mock('../../services/communityRooms/roomOutboxService', () => ({ emitRoomEvent: jest.fn() }));
 jest.mock('../../services/driveService', () => ({ findRecordingForSession: jest.fn(), streamDriveFile: jest.fn() }));
-jest.mock('../../services/zoomService', () => ({ findRecordingForSession: jest.fn(), streamZoomFile: jest.fn() }));
+jest.mock('../../services/zoomService', () => ({
+  findRecordingForSession: jest.fn(),
+  findRecordingByMeetingId: jest.fn(),
+  streamZoomFile: jest.fn(),
+}));
 jest.mock('../../config/upload', () => ({ ROOM_RECORDING_DIR: '/fake/room-recordings', MAX_ROOM_RECORDING_SIZE: 4 * 1024 * 1024 * 1024 }));
 jest.mock('../../config/database', () => ({ sequelize: { transaction: jest.fn() } }));
 
@@ -24,9 +28,9 @@ import RoomResource from '../../models/RoomResource';
 import { ensureRoomForSession } from '../../services/communityRooms/roomService';
 import { emitRoomEvent } from '../../services/communityRooms/roomOutboxService';
 import { findRecordingForSession as findDriveMatch, streamDriveFile } from '../../services/driveService';
-import { findRecordingForSession as findZoomMatch, streamZoomFile } from '../../services/zoomService';
+import { findRecordingForSession as findZoomMatch, findRecordingByMeetingId, streamZoomFile } from '../../services/zoomService';
 import { sequelize } from '../../config/database';
-import { ingestRecordingForSession } from '../../services/sessionRecordingService';
+import { ingestRecordingForSession, ingestRecordingForBooking } from '../../services/sessionRecordingService';
 
 const findOrCreateBooking = RoomBooking.findOrCreate as jest.Mock;
 const findOneResource = RoomResource.findOne as jest.Mock;
@@ -36,6 +40,7 @@ const emitMock = emitRoomEvent as jest.Mock;
 const findDriveMatchMock = findDriveMatch as jest.Mock;
 const streamDriveMock = streamDriveFile as jest.Mock;
 const findZoomMatchMock = findZoomMatch as jest.Mock;
+const findByMeetingIdMock = findRecordingByMeetingId as jest.Mock;
 const streamZoomMock = streamZoomFile as jest.Mock;
 const transactionMock = sequelize.transaction as jest.Mock;
 
@@ -196,5 +201,86 @@ describe('ingestRecordingForSession — Zoom provider dispatch', () => {
     expect(result).toEqual({ status: 'ingested', resourceId: 'zoom-resource-2' });
     expect(findZoomMatchMock).not.toHaveBeenCalled();
     expect(streamZoomMock).toHaveBeenCalledWith(preResolvedMatch);
+  });
+});
+
+describe('ingestRecordingForBooking — general Room bookings (the "+ Book a session" flow)', () => {
+  const zoomBooking = {
+    id: 'booking-zoom-1',
+    room_id: 'room-zoom-1',
+    title: 'Study Group',
+    meeting_provider: 'zoom',
+    related_live_session_id: null,
+    google_event_id: '987654321',
+    start_at: new Date('2026-08-04T18:30:00Z'),
+  } as any;
+
+  it('is a clean no-op for a non-zoom booking (legacy Google Meet ad-hoc bookings are not supported)', async () => {
+    const result = await ingestRecordingForBooking({ ...zoomBooking, meeting_provider: 'google_meet' });
+    expect(result).toEqual({ status: 'not_found' });
+    expect(findOneResource).not.toHaveBeenCalled();
+  });
+
+  it('is a clean no-op for a class-session-derived booking (owned by ingestRecordingForSession instead)', async () => {
+    const result = await ingestRecordingForBooking({ ...zoomBooking, related_live_session_id: 'session-1' });
+    expect(result).toEqual({ status: 'not_found' });
+    expect(findOneResource).not.toHaveBeenCalled();
+  });
+
+  it('is a clean no-op when the booking never got a Zoom meeting ID (e.g. never scheduled/provisioned)', async () => {
+    const result = await ingestRecordingForBooking({ ...zoomBooking, google_event_id: null });
+    expect(result).toEqual({ status: 'not_found' });
+    expect(findOneResource).not.toHaveBeenCalled();
+  });
+
+  it('no-ops when a recording resource already exists (idempotency, same guard as the session path)', async () => {
+    findOneResource.mockResolvedValue({ id: 'existing-resource' });
+    const result = await ingestRecordingForBooking(zoomBooking);
+    expect(result).toEqual({ status: 'already_present', resourceId: 'existing-resource' });
+    expect(findByMeetingIdMock).not.toHaveBeenCalled();
+  });
+
+  it('finds by exact meeting ID (using the booking start date as the day-window hint) and ingests', async () => {
+    findOneResource.mockResolvedValue(null);
+    findByMeetingIdMock.mockResolvedValue({ downloadUrl: 'https://zoom.us/rec/download/booking', name: 'Study Group.mp4', mimeType: 'video/mp4', sizeBytes: 400 });
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'booking-resource' });
+
+    const result = await ingestRecordingForBooking(zoomBooking);
+
+    expect(result).toEqual({ status: 'ingested', resourceId: 'booking-resource' });
+    expect(findByMeetingIdMock).toHaveBeenCalledWith('987654321', '2026-08-04', 'Study Group');
+    expect(createResource.mock.calls[0][0]).toMatchObject({
+      room_id: 'room-zoom-1', booking_id: 'booking-zoom-1', resource_type: 'recording', mime_type: 'video/mp4',
+    });
+    expect(emitMock).toHaveBeenCalledWith(expect.objectContaining({
+      aggregateId: 'booking-resource',
+      payload: expect.objectContaining({ booking_id: 'booking-zoom-1' }),
+    }));
+    // Unlike the session path, there's no LiveSession.recording_url to keep in sync.
+  });
+
+  it('a webhook-supplied preResolvedMatch skips the findRecordingByMeetingId lookup entirely', async () => {
+    findOneResource.mockResolvedValue(null);
+    streamZoomMock.mockResolvedValue(fakeSource());
+    createResource.mockResolvedValue({ id: 'booking-resource-2' });
+
+    const preResolvedMatch = { downloadUrl: 'https://zoom.us/rec/download/xyz', downloadToken: 'tok', name: 'Study Group.mp4', mimeType: 'video/mp4', sizeBytes: 600 };
+    const result = await ingestRecordingForBooking(zoomBooking, preResolvedMatch);
+
+    expect(result).toEqual({ status: 'ingested', resourceId: 'booking-resource-2' });
+    expect(findByMeetingIdMock).not.toHaveBeenCalled();
+    expect(streamZoomMock).toHaveBeenCalledWith(preResolvedMatch);
+  });
+
+  it('returns not_found cleanly when no recording matches (recording is still a manual toggle a host may not have used)', async () => {
+    findOneResource.mockResolvedValue(null);
+    findByMeetingIdMock.mockResolvedValue(null);
+
+    const result = await ingestRecordingForBooking(zoomBooking);
+
+    expect(result).toEqual({ status: 'not_found' });
+    expect(streamZoomMock).not.toHaveBeenCalled();
+    expect(createResource).not.toHaveBeenCalled();
   });
 });

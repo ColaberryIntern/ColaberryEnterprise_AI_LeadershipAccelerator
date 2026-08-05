@@ -5,8 +5,9 @@ import { Cohort, EnrollmentLead } from '../models';
 import { runEnrollmentAutomation } from '../services/automationService';
 import { activateByRef, isSubscriptionRef } from '../services/subscriptionService';
 import LiveSession from '../models/LiveSession';
+import RoomBooking from '../models/RoomBooking';
 import { verifyZoomWebhookSignature, computeZoomWebhookEncryptedToken } from '../services/zoomService';
-import { ingestRecordingForSession } from '../services/sessionRecordingService';
+import { ingestRecordingForSession, ingestRecordingForBooking } from '../services/sessionRecordingService';
 
 export async function handlePaySimpleWebhook(req: Request, res: Response): Promise<void> {
   // PaySimple sends signature in 'paysimple-hmac-sha256' header, computed over
@@ -197,13 +198,23 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
   try {
     const meetingId = String(event.payload?.object?.id || '');
     const session = meetingId ? await LiveSession.findOne({ where: { zoom_meeting_id: meetingId } }) : null;
+    // Only checked when no class session matched — a general Room booking
+    // (the "+ Book a session" flow). related_live_session_id: null excludes
+    // class-session-derived bookings, which never carry google_event_id
+    // anyway (they're keyed by LiveSession.zoom_meeting_id above instead)
+    // but the extra check makes the exclusion explicit rather than implicit.
+    const booking = !session && meetingId
+      ? await RoomBooking.findOne({ where: { google_event_id: meetingId, related_live_session_id: null } })
+      : null;
 
-    // No matching session is a normal, benign outcome — this webhook
-    // subscription is account-wide, so any non-class Zoom meeting on the
-    // same account (a 1:1 call, a personal meeting) also fires this event.
-    // Acking 200 avoids Zoom retrying something that was never going to
-    // match anything, and avoids log noise for a "failure" that isn't one.
-    if (!session) {
+    // No match at all is a normal, benign outcome — this webhook
+    // subscription is account-wide, so any non-class, non-booking Zoom
+    // meeting on the same account (a 1:1 call, a personal meeting, one of
+    // the always-open persistent video rooms — not covered here, see
+    // sessionRecordingService.ts's header comment for why) also fires this
+    // event. Acking 200 avoids Zoom retrying something that was never going
+    // to match anything, and avoids log noise for a "failure" that isn't one.
+    if (!session && !booking) {
       res.status(200).json({ received: true, matched: false });
       return;
     }
@@ -218,10 +229,11 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
     // largest file is the real one, not necessarily whichever comes first.
     const best = mp4s.reduce((a: any, b: any) => (b.file_size > a.file_size ? b : a));
 
+    const fallbackTitle = session ? session.title : (booking as RoomBooking).title;
     const preResolvedMatch = {
       downloadUrl: best.download_url,
       downloadToken: event.download_token as string | undefined,
-      name: `${event.payload?.object?.topic || session.title}.mp4`,
+      name: `${event.payload?.object?.topic || fallbackTitle}.mp4`,
       mimeType: 'video/mp4',
       sizeBytes: best.file_size ?? null,
     };
@@ -232,9 +244,15 @@ export async function handleZoomWebhook(req: Request, res: Response): Promise<vo
     // is sent, or retrying it on a later webhook/cron pass, is always safe.
     res.status(200).json({ received: true, matched: true });
 
-    ingestRecordingForSession(session, preResolvedMatch).catch((err: any) => {
-      console.error(`[Webhook] Zoom recording ingest failed for session ${session.id}:`, err.message);
-    });
+    if (session) {
+      ingestRecordingForSession(session, preResolvedMatch).catch((err: any) => {
+        console.error(`[Webhook] Zoom recording ingest failed for session ${session.id}:`, err.message);
+      });
+    } else if (booking) {
+      ingestRecordingForBooking(booking, preResolvedMatch).catch((err: any) => {
+        console.error(`[Webhook] Zoom recording ingest failed for booking ${booking.id}:`, err.message);
+      });
+    }
   } catch (err: any) {
     console.error('[Webhook] Zoom processing error:', err.message);
     if (!res.headersSent) res.status(500).json({ error: 'Webhook processing failed' });

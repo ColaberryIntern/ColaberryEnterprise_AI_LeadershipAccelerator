@@ -36,7 +36,8 @@ import { ensureSessionMeetLink } from './meetingService';
 import { postLiveClassQrToRoom } from './liveClassQrService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
 import LiveSession from '../models/LiveSession';
-import { ingestRecordingForSession } from './sessionRecordingService';
+import RoomBooking from '../models/RoomBooking';
+import { ingestRecordingForSession, ingestRecordingForBooking } from './sessionRecordingService';
 
 /**
  * Instrumentation wrapper for cron jobs.
@@ -2428,11 +2429,41 @@ export function startScheduler(): void {
           console.error(`[Scheduler] Recording ingest failed for session ${session.id}:`, err.message);
         }
       }
+
+      // Same sweep, for general Room bookings (the "+ Book a session" flow) —
+      // Zoom-only, and excludes class-session-derived bookings (owned by the
+      // loop above). "Completed" here means the booking's own scheduled end
+      // has passed, not that a host clicked Complete — that's a manual,
+      // easily-forgotten step this shouldn't depend on. Always-open
+      // persistent video rooms (Grape Gallery etc.) are deliberately not
+      // swept here — see sessionRecordingService.ts's header comment.
+      const bookingCandidates = await RoomBooking.findAll({
+        where: {
+          meeting_provider: 'zoom',
+          related_live_session_id: null,
+          google_event_id: { [Op.ne]: null },
+          end_at: {
+            [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+            [Op.lte]: new Date(),
+          },
+          state: { [Op.notIn]: ['cancelled', 'draft', 'pending_approval'] },
+        },
+      });
+      for (const booking of bookingCandidates) {
+        try {
+          const result = await ingestRecordingForBooking(booking);
+          if (result.status === 'ingested') {
+            console.log(`[Scheduler] Recording ingested for booking ${booking.id} "${booking.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for booking ${booking.id}:`, err.message);
+        }
+      }
     }).catch((err: any) => {
       console.error('[Scheduler] Session recording ingest error:', err.message);
     });
   });
-  console.log('[Scheduler] Accelerator: session recording ingestion every 30 min (pilot cohort only)');
+  console.log('[Scheduler] Accelerator: session + room-booking recording ingestion every 30 min');
 
   // ── Alumni Lifecycle Processor (daily 6 AM CT / 11 UTC) ──────────────
   const { detectInactiveLeads, detectReengagementComplete } = require('./campaignLifecycleService');
