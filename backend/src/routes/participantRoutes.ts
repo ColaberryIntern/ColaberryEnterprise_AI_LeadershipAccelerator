@@ -871,6 +871,40 @@ router.post('/api/portal/community/comments/:commentId/like', requireParticipant
 router.get('/api/portal/classroom/cards/:cardId/comments', requireParticipant, handleListCardComments);
 router.post('/api/portal/classroom/cards/:cardId/comments', communityCommentRateLimiter, requireParticipant, handleCreateCardComment);
 
+// Community Organizer / Admin / Owner only (Ali 2026-08-05) — delete-any
+// controls in the Belong feed. Regular members cannot delete even their own
+// post/comment yet (out of scope); the service layer 403s anyone whose
+// mgmt_role isn't in COMMUNITY_MODERATOR_ROLES.
+router.delete('/api/portal/community/posts/:postId', requireParticipant, async (req, res) => {
+  const paramsParsed = PostIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid post id' });
+    return;
+  }
+  try {
+    const { removePostAsModerator } = await import('../services/communityService');
+    const result = await removePostAsModerator(req.participant!.sub, paramsParsed.data.postId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+router.delete('/api/portal/community/comments/:commentId', requireParticipant, async (req, res) => {
+  const paramsParsed = CommentIdParamSchema.safeParse(req.params);
+  if (!paramsParsed.success) {
+    res.status(400).json({ error: 'Invalid comment id' });
+    return;
+  }
+  try {
+    const { removeCommentAsModerator } = await import('../services/communityService');
+    const result = await removeCommentAsModerator(req.participant!.sub, paramsParsed.data.commentId);
+    res.json(result);
+  } catch (err: any) {
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
 router.post('/api/portal/community/posts/:postId/report', requireParticipant, async (req, res) => {
   const paramsParsed = PostIdParamSchema.safeParse(req.params);
   const bodyParsed = ReportPostSchema.safeParse(req.body);

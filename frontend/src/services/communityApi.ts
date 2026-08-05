@@ -71,6 +71,9 @@ export interface CommunityMemberProfile {
   badges: MemberBadge[];
   presence: CommunityPresenceStatus;
   created_at: string;
+  // True for Owner/Admin/Community Organizer — shows the delete-any controls
+  // on posts/comments in the feed. The server re-checks on every remove call.
+  can_moderate_community: boolean;
 }
 
 export const MEMBER_ROLE_META: Record<CommunityMemberRole, { label: string; emoji: string }> = {
@@ -167,6 +170,18 @@ export async function createComment(postId: string, body: string, parentCommentI
     parent_comment_id: parentCommentId,
   });
   return data.comment;
+}
+
+// Community Organizer / Admin / Owner only — the server 403s anyone else.
+// Soft-delete: the post/comment drops out of the feed immediately.
+export async function removePost(postId: string): Promise<{ post_id: string; status: string }> {
+  const { data } = await portalApi.delete(`/api/portal/community/posts/${postId}`);
+  return data;
+}
+
+export async function removeComment(commentId: string): Promise<{ comment_id: string; status: string }> {
+  const { data } = await portalApi.delete(`/api/portal/community/comments/${commentId}`);
+  return data;
 }
 
 export async function togglePostLike(postId: string): Promise<{ liked: boolean; like_count: number }> {

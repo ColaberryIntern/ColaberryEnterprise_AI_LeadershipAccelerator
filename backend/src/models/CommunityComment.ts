@@ -1,12 +1,17 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
+export type CommunityCommentStatus = 'visible' | 'removed';
+
 export interface CommunityCommentAttributes {
   id?: string;
   post_id: string;
   member_id: string;
   parent_comment_id?: string | null;
   body: string;
+  status?: CommunityCommentStatus;
+  removed_at?: Date | null;
+  removed_by?: string | null;
   created_at?: Date;
   updated_at?: Date;
 }
@@ -17,6 +22,9 @@ class CommunityComment extends Model<CommunityCommentAttributes> implements Comm
   declare member_id: string;
   declare parent_comment_id: string | null;
   declare body: string;
+  declare status: CommunityCommentStatus;
+  declare removed_at: Date | null;
+  declare removed_by: string | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -51,6 +59,22 @@ CommunityComment.init(
       type: DataTypes.TEXT,
       allowNull: false,
       validate: { notEmpty: true },
+    },
+    // Moderation soft-delete (Community Organizer role) — mirrors CommunityPost's
+    // status/removed_at/removed_by. A removed comment stays in the DB for audit
+    // but is filtered out of listComments().
+    status: {
+      type: DataTypes.ENUM('visible', 'removed'),
+      allowNull: false,
+      defaultValue: 'visible',
+    },
+    removed_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    removed_by: {
+      type: DataTypes.UUID,
+      allowNull: true,
     },
   },
   {

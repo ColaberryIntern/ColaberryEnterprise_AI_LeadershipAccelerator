@@ -23,7 +23,7 @@ export type SectionKey = typeof SECTION_KEYS[number];
 export const ALL_SECTIONS: SectionKey[] = [...SECTION_KEYS];
 
 // The management roles. 'owner' sees everything; the rest are scoped.
-export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support'] as const;
+export const MGMT_ROLES = ['owner', 'admin', 'curriculum', 'revenue', 'admissions', 'support', 'community_organizer'] as const;
 export type MgmtRole = typeof MGMT_ROLES[number];
 
 export interface MgmtRoleDef {
@@ -47,6 +47,12 @@ export const MGMT_ROLE_DEFS: Record<MgmtRole, MgmtRoleDef> = {
   admissions: { role: 'admissions', label: 'Admissions', sections: ['dashboard', 'lead_ingestion'] },
   // Support → NO normal admin nav; only the read-only student-story surface.
   support: { role: 'support', label: 'Support', sections: ['students'] },
+  // Community Organizer → no management-portal data section of its own (v1).
+  // Its actual grant — delete-any post/comment in the Belong feed — is
+  // enforced directly against mgmt_role in the community moderation surface
+  // (see COMMUNITY_MODERATOR_ROLES below / staffAccess.isCommunityModerator),
+  // not via this admin-section gate. 'dashboard' just gives a landing page.
+  community_organizer: { role: 'community_organizer', label: 'Community Organizer', sections: ['dashboard'] },
 };
 
 export function isMgmtRole(role: string | undefined | null): role is MgmtRole {
@@ -61,4 +67,16 @@ export function sectionsForRole(role: string | undefined | null): SectionKey[] {
 /** Authoritative access check — may this role reach this section? */
 export function roleCanAccessSection(role: string | undefined | null, section: SectionKey): boolean {
   return sectionsForRole(role).includes(section);
+}
+
+// Roles allowed to remove ANY member's post/comment in the community feed
+// (not just their own — self-delete isn't built yet). Owner/Admin get this
+// implicitly (per Ali); Community Organizer is the dedicated, narrow role for
+// staff like Jackie whose job is moderating the feed, without the broader
+// Program-section access Curriculum/Admin/Owner have.
+export const COMMUNITY_MODERATOR_ROLES: readonly MgmtRole[] = ['owner', 'admin', 'community_organizer'];
+
+/** Deny-by-default — may this mgmt_role delete other members' posts/comments? */
+export function isCommunityModeratorRole(role: string | undefined | null): boolean {
+  return isMgmtRole(role) && COMMUNITY_MODERATOR_ROLES.includes(role);
 }
