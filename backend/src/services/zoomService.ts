@@ -228,6 +228,7 @@ interface ZoomRecordingFile {
 }
 interface ZoomRecordingMeeting {
   id: number;
+  uuid: string;
   topic: string;
   recording_files: ZoomRecordingFile[];
 }
@@ -266,21 +267,13 @@ function addDays(dateStr: string, days: number): string {
 // sessionRecordingService.ingestRecordingForBooking (general Room bookings)
 // go through this, since matching only ever needs a meeting ID + a date to
 // pick the right day-window, never the whole LiveSession/RoomBooking shape.
-export async function findRecordingByMeetingId(
-  meetingId: string,
-  dateHint: string,
-  fallbackName?: string,
-): Promise<ZoomRecordingMatch | null> {
-  const meetings = await listRecordings(dateHint, addDays(dateHint, 1));
-  const meeting = meetings.find((m) => String(m.id) === meetingId);
-  if (!meeting || !meeting.recording_files?.length) return null;
-
+function toRecordingMatch(meeting: ZoomRecordingMeeting, fallbackName?: string): ZoomRecordingMatch | null {
+  if (!meeting.recording_files?.length) return null;
   const mp4s = meeting.recording_files.filter((f) => f.file_type === 'MP4');
   if (!mp4s.length) return null;
   // Pause/resume can produce more than one MP4 for the same meeting — the
   // largest file is the real one, not necessarily whichever comes first.
   const best = mp4s.reduce((a, b) => (b.file_size > a.file_size ? b : a));
-
   return {
     downloadUrl: best.download_url,
     name: `${meeting.topic || fallbackName || 'recording'}.mp4`,
@@ -289,9 +282,57 @@ export async function findRecordingByMeetingId(
   };
 }
 
+export async function findRecordingByMeetingId(
+  meetingId: string,
+  dateHint: string,
+  fallbackName?: string,
+): Promise<ZoomRecordingMatch | null> {
+  const meetings = await listRecordings(dateHint, addDays(dateHint, 1));
+  const meeting = meetings.find((m) => String(m.id) === meetingId);
+  return meeting ? toRecordingMatch(meeting, fallbackName) : null;
+}
+
 export async function findRecordingForSession(session: LiveSession): Promise<ZoomRecordingMatch | null> {
   if (!session.zoom_meeting_id) return null;
   return findRecordingByMeetingId(session.zoom_meeting_id, session.session_date, session.title);
+}
+
+export interface ZoomRecordingInstance {
+  uuid: string;
+  match: ZoomRecordingMatch;
+}
+
+// Same numeric meeting ID matching as findRecordingByMeetingId, but returns
+// EVERY completed recording instance in the window instead of the first —
+// needed for always-open Rooms (see sessionRecordingService.ingestRecordingForRoom),
+// whose meeting_link is reused indefinitely (joinVideoRoom mints it once and
+// every join reuses it), so "one meeting ID" can legitimately have many
+// distinct recordings over time, each with its own `uuid`. Callers dedupe by
+// uuid — this function does not, since it has no notion of "already ingested."
+export async function findRecordingInstancesByMeetingId(
+  meetingId: string,
+  fromDate: string,
+  toDate: string,
+  fallbackName?: string,
+): Promise<ZoomRecordingInstance[]> {
+  const meetings = await listRecordings(fromDate, toDate);
+  const out: ZoomRecordingInstance[] = [];
+  for (const meeting of meetings) {
+    if (String(meeting.id) !== meetingId) continue;
+    const match = toRecordingMatch(meeting, fallbackName);
+    if (match) out.push({ uuid: meeting.uuid, match });
+  }
+  return out;
+}
+
+// Pulls the numeric Zoom meeting ID out of a join URL like
+// https://colaberry.zoom.us/j/89581408269?pwd=... — CommunityRoom has no
+// separate "meeting_provider" column (only RoomBooking does), so for
+// always-open Rooms the URL shape IS the provider signal.
+export function extractZoomMeetingId(meetingLink: string | null | undefined): string | null {
+  if (!meetingLink) return null;
+  const match = meetingLink.match(/zoom\.us\/j\/(\d+)/);
+  return match ? match[1] : null;
 }
 
 // Streams a Zoom recording's bytes — never buffers the whole file in memory
