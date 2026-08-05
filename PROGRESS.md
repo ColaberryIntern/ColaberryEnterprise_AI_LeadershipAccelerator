@@ -13487,3 +13487,23 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Notes: This discovery (CRA test runner reachable via `npx`, not the direct
     `node_modules/.bin` path) will be applied to the remaining T013/T014 panels
     too, strengthening their verification beyond what T010 assumed was possible.
+
+- [x] **T012 - learner-stage policies panel (real implementation, replaces T010 placeholder)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/pages/admin/governance/LearnerStagePolicies.tsx`
+    replaced with the real panel - 5 mode cards, mix % editor with dynamic
+    categories (rendered from `Object.keys(policy.mix)`, not a hardcoded list,
+    since each mode's category set differs per design doc §10's table), a
+    client-side sum-to-100% check gating Save (mirrors
+    `AdminCapeSettingsPage.tsx`'s `sumOk` pattern), explicit-save-only (no
+    autosave on slider drag), a distinguishable "no changes to save" no-op vs a
+    real versioned save, and per-mode version history. Added
+    `LearnerStagePolicies.smoke.test.tsx` (same no-browser pattern as T011).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh
+    evidence: tsc clean, smoke test re-run and passing, confirmed dynamic
+    category rendering would not silently break for a mode with a different
+    category set, confirmed Save is the only write path, confirmed the
+    versioned-vs-no-op distinction reads the real API flag).
+  - Notes: Matches T011's now-established pattern of pairing every new panel
+    with a lightweight no-browser smoke test.
