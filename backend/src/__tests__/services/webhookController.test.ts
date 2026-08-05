@@ -31,11 +31,31 @@ jest.mock('../../services/automationService', () => ({
   runEnrollmentAutomation: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { handlePaySimpleWebhook } from '../../controllers/webhookController';
+jest.mock('../../services/subscriptionService', () => ({
+  activateByRef: jest.fn(),
+  isSubscriptionRef: jest.fn().mockReturnValue(false),
+}));
+
+jest.mock('../../services/zoomService', () => ({
+  verifyZoomWebhookSignature: jest.fn(),
+  computeZoomWebhookEncryptedToken: jest.fn(),
+}));
+
+jest.mock('../../models/LiveSession', () => ({ findOne: jest.fn() }));
+
+jest.mock('../../services/sessionRecordingService', () => ({
+  ingestRecordingForSession: jest.fn(),
+}));
+
+import { handlePaySimpleWebhook, handleZoomWebhook } from '../../controllers/webhookController';
 import { verifyWebhookSignature } from '../../services/paysimpleService';
 import { markEnrollmentPaid, markEnrollmentFailed } from '../../services/enrollmentService';
 import { Cohort, EnrollmentLead } from '../../models';
 import { runEnrollmentAutomation } from '../../services/automationService';
+import { activateByRef, isSubscriptionRef } from '../../services/subscriptionService';
+import { verifyZoomWebhookSignature, computeZoomWebhookEncryptedToken } from '../../services/zoomService';
+import LiveSession from '../../models/LiveSession';
+import { ingestRecordingForSession } from '../../services/sessionRecordingService';
 
 function mockRequest(body: any, headers: Record<string, string> = {}): Partial<Request> {
   return { body, headers };
@@ -296,6 +316,69 @@ describe('handlePaySimpleWebhook', () => {
     expect(EnrollmentLead.findOrCreate).not.toHaveBeenCalled();
   });
 
+  /**
+   * The real request shape. The route parses the body with express.raw()
+   * specifically so req.body is a Buffer of PaySimple's exact original
+   * bytes — signature verification MUST be computed over that Buffer, not
+   * a JSON.stringify() of an already-parsed object (which can never
+   * reproduce byte-identical JSON: key order, spacing, and number
+   * formatting can all differ from the source). This was the actual
+   * production bug, found live 2026-07-30: every real webhook call was
+   * silently rejected here, so no self-serve subscription payment ever
+   * activated automatically.
+   */
+  describe('real Buffer request body (as express.raw() actually delivers it)', () => {
+    it('verifies the signature against the raw buffer bytes, not a re-serialized object', async () => {
+      (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+      (markEnrollmentPaid as jest.Mock).mockResolvedValue(MOCK_ENROLLMENT);
+      (Cohort.findByPk as jest.Mock).mockResolvedValue(MOCK_COHORT);
+
+      // Deliberately formatted differently than JSON.stringify(PAYMENT_CREATED_EVENT)
+      // would produce (extra whitespace) — proving the exact bytes are what get hashed.
+      const rawJson = '{\n  "event_type": "payment_created",\n  "data": {\n    "order_external_id": "CB-42620872-1710700000000",\n    "payment_id": 29124495,\n    "amount": 4500\n  }\n}';
+      const buf = Buffer.from(rawJson, 'utf8');
+      const req = mockRequest(buf, { 'paysimple-hmac-sha256': 'sig' });
+      const res = mockResponse();
+
+      await handlePaySimpleWebhook(req as Request, res as Response);
+
+      expect(verifyWebhookSignature).toHaveBeenCalledWith(rawJson, 'sig');
+      expect(markEnrollmentPaid).toHaveBeenCalledWith('CB-42620872-1710700000000', { paymentId: 29124495, amount: 4500 });
+    });
+
+    it('activates a subscription (SUB- ref) parsed from a real Buffer body', async () => {
+      (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
+      (isSubscriptionRef as jest.Mock).mockReturnValue(true);
+      (activateByRef as jest.Mock).mockResolvedValue({ id: 'sub-1', plan: 'monthly', enrollment_id: 'enroll-123' });
+
+      const event = {
+        event_type: 'payment_created',
+        data: { order_external_id: 'SUB-abc123-ms7r1cx7', payment_id: 555, amount: 199 },
+      };
+      const buf = Buffer.from(JSON.stringify(event), 'utf8');
+      const req = mockRequest(buf, { 'paysimple-hmac-sha256': 'sig' });
+      const res = mockResponse();
+
+      await handlePaySimpleWebhook(req as Request, res as Response);
+
+      expect(activateByRef).toHaveBeenCalledWith('SUB-abc123-ms7r1cx7', { paymentId: 555, amount: 199 });
+      expect(res.json).toHaveBeenCalledWith({ received: true });
+    });
+
+    it('rejects an invalid signature computed over a real Buffer body (no false positive from the fix)', async () => {
+      (verifyWebhookSignature as jest.Mock).mockReturnValue(false);
+
+      const buf = Buffer.from(JSON.stringify(PAYMENT_CREATED_EVENT), 'utf8');
+      const req = mockRequest(buf, { 'paysimple-hmac-sha256': 'bad-sig' });
+      const res = mockResponse();
+
+      await handlePaySimpleWebhook(req as Request, res as Response);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(markEnrollmentPaid).not.toHaveBeenCalled();
+    });
+  });
+
   it('idempotency: duplicate payment returns early without triggering automation again', async () => {
     (verifyWebhookSignature as jest.Mock).mockReturnValue(true);
     // markEnrollmentPaid returns the already-paid enrollment (status=paid, no changes)
@@ -313,5 +396,121 @@ describe('handlePaySimpleWebhook', () => {
 
     // Still responds 200 (PaySimple will retry otherwise)
     expect(res.json).toHaveBeenCalledWith({ received: true });
+  });
+});
+
+describe('handleZoomWebhook', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('answers the one-time endpoint.url_validation handshake correctly', async () => {
+    (computeZoomWebhookEncryptedToken as jest.Mock).mockReturnValue('encrypted-abc');
+
+    const event = { event: 'endpoint.url_validation', payload: { plainToken: 'plain-abc' }, event_ts: 1 };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), {});
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(computeZoomWebhookEncryptedToken).toHaveBeenCalledWith('plain-abc');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ plainToken: 'plain-abc', encryptedToken: 'encrypted-abc' });
+    // No signature check for the handshake itself — it isn't signed the normal way.
+    expect(verifyZoomWebhookSignature).not.toHaveBeenCalled();
+  });
+
+  it('rejects a real event with an invalid/missing signature', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(false);
+
+    const event = { event: 'recording.completed', payload: { object: { id: 123 } } };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'bad', 'x-zm-request-timestamp': '1' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(LiveSession.findOne).not.toHaveBeenCalled();
+  });
+
+  it('benign-acks a non recording.completed event without touching the DB', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+
+    const event = { event: 'meeting.started', payload: { object: { id: 123 } } };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ received: true });
+    expect(LiveSession.findOne).not.toHaveBeenCalled();
+  });
+
+  it('benign-acks recording.completed for a meeting that matches no LiveSession (account-wide subscription, non-class meeting)', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
+
+    const event = { event: 'recording.completed', payload: { object: { id: 999, topic: 'Unrelated 1:1', recording_files: [] } } };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ received: true, matched: false });
+    expect(ingestRecordingForSession).not.toHaveBeenCalled();
+  });
+
+  it('matches a session, picks the largest MP4 when more than one is present, and ingests with the webhook-supplied download_token', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    const session = { id: 'session-1', title: 'Week 1 · Build Day', zoom_meeting_id: '123' };
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(session);
+    (ingestRecordingForSession as jest.Mock).mockResolvedValue({ status: 'ingested', resourceId: 'r1' });
+
+    const event = {
+      event: 'recording.completed',
+      download_token: 'short-lived-token',
+      payload: {
+        object: {
+          id: 123,
+          topic: 'Week 1 Build Day',
+          recording_files: [
+            { file_type: 'MP4', file_size: 100, download_url: 'https://zoom.us/rec/small' },
+            { file_type: 'MP4', file_size: 900, download_url: 'https://zoom.us/rec/large' },
+            { file_type: 'CHAT', file_size: 10, download_url: 'https://zoom.us/rec/chat' },
+          ],
+        },
+      },
+    };
+    const req = mockRequest(Buffer.from(JSON.stringify(event), 'utf8'), { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(LiveSession.findOne).toHaveBeenCalledWith({ where: { zoom_meeting_id: '123' } });
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({ received: true, matched: true });
+    expect(ingestRecordingForSession).toHaveBeenCalledWith(session, {
+      downloadUrl: 'https://zoom.us/rec/large',
+      downloadToken: 'short-lived-token',
+      name: 'Week 1 Build Day.mp4',
+      mimeType: 'video/mp4',
+      sizeBytes: 900,
+    });
+  });
+
+  it('verifies the signature against the raw buffer bytes, not a re-serialized object (mirrors the PaySimple fix above)', async () => {
+    (verifyZoomWebhookSignature as jest.Mock).mockReturnValue(true);
+    (LiveSession.findOne as jest.Mock).mockResolvedValue(null);
+
+    const rawJson = '{\n  "event": "recording.completed",\n  "payload": {\n    "object": {\n      "id": 123,\n      "recording_files": []\n    }\n  }\n}';
+    const buf = Buffer.from(rawJson, 'utf8');
+    const req = mockRequest(buf, { 'x-zm-signature': 'v0=x', 'x-zm-request-timestamp': '1700000000' });
+    const res = mockResponse();
+
+    await handleZoomWebhook(req as Request, res as Response);
+
+    expect(verifyZoomWebhookSignature).toHaveBeenCalledWith(rawJson, '1700000000', 'v0=x');
   });
 });

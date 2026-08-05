@@ -133,8 +133,20 @@ export async function emitAiEvent(params: {
   error_class?: string | null;
   cache_hit?: boolean;
   metadata?: Record<string, any> | null;
+  /** TBI T003 / P2-3 — which hardcoded/DB-backed prompt produced this call, e.g. "maya-chat-v1". */
+  prompt_version?: string | null;
+  /** TBI T003 / P2-3 — PromptTemplate.id, when the call used a DB-backed template rather than a hardcoded prompt. */
+  prompt_template_id?: string | null;
 }): Promise<void> {
   try {
+    // No schema change (Assumption 3): prompt_version/prompt_template_id live inside the
+    // existing metadata JSONB rather than new ai_events columns, same as tool.call's
+    // arg_keys or retrieval's sources.
+    const metadata: Record<string, any> | null =
+      params.prompt_version || params.prompt_template_id
+        ? { ...(params.metadata ?? {}), prompt_version: params.prompt_version ?? undefined, prompt_template_id: params.prompt_template_id ?? undefined }
+        : (params.metadata ?? null);
+
     await AiEvent.create({
       event_type: params.event_type,
       outcome: params.outcome,
@@ -152,7 +164,7 @@ export async function emitAiEvent(params: {
       duration_ms: params.duration_ms ?? null,
       error_class: params.error_class ?? null,
       cache_hit: params.cache_hit ?? false,
-      metadata: params.metadata ?? null,
+      metadata,
     });
   } catch (err: any) {
     console.error('[emitAiEvent] Failed to persist ai_event:', err?.message);

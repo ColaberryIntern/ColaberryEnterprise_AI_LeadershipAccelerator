@@ -13,6 +13,7 @@ import { Op } from 'sequelize';
 import { Lead, CampaignLead, ScheduledEmail, UnsubscribeEvent } from '../models';
 import { logActivity } from './activityService';
 import { revokeConsent } from './consentService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 // ---------------------------------------------------------------------------
 // STOP keyword detection
@@ -134,7 +135,7 @@ export async function processOptOut(
   reason: string,
   source: string = 'system',
 ): Promise<{ cancelled: number }> {
-  console.log(`[Unsubscribe] Processing opt-out for lead ${leadId} via ${channel}: ${reason}`);
+  console.log(`[Unsubscribe] Processing opt-out for lead ${leadId} via ${channel}: ${redactForLogs(reason)}`);
 
   // 1. Update lead status → unsubscribed
   await Lead.update(

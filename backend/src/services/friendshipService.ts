@@ -1,6 +1,7 @@
 import { Op } from 'sequelize';
 import Friendship, { FriendshipStatus } from '../models/Friendship';
 import Enrollment from '../models/Enrollment';
+import { isStaffOrMgmt } from './access/staffAccess';
 
 // Per-person status the directory/rail shows for someone else, from my POV.
 export type DirectoryStatus = 'friend' | 'requested' | 'incoming' | 'none';
@@ -31,11 +32,13 @@ async function notify(recipient: string, actor: string, type: 'friend_request' |
 /**
  * Send a friend request (or auto-accept the reverse if they already asked me).
  * Idempotent: re-sending an existing request is a no-op that returns the
- * current state. Cohort-scoped for v1.
+ * current state. Cohort-scoped for students; staff/mgmt bypass it, matching
+ * the same cross-cohort exception already applied to DMs (dmService.ts) and
+ * profile viewing / the People directory (communityService.ts).
  */
 export async function sendFriendRequest(me: string, targetId: string): Promise<{ status: 'requested' | 'friend' }> {
   if (!targetId || targetId === me) throw new FriendRequestError('Invalid target');
-  if (!(await sameCohort(me, targetId))) {
+  if (!(await sameCohort(me, targetId)) && !(await isStaffOrMgmt(me))) {
     throw new FriendRequestError('You can only connect with people in your cohort');
   }
 

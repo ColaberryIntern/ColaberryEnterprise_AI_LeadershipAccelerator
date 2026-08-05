@@ -46,7 +46,7 @@ export interface TimelineFeedCard {
   lock_reason?: string | null;   // when status='locked', why (e.g. "Finish the Learn tasks first")
   quiz_score: number | null;
   completed_at: string | null;
-  video?: { url: string; presenter: string | null; poster: string | null; title?: string | null } | null;
+  video?: { url: string; presenter: string | null; poster: string | null; title?: string | null; duration_seconds?: number | null } | null;
   image?: string | null;   // the item's OWN image (blog cover, testimonial still) — overrides the generic type visual
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;   // title = the generated lesson title ("Overview — {week topic}"), display beats the raw card title
   course?: { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null;   // Skills Course (skills_jar): class name + link + completion mode

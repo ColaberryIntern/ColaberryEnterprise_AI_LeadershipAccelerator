@@ -1,4 +1,5 @@
 import cron from 'node-cron';
+import { wrapWithDeadLetter } from './deadLetterService';
 import { seedAgentRegistry } from './agentRegistrySeed';
 import { seedDepartments } from './departmentSeed';
 import { seedAdmissionsKnowledge } from './admissionsKnowledgeSeed';
@@ -91,6 +92,7 @@ import { runCoryStrategicCycle, runSelfEvolution } from './cory/coryBrain';
 import { runMetaAgentLoop } from '../intelligence/meta/metaAgentLoop';
 import { resolveAllCronSchedules, ResolvedCronSchedule } from './governanceResolutionService';
 import { expireStaleProposals } from './proposalCleanupService';
+import { trackAgentRun } from './agentRunTracker';
 
 // ─── Schedule Registry ──────────────────────────────────────────────────────
 // Maps agent_name (matching cron_schedule_configs rows) to runner + hardcoded default.
@@ -119,8 +121,14 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
 
   // Intelligence layer
   { agentName: 'AutonomousRequirementExpansion', hardcodedSchedule: '3,18,33,48 * * * *', runner: async () => { const { runExpansionCycle } = await import('./autonomousRequirementExpansionService'); return runExpansionCycle(); }, label: 'Autonomous requirement expansion' },
-  { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: runAutonomousCycle, label: 'Autonomous engine' },
-  { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: runCoryStrategicCycle, label: 'Cory Brain strategic cycle' },
+  // AutonomousEngine/AICOOStrategicCycle/MetaAgentLoop (below)/CoryEvolutionCycle (bottom of
+  // this array) are wrapped in trackAgentRun() — unlike most entries in this registry, their
+  // runners (autonomousEngine.ts/cory/coryBrain.ts/metaAgentLoop.ts) never touch the AiAgent
+  // row themselves, so without this wrapper they run correctly but always show run_count=0
+  // on the Trust Command Center. Confirmed via source read (2026-07-31 registry audit): neither
+  // file calls AiAgent.update for its own row.
+  { agentName: 'AutonomousEngine', hardcodedSchedule: '5,15,25,35,45,55 * * * *', runner: () => trackAgentRun('AutonomousEngine', runAutonomousCycle), label: 'Autonomous engine' },
+  { agentName: 'AICOOStrategicCycle', hardcodedSchedule: '0,30 * * * *', runner: () => trackAgentRun('AICOOStrategicCycle', runCoryStrategicCycle), label: 'Cory Brain strategic cycle' },
   { agentName: 'CompanyStrategicCycle', hardcodedSchedule: '15,45 * * * *', runner: async () => {
     const { isCompanyLayerEnabled } = await import('./company/companyToCoryAdapter');
     if (!(await isCompanyLayerEnabled())) return;
@@ -130,7 +138,7 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
     const { runCompanyStrategicCycle } = await import('./company/companyStrategyAgent');
     return runCompanyStrategicCycle((company as any).id);
   }, label: 'Company CEO strategic cycle' },
-  { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: runMetaAgentLoop, label: 'Meta-agent loop' },
+  { agentName: 'MetaAgentLoop', hardcodedSchedule: '2 * * * *', runner: () => trackAgentRun('MetaAgentLoop', runMetaAgentLoop), label: 'Meta-agent loop' },
   { agentName: 'ApolloLeadIntelligenceAgent', hardcodedSchedule: '0 */6 * * *', runner: runLeadIntelligence, label: 'Apollo lead intelligence' },
   { agentName: 'ApolloWeeklyEnrollmentAgent', hardcodedSchedule: '0 14 * * 1-5', runner: runWeeklyLeadEnrollment, label: 'Daily cold lead enrollment (Mon-Fri 9 AM CT, 20/day)' },
 
@@ -226,7 +234,21 @@ const SCHEDULE_REGISTRY: ScheduleEntry[] = [
   { agentName: 'FinanceSuperAgent', hardcodedSchedule: '17,47 * * * *', runner: runFinanceSuperAgent, label: 'Finance super agent' },
 
   // Cory self-evolution cycle (every 6 hours, offset from strategic cycle)
-  { agentName: 'CoryEvolutionCycle', hardcodedSchedule: '20 */6 * * *', runner: async () => { await runSelfEvolution(); return null as any; }, label: 'Cory self-evolution cycle' },
+  { agentName: 'CoryEvolutionCycle', hardcodedSchedule: '20 */6 * * *', runner: () => trackAgentRun('CoryEvolutionCycle', runSelfEvolution), label: 'Cory self-evolution cycle' },
+
+  // AI Workforce directors (orgRegistry.ts) — one tool + one action each. All
+  // seed disabled (agentRegistrySeed.ts); each runner is a no-op via the
+  // workforceAgentRuntime gate until turned on. Marketing is deliberately NOT
+  // here — it is manual-trigger only, invoked from the admin dashboard.
+  { agentName: 'WorkforceStudentSuccessDirector', hardcodedSchedule: '0 6 * * *', runner: async () => { const { runStudentSuccessDirector } = await import('./workforce/directorActions'); return runStudentSuccessDirector(); }, label: 'AI Workforce: Student Success director' },
+  { agentName: 'WorkforceCurriculumDirector', hardcodedSchedule: '10 6 * * *', runner: async () => { const { runCurriculumDirector } = await import('./workforce/directorActions'); return runCurriculumDirector(); }, label: 'AI Workforce: Curriculum director' },
+  { agentName: 'WorkforceCareerDirector', hardcodedSchedule: '20 6 * * *', runner: async () => { const { runCareerDirector } = await import('./workforce/directorActions'); return runCareerDirector(); }, label: 'AI Workforce: Career director' },
+  { agentName: 'WorkforceCertificationDirector', hardcodedSchedule: '30 6 * * *', runner: async () => { const { runCertificationDirector } = await import('./workforce/directorActions'); return runCertificationDirector(); }, label: 'AI Workforce: Certification director' },
+  { agentName: 'WorkforceFinanceDirector', hardcodedSchedule: '40 6 * * *', runner: async () => { const { runFinanceDirector } = await import('./workforce/directorActions'); return runFinanceDirector(); }, label: 'AI Workforce: Finance director' },
+  { agentName: 'WorkforceOperationsDirector', hardcodedSchedule: '*/15 * * * *', runner: async () => { const { runOperationsDirector } = await import('./workforce/directorActions'); return runOperationsDirector(); }, label: 'AI Workforce: Operations director' },
+  { agentName: 'WorkforceCommunityDirector', hardcodedSchedule: '50 6 * * *', runner: async () => { const { runCommunityDirector } = await import('./workforce/directorActions'); return runCommunityDirector(); }, label: 'AI Workforce: Community director' },
+  { agentName: 'WorkforceTechnologyDirector', hardcodedSchedule: '7,22,37,52 * * * *', runner: async () => { const { runTechnologyDirector } = await import('./workforce/directorActions'); return runTechnologyDirector(); }, label: 'AI Workforce: Technology director' },
+  { agentName: 'WorkforceResearchDirector', hardcodedSchedule: '0 7 * * 0', runner: async () => { const { runResearchDirector } = await import('./workforce/directorActions'); return runResearchDirector(); }, label: 'AI Workforce: Research director (weekly)' },
 ];
 
 // Executive briefings use dynamic imports, registered separately
@@ -418,8 +440,10 @@ export async function startAIOpsScheduler(): Promise<void> {
     }
 
     cron.schedule(schedule, () => {
-      entry.runner().catch((err) => {
-        console.error(`[AI Ops] ${entry.label} cron error:`, err);
+      wrapWithDeadLetter(entry.agentName, entry.label, entry.runner).catch((err) => {
+        // wrapWithDeadLetter itself never throws (it swallows both the job's error and
+        // its own DLQ-write error) — this catch exists only as a last-resort guard.
+        console.error(`[AI Ops] ${entry.label} cron error (dead-letter wrapper itself threw):`, err);
       });
     }, { timezone: 'America/Chicago' });
 

@@ -105,6 +105,16 @@ export const env = {
   // Discover its id with `node backend/src/scripts/discoverFamilyCalendar.js`.
   googleFamilyCalendarId: process.env.GOOGLE_FAMILY_CALENDAR_ID || '',
 
+  // Zoom (Server-to-Server OAuth app) — replaces Google Meet as the class
+  // video/recording provider; see zoomService.ts. zoomHostEmail is the Zoom
+  // user every class meeting is created under (the account with Cloud
+  // Recording + auto_recording enabled), not the app's own identity.
+  zoomAccountId: process.env.ZOOM_ACCOUNT_ID || '',
+  zoomClientId: process.env.ZOOM_CLIENT_ID || '',
+  zoomClientSecret: process.env.ZOOM_CLIENT_SECRET || '',
+  zoomWebhookSecretToken: process.env.ZOOM_WEBHOOK_SECRET_TOKEN || '',
+  zoomHostEmail: process.env.ZOOM_HOST_EMAIL || '',
+
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
   enableVoiceCallForOverview: process.env.ENABLE_VOICE_CALL_FOR_OVERVIEW === 'true',
@@ -131,6 +141,15 @@ export const env = {
   // per-card/type routing. Default OFF; flag-off keeps the legacy hardcoded
   // CADENCE=2 + fixed provider list + week→bucket→order behavior byte-identical.
   feedControlEnabled: process.env.FEED_CONTROL_ENABLED === 'true',
+  // CAPE Phase 4 — the learning-value ranker (design doc §9, §16 Phase 4). Reorders
+  // the ANCHORED candidate queue in todayFeedComposer.ts by an explainable
+  // skill-gap/prerequisite/goal-fit score instead of raw gatherAnchored() order.
+  // Default OFF everywhere including production — flag-off keeps Today feed
+  // ranking byte-identical to pre-Phase-4 behavior (see
+  // todayFeedComposer.capeFlagOff.test.ts). Not documented in .env.example,
+  // matching the established convention for this flag family (FEED_CONTROL_ENABLED/
+  // TODAY_FEED_V2_ENABLED/TODAY_AGGREGATE_SOURCES are likewise inline-only).
+  capeLearningValueRankerEnabled: process.env.CAPE_LEARNING_VALUE_RANKER_ENABLED === 'true',
   // Content paywall — gate the full 12-week curriculum behind PAYMENT (paid /
   // admin-comp / staff / business-workspace), not just enrollment_type='explorer'.
   // Default OFF: flag-off preserves the legacy explorer-only Week-0 gate byte-for-
@@ -138,6 +157,15 @@ export const env = {
   // unpaid members see the free preview until they pay. See
   // services/access/contentEntitlement.ts.
   contentPaidGateEnabled: process.env.CONTENT_PAID_GATE_ENABLED === 'true',
+  // Week-start gating — TODAY TIMELINE ONLY (does not affect Classroom): a
+  // curriculum week's cards stay off the Today feed (except that week's own
+  // first/entry card) until the student completes >=1 completable card in that
+  // week. Classroom (`/portal/classroom`, timelineGatingService.evaluateCardLock)
+  // is completely unaffected — this flag is only read inside
+  // todayAnchoredSources.classCandidates. Default OFF: flag-off preserves the
+  // legacy "everything visible" behavior byte-for-byte. See
+  // todayFeedPlan.weekStartedForToday.
+  timelineWeekStartGateEnabled: process.env.TIMELINE_WEEK_START_GATE_ENABLED === 'true',
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',
@@ -254,4 +282,6 @@ export const env = {
   vaErpRequestTimeoutMs: parseInt(process.env.VA_ERP_REQUEST_TIMEOUT_MS || '15000', 10),
   vaErpMaxRetries: parseInt(process.env.VA_ERP_MAX_RETRIES || '3', 10),
   vaErpRoleAssignmentsJson: process.env.VA_ERP_ROLE_ASSIGNMENTS || '{}',
+  vaErpBatchSize: parseInt(process.env.VA_ERP_BATCH_SIZE || '10', 10),
+  vaErpBatchDelayMs: parseInt(process.env.VA_ERP_BATCH_DELAY_MS || '0', 10),
 };

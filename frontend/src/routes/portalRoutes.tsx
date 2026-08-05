@@ -11,13 +11,11 @@ import PortalMgmtEnterPage from '../pages/portal/PortalMgmtEnterPage';
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
 import PortalHandoffPage from '../pages/portal/PortalHandoffPage';
 import ClassCheckinPage from '../pages/portal/ClassCheckinPage';
-import PortalCurriculumPage from '../pages/portal/PortalCurriculumPage';
 import ClassroomPage from '../pages/portal/ClassroomPage';
 import PageGate from '../components/paywall/PageGate';
 import RuntimeWorkspace from '../pages/portal/runtime/RuntimeWorkspace';
 import PortalLessonPage from '../pages/portal/PortalLessonPage';
 import PortalSessionsPage from '../pages/portal/PortalSessionsPage';
-import PortalSessionDetailPage from '../pages/portal/PortalSessionDetailPage';
 import PortalAssignmentsPage from '../pages/portal/PortalAssignmentsPage';
 import PortalProgressPage from '../pages/portal/PortalProgressPage';
 import TodayShell from '../pages/portal/today/TodayShell';
@@ -80,11 +78,20 @@ const portalRoutes = (
       <Route path="/portal/dashboard" element={<Navigate to="/portal/today" replace />} />
       {/* Legacy student pages that still use the lean PortalLayout chrome. */}
       <Route element={<PortalLayout />}>
-        <Route path="/portal/curriculum" element={<PortalCurriculumPage />} />
+        {/* Retired: the legacy curriculum-modules browser had zero CurriculumModule
+            rows linked to any current cohort and 500'd on every open (found
+            2026-07-30 via a real student report). Redirect rather than delete the
+            route outright, in case an old bookmark or email link still points here. */}
+        <Route path="/portal/curriculum" element={<Navigate to="/portal/today" replace />} />
         <Route path="/portal/classroom/week/:weekNum" element={<ClassroomWeekPage />} />
         <Route path="/portal/curriculum/lessons/:lessonId" element={<PortalLessonPage />} />
         <Route path="/portal/sessions" element={<PortalSessionsPage />} />
-        <Route path="/portal/sessions/:id" element={<PortalSessionDetailPage />} />
+        {/* Retired: the class waiting room is now the session's Colaberry
+            Commons room (see NextLiveClassCard/ClassroomPage/etc, which all
+            link to /portal/rooms/:room_id directly). Redirect rather than
+            delete the route outright, in case an old bookmark or email link
+            still points here — matches the /portal/curriculum precedent above. */}
+        <Route path="/portal/sessions/:id" element={<Navigate to="/portal/sessions" replace />} />
         <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
         <Route path="/portal/progress" element={<PortalProgressPage />} />
       </Route>

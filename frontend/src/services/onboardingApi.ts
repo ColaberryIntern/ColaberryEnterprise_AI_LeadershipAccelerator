@@ -1,4 +1,5 @@
 import portalApi from '../utils/portalApi';
+import { getParticipantToken } from '../utils/participantToken';
 import type { Band } from './bandLadder';
 
 // Re-export the pure 5-band mirror so callers have one import surface for the
@@ -164,11 +165,51 @@ export interface NextLiveSession {
   meeting_link: string | null;
   meeting_provider: string | null;
   timezone: string | null; // cohort IANA zone (e.g. America/Chicago) for the time label
+  room_id: string | null; // linked Colaberry Commons room (the class's waiting room), if provisioned
 }
 /** The student's next scheduled/live class session, or null if none is upcoming. */
 export async function getNextSession(): Promise<NextLiveSession | null> {
   const { data } = await portalApi.get<{ next_session: NextLiveSession | null }>('/api/portal/next-session');
   return data.next_session ?? null;
+}
+
+// ── A specific class session's detail — used by a Colaberry Commons room to
+// render its class banner (countdown / live+join / recap) when the room is
+// linked to an official class via CommunityRoom.linked_live_session_id. Same
+// backing endpoint PortalSessionDetailPage uses. ──────────────────────────────
+export interface ClassSessionInfo {
+  id: string;
+  session_number: number;
+  title: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  meeting_link: string | null;
+  recording_url: string | null;
+}
+export async function fetchClassSessionDetail(sessionId: string): Promise<ClassSessionInfo> {
+  const { data } = await portalApi.get<{ session: ClassSessionInfo }>(`/api/portal/sessions/${sessionId}`);
+  return data.session;
+}
+
+// ── The full list of the student's own cohort sessions — used by the Rooms
+// page's "Your Classes" rail section so students can reach any class's room
+// (completed or upcoming) without leaving Rooms. Same backing endpoint
+// PortalSessionsPage uses. ────────────────────────────────────────────────
+export interface MySession {
+  id: string;
+  session_number: number;
+  title: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  room_id: string | null;
+}
+export async function fetchMySessions(): Promise<MySession[]> {
+  const { data } = await portalApi.get<{ sessions: MySession[] }>('/api/portal/sessions');
+  return data.sessions ?? [];
 }
 
 // ── Join a live session (records attendance + awards session_attended once) ───
@@ -182,12 +223,12 @@ export async function joinSession(sessionId: string, source: 'classroom' | 'meet
   return data;
 }
 
-/** Best-effort "left the Meet tab" beacon, fired on page hide/unload. Uses a
+/** Best-effort "left the call tab" beacon, fired on page hide/unload. Uses a
  * manual keepalive fetch (not axios) so the request can survive the page
  * unloading — this is a proxy signal for the deck's ticker, not a reliable
- * presence system (no real Google Meet join/leave webhook is available to us). */
+ * presence system (no real join/leave webhook is wired up for this). */
 export function leaveMeetingBeacon(sessionId: string): void {
-  const token = localStorage.getItem('participant_token');
+  const token = getParticipantToken();
   if (!token) return;
   const base = process.env.REACT_APP_API_URL || '';
   fetch(`${base}/api/portal/sessions/${sessionId}/leave-meet`, {

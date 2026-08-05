@@ -14,7 +14,7 @@ import { emitPointsEarned } from '../../services/pointsFx';
 // lands here. The route is PUBLIC — they may not be signed in yet:
 //   • Signed in  → we record attendance via joinSession() (idempotent), show a
 //     big "you're checked in" confirmation, fire the points burst if awarded,
-//     and offer "Enter the class" → the session detail page (Meet + class chat).
+//     and offer "Enter the class" → the session's Colaberry Commons room (Meet + class chat).
 //   • Signed out → we show the class name and send them to sign in.
 // Any info-load failure fails soft with a friendly retry message (never a crash).
 //
@@ -27,6 +27,7 @@ interface CheckinInfo {
   session_date: string;
   start_time: string;
   cohort_name: string;
+  room_id: string | null;
 }
 
 type Phase = 'loading' | 'load_error' | 'ready';
@@ -144,7 +145,18 @@ const ClassCheckinPage: React.FC = () => {
     doJoin();
   }, [phase, isAuthenticated, doJoin]);
 
-  const enterClass = () => navigate(`/portal/sessions/${sessionId}`);
+  // The session's Colaberry Commons room (Meet + class chat). Falls back to
+  // Today (never the retired /portal/sessions/:id page, removed in Phase 4
+  // of the waiting-room plan) for the rare session with no room yet — the
+  // student is already checked in either way, so Today's own Next-live-class
+  // card picks up from there.
+  const enterClass = () => navigate(info?.room_id ? `/portal/rooms/${info.room_id}` : '/portal/today');
+
+  // Carry the student's intent through sign-in. Without this the magic-link
+  // round trip lands them on /portal/today and their attendance is never
+  // recorded — the QR looks like it "did nothing". The value is re-validated
+  // server-side before it goes into the email, and again before we navigate.
+  const loginHref = `/portal/login?next=${encodeURIComponent(`/portal/class-checkin/${sessionId}`)}`;
 
   return (
     <div className="cbck-root">
@@ -188,8 +200,8 @@ const ClassCheckinPage: React.FC = () => {
                 <h1 className="cbck-title">{info.title}</h1>
                 <p className="cbck-meta">{formatDate(info.session_date)}{info.start_time ? ` · ${formatTime(info.start_time)}` : ''}</p>
                 <p className="cbck-text cbck-text-lead">Log in to check in for this class.</p>
-                <a className="cbck-btn" href="/portal/login">Log in to check in</a>
-                <p className="cbck-text cbck-text-sub">You&rsquo;ll sign in with your enrolled email, then return here to check in.</p>
+                <a className="cbck-btn" href={loginHref}>Log in to check in</a>
+                <p className="cbck-text cbck-text-sub">You&rsquo;ll sign in with your enrolled email, then come straight back here — your check-in finishes automatically.</p>
               </div>
             )}
 

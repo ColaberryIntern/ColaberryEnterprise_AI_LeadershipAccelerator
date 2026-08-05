@@ -117,6 +117,13 @@ export interface WeekClassContent {
      * segment's content (segment id -> beats to insert there). Omit for weeks
      * without any authored. */
     storyBeats?: Record<string, StoryBeat[]>;
+    /** Optional extra survey questions beyond the fixed designChoice/trivia
+     * slots, each tagged with the run-of-show segment to render in (same
+     * shape as kitConfig.ts's InteractionPlacement, inlined here to avoid a
+     * circular import — classSessionPlan.ts stays dependency-free). Spliced
+     * in by kitSpecDaySlides.ts's defaultInteractionsFor(); empty/omitted for
+     * every week that doesn't need more than the 3 default questions. */
+    extraInteractions?: Array<Interaction & { segment: string; eyebrow?: string; title?: string; presenterTip?: string }>;
   };
 
   thursday: {
@@ -296,7 +303,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         'The agentic loop: context window + tools + permissions — what Claude Code can see, do, and is allowed to do',
         'The workflow that scales: explore → plan → code → commit (never skip explore and plan)',
         'Permission modes: Manual (approve each action), Plan (propose then wait), and Auto (run freely) — and when each is safe',
-        'Context management: /compact, /clear, /context — treat the context window as a budget',
+        'Claude Code manages context automatically now — compaction happens in the background, so you focus on direction, not memory management',
         'CLAUDE.md as persistent project memory — Claude reads it every session',
       ],
       realExample: 'Watch one real explore → plan → code → commit loop end to end, then a session where skipping Plan Mode lets Claude edit the wrong area — and what that costs.',
@@ -356,71 +363,87 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
       },
     },
     thursday: {
-      resultPreview: 'A committed Architect Workspace repo with a CLAUDE.md and a first change authored entirely through Claude Code.',
-      readinessCheck: 'Claude Code installed and signed in, VS Code open, your Architect Workspace repo cloned.',
+      resultPreview: 'A governed project foundation — folder structure, docs, and progress tracking — traced back to your own CLAUDE.md and your project requirements, approved by you before Claude created a single folder, and validated as ready for the first component you build in Week 3.',
+      readinessCheck: 'Your CLAUDE.md and a project brief/requirements doc (Project Builder output, a README, or wherever you defined what you\'re building) both present in the repo; Claude Code running.',
       buildMap: [
-        'CP0: clean workspace open',
-        'CP1: a CLAUDE.md that encodes your conventions',
-        'CP2: a real change via explore → plan → code → commit',
-        'CP3: committed and pushed',
+        'CP0: CLAUDE.md confirmed specific and testable',
+        'CP1: governance verified — rules read, project brief located',
+        'CP2: architecture proposed, challenged, and approved',
+        'CP3: foundation built — structure + docs only, no product code',
+        'CP4: foundation validated — ready for Week 3',
       ],
       checkpoints: [
-        { n: 0, label: 'Clean start', detail: 'Architect Workspace repo open in VS Code, Claude Code running.' },
-        { n: 1, label: 'CLAUDE.md steers', detail: 'A CLAUDE.md with 3–5 specific, testable project rules.' },
-        { n: 2, label: 'Change shipped', detail: 'One real change made through explore → plan → code → commit.' },
-        { n: 3, label: 'Committed', detail: 'The change committed and pushed to your repo.' },
+        { n: 0, label: 'CLAUDE.md ready', detail: 'Every rule in your CLAUDE.md is specific and testable, not aspirational.' },
+        { n: 1, label: 'Governance verified', detail: 'Claude has read CLAUDE.md in full and located your project brief — it does not invent the product.' },
+        { n: 2, label: 'Architecture approved', detail: 'A personalized folder tree + rule-to-architecture traceability table, challenged by you, then approved with APPROVE FOUNDATION.' },
+        { n: 3, label: 'Foundation built', detail: 'Only the approved structure, per-folder READMEs, and an architecture doc created — zero product code, zero dependencies.' },
+        { n: 4, label: 'Foundation validated', detail: 'Claude audits itself against CLAUDE.md and reports FOUNDATION VERIFIED — READY FOR WEEK 3.' },
       ],
       prompts: [
         {
-          label: 'Explore', prompt: 'Explore this repo and summarize its structure, entry points, and conventions. Do not change anything yet.',
+          label: 'CLAUDE.md ready-check', prompt: 'Show me the CLAUDE.md at the root of this repository. Confirm every rule in it is specific and testable, not aspirational. If any rule is vague, propose a sharper version — but do not edit the file yet, just show me the diff.',
           pasteWhere: 'Claude Code, in your Architect Workspace repo', ccMode: 'Plan Mode',
-          expectedResult: 'A short written summary of the repo — folders, entry point, and any conventions Claude noticed. No files touched.',
-          stopCondition: 'Claude finishes the summary and stops (nothing to approve — it made no changes).',
-          rescue: 'Not sure the repo is open? Run `pwd` in the terminal first, or tap 🆘 I’m stuck.',
+          expectedResult: 'Confirmation every rule is specific and testable, or a proposed sharper rewrite of any vague rule. No files touched.',
+          stopCondition: 'Claude shows the confirmation or proposed diff and stops.',
+          rescue: 'No CLAUDE.md yet, or Claude Code not already running? Open a terminal once: `cd architect-workspace && claude`, then paste this.',
         },
         {
-          label: 'Author CLAUDE.md', prompt: 'Draft a CLAUDE.md for this project with specific, testable rules for naming, file size, and how to run the tests. Keep only rules that change behavior.',
+          label: 'Governance gate', prompt: 'Read the entire root CLAUDE.md and follow any session-start or verification protocol it requires. Inspect this repository without modifying anything. Then locate my project\'s definition — a requirements doc, Project Builder output, README, or brief describing what I\'m building (if you can\'t find one, stop and ask me where it is — do not invent the product). Summarize: what the project is, who it serves, the primary problem it solves, the tech stack, the CLAUDE.md rules that affect structure, and any protected, legacy, generated, or read-only locations. Do not create or modify any files.',
           pasteWhere: 'Claude Code', ccMode: 'Plan Mode',
-          expectedResult: 'A proposed CLAUDE.md draft with 3–5 specific rules — nothing vague like "write clean code."',
-          stopCondition: 'Claude shows the draft and asks whether to write the file.',
-          rescue: 'Rule sounds vague? Ask Claude "make that rule testable" before approving.',
+          expectedResult: 'A summary of your project and its governing rules, including any protected/legacy areas. Zero files touched.',
+          stopCondition: 'Claude finishes the summary. If it stops and asks for your project brief instead, go find it — don\'t skip this.',
+          rescue: 'No requirements doc exists yet? Point Claude at whatever you have — even a paragraph counts. It must not invent your product.',
         },
         {
-          label: 'Plan a change', prompt: 'In Plan Mode: propose how you would add a health-check endpoint that returns status and version. Show the plan; do not edit yet.',
+          label: 'Architecture proposal', prompt: 'Propose a personalized folder-tree architecture for this project. For every top-level folder, give: its purpose, what belongs there, what must never go there, the CLAUDE.md rule or requirement that supports it, whether it\'s needed NOW/LATER/EXISTING/GENERATED/LEGACY/DO-NOT-TOUCH, and how it will be verified. Only include a folder if my requirements, my stack, an existing convention, or a CLAUDE.md rule supports it — do not copy a generic template. Include a rule-to-architecture traceability table, your assumptions, decisions that need my approval, and the recommended home for my first Week 3 component. Do not create anything yet. End with: ARCHITECTURE APPROVAL REQUIRED.',
           pasteWhere: 'Claude Code', ccMode: 'Plan Mode',
-          expectedResult: 'A step-by-step plan for the health-check endpoint — file(s) to touch, the route, the response shape. No files changed.',
-          stopCondition: 'Claude proposes the plan and waits for your approval.',
-          rescue: 'Plan looks wrong? Just tell Claude what to change — Plan Mode is the seatbelt, revise before approving.',
+          expectedResult: 'A folder tree, a rule-to-architecture traceability table, and the line ARCHITECTURE APPROVAL REQUIRED. No files created.',
+          stopCondition: 'Claude prints ARCHITECTURE APPROVAL REQUIRED and waits. Discuss it as a class — which folder holds the first Week 3 component? what\'s protected? what\'s needed now vs. later? — then type: APPROVE FOUNDATION',
+          rescue: 'Proposal missing a rule or looks wrong? Point out the gap and ask it to re-propose before you approve anything.',
         },
         {
-          label: 'Code + commit', prompt: 'Implement the approved plan, run the tests, then commit with a clear message.',
+          label: 'Approved foundation build', prompt: 'APPROVE FOUNDATION. Create only the approved structure — preserve all existing work, and do not touch protected, generated, legacy, or read-only locations. Do not build product features and do not install any dependencies. Add a short README to each new major folder explaining why it exists, what belongs there, what doesn\'t, and how it will eventually be tested. Then write the full architecture documentation (purpose, principles, folder tree, component responsibilities, rule-to-structure traceability, testing strategy, security boundaries, protected locations, deferred folders, first Week 3 build target, assumptions and risks) in the documentation location CLAUDE.md requires, and update progress tracking exactly as CLAUDE.md requires.',
           pasteWhere: 'Claude Code', ccMode: 'Auto',
-          expectedResult: 'The endpoint exists, tests pass, and a commit lands with a message describing the change.',
-          stopCondition: 'The terminal shows a successful commit hash.',
-          rescue: 'Tests failing? Paste the failing output back to Claude and ask it to fix it — do not skip the tests.',
+          expectedResult: 'The approved folders exist, each with a short README, plus an architecture doc and updated progress tracking — no product code, no installed packages.',
+          stopCondition: 'Claude reports the structure created and shows the new files it wrote.',
+          rescue: 'Did it touch a protected/legacy folder or install something? Stop it, point to the exact CLAUDE.md rule it broke, and have it undo that part.',
+        },
+        {
+          label: 'Validate + report', prompt: 'Audit the foundation you just created. Verify: CLAUDE.md is unchanged, every new folder has a documented responsibility with no conflicts, no implementation code or dependencies were added, no secrets exist, no protected or generated location was touched, and progress tracking was updated. Show the final folder tree, files created, files deliberately not created, which rules drove each decision, and the recommended first Week 3 implementation task. Write a short foundation report. End with exactly one line: FOUNDATION VERIFIED — READY FOR WEEK 3, or FOUNDATION BLOCKED — ACTION REQUIRED with the blocker.',
+          pasteWhere: 'Claude Code', ccMode: 'Auto',
+          expectedResult: 'A validation report ending in exactly FOUNDATION VERIFIED — READY FOR WEEK 3 (or a named blocker).',
+          stopCondition: 'Claude prints the final status line.',
+          rescue: 'Got FOUNDATION BLOCKED? That\'s a correct, valuable outcome — read the blocker with Claude and fix it together; don\'t force past it.',
         },
       ],
-      failureInjection: 'Give Claude a vague CLAUDE.md rule ("write clean code") and watch it get ignored on the next change.',
-      recovery: 'An architect makes rules specific and testable: replace "write clean code" with "functions ≤ 50 lines; no any without a justification comment." Re-run — now the rule bites.',
+      failureInjection: 'Ask Claude to scaffold before it has fully read CLAUDE.md\'s protected/legacy areas — watch it propose creating files inside a DO-NOT-TOUCH or legacy folder.',
+      recovery: 'An architect never approves a plan without checking it against governance first: point Claude back to the specific CLAUDE.md rule it missed and have it re-propose. This is exactly what CP4 validation exists to catch before real damage is done.',
       trivia: {
         kind: 'trivia',
-        q: 'Your context window is almost full mid-task. Best move?',
-        options: ['Keep going and hope', 'Run /compact to summarize and reclaim space', 'Close the terminal', 'Delete CLAUDE.md'],
+        q: 'What has to happen between Claude\'s Architecture Proposal and it actually creating files?',
+        options: ['Nothing — it creates immediately', 'You review it and type APPROVE FOUNDATION', 'Claude asks you to rewrite CLAUDE.md', 'It skips straight to Week 3'],
         answer: 1,
-        reveal: '/compact summarizes the session so far and frees the window without losing the thread.',
+        reveal: 'The approval gate is the whole point of CP2 — a proposal is a plan, not permission to act.',
       },
       beforeAfter: {
-        label: 'The unit of work changed',
-        before: ['Ask AI a question', 'Read the answer', 'Copy it yourself', 'Paste it into 3–5 places', 'Run it manually and hope'],
-        after: ['State the objective', 'Claude explores + plans', 'You approve the plan', 'Claude edits, runs, and tests', 'You review a committed, working change'],
+        label: 'The foundation changed',
+        before: ['Copy a generic starter folder structure', 'Hope it fits your project', 'Start coding immediately', 'Find out later a folder was wrong'],
+        after: ['Claude reads CLAUDE.md + your project brief', 'Proposes a personalized, traced architecture', 'You approve before anything is created', 'The foundation is validated against governance, ready for Week 3'],
       },
     },
     assignment: {
-      title: 'Architect Workspace + CLAUDE.md',
-      deliverables: ['Architect Workspace repo initialized', 'CLAUDE.md committed', 'First PR/commit authored via Claude Code'],
-      proof: 'A short screen recording of your explore → plan → code → commit loop.',
+      title: 'From CLAUDE.md to a Build-Ready Project Foundation',
+      deliverables: [
+        'Personalized repository tree from Claude\'s approved architecture proposal',
+        'Architecture/foundation report + rule-to-architecture traceability table',
+        'Screenshot of the VS Code project tree',
+        'Screenshot of Claude\'s architecture proposal before approval',
+        'GitHub commit showing the foundation',
+        'One-paragraph Week 3 build target',
+      ],
+      proof: 'A short screen recording or GIF walking the approved folder tree, plus the FOUNDATION VERIFIED report.',
     },
-    builderBroadcastFocus: 'the CLAUDE.md that makes Claude follow your standards',
+    builderBroadcastFocus: 'the governed project foundation traced back to their own CLAUDE.md — and exactly where their first Week 3 component will live',
   },
 
   /* ------------------------------------------------------------------ Week 2 */
@@ -431,31 +454,108 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     publicTitle: 'Teach Claude Once and Reuse It Forever',
     monday: {
       tension:
-        'Repeating the same instructions every session does not scale. Agent Skills let you teach Claude a capability once — with a clear description and its own files — and reuse it everywhere, consistently and context-efficiently.',
-      payoffPreview: 'By Thursday you have three project-specific Skills that trigger on demand and are shareable across a team.',
+        'It is 8:05 AM. The executive revenue dashboard says revenue is down 18%. The ETL job says SUCCESS — it ran clean, on schedule, no errors. But the analyst who normally validates the numbers by hand before anyone sees them is out today, and nobody ran that check. The source data actually contains a duplicate order ID, a missing region, a negative revenue amount, and a load timestamp older than 48 hours — a green pipeline only proves the job ran, it never proved the data was trustworthy. The analyst should not be the control. The repeatable procedure should be the control.',
+      payoffPreview: 'By Thursday you adapt this exact pattern into three project-specific Skills of your own — hardened, tested, versioned, and committed.',
       architectureBeats: [
-        'What a Skill is, and how it differs from CLAUDE.md, subagents, and MCP',
-        'Anatomy: frontmatter + an effective description (the trigger) + the instruction body',
-        'Multi-file Skills and scoping tool access to only what the Skill needs',
-        'Packaging and sharing Skills across a team or org',
-        'Why a vague description is the #1 reason a Skill never fires',
+        'data-quality-gate — validates orders/ETL output against a quality contract before anything publishes; PASS/WARN/FAIL + a PUBLISH/BLOCK recommendation',
+        'etl-failure-triage — when the gate blocks, reads logs + run metadata, ranks likely causes with evidence, recommends the next diagnostic step',
+        'executive-dashboard-brief — turns the technical findings into status, business impact, decision, owner, and next-update leadership can act on',
+        'One incident, one connected workflow: Detect → Diagnose → Communicate',
+        'Detection protects the business. Diagnosis restores the system. Communication closes the loop.',
       ],
-      realExample: 'Compare two Skills with the same body but different descriptions — one triggers reliably, one never does. The description is the architecture.',
-      microBuild: 'Author your first Skill: frontmatter, a sharp description, and a 5-line body. Invoke it once to confirm it triggers.',
+      realExample: 'Compare two descriptions for the exact same data-quality-gate body. "Helps with data" never fires — it names no trigger, no output, and collides with every other data-related ask. "Use when the user asks to validate a dataset, CSV, ETL output, query result, or dashboard source before publication" fires reliably, every time, because it names the trigger and the output in the words a data analyst actually uses.',
+      microBuild: 'The gate just blocked the bad data — that stops the bleeding, but the incident is not resolved. Now build the two Skills that finish it: etl-failure-triage investigates why the pipeline produced invalid data, and executive-dashboard-brief turns that investigation into something leadership can act on.',
       designChoice: {
         kind: 'poll',
-        q: 'A task repeats in three places. Skill, CLAUDE.md, or subagent?',
-        options: ['CLAUDE.md — always', 'A Skill — reusable, scoped, invocable on demand', 'A subagent — always', 'Copy-paste the prompt each time'],
-        reveal: 'A repeated, self-contained capability is a Skill. CLAUDE.md is standing context; subagents are for delegated, isolated work.',
+        q: 'The ETL run is green, but the dashboard looks wrong. What should happen first?',
+        options: ['Rebuild the dashboard', 'Rerun the entire ETL pipeline', 'Validate the output against its data-quality contract', 'Ask leadership which number looks suspicious'],
+        answer: 2,
+        reveal: 'A green pipeline proves that the job ran. It does not prove that the resulting data is trustworthy.',
       },
       trivia: {
         kind: 'trivia',
-        q: 'Your Skill never triggers. First thing to check?',
-        options: ['The body length', 'The description — is it specific about when to use it?', 'Your internet', 'The repo name'],
+        q: 'Which part primarily helps Claude recognize when a Skill is relevant?',
+        options: ['Folder color', 'Description', 'Body length', 'Creation date'],
         answer: 1,
-        reveal: 'Claude decides to invoke a Skill from its description. Vague description → no trigger.',
+        reveal: 'Claude scans name + description to decide WHEN to load a Skill — the description is the routing logic, not documentation.',
       },
-      thursdayTrailer: 'Thursday we build three real Skills for your project — and debug one that refuses to fire.',
+      extraInteractions: [
+        {
+          segment: 'deconstruct', kind: 'poll',
+          q: 'The Skill works when you type /data-quality-gate, but not when you ask, "Is this dataset safe to publish?" What should you inspect first?',
+          options: ['Dataset size', 'Skill description', 'Body length', 'CSV filename'],
+          answer: 1,
+          reveal: 'Direct invocation proves the body can run. Natural invocation tests whether the description helps Claude recognize when the Skill is relevant.',
+          eyebrow: '🔬 Deconstruct', title: 'Direct invocation works. Natural does not. Why?',
+          presenterTip: 'This is the trigger-failure diagnosis moment — land it before moving into Harden.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'The gate blocked the dataset. What capability should come next?',
+          options: ['Rebuild the dashboard', 'Add a permanent rule to CLAUDE.md', 'Run a reusable ETL failure-triage procedure', 'Send the entire log to the CFO'],
+          answer: 2,
+          reveal: 'The gate tells us the data is unsafe. Triage determines what evidence explains the failure and what should be tested next.',
+          eyebrow: '🩺 The incident continues', title: 'Data is blocked. What comes next?',
+          presenterTip: 'Take responses, reveal, then move straight into building etl-failure-triage.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'What belongs in the executive incident update?',
+          options: ['The entire pipeline log', 'Every SQL statement tested', 'Status, impact, evidence, decision, owner, and next update', 'A generic statement that IT is investigating'],
+          answer: 2,
+          reveal: 'Leadership needs a decision product, not a technical data dump.',
+          eyebrow: '📣 Leadership is waiting', title: 'What goes in the brief?',
+          presenterTip: 'Take responses, reveal, then move straight into building executive-dashboard-brief.',
+        },
+        {
+          segment: 'trivia', kind: 'trivia',
+          q: 'What does allowed-tools currently do?',
+          options: ['Permanently restricts the Skill to those tools', 'Pre-approves named tools for the invocation turn', 'Prevents automatic Skill invocation', 'Loads every reference file'],
+          answer: 1,
+          reveal: 'Pre-approval and restriction are different controls. allowed-tools pre-approves tools for the turn; disallowed-tools and broader permission deny rules are what actually restrict.',
+          eyebrow: '🧠 Knowledge check', title: 'Tool permissions, precisely',
+          presenterTip: 'This corrects a common misconception — read the reveal exactly as written, do not paraphrase.',
+        },
+      ],
+      thursdayTrailer: 'Thursday you adapt this exact pattern into three project-specific Skills of your own — one hardened, all tested, all versioned and committed.',
+      hook: {
+        headline: 'The ETL job says SUCCESS. The revenue number is wrong.',
+        caption: 'A green pipeline proves the job ran. It never proved the data was trustworthy.',
+      },
+      storyBeats: {
+        checkin: [
+          {
+            icon: '🕗', tone: 'violet', eyebrow: '8:05 AM · The analyst is unavailable',
+            title: 'The analyst who normally catches this is out today.',
+            body: 'The company does not lack a procedure. The analyst runs the same checks every morning: freshness, row count, duplicate keys, required fields, unreasonable amounts. But the procedure exists only in her head, so the control disappears the day she is unavailable.',
+            punch: 'The analyst should not be the control. The repeatable procedure should be the control.',
+          },
+        ],
+        'business-problem': [
+          {
+            icon: '✅', tone: 'berry', eyebrow: 'The procedure became visible',
+            title: 'Everyone in the room just performed the same checks.',
+            body: 'A few minutes ago, the procedure existed only in an analyst\'s memory and saved prompts. Now every student used the same checks, the same thresholds, and the same PASS or FAIL language.',
+            punch: 'Tribal knowledge just became an executable team asset.',
+          },
+        ],
+        deconstruct: [
+          {
+            icon: '🚧', tone: 'cherry', eyebrow: 'The incident continues',
+            title: 'The gate protected the dashboard. Now the business wants the cause.',
+            body: 'Blocking unsafe data is the correct decision, but it does not resolve the incident. Operations still needs to understand why the pipeline produced invalid data, what evidence supports the diagnosis, and what should be tested next.',
+            punch: 'Detection protects the business. Diagnosis restores the system.',
+          },
+        ],
+        'micro-build': [
+          {
+            icon: '📣', tone: 'amber', eyebrow: 'The audience changes',
+            title: 'The technical team has an answer. Leadership is still waiting.',
+            body: 'The data-quality report explains what is wrong. The triage report explains why it may have happened. Neither is written for the CFO, who needs impact, confidence, action, ownership, and the next update.',
+            punch: 'A technically correct answer can still be the wrong communication product.',
+          },
+        ],
+      },
     },
     thursday: {
       resultPreview: 'Three project-specific Agent Skills committed to your workspace, one of them multi-file with scoped tool access.',
@@ -1186,13 +1286,11 @@ export const ARCHITECTURE_DIAGRAMS: Record<number, string> = {
   W --> R[("Your repo")]
   MD["CLAUDE.md — persistent standards"] -.-> CC`,
   2: `flowchart TD
-  T["A task you repeat"] --> S["Agent Skill"]
-  S --> D["Description = the trigger"]
-  S --> B["Instruction body"]
-  S --> F["Extra files + scoped tools"]
-  D --> Q{"Claude matches the ask?"}
-  Q -->|"sharp"| Y["Fires every time"]
-  Q -->|"vague"| N["Never triggers"]`,
+  D["Orders + ETL output"] --> G["data-quality-gate"]
+  G -->|"FAIL"| T["etl-failure-triage"]
+  G -->|"PASS"| PUB["Publish to dashboard"]
+  T --> B["executive-dashboard-brief"]
+  B --> L["Leadership: PUBLISH or BLOCK decision"]`,
   3: `flowchart LR
   In["Business input"] --> API["Claude API"]
   API --> SYS["System prompt + streaming"]

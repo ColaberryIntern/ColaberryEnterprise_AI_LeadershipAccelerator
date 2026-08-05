@@ -5,6 +5,11 @@ import {
   fetchRoomBookings, uploadRoomFile, downloadRoomResource, RoomView, RoomMessage, RoomPerson, BookingCard,
 } from '../../../services/roomsApi';
 import RoomFilesPanel, { ACCEPT, ALLOWED_MIMES, ALLOWED_EXT, MAX_SIZE, extOf } from './RoomFilesPanel';
+import { fetchClassSessionDetail, ClassSessionInfo, joinSession } from '../../../services/onboardingApi';
+import { emitPointsEarned } from '../../../services/pointsFx';
+import { useCountdown } from '../../../hooks/useCountdown';
+import { parseSessionTimeToHHMM, formatSessionTimeRange } from '../../../utils/sessionTime';
+import RoomRecordingsPanel from './RoomRecordingsPanel';
 
 // A chat-attached file's message content is always "📎 <title>" (see
 // handleAttachFile below) — strip the marker back off to recover the title
@@ -66,7 +71,86 @@ const InviteModal: React.FC<{ roomId: string; onClose: () => void; onDone: () =>
   );
 };
 
-type RoomTab = 'chat' | 'files';
+// The class banner for a room linked to an official live_sessions row
+// (CommunityRoom.linked_live_session_id, provisioned by ensureRoomForSession
+// for every session — see backend/src/services/communityRooms/roomService.ts).
+// This IS the room's "waiting room" state, driven directly off the session's
+// own status (never a second, room-local status field — see the Phase 1
+// PROGRESS.md note on why RoomBooking's dormant lobby_open/live/cooldown
+// machine was deliberately not activated for this).
+//   scheduled → countdown, no join button (indirect-join: nothing here jumps
+//     straight to the call until the class is actually live)
+//   live      → real "Join Class" button (session.meeting_link) +
+//     attendance recording, same pattern as NextLiveClassCard.handleJoin
+//   completed → recap/recording link if one was generated
+const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
+  const [session, setSession] = useState<ClassSessionInfo | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchClassSessionDetail(sessionId).then((s) => { if (alive) setSession(s); }).catch(() => { /* banner just stays hidden */ });
+    return () => { alive = false; };
+  }, [sessionId]);
+
+  const isLive = session?.status === 'live';
+  const target = (() => {
+    if (!session || isLive || !session.session_date) return null;
+    const hhmm = parseSessionTimeToHHMM(session.start_time || '09:00');
+    return hhmm ? `${session.session_date}T${hhmm}:00` : null;
+  })();
+  const cd = useCountdown(target);
+
+  const handleJoin = () => {
+    if (!session?.meeting_link) return;
+    window.open(session.meeting_link, '_blank', 'noopener,noreferrer');
+    joinSession(session.id)
+      .then((r) => { if (r.awarded) emitPointsEarned(r.points); })
+      .catch(() => { /* attendance credit is best-effort */ });
+  };
+
+  if (!session) return null;
+
+  return (
+    <div className={`rm-classbanner${isLive ? ' live' : ''}`}>
+      <div className="rm-classbanner-top">
+        <b>Session {session.session_number}</b> · {session.title}
+      </div>
+      <div className="rm-classbanner-time">
+        {session.session_date} · {formatSessionTimeRange(session.start_time, session.end_time)}
+      </div>
+
+      {session.status === 'completed' ? (
+        session.recording_url
+          ? <a className="te-btn ghost sm" href={session.recording_url} target="_blank" rel="noopener noreferrer">▶ Watch recording</a>
+          : <div className="rm-classbanner-time">This class has ended.</div>
+      ) : isLive ? (
+        <>
+          <div className="rm-classbanner-live"><span className="te-livedot" aria-hidden="true" /> Live now</div>
+          <button type="button" className="te-btn cherry sm" onClick={handleJoin}>📹 Join Class</button>
+        </>
+      ) : (
+        cd && (
+          <div className="rm-classbanner-cd">
+            <b>{cd.days}</b>d <b>{cd.hours}</b>h <b>{cd.minutes}</b>m <b>{cd.seconds}</b>s until class starts
+          </div>
+        )
+      )}
+    </div>
+  );
+};
+
+// General video rooms (is_video, no linked_live_session_id — e.g. a cohort's
+// always-open room) get the same "live" visual treatment as an actual class
+// (see ClassSessionBanner above), but always-on rather than schedule-gated —
+// this is the practice/demo venue for what joining a real class looks like,
+// so it never shows a countdown or a completed state.
+const AlwaysOpenVideoBanner: React.FC<{ onJoin: () => void }> = ({ onJoin }) => (
+  <div className="rm-classbanner live">
+    <div className="rm-classbanner-live"><span className="te-livedot" aria-hidden="true" /> Live now · always open</div>
+    <button type="button" className="te-btn cherry sm" onClick={onJoin}>📹 Join Video Call</button>
+  </div>
+);
+
+type RoomTab = 'chat' | 'files' | 'recordings';
 
 const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () => void }> = ({ roomId, onDeleted, onChanged }) => {
   const [view, setView] = useState<RoomView | null | 'error'>(null);
@@ -241,14 +325,18 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
         {room.privacy !== 'public' && <span className={`rm-privacy ${room.privacy}`}>{room.privacy.replace('_', ' ')}</span>}
         {activeCount > 0 && <span className="rm-presence">{activeCount} here</span>}
         <span style={{ flex: 1 }} />
-        {room.is_video && <button type="button" className="te-btn cherry sm" onClick={doJoinVideo}>📹 Join call</button>}
         {canManage && <button type="button" className="te-btn ghost sm" onClick={() => setShowInvite(true)}>Invite</button>}
         {isOwner && !room.is_system && <button type="button" className="te-btn ghost sm rm-danger" onClick={doDelete}>Delete</button>}
       </div>
 
+      {room.linked_live_session_id
+        ? <ClassSessionBanner sessionId={room.linked_live_session_id} />
+        : room.is_video && <AlwaysOpenVideoBanner onJoin={doJoinVideo} />}
+
       <div className="rm-tabs" role="tablist" aria-label="Room sections">
         <button type="button" role="tab" aria-selected={paneTab === 'chat'} className={`rm-tab${paneTab === 'chat' ? ' active' : ''}`} onClick={() => setPaneTab('chat')}>Chat</button>
         <button type="button" role="tab" aria-selected={paneTab === 'files'} className={`rm-tab${paneTab === 'files' ? ' active' : ''}`} onClick={() => setPaneTab('files')}>Docs &amp; Files</button>
+        <button type="button" role="tab" aria-selected={paneTab === 'recordings'} className={`rm-tab${paneTab === 'recordings' ? ' active' : ''}`} onClick={() => setPaneTab('recordings')}>Recordings</button>
       </div>
 
       {paneTab === 'chat' && (
@@ -304,6 +392,7 @@ const RoomPane: React.FC<{ roomId: string; onDeleted: () => void; onChanged: () 
       )}
 
       {paneTab === 'files' && <RoomFilesPanel roomId={roomId} canUpload={view.can_upload_resource} bookings={bookings} />}
+      {paneTab === 'recordings' && <RoomRecordingsPanel roomId={roomId} />}
 
       {showInvite && <InviteModal roomId={roomId} onClose={() => setShowInvite(false)} onDone={() => { loadRoom(); onChanged(); }} />}
     </div>

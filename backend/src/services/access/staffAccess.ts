@@ -33,3 +33,20 @@ export async function isStaffEnrollment(enrollmentId: string): Promise<boolean> 
     return false;
   }
 }
+
+/**
+ * Broader than `isStaffEnrollment`: true for the admin-assigned community
+ * `staff` role OR any non-null `mgmt_role` (the same "cross-cohort viewer" set
+ * the role-aware People panel uses, see `peoplePanelService.resolveIsStaff`).
+ * Reused wherever an action needs to match that panel's cross-cohort visibility
+ * (e.g. DMs — staff/mgmt can see people outside their own cohort in the panel,
+ * so they must also be able to open a DM with them). Fail-SAFE to `false`.
+ */
+export async function isStaffOrMgmt(enrollmentId: string): Promise<boolean> {
+  if (!enrollmentId) return false;
+  const [staffRole, member] = await Promise.all([
+    isStaffEnrollment(enrollmentId),
+    CommunityMember.findOne({ where: { enrollment_id: enrollmentId }, attributes: ['mgmt_role'] }).catch(() => null),
+  ]);
+  return staffRole || !!(member as any)?.mgmt_role;
+}

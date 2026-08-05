@@ -2,6 +2,7 @@ import { Op } from 'sequelize';
 import { env } from '../config/env';
 import Lead from '../models/Lead';
 import { syncNewLeadToGhl } from './ghlService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 const APOLLO_BASE_URL = 'https://api.apollo.io';
 
@@ -272,7 +273,7 @@ export async function importApolloResults(
       // Skip leads without phone numbers (required for voice outreach)
       const hasPhone = person.phone_numbers?.some((p) => p.raw_number?.trim());
       if (requirePhone && !hasPhone) {
-        console.log(`[Apollo] Skipping ${person.email} — no phone number`);
+        console.log(`[Apollo] Skipping ${redactForLogs(person.email)} — no phone number`);
         skippedNoPhone++;
         continue;
       }
@@ -331,20 +332,20 @@ export async function importApolloResults(
 
       // Auto-sync to GHL (fire-and-forget)
       syncNewLeadToGhl(lead).catch((err) =>
-        console.error(`[Apollo] GHL sync error ${person.email}: ${err.message}`)
+        console.error(`[Apollo] GHL sync error ${redactForLogs(person.email)}: ${err.message}`)
       );
 
       // Request async phone reveal if lead has no phone and has apollo_id
       if (!phone && person.id && apiKey) {
         requestPhoneReveal(apiKey, person.id).catch((err) =>
-          console.warn(`[Apollo] Phone reveal request failed for ${person.email}: ${err.message}`)
+          console.warn(`[Apollo] Phone reveal request failed for ${redactForLogs(person.email)}: ${err.message}`)
         );
       }
 
       imported++;
       leads.push(lead);
     } catch (err: any) {
-      console.error(`[Apollo] Failed to import ${person.email}:`, err.message);
+      console.error(`[Apollo] Failed to import ${redactForLogs(person.email)}:`, err.message);
       errors++;
     }
   }

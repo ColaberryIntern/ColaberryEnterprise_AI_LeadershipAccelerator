@@ -9,6 +9,8 @@ import { logCommunication } from '../services/communicationLogService';
 import { respondAsLead } from '../services/testing/campaignSimulator';
 import { processOptOut } from '../services/unsubscribeEnforcementService';
 import ScheduledEmail from '../models/ScheduledEmail';
+import { handleTicketReplyEmail } from '../services/workforce/ticketReplyService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 /** Map Mandrill event types to our outcome types */
 function mapMandrillEvent(eventType: string): OutcomeType | null {
@@ -53,7 +55,12 @@ function verifyMandrillSignature(
     .update(signedData)
     .digest('base64');
 
-  return hash === expectedSignature;
+  // Constant-time comparison — a plain === leaks timing information proportional to how
+  // many leading bytes match, a real (if narrow) side channel for a signature check.
+  const hashBuf = Buffer.from(hash);
+  const expectedBuf = Buffer.from(expectedSignature || '');
+  if (hashBuf.length !== expectedBuf.length) return false;
+  return crypto.timingSafeEqual(hashBuf, expectedBuf);
 }
 
 /** Handle Mandrill webhook events (open, click, bounce, unsub) */
@@ -118,7 +125,7 @@ export async function handleMandrillWebhook(req: Request, res: Response): Promis
       if (!scheduledEmailId) {
         // Log what we're skipping for debugging
         if (event.event === 'open' || event.event === 'click') {
-          console.log(`[MandrillWebhook] Skipping ${event.event} for ${event.msg?.email || 'unknown'} — no scheduled_email_id in metadata: ${JSON.stringify(event.msg?.metadata || {})}`);
+          console.log(`[MandrillWebhook] Skipping ${event.event} for ${redactForLogs(event.msg?.email) || 'unknown'} — no scheduled_email_id in metadata: ${JSON.stringify(event.msg?.metadata || {})}`);
         }
         skipped++;
         continue;
@@ -180,10 +187,40 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       return;
     }
 
-    // Signature verification — skip for inbound since Mandrill's route validation
-    // test does not include the correct signature. Inbound emails are already
-    // authenticated by Mandrill's MX routing (only Mandrill can deliver to our
-    // inbound domain). The outbound webhook retains strict signature checking.
+    // Signature verification — REJECT the whole request on mismatch when a webhook key is
+    // configured, matching the outbound handler's convention (handleMandrillWebhook above).
+    // Previously this only rejected the ticket-<id>@ reply path; the Lead-reply path below —
+    // which can trigger an AI-generated auto-reply send, an auto-unsubscribe, and a voice
+    // call to Ali — accepted unverified inbound events. The Mandrill URL-verification
+    // HEAD/ping (no `mandrill_events` body) already short-circuits above this point, so
+    // promoting to a full-request reject doesn't reintroduce the false-positive that
+    // originally motivated scoping enforcement down to just the ticket path.
+    // NOTE: env.mandrillWebhookUrl is hardcoded in production to the OUTBOUND tracking-events
+    // URL (.../api/webhook/mandrill) — reusing it here would make every real inbound
+    // signature fail, since Mandrill signs against the exact URL it posted to. Derive this
+    // route's own URL instead (append '/inbound' to the outbound base when the override is
+    // set; otherwise reconstruct per-request exactly like the outbound handler's fallback).
+    const webhookKey = env.mandrillWebhookKey || '';
+    if (webhookKey) {
+      const signature = req.headers['x-mandrill-signature'] as string || '';
+      const inboundWebhookUrl = env.mandrillWebhookUrl
+        ? `${env.mandrillWebhookUrl}/inbound`
+        : `${req.protocol}://${req.get('host')}${req.originalUrl}`;
+      const isValid = verifyMandrillSignature(webhookKey, inboundWebhookUrl, req.body, signature);
+      if (!isValid) {
+        console.warn(
+          `[MandrillInbound] Signature mismatch — rejecting. url: ${inboundWebhookUrl}. ` +
+          `If this is a false rejection behind a proxy, verify MANDRILL_WEBHOOK_URL matches the exact public inbound URL.`
+        );
+        res.status(401).json({ error: 'Invalid webhook signature' });
+        return;
+      }
+    } else {
+      // No webhook key configured — auth degrades to sender-email (+ reply-token on the
+      // ticket path) only. Loud on purpose: production is confirmed to have the key set, so
+      // this firing there means the config regressed, not routine dev behavior.
+      console.warn('[MandrillInbound] MANDRILL_WEBHOOK_KEY not configured — inbound signature verification is disabled');
+    }
 
     let processed = 0;
     let skipped = 0;
@@ -204,6 +241,27 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
       if (!fromEmail) { skipped++; continue; }
 
       console.log(`[MandrillInbound] Email reply from ${fromEmail}: ${subject}`);
+
+      // AI Workforce ticket-approval replies: routed via a ticket-<id>-<token>@ subaddress
+      // on the Mandrill-inbound domain, so the ticket ID is read directly off the recipient
+      // address — no thread/Message-ID correlation needed, and no dependency on the Lead
+      // pipeline below at all. The token is a per-ticket random value only ever transmitted
+      // in the actual approval email (never rendered in the dashboard UI) — required in
+      // addition to the sender allowlist so knowing a ticket's UUID alone (visible to any
+      // admin who can browse the Tickets board, a broader set than who may approve) isn't
+      // enough to construct a working reply address.
+      const toLocalPart = String(msg.email || '').split('@')[0] || '';
+      const ticketMatch = toLocalPart.match(/^ticket-([0-9a-f-]{36})-([0-9a-f]{8})$/i);
+      if (ticketMatch) {
+        try {
+          const result = await handleTicketReplyEmail({ ticketId: ticketMatch[1], replyToken: ticketMatch[2], fromEmail, rawBody: body });
+          console.log(`[MandrillInbound] Ticket reply for ${ticketMatch[1]}: ${result.reason}`);
+        } catch (err: any) {
+          console.error(`[MandrillInbound] Ticket reply handling failed for ${ticketMatch[1]}:`, err.message);
+        }
+        processed++;
+        continue;
+      }
 
       // Find lead by email
       const lead = await Lead.findOne({ where: { email: fromEmail } });
@@ -303,14 +361,14 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
         console.warn(`[MandrillInbound] Failed to resume simulation:`, simErr.message);
       }
 
-      console.log(`[MandrillInbound] Reply processed for lead ${lead.id} (${lead.name})`);
+      console.log(`[MandrillInbound] Reply processed for lead ${lead.id} (${redactForLogs(lead.name)})`);
 
       // Auto-detect unsubscribe keywords — broad matching anywhere in message body
       const bodyLower = body.toLowerCase().trim();
       const unsubExactKeywords = ['unsubscribe', 'stop', 'remove me', 'opt out', 'opt-out', 'take me off', 'no more emails', 'stop emailing', 'don\'t email', 'dont email', 'don\'t contact', 'dont contact'];
       const isUnsubscribe = unsubExactKeywords.some(kw => bodyLower.includes(kw));
       if (isUnsubscribe) {
-        console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${(lead as any).name}): "${bodyLower.substring(0, 80)}"`);
+        console.log(`[MandrillInbound] Auto-unsubscribe detected for lead ${lead.id} (${redactForLogs((lead as any).name)}): "${redactForLogs(bodyLower).substring(0, 80)}"`);
         await processOptOut(lead.id, 'email', `Inbound email opt-out: "${bodyLower.substring(0, 100)}"`, 'inbound_reply');
         // Do NOT auto-reply to someone who asked to unsubscribe
         console.log(`[MandrillInbound] Skipping auto-reply — lead requested unsubscribe`);
@@ -381,7 +439,7 @@ export async function handleMandrillInbound(req: Request, res: Response): Promis
               metadata: { auto_reply: true, in_reply_to: inReplyTo || null },
             }).catch(() => {});
 
-            console.log(`[MandrillInbound] Auto-replied to ${(lead as any).name} (${fromEmail})`);
+            console.log(`[MandrillInbound] Auto-replied to ${redactForLogs((lead as any).name)} (${redactForLogs(fromEmail)})`);
           }
         } else {
           console.log(`[MandrillInbound] Skipping auto-reply — Ali personal outreach (Ali handles personally)`);

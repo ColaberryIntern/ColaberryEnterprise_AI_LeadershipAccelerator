@@ -5,15 +5,18 @@
 
 jest.mock('../../models/Friendship', () => ({ findOne: jest.fn(), findAll: jest.fn(), create: jest.fn() }));
 jest.mock('../../models/Enrollment', () => ({ findByPk: jest.fn() }));
+jest.mock('../../services/access/staffAccess', () => ({ isStaffOrMgmt: jest.fn() }));
 
 import { sendFriendRequest, respondToRequest, getFriendshipStatuses } from '../../services/friendshipService';
 import Friendship from '../../models/Friendship';
 import Enrollment from '../../models/Enrollment';
+import { isStaffOrMgmt } from '../../services/access/staffAccess';
 
 const findOne = Friendship.findOne as jest.Mock;
 const findAll = Friendship.findAll as jest.Mock;
 const create = Friendship.create as jest.Mock;
-const findByPk = Enrollment.findByPk as jest.Mock;
+const findByPkEnrollment = Enrollment.findByPk as jest.Mock;
+const isStaffOrMgmtMock = isStaffOrMgmt as jest.Mock;
 
 const me = '11111111-1111-1111-1111-111111111111';
 const target = '22222222-2222-2222-2222-222222222222';
@@ -29,7 +32,8 @@ function row(fields: any) {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  findByPk.mockImplementation((id: string) => Promise.resolve({ id, cohort_id: COHORT })); // same cohort
+  findByPkEnrollment.mockImplementation((id: string) => Promise.resolve({ id, cohort_id: COHORT })); // same cohort
+  isStaffOrMgmtMock.mockResolvedValue(false);
   findOne.mockResolvedValue(null);
   findAll.mockResolvedValue([]);
   create.mockResolvedValue({});
@@ -47,10 +51,18 @@ describe('sendFriendRequest', () => {
     expect(create).not.toHaveBeenCalled();
   });
 
-  it('rejects a cross-cohort request', async () => {
-    findByPk.mockImplementation((id: string) => Promise.resolve({ id, cohort_id: id === me ? 'A' : 'B' }));
+  it('rejects a cross-cohort request from a regular student', async () => {
+    findByPkEnrollment.mockImplementation((id: string) => Promise.resolve({ id, cohort_id: id === me ? 'A' : 'B' }));
     await expect(sendFriendRequest(me, target)).rejects.toMatchObject({ name: 'FriendRequestError' });
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it('staff/mgmt bypasses the cohort check and can connect cross-cohort', async () => {
+    findByPkEnrollment.mockImplementation((id: string) => Promise.resolve({ id, cohort_id: id === me ? 'A' : 'B' }));
+    isStaffOrMgmtMock.mockResolvedValue(true);
+    const r = await sendFriendRequest(me, target);
+    expect(r).toEqual({ status: 'requested' });
+    expect(create).toHaveBeenCalledWith({ requester_id: me, addressee_id: target, status: 'pending' });
   });
 
   it('idempotent: an existing pending request returns requested without a new row', async () => {

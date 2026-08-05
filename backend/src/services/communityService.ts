@@ -16,6 +16,7 @@ import Organization from '../models/Organization';
 import OrgMember from '../models/OrgMember';
 import { env } from '../config/env';
 import { activeCompEnrollmentIds } from './subscriptionService';
+import { isStaffOrMgmt } from './access/staffAccess';
 import { CreatePostInput, TogglePinInput, CreateCommentInput, UpdateProfileInput } from '../schemas/communitySchemas';
 
 // Lite poll-presence (P0 per the approved design mockup — real-time websocket
@@ -1000,13 +1001,15 @@ export async function getMyProfile(enrollmentId: string): Promise<MemberProfile>
 // Cross-member lookups return NotFoundError uniformly whether the member
 // doesn't exist OR belongs to a different cohort — avoids leaking cross-cohort
 // member existence (per-student data isolation, root CLAUDE.md security rules).
+// Staff/mgmt bypass this, matching the same exception on DMs (dmService.ts)
+// and cross-cohort friend requests (friendshipService.ts).
 export async function getMemberProfileById(enrollmentId: string, targetMemberId: string): Promise<MemberProfile> {
-  const cohortId = await resolveCohortId(enrollmentId);
+  const [cohortId, staffOrMgmt] = await Promise.all([resolveCohortId(enrollmentId), isStaffOrMgmt(enrollmentId)]);
 
   const target = await CommunityMember.findByPk(targetMemberId, {
     include: [{ model: Enrollment, as: 'enrollment', attributes: ['cohort_id'] }],
   });
-  if (!target || (target as any).enrollment?.cohort_id !== cohortId) {
+  if (!target || (!staffOrMgmt && (target as any).enrollment?.cohort_id !== cohortId)) {
     throw notFoundError('Member not found');
   }
   const total = (await getPointsSummary(target.enrollment_id)).total;
@@ -1051,20 +1054,25 @@ export interface DirectoryPage {
 const DIRECTORY_DEFAULT_LIMIT = 24;
 const DIRECTORY_MAX_LIMIT = 100;
 
-// Cohort-scoped directory — ordered by canonical points DESC. Points/level/badges
-// come from the ONE ledger + recognition (batched), so this matches the
-// leaderboard + HUD. `members` is always present; new callers read total/has_more.
+// Cohort-scoped directory for students; staff/mgmt see every member on the
+// platform (matching their cross-cohort view of DMs and friend requests).
+// Ordered by canonical points DESC. Points/level/badges come from the ONE
+// ledger + recognition (batched), so this matches the leaderboard + HUD.
+// `members` is always present; new callers read total/has_more.
 export async function listMembers(enrollmentId: string, query: DirectoryQuery = {}): Promise<DirectoryPage> {
-  const cohortId = await resolveCohortId(enrollmentId);
+  const [cohortId, staffOrMgmt] = await Promise.all([resolveCohortId(enrollmentId), isStaffOrMgmt(enrollmentId)]);
 
   const where: Record<string, unknown> = {};
   if (query.role) where.role = query.role;
   const search = query.search?.trim();
   if (search) where.display_name = { [Op.iLike]: `%${search}%` };
 
+  const enrollmentInclude: Record<string, unknown> = { model: Enrollment, as: 'enrollment', attributes: [] };
+  if (!staffOrMgmt) enrollmentInclude.where = { cohort_id: cohortId };
+
   const members = await CommunityMember.findAll({
     where,
-    include: [{ model: Enrollment, as: 'enrollment', attributes: [], where: { cohort_id: cohortId } }],
+    include: [enrollmentInclude],
   });
 
   const enrollmentIds = members.map((m: any) => m.enrollment_id);

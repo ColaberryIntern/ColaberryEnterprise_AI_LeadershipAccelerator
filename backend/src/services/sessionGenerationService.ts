@@ -1,5 +1,6 @@
 import { Cohort, LiveSession } from '../models';
 import { AppError } from '../utils/AppError';
+import { env } from '../config/env';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -17,6 +18,11 @@ export interface ScheduleConfig {
   end_time: string;
   total_sessions: number;
   core_days: string[];
+  /** Optional per-day time override, e.g. a Tuesday/Saturday cohort meeting at
+   *  different times on each day. A recurring day missing from this map falls back
+   *  to the shared start_time/end_time above — so every cohort that never sets this
+   *  (i.e. every cohort before this field existed) behaves byte-identically. */
+  day_times?: Record<string, { start_time: string; end_time: string }>;
 }
 
 export interface GenerateResult {
@@ -81,6 +87,7 @@ export function resolveSchedule(cohort: any): ScheduleConfig {
       start_time: explicit.start_time || parsed.start_time,
       end_time: explicit.end_time || parsed.end_time,
       total_sessions: explicit.total_sessions,
+      day_times: explicit.day_times,
     };
   }
   const recurring_days = [cohort.core_day, cohort.optional_lab_day].filter(Boolean);
@@ -114,7 +121,7 @@ export async function generateSessionsFromCohort(cohortId: string): Promise<Gene
     );
   }
 
-  const { recurring_days, start_time, end_time, total_sessions, core_days } = schedule;
+  const { recurring_days, start_time, end_time, total_sessions, core_days, day_times } = schedule;
 
   // Delete existing sessions for this cohort (idempotent regeneration)
   const deleted = await LiveSession.destroy({
@@ -151,17 +158,35 @@ export async function generateSessionsFromCohort(cohortId: string): Promise<Gene
     const dateStr = date.toISOString().split('T')[0];
     const defaultTitle = DEFAULT_SESSION_TITLES[i] || `Session ${i + 1}`;
     const title = `Session ${i + 1} — ${defaultTitle}`;
+    // A day with its own time in day_times wins; otherwise every day shares the
+    // cohort's single start_time/end_time (the pre-existing, unchanged behavior).
+    const dayTime = day_times?.[dayName];
+    const sessionStart = dayTime?.start_time ?? start_time;
+    const sessionEnd = dayTime?.end_time ?? end_time;
 
     const session = await LiveSession.create({
       cohort_id: cohortId,
       session_number: i + 1,
       title,
       session_date: dateStr,
-      start_time: start_time + ':00',
-      end_time: end_time + ':00',
+      start_time: sessionStart + ':00',
+      end_time: sessionEnd + ':00',
       session_type: sessionType,
       status: 'scheduled',
     } as any);
+
+    // Bulk generation is a separate code path from acceleratorService.createSession
+    // (used for one-off/admin session creates), which already does this — this was
+    // the actual gap that left every real, bulk-generated session without a
+    // Colaberry Commons room. Same flag-gated, best-effort, non-fatal pattern.
+    if (env.communityRoomsEnabled) {
+      try {
+        const { ensureRoomForSession } = await import('./communityRooms/roomService');
+        await ensureRoomForSession(session);
+      } catch (err: any) {
+        console.warn('[CommunityRooms] ensureRoomForSession failed (non-fatal):', err?.message);
+      }
+    }
 
     sessions.push(session);
     console.log(

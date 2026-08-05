@@ -16,7 +16,7 @@ import {
   canUploadResource,
 } from './roomEntitlementService';
 import { getMeetingProvider } from './meetingProvider';
-import { log, slugify, shortToken, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
+import { log, slugify, shortToken, truncated, notFoundError, forbiddenError, validationError, conflictError } from './roomShared';
 
 // Rooms CRUD + discovery + the official-session linkage. Entitlement decisions
 // are delegated to roomEntitlementService; this module never returns a room a
@@ -35,12 +35,12 @@ export async function ensureRoomForSession(session: LiveSession): Promise<Commun
     where: { linked_live_session_id: session.id },
     defaults: {
       slug: `session-${session.id}`,
-      name: session.title || `Session ${session.session_number}`,
+      name: truncated(session.title, 200) || `Session ${session.session_number}`,
       category: 'your_cohort',
       room_type: 'scheduled',
       privacy: 'cohort',
       status: 'active',
-      topic: session.description || null,
+      topic: truncated(session.description, 255),
       linked_cohort_id: session.cohort_id,
       linked_live_session_id: session.id,
       is_system: true,
@@ -113,8 +113,8 @@ export async function createRoom(ctx: RoomAccessContext, input: CreateRoomInput)
     linked_cohort_id: ctx.cohortId ?? null,
     linked_project_id: input.linked_project_id ?? null,
     linked_module_id: input.linked_module_id ?? null,
-    // Video rooms are always-open: anyone eligible can jump into the same Meet
-    // anytime. The Meet link is minted lazily on first join (see joinVideoRoom).
+    // Video rooms are always-open: anyone eligible can jump into the same call
+    // anytime. The link is minted lazily on first join (see joinVideoRoom).
     is_video: input.is_video ?? false,
     always_open: input.is_video ?? false,
     is_system: false,
@@ -173,6 +173,16 @@ export async function listRoomsForViewer(
     // The Global Library is reached via its own page + GET .../library, never
     // through normal room browsing/rail.
     slug: { [Op.ne]: GLOBAL_LIBRARY_SLUG },
+    // Exclude two room_types that don't belong in the general browse rail:
+    // 'dm' (1:1 direct messages — reached via the People panel/chat dock,
+    // dmService.ts, never by browsing; every DM ever opened was piling up
+    // here forever, all sharing the hardcoded name "Direct message") and
+    // 'scheduled' (a real class's own Colaberry Commons room — reached via
+    // Today/Classroom/Schedule/the topbar pill, or the organized cohort view
+    // at /portal/sessions, not by scrolling a flat room list). Neither
+    // exclusion affects direct navigation to a specific room by id — that
+    // goes through getRoomForViewer, not this listing.
+    room_type: { [Op.notIn]: ['dm', 'scheduled'] },
   };
   if (filter.category) where.category = filter.category;
   const rooms = await CommunityRoom.findAll({ where, order: [['created_at', 'DESC']], limit: 200 });
@@ -227,7 +237,7 @@ export async function updateRoom(
 }
 
 // Join an always-open video room. Entitlement is re-checked server-side EVERY
-// time; the Google Meet link is minted lazily on first join and then shared by
+// time; the video call link is minted lazily on first join and then shared by
 // everyone who jumps in (that's what makes it a persistent "room").
 export async function joinVideoRoom(
   ctx: RoomAccessContext,
@@ -241,9 +251,12 @@ export async function joinVideoRoom(
 
   if (room.meeting_link) return { join_url: room.meeting_link };
 
-  // First join provisions a persistent Meet link (1-year window; the link stays
-  // joinable). Best-effort — surface no link rather than error if Google is down.
-  const provider = getMeetingProvider('google_meet');
+  // First join provisions a persistent video-call link (1-year window; the
+  // link stays joinable). Best-effort — surface no link rather than error if
+  // the provider is down. No provider name passed — defer to the factory's
+  // default (Zoom) rather than hardcoding one, which is what silently kept
+  // minting Google Meet links here even after the rest of the app switched.
+  const provider = getMeetingProvider();
   const now = new Date();
   const end = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
   const result = await provider.createMeeting({

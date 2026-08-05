@@ -13,9 +13,10 @@ import * as messages from '../services/communityRooms/roomMessageService';
 import * as moderation from '../services/communityRooms/roomModerationService';
 import * as recognition from '../services/communityRooms/roomRecognitionService';
 import * as resourceSvc from '../services/communityRooms/roomResourceService';
+import { resolveRelatedRoomIds } from '../services/communityRooms/relatedRoomResolver';
 import { derivePresence } from '../services/communityService';
 import { hereCounts, touchRoomPresence } from '../services/communityRooms/roomPresenceService';
-import { roomResourceUpload, ROOM_RESOURCE_DIR } from '../config/upload';
+import { roomResourceUpload, ROOM_RESOURCE_DIR, ROOM_RECORDING_DIR } from '../config/upload';
 import {
   CreateRoomSchema, UpdateRoomSchema, ListRoomsQuerySchema, NotificationPrefSchema,
   PostMessageSchema, ListMessagesQuerySchema, QuestionStatusSchema, VerifyAnswerSchema,
@@ -306,7 +307,19 @@ export async function getHome(req: Request, res: Response): Promise<void> {
 export async function listRoomBookings(req: Request, res: Response): Promise<void> {
   try {
     const rows = await bookings.listBookingsForRoom(ctxOf(req), String(req.params.id));
-    res.json({ bookings: rows.map((b) => ({ ...bookingCard(b), related_live_session_id: b.related_live_session_id })) });
+    // related_live_session_id -> the linked class's own Colaberry Commons
+    // room, so a booking's "View class recap" link can route there instead
+    // of the retired /portal/sessions/:id page.
+    const roomBySessionId = await resolveRelatedRoomIds(
+      rows.map((b) => b.related_live_session_id).filter((id): id is string => !!id),
+    );
+    res.json({
+      bookings: rows.map((b) => ({
+        ...bookingCard(b),
+        related_live_session_id: b.related_live_session_id,
+        related_room_id: b.related_live_session_id ? roomBySessionId.get(b.related_live_session_id) ?? null : null,
+      })),
+    });
   } catch (err) { fail(res, err); }
 }
 
@@ -364,9 +377,12 @@ export async function deleteResource(req: Request, res: Response): Promise<void>
 export async function downloadResource(req: Request, res: Response): Promise<void> {
   try {
     const resource = await resourceSvc.getResourceForDownload(ctxOf(req), String(req.params.id), String(req.params.resourceId));
+    const baseDir = resource.resource_type === 'recording' ? ROOM_RECORDING_DIR : ROOM_RESOURCE_DIR;
     res.setHeader('Content-Type', resource.mime_type || 'application/octet-stream');
     res.setHeader('Content-Disposition', `attachment; filename="${(resource.title || resource.storage_key || 'file').replace(/["\r\n]/g, '')}"`);
-    res.sendFile(path.join(ROOM_RESOURCE_DIR, resource.storage_key as string));
+    // sendFile natively honors Range requests, so large recordings also get
+    // in-browser scrubbing for free — the route stays the same "download".
+    res.sendFile(path.join(baseDir, resource.storage_key as string));
   } catch (err) { fail(res, err); }
 }
 

@@ -101,11 +101,17 @@ export async function sumPointsTodayByEventTypes(
   if (eventTypes.length === 0) return 0;
   const rows = await StudentPointsEvent.findAll({
     where: { enrollment_id: enrollmentId, event_type: eventTypes },
-    attributes: ['points', 'created_at'],
+    // Sequelize's auto-timestamp attribute is `createdAt` (camelCase) even
+    // with `underscored: true` on the model — that option only renames the
+    // DB COLUMN to created_at, not the JS attribute. Requesting the literal
+    // string 'created_at' here is not a recognized model attribute, so
+    // Sequelize silently drops it and every row comes back with no date at
+    // all, which the bug below compounds.
+    attributes: ['points', 'createdAt'],
   });
   let sum = 0;
   for (const r of rows as any[]) {
-    const created = r.created_at instanceof Date ? r.created_at : new Date(r.created_at);
+    const created = r.createdAt instanceof Date ? r.createdAt : new Date(r.createdAt);
     if (centralDateKey(created.getTime()) === todayKey) sum += r.points || 0;
   }
   return sum;
@@ -149,7 +155,14 @@ export async function getPointsSummary(enrollmentId: string): Promise<PointsSumm
     event_type: r.event_type,
     event_key: r.event_key,
     points: r.points,
-    created_at: r.created_at,
+    // Sequelize's auto-timestamp attribute is `createdAt` (camelCase) —
+    // `underscored: true` on the model only renames the DB column to
+    // created_at, not this JS property. Reading r.created_at silently
+    // returned undefined on every row, which JSON.stringify then drops
+    // from the API response entirely — every consumer (Schedule's
+    // per-day point badges, the Points page's "Recent points" list) saw
+    // no date at all and could never bucket/display these events by day.
+    created_at: r.createdAt,
     metadata: r.metadata,
   }));
   const total = events.reduce((sum, e) => sum + (e.points || 0), 0);

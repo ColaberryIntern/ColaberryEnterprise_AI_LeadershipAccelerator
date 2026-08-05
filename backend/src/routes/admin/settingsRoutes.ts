@@ -1,6 +1,14 @@
 import { Router } from 'express';
 import { requireAdmin } from '../../middlewares/authMiddleware';
-import { handleGetRevenueDashboard, handleGetRevenuePayments, handleReconcileAppPayments } from '../../controllers/adminRevenueController';
+import {
+  handleGetRevenueDashboard,
+  handleGetRevenuePayments,
+  handleGetSubscriptionAnalytics,
+  handleGetExplorerRoster,
+  handleGetTenureBucketRoster,
+  handleGetPlanRoster,
+  handleReconcileAppPayments,
+} from '../../controllers/adminRevenueController';
 import {
   handleGetSettings,
   handleUpdateSettings,
@@ -13,6 +21,14 @@ const router = Router();
 router.get('/api/admin/revenue/dashboard', requireAdmin, handleGetRevenueDashboard);
 // Unified payments feed for the rebuilt /admin/revenue page
 router.get('/api/admin/revenue/payments', requireAdmin, handleGetRevenuePayments);
+// Subscription analytics (MRR/ARR, plan mix, tenure funnel, needs-attention list)
+router.get('/api/admin/revenue/subscriptions', requireAdmin, handleGetSubscriptionAnalytics);
+// Explorer drill-down roster (behind the tenure funnel's "Explorer" bucket)
+router.get('/api/admin/revenue/explorers', requireAdmin, handleGetExplorerRoster);
+// Drill-down roster for one tenure bucket (1..5, 5 = "Month 5+")
+router.get('/api/admin/revenue/tenure/:month', requireAdmin, handleGetTenureBucketRoster);
+// Drill-down roster for one plan category (behind each "Subscribers by plan" row)
+router.get('/api/admin/revenue/plan/:plan', requireAdmin, handleGetPlanRoster);
 // Heal missed-webhook membership payments (app-scoped; our customers only). Idempotent.
 router.post('/api/admin/revenue/reconcile', requireAdmin, handleReconcileAppPayments);
 

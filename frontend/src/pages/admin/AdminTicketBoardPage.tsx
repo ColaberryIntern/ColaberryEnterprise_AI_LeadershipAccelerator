@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import TicketDetailModal from '../../components/admin/TicketDetailModal';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import { getAgentDisplayName } from '../../utils/agentDisplayNames';
 
 interface Ticket {
   id: string;
@@ -82,6 +83,7 @@ const SOURCE_ICONS: Record<string, string> = {
   cory: 'cpu-line',
   manual: 'user-line',
   system: 'settings-3-line',
+  ai_workforce: 'team-line',
 };
 
 export default function AdminTicketBoardPage() {
@@ -120,6 +122,18 @@ export default function AdminTicketBoardPage() {
   }, [token, filterPriority, filterType, filterSource]);
 
   useEffect(() => { fetchBoard(); }, [fetchBoard]);
+
+  // Deep-link support: ?open=<ticketId> (the approval email's link) opens that
+  // ticket's detail modal directly; ?source=<value> pre-applies the source filter
+  // (used by the Trust Center's "View tickets" link per director). Read once on
+  // mount — the filter select below stays the source of truth after that.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const open = params.get('open');
+    const source = params.get('source');
+    if (open) setSelectedTicket(open);
+    if (source) setFilterSource(source);
+  }, []);
 
   const handleDragStart = (e: React.DragEvent, ticketId: string) => {
     e.dataTransfer.setData('ticketId', ticketId);
@@ -254,6 +268,7 @@ export default function AdminTicketBoardPage() {
           <option value="cory">Cory</option>
           <option value="manual">Manual</option>
           <option value="system">System</option>
+          <option value="ai_workforce">AI Workforce</option>
         </select>
         <button className="btn btn-sm btn-outline-secondary" onClick={() => { setFilterPriority(''); setFilterType(''); setFilterSource(''); }}>
           Clear
@@ -307,6 +322,9 @@ export default function AdminTicketBoardPage() {
                         )}
                         {ticket.source.startsWith('cory') && (
                           <StatusBadge label="Cory" tone="primary" icon={getSourceIcon(ticket.source)} />
+                        )}
+                        {ticket.source === 'ai_workforce' && (
+                          <StatusBadge label={getAgentDisplayName(ticket.created_by_id)} tone="primary" icon={getSourceIcon(ticket.source)} />
                         )}
                       </div>
                     </div>

@@ -93,14 +93,14 @@ function evidenceHtml(slide: KitSlide): string {
 function diagramHtml(slide: KitSlide): string {
   if (!slide.diagram) return '';
   return (
-    '<div class="kdiagram">' +
+    '<div class="kdiagram" onclick="this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
     `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
     (slide.diagramCaption ? `<div class="kdiagram-cap"><span class="kdiagram-cap-ico">🧭</span><span>${esc(slide.diagramCaption)}</span></div>` : '') +
     '</div>'
   );
 }
 
-function interactionHtml(slide: KitSlide): string {
+export function interactionHtml(slide: KitSlide): string {
   const it = slide.interaction;
   if (!it) return '';
   const kindLabel = it.kind === 'trivia' ? 'Trivia' : it.kind === 'prediction' ? 'Predict' : 'Live poll';
@@ -340,6 +340,9 @@ export function renderKitHtml(spec: KitSpec, opts: RenderKitOptions = {}): strin
 </div>
 <button id="kfocus-exit" title="Exit Focus mode (V)">Exit focus ✕</button>
 
+<button id="kprev" class="knav left" type="button" aria-label="Previous slide">‹</button>
+<button id="knext" class="knav right" type="button" aria-label="Next slide">›</button>
+
 <div class="kstage">
 ${slidesHtml}
 </div>
@@ -384,7 +387,7 @@ ${slidesHtml}
 </div>
 
 <div id="kcounter">1 / ${spec.slides.length}</div>
-<div id="khint">→ next · N notes · C compact · Q qr · M mark · S start</div>
+<div id="khint">‹› or click the arrows · N notes · C compact · Q qr · M mark · S start</div>
 
 <script>window.__KIT__ = ${JSON.stringify(data).replace(/</g, '\\u003c')};</script>
 <script>${deckScript()}</script>

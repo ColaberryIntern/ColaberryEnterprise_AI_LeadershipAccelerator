@@ -382,7 +382,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
                 badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
                 onEnded={done || preview ? undefined : completeSafely}
                 onWatchBeat={handleWatchBeat}
-                fallbackDurationS={card.estimated_time ? card.estimated_time * 60 : null}
+                fallbackDurationS={card.video?.duration_seconds || (card.estimated_time ? card.estimated_time * 60 : null)}
               />
             ) : (card.image || card.type_thumbnail) ? (
               // No clip attached yet — show the card's image (own image, else the
@@ -477,7 +477,9 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
               // Generic content: allow-same-origin (no scripts) so we can size the
               // frame to its content and avoid a second inner scroll — the drawer
               // is the single scroll. The reader keeps its own scripted scroll.
-              sandbox={isReader ? 'allow-scripts' : 'allow-same-origin'}
+              // Intel cards (AI News Flash etc.) embed a real source <a href>; without
+              // allow-popups the sandbox silently swallows the click (no console error).
+              sandbox={isReader ? 'allow-scripts' : card.render_band === 'intel' ? 'allow-same-origin allow-popups' : 'allow-same-origin'}
               srcDoc={isReader ? readerDoc(content.body_html) : lessonDoc(content.body_html)}
               onLoad={isReader ? undefined : (e) => {
                 const f = e.currentTarget;

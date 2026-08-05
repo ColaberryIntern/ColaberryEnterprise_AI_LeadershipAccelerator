@@ -294,7 +294,7 @@ const RuntimeWorkspace: React.FC = () => {
                 poster={card.video?.poster || videoThumbnail(parseVideoUrl(card.video?.url))}
                 badge={card.type === 'testimonial' ? 'Testimonial' : card.type === 'podcast' ? 'Podcast' : null}
                 onWatchBeat={onWatchBeat}
-                fallbackDurationS={card.estimated_time ? card.estimated_time * 60 : null}
+                fallbackDurationS={card.video?.duration_seconds || (card.estimated_time ? card.estimated_time * 60 : null)}
               />
               {!completed && card.video?.url && (
                 <div className="tlv-watch">
@@ -394,14 +394,16 @@ const RuntimeWorkspace: React.FC = () => {
           {/* Content-in-iframe cards (the Self Study immersive reader OR a generic lesson)
               FILL the center as the single scroll, with the complete gate in a slim foot —
               so there are never dueling scrollbars. The reader runs scripts (sticky nav +
-              read-gate); a plain lesson stays inert (sandbox=""). */}
+              read-gate); a plain lesson stays inert (sandbox=""), except intel-band cards
+              (AI News Flash etc.) which embed a real source <a href> and need allow-popups
+              or the click is silently swallowed by the sandbox. */}
           {fill && (
             <div className="rt-readerwrap">
               <iframe
                 ref={isDeepDive ? ddIframeRef : undefined}
                 className="rt-readerframe"
                 title={isReader ? 'Self Study reading' : isDeepDive ? 'Field Guide' : 'Lesson'}
-                sandbox={isReader ? 'allow-scripts' : isDeepDive ? 'allow-scripts allow-modals' : ''}
+                sandbox={isReader ? 'allow-scripts' : isDeepDive ? 'allow-scripts allow-modals' : band === 'intel' ? 'allow-popups' : ''}
                 srcDoc={isReader
                   ? readerDoc(card.content?.body_html || '', card.content?.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })
                   : isDeepDive

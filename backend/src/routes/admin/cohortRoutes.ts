@@ -3,7 +3,9 @@ import { requireAdmin } from '../../middlewares/authMiddleware';
 import {
   handleAdminListCohorts,
   handleAdminGetCohort,
+  handleAdminCreateCohort,
   handleAdminUpdateCohort,
+  handleAdminDeleteCohort,
   handleAdminExportCohort,
   handleAdminGetStats,
 } from '../../controllers/adminCohortController';
@@ -12,8 +14,10 @@ const router = Router();
 
 router.get('/api/admin/stats', requireAdmin, handleAdminGetStats);
 router.get('/api/admin/cohorts', requireAdmin, handleAdminListCohorts);
+router.post('/api/admin/cohorts', requireAdmin, handleAdminCreateCohort);
 router.get('/api/admin/cohorts/:id', requireAdmin, handleAdminGetCohort);
 router.patch('/api/admin/cohorts/:id', requireAdmin, handleAdminUpdateCohort);
+router.delete('/api/admin/cohorts/:id', requireAdmin, handleAdminDeleteCohort);
 router.get('/api/admin/cohorts/:id/export', requireAdmin, handleAdminExportCohort);
 
 // War Room composite activity feed — enriched with lead + campaign data

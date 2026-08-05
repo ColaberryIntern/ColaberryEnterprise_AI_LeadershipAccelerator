@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useCountdown } from '../../../hooks/useCountdown';
-import { parseSessionTimeToHHMM, tzAbbrev } from '../../../utils/sessionTime';
+import { parseSessionTimeToHHMM, tzAbbrev, formatSessionTimeRange } from '../../../utils/sessionTime';
 import { NextLiveSession, joinSession } from '../../../services/onboardingApi';
 import { emitPointsEarned } from '../../../services/pointsFx';
 
@@ -9,7 +9,7 @@ import { emitPointsEarned } from '../../../services/pointsFx';
 // live_sessions-driven /api/portal/next-session payload. TodayShell gates on a
 // non-null session, so this component assumes `session` is present.
 //   scheduled → Days/Hrs/Min/Sec countdown + "Open the classroom"
-//   live      → pulsing dot + "Join Google Meet" (opens the meeting in a new tab)
+//   live      → pulsing dot + "Join Class" (opens the meeting in a new tab)
 const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) => {
   const isLive = session.status === 'live';
 
@@ -47,8 +47,8 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
         <b style={{ color: 'var(--strong)' }}>Session {session.session_number}</b> · {session.title}
       </div>
       <div className="te-muted" style={{ marginTop: 2 }}>
-        {session.session_date} · {session.start_time} - {session.end_time}
-        {tzAbbrev(session.timezone) && ` ${tzAbbrev(session.timezone)}`}
+        {session.session_date} · {formatSessionTimeRange(session.start_time, session.end_time)}
+        {tzAbbrev(session.timezone, session.session_date) && ` ${tzAbbrev(session.timezone, session.session_date)}`}
       </div>
 
       {isLive ? (
@@ -66,7 +66,7 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
               <path d="M15 10l4.5-2.5v9L15 14M4 7h9a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
             </svg>
-            Join Google Meet
+            Join Class
           </button>
         </>
       ) : (
@@ -79,13 +79,20 @@ const NextLiveClassCard: React.FC<{ session: NextLiveSession }> = ({ session }) 
               <div className="seg"><b>{cd.seconds}</b><span>sec</span></div>
             </div>
           )}
-          <Link
-            className="te-btn cherry"
-            style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
-            to={`/portal/sessions/${session.id}`}
-          >
-            Open the classroom
-          </Link>
+          {/* The session's Colaberry Commons room (chat + join-meeting).
+              ensureRoomForSession provisions one for every real session, but
+              a session predating that rollout could legitimately have none —
+              hide the button rather than link to the retired session-detail
+              page (removed in Phase 4 of the waiting-room plan). */}
+          {session.room_id && (
+            <Link
+              className="te-btn cherry"
+              style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
+              to={`/portal/rooms/${session.room_id}`}
+            >
+              Open the classroom
+            </Link>
+          )}
         </>
       )}
     </div>

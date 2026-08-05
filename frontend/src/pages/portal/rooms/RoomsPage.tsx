@@ -13,6 +13,7 @@ import {
   RoomsHome, RoomListItem, BookingCard, CreateBookingInput,
   ROOM_CATEGORIES, BOOKING_VARIANTS, BookingVariant, RoomPrivacy,
 } from '../../../services/roomsApi';
+import { fetchMySessions, MySession } from '../../../services/onboardingApi';
 
 const EMOJI_CHOICES = ['🎉', '🚀', '🛠️', '🧠', '💡', '🔥', '🌱', '🎯', '🧩', '☕', '🌈', '🦄', '🐙', '🎨', '📚', '🎮', '⚡', '🌟', '💬', '🎧'];
 const CAT_EMOJI: Record<string, string> = {
@@ -93,6 +94,51 @@ const RailGroup: React.FC<{ title: string; items: RoomListItem[]; activeId?: str
   );
 };
 
+// Status pill per class session, reusing the same pill tokens already used
+// elsewhere on this page/component tree (rm-live for live, rm-qchip/.done
+// for the verified-help question/answer chip) rather than inventing new
+// color language for the same three-state (upcoming/live/done) concept.
+const CLASS_STATUS_PILL: Record<string, { cls: string; label: string }> = {
+  scheduled: { cls: 'rm-qchip', label: 'Upcoming' },
+  live: { cls: 'rm-live', label: 'Live' },
+  completed: { cls: 'rm-qchip done', label: 'Done' },
+  cancelled: { cls: 'rm-qchip', label: 'Cancelled' },
+};
+
+// A session with no linked room yet (predates the Community Rooms rollout)
+// renders as plain, non-clickable text with its status pill — never a link
+// into a room that doesn't exist.
+const ClassRailRow: React.FC<{ session: MySession; active: boolean; onOpen: (id: string) => void }> = ({ session, active, onOpen }) => {
+  const pill = CLASS_STATUS_PILL[session.status] || CLASS_STATUS_PILL.scheduled;
+  const label = `#${session.session_number} ${session.title}`;
+  if (!session.room_id) {
+    return (
+      <div className="rm-railrow" style={{ cursor: 'default', opacity: 0.6 }}>
+        <span className="rm-railicon">🎓</span>
+        <span className="rm-railname">{label}</span>
+        <span className={pill.cls}>{pill.label}</span>
+      </div>
+    );
+  }
+  return (
+    <button type="button" className={`rm-railrow${active ? ' active' : ''}`} onClick={() => onOpen(session.room_id!)}>
+      <span className="rm-railicon">🎓</span>
+      <span className="rm-railname">{label}</span>
+      <span className={pill.cls}>{pill.label}</span>
+    </button>
+  );
+};
+
+const ClassRailGroup: React.FC<{ title: string; sessions: MySession[]; activeId?: string; onOpen: (id: string) => void }> = ({ title, sessions, activeId, onOpen }) => {
+  if (sessions.length === 0) return null;
+  return (
+    <div className="rm-railgroup">
+      <div className="rm-railhdr">{title}</div>
+      {sessions.map((s) => <ClassRailRow key={s.id} session={s} active={!!s.room_id && s.room_id === activeId} onOpen={onOpen} />)}
+    </div>
+  );
+};
+
 const NewRoomModal: React.FC<{ onClose: () => void; onCreated: (id: string) => void }> = ({ onClose, onCreated }) => {
   const [name, setName] = useState('');
   const [category, setCategory] = useState('build_together');
@@ -133,7 +179,7 @@ const NewRoomModal: React.FC<{ onClose: () => void; onCreated: (id: string) => v
           </div>
           <label className={`rm-toggle${isVideo ? ' on' : ''}`}>
             <input type="checkbox" checked={isVideo} onChange={(e) => setIsVideo(e.target.checked)} />
-            <span className="rm-toggle-txt"><b>📹 Video room</b><span>A Google Meet everyone can jump into.</span></span>
+            <span className="rm-toggle-txt"><b>📹 Video room</b><span>A video call everyone can jump into.</span></span>
           </label>
         </div>
         <div className="rm-modal-foot">
@@ -191,6 +237,7 @@ const RoomsPage: React.FC = () => {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<RoomListItem[] | null>(null);
   const [home, setHome] = useState<RoomsHome | null>(null);
+  const [mySessions, setMySessions] = useState<MySession[] | null>(null);
   const [modal, setModal] = useState<'none' | 'book' | 'new'>('none');
 
   const loadRooms = useCallback(async () => { setRooms(await fetchRooms()); }, []);
@@ -203,6 +250,9 @@ const RoomsPage: React.FC = () => {
     return () => window.clearInterval(id);
   }, [loadRooms]);
   useEffect(() => { loadHome().catch(() => setHome({ happening_now: [], up_next: [], my_rooms: [] })); }, [loadHome]);
+  // One-time fetch — a session's status/room_id doesn't change often enough
+  // to warrant the room list's 15s "here now" polling cadence.
+  useEffect(() => { fetchMySessions().then(setMySessions).catch(() => setMySessions([])); }, []);
 
   const open = (id: string) => navigate(`/portal/rooms/${id}`);
   const joinSession = async (bookingId: string) => {
@@ -232,6 +282,7 @@ const RoomsPage: React.FC = () => {
       <div className="rm-shell">
         <div className="rm-rail">
           {rooms === null && <div className="rm-empty">Loading…</div>}
+          <ClassRailGroup title="Your Classes" sessions={mySessions || []} activeId={roomId} onOpen={open} />
           <RailGroup title="Public" items={pub.filter((i) => !i.room.is_video)} activeId={roomId} onOpen={open} />
           <RailGroup title="Public · Video" items={pub.filter((i) => i.room.is_video)} activeId={roomId} onOpen={open} />
           <RailGroup title="Private" items={privFull.filter((i) => !i.room.is_video)} activeId={roomId} onOpen={open} />

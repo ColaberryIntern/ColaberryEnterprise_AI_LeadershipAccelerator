@@ -5,6 +5,8 @@ import { fetchPoints, fetchSchedule, levelFor, bandHudNext, PointsSummary, Onboa
 import { fetchSettings, readCachedAvatar } from '../../../services/portalSettingsApi';
 import { onPointsEarned } from '../../../services/pointsFx';
 import { readParticipant, countdown, firstClassTargetMs } from './shellUtils';
+import { useNextLiveSession } from './useNextLiveSession';
+import { parseSessionTimeToHHMM } from '../../../utils/sessionTime';
 import NotificationBell from '../community/NotificationBell';
 import BuildToast from '../projects/BuildToast';
 import { CohortContact, fetchCohortPresence, sendFriendRequest, respondToFriendRequest, colorFor } from '../../../services/cohortPresenceApi';
@@ -141,6 +143,13 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
   const [schedule, setSchedule] = useState<OnboardingSchedule | null>(null);
   const [now, setNow] = useState<number>(() => Date.now());
+  // Real per-session schedule (live_sessions), same source as the Today "Next
+  // live class" card and the Classroom sidebar — the topbar "Next class" pill
+  // used to derive its countdown purely from the cohort's first_class start
+  // date (midnight-anchored, no time-of-day), so it never reflected the actual
+  // next session's real start time. Falls back to that cohort-level countdown
+  // when there's no live session (e.g. Explorer/guest with none scheduled).
+  const { session: nextLiveSessionHud } = useNextLiveSession();
   // Points-earned FX: displayTotal counts UP to the real total; `fx` drives the
   // "+N" burst + a brief scale-pulse on the HUD when points land.
   const [displayTotal, setDisplayTotal] = useState(0);
@@ -212,14 +221,21 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
   const openChatTarget = useCallback((t: DmTarget) => {
     setChats((prev) => (prev.some((x) => x.roomId === t.roomId) ? prev : [...prev, t]));
   }, []);
+  // Surfaces a failed DM-open (e.g. "You can only message people in your cohort")
+  // instead of swallowing it — a click that silently does nothing looks broken.
+  const [dmError, setDmError] = useState('');
+  const flashDmError = useCallback((err: any) => {
+    setDmError(err?.response?.data?.error || 'Could not open that conversation.');
+    window.setTimeout(() => setDmError(''), 3200);
+  }, []);
   const openChat = useCallback((c: CohortContact) => {
-    openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(() => { /* non-fatal */ });
-  }, [openChatTarget]);
+    openDm(c.id).then((roomId) => openChatTarget({ roomId, name: c.name, color: c.color })).catch(flashDmError);
+  }, [openChatTarget, flashDmError]);
   // People-panel rows carry only enrollmentId + name; derive the colour the same way
   // the cohort rail does so the same person is always the same colour.
   const openPerson = useCallback((enrollmentId: string, name: string) => {
-    openDm(enrollmentId).then((roomId) => openChatTarget({ roomId, name, color: colorFor(enrollmentId) })).catch(() => { /* non-fatal */ });
-  }, [openChatTarget]);
+    openDm(enrollmentId).then((roomId) => openChatTarget({ roomId, name, color: colorFor(enrollmentId) })).catch(flashDmError);
+  }, [openChatTarget, flashDmError]);
 
   // Bridge: other surfaces (e.g. the community member profile drawer) open a DM
   // by dispatching a `te-open-dm` CustomEvent { enrollmentId, name, color? } —
@@ -231,11 +247,11 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
       if (!detail?.enrollmentId) return;
       openDm(detail.enrollmentId)
         .then((roomId) => openChatTarget({ roomId, name: detail.name ?? 'Direct message', color: detail.color ?? colorFor(detail.enrollmentId!) }))
-        .catch(() => { /* non-fatal */ });
+        .catch(flashDmError);
     };
     window.addEventListener('te-open-dm', onOpenDm as EventListener);
     return () => window.removeEventListener('te-open-dm', onOpenDm as EventListener);
-  }, [openChatTarget]);
+  }, [openChatTarget, flashDmError]);
 
   const load = useCallback(async () => {
     const [p, s] = await Promise.allSettled([fetchPoints(), fetchSchedule()]);
@@ -313,7 +329,19 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
     : (lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level');
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
-  const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
+  const nextLiveSessionTargetMs = (() => {
+    if (!nextLiveSessionHud) return null;
+    if (nextLiveSessionHud.status === 'live') return now; // live now → 0d 0h
+    if (!nextLiveSessionHud.session_date) return null;
+    const hhmm = parseSessionTimeToHHMM(nextLiveSessionHud.start_time || '09:00');
+    if (!hhmm) return null;
+    const t = new Date(`${nextLiveSessionHud.session_date}T${hhmm}:00`).getTime();
+    return isNaN(t) ? null : t;
+  })();
+  const fcCd = countdown(
+    nextLiveSessionHud ? nextLiveSessionTargetMs : firstClassTargetMs(schedule?.first_class ?? null),
+    now,
+  );
   const cohortName = schedule?.first_class?.cohort_name || 'Your cohort';
   const active = location.pathname;
 
@@ -350,10 +378,22 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
         </div>
         <div className="te-top-right">
           <div className="te-rail">
-            <span className="te-cd class" title="Next class">
-              <span className="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M7 11v4c0 1 2 2 5 2s5-1 5-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
-              <span className="tx"><span className="lbl">Next class</span><span className="when mono">{fcCd ? `${fcCd.d}d ${fcCd.h}h` : '—'}</span></span>
-            </span>
+            {(() => {
+              const cdInner = (
+                <>
+                  <span className="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M3 8l9-4 9 4-9 4-9-4Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /><path d="M7 11v4c0 1 2 2 5 2s5-1 5-2v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
+                  <span className="tx"><span className="lbl">Next class</span><span className="when mono">{fcCd ? `${fcCd.d}d ${fcCd.h}h` : '—'}</span></span>
+                </>
+              );
+              // Clickable straight into the class's room when one exists (real
+              // live_sessions countdown); a cohort-level fallback countdown (no
+              // linked session yet) stays a plain, non-clickable pill.
+              return nextLiveSessionHud?.room_id ? (
+                <Link className="te-cd class" title="Next class" to={`/portal/rooms/${nextLiveSessionHud.room_id}`}>{cdInner}</Link>
+              ) : (
+                <span className="te-cd class" title="Next class">{cdInner}</span>
+              );
+            })()}
             <span className="te-cd event" title="Next event">
               <span className="ic"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="3" stroke="currentColor" strokeWidth="2" /><path d="M3 9h18M8 3v4M16 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></span>
               <span className="tx"><span className="lbl">Next event</span><span className="when mono">{ohCd ? `${ohCd.d}d ${ohCd.h}h` : '—'}</span></span>
@@ -548,6 +588,8 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge }) => {
           ))}
         </div>
       )}
+
+      {dmError && <div className="te-toast">{dmError}</div>}
 
       {/* ── bottom tab bar (mobile only via CSS) — nav reachable on phones ── */}
       <nav className="te-tabbar">

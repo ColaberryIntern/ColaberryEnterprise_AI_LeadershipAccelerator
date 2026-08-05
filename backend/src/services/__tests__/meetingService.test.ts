@@ -18,7 +18,7 @@ describe('shouldGenerateMeetLink', () => {
     expect(shouldGenerateMeetLink({ meeting_link: null, status: 'cancelled' }, true)).toBe(false);
   });
 
-  it('does not generate when Meet is not configured (no Google creds)', () => {
+  it('does not generate when Meet is not configured (no Zoom creds)', () => {
     expect(shouldGenerateMeetLink({ meeting_link: null, status: 'scheduled' }, false)).toBe(false);
   });
 });

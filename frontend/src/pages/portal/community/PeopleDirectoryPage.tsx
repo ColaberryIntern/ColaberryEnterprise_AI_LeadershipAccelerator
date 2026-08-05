@@ -20,7 +20,8 @@ const ROLE_FILTERS: { key: CommunityMemberRole | 'all'; label: string }[] = [
 
 /**
  * People directory (Feature #3) — a dedicated, browsable, searchable roster of
- * the viewer's cohort. Cohort scoping + role/badges come from the backend
+ * the viewer's cohort (staff/mgmt see every member on the platform instead —
+ * see communityService.ts's listMembers). Role/badges come from the backend
  * (/api/portal/community/members). Clicking a card opens the shared
  * MemberProfileDrawer (which now wires Message + Connect).
  */

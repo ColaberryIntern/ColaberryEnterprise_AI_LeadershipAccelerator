@@ -12,7 +12,7 @@
  */
 import { getFeed, type FeedCard, type FeedVideo } from './timelineService';
 import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
-import { anchoredWeekAllowed } from './todayFeedPlan';
+import { anchoredWeekAllowed, weekStartedForToday, isWeekGated, groupByType } from './todayFeedPlan';
 import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
@@ -237,26 +237,51 @@ export async function rehydrateSessionItems(items: TodayFeedItem[]): Promise<voi
   }
 }
 
-async function classCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
+export interface ClassCandidates {
+  /** Real curriculum (week-bound) — the student's actual assigned work this week. Order untouched. */
+  weekBound: TodayFeedItem[];
+  /** Evergreen (week:null) intel-pipeline/curriculum types, grouped so the composer
+   *  can round-robin them alongside the ambient providers as one flat "variety"
+   *  pool — see gatherAnchored's docstring for why this is a separate tier from
+   *  weekBound rather than concatenated onto it. */
+  evergreenByType: Map<string, TodayFeedItem[]>;
+}
+
+async function classCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<ClassCandidates> {
   try {
     const feed = await getFeed(enrollmentId);
     const isExplorer = feed.is_explorer === true; // free tier — Week 0 curriculum only
-    return feed.cards
+    // TODAY-ONLY: a week's cards only appear on Today once the student has
+    // started that week (see weekStartedForToday's docstring) — Classroom is
+    // completely unaffected (it never reads this flag or calls this function).
+    const weekStartGateOn = env.timelineWeekStartGateEnabled;
+    const eligible = feed.cards
       .filter((c) => {
         if (!isTodayEligible(c.type) || isAmbient(c.type)) return false;
         if (c.status === 'locked' || c.status === 'completed') return false;
         if (placedRefs.has(`card:${c.id}`)) return false;
-        // The week gate governs CLASS curriculum progression only. Today-homed
-        // evergreen content (news / tools / quotes — week:null) is the free
-        // engagement layer and must never be week-gated, or free users see none
-        // of it (null !== 0). Paid users pass either way.
-        if ((surfaceOf(c.type) ?? 'class') === 'class' && !anchoredWeekAllowed(c.week, isExplorer)) return false;
+        // The week gate governs any card tied to a real curriculum week,
+        // regardless of surface — REGRESSION (2026-08-03): this used to be
+        // scoped to `surfaceOf(c.type) === 'class'`, but `announcement` (and
+        // `implementation_task`/`artifact_submission`, `community_discussion`
+        // in some cases) are registered under other home surfaces
+        // (`home_surface: 'today'`/`'project'`/`'community'`) despite
+        // carrying a real `week` — so the gate silently never ran for them at
+        // all, regardless of what the gate functions themselves did. Today-
+        // homed EVERGREEN content (news / tools / quotes) has `week: null`
+        // and must never be week-gated, or free users see none of it
+        // (null !== 0) — that's what this guard actually protects, not surface.
+        if (isWeekGated(c.week) && !anchoredWeekAllowed(c.week, isExplorer)) return false;
+        if (weekStartGateOn && isWeekGated(c.week) && !weekStartedForToday(c, feed.cards)) return false;
         return true;
       })
       .map(anchoredItemFromCard);
+    const weekBound = eligible.filter((i) => i.week != null);
+    const evergreenByType = groupByType(eligible.filter((i) => i.week == null), (i) => i.type);
+    return { weekBound, evergreenByType };
   } catch (err: any) {
     console.warn('[todayAnchoredSources] class failed:', err?.message?.split('\n')[0]);
-    return [];
+    return { weekBound: [], evergreenByType: new Map() };
   }
 }
 
@@ -325,14 +350,32 @@ async function missedSessionCandidates(enrollmentId: string, placedRefs: Set<str
 }
 
 /**
- * The blended anchored queue for the Today feed. Class-only unless
- * env.todayAggregateSources is on, in which case Project + Community are blended
- * in round-robin. Items carry position 0; the composer assigns real positions.
+ * The Today feed's two candidate tiers:
+ *  - `weekBound`: real, precedence-worthy work — the student's current-week
+ *    curriculum blended (round-robin, via blendSurfaces) with Project tasks /
+ *    Community posts / missed-session replays when those surfaces are on.
+ *    This is what the composer treats as "anchored" for cadence purposes —
+ *    curriculum (and curriculum-adjacent work) gets first billing.
+ *  - `evergreenByType`: the intel-pipeline/curriculum evergreen types
+ *    (ai_news_flash, market_intelligence, ai_tool_of_the_day, …), grouped by
+ *    type. The composer merges this with the ambient providers
+ *    (blog/podcast/testimonial) into ONE flat round-robin "variety" pool —
+ *    see todayFeedComposer.extendFeed. Kept SEPARATE from weekBound (rather
+ *    than concatenated onto it, as before 2026-08-04) because lumping a
+ *    ~14-type evergreen pool in with a 3-provider ambient pool gave each
+ *    ambient provider (blog/testimonial/podcast) a much bigger individual
+ *    share than any single evergreen type — the exact "too many blogs"
+ *    imbalance this split fixes.
  */
-export async function gatherAnchored(enrollmentId: string, placedRefs: Set<string>): Promise<TodayFeedItem[]> {
+export interface AnchoredCandidates {
+  weekBound: TodayFeedItem[];
+  evergreenByType: Map<string, TodayFeedItem[]>;
+}
+
+export async function gatherAnchored(enrollmentId: string, placedRefs: Set<string>): Promise<AnchoredCandidates> {
   const cls = await classCandidates(enrollmentId, placedRefs);
   // Each extra surface is gated by its own flag; when all are off this returns
-  // the class-only queue unchanged (flag-off ≡ byte-identical to before).
+  // the class-only weekBound queue unchanged (flag-off ≡ byte-identical to before).
   const extras: TodayFeedItem[][] = [];
   if (env.todayAggregateSources) {
     const [project, community] = await Promise.all([
@@ -344,6 +387,6 @@ export async function gatherAnchored(enrollmentId: string, placedRefs: Set<strin
   if (env.todaySessionReplays) {
     extras.push(await missedSessionCandidates(enrollmentId, placedRefs));
   }
-  if (!extras.length) return cls;
-  return blendSurfaces([cls, ...extras]);
+  const weekBound = extras.length ? blendSurfaces([cls.weekBound, ...extras]) : cls.weekBound;
+  return { weekBound, evergreenByType: cls.evergreenByType };
 }

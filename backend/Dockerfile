@@ -24,7 +24,7 @@ WORKDIR /app
 # on every commit) was copied first, so xvfb/git/curl/gnupg, the Docker CLI +
 # compose plugin, and the Playwright Chromium download were all re-fetched on
 # every single build — multiple minutes of unrelated work per rebuild.
-RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc git ca-certificates curl gnupg && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb x11vnc git ca-certificates curl gnupg poppler-utils && rm -rf /var/lib/apt/lists/*
 # Install docker CLI + compose plugin so the backend can provision preview stacks
 # via the mounted /var/run/docker.sock. Only the CLI — the daemon lives on the host.
 RUN install -m 0755 -d /etc/apt/keyrings \
@@ -47,6 +47,10 @@ RUN npx playwright install --with-deps chromium
 # commit invalidates from here down, not the installs above.
 COPY --from=builder /app/backend/dist ./dist
 COPY --from=builder /app/frontend/src/pages ./frontend/src/pages
+# Static data the running backend reads directly off disk (not compiled/bundled) —
+# trustInpactGoalsService.ts reads this at runtime. Copied straight from the build
+# context (not --from=builder) since it needs no build step.
+COPY docs/ai-governance/ai-systems-registry.csv ./docs/ai-governance/ai-systems-registry.csv
 RUN mkdir -p /app/uploads/strategy-prep /data/screenshots /data/browser-profiles
 
 ENV NODE_ENV=production

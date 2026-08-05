@@ -1,0 +1,18 @@
+{
+  "generated_at": "2026-07-30T03:00:27.137Z",
+  "max_safe_width": 1800,
+  "safe_viewport": {
+    "width": 1440,
+    "height": 900,
+    "deviceScaleFactor": 1
+  },
+  "entries": [
+    {
+      "file": "03-subscription-tab.png",
+      "originalWidth": 1440,
+      "finalWidth": 1440,
+      "downscaled": false,
+      "outPath": "docs\\screenshots\\2026-07-30-settings-location\\03-subscription-tab.png"
+    }
+  ]
+}

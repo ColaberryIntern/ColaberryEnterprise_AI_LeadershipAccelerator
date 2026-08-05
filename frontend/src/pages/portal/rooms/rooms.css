@@ -136,6 +136,17 @@
 .rm-pane-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface,#fff);border:1px solid var(--border-subtle,#E4E4E3);border-radius:var(--r-16,16px);padding:12px 16px;margin-bottom:14px}
 .rm-pane-title{font-size:18px;font-weight:800;color:var(--strong,#1A1A1A);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+/* Class-linked room banner (the room's "waiting room" state, driven off the
+   real live_sessions status — countdown / live+join / recap) */
+.rm-classbanner{background:var(--cherry-bg,#FFF0F1);border:1px solid var(--cherry,#FB2832);border-radius:var(--r-16,16px);padding:12px 16px;margin-bottom:14px}
+.rm-classbanner.live{background:var(--cherry-bg,#FFF0F1);border-color:var(--cherry-deep,#C20E1E)}
+.rm-classbanner-top{font-size:14px;color:var(--strong,#1A1A1A)}
+.rm-classbanner-time{font-size:12.5px;color:var(--muted,#6B6B6B);margin-top:2px}
+.rm-classbanner-cd{margin-top:8px;font-size:13px;color:var(--strong,#1A1A1A)}
+.rm-classbanner-cd b{font-variant-numeric:tabular-nums}
+.rm-classbanner-live{display:flex;align-items:center;gap:7px;margin-top:8px;font-size:13px;font-weight:700;color:var(--cherry-deep,#C20E1E)}
+.rm-classbanner button.te-btn{margin-top:8px}
+
 .rm-welcome-hero{text-align:center;padding:40px 20px;background:linear-gradient(135deg,var(--cherry-bg,#FFF0F1),var(--berry-bg,#EAF2F6));border-radius:var(--r-16,16px)}
 .rm-welcome-hero h2{margin:8px 0 4px;font-size:20px;color:var(--strong,#1A1A1A)}
 .rm-welcome-hero p{margin:0 auto;color:var(--muted,#6B6B6B);font-size:14px;max-width:420px}

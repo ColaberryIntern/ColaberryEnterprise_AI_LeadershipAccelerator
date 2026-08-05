@@ -1,4 +1,5 @@
 import portalApi from '../utils/portalApi';
+import { getParticipantToken } from '../utils/participantToken';
 
 // Client for the Community Rooms backend (/api/portal/community/rooms|bookings|
 // events|home|people). Mirrors communityApi.ts — goes through portalApi so the
@@ -67,7 +68,7 @@ export interface RoomListItem {
 // The viewer's enrollment id, decoded from the participant JWT (for owner checks).
 export function myEnrollmentId(): string {
   try {
-    const t = localStorage.getItem('participant_token') || '';
+    const t = getParticipantToken() || '';
     return JSON.parse(atob(t.split('.')[1] || '')).sub || '';
   } catch { return ''; }
 }
@@ -103,6 +104,7 @@ export interface BookingCard {
   host_enrollment_id: string | null;
   emoji?: string;
   related_live_session_id?: string | null;
+  related_room_id?: string | null;
 }
 
 export interface RoomsHome {
@@ -309,6 +311,10 @@ export interface RoomResource {
   body: string | null;
   mime_type: string | null;
   size_bytes: number | null;
+  // Present when this resource is a server-hosted file (uploaded doc, or an
+  // auto-ingested recording) — absent for a plain link/note/recap. Only used
+  // to decide "download button vs external link"; never used to build a path.
+  storage_key: string | null;
   created_by_enrollment_id: string | null;
   is_pinned: boolean;
   created_at: string;

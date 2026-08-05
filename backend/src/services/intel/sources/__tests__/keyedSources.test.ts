@@ -1,17 +1,22 @@
 /**
- * keyedSources.test.ts — behavioural tests for the two key/endpoint-gated intel
- * source adapters (ai_video_stream, market_intelligence).
+ * keyedSources.test.ts — behavioural tests for the key/endpoint-gated intel source
+ * adapter (ai_video_stream).
  *
- * The single most important guarantee these adapters must uphold is DEGRADE-DARK:
+ * The single most important guarantee this adapter must uphold is DEGRADE-DARK:
  * when the required env var is missing, collect() must return [] WITHOUT throwing
  * and WITHOUT touching the network. These tests assert exactly that, plus the
  * happy-path normalization for the YouTube adapter (stubbed global fetch), plus a
- * non-2xx degrade and the Opportunity Pulse defensive mapping.
+ * non-2xx degrade.
  *
- * Importing the modules self-registers them; we exercise their exported collect().
+ * market_intelligence used to live in this file too (it was also endpoint-gated,
+ * over an internal "Opportunity Pulse" REST API). It has since been rewritten as a
+ * CURATED source (no live fetch, no external dependency) matching the pattern of
+ * ai_quote_of_the_day / ai_tool_of_the_day / claude_code_technique — its coverage
+ * now lives in curatedSources.test.ts alongside those siblings.
+ *
+ * Importing the module self-registers it; we exercise its exported collect().
  */
 import { collect as collectVideo } from '../aiVideoStreamSource';
-import { collect as collectMarket } from '../marketIntelligenceSource';
 
 /** Build a minimal Response-like object for a stubbed global fetch. */
 function jsonResponse(payload: unknown, ok = true, status = 200): Response {
@@ -25,8 +30,6 @@ function jsonResponse(payload: unknown, ok = true, status = 200): Response {
 describe('keyed intel sources — degrade-dark when env is unset', () => {
   const envKeys = [
     'YOUTUBE_API_KEY',
-    'OPPORTUNITY_PULSE_URL',
-    'OPPORTUNITY_PULSE_TOKEN',
     'AI_VIDEO_STREAM_QUERY',
   ] as const;
   const saved: Record<string, string | undefined> = {};
@@ -50,12 +53,6 @@ describe('keyed intel sources — degrade-dark when env is unset', () => {
   it('ai_video_stream returns [] (no throw, no fetch) when YOUTUBE_API_KEY is unset', async () => {
     const fetchSpy = jest.spyOn(global, 'fetch');
     await expect(collectVideo()).resolves.toEqual([]);
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-
-  it('market_intelligence returns [] (no throw, no fetch) when OPPORTUNITY_PULSE_URL is unset', async () => {
-    const fetchSpy = jest.spyOn(global, 'fetch');
-    await expect(collectMarket()).resolves.toEqual([]);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -105,39 +102,5 @@ describe('keyed intel sources — degrade-dark when env is unset', () => {
       { ok: false, status: 403, text: async () => '' } as unknown as Response,
     );
     await expect(collectVideo()).resolves.toEqual([]);
-  });
-
-  it('market_intelligence maps a bare array and tolerates missing/alt field names', async () => {
-    process.env.OPPORTUNITY_PULSE_URL = 'https://pulse.internal/api';
-    const payload = [
-      { id: 42, name: 'RFP: Data Platform', link: 'https://pulse/op/42', description: 'summary text', created_at: '2026-07-18T00:00:00Z' },
-      { url: 'https://pulse/op/nolabel-ok', title: 'Titled via url identity' },
-      { title: 'No identity — skipped' }, // no id and no url → skipped
-      { id: 7 }, // no title → skipped
-    ];
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse(payload));
-
-    const items = await collectMarket();
-
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(items).toHaveLength(2);
-    expect(items[0]).toEqual({
-      guid: 'op:42',
-      source: 'Opportunity Pulse',
-      title: 'RFP: Data Platform',
-      url: 'https://pulse/op/42',
-      excerpt: 'summary text',
-      publishedAt: new Date('2026-07-18T00:00:00Z'),
-    });
-    expect(items[1].guid).toBe('op:https://pulse/op/nolabel-ok');
-    expect(items[1].publishedAt).toBeNull();
-  });
-
-  it('market_intelligence degrades to [] on malformed JSON (never throws)', async () => {
-    process.env.OPPORTUNITY_PULSE_URL = 'https://pulse.internal/api';
-    jest.spyOn(global, 'fetch').mockResolvedValue(
-      { ok: true, status: 200, text: async () => '<<not json>>' } as unknown as Response,
-    );
-    await expect(collectMarket()).resolves.toEqual([]);
   });
 });

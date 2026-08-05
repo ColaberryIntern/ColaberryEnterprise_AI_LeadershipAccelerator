@@ -25,17 +25,10 @@ import CommunityPulse from './CommunityPulse';
 import NextLiveClassCard from './NextLiveClassCard';
 import { useNextLiveSession } from './useNextLiveSession';
 import '../../../components/timeline/timeline.css';
-import { readViewSnapshot, restoreScroll, usePersistScrollOnScroll } from '../../../hooks/useScrollRestore';
 import SkillMeter from '../SkillMeter';
 import SetupModal from './SetupModal';
 import { useReferralForm } from './useReferralForm';
-
-// Persist the Today feed's scroll position so leaving for a card's runtime
-// workspace and coming back — via its Back button OR the browser's own back
-// button — returns the student to the same spot instead of resetting to the
-// top. Same proven pattern as Classroom's 'classroom-view' key; see
-// hooks/useScrollRestore for the restore/persist mechanics.
-const TODAY_VIEW_KEY = 'today-view';
+import { fetchSkillProfile, LearnerSkillProfile } from '../../../services/capeApi';
 
 const TodayShell: React.FC = () => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
@@ -55,6 +48,10 @@ const TodayShell: React.FC = () => {
   const [streak, setStreak] = useState<StreakView | null>(null);
   const [curriculum, setCurriculum] = useState<TimelineFeedCard[]>([]);
   const [selectedCard, setSelectedCard] = useState<TimelineFeedCard | null>(null);
+  // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — the ONE backend learner-skill
+  // profile that drives both the radar (SkillMeter) and the Readiness ring below.
+  // null while loading; the ring/radar render their own loading states off that.
+  const [capeProfile, setCapeProfile] = useState<LearnerSkillProfile | null>(null);
 
   const me = useMemo(readParticipant, []);
   const { flags } = usePortalFlags();
@@ -72,14 +69,15 @@ const TodayShell: React.FC = () => {
     // therefore the scroll-restore effect below, which waits on curriculum)
     // far longer than necessary for zero benefit — scheduleCache exists
     // exactly to make two callers share one in-flight request.
-    const [p, s, pr, cl, st] = await Promise.allSettled([
-      fetchPoints(), loadSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'), fetchStreak(),
+    const [p, s, pr, cl, st, cp] = await Promise.allSettled([
+      fetchPoints(), loadSchedule(), fetchOnboardingProfile(), portalApi.get('/api/portal/classroom'), fetchStreak(), fetchSkillProfile(),
     ]);
     if (p.status === 'fulfilled') setPoints(p.value);
     if (s.status === 'fulfilled') setSchedule(s.value);
     if (pr.status === 'fulfilled') setProfile(pr.value);
     if (cl.status === 'fulfilled') setCurriculum(((cl.value.data?.cards as TimelineFeedCard[]) || []).sort((a, b) => (a.week ?? 0) - (b.week ?? 0) || a.order - b.order));
     if (st.status === 'fulfilled') setStreak(st.value);
+    if (cp.status === 'fulfilled') setCapeProfile(cp.value);
   }, []);
 
   useEffect(() => { loadAll(); }, [loadAll]);
@@ -91,22 +89,14 @@ const TodayShell: React.FC = () => {
     return () => window.clearInterval(id);
   }, []);
 
-  // Restore scroll once the feed has loaded (restoreScroll itself waits for the
-  // page to actually grow tall enough — thumbnails load after mount — so it's
-  // safe to call as soon as we have cards to render). Runs once.
-  const restoredScrollRef = React.useRef(false);
-  useEffect(() => {
-    if (restoredScrollRef.current || curriculum.length === 0) return;
-    restoredScrollRef.current = true;
-    const snap = readViewSnapshot<Record<string, never>>(TODAY_VIEW_KEY);
-    if (snap) restoreScroll(snap.scrollY || 0);
-  }, [curriculum]);
-  usePersistScrollOnScroll<Record<string, never>>(TODAY_VIEW_KEY, curriculum.length > 0, () => ({}));
-
   const flash = (msg: string) => { setToast(msg); window.setTimeout(() => setToast(''), 2600); };
 
   const total = points?.total ?? 0;
   const lvl = levelFor(total);
+  // Architect Readiness — backend-owned (CAPE Phase 0-1), replaces the previous
+  // hardcoded 0/100 literal. Rounds the same overall_proficiency SkillMeter renders,
+  // so the ring and the radar can never disagree (design doc §2, §11, §17 AC 10).
+  const readiness = capeProfile ? Math.round(capeProfile.overall_proficiency) : 0;
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
@@ -244,7 +234,7 @@ const TodayShell: React.FC = () => {
               <div className="cap">Setup</div>
             </div>
             <div className="te-ringwrap">
-              <div className="te-ring" style={{ '--p': 2, '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>0</b><span>/100</span></div></div>
+              <div className="te-ring" style={{ '--p': Math.max(2, readiness), '--c': 'var(--cherry)' } as React.CSSProperties}><div className="v"><b>{readiness}</b><span>/100</span></div></div>
               <div className="cap">Readiness</div>
             </div>
             <div className="te-metacol">
@@ -283,7 +273,7 @@ const TodayShell: React.FC = () => {
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <Link className="te-btn cherry" to="/portal/curriculum">Enroll to unlock →</Link>
+            <Link className="te-btn cherry" to="/portal/settings?tab=subscription">Enroll to unlock →</Link>
             {oh && <button className="te-btn" style={{ color: '#fff', border: '1px solid rgba(255,255,255,.6)', background: 'rgba(255,255,255,.14)' }} onClick={doRsvp} disabled={busy || rsvped}>{rsvped ? "RSVP'd for the event" : 'RSVP for the event'}</button>}
           </div>
         </div>
@@ -325,7 +315,7 @@ const TodayShell: React.FC = () => {
               <span className="go">→</span>
             </button>
           )}
-          <SkillMeter cards={curriculum} />
+          <SkillMeter profile={capeProfile} />
 
           {showSetupModal && (
             <SetupModal
@@ -395,8 +385,8 @@ const TodayShell: React.FC = () => {
             <div className="te-muted" style={{ margin: '-4px 0 12px' }}>{lvl.next ? `${lvl.next.min - total} pts to ${lvl.next.name}` : 'Max level reached'}</div>
             <div className="te-stat"><span className="lab">Setup progress</span><span className="num">{setupDone}/{steps.length}</span></div>
             <div className="te-ribbon"><i style={{ width: `${setupPct}%`, background: 'var(--berry)' }} /></div>
-            <div className="te-stat"><span className="lab">Architect Readiness</span><span className="num">0/100</span></div>
-            <div className="te-ribbon" style={{ marginBottom: 4 }}><i style={{ width: '2%', background: 'var(--cherry)' }} /></div>
+            <div className="te-stat"><span className="lab">Architect Readiness</span><span className="num">{readiness}/100</span></div>
+            <div className="te-ribbon" style={{ marginBottom: 4 }}><i style={{ width: `${Math.max(2, readiness)}%`, background: 'var(--cherry)' }} /></div>
             <div className="te-muted" style={{ fontSize: 12 }}>Grows as you build once the program starts.</div>
             <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} to="/portal/points">Break down my points</Link>
             <Link className="te-btn ghost sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} to="/portal/path">See your path</Link>

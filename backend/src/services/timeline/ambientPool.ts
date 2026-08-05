@@ -13,6 +13,27 @@
  * Today feed's job is fresh rotation + variety, and the composer persists each
  * pick as a `today_feed_impressions` row so pagination is stable regardless.
  * Fail-safe: any error resolves to [] so the feed never breaks.
+ *
+ * REPEAT COOLDOWN + TOP-UP FALLBACK (2026-08-04): the least-recently-seen SQL
+ * ordering above is only reachable if the CALLER's exclude list doesn't
+ * already block every row outright. The composer used to pass an ALL-TIME
+ * exclude list (every media id ever placed for that enrollment, no expiry) —
+ * for a heavily-used account that eventually excludes literally every row in
+ * a small pool (blog: 89 posts, podcast: 24 episodes), permanently:
+ * `pickAmbientBatch` returns [] forever, even though this module's own
+ * `*_views` ledger was built specifically to let old-but-eligible-again items
+ * resurface. Confirmed live 2026-08-04: a real account placed 488 impressions
+ * in 11 days and had fully exhausted blog (89/89) and podcast (24/24).
+ *
+ * Fixed in two layers (composer.ts): (1) the exclude list only covers items
+ * placed within `AMBIENT_REPEAT_COOLDOWN_DAYS` — outside that window the
+ * least-recently-seen ordering resurfaces the OLDEST-shown item first, same
+ * "recycle after a retention window" pattern as generatedContentRetention.ts.
+ * (2) A pool small enough to be fully cycled WITHIN the cooldown window itself
+ * (a very active student can exhaust 24 podcasts in days) still needs to never
+ * go fully dark — so if a fetch comes back short, the composer tops up with a
+ * second fetch excluding only THIS batch's own picks (no same-page duplicate),
+ * accepting a possible near-term repeat rather than showing nothing at all.
  */
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
@@ -21,6 +42,17 @@ import type { FeedVideo, FeedBlog } from './timelineService';
 
 export type AmbientProviderSlug = 'blog' | 'podcast' | 'testimonial';
 export const AMBIENT_PROVIDERS: AmbientProviderSlug[] = ['blog', 'podcast', 'testimonial'];
+/** How long a placed ambient item stays excluded from re-selection before it
+ *  becomes eligible again (oldest-shown-first, via the `*_views` ledger).
+ *  Deliberately much shorter than generatedContentRetention's 30-day window:
+ *  that constant governs LLM-generated cards (generation cost matters, and
+ *  those pools are effectively unlimited for live-fetch sources); this one
+ *  governs small, static, pre-existing content pools (podcast: 24 episodes)
+ *  that a single active student can fully cycle through in days, not weeks —
+ *  confirmed live 2026-08-04: a real account placed 488 impressions in 11
+ *  days and had exhausted 100% of blog (89/89) and podcast (24/24) content,
+ *  permanently, under the old all-time exclusion. */
+export const AMBIENT_REPEAT_COOLDOWN_DAYS = Number(process.env.AMBIENT_REPEAT_COOLDOWN_DAYS || 7);
 
 export interface AmbientItem {
   provider: AmbientProviderSlug;

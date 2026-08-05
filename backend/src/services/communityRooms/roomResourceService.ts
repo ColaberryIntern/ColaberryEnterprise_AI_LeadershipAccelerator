@@ -185,6 +185,7 @@ export async function getResourceForDownload(
   // (public, unauthenticated GET keyed only on an unguessable UUID) explicitly
   // lacks — room/booking files must not be fetchable by guessing an id.
   if (!canReadContent(room, ctx, membership)) throw forbiddenError('You cannot read this room');
-  if (resource.resource_type !== 'file' || !resource.storage_key) throw notFoundError('This resource is not a downloadable file');
+  const downloadable = resource.resource_type === 'file' || resource.resource_type === 'recording';
+  if (!downloadable || !resource.storage_key) throw notFoundError('This resource is not a downloadable file');
   return resource;
 }

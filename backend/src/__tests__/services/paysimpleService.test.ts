@@ -205,6 +205,52 @@ describe('PaySimple Service', () => {
       expect(body.external_id).toBe('CB-100-1234567890');
       expect(body.customer.email).toBe('test@co.com');
     });
+
+    it('clamps item.name to 50 chars when a long cohortName would overflow PaySimple\'s limit', async () => {
+      // Regression test: found live 2026-07-31 -- "Monthly plan (-$50 credit)" as
+      // cohortName produced a 54-char item.name and PaySimple returned a 400
+      // ("must be 50 characters or fewer") for every credit-holding student's checkout.
+      const mockLink = { id: 'link_def456', payment_link: 'https://colaberry.mypaysimple.com/s/pay/abc' };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: mockLink }),
+      });
+
+      await createPaymentLink({
+        externalId: 'SUB-100-1234567890',
+        cohortName: 'Monthly plan (−$50 credit)', // 26 chars -> 54 combined with the name prefix
+        amount: 149,
+        customerFirstName: 'Test',
+        customerLastName: 'User',
+        customerEmail: 'test@co.com',
+      });
+
+      const [, options] = mockFetch.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.item.name.length).toBeLessThanOrEqual(50);
+      expect(body.item.name).toBe('AI Leadership Accelerator - Monthly plan (−$50');
+    });
+
+    it('leaves a short item.name unchanged (no unnecessary truncation)', async () => {
+      const mockLink = { id: 'link_ghi789', payment_link: 'https://colaberry.mypaysimple.com/s/pay/ghi' };
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({ data: mockLink }),
+      });
+
+      await createPaymentLink({
+        externalId: 'SUB-101-1234567890',
+        cohortName: 'Monthly plan',
+        amount: 199,
+        customerFirstName: 'Test',
+        customerLastName: 'User',
+        customerEmail: 'test@co.com',
+      });
+
+      const [, options] = mockFetch.mock.calls[0];
+      const body = JSON.parse(options.body);
+      expect(body.item.name).toBe('AI Leadership Accelerator - Monthly plan');
+    });
   });
 
   describe('deletePaymentLink', () => {

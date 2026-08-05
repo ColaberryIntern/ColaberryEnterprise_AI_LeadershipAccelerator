@@ -3,6 +3,7 @@ import {
   handleListOpenCohorts,
   handleCreateInvoice,
   handleCreateInvoiceRequest,
+  handleCreateFreeAccount,
   handleVerifyEnrollment,
 } from '../controllers/enrollmentController';
 import { handleRedeemSeat } from '../controllers/sponsorController';
@@ -12,6 +13,7 @@ const router = Router();
 router.get('/api/cohorts', handleListOpenCohorts);
 router.post('/api/create-invoice', handleCreateInvoice);
 router.post('/api/create-invoice-request', handleCreateInvoiceRequest);
+router.post('/api/create-free-account', handleCreateFreeAccount);
 router.get('/api/enrollment/verify', handleVerifyEnrollment);
 // Door B employee seat redemption — public, must stay on enrollmentRoutes
 // (mounted before the auth guard). Idempotent on the redemption code.

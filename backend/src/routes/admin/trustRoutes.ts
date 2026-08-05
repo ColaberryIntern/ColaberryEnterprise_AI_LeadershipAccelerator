@@ -14,6 +14,16 @@ import {
   handleGetCostBreakdown,
   handleGetValue,
   handleGetRetention,
+  handleEnforceRetention,
+  handleGetAgentRoster,
+  handleGetRegistryHealth,
+  handleGetAgentDetail,
+  handleRunAgent,
+  handleGetCompositeBreakdown,
+  handleGetActivityDetail,
+  handleGetActivityDetailForDay,
+  handleGetBlockedWrites,
+  handleGetAgentRegistryDetail,
 } from '../../controllers/trustController';
 
 const router = Router();
@@ -26,6 +36,18 @@ router.get('/api/admin/trust/actions', requireAdmin, handleGetActions);
 router.get('/api/admin/trust/cost-breakdown', requireAdmin, handleGetCostBreakdown);
 router.get('/api/admin/trust/value', requireAdmin, handleGetValue);
 router.get('/api/admin/trust/retention', requireAdmin, handleGetRetention);
+router.post('/api/admin/trust/retention/enforce', requireAdmin, handleEnforceRetention);
 router.get('/api/admin/trust/dimension/:key', requireAdmin, handleGetDimension);
+router.get('/api/admin/trust/agents', requireAdmin, handleGetAgentRoster);
+router.get('/api/admin/trust/registry-health', requireAdmin, handleGetRegistryHealth);
+router.get('/api/admin/trust/agents/registry/:name', requireAdmin, handleGetAgentRegistryDetail);
+router.get('/api/admin/trust/agents/:slug', requireAdmin, handleGetAgentDetail);
+router.post('/api/admin/trust/agents/:slug/run', requireAdmin, handleRunAgent);
+
+// Phase B — Trust 90+ drill-down (T008-T013)
+router.get('/api/admin/trust/composite-breakdown', requireAdmin, handleGetCompositeBreakdown);
+router.get('/api/admin/trust/activity/day/:date', requireAdmin, handleGetActivityDetailForDay);
+router.get('/api/admin/trust/activity/:kind', requireAdmin, handleGetActivityDetail);
+router.get('/api/admin/trust/blocked-writes', requireAdmin, handleGetBlockedWrites);
 
 export default router;

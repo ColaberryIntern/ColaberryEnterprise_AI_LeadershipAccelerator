@@ -3,6 +3,8 @@ import { Cohort, Enrollment, Lead, Campaign } from '../models';
 import { AppError } from '../utils/AppError';
 import { env } from '../config/env';
 import { CreateInvoiceInput, CreateInvoiceRequestInput } from '../schemas/enrollmentSchema';
+import { pickBestEnrollment } from './participantService';
+import { redactForLogs } from '../utils/piiRedaction';
 
 export async function validateCohortAvailability(cohortId: string): Promise<Cohort> {
   const cohort = await Cohort.findByPk(cohortId);
@@ -103,6 +105,10 @@ export async function markEnrollmentPaid(
   if (enrollment.payment_status === 'paid') return enrollment;
 
   enrollment.payment_status = 'paid';
+  // Confirmed payment is the self-serve grant condition — without this, requestMagicLink
+  // (participantService) keeps rejecting the paid student with "pending admin approval"
+  // forever, since it gates strictly on portal_enabled, not payment_status.
+  enrollment.portal_enabled = true;
   if (paymentDetails) {
     enrollment.paysimple_payment_id = String(paymentDetails.paymentId);
     enrollment.amount_paid = paymentDetails.amount;
@@ -213,7 +219,17 @@ export async function createAdminEnrollment(data: {
     payment_status: 'paid',
     payment_method: 'invoice',
     status: 'active',
-    portal_enabled: false,
+    // Portal access ON at creation. This was `false`, which meant every student
+    // an admin rostered manually hit "Your enrollment is pending admin approval
+    // for portal access" on the login screen and could not get in — only the
+    // /quick-add-student route flipped it on afterwards. Found live when the
+    // 2026-07-23 Orientation cohort could not check in via the class QR, and
+    // independently confirmed 2026-07-30 when 9 real paying Open House seat-hold
+    // depositors turned out silently locked out the same way for two weeks.
+    // An admin who wants a rostered-but-locked-out student can still revoke via
+    // setPortalAccess(); the safe default is the one that matches the admin's
+    // intent when they add a paid student to a cohort.
+    portal_enabled: true,
     notes: data.notes || 'Manually added by admin',
   });
 
@@ -242,7 +258,11 @@ export async function createExplorerEnrollment(input: {
   name: string;
   email: string;
   phone?: string;
+  company?: string;
+  title?: string;
+  company_size?: string;
   order_id?: string;
+  source?: string;
   utm_source?: string;
   utm_campaign?: string;
   page_url?: string;
@@ -254,17 +274,39 @@ export async function createExplorerEnrollment(input: {
   const cohort = await getOrCreateExplorerCohort();
   if (!cohort) throw new AppError('No cohort available to place the Explorer under', 409);
 
-  // Idempotent: reuse any existing enrollment for this email in the cohort —
-  // including a real paid student — so we never duplicate or downgrade anyone.
-  const existing = await Enrollment.findOne({ where: { email, cohort_id: cohort.id } });
+  // Idempotent: reuse any existing ACTIVE enrollment for this email across
+  // EVERY cohort, not just the Explorer one -- including a real paid student
+  // -- so we never duplicate or downgrade anyone. This used to check only
+  // `cohort_id: cohort.id` (the Explorer cohort itself), which meant anyone
+  // who already had a real seat in a *different* cohort got a brand-new
+  // duplicate Explorer row every time this ran (a repeat Open House RSVP
+  // through the live registration endpoint, or a resynced Eventbrite batch
+  // row) -- the query never even looked at their real enrollment. That
+  // duplicate then silently shadowed the student's real points/attendance
+  // (`pickBestEnrollment`'s recency tiebreak could make the new, empty
+  // duplicate outrank their real account at login) or, if the duplicate
+  // landed in a different cohort than the one their live sessions belong to,
+  // caused live-session check-in to fail outright with no useful error.
+  // Found live 2026-07-31 across 8+ real students (Sonya Parker, Britiana
+  // Akhile, Martin Mungai, Marcus Zeno, and others) before being traced back
+  // to this exact query scope -- every one of those was a symptom, this is
+  // the actual source. `pickBestEnrollment` picks the same canonical account
+  // the real login flow would, so a caller who already has multiple active
+  // rows (a pre-existing duplicate from before this fix) still gets routed
+  // to their real one, not an arbitrary match.
+  const existingCandidates = await Enrollment.findAll({ where: { email, status: 'active' } });
+  const existing = pickBestEnrollment(existingCandidates);
   if (existing) {
-    return { enrollment: existing, created: false, cohort_id: cohort.id };
+    return { enrollment: existing, created: false, cohort_id: existing.cohort_id };
   }
 
+  const source = input.source || 'Open House Explorer';
   const enrollment = await Enrollment.create({
     full_name: input.name.trim() || 'Open House Guest',
     email,
-    company: '',
+    company: input.company?.trim() || '',
+    title: input.title?.trim() || undefined,
+    company_size: input.company_size?.trim() || undefined,
     phone: input.phone || undefined,
     cohort_id: cohort.id,
     enrollment_type: 'explorer',
@@ -272,7 +314,7 @@ export async function createExplorerEnrollment(input: {
     payment_method: 'credit_card',
     status: 'active',
     portal_enabled: true,
-    notes: `Open House Explorer${input.order_id ? ` | eventbrite_order:${input.order_id}` : ''}`,
+    notes: `${source}${input.order_id ? ` | eventbrite_order:${input.order_id}` : ''}`,
   });
   // NOTE: intentionally does NOT increment cohort.seats_taken — Explorers are not
   // paying students and must never consume a paid seat.
@@ -402,7 +444,7 @@ async function enrollInPaymentCampaignIfUnpaid(enrollment: Enrollment): Promise<
 
   const { enrollLeadsInCampaign } = await import('./campaignService');
   const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
+  console.log(`[Payment Campaign] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
 }
 
 /* ------------------------------------------------------------------ */
@@ -437,7 +479,7 @@ export async function enrollInClassReadinessCampaign(enrollment: Enrollment): Pr
 
   const { enrollLeadsInCampaign } = await import('./campaignService');
   const results = await enrollLeadsInCampaign(campaign.id, [lead.id]);
-  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${enrollment.email}):`, results);
+  console.log(`[Class Readiness] Enrolled lead ${lead.id} (${redactForLogs(enrollment.email)}):`, results);
 }
 
 async function exitPaymentCampaign(email: string): Promise<void> {

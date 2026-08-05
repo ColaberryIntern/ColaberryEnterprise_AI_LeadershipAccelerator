@@ -18,6 +18,7 @@ import { recomputeRecentIntentScores } from './intentScoringService';
 import { evaluateBehavioralTriggers } from './behavioralTriggerService';
 import { recomputeActiveOpportunityScores } from './opportunityScoringService';
 import { getSetting } from './settingsService';
+import { redactForLogs } from '../utils/piiRedaction';
 import { staleCutoff, resolveMaxAgeDays } from './scheduledActionPolicy';
 import { evaluateSend } from './communicationSafetyService';
 import type { SendChannel } from './communicationSafetyService';
@@ -32,7 +33,10 @@ import {
 import { finalizeSessionAttendance } from './liveSessionAttendanceService';
 import { generateSessionRecap } from './sessionRecapService';
 import { ensureSessionMeetLink } from './meetingService';
+import { postLiveClassQrToRoom } from './liveClassQrService';
 import { sendSessionReminder, sendMissedSessionEmail, sendAbsenceAlert } from './emailService';
+import LiveSession from '../models/LiveSession';
+import { ingestRecordingForSession } from './sessionRecordingService';
 
 /**
  * Instrumentation wrapper for cron jobs.
@@ -1771,6 +1775,18 @@ export function startScheduler(): void {
     });
   });
 
+  // Reliability alerting (Trust Center P1-5): rolling 15-min ai_events error-rate
+  // check, alerts ali@colaberry.com on breach (2h in-memory cooldown, see
+  // reliabilityAlertingService.ts). Cadence matches the check's own window.
+  cron.schedule('*/15 * * * *', () => {
+    instrumentCronJob('ReliabilityAlerting', async () => {
+      const { runReliabilityAlertCheck } = await import('./reliabilityAlertingService');
+      await runReliabilityAlertCheck();
+    }).catch((err) => {
+      console.error('[Scheduler] Reliability alerting error:', err);
+    });
+  });
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(
@@ -2176,6 +2192,25 @@ export function startScheduler(): void {
   });
   console.log('[Scheduler] Campaign graduation: every 6 hours');
 
+  // -- Inbox Intel Case Auto-Sync: hourly, on the hour --
+  // Turns Ali's real inbox (email + Basecamp, filtered through Inbox COS's
+  // classification) into Cases without him having to search a person/topic
+  // first. Read-only against mail/Basecamp/Inbox COS; only creates Case/
+  // CaseItem rows in ASSESSING state, same as manual "Discover Related
+  // Work" — never auto-approves or auto-executes anything.
+  cron.schedule('0 * * * *', () => {
+    instrumentCronJob('InboxCaseAutoSync', async () => {
+      const { runAutoSync } = require('./inboxCase/caseAutoSyncService');
+      const result = await runAutoSync('cron', 'system');
+      console.log(
+        `[Scheduler] Inbox case auto-sync: ${result.newCasesCreated} new case(s), ${result.itemsAdded} item(s), ${result.emailsSkippedUnclassified} unclassified skipped`
+      );
+    }).catch((err: any) => {
+      console.error('[Scheduler] Inbox case auto-sync error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Inbox case auto-sync: hourly, on the hour');
+
   // -- Inbox Chief of Staff --
   try {
     const { startInboxScheduler } = require('./inbox/inboxScheduler');
@@ -2244,7 +2279,7 @@ export function startScheduler(): void {
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: false,
-          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${e.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Session reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
           sentReminders.add(dedupKey);
@@ -2271,7 +2306,7 @@ export function startScheduler(): void {
             meetingLink: session.meeting_link || null,
             materialsJson: session.materials_json || null,
             isOneHour: true,
-          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${e.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Session 1h reminder failed for ${redactForLogs(e.email)}:`, err.message));
         }
         if (enrollments.length > 0) {
           sentReminders.add(dedupKey1h);
@@ -2290,6 +2325,15 @@ export function startScheduler(): void {
       for (const session of toLive) {
         await session.update({ status: 'live' });
         console.log(`[Scheduler] Session ${session.session_number} "${session.title}" marked as live`);
+
+        // Post the check-in QR into the session's Colaberry Commons waiting
+        // room (ensureRoomForSession provisions one per session) so a student
+        // already in the room sees it the moment class goes live. Best-effort
+        // and idempotent (marker) — a missing room or a cron re-run must never
+        // block/duplicate the status flip above.
+        await postLiveClassQrToRoom(session).catch((err: any) =>
+          console.error(`[Scheduler] Live-class QR post failed for session ${session.id}:`, err.message)
+        );
       }
 
       const toComplete = await getSessionsToMarkCompleted();
@@ -2321,7 +2365,7 @@ export function startScheduler(): void {
             recordingUrl: session.recording_url || null,
             materialsJson: session.materials_json || null,
             consecutiveMisses,
-          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${enrollment.email}:`, err.message));
+          }).catch((err: any) => console.error(`[Scheduler] Missed session email failed for ${redactForLogs(enrollment.email)}:`, err.message));
 
           // Alert admin if 2+ consecutive absences
           if (consecutiveMisses >= 2) {
@@ -2355,6 +2399,40 @@ export function startScheduler(): void {
   console.log('[Scheduler] Accelerator: session reminders every 30 min (24h + 1h before)');
   console.log('[Scheduler] Accelerator: session lifecycle (live/completed) every 5 min');
   console.log('[Scheduler] Accelerator: post-session absence detection + readiness recompute');
+
+  // Session Recordings — poll Drive for a completed session's Meet recording
+  // and ingest it into that session's Room as a downloadable resource.
+  // Proven on the July 2026 pilot cohort (per the staged rollout plan) and
+  // widened to every cohort going forward — no more cohort_id filter.
+  // Bounded retry: only sessions completed in the last 7 days are considered,
+  // then we give up automatically and fall back to the existing manual
+  // PATCH .../sessions/:id { recording_url } path.
+  cron.schedule('12,42 * * * *', () => {
+    instrumentCronJob('SessionRecordingIngest', async () => {
+      const candidates = await LiveSession.findAll({
+        where: {
+          status: 'completed',
+          session_date: { [Op.gte]: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10) },
+        },
+      });
+      // One at a time — a multi-hundred-MB stream-to-disk download alongside
+      // every other cron in this same 512MB-heap process is not something to
+      // run concurrently.
+      for (const session of candidates) {
+        try {
+          const result = await ingestRecordingForSession(session);
+          if (result.status === 'ingested') {
+            console.log(`[Scheduler] Recording ingested for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Recording ingest failed for session ${session.id}:`, err.message);
+        }
+      }
+    }).catch((err: any) => {
+      console.error('[Scheduler] Session recording ingest error:', err.message);
+    });
+  });
+  console.log('[Scheduler] Accelerator: session recording ingestion every 30 min (pilot cohort only)');
 
   // ── Alumni Lifecycle Processor (daily 6 AM CT / 11 UTC) ──────────────
   const { detectInactiveLeads, detectReengagementComplete } = require('./campaignLifecycleService');
@@ -2446,7 +2524,7 @@ export function startScheduler(): void {
 
           // Skip voice call if no phone — still mark as hot
           if (!lead.phone) {
-            console.log(`[HotLead] Marked ${lead.name} as hot (no phone — email-only lead)`);
+            console.log(`[HotLead] Marked ${redactForLogs(lead.name)} as hot (no phone — email-only lead)`);
             continue;
           }
 
@@ -2462,7 +2540,7 @@ export function startScheduler(): void {
               LIMIT 1
             `, { replacements: { leadId: lead.lead_id }, type: QueryTypes.SELECT }) as any[];
             if (recentAliEmail) {
-              console.log(`[HotLead] Skipping ${lead.name} — Ali emailed in last 48h (Maya/Ali coordination)`);
+              console.log(`[HotLead] Skipping ${redactForLogs(lead.name)} — Ali emailed in last 48h (Maya/Ali coordination)`);
               continue;
             }
           } catch { /* non-critical — proceed with call if check fails */ }
@@ -2580,12 +2658,12 @@ export function startScheduler(): void {
                 goal: 'Book 30-min strategy call with Business Development team',
               },
             }).catch(() => {});
-            console.log(`[HotLead] 📞 Called ${lead.name} (${lead.phone})`);
+            console.log(`[HotLead] 📞 Called ${redactForLogs(lead.name)} (${redactForLogs(lead.phone)})`);
             callsToday++;
             await settingsSvc.setSetting('hot_lead_calls_today', String(callsToday));
           }
         } catch (err: any) {
-          console.warn(`[HotLead] Failed to call ${lead.name}: ${err.message}`);
+          console.warn(`[HotLead] Failed to call ${redactForLogs(lead.name)}: ${err.message}`);
         }
 
         // 60s between calls — spread calls throughout the cycle

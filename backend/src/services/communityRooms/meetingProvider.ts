@@ -1,11 +1,13 @@
 import { google } from 'googleapis';
 import { env } from '../../config/env';
+import * as zoomService from '../zoomService';
 
-// Meeting provider adapter (spec §11). Keeps Google Meet for the first release
-// but behind a stable interface so LiveKit/Jitsi can be evaluated later without
-// touching room/booking logic. Reuses the existing service-account + domain-wide
-// delegation auth pattern from meetingService/calendarService (Meet-link creation
-// requires the impersonated subject).
+// Meeting provider adapter (spec §11) — a stable interface behind which the
+// actual video provider can be swapped without touching room/booking logic.
+// Zoom is the default as of the Google Meet -> Zoom migration (see
+// zoomService.ts); GoogleMeetAdapter stays registered so it keeps working for
+// any pre-existing bookings, and so a future provider (LiveKit/Jitsi/etc.)
+// can be evaluated the same way this one was.
 
 export interface CreateMeetingInput {
   title: string;
@@ -167,13 +169,77 @@ export class GoogleMeetAdapter implements MeetingProvider {
   }
 }
 
+// Zoom adapter — the default provider going forward (see zoomService.ts for
+// why: Google Meet cloud recording required an org-wide Workspace edition
+// upgrade and depended on a human clicking Record; Zoom's auto_recording
+// setting removes that dependency). Every call goes through zoomService.ts's
+// shared OAuth/fetch plumbing rather than duplicating it here.
+export class ZoomMeetAdapter implements MeetingProvider {
+  readonly name = 'zoom';
+
+  async createMeeting(input: CreateMeetingInput): Promise<MeetingResult> {
+    const durationMinutes = Math.max(1, Math.round((input.endAt.getTime() - input.startAt.getTime()) / 60000));
+    const result = await zoomService.createMeeting({
+      topic: input.title,
+      agenda: input.description,
+      startDateTime: input.startAt.toISOString().slice(0, 19),
+      durationMinutes,
+      timezone: input.timezone || DEFAULT_TZ,
+    });
+    return { providerEventId: result.meetingId, joinUrl: result.joinUrl };
+  }
+
+  async updateMeeting(providerEventId: string, patch: Partial<CreateMeetingInput>): Promise<void> {
+    await zoomService.updateMeeting(providerEventId, {
+      ...(patch.title !== undefined ? { topic: patch.title } : {}),
+      ...(patch.description !== undefined ? { agenda: patch.description } : {}),
+      ...(patch.startAt ? { startDateTime: patch.startAt.toISOString().slice(0, 19) } : {}),
+      ...(patch.endAt && patch.startAt
+        ? { durationMinutes: Math.max(1, Math.round((patch.endAt.getTime() - patch.startAt.getTime()) / 60000)) }
+        : {}),
+      ...(patch.timezone !== undefined ? { timezone: patch.timezone } : {}),
+    });
+  }
+
+  async cancelMeeting(providerEventId: string): Promise<void> {
+    await zoomService.cancelMeeting(providerEventId);
+  }
+
+  async getJoinUrl(providerEventId: string): Promise<string | null> {
+    return zoomService.getMeetingJoinUrl(providerEventId);
+  }
+
+  // Attendance/recording for general Room bookings aren't wired for this
+  // release (same scope boundary GoogleMeetAdapter already draws above) —
+  // the one recording pipeline that exists (sessionRecordingService.ts) is
+  // specific to official LiveSession-backed classes, not ad-hoc Room
+  // bookings. Building that out for arbitrary rooms is a separate feature.
+  async getAttendance(): Promise<MeetingAttendance[]> {
+    return [];
+  }
+
+  async getRecording(): Promise<string | null> {
+    return null;
+  }
+
+  supportsEmbedded(): boolean {
+    return false;
+  }
+
+  supportsBreakouts(): boolean {
+    return false;
+  }
+}
+
 const PROVIDERS: Record<string, MeetingProvider> = {
   google_meet: new GoogleMeetAdapter(),
+  zoom: new ZoomMeetAdapter(),
 };
 
-// Factory — default to Google Meet. Unknown providers fall back to Meet (the only
-// implemented provider this release) rather than throwing, so a stray value in a
-// booking row never breaks the outbox.
+// Factory — defaults to Zoom (the current default provider; see ZoomMeetAdapter
+// above). Unknown providers also fall back to Zoom rather than throwing, so a
+// stray value in a booking row never breaks the outbox. google_meet stays
+// available for any pre-existing bookings created before this switch.
 export function getMeetingProvider(name?: string | null): MeetingProvider {
-  return PROVIDERS[name || 'google_meet'] || PROVIDERS.google_meet;
+  return PROVIDERS[name || 'zoom'] || PROVIDERS.zoom;
 }

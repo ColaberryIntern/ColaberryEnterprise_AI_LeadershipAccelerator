@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SEOHead from '../components/SEOHead';
 import api from '../utils/api';
 import { getUTMPayloadFields } from '../services/utmService';
-import { Cohort } from '../models/Cohort';
-import CohortUrgencyBadge from '../components/CohortUrgencyBadge';
 import StrategyCallModal from '../components/StrategyCallModal';
 import { Card } from '../colaberry/components/core/Card';
 import { Button } from '../colaberry/components/core/Button';
@@ -39,16 +37,7 @@ const fieldLabelStyle: React.CSSProperties = {
   marginBottom: 'var(--space-1)',
 };
 
-const errorMsgStyle: React.CSSProperties = {
-  fontSize: 'var(--fs-caption)',
-  color: 'var(--red-600)',
-  marginTop: 'var(--space-1)',
-  display: 'block',
-};
-
 function EnrollPage() {
-  const [cohorts, setCohorts] = useState<Cohort[]>([]);
-  const [loadingCohorts, setLoadingCohorts] = useState(true);
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -56,15 +45,12 @@ function EnrollPage() {
     title: '',
     phone: '',
     company_size: '',
-    cohort_id: '',
   });
-  const [paymentOption, setPaymentOption] = useState<'credit_card' | 'invoice'>('credit_card');
   const [errors, setErrors] = useState<FormErrors>({});
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [invoiceSubmitted, setInvoiceSubmitted] = useState(false);
+  const [signupComplete, setSignupComplete] = useState(false);
 
-  const [cohortError, setCohortError] = useState(false);
   const [showBooking, setShowBooking] = useState(false);
 
   // --- Sponsor code redemption (Door B) ---
@@ -78,42 +64,6 @@ function EnrollPage() {
   const [redeeming, setRedeeming] = useState(false);
   const [redeemed, setRedeemed] = useState(false);
 
-  useEffect(() => {
-    api
-      .get('/api/cohorts')
-      .then((res) => {
-        const today = new Date().toISOString().split('T')[0];
-        const allCohorts = res.data.cohorts || [];
-        const openCohorts = allCohorts.filter(
-          (c: Cohort) => c.seats_taken < c.max_seats && c.start_date >= today
-        );
-
-        if (allCohorts.length > 0 && openCohorts.length === 0) {
-          console.warn('[EnrollPage] Cohorts exist but none pass filters:', {
-            total: allCohorts.length,
-            reasons: allCohorts.map((c: Cohort) => ({
-              id: c.id,
-              name: c.name,
-              start_date: c.start_date,
-              seats_remaining: c.max_seats - c.seats_taken,
-              pastDate: c.start_date < today,
-              full: c.seats_taken >= c.max_seats,
-            })),
-          });
-        }
-
-        setCohorts(openCohorts);
-        if (openCohorts.length === 1) {
-          setFormData((prev) => ({ ...prev, cohort_id: openCohorts[0].id }));
-        }
-      })
-      .catch(() => {
-        setCohorts([]);
-        setCohortError(true);
-      })
-      .finally(() => setLoadingCohorts(false));
-  }, []);
-
   const validate = (): boolean => {
     const newErrors: FormErrors = {};
     if (!formData.full_name.trim()) newErrors.full_name = 'Full name is required';
@@ -122,8 +72,6 @@ function EnrollPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
       newErrors.email = 'Please enter a valid email address';
     }
-    if (!formData.company.trim()) newErrors.company = 'Company is required';
-    if (!formData.cohort_id) newErrors.cohort_id = 'Please select a cohort';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -151,20 +99,11 @@ function EnrollPage() {
         form_type: 'enrollment',
       };
 
-      if (paymentOption === 'credit_card') {
-        const res = await api.post('/api/create-invoice', {
-          ...formData,
-          ...trackingData,
-        });
-        // Redirect to PaySimple hosted payment page
-        window.location.href = res.data.payment_link;
-      } else {
-        await api.post('/api/create-invoice-request', {
-          ...formData,
-          ...trackingData,
-        });
-        setInvoiceSubmitted(true);
-      }
+      await api.post('/api/create-free-account', {
+        ...formData,
+        ...trackingData,
+      });
+      setSignupComplete(true);
     } catch (err: any) {
       if (err.response?.status === 400 && err.response?.data?.details) {
         const fieldErrors: FormErrors = {};
@@ -246,20 +185,11 @@ function EnrollPage() {
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-US', {
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  };
-
   return (
     <>
       <SEOHead
         title="Enroll"
-        description="Enroll in the Colaberry AI Challenge. Join as an individual, or redeem a sponsor code from your employer."
+        description="Create your free Colaberry account and start exploring the AI Systems Architect Accelerator, or redeem a sponsor code from your employer."
       />
 
       {/* Hero */}
@@ -292,75 +222,57 @@ function EnrollPage() {
               marginBottom: 'var(--space-3)',
             }}
           >
-            Get your seat
+            Start for free
           </h1>
           <p
             style={{
               fontSize: 'var(--fs-body-lg)',
               color: 'var(--text-on-accent)',
               opacity: 0.9,
-              marginBottom: 'var(--space-2)',
+              marginBottom: 0,
             }}
           >
-            Most people consume AI. Very few learn to build with it. Claim your seat
-            below, or redeem a code from your employer.
+            Most people consume AI. Very few learn to build with it. Create your
+            free account below — no card needed — or redeem a code from your
+            employer.
           </p>
-          {cohorts.length > 0 && (
-            <div style={{ marginTop: 'var(--space-4)' }}>
-              <CohortUrgencyBadge
-                startDate={cohorts[0].start_date}
-                seatsRemaining={cohorts[0].max_seats - cohorts[0].seats_taken}
-              />
-            </div>
-          )}
         </div>
       </section>
 
       {/* Enrollment Form */}
       <section
-        aria-label="Enrollment Form"
+        aria-label="Free Account Signup"
         style={{
           background: 'var(--surface-page)',
           padding: 'var(--space-16) var(--space-4)',
         }}
       >
         <div className="container" style={{ maxWidth: 760, margin: '0 auto' }}>
-          {invoiceSubmitted ? (
-            <div role="status">
-              <div className="text-center" style={{ marginBottom: 'var(--space-6)' }}>
-                <h2
-                  style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 'var(--fs-h2)',
-                    fontWeight: 900,
-                    color: 'var(--text-strong)',
-                    marginBottom: 'var(--space-2)',
-                  }}
-                >
-                  Your Seat is Reserved
-                </h2>
-                <Badge tone="warning" dot>
-                  Pending Payment
-                </Badge>
-              </div>
+          {signupComplete ? (
+            <div role="status" className="text-center">
+              <Badge tone="green" dot style={{ marginBottom: 'var(--space-3)' }}>
+                Registration Confirmed
+              </Badge>
+              <h2
+                className="cb-balance"
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: 'var(--fs-h2)',
+                  fontWeight: 900,
+                  color: 'var(--text-strong)',
+                  marginBottom: 'var(--space-3)',
+                }}
+              >
+                You're in. Let's get you started.
+              </h2>
+              <p style={{ fontSize: 'var(--fs-body-lg)', color: 'var(--text-body)', marginBottom: 'var(--space-6)' }}>
+                Your login is on its way to{' '}
+                <strong style={{ color: 'var(--text-strong)' }}>{formData.email}</strong> —
+                open that email to enter your portal: free AI material, a community
+                of builders, and free live events.
+              </p>
 
-              <Card accent="red" padded style={{ marginBottom: 'var(--space-5)' }}>
-                <p style={{ marginBottom: 'var(--space-3)', color: 'var(--text-body)' }}>
-                  A confirmation email with payment instructions has been sent to{' '}
-                  <strong style={{ color: 'var(--text-strong)' }}>{formData.email}</strong>.
-                </p>
-                <p style={{ marginBottom: 'var(--space-3)', color: 'var(--text-body)' }}>
-                  Your seat is temporarily reserved. To fully confirm your spot, payment
-                  must be completed.
-                </p>
-                <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginBottom: 0 }}>
-                  Seats are only guaranteed once payment is received. Due to limited
-                  capacity, we recommend completing payment as soon as possible. If you
-                  don't see the email, check your spam or promotions folder.
-                </p>
-              </Card>
-
-              <Card padded style={{ marginBottom: 'var(--space-5)' }}>
+              <Card padded style={{ marginBottom: 'var(--space-5)', textAlign: 'left' }}>
                 <h3
                   style={{
                     fontFamily: 'var(--font-display)',
@@ -373,34 +285,16 @@ function EnrollPage() {
                   Next Steps
                 </h3>
                 <ol style={{ lineHeight: 2, marginBottom: 0, color: 'var(--text-body)' }}>
-                  <li>Check your email for the confirmation and payment instructions</li>
-                  <li>Complete payment (credit card or ACH)</li>
-                  <li>Receive your enrollment confirmation and onboarding access</li>
+                  <li>Check your email for your sign-in link</li>
+                  <li>Click it to enter your free portal — no card required</li>
+                  <li>Explore the program, then upgrade whenever you're ready</li>
                 </ol>
               </Card>
 
               <div
                 className="d-flex justify-content-center flex-wrap"
-                style={{ gap: 'var(--space-3)', marginBottom: 'var(--space-4)' }}
+                style={{ gap: 'var(--space-3)' }}
               >
-                <Button
-                  size="lg"
-                  disabled={submitting}
-                  onClick={async () => {
-                    setSubmitting(true);
-                    try {
-                      const res = await api.post('/api/create-invoice', formData);
-                      window.location.href = res.data.payment_link;
-                    } catch {
-                      setServerError('Unable to create payment link. Please try again.');
-                      setInvoiceSubmitted(false);
-                    } finally {
-                      setSubmitting(false);
-                    }
-                  }}
-                >
-                  {submitting ? 'Setting up payment...' : 'Complete Payment Now'}
-                </Button>
                 <Button variant="outline" size="lg" onClick={() => setShowBooking(true)}>
                   Schedule an AI Strategy Call
                 </Button>
@@ -408,9 +302,9 @@ function EnrollPage() {
 
               <p
                 className="text-center"
-                style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)' }}
+                style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginTop: 'var(--space-4)' }}
               >
-                Secure payment via PaySimple (credit card or ACH)
+                If you don't see it, check your spam or promotions folder.
               </p>
             </div>
           ) : (
@@ -427,60 +321,6 @@ function EnrollPage() {
               )}
 
               <div className="row g-3">
-                {/* Cohort Selector */}
-                <div className="col-12">
-                  <label htmlFor="cohort_id" style={fieldLabelStyle}>
-                    Select Cohort{' '}
-                    <span style={{ color: 'var(--red-500)' }} aria-hidden="true">
-                      *
-                    </span>
-                  </label>
-                  {loadingCohorts ? (
-                    <div style={{ color: 'var(--text-muted)' }} aria-live="polite">
-                      Loading available cohorts...
-                    </div>
-                  ) : cohortError ? (
-                    <Card accent="blue" padded>
-                      Unable to load cohort information. Please try again later or{' '}
-                      <Link to="/contact">contact us</Link> directly.
-                    </Card>
-                  ) : cohorts.length === 0 ? (
-                    <Card accent="blue" padded>
-                      No upcoming cohorts are currently available. Please check back soon
-                      or <Link to="/contact">contact us</Link> for private cohort options.
-                    </Card>
-                  ) : (
-                    <select
-                      style={{
-                        ...selectStyle,
-                        borderColor: errors.cohort_id
-                          ? 'var(--red-500)'
-                          : 'var(--border-default)',
-                      }}
-                      id="cohort_id"
-                      name="cohort_id"
-                      value={formData.cohort_id}
-                      onChange={handleChange}
-                      aria-invalid={!!errors.cohort_id}
-                      aria-describedby={errors.cohort_id ? 'cohort_id-error' : undefined}
-                      required
-                    >
-                      <option value="">Choose a cohort...</option>
-                      {cohorts.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} — Starts {formatDate(c.start_date)} (
-                          {c.max_seats - c.seats_taken} seats remaining)
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                  {errors.cohort_id && (
-                    <span id="cohort_id-error" role="alert" style={errorMsgStyle}>
-                      {errors.cohort_id}
-                    </span>
-                  )}
-                </div>
-
                 {/* Full Name */}
                 <div className="col-md-6">
                   <Input
@@ -513,7 +353,6 @@ function EnrollPage() {
                 <div className="col-md-6">
                   <Input
                     label="Company"
-                    required
                     id="company"
                     name="company"
                     value={formData.company}
@@ -567,105 +406,22 @@ function EnrollPage() {
                   </select>
                 </div>
 
-                {/* Payment Option */}
-                <div className="col-12" role="radiogroup" aria-label="Payment option">
-                  <span style={{ ...fieldLabelStyle, fontWeight: 700 }}>
-                    Payment Option
-                  </span>
-                  <div className="row g-3">
-                    <div className="col-md-6">
-                      <Card
-                        padded
-                        hoverable
-                        accent={paymentOption === 'credit_card' ? 'red' : undefined}
-                        onClick={() => setPaymentOption('credit_card')}
-                        style={{ cursor: 'pointer', height: '100%' }}
-                      >
-                        <div className="form-check">
-                          <input
-                            className="form-check-input"
-                            type="radio"
-                            name="paymentOption"
-                            id="payment_cc"
-                            checked={paymentOption === 'credit_card'}
-                            onChange={() => setPaymentOption('credit_card')}
-                          />
-                          <label
-                            className="form-check-label"
-                            htmlFor="payment_cc"
-                            style={{ fontWeight: 700, color: 'var(--text-strong)' }}
-                          >
-                            Pay Now (Credit Card / ACH)
-                          </label>
-                          <p
-                            style={{
-                              fontSize: 'var(--fs-body-sm)',
-                              color: 'var(--text-muted)',
-                              marginBottom: 0,
-                              marginTop: 'var(--space-1)',
-                            }}
-                          >
-                            Secure payment via PaySimple
-                          </p>
-                        </div>
-                      </Card>
-                    </div>
-                    <div className="col-md-6">
-                      <Card
-                        padded
-                        hoverable
-                        accent={paymentOption === 'invoice' ? 'red' : undefined}
-                        onClick={() => setPaymentOption('invoice')}
-                        style={{ cursor: 'pointer', height: '100%' }}
-                      >
-                        <div className="form-check">
-                          <input
-                            className="form-check-input"
-                            type="radio"
-                            name="paymentOption"
-                            id="payment_invoice"
-                            checked={paymentOption === 'invoice'}
-                            onChange={() => setPaymentOption('invoice')}
-                          />
-                          <label
-                            className="form-check-label"
-                            htmlFor="payment_invoice"
-                            style={{ fontWeight: 700, color: 'var(--text-strong)' }}
-                          >
-                            Request Corporate Invoice
-                          </label>
-                          <p
-                            style={{
-                              fontSize: 'var(--fs-body-sm)',
-                              color: 'var(--text-muted)',
-                              marginBottom: 0,
-                              marginTop: 'var(--space-1)',
-                            }}
-                          >
-                            For procurement teams — invoice sent within 1 business day
-                          </p>
-                        </div>
-                      </Card>
-                    </div>
-                  </div>
-                </div>
-
                 {/* Submit */}
                 <div className="col-12" style={{ marginTop: 'var(--space-5)' }}>
-                  <Button
-                    type="submit"
-                    size="lg"
-                    fullWidth
-                    disabled={submitting || cohorts.length === 0}
-                  >
-                    {submitting
-                      ? paymentOption === 'credit_card'
-                        ? 'Setting up payment...'
-                        : 'Reserving your seat...'
-                      : paymentOption === 'credit_card'
-                      ? 'Proceed to Payment'
-                      : 'Request Invoice'}
+                  <Button type="submit" size="lg" fullWidth disabled={submitting}>
+                    {submitting ? 'Creating your account...' : 'Create My Free Account'}
                   </Button>
+                  <p
+                    className="text-center"
+                    style={{
+                      fontSize: 'var(--fs-body-sm)',
+                      color: 'var(--text-muted)',
+                      marginTop: 'var(--space-2)',
+                      marginBottom: 0,
+                    }}
+                  >
+                    No card required. Upgrade anytime from inside the portal.
+                  </p>
                 </div>
               </div>
             </form>
@@ -834,7 +590,7 @@ function EnrollPage() {
           <div className="row g-4 text-center">
             <div className="col-md-4">
               <div style={{ fontSize: 'var(--fs-h1)', marginBottom: 'var(--space-2)' }} aria-hidden="true">
-                🔒
+                🆓
               </div>
               <h3
                 style={{
@@ -844,10 +600,10 @@ function EnrollPage() {
                   color: 'var(--text-strong)',
                 }}
               >
-                Secure Payment
+                No Card Needed
               </h3>
               <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginBottom: 0 }}>
-                Payments processed securely via PaySimple
+                Free to start — upgrade anytime from inside the portal
               </p>
             </div>
             <div className="col-md-4">
@@ -883,7 +639,7 @@ function EnrollPage() {
                 Instant Confirmation
               </h3>
               <p style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-muted)', marginBottom: 0 }}>
-                Enrollment confirmation sent immediately
+                Your sign-in link is emailed immediately
               </p>
             </div>
           </div>

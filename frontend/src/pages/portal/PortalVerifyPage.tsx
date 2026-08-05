@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useParticipantAuth } from '../../contexts/ParticipantAuthContext';
 import portalApi from '../../utils/portalApi';
+import { safeNextPath } from '../../utils/safeNextPath';
 
 function PortalVerifyPage() {
   const [searchParams] = useSearchParams();
@@ -9,6 +10,15 @@ function PortalVerifyPage() {
   const { login } = useParticipantAuth();
   const [error, setError] = useState('');
   const [verifying, setVerifying] = useState(true);
+
+  // A verify call can fail on a stale/expired token (e.g. a student requested
+  // a second link, silently invalidating the first, then clicked the old
+  // email). "Request New Link" must carry the same `next` through to
+  // PortalLoginPage so a retry still lands back on the class check-in page
+  // instead of silently losing the QR intent — same rationale as the happy
+  // path below.
+  const nextParam = safeNextPath(searchParams.get('next'));
+  const retryLoginHref = nextParam ? `/portal/login?next=${encodeURIComponent(nextParam)}` : '/portal/login';
 
   useEffect(() => {
     const token = searchParams.get('token');
@@ -21,12 +31,18 @@ function PortalVerifyPage() {
     portalApi.get(`/api/portal/verify?token=${token}`)
       .then((res) => {
         login(res.data.jwt);
-        // Land on Today — the student's daily command center (your day, next
-        // step, schedule, streak). This is the ONE universal post-login and
+        // Honour an explicit post-login destination when the sign-in was started
+        // from a specific page — today that is the class check-in page a student
+        // reached by scanning the room QR. Without this the QR flow dead-ends on
+        // Today and attendance is silently never recorded.
+        //
+        // Otherwise land on Today — the student's daily command center (your day,
+        // next step, schedule, streak). This is the ONE universal post-login and
         // post-signup home for every account (PortalFreeSignupPage lands here
         // too). The build/requirements wizard is never forced; it opens only when
         // the user explicitly starts a project from Projects.
-        navigate('/portal/today', { replace: true });
+        const dest = safeNextPath(searchParams.get('next')) ?? '/portal/today';
+        navigate(dest, { replace: true });
       })
       .catch((err) => {
         setError(err.response?.data?.error || 'Invalid or expired link. Please request a new one.');
@@ -55,7 +71,7 @@ function PortalVerifyPage() {
               </div>
               <h2 className="h5 fw-semibold">Verification Failed</h2>
               <p className="text-muted small">{error}</p>
-              <a href="/portal/login" className="btn btn-sm" style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}>
+              <a href={retryLoginHref} className="btn btn-sm" style={{ background: '#FB2832', borderColor: '#FB2832', color: '#fff' }}>
                 Request New Link
               </a>
             </>

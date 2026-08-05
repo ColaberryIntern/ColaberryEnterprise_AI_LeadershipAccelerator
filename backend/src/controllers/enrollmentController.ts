@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import { ZodError } from 'zod';
-import { createInvoiceSchema, createInvoiceRequestSchema } from '../schemas/enrollmentSchema';
+import { createInvoiceSchema, createInvoiceRequestSchema, createFreeAccountSchema } from '../schemas/enrollmentSchema';
 import { createEnrollmentInvoice } from '../services/paysimpleService';
 import {
   validateCohortAvailability,
   createPendingEnrollment,
   createInvoiceEnrollment,
+  createExplorerEnrollment,
   getEnrollmentByInvoiceId,
 } from '../services/enrollmentService';
 import { listOpenCohorts } from '../services/cohortService';
@@ -108,6 +109,57 @@ export async function handleCreateInvoiceRequest(
     res.status(201).json({
       message: 'Your seat is reserved. A confirmation email with payment instructions has been sent.',
       enrollmentId: enrollment.id,
+    });
+  } catch (error) {
+    if (error instanceof ZodError) {
+      res.status(400).json({
+        error: 'Validation failed',
+        details: error.issues.map((issue) => ({
+          field: issue.path.join('.'),
+          message: issue.message,
+        })),
+      });
+      return;
+    }
+    next(error);
+  }
+}
+
+// POST /api/create-free-account — public, /enroll page's free-signup path.
+// Reuses createExplorerEnrollment (same idempotent-by-email, auto-placed-in-
+// Explorer-cohort, magic-link-welcome-email behavior as the Open House flow),
+// just with a distinguishable source label and no service-token requirement
+// since this is a first-party call from our own frontend, not a partner site.
+export async function handleCreateFreeAccount(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const data = createFreeAccountSchema.parse(req.body);
+    const { enrollment, created } = await createExplorerEnrollment({
+      name: data.full_name,
+      email: data.email,
+      company: data.company,
+      title: data.title,
+      company_size: data.company_size,
+      phone: data.phone,
+      source: 'Free signup (/enroll)',
+      utm_source: typeof req.body.utm_source === 'string' ? req.body.utm_source : undefined,
+      utm_campaign: typeof req.body.utm_campaign === 'string' ? req.body.utm_campaign : undefined,
+      page_url: typeof req.body.page_url === 'string' ? req.body.page_url : undefined,
+    });
+
+    console.log(
+      `[Enrollment] Free account ${created ? 'created' : 'already existed'} for ${data.email}`
+    );
+
+    res.status(created ? 201 : 200).json({
+      message: created
+        ? 'Your free account is ready. Check your email for your sign-in link.'
+        : 'You already have a free account. Check your email for your sign-in link.',
+      enrollmentId: enrollment.id,
+      created,
     });
   } catch (error) {
     if (error instanceof ZodError) {

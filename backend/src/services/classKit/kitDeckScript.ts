@@ -31,6 +31,9 @@ export function deckScript(): string {
   var elProgress = document.getElementById('kprogress');
   var elCounter = document.getElementById('kcounter');
   var elNotes = document.getElementById('knotes');
+  var elPrev = document.getElementById('kprev');
+  var elNext = document.getElementById('knext');
+  var elStage = document.querySelector('.kstage');
 
   function pad(n){ n = Math.floor(n); return (n < 10 ? '0' : '') + n; }
   function fmtMMSS(ms){ var s = Math.max(0, Math.floor(ms/1000)); return pad(s/60) + ':' + pad(s%60); }
@@ -48,6 +51,8 @@ export function deckScript(): string {
     for (var k = 0; k < slides.length; k++){ slides[k].classList.toggle('active', k === i); }
     elProgress.style.width = ((i + 1) / slides.length * 100) + '%';
     elCounter.textContent = (i + 1) + ' / ' + slides.length;
+    if (elPrev) elPrev.disabled = (i === 0);
+    if (elNext) elNext.disabled = (i === slides.length - 1);
     applyMode();
     var sm = (K.slides || [])[i];
     if (sm && sm.question && sm.question.theater && !theaterState[sm.id]) theaterState[sm.id] = 'voting';
@@ -61,6 +66,26 @@ export function deckScript(): string {
   }
   function next(){ show(i + 1); }
   function prev(){ show(i - 1); }
+
+  // Dedicated nav buttons — the only click-driven way to change slides now.
+  // A whole-page click used to fire next()/prev() (a 28%-of-screen-width
+  // left/right split bound to document click), which turned the page on
+  // ordinary clicks meant for reading or pointing at content. Buttons +
+  // keyboard + swipe replace that entirely.
+  if (elPrev) elPrev.addEventListener('click', function(e){ e.stopPropagation(); prev(); });
+  if (elNext) elNext.addEventListener('click', function(e){ e.stopPropagation(); next(); });
+
+  // Touch swipe on the slide stage — useful on the phone-companion / Rehearse view.
+  var touchStartX = null;
+  if (elStage){
+    elStage.addEventListener('touchstart', function(e){ touchStartX = e.changedTouches[0].clientX; }, { passive: true });
+    elStage.addEventListener('touchend', function(e){
+      if (touchStartX === null) return;
+      var dx = e.changedTouches[0].clientX - touchStartX;
+      if (Math.abs(dx) > 60){ if (dx < 0) next(); else prev(); }
+      touchStartX = null;
+    }, { passive: true });
+  }
 
   // Small persistent QR for latecomers — only past the cover slide, and only
   // once the instructor has actually started class (see kitDeckStyles.ts
@@ -104,9 +129,17 @@ export function deckScript(): string {
   }
 
   // ---- pace tracker ----
+  // Hard ceiling: no class clock runs past 3 hours no matter what — an
+  // instructor who leaves a Present tab open (or forgets to stop it) must
+  // never see it climb past this, since these tabs also double as the
+  // screen-recording source that gets turned into video after class.
+  var MAX_CLASS_MS = 3 * 60 * 60 * 1000;
   var startKey = 'kit_start_' + (K.meta && K.meta.sessionId || 'x');
+  var endKey = 'kit_end_' + (K.meta && K.meta.sessionId || 'x');
   function classStart(){ var v = localStorage.getItem(startKey); return v ? parseInt(v, 10) : 0; }
   function setStart(ms){ if (ms) localStorage.setItem(startKey, String(ms)); else localStorage.removeItem(startKey); }
+  function classEnd(){ var v = localStorage.getItem(endKey); return v ? parseInt(v, 10) : 0; }
+  function setEnd(ms){ if (ms) localStorage.setItem(endKey, String(ms)); else localStorage.removeItem(endKey); }
 
   var elStart = document.getElementById('kstart');
   var elClock = document.getElementById('kpaceclock');
@@ -114,33 +147,67 @@ export function deckScript(): string {
   var elStatus = document.getElementById('kpacestatus');
   var elNow = document.getElementById('kpacenow');
 
+  // Whether anyone has been seen checked in during this run — guards the
+  // "everyone left" auto-stop so it can't fire before the room ever fills up.
+  var sawPresence = false;
+
   elStart.addEventListener('click', function(){
-    if (classStart()){ if (confirm('Reset the class clock?')) { setStart(0); } }
-    else { setStart(Date.now()); }
+    var start = classStart(), end = classEnd();
+    if (start && !end){
+      // running -> stop. This is the normal end-of-class action, so it
+      // doesn't confirm; the clock freezes but the elapsed time is kept.
+      setEnd(Date.now());
+    } else if (start && end){
+      // stopped but not yet cleared -> confirm before wiping the run.
+      if (confirm('Reset the class clock?')) { setStart(0); setEnd(0); sawPresence = false; }
+    } else {
+      setStart(Date.now()); setEnd(0); sawPresence = false;
+    }
     updatePace();
     updateLateQr();
   });
 
+  // Auto-stop: 3-hour hard cap, OR everyone has checked out after having
+  // checked in — whichever comes first. Runs every tick from updatePace()
+  // and every live poll, so it fires even if the instructor never returns
+  // to the tab.
+  function autoStopIfNeeded(start, rawElapsedMs){
+    if (classEnd()) return;
+    if (rawElapsedMs >= MAX_CLASS_MS){ setEnd(start + MAX_CLASS_MS); return; }
+    if (live.enabled){
+      if (pulse.present > 0) sawPresence = true;
+      else if (sawPresence) { setEnd(Date.now()); return; }
+    }
+  }
+
   function updatePace(){
     var start = classStart();
     if (!start){
-      elStart.textContent = 'Start class'; elStart.classList.remove('running');
+      elStart.textContent = 'Start class'; elStart.classList.remove('running', 'ended');
       elClock.textContent = '00:00';
       elSeg.innerHTML = '<b>Not started</b>press Start class when you begin';
       elStatus.className = 'kpace-status idle'; elStatus.textContent = 'READY';
       if (elNow) elNow.style.left = '0%';
       return;
     }
-    elStart.textContent = 'Reset'; elStart.classList.add('running');
-    var elapsedMs = Date.now() - start;
+    autoStopIfNeeded(start, Date.now() - start);
+    var end = classEnd();
+    var elapsedMs = end ? (end - start) : (Date.now() - start);
     var elapsedMin = elapsedMs / 60000;
     elClock.textContent = fmtMMSS(elapsedMs);
     var cur = segOfSlide(i);
     elSeg.innerHTML = '<b>' + esc(cur.label) + '</b>planned ' + Math.round(cur.start) + '–' + Math.round(cur.end) + ' min';
 
-    var cls = 'ontime', txt = 'ON TIME';
-    if (elapsedMin > cur.end){ cls = 'behind'; txt = 'BEHIND ' + Math.round(elapsedMin - cur.end) + ' MIN'; }
-    else if (elapsedMin < cur.start){ cls = 'ahead'; txt = 'AHEAD ' + Math.round(cur.start - elapsedMin) + ' MIN'; }
+    var cls, txt;
+    if (end){
+      elStart.textContent = 'Reset'; elStart.classList.remove('running'); elStart.classList.add('ended');
+      cls = 'ended'; txt = 'CLASS ENDED';
+    } else {
+      elStart.textContent = 'Stop class'; elStart.classList.add('running'); elStart.classList.remove('ended');
+      cls = 'ontime'; txt = 'ON TIME';
+      if (elapsedMin > cur.end){ cls = 'behind'; txt = 'BEHIND ' + Math.round(elapsedMin - cur.end) + ' MIN'; }
+      else if (elapsedMin < cur.start){ cls = 'ahead'; txt = 'AHEAD ' + Math.round(cur.start - elapsedMin) + ' MIN'; }
+    }
     elStatus.className = 'kpace-status ' + cls; elStatus.textContent = txt;
 
     if (elNow) elNow.style.left = Math.min(100, (elapsedMin / total) * 100) + '%';
@@ -170,7 +237,9 @@ export function deckScript(): string {
         '<div class="lab"><span>' + esc(opt) + '</span><span class="n">' + n + '</span></div>' +
         '<div class="kpoll-bar"><i style="width:' + pct + '%"></i></div></div>';
     }).join('');
-    el.innerHTML = '<div class="kpoll-head">Live answers · ' + total + ' voted</div>' + rows;
+    var correctLine = (revealedNow && p.correctResponders && p.correctResponders.length)
+      ? '<div class="kpoll-correct">✅ Got it right: ' + esc(p.correctResponders.join(', ')) + '</div>' : '';
+    el.innerHTML = '<div class="kpoll-head">Live answers · ' + total + ' voted</div>' + rows + correctLine;
     el.style.display = 'block';
   }
 
@@ -194,6 +263,7 @@ export function deckScript(): string {
     var revealBtn = root.querySelector('[data-action="reveal"]');
     var reopenBtn = root.querySelector('[data-action="reopen"]');
     var explain = root.querySelector('[data-role="explain"]');
+    var correctList = root.querySelector('[data-role="correct-list"]');
     var p = pulse.poll;
     var total = (p && p.total) || 0;
     if (countEl) countEl.textContent = total + (pulse.present ? (' of ' + pulse.present + ' voted') : ' voted');
@@ -205,6 +275,16 @@ export function deckScript(): string {
     if (revealBtn) revealBtn.style.display = st === 'locked' ? '' : 'none';
     if (reopenBtn) reopenBtn.style.display = st === 'locked' ? '' : 'none';
     if (explain) explain.style.display = st === 'revealed' ? '' : 'none';
+    if (correctList){
+      var names = (p && p.correctResponders) || null;
+      if (st === 'revealed' && names && names.length){
+        correctList.textContent = '✅ Got it right: ' + names.join(', ');
+        correctList.style.display = '';
+      } else {
+        correctList.textContent = '';
+        correctList.style.display = 'none';
+      }
+    }
     for (var k = 0; k < tiles.length; k++){
       var idx = parseInt(tiles[k].getAttribute('data-idx'), 10);
       var n = (p && p.tally && p.tally[idx]) || 0;
@@ -323,11 +403,19 @@ export function deckScript(): string {
     if (rb){
       e.stopPropagation();
       var wrap = rb.closest('.kinner');
-      var line = wrap.querySelector('.kreveal-line'); if (line) line.classList.add('show');
-      var correct = wrap.querySelector('.kopt[data-correct="1"]'); if (correct) correct.classList.add('correct');
-      rb.style.display = 'none';
-      // tell the phones the answer is revealed too
-      var sm = (K.slides || [])[i]; if (sm) { revealed[sm.id] = true; broadcastCurrent(); }
+      var line = wrap.querySelector('.kreveal-line');
+      var correct = wrap.querySelector('.kopt[data-correct="1"]');
+      var sm = (K.slides || [])[i];
+      // Toggle: a second click on the same control reverses the reveal (hides the
+      // explanation + the highlighted correct option, restores the button's own
+      // original label) rather than being a one-way action with no way back.
+      var nowRevealed = !(sm && revealed[sm.id]);
+      if (!rb.getAttribute('data-label')) rb.setAttribute('data-label', rb.textContent);
+      if (line) line.classList.toggle('show', nowRevealed);
+      if (correct) correct.classList.toggle('correct', nowRevealed);
+      rb.textContent = nowRevealed ? 'Hide answer' : rb.getAttribute('data-label');
+      // tell the phones the reveal state too
+      if (sm) { revealed[sm.id] = nowRevealed; broadcastCurrent(); }
       return;
     }
     var cb = e.target.closest('.kcopy');
@@ -340,9 +428,6 @@ export function deckScript(): string {
       return;
     }
     if (e.target.closest('#klateqr')){ e.stopPropagation(); toggleQR(); return; }
-    if (e.target.closest('#kpace, #krail, #knotes, .ktoggles, #kqr-overlay, button, a')) return;
-    // click zones: right = next, left = prev
-    if (e.clientX > window.innerWidth * 0.28) next(); else prev();
   });
 
   // ---- presenter notes ----

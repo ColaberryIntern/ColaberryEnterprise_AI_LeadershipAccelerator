@@ -13,10 +13,13 @@ const PRESENCE_LABEL: Record<string, string> = {
 /**
  * Slide-in member profile (Design E). Opens on avatar/name clicks anywhere in
  * the feed, the People directory, or the contacts rail. Cohort privacy is
- * preserved server-side: a member in another cohort resolves to 404, which
- * surfaces here as "not available". Message opens a 1:1 DM (via the shared
- * `te-open-dm` bridge → ChatDock in PortalShell); Connect sends a friend
- * request. Both are enrollment-keyed (profile.enrollment_id).
+ * preserved server-side for students: a member in another cohort resolves to
+ * 404, which surfaces here as "not available" — staff/mgmt bypass this (see
+ * communityService.ts's getMemberProfileById). Message opens a 1:1 DM (via the
+ * shared `te-open-dm` bridge → ChatDock in PortalShell); Connect sends a friend
+ * request. Both stay cohort-scoped for students and both bypass for staff/mgmt
+ * (dmService.ts / friendshipService.ts), so the two actions behave consistently
+ * for any given viewer. Both are enrollment-keyed (profile.enrollment_id).
  */
 const MemberProfileDrawer: React.FC<{
   memberId: string | null;

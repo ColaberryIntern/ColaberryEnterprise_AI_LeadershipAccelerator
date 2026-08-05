@@ -261,9 +261,10 @@ export async function uploadCommunityMedia(file: File): Promise<string> {
   return data.url;
 }
 
-// Cohort-scoped member profile lookup for the profile drawer. The backend
-// returns 404 (not 403) for a member in another cohort, preserving the
-// anti-enumeration behavior — the drawer surfaces that as "member not found".
+// Cohort-scoped member profile lookup for the profile drawer (staff/mgmt bypass
+// server-side). The backend returns 404 (not 403) for a member in another
+// cohort, preserving the anti-enumeration behavior — the drawer surfaces that
+// as "member not found".
 export async function fetchMemberProfile(memberId: string): Promise<CommunityMemberProfile> {
   const { data } = await portalApi.get<{ profile: CommunityMemberProfile }>(
     `/api/portal/community/members/${memberId}`

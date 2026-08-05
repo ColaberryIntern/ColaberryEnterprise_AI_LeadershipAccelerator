@@ -29,13 +29,33 @@ interface PodcastRow {
   audio_url: string | null;
   thumbnail_url: string | null;
   category: string | null;
+  duration_seconds: number | null;
   tags: unknown;
 }
 
-function toFeedVideo(p: PodcastRow): FeedVideo {
+export function toFeedVideo(p: PodcastRow): FeedVideo {
   // The audio_url is a direct .mp3 — the frontend renders an in-app audio player
-  // (VideoEmbed's audio path) with the episode thumbnail as the poster.
-  return { url: (p.audio_url || '').trim(), presenter: null, poster: p.thumbnail_url || null, title: p.title || null };
+  // (VideoEmbed's audio path) with the episode thumbnail as the poster. duration_seconds
+  // is already real (RSS itunes:duration, see podcastIngestionService.ts) — just passed through.
+  const duration = Number(p.duration_seconds);
+  return { url: (p.audio_url || '').trim(), presenter: null, poster: p.thumbnail_url || null, title: p.title || null, duration_seconds: Number.isFinite(duration) && duration > 0 ? duration : null };
+}
+
+/** The authoritative duration (seconds) for whichever episode this student was
+ *  already assigned to this card, or null if unassigned/unknown. Exact sibling of
+ *  networkVideoService.getAssignedTestimonialDurationS. */
+export async function getAssignedPodcastDurationS(enrollmentId: string, cardId: string): Promise<number | null> {
+  try {
+    const rows = await sequelize.query<{ duration_seconds: number | null }>(
+      `SELECT p.duration_seconds FROM podcast_views vw JOIN podcasts p ON p.id = vw.podcast_id
+        WHERE vw.enrollment_id = :eid AND vw.last_timeline_card_id = :cid LIMIT 1`,
+      { replacements: { eid: enrollmentId, cid: cardId }, type: QueryTypes.SELECT },
+    );
+    const d = Number(rows[0]?.duration_seconds);
+    return Number.isFinite(d) && d > 0 ? d : null;
+  } catch {
+    return null;
+  }
 }
 
 function score(p: PodcastRow, userTags: Set<string>): number {

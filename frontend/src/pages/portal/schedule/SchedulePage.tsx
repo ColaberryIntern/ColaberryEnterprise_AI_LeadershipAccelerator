@@ -24,6 +24,7 @@ type SessionItem = {
   start_time: string | null;
   status: string;         // scheduled | live | completed | cancelled
   session_type: string;
+  room_id?: string | null; // linked Colaberry Commons room, when one exists
 };
 
 type EvKind = 'class' | 'event'; // class = cohort session, event = public open house
@@ -105,7 +106,13 @@ function buildSchedule(sessions: SessionItem[], events: OpenHouseView[], firstCl
       id: s.id, kind: 'class', title: `#${s.session_number} · ${s.title}`,
       time: fmtTime(s.start_time), hour: hourOf(s.start_time),
       state: stateForSession(s.status, d, today),
-      href: `/portal/sessions/${s.id}`, sub: (s.session_type || 'session').replace(/_/g, ' '),
+      // Sessions link into their Colaberry Commons room, not the retired
+      // /portal/sessions/:id detail page. A session only has a room once
+      // Community Rooms has provisioned one for it (ensureRoomForSession);
+      // until then the item renders as plain (unclickable) text rather than
+      // pointing at a dead route.
+      href: s.room_id ? `/portal/rooms/${s.room_id}` : undefined,
+      sub: (s.session_type || 'session').replace(/_/g, ' '),
     });
   }
   for (const e of events) {
@@ -166,6 +173,11 @@ const LiveIcon: React.FC = () => (
 );
 const TodoIcon: React.FC<{ w?: number; h?: number; stroke?: string }> = ({ w = 13, h = 13, stroke = 'currentColor' }) => (
   <svg width={w} height={h} viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke={stroke} strokeWidth="2" /></svg>
+);
+// Points-earned marker — a filled star, so a day with points is recognizable
+// at a glance (not just another text chip) in every view.
+const PointsIcon: React.FC<{ w?: number; h?: number; fill?: string }> = ({ w = 11, h = 11, fill = '#3C7A26' }) => (
+  <svg width={w} height={h} viewBox="0 0 24 24" fill="none"><path d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6-5.9-3.3-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8L12 2.5z" fill={fill} /></svg>
 );
 
 const SchedulePage: React.FC = () => {
@@ -291,7 +303,7 @@ const SchedulePage: React.FC = () => {
       const dots = evs.slice(0, 3).map((ev) => renderItem(
         ev, `mdot ${KIND_CLASS[ev.kind]}${ev.state === 'done' ? ' done' : ''}`,
         <>
-          <b style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.title}</b>
+          <b>{ev.title}</b>
           {ev.time ? <span className="mp">{ev.time}</span> : null}
         </>,
       ));
@@ -301,7 +313,11 @@ const SchedulePage: React.FC = () => {
         <div key={i} className={`mcell${out ? ' out' : ''}${isToday(d) ? ' today' : ''}`}>
           <div className="dn"><span>{d.getDate()}</span>{wk && d.getDay() === 1 ? <span className="wkn">W{wk}</span> : null}</div>
           {dots}{more}
-          {dayPts ? <div className="mdot" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26', fontWeight: 800 }} title={`${dayPts} points earned`}>+{dayPts} pts</div> : null}
+          {dayPts ? (
+            <div className="mdot pts-badge" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26', fontWeight: 800 }} title={`${dayPts} points earned`}>
+              <PointsIcon /><span>+{dayPts} pts</span>
+            </div>
+          ) : null}
         </div>
       );
     }
@@ -334,7 +350,11 @@ const SchedulePage: React.FC = () => {
             return (
               <div key={i} className={`tg-dayhead${isToday(d) ? ' today' : ''}`}>
                 <div className="d">{dn}</div><div className="n">{d.getDate()}</div>
-                {dayPts ? <div style={{ fontSize: 10, fontWeight: 800, color: '#3C7A26' }} title={`${dayPts} points earned`}>+{dayPts} pts</div> : null}
+                {dayPts ? (
+                  <div className="pts-badge" style={{ fontSize: 10, fontWeight: 800, color: '#3C7A26', justifyContent: 'center' }} title={`${dayPts} points earned`}>
+                    <PointsIcon w={10} h={10} /><span>+{dayPts} pts</span>
+                  </div>
+                ) : null}
               </div>
             );
           })}
@@ -378,7 +398,11 @@ const SchedulePage: React.FC = () => {
         <div key={dkey(d)}>
           <div className="agenda-day">
             <div className="dh">{d.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}{isToday(d) ? ' — Today' : ''}</div>
-            {dayPtsTotal ? <span className="ptbadge" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26' }}>+{dayPtsTotal} pts</span> : null}
+            {dayPtsTotal ? (
+              <span className="ptbadge pts-badge" style={{ background: 'rgba(91,166,60,.14)', color: '#3C7A26' }}>
+                <PointsIcon /><span>+{dayPtsTotal} pts</span>
+              </span>
+            ) : null}
           </div>
           {pts.length ? (
             <div className="queue agenda-queue">
@@ -473,6 +497,7 @@ const SchedulePage: React.FC = () => {
           <span style={{ marginLeft: 8, display: 'inline-flex', gap: 6, alignItems: 'center' }}><CheckIcon /> done</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><LiveIcon /> live</span>
           <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><TodoIcon /> upcoming</span>
+          <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}><PointsIcon /> points earned that day</span>
         </div>
       </div>
     </PortalShell>
