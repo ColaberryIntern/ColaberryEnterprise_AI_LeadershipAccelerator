@@ -270,3 +270,27 @@ export const skillEvidenceHistoryResponseSchema = z.object({
   next_recommended_proof: z.string().nullable(),
 });
 export type SkillEvidenceHistoryResponse = z.infer<typeof skillEvidenceHistoryResponseSchema>;
+
+/**
+ * CAPE Phase 6 (design doc §12 "Pacing controls", §16 Phase 6) — the governance
+ * policy covering Stage 4 rerank caps (previously hardcoded constants in
+ * capeLearningValuePolicy.ts) and Today Plan pacing knobs (previously implicit
+ * in capeTodayPlanService.ts). Body contract for PUT /api/admin/cape/governance/policy.
+ * All fields optional (partial patch, same convention as updateSkillDefinitionSchema)
+ * but at least one must be present.
+ */
+export const updateGovernancePolicySchema = z.object({
+  same_type_max_streak: z.number().int().min(1).max(10).optional(),
+  passive_max_streak: z.number().int().min(1).max(10).optional(),
+  crowd_out_max_per_skill: z.number().int().min(1).max(10).optional(),
+  crowd_out_window: z.number().int().min(1).max(20).optional(),
+  stretch_cap_first_five: z.number().int().min(0).max(5).optional(),
+  daily_plan_target_minutes: z.number().int().min(1).max(999).optional(),
+  review_slot_share: z.number().min(0).max(1).optional(),
+  ai_pulse_slot_share: z.number().min(0).max(1).optional(),
+  reason: z.string().max(500).nullable().optional(),
+}).refine(
+  (v) => Object.entries(v).some(([k, val]) => k !== 'reason' && val !== undefined),
+  { message: 'at least one policy field must be provided' },
+);
+export type UpdateGovernancePolicyInput = z.infer<typeof updateGovernancePolicySchema>;

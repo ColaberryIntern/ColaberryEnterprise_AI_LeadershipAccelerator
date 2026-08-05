@@ -13243,3 +13243,24 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     table changes NOTHING about live production ranking/pacing behavior until an
     admin explicitly edits a value through the Phase 6 board (verified by the task
     verifier against the actual pre-existing hardcoded constants, not just asserted).
+
+- [x] **T002 — governance policy service (versioned CRUD over the Stage-4/pacing knobs)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeGovernancePolicyService.ts` (new) —
+    `getCurrentGovernancePolicy()` (fail-soft plain-values read for the ranker/Today-
+    Plan services to consume in T004/T005, degrades to the T001 seed defaults if the
+    schema hasn't initialized), `getCurrentGovernancePolicyRow()` (admin-facing read,
+    throws `GovernancePolicyNotFoundError` on a missing row), `updateGovernancePolicy()`
+    (versioned insert, same "insert-new-version, flip prior is_current, no-op on
+    identical patch" contract as `capeSkillDefinitionsService.ts`), `getGovernancePolicyHistory()`.
+    `backend/src/schemas/capeSchema.ts` gained `updateGovernancePolicySchema` (bounded
+    fields matching the execution contract's clamp ranges, `.refine()` requiring at
+    least one field).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh evidence:
+    re-ran `tsc --noEmit` clean, re-ran 9/9 new tests, re-ran 17/17 sibling
+    `capeSchema` tests for regression, wrote and ran its own throwaway Zod-bounds
+    test to independently confirm every clamp range, confirmed zero scope creep into
+    T004/T005's wiring targets via `git diff --cached --name-only` grep).
+  - Notes: Part of the CAPE Phase 6 governance-board `loop-architect` run. Not yet
+    wired into the live ranker/Today-Plan — that's T004/T005.
