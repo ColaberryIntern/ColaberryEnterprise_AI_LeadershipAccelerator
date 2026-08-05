@@ -16,6 +16,7 @@ import calendarRoutes from './routes/calendarRoutes';
 import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
+import devAuthRoutes from './routes/devAuthRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
@@ -74,6 +75,11 @@ app.use(healthRoutes);
 app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
+// Local-dev one-click login for seeded @localdev.test accounts — never
+// mounted outside development, so the routes don't exist at all in prod.
+if (env.nodeEnv !== 'production') {
+  app.use(devAuthRoutes);
+}
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);
@@ -1878,6 +1884,11 @@ async function ensureMissedOpportunitiesSchema() {
 async function ensureMessagingSchema() {
   const statements = [
     `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`,
+    // DM delivery ticks (sent/delivered) + typing indicator — both poll-based,
+    // no websockets. delivered = peer's last_delivered_at >= message.created_at;
+    // typing = typing_at within a short freshness window (see dmService).
+    `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_delivered_at TIMESTAMPTZ`,
+    `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS typing_at TIMESTAMPTZ`,
     `ALTER TABLE community_notifications DROP CONSTRAINT IF EXISTS ck_community_notifications_type`,
     `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message'))`,
   ];
