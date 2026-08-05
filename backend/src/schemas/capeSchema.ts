@@ -294,3 +294,22 @@ export const updateGovernancePolicySchema = z.object({
   { message: 'at least one policy field must be provided' },
 );
 export type UpdateGovernancePolicyInput = z.infer<typeof updateGovernancePolicySchema>;
+
+/**
+ * CAPE Phase 6 (design doc §10 "Lifecycle mixes", §12 "Learner-stage policies") —
+ * PUT /api/admin/cape/governance/lifecycle-modes/:mode body contract. `mix` is a
+ * free-form category->percentage map (each mode's category set differs per §10's
+ * table) that must sum to ~1.0 (±0.001, same tolerance as
+ * updateEvidenceBandWeightsSchema above). Reuses `lifecycleModeSchema` (already
+ * defined above for the Phase 5 Today Plan contract) as the single source of
+ * truth for the 5 valid mode values — not redefined here.
+ */
+export const updateLifecycleModeMixSchema = z.object({
+  mix: z.record(z.string().min(1).max(60), z.number().min(0).max(1))
+    .refine((m) => Object.keys(m).length >= 1, { message: 'mix must have at least one category' })
+    .refine((m) => Math.abs(Object.values(m).reduce((s, v) => s + v, 0) - 1) < 0.001, {
+      message: 'mix percentages must sum to 1.0',
+    }),
+  reason: z.string().max(500).nullable().optional(),
+});
+export type UpdateLifecycleModeMixInput = z.infer<typeof updateLifecycleModeMixSchema>;

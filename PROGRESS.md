@@ -13264,3 +13264,25 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     T004/T005's wiring targets via `git diff --cached --name-only` grep).
   - Notes: Part of the CAPE Phase 6 governance-board `loop-architect` run. Not yet
     wired into the live ranker/Today-Plan — that's T004/T005.
+
+- [x] **T003 — lifecycle-mode policy service (mix percentages, versioned CRUD)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeLifecycleModePolicyService.ts` (new) —
+    `listCurrentLifecycleModePolicies()`, `getLifecycleModePolicyHistory(mode)`,
+    `updateLifecycleModeMix(mode, mix, adminId, reason?)` (same versioned-insert
+    contract as T002), reusing `LifecycleMode` from Phase 5's
+    `capeLifecycleModeService.ts` (not redefined). `backend/src/schemas/capeSchema.ts`
+    gained `updateLifecycleModeMixSchema` (free-form category->percentage map,
+    sum-to-1.0 refine, same ±0.001 tolerance as the existing evidence-band-weights
+    precedent).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh evidence:
+    tsc clean, 11/11 new tests, cross-checked all 4 numeric §10 mixes against the
+    actual design doc text, confirmed `returning_after_absence`'s first-cut split is
+    honestly labeled at 4 separate levels in the code — not presented as a §10
+    number — and confirmed zero edits to `capeLifecycleModeService.ts` or any live
+    ranking file).
+  - Notes: This mix is NOT consumed by any live ranking/selection logic in this
+    phase — view+versioned-edit only, per execution-contract.md's logged scope
+    decision. Wiring it into actual Today Plan/ranker slot selection is deferred to a
+    future phase.
