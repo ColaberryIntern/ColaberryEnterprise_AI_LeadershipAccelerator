@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { getWorkLedgerHealth, WorkLedgerHealth } from '../../services/workLedgerApi';
+import { getWorkLedgerHealth, WorkLedgerHealth, getGovernanceShadowSummary, GovernanceShadowSummary } from '../../services/workLedgerApi';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
+import GovernanceShadowPanel from '../../components/admin/GovernanceShadowPanel';
 
 // ProofDesk Work Ledger — Milestone 1 (Foundation). Read-only ingestion-health
 // panel: proves the shadow-mode wrap points (ticket create/status-change/
@@ -30,6 +31,31 @@ export default function AdminWorkLedgerHealthPage() {
     const interval = setInterval(fetchHealth, 10000);
     return () => clearInterval(interval);
   }, [fetchHealth]);
+
+  // ProofDesk Governance — Milestone 4 (shadow mode). Deliberately independent
+  // loading/error state from the ingestion-health card above - a governance-panel
+  // fetch failure must never affect the pre-existing card's render (T009 AC3).
+  const [governance, setGovernance] = useState<GovernanceShadowSummary | null>(null);
+  const [govLoading, setGovLoading] = useState(true);
+  const [govError, setGovError] = useState<string | null>(null);
+
+  const fetchGovernance = useCallback(async () => {
+    try {
+      const data = await getGovernanceShadowSummary(24);
+      setGovernance(data);
+      setGovError(null);
+    } catch (err: any) {
+      setGovError(err?.response?.data?.error || 'Failed to load governance shadow summary');
+    } finally {
+      setGovLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGovernance();
+    const interval = setInterval(fetchGovernance, 10000);
+    return () => clearInterval(interval);
+  }, [fetchGovernance]);
 
   const trust: TrustSignal = useMemo(() => {
     const pct = health?.completeness_pct ?? 0;
@@ -144,6 +170,13 @@ export default function AdminWorkLedgerHealthPage() {
           </table>
         </div>
       </SectionCard>
+
+      <GovernanceShadowPanel
+        governance={governance}
+        loading={govLoading}
+        error={govError}
+        onRefresh={fetchGovernance}
+      />
     </>
   );
 }

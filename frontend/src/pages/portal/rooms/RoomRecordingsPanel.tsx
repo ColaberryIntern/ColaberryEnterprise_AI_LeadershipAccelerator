@@ -10,7 +10,8 @@ function fmtBytes(n: number | null): string {
 
 // Recordings tab — a filtered, read-only view of this room's resources
 // (resource_type: 'recording'). Recordings are captured automatically from
-// each class's Google Meet call and hosted on our own storage
+// each class's video call (Zoom Cloud Recording, or Google Meet for older
+// sessions) and hosted on our own storage
 // (sessionRecordingService); a resource with a storage_key downloads through
 // the same authenticated route Docs & Files uses, one with only a url (a
 // manually-pasted link, still possible via Docs & Files) opens externally.

@@ -1,5 +1,5 @@
 import { sequelize } from '../../../config/database';
-import { getWorkLedgerHealth } from '../../../services/workLedger/workLedgerHealthService';
+import { getWorkLedgerHealth, getGovernanceShadowSummary } from '../../../services/workLedger/workLedgerHealthService';
 
 jest.mock('../../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 
@@ -61,6 +61,60 @@ describe('getWorkLedgerHealth — invalid window falls back to 24h default', () 
     mockQuery.mockResolvedValue([]);
 
     const result = await getWorkLedgerHealth(-5);
+
+    expect(result.window_hours).toBe(24);
+  });
+});
+
+// ProofDesk Governance — Milestone 4 (shadow mode). Read-only would-allow/
+// would-require-approval/would-block breakdown — see the service function's own
+// header for what this proves (nothing here gates any real action).
+describe('getGovernanceShadowSummary — happy path (mixed R0/R3 rows)', () => {
+  it('computes correct verdict totals and a per-action/risk-tier breakdown', async () => {
+    mockQuery.mockResolvedValue([
+      { action: 'ticket_dispatch', risk_tier: 'R0', verdict: 'would_allow', count: '42' },
+      { action: 'ticket_dispatch', risk_tier: 'R1', verdict: 'would_allow', count: '8' },
+      { action: 'ticket_dispatch', risk_tier: 'R3', verdict: 'would_require_approval', count: '3' },
+      { action: 'ticket_dispatch', risk_tier: 'R4', verdict: 'would_block', count: '1' },
+    ]);
+
+    const result = await getGovernanceShadowSummary(24);
+
+    expect(result.would_allow).toBe(50);
+    expect(result.would_require_approval).toBe(3);
+    expect(result.would_block).toBe(1);
+    expect(result.total_decisions).toBe(54);
+    expect(result.breakdown).toEqual([
+      { action: 'ticket_dispatch', risk_tier: 'R0', verdict: 'would_allow', count: 42 },
+      { action: 'ticket_dispatch', risk_tier: 'R1', verdict: 'would_allow', count: 8 },
+      { action: 'ticket_dispatch', risk_tier: 'R3', verdict: 'would_require_approval', count: 3 },
+      { action: 'ticket_dispatch', risk_tier: 'R4', verdict: 'would_block', count: 1 },
+    ]);
+  });
+});
+
+describe('getGovernanceShadowSummary — boundary: zero rows in window', () => {
+  it('returns an all-zero response, no crash', async () => {
+    mockQuery.mockResolvedValue([]);
+
+    const result = await getGovernanceShadowSummary(24);
+
+    expect(result).toEqual({
+      window_hours: 24,
+      total_decisions: 0,
+      would_allow: 0,
+      would_require_approval: 0,
+      would_block: 0,
+      breakdown: [],
+    });
+  });
+});
+
+describe('getGovernanceShadowSummary — invalid window falls back to 24h default', () => {
+  it('uses 24 when given a non-positive window', async () => {
+    mockQuery.mockResolvedValue([]);
+
+    const result = await getGovernanceShadowSummary(0);
 
     expect(result.window_hours).toBe(24);
   });

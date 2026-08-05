@@ -144,11 +144,15 @@ describe('roomEvents idempotency key', () => {
 });
 
 describe('meeting provider factory', () => {
-  it('defaults to google_meet and falls back for unknown providers', () => {
-    expect(getMeetingProvider().name).toBe('google_meet');
-    expect(getMeetingProvider('google_meet').name).toBe('google_meet');
-    expect(getMeetingProvider('livekit').name).toBe('google_meet');
+  it('defaults to zoom and falls back to zoom for unknown providers', () => {
+    expect(getMeetingProvider().name).toBe('zoom');
+    expect(getMeetingProvider('zoom').name).toBe('zoom');
+    expect(getMeetingProvider('livekit').name).toBe('zoom');
     expect(getMeetingProvider(null).supportsEmbedded()).toBe(false);
     expect(getMeetingProvider().supportsBreakouts()).toBe(false);
+  });
+
+  it('still resolves google_meet explicitly, for bookings created before the switch to Zoom', () => {
+    expect(getMeetingProvider('google_meet').name).toBe('google_meet');
   });
 });

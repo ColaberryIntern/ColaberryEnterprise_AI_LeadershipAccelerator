@@ -81,3 +81,77 @@ export async function getWorkLedgerHealth(windowHours = 24): Promise<WorkLedgerH
     breakdown,
   };
 }
+
+// ProofDesk Governance — Milestone 4 (Governance Enforcement, SHADOW MODE ONLY).
+//
+// Read-only: how many ticket-dispatch actions in the window WOULD have been
+// blocked/required-approval under R3/R4 (or any other authorizeAgentAction() denial)
+// if abac_enforcement were 'enforce', broken down by action/risk tier — this is the
+// concrete evidence for this milestone's handoff "before/after" requirement (T014).
+// Nothing here reads this data to gate anything; it is purely descriptive.
+//
+// approval_requests only ever gets a row when the decision was NOT would_allow (see
+// agentActionAuthorizationBridge.ts) — so "would_allow" here is inferred as the
+// complement: a dispatch ledger event with no matching approval_requests row.
+
+export interface GovernanceShadowBreakdownRow {
+  action: string;
+  risk_tier: string;
+  verdict: 'would_allow' | 'would_require_approval' | 'would_block';
+  count: number;
+}
+
+export interface GovernanceShadowSummary {
+  window_hours: number;
+  total_decisions: number;
+  would_allow: number;
+  would_require_approval: number;
+  would_block: number;
+  breakdown: GovernanceShadowBreakdownRow[];
+}
+
+export async function getGovernanceShadowSummary(windowHours = 24): Promise<GovernanceShadowSummary> {
+  const safeWindowHours = Number.isFinite(windowHours) && windowHours > 0 ? Number(windowHours) : 24;
+
+  const rows = await sequelize.query<{ action: string; risk_tier: string; verdict: string; count: string }>(
+    `WITH windowed_dispatches AS (
+       SELECT event_id, action_class, risk_tier, authorization_decision_id
+       FROM work_ledger_events
+       WHERE action_class = 'ticket_dispatch'
+         AND occurred_at >= NOW() - INTERVAL '${safeWindowHours} hours'
+     )
+     SELECT
+       wd.action_class AS action,
+       wd.risk_tier,
+       COALESCE(ar.verdict, 'would_allow') AS verdict,
+       COUNT(*)::text AS count
+     FROM windowed_dispatches wd
+     LEFT JOIN approval_requests ar ON ar.event_id = wd.event_id
+     GROUP BY wd.action_class, wd.risk_tier, COALESCE(ar.verdict, 'would_allow')
+     ORDER BY wd.action_class, wd.risk_tier, verdict`,
+    { type: QueryTypes.SELECT },
+  );
+
+  const breakdown: GovernanceShadowBreakdownRow[] = rows.map((r) => ({
+    action: r.action,
+    risk_tier: r.risk_tier,
+    verdict: r.verdict as GovernanceShadowBreakdownRow['verdict'],
+    count: Number(r.count),
+  }));
+
+  const sumByVerdict = (verdict: GovernanceShadowBreakdownRow['verdict']) =>
+    breakdown.filter((r) => r.verdict === verdict).reduce((sum, r) => sum + r.count, 0);
+
+  const would_allow = sumByVerdict('would_allow');
+  const would_require_approval = sumByVerdict('would_require_approval');
+  const would_block = sumByVerdict('would_block');
+
+  return {
+    window_hours: safeWindowHours,
+    total_decisions: would_allow + would_require_approval + would_block,
+    would_allow,
+    would_require_approval,
+    would_block,
+    breakdown,
+  };
+}

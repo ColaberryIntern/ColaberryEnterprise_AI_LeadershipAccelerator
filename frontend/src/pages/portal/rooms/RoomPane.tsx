@@ -79,8 +79,8 @@ const InviteModal: React.FC<{ roomId: string; onClose: () => void; onDone: () =>
 // PROGRESS.md note on why RoomBooking's dormant lobby_open/live/cooldown
 // machine was deliberately not activated for this).
 //   scheduled → countdown, no join button (indirect-join: nothing here jumps
-//     straight to Meet until the class is actually live)
-//   live      → real "Join Google Meet" button (session.meeting_link) +
+//     straight to the call until the class is actually live)
+//   live      → real "Join Class" button (session.meeting_link) +
 //     attendance recording, same pattern as NextLiveClassCard.handleJoin
 //   completed → recap/recording link if one was generated
 const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
@@ -125,7 +125,7 @@ const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
       ) : isLive ? (
         <>
           <div className="rm-classbanner-live"><span className="te-livedot" aria-hidden="true" /> Live now</div>
-          <button type="button" className="te-btn cherry sm" onClick={handleJoin}>📹 Join Google Meet</button>
+          <button type="button" className="te-btn cherry sm" onClick={handleJoin}>📹 Join Class</button>
         </>
       ) : (
         cd && (
@@ -146,7 +146,7 @@ const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
 const AlwaysOpenVideoBanner: React.FC<{ onJoin: () => void }> = ({ onJoin }) => (
   <div className="rm-classbanner live">
     <div className="rm-classbanner-live"><span className="te-livedot" aria-hidden="true" /> Live now · always open</div>
-    <button type="button" className="te-btn cherry sm" onClick={onJoin}>📹 Join Google Meet</button>
+    <button type="button" className="te-btn cherry sm" onClick={onJoin}>📹 Join Video Call</button>
   </div>
 );
 

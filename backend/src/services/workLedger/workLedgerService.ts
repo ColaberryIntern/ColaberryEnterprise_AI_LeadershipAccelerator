@@ -66,6 +66,12 @@ export async function emitEvent(input: WorkLedgerEventInput): Promise<WorkLedger
   let created: WorkLedgerEvent;
   try {
     created = await WorkLedgerEvent.create({
+      // ProofDesk Milestone 4: use the caller-supplied event_id when provided (so a
+      // pre-computed governance decision can reference this exact row), otherwise let
+      // the DB default (DataTypes.UUIDV4) generate one, exactly as before this
+      // milestone. `event_id: undefined` is a no-op for Sequelize's create() - the
+      // column default still applies - so this is fully backward compatible.
+      event_id: data.eventId ?? undefined,
       work_context_id: data.workContextId ?? null,
       ticket_id: data.ticketId ?? null,
       work_unit_id: data.workUnitId ?? null,

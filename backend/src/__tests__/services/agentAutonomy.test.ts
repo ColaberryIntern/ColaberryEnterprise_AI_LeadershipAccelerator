@@ -86,3 +86,55 @@ describe('agentAutonomy — HITL always-approval rules (§5 Q2)', () => {
     expect(actionRequiresApproval('erp_update', { resourceType: 'legacy_erp_module' }).rule).toBe('erp_write');
   });
 });
+
+describe('agentAutonomy — ProofDesk R0-R4 risk-tier reconciliation (Milestone 4, shadow mode)', () => {
+  it('happy path: R1/R2 risk tiers do not force approval on their own (existing rules still decide)', () => {
+    expect(actionRequiresApproval('update_campaign_config', { riskTier: 'R1' }).required).toBe(false);
+    expect(actionRequiresApproval('update_campaign_config', { riskTier: 'R2' }).required).toBe(false);
+    // R0/undefined behave exactly as before this milestone (no riskTier passed at all).
+    expect(actionRequiresApproval('update_campaign_config', { riskTier: 'R0' }).required).toBe(false);
+    expect(actionRequiresApproval('update_campaign_config').required).toBe(false);
+  });
+
+  it('boundary: R3 and R4 force approval, EVEN for an action that would otherwise classify as read/observe-safe', () => {
+    // 'run_qa_test' classifies as 'read' (see actionCategory's READ_HINTS) and would
+    // never need approval under any existing rule - this is the edge case worth its
+    // own explicit assertion: risk tier overrides category entirely.
+    const r3 = actionRequiresApproval('run_qa_test', { riskTier: 'R3' });
+    expect(r3.required).toBe(true);
+    expect(r3.rule).toBe('high_risk_tier');
+
+    const r4 = actionRequiresApproval('ticket_dispatch', { riskTier: 'R4' });
+    expect(r4.required).toBe(true);
+    expect(r4.rule).toBe('high_risk_tier');
+  });
+
+  it('the high-risk-tier rule is checked ahead of the other rules (takes the ERP-write reason slot too)', () => {
+    // Same action would ALSO qualify for 'erp_write' - risk tier wins because it's
+    // checked first, proving R3/R4 truly overrides regardless of action category.
+    const d = actionRequiresApproval('erp_data_push', { riskTier: 'R4' });
+    expect(d.required).toBe(true);
+    expect(d.rule).toBe('high_risk_tier');
+  });
+
+  it('failure/malformed input: a bad risk-tier string never throws and never falsely forces approval', () => {
+    expect(() => actionRequiresApproval('update_campaign_config', { riskTier: 'bogus' as any })).not.toThrow();
+    expect(actionRequiresApproval('update_campaign_config', { riskTier: 'bogus' as any }).required).toBe(false);
+    expect(() => actionRequiresApproval('update_campaign_config', { riskTier: null })).not.toThrow();
+    expect(actionRequiresApproval('update_campaign_config', { riskTier: null }).required).toBe(false);
+    expect(() => actionRequiresApproval('update_campaign_config', { riskTier: undefined })).not.toThrow();
+    expect(actionRequiresApproval('update_campaign_config', { riskTier: undefined }).required).toBe(false);
+    // Empty string is falsy - same safe-default path, not an R0-vs-crash ambiguity.
+    expect(actionRequiresApproval('update_campaign_config', { riskTier: '' }).required).toBe(false);
+  });
+
+  it('every pre-existing rule (ERP/social/new-lead/campaign-first-24h) still fires exactly as before when no riskTier is passed', () => {
+    // Regression guard for T003's own change: re-assert the pre-existing behavior this
+    // milestone must not alter, using the same fixtures as the describe block above.
+    expect(actionRequiresApproval('create_agent').rule).toBe('agent_lifecycle');
+    expect(actionRequiresApproval('social_post', { resourceType: 'social' }).rule).toBe('public_social_post');
+    expect(actionRequiresApproval('send_email', { isNewLead: true }).rule).toBe('first_touch_new_lead');
+    expect(actionRequiresApproval('send_sms', { campaignAgeHours: 3 }).rule).toBe('campaign_first_24h');
+    expect(actionRequiresApproval('send_email', { isNewLead: false, campaignAgeHours: 200 }).required).toBe(false);
+  });
+});

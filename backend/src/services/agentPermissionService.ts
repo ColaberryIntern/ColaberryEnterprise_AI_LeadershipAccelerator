@@ -59,6 +59,22 @@ const AGENT_PERMISSIONS: Record<string, AgentPermission> = {
   WebsiteAutoRepairAgent: { tier: 'write_with_audit', allowedTables: ['website_issues'], allowedOperations: ['auto_repair'], requiresEvaluateSend: false },
   ExecutionAgent: { tier: 'write_with_audit', allowedTables: ['ai_agents', 'intelligence_decisions'], allowedOperations: ['update_agent_config', 'modify_agent_schedule', 'update_campaign_config', 'adjust_lead_scoring', 'launch_ab_test', 'pause_campaign'], requiresEvaluateSend: false },
 
+  // ProofDesk Work Graph capability-registry agents (Milestone 4 - Governance
+  // Enforcement, shadow mode). These 4 already write ticket/artifact state today via
+  // ticketAgentDispatcher.ts's dispatch path (M1-M3, live), audited by AgentRun +
+  // work_ledger_events - write_with_audit is the accurate existing-behavior tier, not
+  // a new grant. Without this entry, an unclassified agent falls to
+  // DEFAULT_PERMISSION ('suggest_only' -> ladder level 'suggest', which forbids
+  // 'write' category actions entirely) and every single ticket dispatch would
+  // incorrectly register as "would-deny" once T005/T006 wire authorizeAgentAction()
+  // into the dispatch path - an inaccurate signal unrelated to this milestone's actual
+  // R0-R4 goal. The risk_tier reconciliation (agentAutonomy.ts, T003) is what decides
+  // whether a SPECIFIC action needs a human, independent of this ladder-level grant.
+  CurriculumArchitectAgent: { tier: 'write_with_audit', allowedTables: ['tickets', 'ticket_activities'], allowedOperations: ['ticket_dispatch'], requiresEvaluateSend: false },
+  ArtifactGenerationAgent: { tier: 'write_with_audit', allowedTables: ['tickets', 'ticket_activities'], allowedOperations: ['ticket_dispatch'], requiresEvaluateSend: false },
+  CurriculumQAAgent: { tier: 'write_with_audit', allowedTables: ['tickets', 'ticket_activities'], allowedOperations: ['ticket_dispatch'], requiresEvaluateSend: false },
+  PlatformFixAgent: { tier: 'write_with_audit', allowedTables: ['tickets', 'ticket_activities'], allowedOperations: ['ticket_dispatch'], requiresEvaluateSend: false },
+
   // Tier 4 — COMMUNICATION: Agents that send outbound messages
   AdmissionsSMSAgent: { tier: 'communication', allowedTables: ['admissions_action_logs', 'communication_logs'], allowedOperations: ['send_sms'], requiresEvaluateSend: true },
   AdmissionsSynthflowCallAgent: { tier: 'communication', allowedTables: ['call_contact_logs', 'admissions_action_logs', 'communication_logs'], allowedOperations: ['synthflow_call'], requiresEvaluateSend: true },
