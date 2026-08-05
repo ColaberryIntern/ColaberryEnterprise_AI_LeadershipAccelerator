@@ -150,6 +150,17 @@ export const env = {
   // matching the established convention for this flag family (FEED_CONTROL_ENABLED/
   // TODAY_FEED_V2_ENABLED/TODAY_AGGREGATE_SOURCES are likewise inline-only).
   capeLearningValueRankerEnabled: process.env.CAPE_LEARNING_VALUE_RANKER_ENABLED === 'true',
+  // CAPE Phase 5 — the finite "Today Plan" section, card-treatment chips (Why
+  // this/Level/Proof), learner feedback controls, skill-detail drawer, and
+  // real filter chips (design doc §10, §11, §16 Phase 5). Default OFF
+  // everywhere including production — flag-off keeps the Today page byte-
+  // identical to pre-Phase-5 behavior (see the flag-off regression tests
+  // added for this phase). UNLIKE the Phase 4 ranker flag above, this one IS
+  // documented in .env.example and exposed to the frontend via
+  // portalFlagsService.getPortalFlags() -> GET /api/portal/flags, because it
+  // gates a section students actually see (same convention as
+  // PORTAL_TODAY_REDESIGN_ENABLED), not a silent backend-only reorder.
+  capeTodayPlanEnabled: process.env.CAPE_TODAY_PLAN_ENABLED === 'true',
   // Content paywall — gate the full 12-week curriculum behind PAYMENT (paid /
   // admin-comp / staff / business-workspace), not just enrollment_type='explorer'.
   // Default OFF: flag-off preserves the legacy explorer-only Week-0 gate byte-for-
