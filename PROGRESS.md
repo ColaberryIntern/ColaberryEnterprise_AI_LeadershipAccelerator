@@ -13463,3 +13463,27 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     precedent file `AdminCapeSettingsPage.tsx` also ships with zero tests, and
     real manual verification is explicitly T015's job).
   - Notes: Panels T011-T014 each replace one placeholder file in place.
+
+- [x] **T011 — skill coverage heatmap panel (real implementation, replaces T010 placeholder)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/pages/admin/governance/SkillCoverageHeatmap.tsx`
+    replaced with the real panel - calls the T009 `fetchSkillCoverageHeatmap()`
+    client, renders the full types x skills matrix (no truncation), color-codes
+    cells by `credit_strength`, and visually flags gap cells (amber outline + a
+    warning glyph, not just computed-and-discarded) with a gap-detail list below
+    the matrix. Genuinely read-only (no mutating API calls).
+  - Verification: `loop-task-verifier` PASS 11/12 (independent agent, fresh
+    evidence: frontend tsc clean, confirmed no field-name drift against the real
+    T009 TypeScript interfaces, confirmed read-only via grep, confirmed the gap
+    highlighting is load-bearing in the rendered markup). The verifier's one
+    finding - that `npx react-scripts test` IS actually reachable in this
+    worktree (contrary to what was assumed for T010) - was acted on immediately:
+    added `frontend/src/pages/admin/governance/__tests__/SkillCoverageHeatmap.smoke.test.tsx`
+    following the repo's existing `AdminTrustCenterPage.smoke.test.tsx`
+    no-browser `renderToStaticMarkup` pattern (proves the initial-render/loading
+    state never crashes). Ran via `CI=true npx react-scripts test --watchAll=false
+    SkillCoverageHeatmap` - 1/1 passing. tsc re-confirmed clean after the addition.
+  - Notes: This discovery (CRA test runner reachable via `npx`, not the direct
+    `node_modules/.bin` path) will be applied to the remaining T013/T014 panels
+    too, strengthening their verification beyond what T010 assumed was possible.
