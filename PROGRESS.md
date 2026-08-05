@@ -13437,3 +13437,29 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     API-client wrapper functions).
   - Notes: Pure client-side typing/plumbing, no UI yet - the page/panels land in
     T010-T014.
+
+- [x] **T010 — governance page shell + routing + nav**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/pages/admin/AdminFeedControlGovernancePage.tsx`
+    (new) - standalone page at `/admin/feed-control-governance` (execution-contract
+    Assumption 1: `FeedControlTab.tsx` was already 536 lines, 4 more large panels
+    there would blow past CLAUDE.md's 500-line file ceiling), reusing
+    `PageHeader`/`SectionCard` from the shared admin shell, with a real working
+    URL-param-backed section switcher (heatmap/policies/pacing/simulator). 4
+    placeholder panel files created under `frontend/src/pages/admin/governance/`
+    (real compiling components, honestly labeled "coming in T0XX" - not fabricated
+    functionality) to be replaced one-by-one in T011-T014. Route + nav entry added
+    (`adminRoutes.tsx`, `adminNav.ts`). `FeedControlTab.tsx` got a single
+    discoverability link (+7 lines, zero pre-existing lines touched).
+  - Verification: `loop-task-verifier` PASS 11/12 (independent agent, fresh
+    evidence: frontend tsc completely clean, confirmed the new route sits inside
+    the same `ProtectedRoute`/`AdminLayout` wrapper as every other admin page,
+    confirmed `FeedControlTab.tsx`'s diff is genuinely minimal via `git diff --stat`,
+    confirmed the section switcher is real working state+URL logic not decorative,
+    confirmed zero backend files touched). The 1-point gap: no automated test for
+    the switcher (CRA's test runner isn't reachable through this worktree's
+    node_modules junction, a known environment limit, not a task defect - the
+    precedent file `AdminCapeSettingsPage.tsx` also ships with zero tests, and
+    real manual verification is explicitly T015's job).
+  - Notes: Panels T011-T014 each replace one placeholder file in place.
