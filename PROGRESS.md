@@ -13349,3 +13349,22 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
     stays untouched; default pacing values reproduce the exact prior fixed-5-slot
     output (explicit identity test), and the hardening fix makes the fail-soft
     contract MORE robust than before, not less.
+
+- [x] **T006 — skill coverage heatmap service (read-only)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeSkillCoverageHeatmapService.ts` (new)
+    - `getSkillCoverageHeatmap()` builds the full registered-type x Architecture-Skill
+    matrix from Phase 3's `curriculum_skill_maps` (type-level rows), reusing
+    `typeRegistry.allTypes()` for the type roster and Phase 0-1's
+    `listCurrentSkillDefinitions()` for the 10 skill columns (no duplicated lists). A
+    type with no current mapping surfaces as `source: 'none'` for every skill,
+    never silently dropped. `gaps` implements design doc §12's exact rule: a cell
+    with `weight > 0` and bands limited to claim/knowledge (no application/judgment)
+    flags as "claims/teaches but never proves."
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh evidence:
+    tsc clean, 8/8 tests, confirmed genuinely read-only via grep for any
+    create/update/destroy/raw-SQL call, confirmed the gap rule matches the design
+    doc's exact wording, confirmed a zero-weight cell is never flagged as a gap,
+    confirmed the fail-soft fallback still produces a real 10-column matrix).
+  - Notes: Read-only, no live-production wiring - standard-scrutiny verification.
