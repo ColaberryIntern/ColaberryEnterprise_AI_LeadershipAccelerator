@@ -108,6 +108,11 @@ export function deckScript(): string {
   }
 
   // Broadcast the deck's CURRENT view so students' phones switch to match it.
+  // Also carries the presenter's own script/next-slide preview — server-side
+  // this is stored in the same row but only ever served back out through the
+  // kit-token/admin-gated presenter-notes endpoint, never the student-facing
+  // companion-state one (see sessionLiveStateService.ts / getCompanionState,
+  // which whitelists its own return fields and does not include this).
   function broadcastCurrent(){
     var live = K.live || {};
     if (!live.enabled || !live.broadcastEndpoint) return;
@@ -118,10 +123,13 @@ export function deckScript(): string {
       options: sm.question.options, answer: sm.question.answer, revealed: !!revealed[sm.id],
       theater: sm.question.theater ? { state: theaterState[sm.id] || 'voting' } : undefined,
     } : null;
+    var tipEl = slides[i];
+    var presenterTip = tipEl ? (tipEl.getAttribute('data-tip') || '') : '';
+    var nextTitle = (i + 1 < slides.length) ? (slides[i + 1].getAttribute('data-slidetitle') || '') : 'End of class';
     var body = {
       slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
       phase: sm.phase, question: q, broadcast_prompts: sm.broadcast_prompts,
-      prompt: sm.prompt || undefined,
+      prompt: sm.prompt || undefined, presenter_tip: presenterTip, next_title: nextTitle,
     };
     fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),

@@ -83,6 +83,13 @@ export interface BroadcastState {
   question: BroadcastQuestion | null;
   broadcast_prompts?: string[];
   prompt?: BroadcastPrompt | null;
+  /** The presenter's own script/talking-points for the current slide, and the
+   * next slide's title — instructor-only. Stored in the same row as the rest
+   * of the broadcast state, but must NEVER be added to CompanionState (the
+   * student-facing read below), which whitelists its own fields. Read back
+   * out only via the kit-token/admin-gated presenter-notes endpoint. */
+  presenter_tip?: string;
+  next_title?: string;
   updated_at?: string;
 }
 
@@ -234,6 +241,34 @@ export async function getLiveState(sessionId: string): Promise<LiveState> {
     questions: msgs.map((m) => ({ name: m.sender_name, text: m.content, at: String(m.created_at) })),
     poll,
     recentEvents,
+  };
+}
+
+// ---- presenter (instructor's own phone) view ----
+
+export interface PresenterNotes {
+  title: string;
+  segment_label: string;
+  presenter_tip: string;
+  next_title: string;
+  updated_at: string | null;
+}
+
+/**
+ * What the INSTRUCTOR's own phone shows — the current slide's script/talking
+ * points and a preview of what's next. Deliberately a separate read path from
+ * getCompanionState (students): callers of this must be gated by the kit
+ * token or an admin JWT at the route, never by requireParticipant, since this
+ * is the one place presenter_tip is ever read back out.
+ */
+export async function getPresenterNotes(sessionId: string): Promise<PresenterNotes> {
+  const bc = await getBroadcast(sessionId);
+  return {
+    title: bc?.title || '',
+    segment_label: bc?.segment_label || '',
+    presenter_tip: bc?.presenter_tip || '',
+    next_title: bc?.next_title || '',
+    updated_at: bc?.updated_at || null,
   };
 }
 

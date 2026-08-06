@@ -405,51 +405,52 @@ export const GENERATED_WEEK_TEACH: Record<number, DayTeach> = {
       },
       {
         "segment": "failure",
-        "eyebrow": "💥 Failure Injection",
-        "title": "The skill you built is not firing — 'helps with my idea'",
-        "body": "Here is the failure you will absolutely hit again later, so let us hit it now on purpose. Point system-architect at a vague description like helps with my idea, then describe your project. Claude just answers inline and the Skill never loads. Nothing errors, nothing warns you. Do not start randomly tweaking the body — we diagnose this like architects.",
+        "eyebrow": "💾 The Failure Nobody Warns You About",
+        "title": "Your blueprint has one copy — and it lives on the one laptop in this room most likely to have a bad day",
+        "body": "Everything built tonight — the architecture, the stack, the mockup, the PDF — exists in exactly one place right now: this machine. No error message is coming to warn you. A crashed drive, a reformatted laptop, or one careless git checkout can erase an hour of real work in a single command, and it will look identical to success until the moment it does not. The fix is not more caution. It is a habit, and the habit is git.",
         "bullets": [
-          "Vague description: 'helps with my idea'",
-          "Ask about your project → Claude answers inline, Skill never loads",
-          "No error, no warning — the worst kind of failure"
+          "Everything tonight lives in ONE place: this laptop",
+          "No warning, no error — it just quietly stays unsaved",
+          "The fix isn't caution. It's a habit: commit early, commit often"
         ],
-        "diagram": "flowchart LR\n  V[\"❓ Vague description:\\n'Helps with my idea'\"] -.-> N[\"🚫 Never fires\"]",
-        "code": {
-          "label": "Reproduce the failure",
-          "code": "Set the system-architect description to a vague line:\n  description: Helps with my idea\n\nThen ask:\n  \"how would my project actually work?\"\n\nObserve: Claude answers by hand and never loads system-architect."
-        },
-        "script": "Here's the failure you WILL hit again. You built a Skill, you ask for the thing, and Claude just does it manually, ignoring your Skill. Let's diagnose instead of guessing."
+        "diagram": "flowchart LR\n  A[\"🖥️ Laptop only\\n(tonight, right now)\"] -.->|\"one bad day\"| B[\"💥 Gone\"]\n  A -->|\"git commit\"| C[\"📸 Saved snapshot\"]\n  C --> D[\"🛡️ Survives a crash,\\na reformat, a bad checkout\"]",
+        "script": "This is the real failure tonight teaches — not a Skill bug, a saving bug. Ask the room: whose blueprint currently exists in exactly one place? Every hand should go up."
       },
       {
         "segment": "failure",
-        "eyebrow": "🩺 Diagnose",
-        "title": "Four checks, in order: description, name/folder, frontmatter, overlap",
-        "body": "Do not randomly tweak — run the triage in order and stop when you find it. Check one: does the description name the trigger and the output in the words a user would actually type? That is about eighty percent of cases. Check two: is the Skill at .claude/skills/<name>/SKILL.md with the name matching the folder? Check three: is the frontmatter's YAML well-formed, since a parse error silently disables the Skill? Check four: is another Skill or a CLAUDE.md rule absorbing the same trigger?",
+        "eyebrow": "📸 Git Basics: status → add → commit → log",
+        "title": "Four commands. That is the entire lesson.",
+        "body": "git status shows what changed since your last save point. git add stages exactly the files you want captured. git commit -m saves a permanent, named snapshot you can always return to. git log --oneline is your proof — a timestamped, ordered record that you actually built this, tonight. Run all four right now, on the blueprint you just built.",
         "bullets": [
-          "1. Description names trigger + output (~80% of cases)",
-          "2. Skill at .claude/skills/<name>/SKILL.md, name matches folder",
-          "3. Frontmatter YAML is valid",
-          "4. No other Skill or CLAUDE.md rule absorbing the trigger"
+          "git status — what changed since your last commit",
+          "git add <path> — stage exactly what you want saved",
+          "git commit -m \"message\" — a permanent, named snapshot",
+          "git log --oneline — the proof, in order, that you built this"
         ],
-        "diagram": "flowchart TD\n  C1[\"1️⃣ Description names\\ntrigger + output?\"] --> C2[\"2️⃣ Name matches folder?\"]\n  C2 --> C3[\"3️⃣ Frontmatter valid YAML?\"]\n  C3 --> C4[\"4️⃣ No overlap with\\nanother Skill?\"]",
-        "script": "Don't randomly tweak. Run the checklist in order. Nine times out of ten you stop at step one — the description. But know all four so you can fix the rare one fast."
+        "diagram": "flowchart LR\n  S[\"🔍 git status\\nwhat changed?\"] --> Ad[\"➕ git add\\nstage it\"]\n  Ad --> C[\"📸 git commit\\nsave it, named\"]\n  C --> L[\"📜 git log\\nyour proof, in order\"]",
+        "code": {
+          "label": "Run this now — commit tonight's blueprint",
+          "code": "git status\n\ngit add .claude/skills project-blueprint\n\ngit commit -m \"feat(blueprint): system-architect, tech-stack-recommender, mvp-scoper\"\n\ngit log --oneline -5"
+        },
+        "script": "Run these four live, on your own machine, in order. When git log prints your commit, that line is the first real entry in your capstone's paper trail — point at it and say so."
       },
       {
         "segment": "failure",
-        "eyebrow": "🔧 Fix & Harden",
-        "title": "Name the trigger and the output — then re-invoke and confirm",
-        "body": "Apply the fix from check one: rewrite the description to name when and what, using the phrases you actually say. Re-invoke with the same natural-language ask and watch it fire this time. The lesson to carry out of tonight: a dead Skill is almost always a description problem, and the fix is naming when and what — never rewriting the body.",
+        "eyebrow": "🧰 Repo-less Setup",
+        "title": "Get everything else ready — before you even have a live GitHub repo",
+        "body": "Most of you have not created your capstone's actual GitHub repository yet, and that is fine — that comes later in the program. But real, valuable setup work does not need to wait for a remote to exist: a README that explains what a stranger is looking at, and a .gitignore that keeps noise out of every future commit. Both are 100% local, both take two minutes, and both mean you look and act like someone who ships professionally the moment a remote does exist.",
         "bullets": [
-          "Rewrite the description to name trigger + output",
-          "Re-invoke on the same natural ask — it fires now",
-          "Rule: dead Skill = description problem, not a body problem"
+          "A README.md explaining what's in project-blueprint/ — future you (and a recruiter) will thank you",
+          "A .gitignore so Skill outputs never accidentally track junk (node_modules, .env, OS files)",
+          "git log --oneline is your own proof-of-work ledger — screenshot it for your portfolio",
+          "None of this needs a GitHub repo yet — all of it is fully local"
         ],
-        "diagram": "flowchart LR\n  V[\"❓ Vague description\"] --> S[\"✅ Sharp description:\\n'Use when I have a\\nproject idea...'\"]\n  S --> Y[\"🎯 Fires every time\"]",
+        "diagram": "flowchart LR\n  L[\"💻 Local repo\\n(already have it)\"] --> R[\"📄 README.md\"]\n  L --> G[\"🚫 .gitignore\"]\n  R --> P[\"✅ Ready to push\\nthe moment a remote exists\"]\n  G --> P",
         "code": {
-          "label": "The fix",
-          "code": "Change the description to:\n  description: Use when the user has a project idea and wants a system architecture, a technical design, or a diagram of how it would work.\n\nThen re-ask:\n  \"how would my project actually work?\"\n\nExpected: system-architect now triggers on the natural ask."
+          "label": "Claude Code prompt — draft README + .gitignore",
+          "code": "Look at what is currently in .claude/skills/ and project-blueprint/.\n\nCreate a README.md at the project root that explains, for someone who has never seen this project before: what the idea is, what the three Skills do (system-architect, tech-stack-recommender, mvp-scoper), and the exact prompt pattern to re-run them if the blueprint ever needs to be regenerated.\n\nCreate a .gitignore appropriate for a Node + Claude Code project if one does not already exist: node_modules, .env, .DS_Store, and any local build output. Never list an actual .env file's contents — only ignore the filename.\n\nDo not commit anything yet — just create the two files.\n\nWHEN FINISHED, REPORT: the exact path of each file created, and confirm the .gitignore excludes .env without ever printing what is inside it."
         },
-        "script": "The fix is never a longer body. It's naming the trigger and the output in the words you actually use, then re-testing on a natural ask. Watch it fire now."
+        "script": "This is the last mile. You don't need a live GitHub repo tonight to look like someone who ships professionally — you need a README, a .gitignore, and the habit you just practiced. Close by pointing at git log one more time: that is tonight's real deliverable, not just the blueprint."
       }
     ]
   },
