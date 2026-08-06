@@ -34,14 +34,12 @@ export function usePolledResource<T>(
     } finally {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, intervalMs);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData]);
 
   return { data, loading, error, refetch: fetchData };
