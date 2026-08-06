@@ -556,6 +556,40 @@ describe('Week 2 Build Day — architecture blueprint redesign (week2-buildday-a
     expect(html.length).toBeGreaterThan(4000);
   });
 
+  it('the git lesson replaces the old Skill-description failure injection in the failure segment', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const text = JSON.stringify(spec.slides);
+    expect(text).toMatch(/git status/);
+    expect(text).toMatch(/git commit/i);
+    expect(text).toMatch(/git log/);
+    expect(text).toMatch(/README\.md/);
+    expect(text).toMatch(/\.gitignore/);
+    expect(text).not.toContain('helps with my idea');
+  });
+
+  it('extra participation polls render for build-map, guided-build, and the (git lesson) failure segment', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const interactionSlides = spec.slides.filter((s) => s.kind === 'interaction');
+    const bySegment = (id: string) => interactionSlides.filter((s) => s.segmentId === id);
+    expect(bySegment('build-map').length).toBeGreaterThanOrEqual(1);
+    expect(bySegment('guided-build').length).toBeGreaterThanOrEqual(2);
+    expect(bySegment('failure').length).toBeGreaterThanOrEqual(1);
+    const text = JSON.stringify(interactionSlides);
+    expect(text).toMatch(/how cool your deliverable/i);
+    expect(text).toMatch(/creative juices/i);
+  });
+
+  it('extra story beats render before the guided-build (skills) segment starts', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const storySlides = spec.slides.filter((s) => s.kind === 'storybeat');
+    expect(storySlides.length).toBeGreaterThanOrEqual(2);
+    const guidedBuildStart = spec.slides.findIndex((s) => s.segmentId === 'guided-build');
+    storySlides.forEach((s) => {
+      const idx = spec.slides.indexOf(s);
+      expect(idx).toBeLessThan(guidedBuildStart);
+    });
+  });
+
   it('Week 2 Monday (Architecture Day) is unaffected by this Thursday-only change', async () => {
     const mondaySession: BuildKitSpecInput['session'] = {
       id: 'demo-wk2-mon-check', session_number: 4, title: 'Week 2 · Architecture Day — Agent Skills (build 3 skills)',

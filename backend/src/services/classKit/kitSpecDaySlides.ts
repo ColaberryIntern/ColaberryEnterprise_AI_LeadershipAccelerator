@@ -80,6 +80,9 @@ export function defaultInteractionsFor(week: number | null, dayKind: DayKind): I
   const t = wc.thursday;
   return [
     { ...t.trivia, segment: 'readiness', eyebrow: '🧠 Warm-up', title: 'Quick check', presenterTip: 'One trivia to confirm last week landed before we build on it.' },
+    // Optional extra questions beyond the fixed slot above — empty for every
+    // week that doesn't author any (see WeekClassContent.thursday.extraInteractions).
+    ...(t.extraInteractions || []),
   ];
 }
 
@@ -276,9 +279,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       presenterTip: 'Show the finished result first. This is the cold open of the episode.',
     }));
   }
-  // No default Build Day story beats are authored yet — this only fires when
-  // the instructor adds a custom one via Present ▾ → Customize.
-  pushStoryBeats(out, undefined, 'result-preview', preview, config);
+  pushStoryBeats(out, t.storyBeats, 'result-preview', preview, config);
   pushInteractions(out, interactions, 'result-preview', preview);
 
   const readiness = segById(segs, 'readiness');
@@ -302,6 +303,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       presenterTip: i === 0 ? 'Everyone starts here. Confirm CP0 before the first prompt.' : 'Wait for the pulse to catch up before the next checkpoint.',
     }));
   });
+  pushStoryBeats(out, t.storyBeats, 'build-map', map, config);
   pushInteractions(out, interactions, 'build-map', map);
 
   // Guided build: the deep teaching steps when authored, else the plain prompt

@@ -146,6 +146,15 @@ export interface WeekClassContent {
     /** Optional Story Mode before/after comparison, shown before the assignment
      * brief as the transformation payoff. Omit for weeks without one authored. */
     beforeAfter?: { label?: string; before: string[]; after: string[] };
+    /** Optional "change of pace" story beats for Build Day, inserted right
+     * after the named segment's content (segment id -> beats to insert
+     * there). Same shape and splice mechanism as monday.storyBeats — omit
+     * for weeks without any authored. */
+    storyBeats?: Record<string, StoryBeat[]>;
+    /** Optional extra survey questions beyond the fixed readiness-trivia slot,
+     * each tagged with the run-of-show segment to render in. Mirrors
+     * monday.extraInteractions exactly — see that field's doc comment. */
+    extraInteractions?: Array<Interaction & { segment: string; eyebrow?: string; title?: string; presenterTip?: string }>;
   };
 
   /** Prove-it-by-Friday: the graded deliverable. */
@@ -572,8 +581,8 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         { label: 'Recommend the stack', prompt: 'Create an Agent Skill named "tech-stack-recommender" that takes a system architecture and recommends a tech stack, explained simply with icons and a fit rating for each choice.' },
         { label: 'Scope the demo builder', prompt: 'Turn "mvp-scoper" into a multi-file Skill that outputs a Week-1 task list, a visual HTML mockup of the idea, and a short marketing one-pager — restrict its tool access to only what it needs.' },
       ],
-      failureInjection: 'Author a Skill with a vague description ("helps with my idea") and show Claude ignoring it.',
-      recovery: 'Rewrite the description to name the trigger and the output ("Use when the user has a project idea and wants a system architecture with a diagram"). Re-invoke — it fires.',
+      failureInjection: 'The quiet failure nobody notices in the room: an idea that took an hour to architect, stack, and demo — sitting only on disk, one crashed laptop or one overwritten file away from gone.',
+      recovery: 'git init, git add, git commit — the three commands that turn tonight\'s blueprint into something that survives a closed laptop, a reformatted machine, or tomorrow\'s forgetfulness.',
       trivia: {
         kind: 'trivia',
         q: 'Best tool-access setting for a Skill that only writes a Markdown report?',
@@ -581,6 +590,54 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         answer: 1,
         reveal: 'Scope tools to the minimum the Skill needs — least privilege is an architecture habit, not a nicety.',
       },
+      storyBeats: {
+        'result-preview': [
+          {
+            icon: '🏛️', tone: 'violet', eyebrow: 'Before you build — the story behind tonight',
+            title: 'Every real system you have ever used started exactly where you are right now',
+            body: 'Somewhere there is a napkin, a Slack message, or a one-paragraph email that was the entire spec for a system now worth millions. The founders did not wait until the idea was perfect. They wrote down who it was for, what it did, and the one thing it had to get right — then handed that paragraph to whoever could turn it into a diagram. Tonight, that whoever is Claude, and the paragraph is yours.',
+            punch: 'A blueprint is not what you build after the idea is finished. It is what makes an unfinished idea real enough to argue with.',
+          },
+        ],
+        'build-map': [
+          {
+            icon: '📐', tone: 'berry', eyebrow: 'Why architecture comes before code',
+            title: 'Nobody pours a foundation before seeing the blueprint — the same rule applies here',
+            body: 'A contractor who starts pouring concrete before the blueprint exists is not moving fast, they are gambling with the client\'s money. The four checkpoints tonight exist for the same reason a real blueprint exists: so the expensive mistakes get caught on paper, in minutes, instead of in code, in weeks. system-architect is not a formality before the "real" work — it IS the real work, just faster than an architect could ever do it by hand.',
+            punch: 'Slow is not the opposite of fast here. Guessing is.',
+          },
+        ],
+      },
+      extraInteractions: [
+        {
+          segment: 'build-map', kind: 'poll',
+          q: 'How ready do you feel to turn your idea into a real architecture tonight?',
+          options: ['😬 Honestly nervous', '🙂 Cautiously ready', '😎 Let\'s go', '🔥 Already sketching it in my head'],
+          eyebrow: '🌡️ Room check', title: 'Before we start building',
+          presenterTip: 'Quick temperature check, no reveal needed — just read a few answers out loud to loosen the room up before CP0.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'Rate how cool your deliverable is right now, honestly.',
+          options: ['🙂 Solid', '😃 Really good', '🤩 Genuinely impressive', '🚀 I would show this to an investor tomorrow'],
+          eyebrow: '📣 Show it off', title: 'Rate your blueprint',
+          presenterTip: 'Fires right after CP3 lands, while mockups are still open on screen. Read a few of the "🚀" answers out loud by name — this is the peak-energy moment of the night.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'How much did tonight get your creative juices flowing for your actual capstone?',
+          options: ['💧 A little', '🌊 A lot', '🌪️ I already have three new ideas', '🎢 I want to redo my whole idea now'],
+          eyebrow: '💡 Spark check', title: 'Did this change how you\'re thinking about your project?',
+          presenterTip: 'Pairs with the poll above — back-to-back reaction round right before the break. If several people pick the last two options, say so out loud; that is the class working.',
+        },
+        {
+          segment: 'failure', kind: 'poll',
+          q: 'Be honest — how comfortable are you with git commands like add and commit right now?',
+          options: ['😅 Still Googling every command', '🙂 I can follow along', '💪 I could teach this to someone else', '🧙 I dream in git log'],
+          eyebrow: '🧠 Self-check', title: 'Where you stand on git, right now',
+          presenterTip: 'Ask this AFTER the git lesson, not before — it is a confidence check on what was just taught, not a cold-open poll. Reveal is unnecessary; just note the spread.',
+        },
+      ],
     },
     assignment: {
       title: 'Your idea, architected and demoed',
