@@ -6,9 +6,16 @@ import { fetchTodayPlan } from '../../../services/capeApi';
 export type TodayNextStep =
   | { kind: 'classroom'; card: TimelineFeedCard }
   | { kind: 'classroom-done' }
-  | { kind: 'setup'; title: string }
+  | { kind: 'setup'; key: string; title: string; action: (() => void) | null }
   | { kind: 'plan' }
   | { kind: 'timeline' };
+
+/** Short CTA button text per setup step key — shared between the full
+ *  command band and the condensed slot so they never drift. */
+export const SETUP_STEP_CTA_LABEL: Record<string, string> = {
+  resume: 'Upload résumé / LinkedIn',
+  referral: 'Recommend a friend',
+};
 
 /**
  * Decides what the Command Center's primary CTA should point a student at —
@@ -28,13 +35,13 @@ export function useTodayNextStep(params: {
   curriculum: TimelineFeedCard[];
   buckets: string[];
   setupRemaining: number;
-  nextSetupStepTitle: string | null;
+  nextSetupStep: { key: string; title: string; action: (() => void) | null } | null;
   planFlagOn: boolean;
   /** Bump/replace this (e.g. the points object) to re-check plan completion
    *  after a card is completed elsewhere on the page. */
   refreshToken: unknown;
 }): TodayNextStep {
-  const { isExplorer, curriculum, buckets, setupRemaining, nextSetupStepTitle, planFlagOn, refreshToken } = params;
+  const { isExplorer, curriculum, buckets, setupRemaining, nextSetupStep, planFlagOn, refreshToken } = params;
   // null = unknown yet, or no plan to speak of (flag off / empty / errored) —
   // both fall through to the Timeline stage rather than blocking on a loading state.
   const [planIncomplete, setPlanIncomplete] = useState<boolean | null>(null);
@@ -57,7 +64,11 @@ export function useTodayNextStep(params: {
     const card = findActiveNextCard(curriculum, buckets);
     return card ? { kind: 'classroom', card } : { kind: 'classroom-done' };
   }
-  if (setupRemaining > 0) return { kind: 'setup', title: nextSetupStepTitle ?? 'Finish setting up' };
+  if (setupRemaining > 0) {
+    return nextSetupStep
+      ? { kind: 'setup', key: nextSetupStep.key, title: nextSetupStep.title, action: nextSetupStep.action }
+      : { kind: 'setup', key: '', title: 'Finish setting up', action: null };
+  }
   if (planIncomplete) return { kind: 'plan' };
   return { kind: 'timeline' };
 }

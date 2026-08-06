@@ -1,8 +1,26 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { getWorkLedgerHealth, WorkLedgerHealth, getGovernanceShadowSummary, GovernanceShadowSummary } from '../../services/workLedgerApi';
+import {
+  getWorkLedgerHealth,
+  WorkLedgerHealth,
+  getGovernanceShadowSummary,
+  GovernanceShadowSummary,
+  getAgentTrust,
+  AgentTrustEntry,
+  getCostToProof,
+  CostToProofEntry,
+  getRelatedWorkClusters,
+  RelatedWorkClusters,
+  getOutcomeMeasurementsSummary,
+  OutcomeMeasurementsSummary,
+} from '../../services/workLedgerApi';
 import { PageHeader, StatCard, SectionCard } from '../../components/admin/shell';
 import { TrustSignal, TrustLevel } from '../../components/admin/shell/trust';
 import GovernanceShadowPanel from '../../components/admin/GovernanceShadowPanel';
+import AgentTrustPanel from '../../components/admin/AgentTrustPanel';
+import CostToProofPanel from '../../components/admin/CostToProofPanel';
+import RelatedWorkClustersPanel from '../../components/admin/RelatedWorkClustersPanel';
+import OutcomeMeasurementsPanel from '../../components/admin/OutcomeMeasurementsPanel';
+import { usePolledResource } from '../../hooks/usePolledResource';
 
 // ProofDesk Work Ledger — Milestone 1 (Foundation). Read-only ingestion-health
 // panel: proves the shadow-mode wrap points (ticket create/status-change/
@@ -56,6 +74,22 @@ export default function AdminWorkLedgerHealthPage() {
     const interval = setInterval(fetchGovernance, 10000);
     return () => clearInterval(interval);
   }, [fetchGovernance]);
+
+  // ProofDesk Outcomes & Learning — Milestone 5. Each panel below fetches
+  // independently (usePolledResource), so one panel's failure never affects another's
+  // render — same invariant the pre-existing governance panel already established.
+  const agentTrust = usePolledResource<AgentTrustEntry[]>(getAgentTrust, 10000, 'Failed to load agent trust stats');
+  const costToProof = usePolledResource<CostToProofEntry[]>(getCostToProof, 10000, 'Failed to load cost-to-proof stats');
+  const relatedWorkClusters = usePolledResource<RelatedWorkClusters>(
+    getRelatedWorkClusters,
+    10000,
+    'Failed to load related-work clusters',
+  );
+  const outcomeMeasurements = usePolledResource<OutcomeMeasurementsSummary>(
+    getOutcomeMeasurementsSummary,
+    10000,
+    'Failed to load outcome measurements summary',
+  );
 
   const trust: TrustSignal = useMemo(() => {
     const pct = health?.completeness_pct ?? 0;
@@ -177,6 +211,39 @@ export default function AdminWorkLedgerHealthPage() {
         error={govError}
         onRefresh={fetchGovernance}
       />
+
+      {/* ProofDesk Outcomes & Learning — Milestone 5 */}
+      <OutcomeMeasurementsPanel
+        summary={outcomeMeasurements.data}
+        loading={outcomeMeasurements.loading}
+        error={outcomeMeasurements.error}
+        onRefresh={outcomeMeasurements.refetch}
+      />
+      <AgentTrustPanel
+        entries={agentTrust.data}
+        loading={agentTrust.loading}
+        error={agentTrust.error}
+        onRefresh={agentTrust.refetch}
+      />
+      <CostToProofPanel
+        entries={costToProof.data}
+        loading={costToProof.loading}
+        error={costToProof.error}
+        onRefresh={costToProof.refetch}
+      />
+      <RelatedWorkClustersPanel
+        clusters={relatedWorkClusters.data}
+        loading={relatedWorkClusters.loading}
+        error={relatedWorkClusters.error}
+        onRefresh={relatedWorkClusters.refetch}
+      />
+
+      {/* ProofDesk Outcomes & Learning — Milestone 5 (T011) */}
+      <div className="text-center mt-4 mb-2">
+        <a href="/admin/executive-narrative" className="btn btn-outline-secondary btn-sm">
+          <i className="ri-file-text-line" aria-hidden="true" /> View executive narrative (what shipped, what needs a decision)
+        </a>
+      </div>
     </>
   );
 }

@@ -8,7 +8,6 @@ import {
 import { loadSchedule } from '../scheduleCache';
 import PortalShell from './PortalShell';
 import OpenOnPhone from './OpenOnPhone';
-import CondensedHeaderCard, { CondensedTone } from './CondensedHeaderCard';
 import { usePortalFlags } from '../../../hooks/usePortalFlags';
 import {
   readParticipant, countdown, firstClassTargetMs,
@@ -36,6 +35,7 @@ import { useReferralForm } from './useReferralForm';
 import { fetchSkillProfile, LearnerSkillProfile } from '../../../services/capeApi';
 import { useTodayNextStep } from './useTodayNextStep';
 import TodayNextStepBanner from './TodayNextStepBanner';
+import TodayNextStepCondensed from './TodayNextStepCondensed';
 
 const TodayShell: React.FC = () => {
   const [points, setPoints] = useState<PointsSummary | null>(null);
@@ -115,9 +115,6 @@ const TodayShell: React.FC = () => {
   // hardcoded 0/100 literal. Rounds the same overall_proficiency SkillMeter renders,
   // so the ring and the radar can never disagree (design doc §2, §11, §17 AC 10).
   const readiness = capeProfile ? Math.round(capeProfile.overall_proficiency) : 0;
-  // Banding for the condensed-header readiness chip — same thresholds a
-  // student would read as "on track" / "building" / "just starting".
-  const readinessTone: CondensedTone = readiness >= 70 ? 'leaf' : readiness >= 40 ? 'amber' : 'cherry';
   const oh = schedule?.next_open_house || null;
   const ohCd = countdown(oh ? new Date(oh.starts_at).getTime() : null, now);
   const fcCd = countdown(firstClassTargetMs(schedule?.first_class ?? null), now);
@@ -219,7 +216,7 @@ const TodayShell: React.FC = () => {
     curriculum,
     buckets: curriculumBuckets,
     setupRemaining,
-    nextSetupStepTitle: nextSetupStep?.title ?? null,
+    nextSetupStep,
     planFlagOn: !!flags?.cape_today_plan,
     refreshToken: points,
   });
@@ -243,23 +240,7 @@ const TodayShell: React.FC = () => {
   return (
     <PortalShell
       todayBadge={setupRemaining}
-      condensedSlot={(
-        <CondensedHeaderCard
-          icon={<svg viewBox="0 0 24 24" fill="none"><path d="M12 2l2.8 6.6 7.2.6-5.5 4.7 1.7 7L12 17.8 5.8 21.5l1.7-7L2 9.8l7.2-.6z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>}
-          tone="leaf"
-          visual={<div className="te-ring mini" style={{ '--p': lvl.pct, '--c': 'var(--leaf)' } as React.CSSProperties}><div className="v"><b>{total}</b></div></div>}
-          label="Next tier"
-          title={lvl.next ? lvl.next.name : 'Max level'}
-          sub={lvl.next ? `${lvl.next.min - total} pts to go` : 'Top tier reached'}
-          stats={[{
-            icon: <span className="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg></span>,
-            value: `${readiness}`,
-            tone: readinessTone,
-            title: `Architect readiness — ${readiness}/100`,
-          }]}
-          action={<OpenOnPhone />}
-        />
-      )}
+      condensedSlot={<TodayNextStepCondensed nextStep={nextStep} onScrollTo={scrollToAnchor} />}
     >
       {(condensed) => (
         <>
@@ -275,8 +256,6 @@ const TodayShell: React.FC = () => {
             <TodayNextStepBanner
               nextStep={nextStep}
               total={total}
-              hasBackground={hasBackground}
-              onOpenUpload={openUpload}
               onScrollTo={scrollToAnchor}
             />
           </div>
