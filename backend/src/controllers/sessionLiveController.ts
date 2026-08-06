@@ -135,6 +135,16 @@ export async function handleGetPresenterPage(req: Request, res: Response, next: 
   try {
     const html = await renderPresenterPage(req.params.id as string);
     if (!html) return res.status(404).json({ error: 'Session not found' });
+    // This page is a real browser navigation (not opened via document.write
+    // into an about:blank tab like the deck), so the app-wide CSP's default
+    // `script-src 'self'` (no 'unsafe-inline') actually applies here and
+    // silently kills the page's own inline polling <script> — the page just
+    // sits on its static placeholder forever with no console-visible error
+    // on the instructor's phone. Relax CSP for this one response only.
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:; img-src 'self' data:; connect-src 'self'",
+    );
     res.type('html').send(html);
   } catch (err) { next(err); }
 }
