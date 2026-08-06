@@ -41,7 +41,7 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'program',
     title: 'Next Cohort',
-    content: 'The Founding Cohort is the current live cohort - capped at 40 seats. For the exact next Open House and kickoff dates and current seat availability, check enterprise.colaberry.ai or ask Maya to pull the live figures; do not state a specific date from memory, it goes stale quickly.',
+    content: 'Enrollment is rolling - there is no fixed start date or capped Founding Cohort to wait for. You can create a free Explorer account and start exploring the material today at training.colaberry.com, or enroll in full paid access anytime. Full Classroom access unlocks when your assigned cohort\'s classes actually begin.',
     keywords: ['start', 'date', 'when', 'next', 'cohort', 'begin'],
     priority: 10,
   },
@@ -103,23 +103,30 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'pricing',
     title: 'Seat Deposit',
-    content: 'Registering through the Open House reserves your seat with a $50 deposit, credited toward your first membership payment - not paid on top of it. Full program access starts the day your cohort kicks off, and that\'s also when your first membership charge lands, with each following charge landing on that same date each month after. If you end up not attending, the $50 is fully refundable, or it can be applied as a credit toward a future cohort instead.',
+    content: 'The $50 seat deposit is no longer offered. To reserve your spot, you pay your plan price directly - there is no separate deposit. Your first membership charge is what holds your seat, with each following charge landing on that same date each month after. Full program access starts the day your cohort\'s classes actually begin, not the moment you pay. If you paid the $50 deposit before this option was retired in August 2026, that credit and its refund/reapply terms are unchanged for you.',
     keywords: ['deposit', 'down payment', '$50', 'reserve', 'seat', 'open house', 'when does access start'],
     priority: 10,
   },
   {
     category: 'pricing',
     title: 'ROI and Value',
-    content: 'The program pays for itself through the real deliverables you walk away with: a deployed AI system, a GitHub portfolio employers can actually review, and Anthropic Architect certification prep - proof of capability, not just a certificate claim. Scholarships are available for qualifying applicants; ask admissions@colaberry.com.',
+    content: 'The program pays for itself through the real deliverables you walk away with: a deployed AI system, a GitHub portfolio employers can actually review, and Anthropic Architect certification prep - proof of capability, not just a certificate claim. Scholarships are not currently available, but you can explore the material for free through the Explorer preview tier before committing to paid access.',
     keywords: ['roi', 'value', 'return', 'worth', 'investment', 'benefit', 'scholarship'],
     priority: 9,
   },
   {
     category: 'pricing',
     title: 'Payment Options',
-    content: 'Enrollment is a single membership - $149/month billed annually (founding rate) or $199/month month-to-month, no separate course fees or add-ons. A $50 deposit can reserve a seat through the Open House and is credited toward the first payment. Scholarships are available for qualifying applicants.',
+    content: 'Enrollment is a single membership - $149/month billed annually (founding rate) or $199/month month-to-month, no separate course fees or add-ons. There is no discounted deposit option - your plan payment itself is what reserves your seat, and full program access starts when your cohort\'s classes begin. Not ready to commit? Start with the free Explorer preview tier ($0, no payment) and upgrade whenever you\'re ready. Scholarships are not currently available.',
     keywords: ['payment', 'options', 'pay', 'financing', 'scholarship'],
     priority: 7,
+  },
+  {
+    category: 'pricing',
+    title: 'Free Explorer Preview',
+    content: 'If you\'re undecided, you don\'t have to commit right away. Create a free Explorer account at training.colaberry.com to preview the material and see how the program works - no payment required. When you\'re ready, upgrading to full paid access ($149/month annual or $199/month month-to-month) takes just a couple clicks from your account, and full Classroom access unlocks when your cohort\'s classes begin.',
+    keywords: ['free', 'explorer', 'preview', 'trial', 'try before', 'undecided', 'not ready'],
+    priority: 9,
   },
 
   // FAQ
@@ -156,7 +163,7 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'logistics',
     title: 'Enrollment Process',
-    content: 'To enroll: (1) Attend the free Open House to meet the instructors and see the full curriculum live - no commitment required, (2) Reserve your seat with the $50 deposit if you\'re ready, or enroll directly for self-paced access, (3) Select your plan (Annual or Month-to-Month) and complete checkout at enterprise.colaberry.ai, (4) Start with your cohort when it kicks off. Seats are limited - check enterprise.colaberry.ai for current availability.',
+    content: 'Enrollment is rolling - start anytime at training.colaberry.com. (1) Create a free Explorer account to preview the material - no payment or commitment required, (2) When you\'re ready, select your plan (Annual or Month-to-Month) and complete checkout to reserve your seat, (3) Full program access starts when your assigned cohort\'s classes actually begin.',
     keywords: ['enroll', 'enrollment', 'process', 'steps', 'how to join', 'sign up', 'register'],
     priority: 9,
   },
