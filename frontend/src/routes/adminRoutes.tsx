@@ -58,6 +58,7 @@ import CEOCommandCenter from '../pages/admin/CEOCommandCenter';
 import AdminFunnelPage from '../pages/admin/AdminFunnelPage';
 import CbSystemCommand from '../pages/admin/CbSystemCommand';
 import AdminTrustCenterPage from '../pages/admin/AdminTrustCenterPage';
+import AdminVaErpDashboardPage from '../pages/admin/AdminVaErpDashboardPage';
 import AdminPortalEnterPage from '../pages/admin/AdminPortalEnterPage';
 const adminRoutes = (
   <>
@@ -130,6 +131,7 @@ const adminRoutes = (
             Redirect the old URL to the CB System Command dashboard. */}
         <Route path="/admin/ops" element={<Navigate to="/admin/cb-system" replace />} />
         <Route path="/admin/trust" element={<AdminTrustCenterPage />} />
+        <Route path="/admin/va-erp" element={<AdminVaErpDashboardPage />} />
       </Route>
     </Route>
   </>
