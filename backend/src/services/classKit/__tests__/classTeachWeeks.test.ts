@@ -4,11 +4,14 @@ import { GENERATED_WEEK_TEACH } from '../../../data/classTeachWeeks';
  * classTeachWeeks.ts is GENERATED (scripts/buildTeachWeeks.js), but its input
  * (a directory of weekN.json files from a one-time fan-out) is not committed
  * anywhere in this repo — confirmed by a repo-wide search before this change.
- * Week 2's "monday" array was therefore hand-edited directly, disclosed here,
- * to replace the commit-message/PR-description/release-notes examples with
- * the data-quality/ETL-incident story (week2-architecture-day-redesign).
- * Weeks 3-12 and Week 2's "thursday" array were left byte-for-byte untouched.
- * These tests guard Week 2's monday content from silently reverting.
+ * Week 2's "monday" array was hand-edited directly (week2-architecture-day-redesign,
+ * the dashboard/ETL-incident story) and its "thursday" array was hand-edited
+ * separately (week2-buildday-architecture-blueprint, replacing the commit-
+ * message/PR-description/release-notes examples with system-architect /
+ * tech-stack-recommender / mvp-scoper — turn a one-paragraph idea into a real
+ * architecture diagram, a justified stack, and a visual demo). Weeks 3-12 are
+ * left byte-for-byte untouched. These tests guard both of Week 2's arrays from
+ * silently reverting.
  */
 describe('classTeachWeeks — Week 2 monday (week2-architecture-day-redesign)', () => {
   const week2 = GENERATED_WEEK_TEACH[2];
@@ -77,11 +80,29 @@ describe('classTeachWeeks — Week 2 monday (week2-architecture-day-redesign)', 
     expect(testLabels.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('Thursday (Build Day) content is completely untouched by this change', () => {
+  it('Thursday now carries the architecture-blueprint Skills (week2-buildday-architecture-blueprint)', () => {
     const text = JSON.stringify(week2.thursday);
-    expect(text).toContain('commit-summary');
-    expect(text).toContain('release-notes');
-    expect(text).toContain('pr-description');
+    expect(text).toContain('system-architect');
+    expect(text).toContain('tech-stack-recommender');
+    expect(text).toContain('mvp-scoper');
+    expect(text).not.toContain('commit-summary');
+    expect(text).not.toContain('release-notes');
+    expect(text).not.toContain('pr-description');
+  });
+
+  it('Thursday carries a real mermaid diagram on every teach slide (Ram feedback, applied to Thursday too)', () => {
+    const withoutDiagram = week2.thursday!.filter((s) => !s.diagram);
+    expect(withoutDiagram).toEqual([]);
+    expect(week2.thursday!.every((s) => s.diagram!.includes('flowchart'))).toBe(true);
+  });
+
+  it('mvp-scoper is scoped to Read/Write only, never Bash, and produces a real visual mockup', () => {
+    const text = JSON.stringify(week2.thursday);
+    expect(text).toContain('mockup.html');
+    expect(text).toMatch(/allowed-tools:\s*Read,\s*Write/);
+    // The frontmatter line itself must never grant Bash — a nearby prose
+    // mention like "never Bash" (this file has one, deliberately) is fine.
+    expect(text).not.toMatch(/allowed-tools:\s*Read,\s*Write,\s*Bash/);
   });
 
   it('does not modify any other generated week (3-12 byte-for-byte)', () => {
