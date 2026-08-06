@@ -49,7 +49,6 @@ export default function AdminExecutiveNarrativePage() {
 
   React.useEffect(() => {
     load(window_);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [window_]);
 
   return (
