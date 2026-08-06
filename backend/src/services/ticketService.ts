@@ -186,6 +186,17 @@ export async function updateTicketStatus(
       .catch(() => { /* non-critical */ });
   }
 
+  // ProofDesk Outcomes & Learning (Milestone 5, spec 20.4): every ticket reaching
+  // 'done' — not just cory strategic tickets — gets a 7-day recurrence-check
+  // follow-up scheduled. Non-blocking, same failure-isolation contract as the cory
+  // hook above: a failure here must never affect this function's own success/failure
+  // or return value.
+  if (newStatus === 'done') {
+    import('./outcomes/outcomeMeasurementService')
+      .then((svc) => svc.scheduleOutcomeMeasurement(ticketId))
+      .catch(() => { /* non-critical */ });
+  }
+
   return ticket;
 }
 
