@@ -1,6 +1,16 @@
 import { Ticket, TicketActivity } from '../../models';
 import { emitEvent } from '../../services/workLedger/workLedgerService';
+import { scheduleOutcomeMeasurement } from '../../services/outcomes/outcomeMeasurementService';
 import { createTicket, updateTicketStatus, addAgentOutput } from '../../services/ticketService';
+
+/** Dynamic import() hooks (cory + outcome-measurement) run in a `.then()` chain that
+ * is deliberately NOT awaited by updateTicketStatus (non-blocking by design) — flush
+ * the microtask queue so their mocked callbacks have a chance to run before asserting
+ * on them. */
+async function flushMicrotasks(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+}
 
 jest.mock('../../config/database', () => ({ sequelize: { query: jest.fn() } }));
 jest.mock('../../models', () => ({
@@ -10,16 +20,21 @@ jest.mock('../../models', () => ({
 jest.mock('../../services/workLedger/workLedgerService', () => ({
   emitEvent: jest.fn(),
 }));
+jest.mock('../../services/outcomes/outcomeMeasurementService', () => ({
+  scheduleOutcomeMeasurement: jest.fn(),
+}));
 
 const ticketFindOne = Ticket.findOne as unknown as jest.Mock;
 const ticketCreate = Ticket.create as unknown as jest.Mock;
 const ticketFindByPk = Ticket.findByPk as unknown as jest.Mock;
 const activityCreate = TicketActivity.create as unknown as jest.Mock;
 const mockEmit = emitEvent as unknown as jest.Mock;
+const mockScheduleOutcome = scheduleOutcomeMeasurement as unknown as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockEmit.mockResolvedValue({ event_id: 'evt-mock' });
+  mockScheduleOutcome.mockResolvedValue({ id: 'om-mock' });
 });
 
 describe('createTicket', () => {
@@ -101,6 +116,64 @@ describe('updateTicketStatus', () => {
     );
     expect(activityCreate).not.toHaveBeenCalled();
     expect(mockEmit).not.toHaveBeenCalled();
+  });
+
+  describe('ProofDesk Outcomes & Learning (Milestone 5) — done-hook', () => {
+    it('happy path: a transition to done schedules an outcome measurement for the ticket, for ANY ticket type/source (not just cory strategic)', async () => {
+      const ticket = makeTicket('in_review');
+      ticket.type = 'task'; // deliberately not 'strategic'/'cory' — the M5 hook is unconditional
+      ticket.source = 'human';
+      ticketFindByPk.mockResolvedValue(ticket);
+      activityCreate.mockResolvedValue({ id: 'act-done-1' });
+
+      const result = await updateTicketStatus('t2', 'done', 'human', 'ali');
+      await flushMicrotasks();
+
+      expect(result.status).toBe('done');
+      expect(mockScheduleOutcome).toHaveBeenCalledTimes(1);
+      expect(mockScheduleOutcome).toHaveBeenCalledWith('t2');
+    });
+
+    it('non-done transitions never schedule an outcome measurement', async () => {
+      const ticket = makeTicket('todo');
+      ticketFindByPk.mockResolvedValue(ticket);
+      activityCreate.mockResolvedValue({ id: 'act-nondone' });
+
+      await updateTicketStatus('t2', 'in_progress', 'human', 'ali');
+      await flushMicrotasks();
+
+      expect(mockScheduleOutcome).not.toHaveBeenCalled();
+    });
+
+    it('boundary/failure isolation: scheduleOutcomeMeasurement rejecting does not propagate and does not prevent updateTicketStatus from returning successfully', async () => {
+      mockScheduleOutcome.mockRejectedValue(new Error('outcome scheduling DB unavailable'));
+      const ticket = makeTicket('in_progress');
+      ticketFindByPk.mockResolvedValue(ticket);
+      activityCreate.mockResolvedValue({ id: 'act-done-2' });
+
+      await expect(updateTicketStatus('t2', 'done', 'human', 'ali')).resolves.toBe(ticket);
+      await flushMicrotasks();
+
+      expect(mockScheduleOutcome).toHaveBeenCalledTimes(1);
+    });
+
+    it('regression: the existing cory strategic-ticket hook still fires alongside the new unconditional hook, not instead of it', async () => {
+      const ticket = makeTicket('in_review');
+      ticket.type = 'strategic';
+      ticket.source = 'cory';
+      ticketFindByPk.mockResolvedValue(ticket);
+      activityCreate.mockResolvedValue({ id: 'act-done-3' });
+
+      await updateTicketStatus('t2', 'done', 'human', 'ali');
+      await flushMicrotasks();
+
+      // Both hooks are independent dynamic imports; this test only asserts the new
+      // M5 hook still fires for a cory/strategic ticket exactly as it does for any
+      // other ticket — the cory hook's own behavior is unchanged (untouched by this
+      // diff) and out of scope to re-assert here.
+      expect(mockScheduleOutcome).toHaveBeenCalledTimes(1);
+      expect(mockScheduleOutcome).toHaveBeenCalledWith('t2');
+    });
   });
 });
 

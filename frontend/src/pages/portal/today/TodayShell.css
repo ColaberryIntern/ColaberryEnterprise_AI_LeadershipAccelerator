@@ -455,6 +455,9 @@
   border-radius:var(--r-pill);padding:8px 14px;font-size:13px;font-weight:700;color:var(--berry);cursor:pointer;font-family:inherit}
 .phonebtn:hover{background:var(--sunken)}
 .phonebtn svg{width:16px;height:16px}
+/* icon-only variant — the condensed/sticky slot's "Open on your phone", a
+   plain circular icon button matching the header's other icon buttons. */
+.phonebtn.compact{width:32px;height:32px;padding:0;justify-content:center;border-radius:50%;flex:none}
 
 /* ── scroll-condense: "sucked up" Command-Center-into-header effect ──
    Shared by Today / Projects / Classroom. Two independently-rendered
@@ -488,19 +491,6 @@
 .te-cmini-tx .lab{font-size:9px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
 .te-cmini-tx .val{font-size:13px;font-weight:700;color:var(--strong);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
 .te-cmini-tx .sub{font-size:11px;color:var(--muted)}
-.te-cmini-stats{display:flex;align-items:center;gap:12px;padding-left:12px;margin-left:2px;border-left:1px solid var(--border-sub)}
-.te-cmini-stat{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
-.te-cmini-stat .ic{width:14px;height:14px;flex:none;display:flex}
-.te-cmini-stat .ic svg{width:14px;height:14px}
-.te-cmini-stat b{font-family:var(--mono);color:var(--strong);font-size:12px}
-.te-cmini-stat.tone-leaf{color:var(--leaf-text)}
-.te-cmini-stat.tone-leaf b{color:var(--leaf-text)}
-.te-cmini-stat.tone-amber{color:var(--amber-deep)}
-.te-cmini-stat.tone-amber b{color:var(--amber-deep)}
-.te-cmini-stat.tone-cherry{color:var(--cherry-text)}
-.te-cmini-stat.tone-cherry b{color:var(--cherry-text)}
-.te-cmini-stat.tone-berry{color:var(--berry)}
-@media(max-width:1250px){.te-cmini-stats{display:none}}
 /* Week prev/next for the condensed slot (e.g. Classroom's sticky next-step
    card) — a .tl-arrow equivalent that resolves this file's own tokens,
    since the condensed slot renders inside the header (.te-shell), outside
@@ -510,17 +500,12 @@
 .te-weekarrow:hover:not(:disabled){border-color:var(--berry);color:var(--berry)}
 .te-weekarrow:disabled{opacity:.4;cursor:default}
 .te-weekarrow svg{width:14px;height:14px}
-.te-ring.mini{width:32px;height:32px}
-.te-ring.mini .v b{font-size:9px}
-.te-ring.mini .v span{display:none}
-.te-ring.mini::before{inset:4px}
 @media (prefers-reduced-motion:reduce){
   .te-condense-body,.te-condensed-slot{transition:none}
 }
 /* graduated truncation as the header narrows (nav/contacts collapse stages
    don't touch header width, but the slot's own content still needs room) */
 @media(max-width:1150px){.te-cmini-tx .sub{display:none}}
-@media(max-width:1000px){.te-condensed .phonebtn .label-text{display:none}}
 
 /* bottom tab bar — mobile only (revealed in the ≤820 query) */
 .te-tabbar{display:none;position:fixed;bottom:0;left:0;right:0;z-index:40;background:var(--surface);border-top:1px solid var(--border);

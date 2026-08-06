@@ -1,13 +1,11 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { sumCardPoints } from '../classroomNextStep';
-import type { TodayNextStep } from './useTodayNextStep';
+import { SETUP_STEP_CTA_LABEL, type TodayNextStep } from './useTodayNextStep';
 
 type Props = {
   nextStep: TodayNextStep;
   total: number;
-  hasBackground: boolean;
-  onOpenUpload: () => void;
   onScrollTo: (id: string) => () => void;
 };
 
@@ -18,7 +16,7 @@ type Props = {
  * doesn't grow that file further. Pure presentation; all the "what state is
  * the student in" logic lives in useTodayNextStep.ts.
  */
-const TodayNextStepBanner: React.FC<Props> = ({ nextStep, total, hasBackground, onOpenUpload, onScrollTo }) => {
+const TodayNextStepBanner: React.FC<Props> = ({ nextStep, total, onScrollTo }) => {
   if (nextStep.kind === 'classroom') {
     const pts = sumCardPoints(nextStep.card.points);
     return (
@@ -50,8 +48,10 @@ const TodayNextStepBanner: React.FC<Props> = ({ nextStep, total, hasBackground, 
             : <>You're one step from your first points — <b>{nextStep.title}</b>.</>}
         </p>
         <div className="ctas">
-          {!hasBackground && (
-            <button className="te-btn cherry" type="button" onClick={onOpenUpload}>Upload résumé / LinkedIn</button>
+          {nextStep.action && (
+            <button className="te-btn cherry" type="button" onClick={nextStep.action}>
+              {SETUP_STEP_CTA_LABEL[nextStep.key] ?? 'Continue'}
+            </button>
           )}
           <Link className="te-btn ghost" to="/portal/path">See your path</Link>
         </div>
