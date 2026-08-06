@@ -510,12 +510,13 @@ describe('Week 2 Build Day — architecture blueprint redesign (week2-buildday-a
     expect(testLabels.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('mvp-scoper is scoped to Read/Write, produces a visual mockup.html and a marketing one-pager', async () => {
+  it('mvp-scoper is scoped to Read, Write, Bash — Bash for real PDF generation — and produces a visual mockup.html and a PDF one-pager (week2-mvp-scoper-run-prompt)', async () => {
     const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
     const text = JSON.stringify(spec.slides);
     expect(text).toContain('mockup.html');
-    expect(text).toContain('one-pager.md');
-    expect(text).toMatch(/allowed-tools:\s*Read,\s*Write/);
+    expect(text).toContain('one-pager.pdf');
+    expect(text).not.toContain('one-pager.md');
+    expect(text).toMatch(/allowed-tools:\s*Read,\s*Write,\s*Bash/);
   });
 
   it('the tech-stack-recommender output is described as colorful/icon-led with a learn-more prompt per technology', async () => {
