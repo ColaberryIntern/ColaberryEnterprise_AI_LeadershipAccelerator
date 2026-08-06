@@ -3,6 +3,7 @@ import { env } from '../config/env';
 import { Enrollment, Cohort } from '../models';
 import { isStaffEnrollment } from '../services/access/staffAccess';
 import { activeCompEnrollmentIds } from '../services/subscriptionService';
+import { hasCohortStarted } from '../services/cohortService';
 
 /**
  * requireBuildEntitlement — the paid/entitlement gate on the build + evidence
@@ -41,11 +42,14 @@ export interface BuildEntitlementRoleInfo {
 // Minimal structural shapes so callers and tests need not build full Sequelize
 // instances to reason about entitlement.
 type EntitlementEnrollment = { payment_status?: string | null } | null | undefined;
-type EntitlementCohort = { cohort_type?: string | null } | null | undefined;
+type EntitlementCohort = { cohort_type?: string | null; start_date?: string | Date | null } | null | undefined;
 
 /**
  * PURE entitlement rule. "Entitled to build" is the OR of five signals:
- *   - PAID:            enrollment.payment_status === 'paid'
+ *   - PAID:            enrollment.payment_status === 'paid' AND the cohort's class
+ *                      has actually started (hasCohortStarted) — paying reserves
+ *                      the spot, build access unlocks at class start, not at
+ *                      payment (Ali decision, BC #10160497402, relayed 2026-08-04).
  *   - admin-comped:    an active "Free Access" comp subscription (roleInfo.hasActiveComp)
  *   - staff/privileged: community_members.role === 'staff' (roleInfo.isStaff)
  *   - sponsor seat:    the enrollment sits in a cohort_type='sponsor' cohort
@@ -64,7 +68,11 @@ export function isBuildEntitled(
   roleInfo: BuildEntitlementRoleInfo | null | undefined,
 ): boolean {
   if (!enrollment) return false;
-  const paid = enrollment.payment_status === 'paid';
+  // Cohort-start gate applies ONLY to the payment path — sponsor/accelerator seats
+  // below are a deliberately separate carve-out (billing state, not class timing)
+  // and must NOT be additionally gated on start_date, or the 2026-07-21 "103
+  // accelerator/pending students wrongly 402'd" incident comes back.
+  const paid = enrollment.payment_status === 'paid' && hasCohortStarted(cohort);
   const comped = roleInfo?.hasActiveComp === true;
   const staff = roleInfo?.isStaff === true;
   const cohortType = String(cohort?.cohort_type ?? '').toLowerCase();
@@ -121,7 +129,7 @@ export async function requireBuildEntitlement(
     }
 
     const cohort = enrollment.cohort_id
-      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type'] })
+      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type', 'start_date'] })
       : null;
 
     // isStaffEnrollment fails SAFE to false internally (never throws); a comp

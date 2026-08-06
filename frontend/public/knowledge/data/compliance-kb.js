@@ -43,9 +43,9 @@ window.COMPLIANCE_DATA = {
       a:"Since 2012. Over more than a decade Colaberry has built and run career programs and the regulated data analytics school behind them." },
 
     // students
-    { category:"students", tags:["barriers","no degree","scholarships","veterans","access"],
+    { category:"students", tags:["barriers","no degree","free-preview","veterans","access"],
       q:"Who can join, and are there barriers to entry?",
-      a:"No degree and no tests are required to begin. Colaberry is built around access, with scholarships and support for veterans, so motivated people can start regardless of background." },
+      a:"No degree and no tests are required to begin. Colaberry is built around access - anyone can start for free with the Explorer preview tier (no payment required) before committing to paid full access, so motivated people can try it regardless of background." },
     { category:"students", tags:["protections","disclosure","costs up front"],
       q:"How are students protected?",
       a:"As a regulated Texas career school, Colaberry operates under student-protection and reporting requirements. We also disclose costs up front, including the third-party tool costs you pay directly to providers, so there are no surprises after you enroll." },
@@ -56,6 +56,6 @@ window.COMPLIANCE_DATA = {
       a:"We lead with proof and we do not invent facts, metrics, or outcomes. Where a detail is still being finalized, we say so plainly rather than state it as final." },
     { category:"transparency", tags:["refund","cancellation","terms","deposit","approved"],
       q:"Are the refund and cancellation terms final?",
-      a:"Yes. Monthly membership cancels anytime with access through the paid month, no partial-month refund. Annual membership has a 14-day money-back window from the cohort kickoff, then is non-refundable but stays active the full year at the locked founding rate. The separate $50 Open House seat deposit is refundable, or creditable toward another cohort, if the prospect doesn't attend; an unclaimed reservation past its start date lapses to an account credit automatically." }
+      a:"Yes. Monthly membership cancels anytime with access through the paid month, no partial-month refund. Annual membership has a 14-day money-back window from the cohort kickoff, then is non-refundable but stays active the full year at the locked founding rate. The $50 Open House seat deposit is no longer offered as of August 2026 - reserving a seat now means paying the plan price directly. For deposits paid before then, the terms are unchanged: refundable, or creditable toward another cohort, if the prospect doesn't attend; an unclaimed reservation past its start date lapses to an account credit automatically." }
   ]
 };

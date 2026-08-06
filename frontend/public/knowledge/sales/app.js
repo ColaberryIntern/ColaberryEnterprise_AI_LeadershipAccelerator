@@ -99,13 +99,13 @@
   /* ---------- diagrams ---------- */
   var DIAGRAMS = [
     { t:'Sales funnel · lead to enrolled', g:
-      'flowchart LR\n A[Lead / outreach] --> B["Free Open House<br/>Thu Jul 16"]\n B --> C{Ready to join?}\n C -->|Yes| D["Enroll<br/>training.colaberry.com"]\n C -->|Not yet| E["Follow up<br/>+ send 1-pager"]\n E --> D\n D --> F["Founding Cohort kickoff<br/>Thu Jul 23"]\n F --> G["Architect Expo<br/>early October"]' },
+      'flowchart LR\n A[Lead / outreach] --> B{Ready to join?}\n B -->|Not yet| C["Free Explorer account<br/>training.colaberry.com"]\n C --> D["Preview material<br/>decide when ready"]\n D --> E["Upgrade to paid<br/>training.colaberry.com"]\n B -->|Yes| E\n E --> F["Cohort classes begin<br/>(rolling, per-cohort)"]\n F --> G["Architect Expo"]' },
     { t:'The 12 weeks · what you build', g:
       'flowchart LR\n I1["Intensive 1<br/>Business Workflow Assistant<br/>+ reusable AI Skills"] --> I2["Intensive 2<br/>Multi-agent AI team<br/>+ Enterprise Prompt Library"]\n I2 --> I3["Intensive 3<br/>Working MCP server<br/>integrated with a real system"]\n I3 --> I4["Intensive 4<br/>Complete Solution<br/>Architecture Package"]\n I4 --> O["Deployed AI system +<br/>GitHub portfolio +<br/>Anthropic Architect certification"]' },
     { t:'Pick a plan', g:
       'flowchart TD\n Q{How do you want to pay?}\n Q -->|Best value, committed| A["Annual<br/>$149/mo<br/>founding rate locks for life of membership"]\n Q -->|Want flexibility| M["Monthly<br/>$199/mo<br/>cancel anytime"]\n A --> S["One membership =<br/>all 4 intensives + cert prep<br/>+ internship + portfolio"]\n M --> S\n S --> Z["Checkout: training.colaberry.com"]' },
     { t:'Objection to close', g:
-      'flowchart LR\n O[Objection] --> T["Acknowledge<br/>that is fair"]\n T --> AN["One-line answer<br/>from this KB"]\n AN --> B["Bridge<br/>which is why this gets<br/>you to their goal"]\n B --> CL["Close on scarcity<br/>40 seats, rate locks"]\n CL --> N["Next step<br/>seat or scheduled follow-up"]' }
+      'flowchart LR\n O[Objection] --> T["Acknowledge<br/>that is fair"]\n T --> AN["One-line answer<br/>from this KB"]\n AN --> B["Bridge<br/>which is why this gets<br/>you to their goal"]\n B --> CL["Close on the founding rate<br/>(no seat cap, rolling enrollment)"]\n CL --> N["Next step<br/>enroll, or free Explorer + scheduled follow-up"]' }
   ];
   function renderDiagrams(){
     var root = document.getElementById('diagram-root');
@@ -144,9 +144,9 @@
     var root = document.getElementById('train-root');
     root.innerHTML =
       '<div class="train"><h4>Five-minute call prep</h4><ol>'+
-        '<li>Skim <b>Pricing</b> and <b>Founding Cohort &amp; urgency</b> here so the numbers are reflexive: $149/mo annual, $199/mo monthly, 40 seats, rate locks.</li>'+
+        '<li>Skim <b>Pricing</b> and <b>Founding rate &amp; enrollment</b> here so the numbers are reflexive: $149/mo annual, $199/mo monthly, free Explorer preview, no seat cap.</li>'+
         '<li>Have the <b>one-pager</b> open in a tab to screen-share or send.</li>'+
-        '<li>Know the dates cold: free Open House Thu Jul 16, kickoff Thu Jul 23.</li>'+
+        '<li>Know the model cold: enrollment is rolling (no fixed dates or cap); Open House events still run periodically as a free intro.</li>'+
         '<li>Pick the prospect angle below before you dial.</li>'+
         '<li>Ask Cory to build a gameplan for the specific person you are about to call.</li>'+
       '</ol></div>'+
@@ -155,8 +155,8 @@
         '<li><b>Discovery</b> · find their problem and their bar. Sell with their words.</li>'+
         '<li><b>Pitch</b> · the outcome (deployed system + portfolio + cert), tied to their problem.</li>'+
         '<li><b>Bridge</b> · acknowledge, one-line answer, return to their goal.</li>'+
-        '<li><b>Close</b> · 40 seats, founding rate locks. Ask for the decision.</li>'+
-        '<li><b>Next step</b> · secure a seat or book the follow-up before you hang up.</li>'+
+        '<li><b>Close</b> · founding rate locks for life of membership (no seat cap). Ask for the decision.</li>'+
+        '<li><b>Next step</b> · enroll now, start free as an Explorer, or book the follow-up before you hang up.</li>'+
       '</ol><p style="font-size:12.5px;color:var(--text-muted);margin:10px 0 0">Full script in Downloads.</p></div>'+
       '<div class="train"><h4>Three prospect angles</h4><ul>'+
         '<li><b>Working professionals</b> · build with AI without leaving the job. Four hours a week.</li>'+
@@ -200,13 +200,13 @@
     var l=q.toLowerCase();
     // strategy / gameplan
     if(/strateg|gameplan|game plan|plan for|approach|pitch (to|a)/.test(l)){
-      return { html:'Here is a simple gameplan:<br>1. <b>Open</b> and earn two minutes.<br>2. <b>Discovery</b> · get their real problem and their bar.<br>3. <b>Pitch the outcome</b> tied to that problem: a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification.<br>4. <b>Bridge</b> any objection (price is not a course fee, four hours a week, no engineering degree needed).<br>5. <b>Close on scarcity</b>: 40 founding seats, $149/mo rate locks for life of membership.<br>6. <b>Lock a next step</b> before you hang up.', doc:'script' };
+      return { html:'Here is a simple gameplan:<br>1. <b>Open</b> and earn two minutes.<br>2. <b>Discovery</b> · get their real problem and their bar.<br>3. <b>Pitch the outcome</b> tied to that problem: a deployed AI system, a GitHub portfolio, and the Anthropic Architect certification.<br>4. <b>Bridge</b> any objection (price is not a course fee, four hours a week, no engineering degree needed).<br>5. <b>Close on the founding rate</b>: $149/mo locks for life of membership, no seat cap (enrollment is rolling) — if they are not ready, offer the free Explorer preview instead.<br>6. <b>Lock a next step</b> before you hang up.', doc:'script' };
     }
     if(/prep|prepare|before (the|a) ?call|get ready|ready for/.test(l)){
-      return { html:'Five-minute prep:<br>1. Numbers reflexive: $149/mo annual, $199/mo monthly, 40 seats, rate locks.<br>2. Dates cold: Open House Thu Jul 16, kickoff Thu Jul 23.<br>3. One-pager open in a tab.<br>4. Pick the angle: working professional, beginner/switcher, or builder.<br>5. Ask me for a gameplan on the specific person.', doc:'onepager' };
+      return { html:'Five-minute prep:<br>1. Numbers reflexive: $149/mo annual, $199/mo monthly, free Explorer preview, no seat cap.<br>2. Model cold: enrollment is rolling (no fixed dates); Open House events still run periodically as a free intro.<br>3. One-pager open in a tab.<br>4. Pick the angle: working professional, beginner/switcher, or builder.<br>5. Ask me for a gameplan on the specific person.', doc:'onepager' };
     }
     if(/refund|cancel|money back|guarantee/.test(l)){
-      return { html:'Monthly ($199/mo) cancels anytime, access through the paid month, no partial-month refund. Annual locks $149/mo and has a 14-day money-back window from the Jul 23 kickoff, then non-refundable but membership stays active the full year and the rate stays locked. The $50 Open House seat deposit is separate: it\'s refundable, or creditable toward another cohort, if the prospect doesn\'t attend, and an unclaimed reservation past its start date lapses to an account credit automatically.', doc:'objections' };
+      return { html:'Monthly ($199/mo) cancels anytime, access through the paid month, no partial-month refund. Annual locks $149/mo and has a 14-day money-back window from the student\'s own cohort start date (enrollment is rolling), then non-refundable but membership stays active the full year and the rate stays locked. The $50 Open House seat deposit is no longer offered as of August 2026 — reserving a seat now means paying the plan price directly. If a prospect paid the $50 deposit before then, it\'s still refundable, or creditable toward another cohort, if they don\'t attend, and an unclaimed reservation past its start date lapses to an account credit automatically.', doc:'objections' };
     }
     if(/\bapi\b|\bllm\b|subscription|claude code|api key|own key|out of pocket|extra (cost|fee|charge)|additional (cost|fee|charge)|other (cost|fee|charge)|hidden (cost|fee|charge)|tool (cost|fee)|anthropic (cost|fee|subscription)/.test(l)){
       return { html:'<b>Important to disclose:</b> beyond the Colaberry membership, students cover their own third-party tool costs, which Colaberry does not cover. An Anthropic subscription for Claude Code is about $20 a month, and LLM API usage is billed to the student’s own key, usually under $10 a month per project. These are paid directly to the providers, not to Colaberry, because students build and deploy on real, live AI tools.', doc:'onepager' };

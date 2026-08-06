@@ -1,4 +1,10 @@
 {
+  "_status": {
+    "state": "ORPHANED — not imported anywhere in the codebase (verified via repo-wide grep, 2026-08-05)",
+    "note": "The INPACT / GOALS / 7-Layer Architecture / Trust Band frameworks described below are NOT stale — they are the live Week 10-11 governance curriculum, authored in backend/src/data/weekBlueprints.ts and backend/src/data/canonicalCourse.ts, with a shipped backend/src/services/trustMetricsService.ts and admin UI. Only THIS FILE is dead weight: nothing reads it.",
+    "known_conflict": "The phase_progression.phases block below uses week boundaries (Foundation Wk1-4 / Intelligence Wk5-7 / Trust Wk8-10 / Operations Wk11-12) that do NOT match the canonical 12-week program structure (Intensive 1 wk1-3, Intensive 2 wk4-6, Intensive 3 wk7-9, Intensive 4 wk10-12) used everywhere else. Do not treat this file as a source of truth for week numbering.",
+    "action_needed": "Owner (Ali/Ram) to decide: delete this file, or wire it up and correct the phase week-boundaries to match canonical. Left as-is for now per Kes 2026-08-05 — content below intentionally unmodified."
+  },
   "book": {
     "title": "Trust Before Intelligence",
     "author": "Ram Katamaraja",
