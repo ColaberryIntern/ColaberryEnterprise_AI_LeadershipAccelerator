@@ -254,7 +254,7 @@ function slideSection(spec: KitSpec, slide: KitSlide): string {
     `data-mode="${attr(modeForSlide(slide))}" ` +
     `data-segstart="${attr(slide.segStartMin)}" data-segend="${attr(slide.segEndMin)}" ` +
     `data-seglabel="${attr(slide.segmentLabel)}" data-slidetitle="${attr(slide.title)}" ` +
-    `data-tip="${attr(slide.presenterTip || '')}" data-pub="${attr(slide.publicValue || '')}">` +
+    `data-tip="${attr(slide.presenterTip || '')}" data-body="${attr(slide.body || '')}" data-pub="${attr(slide.publicValue || '')}">` +
     `<div class="kinner">${slideInnerHtml(spec, slide)}</div>` +
     '</section>'
   );

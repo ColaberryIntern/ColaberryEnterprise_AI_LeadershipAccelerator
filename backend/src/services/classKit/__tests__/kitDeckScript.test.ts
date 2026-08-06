@@ -59,7 +59,12 @@ function makeLocalStorage() {
 }
 
 /** Boots one deckScript() instance in a fresh sandbox and returns test hooks. */
-function bootDeck(opts: { slideCount?: number } = {}) {
+function bootDeck(opts: {
+  slideCount?: number;
+  live?: { enabled: boolean; broadcastEndpoint?: string; token?: string };
+  slideAttrs?: Array<Record<string, string>>;
+  fetch?: (...args: unknown[]) => Promise<unknown>;
+} = {}) {
   const elementIds = [
     'kprogress', 'kcounter', 'knotes', 'kstart', 'kpaceclock', 'kpaceseg',
     'kpacestatus', 'kpacenow', 'kqr-overlay', 'kraillive', 'ktoast',
@@ -72,9 +77,12 @@ function bootDeck(opts: { slideCount?: number } = {}) {
   const body = makeEl();
 
   const slideCount = opts.slideCount ?? 1;
-  const slideEls = Array.from({ length: slideCount }, () => makeEl({
-    getAttribute: (name: string) =>
-      ({ 'data-segstart': '0', 'data-segend': '200', 'data-seglabel': 'Test segment' } as Record<string, string>)[name] ?? null,
+  const slideEls = Array.from({ length: slideCount }, (_, n) => makeEl({
+    getAttribute: (name: string) => {
+      const base: Record<string, string> = { 'data-segstart': '0', 'data-segend': '200', 'data-seglabel': 'Test segment' };
+      const custom = opts.slideAttrs?.[n] || {};
+      return { ...base, ...custom }[name] ?? null;
+    },
   }));
 
   const document = {
@@ -94,14 +102,14 @@ function bootDeck(opts: { slideCount?: number } = {}) {
         segments: [],
         totalMinutes: 120,
         slides: Array.from({ length: slideCount }, (_, n) => ({ id: 's' + n, title: 'Slide ' + n, segment_label: 'Test', phase: 'x' })),
-        live: { enabled: false },
+        live: opts.live || { enabled: false },
         meta: { sessionId: 'test-session' },
       },
     },
     document,
     localStorage: makeLocalStorage(),
     confirm: () => confirmState.value,
-    fetch: () => Promise.reject(new Error('not used in this test')),
+    fetch: opts.fetch || (() => Promise.reject(new Error('not used in this test'))),
     setInterval: (fn: Function) => {
       intervalFns.push(fn);
       return intervalFns.length;
@@ -280,5 +288,51 @@ describe('Class Kit deck — reveal control is a toggle, not one-way (classkit-d
 
   it('the R keyboard shortcut still just clicks the same toggling button (works both directions)', () => {
     expect(script).toContain("e.key === 'r' || e.key === 'R'");
+  });
+});
+
+describe('broadcastCurrent presenter_tip (instructor phone gets the long text)', () => {
+  it('combines the short presenter cue and the slide\'s own body text with a blank-line separator', async () => {
+    const calls: Array<{ url: string; body: any }> = [];
+    const deck = bootDeck({
+      slideCount: 2,
+      live: { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' },
+      slideAttrs: [
+        { 'data-tip': 'Short cue for slide 0', 'data-body': 'The long paragraph for slide 0.', 'data-slidetitle': 'Slide 0' },
+        { 'data-tip': 'Short cue for slide 1', 'data-body': 'The long paragraph for slide 1.', 'data-slidetitle': 'Slide 1' },
+      ],
+      fetch: (url: unknown, init: unknown) => {
+        calls.push({ url: url as string, body: JSON.parse((init as { body: string }).body) });
+        return Promise.resolve({ ok: true });
+      },
+    });
+    // show(0) fires on boot, which is where broadcastCurrent's first call happens.
+    expect(calls.length).toBe(1);
+    expect(calls[0].body.presenter_tip).toBe('Short cue for slide 0\n\nThe long paragraph for slide 0.');
+    expect(calls[0].body.next_title).toBe('Slide 1');
+  });
+
+  it('falls back to whichever of cue/body is present when only one is authored', () => {
+    const calls: Array<{ body: any }> = [];
+    bootDeck({
+      slideCount: 1,
+      live: { enabled: true, broadcastEndpoint: 'https://example.test/broadcast', token: 'tok' },
+      slideAttrs: [{ 'data-tip': '', 'data-body': 'Only a body paragraph, no cue.' }],
+      fetch: (_url: unknown, init: unknown) => {
+        calls.push({ body: JSON.parse((init as { body: string }).body) });
+        return Promise.resolve({ ok: true });
+      },
+    });
+    expect(calls[0].body.presenter_tip).toBe('Only a body paragraph, no cue.');
+  });
+
+  it('never broadcasts when live is disabled (rehearse / standalone mode)', () => {
+    let fetchCalled = false;
+    bootDeck({
+      slideCount: 1,
+      live: { enabled: false },
+      fetch: () => { fetchCalled = true; return Promise.resolve({ ok: true }); },
+    });
+    expect(fetchCalled).toBe(false);
   });
 });
