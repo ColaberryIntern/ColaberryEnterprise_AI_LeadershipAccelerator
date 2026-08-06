@@ -84,6 +84,80 @@ export async function renderSessionKitDoc(sessionId: string, mode: KitDocMode = 
 }
 
 /**
+ * The instructor's OWN phone view — a small, self-contained, dark, high-
+ * contrast page that polls the current slide's script/talking-points and a
+ * preview of what's next. Never shown on the projected/shared deck; opened
+ * only on the presenter's own device. Reuses the same kit-token pattern as
+ * the deck's own live-state polling (no participant login, no new auth
+ * mechanism) — the token is scoped to this one session and expires in 12h.
+ * Null if session missing.
+ */
+export async function renderPresenterPage(sessionId: string): Promise<string | null> {
+  const kit = await buildSessionKit(sessionId);
+  if (!kit) return null;
+
+  const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/+$/, '');
+  const token = mintKitToken(sessionId);
+  const endpoint = `${base}/api/portal/sessions/${sessionId}/presenter-notes?t=${encodeURIComponent(token)}`;
+
+  return `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Presenter notes</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#12141a;color:#f2f0ee;font-family:"Segoe UI",Roboto,Arial,sans-serif;
+    min-height:100vh;display:flex;flex-direction:column;padding:18px 18px 40px}
+  .lbl{font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#f43f5e;margin-bottom:4px}
+  .seg{font-size:13px;color:#9aa2b1;margin-bottom:18px}
+  .tip{font-size:clamp(20px,5.5vw,30px);line-height:1.42;font-weight:600;flex:1;white-space:pre-wrap}
+  .tip.empty{color:#6b7385;font-weight:400;font-style:italic}
+  .next{margin-top:22px;padding-top:16px;border-top:1px solid #2b2f3a;font-size:14px;color:#9aa2b1}
+  .next b{color:#e2e8f0;font-weight:700}
+  .stale{position:fixed;top:10px;right:14px;font-size:10px;color:#6b7385;letter-spacing:.5px}
+  .err{color:#f59e0b;font-size:13px;margin-top:10px}
+</style></head>
+<body>
+  <div class="stale" id="upd"></div>
+  <div class="lbl">Now teaching</div>
+  <div class="seg" id="seg">Waiting for the deck to start…</div>
+  <div class="tip empty" id="tip">Open the deck and press Start class — this page follows it automatically.</div>
+  <div class="next" id="next"></div>
+  <div class="err" id="err"></div>
+<script>
+(function(){
+  var endpoint = ${JSON.stringify(endpoint)};
+  var segEl = document.getElementById('seg'), tipEl = document.getElementById('tip'),
+      nextEl = document.getElementById('next'), updEl = document.getElementById('upd'),
+      errEl = document.getElementById('err');
+  var lastTip = null;
+  function tick(){
+    fetch(endpoint).then(function(r){
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.json();
+    }).then(function(d){
+      errEl.textContent = '';
+      segEl.textContent = (d.segment_label || '') + (d.title ? ' — ' + d.title : '');
+      var tip = d.presenter_tip || '';
+      if (tip !== lastTip) {
+        lastTip = tip;
+        tipEl.textContent = tip || 'No script for this slide — show the diagram, keep talking.';
+        tipEl.classList.toggle('empty', !tip);
+      }
+      nextEl.innerHTML = d.next_title ? '<b>Next:</b> ' + d.next_title.replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }) : '';
+      if (d.updated_at) {
+        var secs = Math.max(0, Math.round((Date.now() - new Date(d.updated_at).getTime()) / 1000));
+        updEl.textContent = secs < 8 ? 'live' : secs + 's ago';
+      }
+    }).catch(function(e){ errEl.textContent = 'Connection hiccup — retrying… (' + e.message + ')'; });
+  }
+  tick();
+  setInterval(tick, 2500);
+})();
+</script>
+</body></html>`;
+}
+
+/**
  * A lightweight instructor readiness report: class facts, counts (teaching slides,
  * prompts, checkpoints, interactions, diagrams), and the source/evidence ledger.
  * Read before class to prep + to review what's sourced. Null if session missing.

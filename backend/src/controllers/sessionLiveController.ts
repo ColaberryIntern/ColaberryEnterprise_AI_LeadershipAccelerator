@@ -2,7 +2,9 @@ import { Request, Response, NextFunction } from 'express';
 import {
   recordPulse, getLiveState, isValidPulseState,
   setBroadcast, getCompanionState, recordPollResponse, sessionInCohort, BroadcastState, PollLockedError,
+  getPresenterNotes,
 } from '../services/sessionLiveStateService';
+import { renderPresenterPage } from '../services/sessionKitDocService';
 
 // Resource-ownership guard for participant live endpoints: the caller must be in
 // the session's cohort. Returns true after sending 403 when they are not.
@@ -101,9 +103,38 @@ export async function handleSetBroadcast(req: Request, res: Response, next: Next
       question,
       broadcast_prompts: Array.isArray(b.broadcast_prompts) ? b.broadcast_prompts.map((p) => String(p)) : undefined,
       prompt,
+      presenter_tip: typeof b.presenter_tip === 'string' ? b.presenter_tip : undefined,
+      next_title: typeof b.next_title === 'string' ? b.next_title : undefined,
     };
     await setBroadcast(req.params.id as string, state);
     res.json({ success: true });
+  } catch (err) { next(err); }
+}
+
+/**
+ * GET /api/portal/sessions/:id/presenter-notes — the instructor's OWN phone
+ * view: the current slide's script and a preview of what's next. Auth at the
+ * route is kit-token-or-admin only (same as live-state/broadcast) — this must
+ * never be reachable via requireParticipant, since it is the one endpoint
+ * that reads presenter_tip back out.
+ */
+export async function handleGetPresenterNotes(req: Request, res: Response, next: NextFunction) {
+  try {
+    const notes = await getPresenterNotes(req.params.id as string);
+    res.json(notes);
+  } catch (err) { next(err); }
+}
+
+/**
+ * GET /api/portal/sessions/:id/presenter-page — the instructor's own phone
+ * page (HTML, not JSON): dark, large-text, polls presenter-notes above.
+ * Same kit-token-or-admin gate as the JSON endpoint it reads from.
+ */
+export async function handleGetPresenterPage(req: Request, res: Response, next: NextFunction) {
+  try {
+    const html = await renderPresenterPage(req.params.id as string);
+    if (!html) return res.status(404).json({ error: 'Session not found' });
+    res.type('html').send(html);
   } catch (err) { next(err); }
 }
 
