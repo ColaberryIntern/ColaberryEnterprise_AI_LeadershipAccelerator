@@ -427,7 +427,7 @@ describe('Week 2 Architecture Day — data-incident redesign (week2-architecture
     expect(html.length).toBeGreaterThan(4000);
   });
 
-  it('Week 2 Build Day (Thursday) still renders successfully, untouched by this change', async () => {
+  it('Week 2 Build Day (Thursday) still renders successfully (content redesigned separately, see week2-buildday-architecture-blueprint below)', async () => {
     const thursdaySession: BuildKitSpecInput['session'] = {
       id: 'demo-wk2-thu', session_number: 5, title: 'Week 2 · Build Day — Agent Skills (build 3 skills)',
       session_date: '2026-08-06', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
@@ -435,7 +435,7 @@ describe('Week 2 Architecture Day — data-incident redesign (week2-architecture
     const spec = buildKitSpec(await inputFor(thursdaySession));
     expect(spec.meta.dayKind).toBe('build');
     const text = JSON.stringify(spec.slides);
-    expect(text).toContain('commit-summary'); // Thursday's prompts are untouched by this change
+    expect(text).toContain('system-architect');
   });
 
   it('Weeks 1 and 3-12 are unaffected — spot-check Week 1 and Week 3 still build cleanly', async () => {
@@ -455,5 +455,114 @@ describe('Week 2 Architecture Day — data-incident redesign (week2-architecture
     const text3 = JSON.stringify(spec3.slides);
     expect(text1).not.toContain('data-quality-gate');
     expect(text3).not.toContain('data-quality-gate');
+  });
+});
+
+/**
+ * week2-buildday-architecture-blueprint — Week 2 Build Day (Thursday), turning
+ * one paragraph of a (possibly not-yet-final) project idea into a real system
+ * architecture diagram, a justified tech stack, and a visual demo (mockup.html
+ * + one-pager). Also emits a real sample deck for visual verification.
+ */
+describe('Week 2 Build Day — architecture blueprint redesign (week2-buildday-architecture-blueprint)', () => {
+  const WEEK2_THURSDAY_SESSION: BuildKitSpecInput['session'] = {
+    id: 'demo-wk2-thu-bp', session_number: 5, title: 'Week 2 · Build Day — Agent Skills (build 3 skills)',
+    session_date: '2026-08-06', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+  };
+
+  it('resolves to Week 2, Build Day, with the correct title', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    expect(spec.meta.dayKind).toBe('build');
+    expect(spec.meta.week).toBe(2);
+    expect(spec.meta.title).toContain('Agent Skills (build 3 skills)');
+  });
+
+  it('the timeline remains exactly 120 minutes, unchanged run-of-show', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    expect(spec.totalMinutes).toBe(120);
+  });
+
+  it('all three Skill names appear, and the idea-stage framing is present', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const text = JSON.stringify(spec.slides);
+    expect(text).toContain('system-architect');
+    expect(text).toContain('tech-stack-recommender');
+    expect(text).toContain('mvp-scoper');
+    expect(text).toMatch(/does not need to be final/i);
+  });
+
+  it('every teach slide carries a real mermaid diagram (Ram feedback)', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const teachSlides = spec.slides.filter((s) => s.kind === 'teach');
+    expect(teachSlides.length).toBeGreaterThan(0);
+    teachSlides.forEach((s) => {
+      expect(s.diagram).toBeTruthy();
+      expect(s.diagram).toContain('flowchart');
+    });
+  });
+
+  it('each of the three Skills has a separate build slide and a separate automatic-invocation test slide', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const labels = spec.slides.map((s) => `${s.eyebrow || ''} ${s.title || ''}`);
+    const buildLabels = labels.filter((t) => /Build system-architect|Build tech-stack-recommender|Build \+ Scope mvp-scoper/i.test(t));
+    const testLabels = labels.filter((t) => /Test Automatic Invocation|Test \+ Demo/i.test(t));
+    expect(buildLabels.length).toBeGreaterThanOrEqual(3);
+    expect(testLabels.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('mvp-scoper is scoped to Read/Write, produces a visual mockup.html and a marketing one-pager', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const text = JSON.stringify(spec.slides);
+    expect(text).toContain('mockup.html');
+    expect(text).toContain('one-pager.md');
+    expect(text).toMatch(/allowed-tools:\s*Read,\s*Write/);
+  });
+
+  it('the tech-stack-recommender output is described as colorful/icon-led with a learn-more prompt per technology', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const text = JSON.stringify(spec.slides);
+    expect(text).toMatch(/🟢|🟡|🔴/);
+    expect(text).toMatch(/learn.more/i);
+  });
+
+  it('no slide anywhere instructs students to use the Downloads folder', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const text = JSON.stringify(spec.slides).toLowerCase();
+    expect(text).not.toMatch(/(save|move|copy|export|download)[^.]{0,40}(to|into|in)[^.]{0,20}downloads/);
+  });
+
+  it('the checkpoints reflect the new arc: diagram fires (CP1), all 3 authored (CP2), mvp-scoper scoped + shown off (CP3)', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const checkpointSlides = spec.slides.filter((s) => s.kind === 'checkpoint');
+    expect(checkpointSlides.length).toBe(4);
+    expect(JSON.stringify(checkpointSlides[1])).toMatch(/system-architect/);
+    expect(JSON.stringify(checkpointSlides[3])).toMatch(/mvp-scoper/);
+  });
+
+  it('QR/phone-controller, status rail, and pace-tracking chrome still render', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const html = renderKitHtml(spec, { live: { enabled: true } });
+    expect(html).toContain('id="kprogress"');
+    expect(html).toContain('id="kpaceclock"');
+    expect(html).toContain('Your phone is your class controller');
+  });
+
+  it('emits a real sample deck to the scratchpad for visual verification', async () => {
+    fs.mkdirSync(SAMPLE_DIR, { recursive: true });
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const html = renderKitHtml(spec, { live: { enabled: false } });
+    fs.writeFileSync(path.join(SAMPLE_DIR, 'week2-buildday-architecture-blueprint.html'), html, 'utf8');
+    expect(html.length).toBeGreaterThan(4000);
+  });
+
+  it('Week 2 Monday (Architecture Day) is unaffected by this Thursday-only change', async () => {
+    const mondaySession: BuildKitSpecInput['session'] = {
+      id: 'demo-wk2-mon-check', session_number: 4, title: 'Week 2 · Architecture Day — Agent Skills (build 3 skills)',
+      session_date: '2026-08-03', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    };
+    const spec = buildKitSpec(await inputFor(mondaySession));
+    const text = JSON.stringify(spec.slides);
+    expect(text).toContain('data-quality-gate');
+    expect(text).not.toContain('system-architect');
   });
 });
