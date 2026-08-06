@@ -13695,6 +13695,13 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: `tsc --noEmit` clean across `frontend/`. Real-browser Playwright screenshot of the merged card (single card, week-nav arrows flanking "Week 1", progress bar, and the next-step CTA with its points badge and Open button all inside one bordered unit) and a second screenshot of the condensed chip with its own compact week-nav arrows + Open button — both confirmed rendering correctly and compactly against the actual `timeline.css`/`TodayShell.css`.
   - Notes: Removed dead CSS (`.tl-hero`, `.tl-hero-done`, `.tl-row1`, `.tl-banner` and its `.ic`/`h3`/`.pr` sub-rules) in the same pass rather than leaving it orphaned, since this session was already the one making it dead — confirmed via `grep` that no other page referenced those classes before removing. No backend changes. Same outstanding item as the whole arc: no real logged-in click-through yet.
 
+### Remove non-English videos from curriculum + language guard for ai_video_stream (2026-08-05)
+- [x] **languageGuard.ts + tests added to the ai_video_stream YouTube intel source; prod non-English video data cleaned up separately**
+  - Date: 2026-08-05
+  - Session: CC-20260805-vk3q
+  - What changed: `aiVideoStreamSource.ts` had no language filter on its YouTube search results, so non-English videos were reaching the curriculum feed (2 confirmed live `timeline_cards`, 16 more queued in `intel_items`). Added `backend/src/services/intel/languageGuard.ts` (deterministic: YouTube `defaultAudioLanguage`/`defaultLanguage` via a new `videos.list` call, backstopped by a non-Latin-script/language-name text heuristic) and wired it into `collect()` so non-English candidates never reach `intel_items`. Full detail and the prod data cleanup (2 cards unpublished, 16 pending items deleted) logged in the primary-checkout PROGRESS.md entry of the same name/date (this branch is a worktree off origin/main for this one PR; the cleanup itself was a direct prod DB fix, not part of this diff).
+  - Verification: 15 new/updated unit tests green (`languageGuard.test.ts`, `keyedSources.test.ts`). `tsc --noEmit` clean (one pre-existing unrelated `@anthropic-ai/sdk` env gap).
+  - Notes: PR #1224, not yet merged/deployed — see the fuller entry for what remains.
 ### CAPE Phase 6 — Feed Control governance board: merged, deployed, and REAL visually verified (not just infra checks) (2026-08-06)
 - [x] **Merged PR #1218, deployed backend + nginx, then actually logged into `/admin/feed-control-governance` with a real admin JWT and interacted with all 4 panels — including running the Explanation Simulator end to end — before calling any of it done.**
   - Date: 2026-08-06
