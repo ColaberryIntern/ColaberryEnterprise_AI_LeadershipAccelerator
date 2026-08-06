@@ -124,7 +124,13 @@ export function deckScript(): string {
       theater: sm.question.theater ? { state: theaterState[sm.id] || 'voting' } : undefined,
     } : null;
     var tipEl = slides[i];
-    var presenterTip = tipEl ? (tipEl.getAttribute('data-tip') || '') : '';
+    // The phone gets the FULL text — the short presenter cue plus the slide's
+    // own paragraph — so it is genuinely the "long version" of what's on
+    // screen. The projected slide itself is unchanged by this; only what
+    // reaches the instructor's own phone is affected.
+    var cue = tipEl ? (tipEl.getAttribute('data-tip') || '') : '';
+    var bodyText = tipEl ? (tipEl.getAttribute('data-body') || '') : '';
+    var presenterTip = cue && bodyText ? (cue + '\\n\\n' + bodyText) : (cue || bodyText);
     var nextTitle = (i + 1 < slides.length) ? (slides[i + 1].getAttribute('data-slidetitle') || '') : 'End of class';
     var body = {
       slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
