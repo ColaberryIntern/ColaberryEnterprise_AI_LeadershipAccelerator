@@ -105,6 +105,7 @@ export async function handleSetBroadcast(req: Request, res: Response, next: Next
       prompt,
       presenter_tip: typeof b.presenter_tip === 'string' ? b.presenter_tip : undefined,
       next_title: typeof b.next_title === 'string' ? b.next_title : undefined,
+      diagram_fullscreen: !!b.diagram_fullscreen,
     };
     await setBroadcast(req.params.id as string, state);
     res.json({ success: true });
