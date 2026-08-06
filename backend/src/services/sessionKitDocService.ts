@@ -111,6 +111,8 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
   .seg{font-size:13px;color:#9aa2b1;margin-bottom:18px}
   .tip{font-size:clamp(20px,5.5vw,30px);line-height:1.42;font-weight:600;flex:1;white-space:pre-wrap}
   .tip.empty{color:#6b7385;font-weight:400;font-style:italic}
+  .waiting{flex:1;display:flex;align-items:center;justify-content:center;text-align:center;
+    color:#4b5263;font-size:16px;line-height:1.6;padding:0 10px}
   .next{margin-top:22px;padding-top:16px;border-top:1px solid #2b2f3a;font-size:14px;color:#9aa2b1}
   .next b{color:#e2e8f0;font-weight:700}
   .stale{position:fixed;top:10px;right:14px;font-size:10px;color:#6b7385;letter-spacing:.5px}
@@ -119,14 +121,16 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
 <body>
   <div class="stale" id="upd"></div>
   <div class="lbl">Now teaching</div>
-  <div class="seg" id="seg">Waiting for the deck to start…</div>
-  <div class="tip empty" id="tip">Open the deck and press Start class — this page follows it automatically.</div>
+  <div class="seg" id="seg">Waiting for the deck to open…</div>
+  <div class="waiting" id="waiting">Full-screen the diagram on the deck — your script appears here the moment you do.</div>
+  <div class="tip empty" id="tip" style="display:none"></div>
   <div class="next" id="next"></div>
   <div class="err" id="err"></div>
 <script>
 (function(){
   var endpoint = ${JSON.stringify(endpoint)};
   var segEl = document.getElementById('seg'), tipEl = document.getElementById('tip'),
+      waitEl = document.getElementById('waiting'),
       nextEl = document.getElementById('next'), updEl = document.getElementById('upd'),
       errEl = document.getElementById('err');
   var lastTip = null;
@@ -137,11 +141,16 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
     }).then(function(d){
       errEl.textContent = '';
       segEl.textContent = (d.segment_label || '') + (d.title ? ' — ' + d.title : '');
-      var tip = d.presenter_tip || '';
-      if (tip !== lastTip) {
-        lastTip = tip;
-        tipEl.textContent = tip || 'No script for this slide — show the diagram, keep talking.';
-        tipEl.classList.toggle('empty', !tip);
+      var showTip = !!d.diagram_fullscreen;
+      tipEl.style.display = showTip ? '' : 'none';
+      waitEl.style.display = showTip ? 'none' : '';
+      if (showTip) {
+        var tip = d.presenter_tip || '';
+        if (tip !== lastTip) {
+          lastTip = tip;
+          tipEl.textContent = tip || 'No script for this slide — keep talking from the diagram.';
+          tipEl.classList.toggle('empty', !tip);
+        }
       }
       nextEl.innerHTML = d.next_title ? '<b>Next:</b> ' + d.next_title.replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }) : '';
       if (d.updated_at) {

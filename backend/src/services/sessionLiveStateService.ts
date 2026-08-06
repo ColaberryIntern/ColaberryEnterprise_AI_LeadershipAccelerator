@@ -90,6 +90,10 @@ export interface BroadcastState {
    * out only via the kit-token/admin-gated presenter-notes endpoint. */
   presenter_tip?: string;
   next_title?: string;
+  /** True only while the instructor has the current slide's diagram
+   * full-screened on the projected deck — that is the moment the projected
+   * screen shows no text at all, so it is when the phone should surface it. */
+  diagram_fullscreen?: boolean;
   updated_at?: string;
 }
 
@@ -251,6 +255,7 @@ export interface PresenterNotes {
   segment_label: string;
   presenter_tip: string;
   next_title: string;
+  diagram_fullscreen: boolean;
   updated_at: string | null;
 }
 
@@ -268,6 +273,7 @@ export async function getPresenterNotes(sessionId: string): Promise<PresenterNot
     segment_label: bc?.segment_label || '',
     presenter_tip: bc?.presenter_tip || '',
     next_title: bc?.next_title || '',
+    diagram_fullscreen: !!bc?.diagram_fullscreen,
     updated_at: bc?.updated_at || null,
   };
 }

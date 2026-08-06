@@ -48,6 +48,7 @@ export function deckScript(): string {
   // ---- navigation ----
   function show(n){
     i = Math.max(0, Math.min(slides.length - 1, n));
+    diagramFull = false; // a new slide always starts un-full-screened
     for (var k = 0; k < slides.length; k++){ slides[k].classList.toggle('active', k === i); }
     elProgress.style.width = ((i + 1) / slides.length * 100) + '%';
     elCounter.textContent = (i + 1) + ' / ' + slides.length;
@@ -107,6 +108,16 @@ export function deckScript(): string {
     document.body.classList.add('mode-' + mode);
   }
 
+  // Full-screening a diagram means the projected screen is showing ONLY the
+  // diagram (no text) — that is exactly when the instructor's phone should
+  // surface the full script, since nothing else on screen has it anymore.
+  var diagramFull = false;
+  window.__toggleDiagramFull = function(el){
+    el.classList.toggle('kdiagram--full');
+    diagramFull = el.classList.contains('kdiagram--full');
+    broadcastCurrent();
+  };
+
   // Broadcast the deck's CURRENT view so students' phones switch to match it.
   // Also carries the presenter's own script/next-slide preview — server-side
   // this is stored in the same row but only ever served back out through the
@@ -136,6 +147,7 @@ export function deckScript(): string {
       slide_index: i, slide_id: sm.id, title: sm.title, segment_label: sm.segment_label,
       phase: sm.phase, question: q, broadcast_prompts: sm.broadcast_prompts,
       prompt: sm.prompt || undefined, presenter_tip: presenterTip, next_title: nextTitle,
+      diagram_fullscreen: diagramFull,
     };
     fetch(live.broadcastEndpoint + '?t=' + encodeURIComponent(live.token || ''), {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
