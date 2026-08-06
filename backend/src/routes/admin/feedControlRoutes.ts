@@ -72,7 +72,16 @@ router.get('/api/admin/feed-control/simulate', requireAdmin, async (req, res) =>
     const includeTypes = sandbox
       ? String(req.query.include || '').split(',').map((s) => s.trim()).filter(Boolean)
       : undefined;
-    res.json({ ok: true, ...(await simulate(enrollmentId, limit, includeTypes)) });
+    // CAPE Phase 6 (T014, design doc §12 "Explanation simulator"): `simulate()`
+    // has always accepted `opts.useCapeRanker` (Phase 4, T009) to force the
+    // CAPE pipeline in preview even when `env.capeLearningValueRankerEnabled`
+    // is off — but nothing here ever forwarded a caller's request for it until
+    // now. Default `false` is EXACTLY equivalent to the pre-existing
+    // 3-argument call this route always made (omitted === false, both fail
+    // the `opts.useCapeRanker === true` check the same way) — no behavior
+    // change for any existing caller that doesn't pass this param.
+    const useCapeRanker = req.query.use_cape_ranker === '1' || req.query.use_cape_ranker === 'true';
+    res.json({ ok: true, ...(await simulate(enrollmentId, limit, includeTypes, { useCapeRanker })) });
   } catch (e) { fail(res, e); }
 });
 

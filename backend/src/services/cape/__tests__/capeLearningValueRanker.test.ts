@@ -4,13 +4,25 @@ import { enrichCandidates } from '../capeCandidateFeatureService';
 import { filterEligible } from '../capeEligibilityFilter';
 import { scoreLearningValue } from '../capeLearningValueScorer';
 import { applyPolicyRerank } from '../capeLearningValuePolicy';
+import { getCurrentGovernancePolicy } from '../capeGovernancePolicyService';
 import type { TodayFeedItem } from '../../timeline/todayFeedComposer';
 
 jest.mock('../capeLearnerStateService', () => ({ getLearnerState: jest.fn() }));
 jest.mock('../capeCandidateFeatureService', () => ({ enrichCandidates: jest.fn() }));
 jest.mock('../capeEligibilityFilter', () => ({ filterEligible: jest.fn() }));
 jest.mock('../capeLearningValueScorer', () => ({ scoreLearningValue: jest.fn() }));
-jest.mock('../capeLearningValuePolicy', () => ({ applyPolicyRerank: jest.fn() }));
+jest.mock('../capeLearningValuePolicy', () => ({
+  applyPolicyRerank: jest.fn(),
+  DEFAULT_RERANK_CAPS: { sameTypeMaxStreak: 2, passiveMaxStreak: 2, crowdOutMaxPerSkill: 2, crowdOutWindow: 5, stretchCapFirstFive: 1 },
+}));
+// CAPE Phase 6: capeLearningValueRanker.ts now imports capeGovernancePolicyService,
+// which imports the real ../../config/database (a live Sequelize instantiation at
+// module load time). Mocked at this direct-import boundary (not the transitive
+// config/database boundary) to match this file's existing per-dependency mocking
+// convention — and because env.feedControlEnabled is false in every test below, the
+// ranker never actually calls this function; it only needs to exist so the module
+// graph loads without touching a real DB connection string.
+jest.mock('../capeGovernancePolicyService', () => ({ getCurrentGovernancePolicy: jest.fn() }));
 jest.mock('../../../config/env', () => ({ env: { feedControlEnabled: false } }));
 jest.mock('../../timeline/feedConfigService', () => ({
   getFeedPolicy: jest.fn(),
@@ -22,6 +34,7 @@ const mockEnrich = enrichCandidates as unknown as jest.Mock;
 const mockFilter = filterEligible as unknown as jest.Mock;
 const mockScore = scoreLearningValue as unknown as jest.Mock;
 const mockPolicy = applyPolicyRerank as unknown as jest.Mock;
+const mockGovernancePolicy = getCurrentGovernancePolicy as unknown as jest.Mock;
 
 const NOW = new Date('2026-08-03T00:00:00.000Z');
 const LEARNER_STATE = { enrollment_id: 'enr-1', skills: [], overall_placement: 0, overall_proficiency: 0, goal: null, role: null, industry: null, has_resume: false, recent_failure: false, learner_state_version: '2026-08-01T00:00:00.000Z' };
@@ -104,5 +117,24 @@ describe('rankLearningValue — feed policy source', () => {
 
     await rankLearningValue('enr-1', [mkItem('a')], NOW);
     expect(getFeedPolicy).not.toHaveBeenCalled();
+  });
+});
+
+describe('rankLearningValue — CAPE Phase 6 governance-policy (RerankCaps) source', () => {
+  it('does NOT call getCurrentGovernancePolicy when env.feedControlEnabled is false, and passes DEFAULT_RERANK_CAPS through to applyPolicyRerank', async () => {
+    mockEnrich.mockResolvedValue([mkItem('a')]);
+    mockFilter.mockReturnValue({ eligible: [mkItem('a') as any], excluded: [] });
+    mockScore.mockReturnValue({ score: 0.5, components: {}, reasons: [] });
+    mockPolicy.mockImplementation((scored: any) => scored);
+
+    await rankLearningValue('enr-1', [mkItem('a')], NOW);
+
+    expect(mockGovernancePolicy).not.toHaveBeenCalled();
+    // 5th argument to applyPolicyRerank is the caps object — must be the
+    // byte-identical default, proving flag-off behavior is unchanged.
+    expect(mockPolicy).toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), expect.anything(), expect.anything(),
+      { sameTypeMaxStreak: 2, passiveMaxStreak: 2, crowdOutMaxPerSkill: 2, crowdOutWindow: 5, stretchCapFirstFive: 1 },
+    );
   });
 });

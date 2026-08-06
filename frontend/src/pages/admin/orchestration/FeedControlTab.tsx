@@ -198,6 +198,13 @@ export default function FeedControlTab() {
           <p className="fc-sub"><b>Check a type to put it in the student's Today timeline; uncheck to take it out.</b> Drag a type between lanes to change which area it belongs to; use the ⚙ gear for cadence and frequency.</p>
         </div>
         <button className="fc-btn ghost" onClick={() => setPolicyOpen(true)}>⚙ Global Policy</button>
+        {/* CAPE Phase 6 (design doc §12): the full governance board — skill
+            coverage heatmap, learner-stage policies, pacing controls, and the
+            explanation simulator — lives on its own page (see
+            AdminFeedControlGovernancePage.tsx's header comment for why it's
+            not built into this already-536-line tab). This link is the only
+            change this file needs for Phase 6 discoverability. */}
+        <a className="fc-btn ghost" href="/admin/feed-control-governance">🛡 Governance Board</a>
       </div>
 
       <div className={`fc-mode ${board.feedControlEnabled ? 'live' : 'preview'}`}>

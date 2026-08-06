@@ -27,9 +27,10 @@ import { getLearnerState } from './capeLearnerStateService';
 import { enrichCandidates } from './capeCandidateFeatureService';
 import { filterEligible, type EligibilityExclusion } from './capeEligibilityFilter';
 import { scoreLearningValue } from './capeLearningValueScorer';
-import { applyPolicyRerank, type RankedLearningValueItem } from './capeLearningValuePolicy';
+import { applyPolicyRerank, DEFAULT_RERANK_CAPS, type RankedLearningValueItem, type RerankCaps } from './capeLearningValuePolicy';
 import { env } from '../../config/env';
 import { getFeedPolicy, DEFAULT_FEED_POLICY, type FeedPolicy } from '../timeline/feedConfigService';
+import { getCurrentGovernancePolicy } from './capeGovernancePolicyService';
 
 /**
  * Manually bumped whenever the Stage 3/4 formula changes materially enough
@@ -79,7 +80,21 @@ export async function rankLearningValue(
   const scored: RankedLearningValueItem[] = eligible.map((c) => ({ ...c, ...scoreLearningValue(c, learnerState, now) }));
 
   const policy: FeedPolicy = env.feedControlEnabled ? await getFeedPolicy() : DEFAULT_FEED_POLICY;
-  const ranked = applyPolicyRerank(scored, learnerState, policy, now);
+  // CAPE Phase 6: same conditional as the FeedPolicy fetch above — reusing
+  // env.feedControlEnabled rather than an unconditional DB call keeps this
+  // fetch's cost profile identical to the existing policy fetch on a path
+  // that's still flag-gated overall. Flag off -> DEFAULT_RERANK_CAPS, which is
+  // byte-identical to the original hardcoded constants.
+  const caps: RerankCaps = env.feedControlEnabled
+    ? await getCurrentGovernancePolicy().then((p) => ({
+        sameTypeMaxStreak: p.same_type_max_streak,
+        passiveMaxStreak: p.passive_max_streak,
+        crowdOutMaxPerSkill: p.crowd_out_max_per_skill,
+        crowdOutWindow: p.crowd_out_window,
+        stretchCapFirstFive: p.stretch_cap_first_five,
+      }))
+    : DEFAULT_RERANK_CAPS;
+  const ranked = applyPolicyRerank(scored, learnerState, policy, now, caps);
 
   const items = ranked.map((item) => ({
     ...item,

@@ -13214,6 +13214,429 @@ Colaberry Design System (Aleem DS) — apply cherry-red primary brand token to a
   - Verification: Direct API responses (`/api/portal/flags`, `/api/portal/cape/today-plan`) captured during the exact flag-on window, not inferred. Scrolled, flag-confirmed-on screenshot at `docs/screenshots/cape-incident-check/02-today-plan-scrolled.png` (this worktree only, not committed — contains live account data, not added to git) shows the corrected render directly. Live bundle hash re-checked twice during this investigation (`main.4885e6f9.js` then `main.ef501b7b.js` — an unrelated concurrent deploy rebuilt the frontend in between; both bundles independently confirmed via `grep` to contain the CAPE Phase 5 fix code) — ruled out "wrong bundle being served" as a cause. `cf-cache-status: DYNAMIC` and explicit `Cache-Control: no-cache, no-store, must-revalidate` on `index.html` ruled out CDN caching as the cause of what Ali saw. Working theory for Ali's second screenshot, not proven but consistent with all evidence: a client-rendered SPA keeps running whatever JS was loaded into the tab at page-load time; if that tab wasn't hard-refreshed between the pre-fix and post-fix deploys, it would keep showing pre-fix behavior indefinitely regardless of what's redeployed server-side. Total live flag-on exposure across all three test cycles: under 5 minutes combined, each immediately followed by rollback-and-reconfirm before the next.
   - Notes: Flags are back on (`CAPE_LEARNING_VALUE_RANKER_ENABLED=true`, `CAPE_TODAY_PLAN_ENABLED=true`), confirmed via `docker exec printenv`, health, and external site check, per Ali's explicit go-ahead after seeing the real screenshot evidence — Ali was asked to hard-refresh before checking again himself. **Process lesson for future CAPE/production incidents, logged for reuse**: when a user reports a visual bug is not fixed, do not re-assert "fixed" from unit tests or infra checks alone — get real rendered evidence (this repo's existing `scripts/captureHelpers.js` Playwright pipeline against production, with a participant token) before making the claim again. A second false "it's fixed" costs more trust than the extra few minutes visual verification takes. Session CC-20260802-r4q9 PROGRESS.md audit: 11 entries this session across the full CAPE Phase 4/5/incident arc, all session-tagged, audit clean.
 
+### CAPE Phase 6 — Feed Control governance board (loop-architect run, build+PR only, not deployed)
+- [x] **T001 — governance policy + lifecycle-mode-policy schema and Sequelize models**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: New additive-only tables `cape_governance_policy` (single global
+    versioned settings row — the Stage-4 rerank caps + Today Plan pacing knobs, seeded
+    byte-identical to the hardcoded constants they will replace) and
+    `cape_lifecycle_mode_policy` (5 versioned rows, one per `LifecycleMode`, seeded
+    with design doc §10's recommended mix percentages for the 4 modes that have a real
+    numeric split; `returning_after_absence` seeded as an explicit, logged first-cut
+    even split since §10 gives no number for that mode). New files:
+    `backend/src/db/ensureCapeGovernanceSchema.ts`,
+    `backend/src/models/CapeGovernancePolicy.ts`,
+    `backend/src/models/CapeLifecycleModePolicy.ts`,
+    `backend/src/db/__tests__/ensureCapeGovernanceSchema.test.ts`. Wired into
+    `backend/src/server.ts` (2-line addition: import + call after
+    `ensureCapeTodayPlanSchema()`) and registered both new models in
+    `backend/src/models/index.ts` (matching this repo's own established convention for
+    new CAPE models, per the task-verifier's review).
+  - Verification: `loop-task-verifier` PASS 11/12 (independent agent, fresh evidence:
+    re-ran `tsc --noEmit`, re-ran the new test file, cross-checked seed values against
+    the actual hardcoded constants in `capeLearningValuePolicy.ts`/
+    `capeTodayPlanService.ts`, cross-checked the `returning_after_absence` deferral
+    against design doc §10's real text). `cd backend && node
+    node_modules/typescript/bin/tsc --noEmit` clean except the pre-existing documented
+    `interviewService.ts`/`@anthropic-ai/sdk` gap. 9/9 new tests passing (`node
+    ../node_modules/jest/bin/jest.js --config jest.config.ts --testPathPattern
+    "ensureCapeGovernanceSchema"`); sibling schema tests
+    (`ensureCapeCurriculumMapSchema`, `ensureCapeTodayPlanSchema`) re-run clean,
+    12/12, confirming no regression.
+  - Notes: Part of the CAPE Phase 6 governance-board `loop-architect` run (plan audit
+    PASS 19/20, run directory
+    `.loop-architect/runs/20260805-140000-cape-phase6-feed-control-governance/`).
+    Build+PR only this run — no deploy. Seed values are deliberately chosen so this
+    table changes NOTHING about live production ranking/pacing behavior until an
+    admin explicitly edits a value through the Phase 6 board (verified by the task
+    verifier against the actual pre-existing hardcoded constants, not just asserted).
+
+- [x] **T002 — governance policy service (versioned CRUD over the Stage-4/pacing knobs)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeGovernancePolicyService.ts` (new) —
+    `getCurrentGovernancePolicy()` (fail-soft plain-values read for the ranker/Today-
+    Plan services to consume in T004/T005, degrades to the T001 seed defaults if the
+    schema hasn't initialized), `getCurrentGovernancePolicyRow()` (admin-facing read,
+    throws `GovernancePolicyNotFoundError` on a missing row), `updateGovernancePolicy()`
+    (versioned insert, same "insert-new-version, flip prior is_current, no-op on
+    identical patch" contract as `capeSkillDefinitionsService.ts`), `getGovernancePolicyHistory()`.
+    `backend/src/schemas/capeSchema.ts` gained `updateGovernancePolicySchema` (bounded
+    fields matching the execution contract's clamp ranges, `.refine()` requiring at
+    least one field).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh evidence:
+    re-ran `tsc --noEmit` clean, re-ran 9/9 new tests, re-ran 17/17 sibling
+    `capeSchema` tests for regression, wrote and ran its own throwaway Zod-bounds
+    test to independently confirm every clamp range, confirmed zero scope creep into
+    T004/T005's wiring targets via `git diff --cached --name-only` grep).
+  - Notes: Part of the CAPE Phase 6 governance-board `loop-architect` run. Not yet
+    wired into the live ranker/Today-Plan — that's T004/T005.
+
+- [x] **T003 — lifecycle-mode policy service (mix percentages, versioned CRUD)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeLifecycleModePolicyService.ts` (new) —
+    `listCurrentLifecycleModePolicies()`, `getLifecycleModePolicyHistory(mode)`,
+    `updateLifecycleModeMix(mode, mix, adminId, reason?)` (same versioned-insert
+    contract as T002), reusing `LifecycleMode` from Phase 5's
+    `capeLifecycleModeService.ts` (not redefined). `backend/src/schemas/capeSchema.ts`
+    gained `updateLifecycleModeMixSchema` (free-form category->percentage map,
+    sum-to-1.0 refine, same ±0.001 tolerance as the existing evidence-band-weights
+    precedent).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh evidence:
+    tsc clean, 11/11 new tests, cross-checked all 4 numeric §10 mixes against the
+    actual design doc text, confirmed `returning_after_absence`'s first-cut split is
+    honestly labeled at 4 separate levels in the code — not presented as a §10
+    number — and confirmed zero edits to `capeLifecycleModeService.ts` or any live
+    ranking file).
+  - Notes: This mix is NOT consumed by any live ranking/selection logic in this
+    phase — view+versioned-edit only, per execution-contract.md's logged scope
+    decision. Wiring it into actual Today Plan/ranker slot selection is deferred to a
+    future phase.
+
+- [x] **T004 — wire Stage-4 rerank caps into the live ranker (highest-stakes task this run)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeLearningValuePolicy.ts` — the 4
+    module constants (`SAME_TYPE_MAX_STREAK`, `PASSIVE_MAX_STREAK`,
+    `CROWD_OUT_MAX_PER_SKILL`, `CROWD_OUT_WINDOW`) plus the previously-unnamed
+    inline `position < 5` stretch-cap literal (2 call sites) are now a single
+    optional `caps: RerankCaps = DEFAULT_RERANK_CAPS` parameter on
+    `applyPolicyRerank` — `DEFAULT_RERANK_CAPS` is byte-identical to the values it
+    replaces (2/2/2/5/1), so every pre-existing call site that omits the 5th arg
+    (including every test written before this phase) is provably unchanged.
+    `backend/src/services/cape/capeLearningValueRanker.ts` fetches
+    `getCurrentGovernancePolicy()` (T002) and maps it to `RerankCaps`, gated behind
+    the SAME `env.feedControlEnabled` conditional the existing `getFeedPolicy()`
+    fetch already uses (no new unconditional DB call on the flag-off path).
+  - Verification: `loop-task-verifier` PASS 12/12 — the run's most scrutinized
+    verification pass given this touches code live in production right now. The
+    verifier independently re-traced 2 of the new hand-built test fixtures against
+    the actual `violatesCaps`/`applyPick` logic (not trusting the test's own
+    asserted values), confirmed line-by-line that no pre-existing test assertion
+    was weakened or changed (only additive diffs), confirmed both previously-inline
+    `position < 5` literals were parametrized (not just the named constant's
+    usages — the specific gap this run's plan audit flagged), and confirmed the
+    flag-off path never calls the new governance-policy fetch. `tsc --noEmit`
+    clean; 38/38 tests passing across 5 suites (2 pre-existing files extended, 1
+    new isolated flag-on test file added following the repo's established
+    `*FlagOn.test.ts` convention).
+  - Notes: Zero behavior change for real students today — `CAPE_LEARNING_VALUE_RANKER_ENABLED`
+    stays untouched, and even when it's on, `env.feedControlEnabled` (a separate,
+    currently-off flag) still gates whether the new governance policy is fetched
+    at all; until BOTH flip and an admin edits a value, output is provably
+    identical to pre-Phase-6 behavior (see the "backward-compat identity" test).
+
+- [x] **T005 — wire Today Plan pacing knobs (second live-in-production surface)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeTodayPlanService.ts` — `review_slot_share`
+    / `ai_pulse_slot_share` (0 deterministically omits that slot, including the cohort
+    fallback pick, not just the primary pick — default 1 reproduces the exact prior
+    unconditional-attempt behavior) and `daily_plan_target_minutes` (trims trailing
+    slots — review, then ai_pulse, then practice; `next_best`/`foundation` never
+    dropped; strict `>` boundary so an exactly-at-target plan is untouched; default 999
+    is a no-op for any realistic plan). **Mid-task hardening fix** to T002's
+    `capeGovernancePolicyService.ts`: `getCurrentGovernancePolicy()`'s fail-soft only
+    guarded a THROWN error, not a successfully-resolved-but-malformed row (a real bug
+    surfaced by a pre-existing test failure) — a silently-`undefined` share field has
+    real behavioral meaning ("never show this slot"), so a new `safeNumber()`
+    per-field coercion (preserves legitimate `0`, only overrides genuinely
+    non-numeric/undefined values) now guards every field individually, not just the
+    whole-row read.
+  - Verification: `loop-task-verifier` PASS 12/12 — verified as a second live-production
+    surface with the same scrutiny as T004: confirmed the share gating covers BOTH the
+    primary pick and the cohort fallback, confirmed the hardening fix preserves
+    legitimate admin-set `0` values while only catching malformed data, confirmed
+    line-by-line no pre-existing test assertion was weakened, re-ran T002's original 9
+    tests unmodified and passing, re-derived the trim loop's drop order/boundary
+    condition from the actual code. `tsc --noEmit` clean; 27/27 tests passing across
+    2 files.
+  - Notes: Zero behavior change for real students today — `CAPE_TODAY_PLAN_ENABLED`
+    stays untouched; default pacing values reproduce the exact prior fixed-5-slot
+    output (explicit identity test), and the hardening fix makes the fail-soft
+    contract MORE robust than before, not less.
+
+- [x] **T006 — skill coverage heatmap service (read-only)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeSkillCoverageHeatmapService.ts` (new)
+    - `getSkillCoverageHeatmap()` builds the full registered-type x Architecture-Skill
+    matrix from Phase 3's `curriculum_skill_maps` (type-level rows), reusing
+    `typeRegistry.allTypes()` for the type roster and Phase 0-1's
+    `listCurrentSkillDefinitions()` for the 10 skill columns (no duplicated lists). A
+    type with no current mapping surfaces as `source: 'none'` for every skill,
+    never silently dropped. `gaps` implements design doc §12's exact rule: a cell
+    with `weight > 0` and bands limited to claim/knowledge (no application/judgment)
+    flags as "claims/teaches but never proves."
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh evidence:
+    tsc clean, 8/8 tests, confirmed genuinely read-only via grep for any
+    create/update/destroy/raw-SQL call, confirmed the gap rule matches the design
+    doc's exact wording, confirmed a zero-weight cell is never flagged as a gap,
+    confirmed the fail-soft fallback still produces a real 10-column matrix).
+  - Notes: Read-only, no live-production wiring - standard-scrutiny verification.
+
+- [x] **T007 — persona + enrollment lookup service (read-only)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/services/cape/capeGovernancePersonaService.ts` (new)
+    - `listPersonas()` maps the 5 design-doc §12 simulator personas onto real
+    accounts by reusing Phase 5's already-shipped `getLifecycleMode()` classifier
+    (mode foundation/experienced_cold_start/active_builder/returning_after_absence/
+    architect_track), scanning the 50 most recently created enrollments once and
+    bucketing the first match per mode - a documented, honest, bounded best-effort,
+    never fabricated data. A persona with no real match returns
+    `enrollment_id: null` + an explicit note, never a made-up row.
+    `lookupEnrollment(query)` does a plain, fully parameterized email/ID search
+    (UUID-shaped input queries by id, else email ILIKE).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh evidence:
+    tsc clean, 12/12 tests, confirmed the anti-fabrication guarantee is real code
+    behavior not just a comment, confirmed `lookupEnrollment` is genuinely
+    parameterized against SQL injection by reading the actual SQL template
+    construction, confirmed fail-soft behavior at both the per-candidate and
+    total-DB-failure levels, confirmed the bounded scan is honestly disclosed).
+  - Notes: Read-only. The "Active Week 5 learner" persona maps to the classifier's
+    `active_builder` mode as the closest real signal available (the classifier has
+    no week-number granularity yet) - this approximation is logged here and will
+    be repeated in `handoff.md`.
+
+- [x] **T008 — admin routes + controller (9 endpoints, all requireAdmin)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `backend/src/routes/admin/capeGovernanceRoutes.ts` (new, 9 routes:
+    GET/history/PUT governance policy, GET/history/PUT lifecycle-mode policy, GET
+    heatmap, GET personas, GET lookup - every route individually carries
+    `requireAdmin`, matching `capeAdminRoutes.ts`'s exact pattern). New
+    `backend/src/controllers/capeGovernanceController.ts` validates every mutating
+    body with T002/T003's real Zod schemas before calling the service (never a
+    re-declared schema), and validates the `:mode` URL param against T003's real
+    `ALL_LIFECYCLE_MODES` list. Mounted in `server.ts` (2-line addition next to the
+    existing `capeAdminRoutes` mount).
+  - Verification: `loop-task-verifier` PASS 11/12 on first pass, one real deviation
+    found (unknown `:mode` returned 400 instead of the plan's stated 404) - fixed
+    immediately (404 for a missing URL resource, matching `:cardId`-style admin
+    route conventions elsewhere in this repo) and re-verified locally: tsc clean,
+    17/17 controller tests pass (including the corrected 404 assertions),
+    `node scripts/lint-route-auth.js` reports all 88 admin route files
+    auth-guarded, and the verifier's own regression check (`capeAdminController` +
+    all `capeGovernance*` suites, 48 tests) confirmed the new mount didn't break
+    the sibling Phase 0-1 controller.
+  - Notes: This is the last backend task before the frontend build begins (T009+).
+    All 4 governance-board service layers (T002/T003/T006/T007) are now reachable
+    over HTTP, admin-authenticated, Zod-validated at the boundary.
+
+- [x] **T009 — frontend API client additions**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/services/capeApi.ts` (edit) - typed wrapper
+    functions for all 9 T008 routes (governance policy GET/history/PUT,
+    lifecycle-mode policy GET/history/PUT, heatmap GET, personas GET, lookup GET),
+    appended as a "Phase 6 additions" section (same convention as the file's
+    existing "Phase 5 additions" marker). Reuses the existing `LifecycleMode` type
+    (not redefined). `lookupGovernanceEnrollment` matches the file's own
+    established `fetchTodayPlan` null-on-404 convention exactly.
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh
+    evidence: `cd frontend && tsc --noEmit` completely clean - the authoritative
+    frontend CI gate, no known-gap tolerance needed here - cross-checked all 9 URL
+    paths against T008's real route file, spot-checked all 9 response-shape types
+    against the real backend controller/service return shapes field-for-field,
+    confirmed no test file was expected per this repo's own convention for pure
+    API-client wrapper functions).
+  - Notes: Pure client-side typing/plumbing, no UI yet - the page/panels land in
+    T010-T014.
+
+- [x] **T010 — governance page shell + routing + nav**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/pages/admin/AdminFeedControlGovernancePage.tsx`
+    (new) - standalone page at `/admin/feed-control-governance` (execution-contract
+    Assumption 1: `FeedControlTab.tsx` was already 536 lines, 4 more large panels
+    there would blow past CLAUDE.md's 500-line file ceiling), reusing
+    `PageHeader`/`SectionCard` from the shared admin shell, with a real working
+    URL-param-backed section switcher (heatmap/policies/pacing/simulator). 4
+    placeholder panel files created under `frontend/src/pages/admin/governance/`
+    (real compiling components, honestly labeled "coming in T0XX" - not fabricated
+    functionality) to be replaced one-by-one in T011-T014. Route + nav entry added
+    (`adminRoutes.tsx`, `adminNav.ts`). `FeedControlTab.tsx` got a single
+    discoverability link (+7 lines, zero pre-existing lines touched).
+  - Verification: `loop-task-verifier` PASS 11/12 (independent agent, fresh
+    evidence: frontend tsc completely clean, confirmed the new route sits inside
+    the same `ProtectedRoute`/`AdminLayout` wrapper as every other admin page,
+    confirmed `FeedControlTab.tsx`'s diff is genuinely minimal via `git diff --stat`,
+    confirmed the section switcher is real working state+URL logic not decorative,
+    confirmed zero backend files touched). The 1-point gap: no automated test for
+    the switcher (CRA's test runner isn't reachable through this worktree's
+    node_modules junction, a known environment limit, not a task defect - the
+    precedent file `AdminCapeSettingsPage.tsx` also ships with zero tests, and
+    real manual verification is explicitly T015's job).
+  - Notes: Panels T011-T014 each replace one placeholder file in place.
+
+- [x] **T011 — skill coverage heatmap panel (real implementation, replaces T010 placeholder)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/pages/admin/governance/SkillCoverageHeatmap.tsx`
+    replaced with the real panel - calls the T009 `fetchSkillCoverageHeatmap()`
+    client, renders the full types x skills matrix (no truncation), color-codes
+    cells by `credit_strength`, and visually flags gap cells (amber outline + a
+    warning glyph, not just computed-and-discarded) with a gap-detail list below
+    the matrix. Genuinely read-only (no mutating API calls).
+  - Verification: `loop-task-verifier` PASS 11/12 (independent agent, fresh
+    evidence: frontend tsc clean, confirmed no field-name drift against the real
+    T009 TypeScript interfaces, confirmed read-only via grep, confirmed the gap
+    highlighting is load-bearing in the rendered markup). The verifier's one
+    finding - that `npx react-scripts test` IS actually reachable in this
+    worktree (contrary to what was assumed for T010) - was acted on immediately:
+    added `frontend/src/pages/admin/governance/__tests__/SkillCoverageHeatmap.smoke.test.tsx`
+    following the repo's existing `AdminTrustCenterPage.smoke.test.tsx`
+    no-browser `renderToStaticMarkup` pattern (proves the initial-render/loading
+    state never crashes). Ran via `CI=true npx react-scripts test --watchAll=false
+    SkillCoverageHeatmap` - 1/1 passing. tsc re-confirmed clean after the addition.
+  - Notes: This discovery (CRA test runner reachable via `npx`, not the direct
+    `node_modules/.bin` path) will be applied to the remaining T013/T014 panels
+    too, strengthening their verification beyond what T010 assumed was possible.
+
+- [x] **T012 - learner-stage policies panel (real implementation, replaces T010 placeholder)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/pages/admin/governance/LearnerStagePolicies.tsx`
+    replaced with the real panel - 5 mode cards, mix % editor with dynamic
+    categories (rendered from `Object.keys(policy.mix)`, not a hardcoded list,
+    since each mode's category set differs per design doc §10's table), a
+    client-side sum-to-100% check gating Save (mirrors
+    `AdminCapeSettingsPage.tsx`'s `sumOk` pattern), explicit-save-only (no
+    autosave on slider drag), a distinguishable "no changes to save" no-op vs a
+    real versioned save, and per-mode version history. Added
+    `LearnerStagePolicies.smoke.test.tsx` (same no-browser pattern as T011).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh
+    evidence: tsc clean, smoke test re-run and passing, confirmed dynamic
+    category rendering would not silently break for a mode with a different
+    category set, confirmed Save is the only write path, confirmed the
+    versioned-vs-no-op distinction reads the real API flag).
+  - Notes: Matches T011's now-established pattern of pairing every new panel
+    with a lightweight no-browser smoke test.
+
+- [x] **T013 — pacing controls panel (real implementation, replaces T010 placeholder)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: `frontend/src/pages/admin/governance/PacingControls.tsx`
+    replaced with the real panel - the 8 T002 governance-policy fields (Stage-4
+    rerank caps + Today Plan pacing knobs) with Zod-bound-matching numeric
+    input ranges, PLUS the existing `explorationPct` field reused (not
+    duplicated) via the pre-existing `GET/PUT /api/admin/feed-control/policy`
+    endpoint, matching `FeedControlTab.tsx`'s own inline `api.get/put`
+    convention. Two fully separate, explicit Save actions (governance policy
+    vs exploration reserve) - neither autosaves, and the initial load only
+    calls GET endpoints. Added `PacingControls.smoke.test.tsx`.
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh
+    evidence: tsc clean, smoke test passing, confirmed all 8 fields map
+    correctly to the real T009 typed interface, confirmed the `explorationPct`
+    reuse claim against the actual pre-existing `feedConfigService.ts` - not a
+    duplicated field, confirmed Save is split into 2 independent explicit
+    actions with no autosave anywhere, confirmed numeric bounds match the real
+    T002 Zod schema, confirmed the help text describing trim-order and
+    slot-share semantics matches T005's actual implementation, not just
+    self-consistent frontend prose).
+  - Notes: This panel edits values that feed the currently-live production
+    ranker/plan (T004/T005 wiring) - verified with the same scrutiny as a
+    live-path change even though this task is "only" the frontend form.
+
+- [x] **T014 — explanation simulator panel (real implementation, replaces T010 placeholder; includes a small backend gap fix)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: Discovered mid-task that `GET /api/admin/feed-control/simulate`
+    never forwarded a `useCapeRanker` option to `simulate()` despite that
+    service function supporting it since Phase 4 - the plan's assumption that
+    this panel could simply reuse the existing endpoint "as-is" to force CAPE
+    output was wrong. Fixed with a small, additive, backward-compatible
+    `use_cape_ranker` query-param passthrough in
+    `backend/src/routes/admin/feedControlRoutes.ts` (default `false`,
+    provably identical to the old 3-argument call every existing caller,
+    including `FeedControlTab.tsx`, still makes). Added
+    `feedControlRoutes.simulateUseCapeRanker.test.ts` (this router's first-ever
+    route-level test, supertest-mounted). `frontend/src/pages/admin/governance/ExplanationSimulator.tsx`
+    replaced with the real panel - email/ID lookup (T007) or persona picker
+    (T007, correctly disabling/labeling any persona with no real match rather
+    than allowing a simulation against a fabricated ID), then a fully
+    read-only "Run simulation" call rendering Stage 2 exclusions, Stage 3
+    score breakdown (`components`), and the final Stage 4 rerank order - with
+    an honest note that Stage 4 reorders without attaching its own per-item
+    reason string (verified against the real `applyPolicyRerank` return
+    shape, not fabricated). Added `ExplanationSimulator.smoke.test.tsx`,
+    including a real read-only guarantee test that greps the component's own
+    source for any mutating HTTP verb.
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent, fresh
+    evidence: backend + frontend tsc clean, new route test passing (5/5), the
+    2 pre-existing `feedControlService.simulate*.test.ts` suites re-run
+    unmodified and still green (regression proof), backward-compat identity
+    independently re-derived from the actual `simulate()` source, param-name
+    cross-check between route and panel, confirmed the read-only guarantee is
+    real not superficial, confirmed the persona/lookup anti-fabrication
+    behavior, confirmed `excluded`/`components`/`ranker` are real shipped
+    fields not invented).
+  - Notes: All 4 CAPE Phase 6 governance-board panels (T011-T014) are now
+    complete and independently verified. Reading/simulating on this panel
+    never mutates production ranking - only T012's/T013's explicit Save
+    buttons ever write anything, and every such write is versioned.
+
+- [x] **T015 — local visual verification (honest, partial evidence)**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: Verification-only, no code shipped. This environment has no
+    reachable local Postgres (`ECONNREFUSED`), no Docker, and no valid admin
+    JWT (`scripts/.ali_jwt.txt` absent) - stated honestly per the run's
+    explicit anti-fabrication requirement rather than skipped or faked.
+    Partial real evidence WAS captured via a one-off Playwright script
+    (`scripts/capePhase6VisualCheck.js`, deleted after use, never committed):
+    (1) an unauthenticated screenshot proving `/admin/feed-control-governance`
+    correctly redirects to the real login page - no crash at the routing
+    layer; (2) a screenshot with a placeholder token injected into
+    `localStorage` (clearing `AuthContext`'s presence-only client-side gate,
+    confirmed via source read - no backend session actually validated)
+    showing the REAL page shell: title/subtitle, back-link, all 4 section
+    tabs, and one panel's real rendered error state - proving the component
+    tree and error-handling code execute correctly in an actual browser,
+    though NOT proving the panels render correct live data (no backend was
+    reachable to serve any).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent - opened
+    all 3 screenshots directly and confirmed pixel content, cross-checked
+    rendered text against the actual T010/T011 source byte-for-byte,
+    independently confirmed the `AuthContext.tsx` presence-only-check claim,
+    confirmed the one-off script has zero trace in git history, confirmed the
+    screenshots directory is genuinely gitignored, confirmed no overclaiming
+    anywhere in the write-up).
+  - Notes: This is real, bounded, honestly-scoped evidence - stronger than a
+    bare "no token available" statement, but explicitly NOT a substitute for
+    an authenticated screenshot showing real governance data. Repeated in
+    `handoff.md` for Ali/Dhee.
+
+- [x] **T016 — RAG/Vectors + AI-Pulse-freshness deferral documentation**
+  - Date: 2026-08-05
+  - Session: CC-20260802-r4q9
+  - What changed: Documentation-only (no code). Confirmed and finalized the 2
+    explicit scope deferrals this run logged from the start (in the run's
+    `verification-log.md` and `execution-contract.md` Out-of-scope section):
+    (1) RAG/Vectors 6-lesson content pathway (design doc §8/§16) - content
+    authoring, not an engineering task, same deferral pattern Phase 3 used;
+    (2) AI Pulse freshness/source-quality/expiry policy wiring - a real,
+    scoped, buildable engineering gap (`freshness_days` exists in the
+    `LearningPlacementContract` type/schema but is read by zero
+    filtering/scoring logic today, re-confirmed via fresh grep after T001-T015
+    landed - still 17 files, still zero consumption logic), deferred purely
+    for priority (the governance board was the explicit priority for this
+    run), with named real follow-up targets (`capeEligibilityFilter.ts`
+    Stage 2, `capeLearningValueScorer.ts`'s `freshnessFieldImportance()`
+    Stage 3).
+  - Verification: `loop-task-verifier` PASS 12/12 (independent agent -
+    re-ran the freshness_days grep fresh rather than trusting the earlier
+    count, confirmed the RAG/Vectors 6-item list matches the design doc
+    verbatim, confirmed both named follow-up files/functions are real,
+    confirmed no contradiction between `verification-log.md` and
+    `execution-contract.md`, confirmed specificity matches Phase 3's own
+    precedent).
+  - Notes: **All 16 planned tasks for this run are now complete and
+    independently verified.** Proceeding to Phase G (quality gate), Phase H
+    (PR open, no deploy), and Phase J (handoff.md).
 ### Scroll-condense feature expanded to all 7 remaining portal pages + visual polish (2026-08-05)
 - [x] **Extended last session's Today/Projects/Classroom scroll-condense mechanism to Path, Schedule, Community, Rooms, and Library; reworked Projects' single-build "interior" view to a pinned (not header-condensed) next-action banner instead; spruced up the shared condensed card with icons/color-coded conditional formatting; added a Readiness stat to Today's condensed slot; resized Classroom's "Your next step" card to sit alongside Week 1 instead of spanning full width.**
   - Date: 2026-08-05

@@ -27,12 +27,25 @@
  * community-typed candidate exists to naturally fill the foundation slot, a
  * SECOND week-bound anchored item fills it instead — implementing "a cohort
  * learner's plan includes time-sensitive Classroom work and may be longer".
+ *
+ * CAPE Phase 6 (design doc §12 "Pacing controls"): 2 previously-nonexistent
+ * knobs are now read from `capeGovernancePolicyService.getCurrentGovernancePolicy()`
+ * (fail-soft — degrades to the byte-identical defaults on any read failure):
+ *   - `review_slot_share` / `ai_pulse_slot_share`: 0 deterministically skips
+ *     that slot's `pickFirst` call entirely; the default (1) reproduces the
+ *     exact prior unconditional-attempt behavior.
+ *   - `daily_plan_target_minutes`: after the plan is assembled, trailing
+ *     slots are dropped (review, then ai_pulse, then practice — next_best and
+ *     foundation are NEVER dropped) until `estimated_total_minutes` is at or
+ *     under the target. The default (999) is high enough that no realistic
+ *     real plan can exceed it, so this is a no-op until an admin lowers it.
  */
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
 import { getTodayPage, extractCapeExplanation, type TodayFeedItem } from '../timeline/todayFeedComposer';
 import { getLifecycleMode, type LifecycleMode } from './capeLifecycleModeService';
 import { enrichCard, type CardChips } from './capeCardEnrichmentService';
+import { getCurrentGovernancePolicy } from './capeGovernancePolicyService';
 
 const CANDIDATE_BATCH_SIZE = 30;
 
@@ -96,10 +109,11 @@ function pickFirst(
 }
 
 export async function getTodayPlan(enrollmentId: string): Promise<TodayPlanResponse> {
-  const [{ mode }, page, cohort] = await Promise.all([
+  const [{ mode }, page, cohort, pacing] = await Promise.all([
     getLifecycleMode(enrollmentId),
     getTodayPage(enrollmentId, 0, CANDIDATE_BATCH_SIZE),
     isCohortLearner(enrollmentId),
+    getCurrentGovernancePolicy(),
   ]);
   const candidates = page.items;
   const used = new Set<number>();
@@ -107,8 +121,15 @@ export async function getTodayPlan(enrollmentId: string): Promise<TodayPlanRespo
   const nextBest = pickFirst(candidates, used, (i) => i.kind === 'anchored');
   let foundation = pickFirst(candidates, used, (i) => i.kind === 'anchored');
   const practice = pickFirst(candidates, used, (i) => PRACTICE_TYPES.has(i.type));
-  const aiPulse = pickFirst(candidates, used, (i) => AI_PULSE_TYPES.has(i.type));
-  let review = pickFirst(candidates, used, (i) => REVIEW_TYPES.has(i.type));
+  // CAPE Phase 6 pacing knobs: a 0 share deterministically skips this slot
+  // entirely (never attempted); the default (1) reproduces the exact prior
+  // unconditional pickFirst call.
+  const aiPulse = pacing.ai_pulse_slot_share > 0
+    ? pickFirst(candidates, used, (i) => AI_PULSE_TYPES.has(i.type))
+    : null;
+  let review = pacing.review_slot_share > 0
+    ? pickFirst(candidates, used, (i) => REVIEW_TYPES.has(i.type))
+    : null;
 
   // Cohort note: if the foundation slot came up empty (e.g. only 1 anchored
   // item total) and this is a cohort learner, let a 3rd anchored item cover
@@ -118,8 +139,8 @@ export async function getTodayPlan(enrollmentId: string): Promise<TodayPlanRespo
     foundation = pickFirst(candidates, used, (i) => i.kind === 'anchored');
   }
   // Same cohort allowance for review, since community/live content may not
-  // exist in every candidate batch.
-  if (!review && cohort) {
+  // exist in every candidate batch. Still respects review_slot_share === 0.
+  if (!review && cohort && pacing.review_slot_share > 0) {
     review = pickFirst(candidates, used, (i) => i.kind === 'anchored');
   }
 
@@ -131,14 +152,27 @@ export async function getTodayPlan(enrollmentId: string): Promise<TodayPlanRespo
     { slot: 'review', item: review },
   ];
 
-  const items: TodayPlanItem[] = [];
+  let items: TodayPlanItem[] = [];
   for (const { slot, item } of slotted) {
     if (!item) continue; // omitted, not padded — Build-Break-Harden boundary case
     const chips = await enrichCard(enrollmentId, item, extractCapeExplanation(item));
     items.push({ ...item, slot, chips });
   }
 
-  const estimated_total_minutes = items.reduce((sum, i) => sum + (i.estimated_time ?? 0), 0);
+  // CAPE Phase 6 pacing knob: trim trailing slots (review, then ai_pulse, then
+  // practice — next_best/foundation are NEVER dropped) if the assembled plan
+  // exceeds daily_plan_target_minutes. Default (999) makes this a no-op for
+  // any realistic real plan — unchanged behavior until an admin lowers it.
+  const dropOrder: TodayPlanSlot[] = ['review', 'ai_pulse', 'practice'];
+  let dropIdx = 0;
+  const totalMinutes = () => items.reduce((sum, i) => sum + (i.estimated_time ?? 0), 0);
+  while (totalMinutes() > pacing.daily_plan_target_minutes && dropIdx < dropOrder.length) {
+    const slotToDrop = dropOrder[dropIdx];
+    items = items.filter((i) => i.slot !== slotToDrop);
+    dropIdx += 1;
+  }
+
+  const estimated_total_minutes = totalMinutes();
 
   return { mode, items, estimated_total_minutes };
 }

@@ -1,4 +1,4 @@
-import { applyPolicyRerank, type RankedLearningValueItem } from '../capeLearningValuePolicy';
+import { applyPolicyRerank, DEFAULT_RERANK_CAPS, type RankedLearningValueItem, type RerankCaps } from '../capeLearningValuePolicy';
 import { EMPTY_CONTRACT, type LearningValueCandidate } from '../capeCandidateFeatureService';
 import type { LearnerState, LearnerSkillState } from '../capeLearnerStateService';
 import { DEFAULT_FEED_POLICY, type FeedPolicy } from '../../timeline/feedConfigService';
@@ -219,5 +219,56 @@ describe('applyPolicyRerank — exploration reserve', () => {
 
   it('reuses the existing feedConfigService default (0.15), not an invented number', () => {
     expect(DEFAULT_FEED_POLICY.explorationPct).toBe(0.15);
+  });
+});
+
+describe('applyPolicyRerank — CAPE Phase 6: RerankCaps parametrization', () => {
+  // 4 passive-type items (video is NOT in ACTIVE_TYPES) + 1 ACTIVE-type disruptor
+  // (knowledge_check IS in ACTIVE_TYPES) — deliberately using an active disruptor
+  // rather than a second passive type, since 2 passive items already saturate
+  // the DEFAULT passiveMaxStreak (2) regardless of same-type streak, which would
+  // make a same-type-only relaxation invisible in the output.
+  const fourVideosOneCheck: RankedLearningValueItem[] = [
+    ranked({ ref: 'v1', type: 'video', score: 0.95 }),
+    ranked({ ref: 'v2', type: 'video', score: 0.90 }),
+    ranked({ ref: 'v3', type: 'video', score: 0.85 }),
+    ranked({ ref: 'v4', type: 'video', score: 0.80 }),
+    ranked({ ref: 'check1', type: 'knowledge_check', score: 0.50 }),
+  ];
+
+  it('omitting the 5th argument entirely reproduces the exact same order as explicitly passing DEFAULT_RERANK_CAPS (backward-compat identity)', () => {
+    const withoutArg = applyPolicyRerank(fourVideosOneCheck, learnerState(), NO_EXPLORATION_POLICY, NOW);
+    const withExplicitDefault = applyPolicyRerank(fourVideosOneCheck, learnerState(), NO_EXPLORATION_POLICY, NOW, DEFAULT_RERANK_CAPS);
+    expect(withoutArg.map((c) => c.ref)).toEqual(withExplicitDefault.map((c) => c.ref));
+  });
+
+  it('default caps (sameTypeMaxStreak=2, passiveMaxStreak=2) break the passive video streak after 2 items, pulling the active check item forward to position 2', () => {
+    const out = applyPolicyRerank(fourVideosOneCheck, learnerState(), NO_EXPLORATION_POLICY, NOW);
+    expect(out.map((c) => c.ref)).toEqual(['v1', 'v2', 'check1', 'v3', 'v4']);
+  });
+
+  it('relaxed sameTypeMaxStreak+passiveMaxStreak (raised via caps) allows pure score order with no forced diversity break — proves the wiring is real, not decorative', () => {
+    const relaxedCaps: RerankCaps = { ...DEFAULT_RERANK_CAPS, sameTypeMaxStreak: 10, passiveMaxStreak: 10 };
+    const out = applyPolicyRerank(fourVideosOneCheck, learnerState(), NO_EXPLORATION_POLICY, NOW, relaxedCaps);
+    expect(out.map((c) => c.ref)).toEqual(['v1', 'v2', 'v3', 'v4', 'check1']);
+  });
+
+  it('a tightened crowdOutWindow/crowdOutMaxPerSkill measurably changes which items land in the first 5 positions vs the default', () => {
+    const sameSkillFive: RankedLearningValueItem[] = [
+      ranked({ ref: 's1', type: 'video', score: 0.95, ...withSkill('rag') }),
+      ranked({ ref: 's2', type: 'blog', score: 0.90, ...withSkill('rag') }),
+      ranked({ ref: 's3', type: 'deep_dive', score: 0.85, ...withSkill('rag') }),
+      ranked({ ref: 'other1', type: 'implementation_task', score: 0.5, ...withSkill('agents_mcp') }),
+      ranked({ ref: 'other2', type: 'knowledge_check', score: 0.4, ...withSkill('governance') }),
+    ];
+    const defaultOut = applyPolicyRerank(sameSkillFive, learnerState(), NO_EXPLORATION_POLICY, NOW);
+    const tightCaps: RerankCaps = { ...DEFAULT_RERANK_CAPS, crowdOutMaxPerSkill: 1 };
+    const tightOut = applyPolicyRerank(sameSkillFive, learnerState(), NO_EXPLORATION_POLICY, NOW, tightCaps);
+    expect(defaultOut.map((c) => c.ref)).not.toEqual(tightOut.map((c) => c.ref));
+    // Default (max 2 per skill in first 5): s1, s2 both land before crowd-out kicks in.
+    expect(defaultOut.slice(0, 2).map((c) => c.ref)).toEqual(['s1', 's2']);
+    // Tightened (max 1 per skill in first 5): only s1 lands before crowd-out blocks s2/s3.
+    expect(tightOut[0].ref).toBe('s1');
+    expect(tightOut[1].ref).not.toBe('s2');
   });
 });

@@ -18,6 +18,7 @@ import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
+import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
@@ -48,6 +49,7 @@ import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
 import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValueRankerSchema';
 import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
+import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -88,6 +90,7 @@ app.use(enrollmentRoutes);
 app.use(participantRoutes);
 app.use(capePortalRoutes);
 app.use(capeAdminRoutes);
+app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);
@@ -2315,6 +2318,7 @@ async function start(): Promise<void> {
   await ensureTodayFeedSchema();
   await ensureCapeLearningValueRankerSchema(); // CAPE Phase 4 (T007) — additive columns; must run AFTER ensureTodayFeedSchema
   await ensureCapeTodayPlanSchema(); // CAPE Phase 5 (T003) — new today_plan_feedback table, references enrollments(id)
+  await ensureCapeGovernanceSchema(); // CAPE Phase 6 — cape_governance_policy + cape_lifecycle_mode_policy (additive, byte-identical seed defaults)
   await ensureFeedControlSchema();
   await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
