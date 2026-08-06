@@ -56,9 +56,9 @@ describe('keyed intel sources — degrade-dark when env is unset', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('ai_video_stream maps a stubbed YouTube search payload to normalized items', async () => {
+  it('ai_video_stream maps a stubbed YouTube search payload to normalized items, dropping non-English candidates', async () => {
     process.env.YOUTUBE_API_KEY = 'test-key-do-not-log';
-    const payload = {
+    const searchPayload = {
       items: [
         {
           id: { kind: 'youtube#video', videoId: 'abc123' },
@@ -74,13 +74,32 @@ describe('keyed intel sources — degrade-dark when env is unset', () => {
         },
         // No videoId (a channel result) — must be skipped, not mapped.
         { id: { kind: 'youtube#channel' }, snippet: { title: 'Some Channel' } },
+        // Non-Latin script title — must be dropped by the text heuristic.
+        {
+          id: { kind: 'youtube#video', videoId: 'zh789' },
+          snippet: { title: 'Prompt 没用了？复杂 Agent 开发的三层控制架构拆解', description: '', publishedAt: '2026-07-20T10:00:00Z' },
+        },
+        // English-scripted title, but German audio per videos.list metadata below.
+        {
+          id: { kind: 'youtube#video', videoId: 'de999' },
+          snippet: { title: 'Architecture Decisions', description: '', publishedAt: '2026-07-20T10:00:00Z' },
+        },
       ],
     };
-    const fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue(jsonResponse(payload));
+    const videosPayload = {
+      items: [
+        { id: 'abc123', snippet: { defaultAudioLanguage: 'en' } },
+        { id: 'de999', snippet: { defaultAudioLanguage: 'de' } },
+      ],
+    };
+    const fetchSpy = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(searchPayload))
+      .mockResolvedValueOnce(jsonResponse(videosPayload));
 
     const items = await collectVideo();
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(items).toHaveLength(2);
     expect(items[0]).toEqual({
       guid: 'yt:abc123',
@@ -94,6 +113,9 @@ describe('keyed intel sources — degrade-dark when env is unset', () => {
     expect(items[1].guid).toBe('yt:def456');
     expect(items[1].excerpt).toBeNull();
     expect(items[1].publishedAt).toBeNull();
+    // zh789 (non-Latin script) and de999 (defaultAudioLanguage=de) are both dropped.
+    expect(items.map((i) => i.guid)).not.toContain('yt:zh789');
+    expect(items.map((i) => i.guid)).not.toContain('yt:de999');
   });
 
   it('ai_video_stream degrades to [] on a non-2xx response (never throws)', async () => {
@@ -102,5 +124,22 @@ describe('keyed intel sources — degrade-dark when env is unset', () => {
       { ok: false, status: 403, text: async () => '' } as unknown as Response,
     );
     await expect(collectVideo()).resolves.toEqual([]);
+  });
+
+  it('ai_video_stream falls back to the text heuristic (never throws) when videos.list fails', async () => {
+    process.env.YOUTUBE_API_KEY = 'test-key';
+    const searchPayload = {
+      items: [
+        { id: { kind: 'youtube#video', videoId: 'ok111' }, snippet: { title: 'English Title', description: '' } },
+      ],
+    };
+    jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(jsonResponse(searchPayload))
+      .mockResolvedValue({ ok: false, status: 500, text: async () => '' } as unknown as Response);
+
+    const items = await collectVideo();
+    expect(items).toHaveLength(1);
+    expect(items[0].guid).toBe('yt:ok111');
   });
 });
