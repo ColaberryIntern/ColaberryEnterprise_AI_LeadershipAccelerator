@@ -96,13 +96,17 @@ describe('classTeachWeeks — Week 2 monday (week2-architecture-day-redesign)', 
     expect(week2.thursday!.every((s) => s.diagram!.includes('flowchart'))).toBe(true);
   });
 
-  it('mvp-scoper is scoped to Read/Write only, never Bash, and produces a real visual mockup', () => {
+  it('mvp-scoper is scoped to Read, Write, Bash — Bash specifically for real PDF generation, not general execution', () => {
+    // Bash is a genuine, necessary requirement here (week2-mvp-scoper-run-prompt):
+    // the one-pager ships as a real PDF, not a renamed .md/.html file, and
+    // producing one requires running a command (headless-Chrome print-to-PDF,
+    // reportlab, puppeteer, etc.). The scoping story is still least-privilege —
+    // Bash is granted because the task genuinely needs it, not broadly.
     const text = JSON.stringify(week2.thursday);
     expect(text).toContain('mockup.html');
-    expect(text).toMatch(/allowed-tools:\s*Read,\s*Write/);
-    // The frontmatter line itself must never grant Bash — a nearby prose
-    // mention like "never Bash" (this file has one, deliberately) is fine.
-    expect(text).not.toMatch(/allowed-tools:\s*Read,\s*Write,\s*Bash/);
+    expect(text).toContain('one-pager.pdf');
+    expect(text).not.toContain('one-pager.md');
+    expect(text).toMatch(/allowed-tools:\s*Read,\s*Write,\s*Bash/);
   });
 
   it('does not modify any other generated week (3-12 byte-for-byte)', () => {
