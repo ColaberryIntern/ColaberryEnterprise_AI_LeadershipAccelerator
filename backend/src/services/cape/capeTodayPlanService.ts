@@ -39,6 +39,27 @@
  *     foundation are NEVER dropped) until `estimated_total_minutes` is at or
  *     under the target. The default (999) is high enough that no realistic
  *     real plan can exceed it, so this is a no-op until an admin lowers it.
+ *
+ * Scoped bugfix (2026-08-06, Session CC-20260802-r4q9) — `ai_pulse` rotation:
+ * `getTodayPage`'s candidates come from `today_feed_impressions`, an
+ * APPEND-ONLY, never-reshuffled feed (see `todayFeedComposer.ts`'s header);
+ * `applyCapeRankingIfEnabled`/`selectAnchoredOrder` (the Phase 4 ranker) is
+ * applied ONLY to the anchored/week-bound queue, never to the ambient/AI-Pulse
+ * pool. A plain `pickFirst` over that pool therefore always returned the SAME
+ * earliest-in-candidate-order AI Pulse card, forever, regardless of how many
+ * fresh alternatives existed (production confirmed: 300+ eligible AI Pulse
+ * cards, same card served every day). Fixed with `pickAiPulse`: among
+ * eligible candidates that already passed `getTodayPage`'s own eligibility
+ * filtering (prerequisites/entitlement/cohort gates untouched), prefer the
+ * least-recently-shown-in-this-slot one, via the new
+ * `cape_ai_pulse_exposure` ledger (`capeAiPulseExposureService.ts`) — a
+ * deterministic, explainable rotation grounded in design doc §9 Stage 2's
+ * "frequency/cooldown policy" and Stage 4's anti-crowd-out reranking
+ * ("Prevent one popular skill, source, or content format from crowding out
+ * the path"), not true randomness. `next_best`/`foundation` (both still plain
+ * `pickFirst` over the anchored queue) are completely untouched by this fix.
+ * Works identically whether `CAPE_LEARNING_VALUE_RANKER_ENABLED` is on or off,
+ * since the ai_pulse slot never reads ranker output either way.
  */
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
@@ -46,6 +67,7 @@ import { getTodayPage, extractCapeExplanation, type TodayFeedItem } from '../tim
 import { getLifecycleMode, type LifecycleMode } from './capeLifecycleModeService';
 import { enrichCard, type CardChips } from './capeCardEnrichmentService';
 import { getCurrentGovernancePolicy } from './capeGovernancePolicyService';
+import { getAiPulseExposureMap, recordAiPulseExposure } from './capeAiPulseExposureService';
 
 const CANDIDATE_BATCH_SIZE = 30;
 
@@ -108,6 +130,47 @@ function pickFirst(
   return null;
 }
 
+/**
+ * ai_pulse slot picker — the rotation fix (see file header). Same eligibility
+ * contract as `pickFirst` (only scans not-yet-`used` candidates that already
+ * passed `getTodayPage`'s filtering, marks the winner used), but among
+ * multiple eligible candidates prefers the least-recently-shown-in-this-slot
+ * one instead of always the first in composer order.
+ *
+ * Boundary cases (Build-Break-Harden):
+ *   - Zero eligible -> null, no query, slot omitted (unchanged behavior).
+ *   - Exactly one eligible -> that one, no exposure query needed (avoids a
+ *     pointless DB round-trip on the common single-candidate case).
+ *   - Multiple eligible -> least-recently-shown wins; never-shown candidates
+ *     (no exposure row) always outrank any previously-shown one. Ties (both
+ *     never-shown, or an identical last_shown_at) preserve the original
+ *     candidate order — Array.prototype.sort is stable (Node/V8, ES2019+) —
+ *     so a cold-start learner with no exposure history yet sees the exact
+ *     same first-eligible-candidate result `pickFirst` used to produce.
+ */
+async function pickAiPulse(
+  enrollmentId: string,
+  candidates: TodayFeedItem[],
+  used: Set<number>,
+): Promise<TodayFeedItem | null> {
+  const eligible = candidates.filter((i) => !used.has(i.position) && AI_PULSE_TYPES.has(i.type));
+  if (!eligible.length) return null;
+  if (eligible.length === 1) {
+    used.add(eligible[0].position);
+    return eligible[0];
+  }
+
+  const exposure = await getAiPulseExposureMap(enrollmentId, eligible.map((i) => i.ref));
+  const ranked = [...eligible].sort((a, b) => {
+    const aShown = exposure.get(a.ref)?.getTime() ?? -Infinity; // never-shown sorts first
+    const bShown = exposure.get(b.ref)?.getTime() ?? -Infinity;
+    return aShown - bShown;
+  });
+  const picked = ranked[0];
+  used.add(picked.position);
+  return picked;
+}
+
 export async function getTodayPlan(enrollmentId: string): Promise<TodayPlanResponse> {
   const [{ mode }, page, cohort, pacing] = await Promise.all([
     getLifecycleMode(enrollmentId),
@@ -125,7 +188,7 @@ export async function getTodayPlan(enrollmentId: string): Promise<TodayPlanRespo
   // entirely (never attempted); the default (1) reproduces the exact prior
   // unconditional pickFirst call.
   const aiPulse = pacing.ai_pulse_slot_share > 0
-    ? pickFirst(candidates, used, (i) => AI_PULSE_TYPES.has(i.type))
+    ? await pickAiPulse(enrollmentId, candidates, used)
     : null;
   let review = pacing.review_slot_share > 0
     ? pickFirst(candidates, used, (i) => REVIEW_TYPES.has(i.type))
@@ -170,6 +233,17 @@ export async function getTodayPlan(enrollmentId: string): Promise<TodayPlanRespo
     const slotToDrop = dropOrder[dropIdx];
     items = items.filter((i) => i.slot !== slotToDrop);
     dropIdx += 1;
+  }
+
+  // Rotation fix (file header): record that this ref was actually placed in
+  // the ai_pulse slot, ONLY if it survived the pacing trim above (a slot
+  // pacing later dropped was never really shown to the learner, so it must
+  // not count toward "recently shown" — that would wrongly deprioritize it
+  // next time). Idempotent upsert (capeAiPulseExposureService.ts) — safe to
+  // call on every getTodayPlan request, never a duplicate-row hazard.
+  const placedAiPulse = items.find((i) => i.slot === 'ai_pulse');
+  if (placedAiPulse) {
+    await recordAiPulseExposure(enrollmentId, placedAiPulse.ref);
   }
 
   const estimated_total_minutes = totalMinutes();
