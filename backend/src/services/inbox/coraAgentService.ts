@@ -264,6 +264,11 @@ export async function handleCoraInquiry(email: {
 }): Promise<CoraDispatchResult> {
   console.log(`${LOG_PREFIX} Handling inquiry: email=${email.id} from=${email.from_address}`);
 
+  // Read fresh per call, not the module-level DRY_RUN constant: that constant is
+  // frozen at import time, so a test (or a runtime env change) that flips
+  // CORA_DRY_RUN after the module has loaded would otherwise have no effect.
+  const dryRun = resolveDryRun(process.env.CORA_DRY_RUN);
+
   // Loop-prevention: never auto-reply to our own mail, to bounces, or to
   // auto-generated mail. Without this, a live Cora replies to its own replies
   // (and to mailer-daemon bounces), producing a self-reply storm.
@@ -291,7 +296,7 @@ export async function handleCoraInquiry(email: {
   // sent anyway). Checked BEFORE reserving the dedup slot below so a tripped breaker
   // leaves this thread free for a real attempt once volume subsides, rather than
   // permanently marking it "already handled" with no reply ever sent.
-  if (!DRY_RUN && (await isCircuitBreakerTripped())) {
+  if (!dryRun && (await isCircuitBreakerTripped())) {
     const reason = `Circuit breaker tripped (>= ${CIRCUIT_BREAKER_MAX_SENDS} Cora sends in the last ${CIRCUIT_BREAKER_WINDOW_MS / 60_000}min)`;
     console.error(`${LOG_PREFIX} ${reason} — routing ${email.id} to human instead of sending`);
     await logAuditEvent({
@@ -360,10 +365,10 @@ export async function handleCoraInquiry(email: {
       metadata: { error_class: 'GenerationError', error: error.message },
     });
     // Generation failed — don't bury the email; leave it for a human.
-    return decideCoraDisposition({ generated: false, dryRun: DRY_RUN, needsHuman: false, sent: false });
+    return decideCoraDisposition({ generated: false, dryRun, needsHuman: false, sent: false });
   }
 
-  if (DRY_RUN) {
+  if (dryRun) {
     console.log(
       `${LOG_PREFIX} DRY RUN — would ${reply.needsHuman ? 'send handoff ack + flag for human' : 'send'} ` +
       `to ${email.from_address}:\nSubject: ${reply.subject}\n\n${reply.body}`
