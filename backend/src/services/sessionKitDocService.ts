@@ -10,6 +10,7 @@
 // Live pulse is off here (the deck runs standalone). Wiring the live-state feed
 // is a follow-up; renderKitHtml already accepts a { live } config for it.
 // ============================================================================
+import QRCode from 'qrcode';
 import { env } from '../config/env';
 import { buildSessionKit } from './sessionKitService';
 import { buildKitSpec } from './classKit/kitSpecDaySlides';
@@ -164,6 +165,26 @@ export async function renderPresenterPage(sessionId: string): Promise<string | n
 })();
 </script>
 </body></html>`;
+}
+
+/**
+ * Self-service link for the instructor's own presenter page — an admin-only
+ * endpoint (not a public/token-guessable one) that mints a fresh kit token
+ * and hands back the URL + a scannable QR, so getting to the presenter page
+ * on a phone never requires anyone to manually mint a token. Every call
+ * mints a NEW 12h token; the QR is generated fresh each time, never cached,
+ * and this is deliberately a separate call from buildSessionKit's own
+ * qr_svg (the student check-in QR) so the two never end up on the same
+ * response payload or printed handout. Null if session missing.
+ */
+export async function getPresenterLink(sessionId: string): Promise<{ url: string; qrSvg: string } | null> {
+  const kit = await buildSessionKit(sessionId);
+  if (!kit) return null;
+  const base = (env.frontendUrl || 'https://enterprise.colaberry.ai').replace(/\/+$/, '');
+  const token = mintKitToken(sessionId);
+  const url = `${base}/api/portal/sessions/${sessionId}/presenter-page?t=${encodeURIComponent(token)}`;
+  const qrSvg = await QRCode.toString(url, { type: 'svg', margin: 1, width: 240 });
+  return { url, qrSvg };
 }
 
 /**

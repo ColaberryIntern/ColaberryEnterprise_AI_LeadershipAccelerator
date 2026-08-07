@@ -12,7 +12,7 @@ import {
 import { generateMeetLink, generateCohortMeetLinks } from '../services/meetingService';
 import { getEnrollmentHistory } from '../services/personHistoryService';
 import { buildSessionKit } from '../services/sessionKitService';
-import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, KitDocMode } from '../services/sessionKitDocService';
+import { renderSessionKitDoc, renderSessionOutline, renderSessionReadinessReport, getPresenterLink, KitDocMode } from '../services/sessionKitDocService';
 import { getKitConfig, saveKitConfig } from '../services/sessionKitConfigService';
 import { getKitConfigDefaults } from '../services/classKit/kitConfigDefaults';
 import { generateQuestion, rewriteTeach, rewriteStoryBeats, rewritePrompts } from '../services/classKit/kitConfigAi';
@@ -130,6 +130,19 @@ export async function handleGetSessionKitDoc(req: Request, res: Response, next: 
     const html = await renderSessionKitDoc(req.params.id as string, mode);
     if (!html) return res.status(404).json({ error: 'Session not found' });
     res.type('html').send(html);
+  } catch (err) { next(err); }
+}
+
+// Self-service instructor presenter link (URL + QR) — admin-only, mints a
+// fresh kit token every call so nobody ever has to hand-mint one. Deliberately
+// its own endpoint, never bundled into handleGetSessionKit's response, so the
+// student check-in QR and this private link can never end up on the same
+// payload or printed handout.
+export async function handleGetPresenterLink(req: Request, res: Response, next: NextFunction) {
+  try {
+    const link = await getPresenterLink(req.params.id as string);
+    if (!link) return res.status(404).json({ error: 'Session not found' });
+    res.json(link);
   } catch (err) { next(err); }
 }
 
