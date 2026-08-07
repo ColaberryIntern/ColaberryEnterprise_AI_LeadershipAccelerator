@@ -37,18 +37,30 @@ const SETTLED_STATUSES = new Set(['Settled', 'Posted']);
 const RECONCILABLE_STATUSES = new Set(['Settled', 'Posted', 'Authorized']);
 
 /**
- * The cheapest real, full-tuition-shaped charge in the current pricing model
- * is the $199/mo Monthly plan (Annual is $1,788 upfront). A $50 charge is
- * always the Open House seat-hold deposit, not a completed payment -- found
- * live in the first dry run against production (2026-07-30): 19 of 28
- * would-be auto-reconciliations were $50 deposits, which would have
- * incorrectly marked pending-balance students as fully paid. Anything below
- * this line is silently skipped, not flagged -- a $50 deposit alone is the
- * normal, expected state for most Open House attendees, not an anomaly, and
- * flagging every one of them would be exactly the notification noise this
- * job exists to avoid.
+ * The floor that separates a real, full-tuition-shaped charge from the $50
+ * Open House seat-hold deposit. A $50 charge is always the deposit, not a
+ * completed payment -- found live in the first dry run against production
+ * (2026-07-30): 19 of 28 would-be auto-reconciliations were $50 deposits,
+ * which would have incorrectly marked pending-balance students as fully paid.
+ * Anything below this line is silently skipped, not flagged -- a $50 deposit
+ * alone is the normal, expected state for most Open House attendees, not an
+ * anomaly, and flagging every one of them would be exactly the notification
+ * noise this job exists to avoid.
+ *
+ * This was 199, pinned to the then-current $199/mo Monthly plan. Pricing moved
+ * to $149/mo (billed annually) with $199 as the month-to-month rate, and this
+ * constant did not move with it -- so every student paying the $149 rate had
+ * their payment filtered out BEFORE the customer lookup and silently never
+ * reconciled. They stayed payment_status='pending' and were locked out of the
+ * portal despite having paid. Found 2026-08-06 via Hellen Muhonja (paid $149
+ * on 08-04) and Firas Baidhani (paid $149 on 08-06), both of whom emailed that
+ * the portal did not reflect their enrollment.
+ *
+ * Deliberately set to a value BETWEEN the deposit and the cheapest real plan
+ * rather than to any specific price, so the next pricing change cannot
+ * silently reintroduce this. Only the $50 deposit needs to fall below it.
  */
-const MINIMUM_FULL_PAYMENT_AMOUNT = 199;
+const MINIMUM_FULL_PAYMENT_AMOUNT = 100;
 
 export interface AutoReconciledEntry {
   enrollmentId: string;

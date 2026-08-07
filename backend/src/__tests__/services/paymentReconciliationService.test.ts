@@ -269,8 +269,8 @@ describe('runPaymentReconciliationSweep', () => {
     expect(mockGetCustomerById).not.toHaveBeenCalled();
   });
 
-  it('never treats a sub-$199 payment (e.g. the $50 Open House seat-hold deposit) as a completed payment', async () => {
-    mockListRecentPayments.mockResolvedValue([payment({ Amount: 50 }), payment({ Id: 2, Amount: 149 })]);
+  it('never treats the $50 Open House seat-hold deposit as a completed payment', async () => {
+    mockListRecentPayments.mockResolvedValue([payment({ Amount: 50 }), payment({ Id: 2, Amount: 50 })]);
 
     const result = await runPaymentReconciliationSweep();
 
@@ -278,6 +278,29 @@ describe('runPaymentReconciliationSweep', () => {
     expect(result.autoReconciled).toHaveLength(0);
     expect(result.flagged).toHaveLength(0);
     expect(mockGetCustomerById).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Regression: MINIMUM_FULL_PAYMENT_AMOUNT was pinned at 199 (the old Monthly
+   * price) while real students were paying the $149 annual rate. Those payments
+   * were filtered out before the customer lookup, so they never reconciled and
+   * the students stayed locked out of the portal despite having paid. This test
+   * previously asserted the OPPOSITE (that $149 was correctly skipped), which is
+   * how the bug survived. Hellen Muhonja and Firas Baidhani both hit it live.
+   */
+  it('reconciles a $149 payment (the current annual-billed monthly rate), not just $199', async () => {
+    mockListRecentPayments.mockResolvedValue([payment({ Amount: 149 })]);
+    mockGetCustomerById.mockResolvedValue(customer());
+    const enr = enrollment();
+    mockEnrFindAll.mockResolvedValue([enr]);
+    mockEnrFindByPk.mockResolvedValue(enr);
+
+    const result = await runPaymentReconciliationSweep();
+
+    expect(result.scanned).toBe(1);
+    expect(mockGetCustomerById).toHaveBeenCalled();
+    expect(result.autoReconciled).toHaveLength(1);
+    expect(result.autoReconciled[0].amount).toBe(149);
   });
 
   it('does not crash and reports an error when PaySimple itself is unreachable', async () => {
