@@ -902,6 +902,8 @@ function AdminAcceleratorPage() {
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleDownloadKit(s.id, s.title); }}>⬇️ Download standalone HTML</button>
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); handleOpenReadiness(s.id); }}>📋 Readiness report</button>
                                 <div className="dropdown-divider" />
+                                <button className="dropdown-item" onClick={() => { setPresentMenu(null); setKitSessionId(s.id); }} title="Private to you — shows your script when you full-screen a diagram">📱 My presenter link</button>
+                                <div className="dropdown-divider" />
                                 <button className="dropdown-item" onClick={() => { setPresentMenu(null); setCustomizeTarget({ id: s.id, title: s.title }); }}>⚙️ Customize</button>
                               </div>
                             )}
