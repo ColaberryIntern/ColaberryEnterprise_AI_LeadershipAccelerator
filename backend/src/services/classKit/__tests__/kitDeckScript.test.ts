@@ -68,7 +68,7 @@ function bootDeck(opts: {
   const elementIds = [
     'kprogress', 'kcounter', 'knotes', 'kstart', 'kpaceclock', 'kpaceseg',
     'kpacestatus', 'kpacenow', 'kqr-overlay', 'kraillive', 'ktoast',
-    'kprev', 'knext',
+    'kprev', 'knext', 'klateqr',
   ];
   const elements: Record<string, ReturnType<typeof makeEl>> = {};
   elementIds.forEach((id) => {
@@ -334,5 +334,40 @@ describe('broadcastCurrent presenter_tip (instructor phone gets the long text)',
       fetch: () => { fetchCalled = true; return Promise.resolve({ ok: true }); },
     });
     expect(fetchCalled).toBe(false);
+  });
+});
+
+/**
+ * Regression: students (Million, Farhat, Marione, Ram — Jul 2026 cohort)
+ * reported they could not find the check-in barcode "in any of the classes",
+ * while the instructor's deck looked fine. The latecomer QR badge used to
+ * require BOTH "past the cover slide" AND classStart(). "Start class" only
+ * drives the pace tracker, so it is easy to never press — and when it is not
+ * pressed the QR lives on slide 1 alone for a 2-hour session. Anyone who
+ * joined late, looked away, or needed to re-scan had no barcode at all.
+ */
+describe('Class Kit deck latecomer QR', () => {
+  it('stays hidden on the cover slide (slide 1 has its own big QR)', () => {
+    const deck = bootDeck({ slideCount: 3 });
+    expect(deck.elements.klateqr.classList.contains('show')).toBe(false);
+  });
+
+  it('appears past the cover even when the instructor never pressed Start class', () => {
+    const deck = bootDeck({ slideCount: 3 });
+
+    deck.clickNext(); // advance off the cover WITHOUT clicking Start
+    expect(deck.elements.kstart.textContent).toBe('Start class'); // never started
+    expect(deck.elements.klateqr.classList.contains('show')).toBe(true);
+  });
+
+  it('is still shown once class is actually started, and hides again on the cover', () => {
+    const deck = bootDeck({ slideCount: 3 });
+
+    deck.clickStart();
+    deck.clickNext();
+    expect(deck.elements.klateqr.classList.contains('show')).toBe(true);
+
+    deck.clickPrev(); // back to the cover
+    expect(deck.elements.klateqr.classList.contains('show')).toBe(false);
   });
 });

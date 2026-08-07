@@ -88,13 +88,21 @@ export function deckScript(): string {
     }, { passive: true });
   }
 
-  // Small persistent QR for latecomers — only past the cover slide, and only
-  // once the instructor has actually started class (see kitDeckStyles.ts
-  // #klateqr for the "why" — before Start, slide 1's own big QR is enough).
+  // Small persistent QR for latecomers — shown on every slide past the cover.
+  //
+  // This used to ALSO require classStart(), on the theory that slide 1's own
+  // big QR covers everyone until the instructor presses Start class. In real
+  // classes that assumption broke: if Start is never pressed (easy to skip —
+  // it is only needed for the pace tracker), the QR existed on exactly one
+  // slide for the whole 2-hour session, so anyone who joined late, looked
+  // away, or had to re-scan had no way to check in. Students reported "the
+  // barcode is not there" while their instructor saw a working deck.
+  // The QR is cheap chrome and already hides itself in Focus/Video mode, so
+  // there is no reason to gate it on an unrelated action.
   function updateLateQr(){
     var el = document.getElementById('klateqr');
     if (!el) return;
-    el.classList.toggle('show', i > 0 && !!classStart());
+    el.classList.toggle('show', i > 0);
   }
 
   // Auto-switch the presentation mode (Teach / Story / Build) from the active
