@@ -1771,6 +1771,21 @@ async function checkPhaseGraduation(): Promise<void> {
 }
 
 export function startScheduler(): void {
+  // Reese Phase 1 — presence heartbeat. Touches ONLY Reese's own CommunityMember
+  // row's last_active_at, on the same ~60s cadence a real student's browser uses
+  // (pingPresence()), so the People panel's existing derivePresence() logic
+  // (90s online threshold) reads Reese as online without any new real-time
+  // infrastructure. Untracked in AiAgent run stats (not the same identity as
+  // Reese's own registry row — a heartbeat touch is not a "Reese ran" event).
+  cron.schedule('*/1 * * * *', () => {
+    instrumentCronJob('ReesePresenceHeartbeat', async () => {
+      const { runReesePresenceHeartbeat } = await import('./reese/reesePresenceHeartbeat');
+      await runReesePresenceHeartbeat();
+    }).catch((err) => {
+      console.error('[Scheduler] Reese presence heartbeat error:', err);
+    });
+  });
+
   // Process pending actions every 5 minutes
   cron.schedule('*/5 * * * *', () => {
     instrumentCronJob('ScheduledActionsProcessor', () => processScheduledActions()).catch((err) => {

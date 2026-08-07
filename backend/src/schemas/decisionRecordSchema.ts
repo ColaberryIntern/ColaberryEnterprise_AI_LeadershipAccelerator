@@ -11,7 +11,10 @@ export const decisionTypeSchema = z.enum(['approve', 'reject', 'override', 'note
 export const decisionRecordInputSchema = z.object({
   ticketId: uuid,
   decisionType: decisionTypeSchema,
-  actorType: z.enum(['human', 'cory', 'agent']),
+  // 'ai_staff' added for Reese Phase 1 — decision records attributed to a real AI
+  // staff-mentor identity (distinct from generic autonomous 'agent'), matching
+  // Ticket.ts's TicketActorType union.
+  actorType: z.enum(['human', 'cory', 'agent', 'ai_staff']),
   actorId: z.string().trim().min(1).max(255),
   rationale: z.string().max(5000).nullable().optional(),
   linkedEvidenceIds: z.array(uuid).optional(),
