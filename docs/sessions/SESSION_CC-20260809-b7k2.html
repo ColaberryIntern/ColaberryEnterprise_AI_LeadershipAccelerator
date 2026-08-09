@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260809-b7k2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Sunday, August 9, 2026 at 3:41 PM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Dropped an invalid unique index that had been silently truncating every student build to 3 tasks, made the import transactional, and stopped the frontend swallowing the failure**</h2>
+          <span class="badge">2026-08-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Audited the live &quot;Projects → Start a new build&quot; pipeline for concurrent-cohort load (Ali&#39;s question: &quot;can this run 20+ times around the same time and still perform successfully?&quot;) and found a live 100%-failure defect. `student_tasks` carried `student_tasks_unique_req_key`, a **non-partial** `UNIQUE (project_id, requirement_key)`. But `generateSkeleton` (frontend `projectsStore.ts`) legitimately emits three tasks citing `R2` and two citing `R3` — one requirement is fulfilled by many stories, by design. So `importProject` raised a unique violation on the 4th task, the route 500&#39;d, and `projectSync.mirrorToBackend`&#39;s bare `catch {}` made a 500 indistinguishable from &quot;feature flag off&quot;. Fix, three parts: (1) `DROP INDEX IF EXISTS student_tasks_unique_req_key` added to the existing `ensureStudentTaskMergeSchema()` boot path in `server.ts` (the convention here — there is no global `sequelize.sync`), with a comment stating why it was never valid; the model&#39;s index list drops the unique and keeps a plain index on `requirement_key`. Task identity is `(project_id, story_id)`, already enforced by the partial unique `student_tasks_unique_story` created two lines above it. (2) `importProject` now wraps the whole plan in one `sequelize.transaction` with the transaction threaded through every `findOrCreate`/`update`, and reads the resulting tree only after commit — previously a throw left a half-written project (exactly the 3 tasks + 2 lists sitting in prod) that a retry could not repair. (3) `projectSync.ts`&#39;s three bare `catch {}` blocks now distinguish 404 (API flag-gated off — still quiet) from anything else, emit a structured JSON error line with `error_class`, and notify an `onSyncFailure` subscriber so the UI can surface a retry (the surface itself is r0/STORY-003, not in this PR). Also shipped three planning docs: `docs/BUILD_PIPELINE_AUDIT.md` (F-1..F-6), `docs/BUILD_PIPELINE_REQUIREMENTS.md` (SBP-REQ-v1: 22 FR / 5 NFR / 3 SAFE / 5 REL / 4 OBS), `docs/BUILD_PIPELINE_RELEASES_AND_STORIES.md` (5 releases, 20 stories, each with a ten-section Claude Code prompt that names the requirement docs by resolvable repo path + signed URL; traceability gate PASS).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Defect confirmed against production before fixing, not inferred.** `docker exec accelerator-db psql -U accelerator -d accelerator_prod` — the entire `student_tasks` table held 3 rows (`t1→R1`, `t2→R4`, `t3→R2`) across 14 `projects` rows, halting at `t4→R2`, exactly `generateSkeleton`&#39;s emission order and exactly the first duplicate requirement_key. Index definitions read from `pg_indexes` confirmed `student_tasks_unique_req_key` non-partial UNIQUE and `student_tasks_unique_story` partial UNIQUE. Prod `HEAD` == `origin/main` == `27b80cc9`, `PROJECT_API_ENABLED=true`. New `backend/src/services/projects/__tests__/projectWriteService.test.ts`: 9 tests, all passing — including a regression test that **reproduces the original failure** (simulating the unique violation, asserting the import aborts after exactly 4 attempts = the 3 rows found in prod) and tests for one-transaction/threaded-transaction, mid-loop rollback propagation, read-after-commit ordering, re-import idempotency, and the monotonic-complete guard. Full related suite green: 27/27 across `projects`, `studentTask`, `buildPlan`. **Frontend `tsc --noEmit`: 0 errors, exit 0** (the authoritative CI gate). Backend `tsc --noEmit` with TypeScript 5.7.3: 1 error, `interviewService.ts` cannot find `@anthropic-ai/sdk` — a junction artifact of this worktree borrowing an older tree&#39;s `node_modules`; the package IS declared in `backend/package.json` (`^0.106.0`). Zero errors in any file this change touches. **CI on PR #1281 confirms it: all 4 required checks pass — Backend typecheck (1m35s), Backend unit tests (33s), Frontend typecheck (1m8s), Secret scan + route-auth lint (17s)** — so the local backend-tsc error was environment-only, as diagnosed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Not merged, not deployed** — PR #1281 is `MERGEABLE` with all 4 checks green, blocked only on `REVIEW_REQUIRED`; this session did not self-merge. https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/1281 The index drop applies itself on the next backend boot via `ensureStudentTaskMergeSchema()`; no manual migration step. The 3 orphan rows already in prod belong to one real project and are left in place — they are valid rows, just an incomplete set, and the next mirror from that student&#39;s browser will complete them now that the constraint is gone. Deliberately scoped to r0/STORY-001 + STORY-002 plus the reporting half of STORY-003; the UI retry surface, and all of r1–r4 (server-side generation, durable bounded queue, releases/stories decomposition, the extensive-prompt delivery that closes F-3), are specified in the two new planning docs and not attempted here.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260809-b7k2</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
