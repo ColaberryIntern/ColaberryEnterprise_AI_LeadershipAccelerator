@@ -1,0 +1,424 @@
+/* ============================================================================
+   publicV2.css -- shared styling for the V2 public site.
+
+   Built ON the Colaberry design system: every value here resolves to a token
+   from colaberry/tokens/*. No raw hex, no second palette. The audit found the
+   repo already carries two competing token systems; this adds none.
+
+   Scope: the cbv2-* namespace only, so it cannot leak into portal or admin.
+   ========================================================================== */
+
+/* ------------------------------------------------------------ evidence ---- */
+/* Status is communicated by word + glyph + border style, never colour alone. */
+
+.cbv2-evidence,
+.cbv2-sample {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: var(--ls-wide);
+  text-transform: uppercase;
+  padding: 3px 9px;
+  border-radius: var(--radius-xs);
+  border: var(--border-1) solid transparent;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.cbv2-evidence--verified {
+  background: var(--surface-ok-subtle, rgba(91, 166, 60, 0.12));
+  color: var(--status-success);
+  border-color: var(--green-600);
+}
+.cbv2-evidence--anonymized {
+  background: var(--surface-info-subtle, rgba(54, 120, 149, 0.12));
+  color: var(--brand-tertiary);
+  border-color: var(--blue-500);
+}
+.cbv2-evidence--illustrative {
+  background: var(--surface-warn-subtle, rgba(232, 146, 12, 0.12));
+  color: var(--status-warning);
+  border-color: var(--amber-500);
+  border-style: dashed;
+}
+.cbv2-evidence--pending {
+  background: var(--surface-sunken);
+  color: var(--text-subtle);
+  border-color: var(--border-default);
+  border-style: dotted;
+}
+
+.cbv2-sample {
+  background: var(--surface-warn-subtle, rgba(232, 146, 12, 0.12));
+  color: var(--status-warning);
+  border-color: var(--amber-500);
+  border-style: dashed;
+}
+.cbv2-sample--inverse {
+  background: rgba(232, 146, 12, 0.18);
+  color: #f0b860;
+  border-color: #b9740a;
+}
+
+/* -------------------------------------------------------------- metric ---- */
+
+.cbv2-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+.cbv2-metric__value {
+  font-family: var(--font-display);
+  font-weight: var(--fw-bold, 700);
+  font-size: var(--fs-h3);
+  line-height: var(--lh-tight);
+  color: var(--text-strong);
+  font-variant-numeric: tabular-nums;
+}
+.cbv2-metric__label {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
+.cbv2-metric__delta {
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  color: var(--status-success);
+}
+.cbv2-metric .cbv2-sample,
+.cbv2-metric .cbv2-evidence {
+  margin-top: var(--space-2);
+}
+
+/* -------------------------------------------------- capability notice ----- */
+
+.cbv2-capability-notice {
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  font-style: italic;
+  border-left: var(--border-3) solid var(--amber-500);
+  background: var(--surface-warn-subtle, rgba(232, 146, 12, 0.1));
+  padding: var(--space-3) var(--space-4);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------- layout ----- */
+
+.cbv2-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--surface-page);
+  color: var(--text-body);
+}
+.cbv2-main {
+  flex: 1 1 auto;
+}
+.cbv2-wrap {
+  max-width: var(--container-xl, 1280px);
+  margin-inline: auto;
+  padding-inline: var(--gutter, var(--space-6));
+}
+
+.cbv2-skip {
+  position: absolute;
+  left: var(--space-4);
+  top: -64px;
+  z-index: var(--z-modal, 1100);
+  background: var(--brand-accent);
+  color: var(--text-on-accent, #fff);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  text-decoration: none;
+  transition: top var(--dur-fast, 140ms) var(--ease-standard, ease);
+}
+.cbv2-skip:focus {
+  top: var(--space-4);
+}
+
+/* ------------------------------------------------------------- header ----- */
+
+.cbv2-header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky, 100);
+  background: color-mix(in srgb, var(--surface-page) 92%, transparent);
+  backdrop-filter: blur(10px);
+  border-bottom: var(--border-1) solid var(--border-subtle);
+}
+.cbv2-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  min-height: 68px;
+}
+.cbv2-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+  text-decoration: none;
+  color: var(--text-strong);
+}
+.cbv2-brand img {
+  height: 30px;
+  width: auto;
+  display: block;
+}
+.cbv2-brand__text {
+  font-family: var(--font-display);
+  font-weight: var(--fw-black, 900);
+  font-size: var(--fs-body-sm);
+  letter-spacing: var(--ls-tight);
+}
+
+.cbv2-navlinks {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cbv2-navlink {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--target-min, 44px);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--fs-body-sm);
+  font-weight: 600;
+  color: var(--text-muted);
+  border-radius: var(--radius-xs);
+  text-decoration: none;
+}
+.cbv2-navlink:hover {
+  color: var(--text-strong);
+  background: var(--surface-sunken);
+}
+.cbv2-navlink[aria-current='page'] {
+  color: var(--text-strong);
+}
+.cbv2-navlink[aria-current='page']::after {
+  content: '';
+  display: block;
+  position: absolute;
+  margin-top: 26px;
+  width: 18px;
+  height: 2px;
+  background: var(--brand-accent);
+  border-radius: 2px;
+}
+
+.cbv2-navactions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 0 0 auto;
+}
+.cbv2-navtoggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--target-min, 44px);
+  min-height: var(--target-min, 44px);
+  background: transparent;
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--text-body);
+}
+.cbv2-navcta-mobile {
+  display: none;
+}
+
+@media (max-width: 1080px) {
+  .cbv2-navlinks {
+    position: fixed;
+    inset: 68px 0 auto 0;
+    flex-direction: column;
+    align-items: stretch;
+    background: var(--surface-card);
+    border-bottom: var(--border-1) solid var(--border-subtle);
+    padding: var(--space-4);
+    gap: var(--space-1);
+    box-shadow: var(--shadow-lg);
+    max-height: calc(100vh - 68px);
+    overflow-y: auto;
+    display: none;
+  }
+  .cbv2-navlinks[data-open='true'] {
+    display: flex;
+  }
+  .cbv2-navlink {
+    font-size: var(--fs-body);
+  }
+  .cbv2-navtoggle {
+    display: inline-flex;
+  }
+  .cbv2-navcta-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    padding-top: var(--space-3);
+    border-top: var(--border-1) solid var(--border-subtle);
+  }
+  /* CTAs move INTO the menu; hiding only one still overflowed at 390px. */
+  .cbv2-navactions .cbv2-btn--primary {
+    display: none;
+  }
+}
+@media (max-width: 760px) {
+  .cbv2-navactions .cbv2-btn--secondary {
+    display: none;
+  }
+  .cbv2-brand__text {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------ buttons ----- */
+
+.cbv2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: var(--target-min, 44px);
+  padding: var(--space-3) var(--space-6);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--fs-body-sm);
+  border-radius: var(--radius-sm);
+  border: var(--border-1) solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: transform var(--dur-fast, 140ms) var(--ease-standard, ease),
+    box-shadow var(--dur-fast, 140ms) var(--ease-standard, ease);
+}
+.cbv2-btn:hover {
+  transform: translateY(-1px);
+}
+.cbv2-btn--primary {
+  background: var(--brand-accent);
+  color: var(--text-on-accent, #fff);
+  box-shadow: var(--shadow-brand);
+}
+.cbv2-btn--secondary {
+  background: var(--surface-card);
+  color: var(--text-strong);
+  border-color: var(--border-default);
+}
+.cbv2-btn--sm {
+  min-height: 36px;
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--fs-caption);
+}
+
+/* ------------------------------------------------------------- footer ----- */
+
+.cbv2-footer {
+  background: var(--surface-inverse, #0e1420);
+  color: var(--text-on-inverse-muted, #a9b4c4);
+  padding-block: var(--space-16) var(--space-8);
+  margin-top: var(--space-16);
+}
+.cbv2-footer__grid {
+  display: grid;
+  gap: var(--space-8);
+  grid-template-columns: 1.4fr repeat(4, minmax(0, 1fr));
+  padding-bottom: var(--space-8);
+  border-bottom: var(--border-1) solid rgba(248, 248, 247, 0.1);
+}
+@media (max-width: 900px) {
+  .cbv2-footer__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 560px) {
+  .cbv2-footer__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.cbv2-footer h2 {
+  font-family: var(--font-mono);
+  font-size: var(--fs-overline);
+  letter-spacing: var(--ls-overline);
+  text-transform: uppercase;
+  color: rgba(248, 248, 247, 0.45);
+  margin: 0 0 var(--space-4);
+  font-weight: 700;
+}
+.cbv2-footer ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cbv2-footer a {
+  font-size: var(--fs-body-sm);
+  color: var(--text-on-inverse-muted, #a9b4c4);
+  text-decoration: none;
+}
+.cbv2-footer a:hover {
+  color: var(--text-on-inverse, #f8f8f7);
+  text-decoration: underline;
+}
+.cbv2-footer__bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  padding-top: var(--space-6);
+  font-size: var(--fs-caption);
+  color: rgba(248, 248, 247, 0.45);
+}
+.cbv2-footer__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+.cbv2-footer__brand img {
+  height: 26px;
+  width: auto;
+}
+
+/* ------------------------------------------------------------- motion ----- */
+/* The audit found reduced-motion handled per-component in 53 files with no
+   global fallback. This is the catch-all the site was missing. */
+
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-shell *,
+  .cbv2-shell *::before,
+  .cbv2-shell *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------ utility ----- */
+/* .sr-only is absent from the design system's base layer; two competing
+   conventions exist elsewhere in the app. This is the namespaced one. */
+
+.cbv2-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
