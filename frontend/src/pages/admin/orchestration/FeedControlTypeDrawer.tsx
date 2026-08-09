@@ -106,7 +106,6 @@ function AdjustmentSlider({ slug, onProposed }: { slug: string; onProposed: (p: 
         .finally(() => setLoading(false));
     }, 250);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, slug]);
 
   return (
