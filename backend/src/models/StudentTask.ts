@@ -96,7 +96,12 @@ StudentTask.init(
       { fields: ['project_id'] },
       { fields: ['requirement_map_id'] },
       { fields: ['story_id'] },
-      { unique: true, fields: ['project_id', 'requirement_key'], name: 'student_tasks_unique_req_key' },
+      // NO unique on (project_id, requirement_key): one requirement is fulfilled
+      // by many stories (SBP-REQ-v1 FR-012). The old `student_tasks_unique_req_key`
+      // is dropped in ensureStudentTaskMergeSchema(). Task identity is
+      // (project_id, story_id) — see `student_tasks_unique_story`, created there
+      // as a partial unique so requirement-based rows (story_id NULL) are exempt.
+      { fields: ['requirement_key'] },
     ],
   }
 );
