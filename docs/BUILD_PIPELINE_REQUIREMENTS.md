@@ -83,10 +83,14 @@ Enforced server-side on the create endpoint, not only by a disabled button.
 
 ## 3. Capability B — Generation
 
-### FR-003 · Requirements are generated server-side from the student's intake · **must**
+### FR-003 · Requirements are generated server-side using chapter-by-chapter scaffolding · **must**
 A generation job reads the `build_intake` row and produces a markdown requirements document of at least 2,500 words for `workflow`, 6,000 for `project`, 12,000 for `autonomous`.
 
-*Acceptance:* Given a submitted intake; When the job completes; Then `build_documents` holds a document meeting the tier's word floor, and its content references the student's stated `users`, `data_sources`, and `done_definition` at least once each.
+**The word floor must be met by chapter-by-chapter generation with a per-chapter minimum and retry-if-short — NOT by a single completion, and NOT by an expansion pass over a thin first draft.** This is not a preference; it is a measured result. `docs/REQUIREMENTS_GENERATOR_COMPARISON.html` (2026-05-21) ran both approaches on the same idea: the Architect's per-chapter method produced 13,742 words; a single `gpt-4o-mini` call asked for ≥6,000 words produced 1,450 — 24% of the ask. Its conclusion: *"one prompt asking for 'a big document' yields a thin one. The Architect's value is the scaffolding, not a smarter model."* Raising `max_tokens` does not help; the model wraps up early regardless.
+
+Generation is therefore a **wiring** requirement, not a greenfield one — `architectProxyService.ts` already implements the scaffolding and has produced real 100k–255k-character documents in production.
+
+*Acceptance:* Given a submitted intake; When the job completes; Then `build_documents` holds a document meeting the tier's word floor, its content references the student's stated `users`, `data_sources`, and `done_definition` at least once each, and the job record shows the document was assembled from ≥2 separately-generated chapters.
 
 ### FR-004 · Documents are versioned and immutable once written · **must**
 Each generation writes a new version row. Prior versions are never overwritten or deleted.
@@ -123,6 +127,24 @@ The intake text is passed to the model inside an explicitly delimited, labelled 
 
 ### FR-006 · Requirements are extracted as uniquely identified records · **must**
 Each becomes `{ id: "REQ-nnn", statement, kind: FUNC|SAFE|REL|NFR|OBS, priority: must|should, cluster, acceptance[] }`. IDs are stable across regeneration of the same document version.
+
+### FR-023 · Extracted requirements are faithful to the source document · **must**
+Extraction preserves the project's domain and excludes document scaffolding.
+
+- **No formatting fragments.** A line that is only markdown decoration (`**Response**:`, `**Output**:`, a bare heading, a table delimiter) is never stored as a requirement.
+- **Domain fidelity.** At least **60%** of a build's requirements must contain at least one salient term from the student's own intake (their stated domain, users, or data sources).
+- **Bounded repetition.** No single `requirement_text` appears more than 3 times within one project.
+
+*Acceptance:* Given the *Autonomous Freight* build guide (251k chars, the real production document); When extraction runs; Then zero requirements have text matching a scaffolding pattern, ≥60% mention a freight-domain term, and no text repeats more than 3 times in the project.
+
+*Rationale:* AUDIT F-7, measured in production: `**Response**:` is stored 24 times and `**Output**:` 22 times as requirements, and only 54 of 908 freight-project requirements (6%) mention freight, broker, or load. Generation produces a good document; extraction is where the project gets lost. Note that 3,067 of 3,587 texts are distinct — the failure is dilution and imprecision, not wholesale duplication.
+
+### FR-024 · Requirement progress has exactly one source of truth · **must**
+`RequirementsMap` currently carries both a legacy `status` column and the 4-state `state` column, written by different layers, and in production **all 3,587 rows read `status='verified'` and `state='unmapped'` simultaneously**. One of them must become authoritative and the other must be removed or derived from it. `state` (`UNMAPPED → PLANNED → BUILT → VERIFIED`) is the one the student's progress display reads.
+
+*Acceptance:* Given any requirement row; Then a single documented column determines its displayed progress, and no code path writes a competing value. And: given a story that fulfils a requirement is completed; Then that requirement's state advances — verifiable end to end, which is not currently true for any of the 3,587 rows in production.
+
+*Rationale:* AUDIT F-7. The 4-state has never advanced once in production. Until this is resolved, every requirement-progress figure shown to a student is untrustworthy.
 
 ### FR-007 · Requirements cluster into capabilities · **must**
 Every requirement belongs to exactly one named cluster; clusters become the student's capability view. A build yielding zero clusters is a hard failure, not a silent success.
@@ -323,7 +345,8 @@ If persist success rate over a rolling window drops below 90% with ≥5 attempts
 - Student OAuth for GitHub (repos stay platform-provisioned under `ColaberryIntern`).
 - The portal committing code on the student's behalf (sync remains pull-only).
 - Multi-student collaboration on a single build.
-- Migrating the legacy Architect (advisor.colaberry.ai) tier — it remains available and untouched; SBP is the path the Projects page uses.
+- **Replacing** the Architect (advisor.colaberry.ai). SBP *wires* it — it is the generation engine, not a legacy tier to migrate off. Its chapter-by-chapter scaffolding is the measured-correct approach (FR-003) and it has real production output.
+- Backfilling the 3,587 existing requirements. They belong to 8 of Ali's test-account projects, are dormant since 2026-05-22, and predate FR-023's fidelity bar. Regenerate rather than repair.
 - Retrofitting existing `localStorage` builds beyond the one-time import already in place.
 
 ---
@@ -333,8 +356,9 @@ If persist success rate over a rolling window drops below 90% with ≥5 attempts
 | Audit finding | Requirements that close it |
 |---|---|
 | F-1 Import halts at task 4 | FR-012, FR-013, FR-015 |
-| F-2 Build is theatre | FR-001, FR-002, FR-003, FR-008, FR-009 |
+| F-2 Build is theatre (generator exists, unwired) | FR-001, FR-002, FR-003, FR-008, FR-009 |
 | F-3 Thin prompts, no doc access | FR-016, FR-017, FR-019, FR-020, FR-021, FR-022 |
+| F-7 Extraction loses the domain; 4-state never moves | FR-023, FR-024 |
 | F-4 No durability, poller overlap | FR-005, NFR-001, NFR-002, REL-001, REL-002, REL-003, NFR-005 |
 | F-5 Requirement state destroyed | REL-004, FR-013 |
 | F-6 Structural / governance | FR-015, SAFE-002, SAFE-003, OBS-001..004, NFR-003 |

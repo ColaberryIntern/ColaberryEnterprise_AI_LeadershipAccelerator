@@ -18,8 +18,10 @@ The capacity question is not the real risk. The correctness question is. Both ar
 |---|---|---|
 | Concurrent build starts survivable | ~unbounded (no server work) | 20 sustained / 50 peak, with real generation |
 | Builds that persist correctly | **0 of 14 projects** (3 tasks total in prod DB) | 100% |
-| Requirements document per build | **None on this path** | 1 versioned doc per build |
-| Releases derived from requirements | **No** — 4 hardcoded lists | Derived, walking-skeleton-first |
+| Requirements document per build | **None on this path** (a working generator exists, unwired — F-2) | 1 versioned doc per build |
+| Requirements that mention the project's own domain | **6%** (54 of 908, freight build) | majority |
+| Requirements ever advanced past `UNMAPPED` | **0 of 3,587** | tracks real progress |
+| Releases derived from requirements | **No** — 4 hardcoded lists; 8 projects hold requirements and **0 tasks** | Derived, walking-skeleton-first |
 | Story prompt length (mean) | **~146 chars** (best case, sample fixture) | ≥1,200 chars, structured |
 | Prompt references requirement docs | **No** | Yes — repo path + signed URL |
 
@@ -120,7 +122,34 @@ A 7-second timer flips a status flag. No API call. No LLM. No requirements docum
 - **Releases are not derived.** `L1..L4` are hardcoded ("Project DNA & Requirements", "Core build", "Reliability & polish", "Showcase & portfolio"). Nothing is walking-skeleton-first; nothing is gated (`blockedBy` is never set on generated builds — only on the salon sample).
 - **20 students starting builds around the same time receive 20 substantively identical projects.** This is the real "does it work at 20×" answer.
 
-Meanwhile a genuine pipeline exists and is unused by this page: [architectProxyService.ts](../backend/src/services/architectProxyService.ts) (advisor.colaberry.ai, 8-phase), [requirementsGenerationService.ts](../backend/src/services/requirementsGenerationService.ts) (OpenAI, two-pass, job-tracked), [buildPlanIngestService.ts](../backend/src/services/buildPlanIngestService.ts) (transactional, idempotent ingest of releases + stories). The Projects page reaches none of them.
+### A working generator already exists — it is simply not wired to this page
+
+This is the most important qualifier on F-2, and it materially reduces the work: **generation is not missing, it is disconnected.** Three server-side pieces exist and the Projects page reaches none of them:
+
+- [architectProxyService.ts](../backend/src/services/architectProxyService.ts) — advisor.colaberry.ai, 8-phase, chapter-by-chapter
+- [requirementsGenerationService.ts](../backend/src/services/requirementsGenerationService.ts) — OpenAI, two-pass, job-tracked
+- [buildPlanIngestService.ts](../backend/src/services/buildPlanIngestService.ts) — transactional, idempotent ingest of releases + stories
+
+The Architect path has produced real output in production. `ali+8@colaberry.com`'s project holds a genuine 251,027-character *"Autonomous Freight — Build Guide"* — 13 chapters, coherent domain prose. Eight activated projects carry documents between 19k and 255k characters and **3,587 requirements** between them.
+
+**The approach question is already settled.** [REQUIREMENTS_GENERATOR_COMPARISON.html](REQUIREMENTS_GENERATOR_COMPARISON.html) (2026-05-21) ran a controlled comparison on the same idea:
+
+| | Architect | Regular LLM (gpt-4o-mini) |
+|---|---|---|
+| Output | 13,742 words · 13 chapters | 1,450 words · 16 sections |
+| Time | ~14–16 min | ~70–103 s |
+| Method | per-chapter writes, ≥1,750-word gate, retry-if-short | one call, `max_tokens` 16,000 |
+| Asked for ≥6,000 words | met | **delivered 24%** |
+
+Its conclusion: *"the regular path's limit isn't really the token cap — it's that one prompt asking for 'a big document' yields a thin one. The Architect's value is the scaffolding (per-chapter generation + quality gates), not a smarter model."*
+
+Any plan that proposes reaching a word floor by asking one model call to write more, or by adding an expansion pass, is re-running an experiment that has already been measured and lost. **r1 wires up the chapter-by-chapter scaffolding; it does not rebuild a generator.**
+
+### But the pipeline stops dead at the requirements
+
+All 8 activated projects have **0 `student_task_lists` and 0 `student_tasks`**. Requirements were generated and clustered into capabilities, and then nothing. Requirements → releases → stories was never built — which makes r2 the true missing link, with eight projects parked at exactly that boundary.
+
+The pipeline is also dormant: the newest `requirements_generation_jobs` row is **2026-05-22** (~2.5 months before this audit), and all 8 activated projects belong to Ali's own test accounts. No real student has ever had an activated project with requirements.
 
 ---
 
@@ -181,6 +210,38 @@ Correct shape is the one already written in `buildPlanIngestService.ts`: a singl
 
 ---
 
+## F-7 · HIGH · Extraction loses the document's domain, and the 4-state has never moved
+
+**Severity:** High · **Blast radius:** every generated build · **Reversible:** yes
+
+Generation produces a good document (F-2). Extraction then turns it into a requirement set that has largely lost the project. Measured across the 3,587 requirements in `accelerator_prod`:
+
+**1. The parser emits markdown scaffolding as requirements.**
+
+| Occurrences | `requirement_text` |
+|---|---|
+| 24 | `**Response**:` |
+| 22 | `**Output**:` |
+
+Those are formatting fragments from the source document, not requirements. `parseRequirements` is matching on structure that also catches non-requirement lines.
+
+**2. Domain signal is heavily diluted.** Of the **908** requirements extracted from the *Autonomous Freight* build guide, only **54 (6%)** mention freight, broker, or load. A 251k-character domain-specific document is being flattened into mostly generic platform requirements. Note the calibration: 3,067 of 3,587 texts are *distinct*, so this is not wholesale boilerplate — the failure is dilution and imprecision, not duplication. But a student reading their own requirements should not find 94% of them domain-neutral.
+
+**3. Some generic requirements repeat heavily** — the same telemetry templates (`ACTION-TRAIL`, `DECISION-AUDIT-LOG`, `PATTERN-DETECTION`, `SESSION-ANALYTICS`, `USER-EVENT-TRACKING`) recur 18–46 times under different `AUTO-<hash>` key prefixes, across a corpus that only ever uses **3** key prefixes total.
+
+**4. `status` and `state` contradict each other, everywhere.** Every one of the 3,587 rows reads `status='verified'` and `state='unmapped'` simultaneously:
+
+```
+  state   | count
+----------+-------
+ unmapped |  3587
+(1 row)
+```
+
+`state` is the 4-state the student's progress display reads (`UNMAPPED → PLANNED → BUILT → VERIFIED`). **It has never advanced once in production.** `status` is a separate legacy column written by the `/decide` path. The code acknowledges the split — *"the /decide path mutates RequirementsMap, a different layer — reconciling the two is a P2 concern"* — but as long as both exist and disagree, no requirement-progress figure shown to a student is trustworthy.
+
+---
+
 ## F-6 · MEDIUM · Structural and governance issues
 
 | Issue | Detail |
@@ -216,8 +277,8 @@ Detailed requirements are in `BUILD_PIPELINE_REQUIREMENTS.md`; the release/story
 | Release | Theme | Why here |
 |---|---|---|
 | **r0** | Stop the bleeding — F-1, transaction, surfaced errors | One index + one transaction recovers 100% of build persistence. Highest value per line changed. |
-| **r1** | Real server-side generation on a durable, bounded queue | Removes F-2's theatre and F-4's fragility together. Queue must land *with* generation, never after. |
-| **r2** | Requirements → releases → stories with a traceability gate | The decomposition the product promises. Reuses `buildPlanIngestService`'s proven transactional ingest. |
+| **r1** | **Wire** the existing Architect generation to the Projects page, on a durable bounded queue | Generation is not missing, it is disconnected (F-2). Do not rebuild it — the single-call approach was measured and lost in May. Queue must land *with* the wiring, never after. |
+| **r2** | Requirements → releases → stories, with extraction fidelity and a traceability gate | The true missing link: 8 projects hold requirements and **zero** tasks (F-2). Also closes F-7's extraction defects. Reuses `buildPlanIngestService`'s proven transactional ingest. |
 | **r3** | Extensive prompts + requirement docs materialized into the workspace repo | Closes F-3 — the specific ask. |
 | **r4** | Concurrency hardening, 20/50 load proof, observability | Turns "we think it holds" into evidence. |
 
@@ -236,3 +297,10 @@ Detailed requirements are in `BUILD_PIPELINE_REQUIREMENTS.md`; the release/story
 | Host: 8 cores, 15 GB, ~7 GB available, 20+ containers | `nproc`, `free -g`, `docker ps` |
 | Mean salon prompt 146 chars | computed over the 19 stories in `salonData.json` |
 | Build creation makes zero server calls | `ProjectsPage.handleCreate` → `createProjectFromAnswers` (pure, `setTimeout` only) |
+| 3,587 requirements across 8 activated projects; 3,067 distinct texts | `psql accelerator_prod`, `requirements_maps` |
+| All 3,587 rows `state='unmapped'`, `status='verified'` | `GROUP BY state` returned a single row |
+| 0 lists / 0 tasks on all 8 activated projects | correlated subquery over `student_task_lists`, `student_tasks` |
+| `**Response**:` ×24, `**Output**:` ×22 stored as requirements | `GROUP BY requirement_text ORDER BY count DESC` |
+| 54 of 908 freight-project requirements mention its domain | `count(*) FILTER (WHERE text ILIKE '%freight%' OR '%broker%' OR '%load%')` |
+| Newest generation job 2026-05-22 | `max(created_at)` on `requirements_generation_jobs` |
+| Architect vs single-call comparison already settled | `docs/REQUIREMENTS_GENERATOR_COMPARISON.html`, dated 2026-05-21 |
