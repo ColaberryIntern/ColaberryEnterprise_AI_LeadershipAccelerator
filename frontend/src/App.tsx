@@ -5,6 +5,8 @@ import ToastProvider from './components/ui/ToastProvider';
 import ScrollToTop from './components/ScrollToTop';
 import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
+import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
+import HomeV2 from './pages/publicV2/HomeV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -39,6 +41,12 @@ function App() {
         {adminRoutes}
         {portalRoutes}
         {referralRoutes}
+        {/* Website V2 preview. Mounted at /v2 so the rebuild is reviewable
+            without replacing the live public site. The cutover that makes this
+            the real "/" happens once V2 is complete and approved. */}
+        <Route path="/v2" element={<PublicLayoutV2 />}>
+          <Route index element={<HomeV2 />} />
+        </Route>
         <Route element={<PublicLayout />}>
           {publicRoutes}
         </Route>
