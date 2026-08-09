@@ -198,6 +198,11 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   pushInteractions(out, interactions, 'cold-open', cold);
 
   const checkin = segById(segs, 'checkin');
+  // Teach slides keyed 'checkin' are opt-in (empty for every week that doesn't
+  // author one) — they exist so a week can run a real opening arc in the
+  // check-in window (a celebration, a "start this now and leave it running"
+  // instruction) before the prediction poll, instead of only a poll.
+  out.push(...teachToSlides(mteach, 'checkin', checkin));
   pushInteractions(out, interactions, 'checkin', checkin);
   pushStoryBeats(out, m.storyBeats, 'checkin', checkin, config);
 

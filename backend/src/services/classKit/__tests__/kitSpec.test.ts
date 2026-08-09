@@ -235,22 +235,38 @@ describe('buildKitSpec — KitConfig wiring', () => {
     expect(overrideSpec.slides.some((s) => s.title === 'Custom preview' && s.body === 'Custom body.')).toBe(true);
   });
 
-  it('opening.hook override adds a hook to a week that has no authored one (Week 3 has none; only Weeks 1 and 2 do — week2-architecture-day-redesign)', async () => {
-    const week3MondaySession: BuildKitSpecInput['session'] = {
-      id: 's-wk3-mon', session_number: 4, title: 'Week 3: Something',
-      session_date: '2026-08-03', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+  it('opening.hook override adds a hook to a week that has no authored one (Week 4 has none; only Weeks 1-3 do — Week 3 gained one in week3-api-and-billing)', async () => {
+    const week4MondaySession: BuildKitSpecInput['session'] = {
+      id: 's-wk4-mon', session_number: 6, title: 'Week 4: Something',
+      session_date: '2026-08-17', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
     };
-    const baseline = buildKitSpec(await inputFor(week3MondaySession));
-    expect(baseline.slides.some((s) => s.kind === 'hook')).toBe(false); // confirms Week 3 truly has none by default
+    const baseline = buildKitSpec(await inputFor(week4MondaySession));
+    expect(baseline.slides.some((s) => s.kind === 'hook')).toBe(false); // confirms Week 4 truly has none by default
 
     const config: KitConfig = {
       ...DEFAULT_KIT_CONFIG,
       opening: { ...DEFAULT_KIT_CONFIG.opening, hook: { enabled: true, override: { headline: 'Added hook', caption: 'Added caption.' } } },
     };
-    const withHook = buildKitSpec({ ...(await inputFor(week3MondaySession)), config });
+    const withHook = buildKitSpec({ ...(await inputFor(week4MondaySession)), config });
     const hookSlide = withHook.slides.find((s) => s.kind === 'hook');
     expect(hookSlide?.title).toBe('Added hook');
     expect(hookSlide?.body).toBe('Added caption.');
+  });
+
+  it('Week 3 Architecture Day has its own authored hook + teach slides in the check-in segment (week3-api-and-billing)', async () => {
+    const week3MondaySession: BuildKitSpecInput['session'] = {
+      id: 's-wk3-mon', session_number: 4, title: 'Week 3: Something',
+      session_date: '2026-08-10', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    };
+    const spec = buildKitSpec(await inputFor(week3MondaySession));
+    expect(spec.slides.find((s) => s.kind === 'hook')?.title).toContain('becomes a build');
+    // The celebration/launch arc renders in check-in — the segment that carried
+    // no teach slides at all before this week was authored.
+    expect(spec.slides.filter((s) => s.kind === 'teach' && s.segmentId === 'checkin').length).toBeGreaterThan(0);
+    // Ram's standing rule, applied to this class: every teach slide carries a diagram.
+    const teach = spec.slides.filter((s) => s.kind === 'teach');
+    expect(teach.length).toBeGreaterThanOrEqual(20);
+    expect(teach.every((s) => !!s.diagram && s.diagram.includes('flowchart'))).toBe(true);
   });
 
   it('Week 2 now has its own authored hook (the dashboard-incident cold open, week2-architecture-day-redesign)', async () => {
