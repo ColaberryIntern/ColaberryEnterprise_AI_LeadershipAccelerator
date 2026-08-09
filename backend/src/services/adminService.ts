@@ -35,6 +35,46 @@ export async function authenticateAdmin(email: string, password: string): Promis
   return token;
 }
 
+/** Shortest password we will accept on rotation. */
+export const MIN_PASSWORD_LENGTH = 12;
+
+/**
+ * Rotate an admin identity's own password.
+ *
+ * Requires the current password even though the caller already holds a valid
+ * JWT: a token lifted from a shared machine should not be enough to lock the
+ * real owner out of their account.
+ *
+ * Throws 401 on a bad current password, with the same message login uses so
+ * this endpoint cannot be used to confirm which accounts exist, and 400 on a
+ * new password that is too short or unchanged.
+ */
+export async function changeAdminPassword(
+  adminId: string,
+  currentPassword: string,
+  newPassword: string
+): Promise<void> {
+  const admin = await AdminUser.findByPk(adminId);
+  if (!admin) {
+    throw new AppError('Invalid email or password', 401);
+  }
+
+  const valid = await bcrypt.compare(currentPassword, admin.password_hash);
+  if (!valid) {
+    throw new AppError('Invalid email or password', 401);
+  }
+
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new AppError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters`, 400);
+  }
+  if (newPassword === currentPassword) {
+    throw new AppError('New password must differ from the current password', 400);
+  }
+
+  admin.password_hash = await bcrypt.hash(newPassword, SALT_ROUNDS);
+  await admin.save();
+}
+
 export async function createAdminUser(email: string, password: string, role = 'admin'): Promise<AdminUser> {
   const hash = await bcrypt.hash(password, SALT_ROUNDS);
   return AdminUser.create({

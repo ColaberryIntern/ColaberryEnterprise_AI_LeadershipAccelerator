@@ -2,6 +2,7 @@ import React from 'react';
 import { Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from '../components/ProtectedRoute';
 import AdminLayout from '../components/Layout/AdminLayout';
+import AdminChangePasswordPage from '../pages/admin/AdminChangePasswordPage';
 import AdminLoginPage from '../pages/admin/AdminLoginPage';
 import AdminDashboardPage from '../pages/admin/AdminDashboardPage';
 import WarRoomPage from '../pages/admin/WarRoomPage';
@@ -71,6 +72,9 @@ const adminRoutes = (
       <Route path="/admin/ai-training-enter" element={<AdminPortalEnterPage />} />
       <Route element={<AdminLayout />}>
         <Route path="/admin/dashboard" element={<AdminDashboardPage />} />
+        {/* Account self-service: reachable by every admin identity regardless
+            of section scope (see UNIVERSAL_ADMIN_PATHS in adminNav.ts). */}
+        <Route path="/admin/change-password" element={<AdminChangePasswordPage />} />
         <Route path="/admin/war-room" element={<WarRoomPage />} />
         <Route path="/admin/cohorts/:id" element={<AdminCohortDetailPage />} />
         <Route path="/admin/pipeline" element={<AdminPipelinePage />} />

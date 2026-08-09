@@ -1,11 +1,21 @@
 import { Router, Request, Response } from 'express';
-import { handleAdminLogin, handleAdminLogout } from '../../controllers/adminAuthController';
+import {
+  handleAdminLogin,
+  handleAdminLogout,
+  handleAdminChangePassword,
+} from '../../controllers/adminAuthController';
 import { requireAnyAdmin, adminAllowedSections } from '../../middlewares/authMiddleware';
 
 const router = Router();
 
 router.post('/api/admin/login', handleAdminLogin);
 router.post('/api/admin/logout', handleAdminLogout);
+
+// Rotating your OWN password is not section-scoped work — every admin-portal
+// identity needs it, and a sales rep provisioned with a generated temp password
+// needs it on day one. The handler reads the account id from the verified JWT,
+// so requireAnyAdmin is the correct (and only) gate.
+router.post('/api/admin/change-password', requireAnyAdmin, handleAdminChangePassword);
 
 // Return current admin user from JWT claims + the admin sidebar SECTIONS this
 // identity may access (the frontend gates the nav/routes on these; the backend
