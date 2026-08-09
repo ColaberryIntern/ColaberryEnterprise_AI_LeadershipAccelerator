@@ -37,9 +37,30 @@ export interface AuthorCardResult {
   reason: 'applied' | 'already-current' | 'not-found' | 'dry-run';
 }
 
-/** Stable-enough structural equality for authored literals (no cycles, no dates). */
-function same(a: unknown, b: unknown): boolean {
-  return JSON.stringify(a) === JSON.stringify(b);
+/** Recursively sort object keys so two structurally-equal values stringify alike. */
+function canon(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(canon);   // array ORDER is meaningful — preserved
+  if (v && typeof v === 'object') {
+    const src = v as Record<string, unknown>;
+    return Object.keys(src).sort().reduce((acc: Record<string, unknown>, k) => {
+      acc[k] = canon(src[k]);
+      return acc;
+    }, {});
+  }
+  return v;
+}
+
+/**
+ * Structural equality for authored literals (no cycles, no dates).
+ *
+ * Key order must be normalised first: Postgres `jsonb` does NOT preserve object key
+ * order, so an authored nested object (e.g. a skills-jar `course`) comes back from
+ * the DB reordered and a naive JSON.stringify comparison reports "changed" on a card
+ * that is byte-identical in content. That made the card rewrite itself — and churn
+ * content_at — on every single run. Caught by running the seeder twice.
+ */
+export function same(a: unknown, b: unknown): boolean {   // exported for tests
+  return JSON.stringify(canon(a)) === JSON.stringify(canon(b));
 }
 
 export async function authorCard(
