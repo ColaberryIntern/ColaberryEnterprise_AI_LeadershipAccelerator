@@ -39,6 +39,10 @@ The prompts now generated for a student's story open with:
 | FR-030 | Story progress is derived from repo activity, not only from a self-reported checkbox | must |
 | FR-031 | A build with no provisioned repo degrades to a documented fallback, never to a broken prompt | must |
 | FR-032 | Every prompt path is verified to resolve before the prompt is offered for copying | must |
+| FR-033 | Mark-done is disabled until repo evidence satisfies every applicable check | must |
+| FR-034 | Every gate has a documented path forward (re-check, mentor override, document-evidence stories) | must |
+| FR-035 | The task card exposes one primary action; tool choice happens after the student reads the story | should |
+| FR-036 | A full-page workspace exists per story, with a story-seeded AI agent and a repo/checks rail | should |
 
 ---
 
@@ -202,7 +206,87 @@ Everything below is derivable from the plan plus the projection — nothing here
 
 ---
 
-## 10. Naming
+## 10. The work surface — Open, Workspace, and a gated Mark Done
+
+Today the task card offers four flat buttons — **Copy Prompt · Open Workspace · Mark Done · Skip** — and the drawer repeats three of them. That asks a student to choose their tool before they have read the task, and it lets them declare a story finished having done nothing at all.
+
+### 10.1 One primary action
+
+The card gets **one** primary button: **Open**. Everything else moves inside.
+
+```
+Card:        [ Open ]              (Skip stays, quiet and secondary)
+   ↓
+Drawer:      the story, its requirement, acceptance
+             [ Open workspace ]  [ Copy prompt ]
+             Mark done  ← gated, see §10.3
+```
+
+**Why:** copying a 3,000-character prompt is not a decision to make from a card title. The drawer is where a student reads the narrative, the requirement it satisfies, and the acceptance criteria — *then* picks how to work: full workspace, or copy and go.
+
+The drawer already renders all of this (story, acceptance, repo provisioning, context notes, prompt preview). This is a button-hierarchy change, not a rebuild.
+
+### 10.2 The workspace page
+
+**Route:** `/portal/projects/:projectId/stories/:storyId` — a real page, not a drawer, at Classroom scale.
+
+| Region | Contents |
+|---|---|
+| **Main column** | The story in full: narrative, the requirement verbatim, acceptance as a live checklist reflecting the repo, the assembled prompt with copy, and the linked documents (`REQUIREMENTS.md`, this story's file) rendered from the projection |
+| **Right rail (wide)** | **AI agent** (`PortalMentorChat`, seeded with this story's context — the requirement, acceptance, and repo state, so it is not a blank assistant); **repo panel** (provision or clone command, recent commits touching this story, last sync + re-check); **checks panel** (§10.3) |
+
+The rail is deliberately wider than the drawer's. The drawer is for triage; the workspace is where a student actually sits while building, with the agent beside the work rather than behind a tab.
+
+Reuse: `PortalMentorChat` + `MentorContext` already exist and are what Classroom uses.
+
+### 10.3 Mark done is earned, not clicked (FR-033)
+
+**A student cannot mark a story done by asserting it.** The button is disabled until the repo shows the work exists.
+
+Checks, all derived from the projection (§8, §9):
+
+| Check | Passes when |
+|---|---|
+| **Repo** | a workspace repo is provisioned for this project |
+| **Commits** | ≥1 commit whose message references this story id |
+| **Acceptance** | every `- [ ]` in `docs/stories/STORY-nnn.md` is ticked |
+| **CI** *(only if the repo defines checks)* | the latest run on the default branch is green |
+
+The panel shows each check with its state and, when failing, **what to do about it** — never a bare greyed-out button:
+
+```
+  ✓ Repo provisioned            ColaberryIntern/student-…-sponsor-dashboard
+  ✓ Commits reference STORY-001  2 commits · last 14 min ago
+  ✗ Acceptance 2 of 3 ticked     tick the last box in docs/stories/STORY-001.md
+  – CI                           no checks defined in this repo
+
+  [ Re-check ]  last checked 3 min ago
+```
+
+**This is the point of the whole system.** "Completing tasks advances your requirements toward verified" is already the promise on the Projects page. Right now that promise is a self-report, and in production the 4-state has never advanced once. Gating on repo evidence is what makes a completed story mean something — to the student, to a sponsor looking at the dashboard, and to an employer looking at the repo.
+
+### 10.4 Not getting stuck (FR-034)
+
+A hard gate with no escape hatch is a trap. Three releases:
+
+1. **Re-check** — re-syncs from GitHub on demand. The webhook may be late or absent; the student should never wait on our plumbing.
+2. **Request review** — sends the story to a mentor with the failing checks attached. The mentor can pass it. Every override is recorded with who and why.
+3. **Not-applicable stories** — a story with no code outcome (a decision, a written artifact) is marked `evidence: document` at generation time and gates on the artifact existing in `docs/`, not on commits.
+
+**Skip** stays unchanged and ungated — skipping is an honest "not doing this now", and a skipped prerequisite still does not clear a downstream gate.
+
+### 10.5 Requirements introduced
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-033 | Mark-done is disabled until repo evidence satisfies every applicable check; the UI names the failing check and the remedy | must |
+| FR-034 | Every gate has a documented path forward: on-demand re-check, mentor review with recorded override, and a document-evidence story type | must |
+| FR-035 | The task card exposes one primary action (Open); tool choice happens in the drawer after the student has read the story | should |
+| FR-036 | A full-page workspace exists per story with a story-seeded AI agent and a repo/checks rail | should |
+
+---
+
+## 11. Naming
 
 "Your builds" reads as jargon. The vocabulary should be ordinary:
 
@@ -214,11 +298,11 @@ Everything below is derivable from the plan plus the projection — nothing here
 | Open your build | **Open project** |
 | How builds work | **How projects work** |
 
-Keep **release** and **story** — those are real industry terms the students are meant to learn, and the whole point is that they graduate speaking them. It is "build" as a *noun* that reads oddly. Scope: `ProjectsPage.tsx`, `ProjectWizard.tsx`, `ProjectsNextStepHero.tsx`, `BuildToast.tsx`, plus copy in the interior and drawer.
+Keep **release** and **story** — those are real industry terms the students are meant to learn, and the whole point is that they graduate speaking them. It is "build" as a *noun* that reads oddly. Scope: `ProjectsPage.tsx`, `ProjectWizard.tsx`, `ProjectsNextStepHero.tsx`, `ProjectInterior.tsx` ("Your build" header), `BuildToast.tsx`, plus copy in the drawer.
 
 ---
 
-## 11. Build sequence
+## 12. Build sequence
 
 | Step | Work | Why this order |
 |---|---|---|
@@ -226,18 +310,23 @@ Keep **release** and **story** — those are real industry terms the students ar
 | **2** | Document renderers (plan → the `docs/**` file set) | Pure functions, no I/O, fully testable. The riskiest content decisions get made in the cheapest place. |
 | **3** | Repo write + manifest + path allowlist | Closes the defect. After this, prompts resolve. |
 | **4** | Prompt assembly asserts against the manifest (FR-032) | Makes the class of bug unrepeatable. |
-| **5** | Conflict detection + the diverged banner | Before students edit anything, not after. |
-| **6** | Webhook + projection | Turns the repo into a live progress signal. |
-| **7** | Dashboard panels, in §9.1 order | Gantt last — it needs both the plan and the projection to be honest. |
-| **8** | Rename to "projects" | Cosmetic, independent, ship any time. |
+| **5** | Button hierarchy: one **Open** on the card, tools in the drawer (FR-035) | Small, independent, immediately better. Needs nothing from GitHub. |
+| **6** | Conflict detection + the diverged banner | Before students edit anything, not after. |
+| **7** | Webhook + projection | Turns the repo into a live progress signal — the prerequisite for both 8 and 9. |
+| **8** | Gated mark-done + checks panel + re-check + mentor override (FR-033, FR-034) | Needs 7. This is what makes "done" mean something. |
+| **9** | Workspace page with the story-seeded agent (FR-036) | Needs 3 (documents) and 8 (checks panel) to have anything to show in the rail. |
+| **10** | Dashboard panels, in §9.1 order | Gantt last — it needs both the plan and the projection to be honest. |
+| **11** | Rename to "projects" | Cosmetic, independent, ship any time. |
 
-Steps 1–4 are the ones that make the current pilot correct. 5–7 are the dashboard Ali asked for. 8 is a half-day.
+Steps 1–4 make the current pilot correct. 5 is a quick win with no dependencies. 6–10 are the workspace and dashboard. 11 is a half-day.
 
 ---
 
-## 12. Open decisions
+## 13. Open decisions
 
 1. **Repo provisioning becomes mandatory to start a project.** Recommended, and implied by Option B — without a repo there is no system of record. Needs Ali's sign-off because it adds a GitHub-username step to the wizard.
 2. **One repo per project, or one per student holding many projects?** Current code is one per *enrollment*. Multi-project (a stated platform capability) then means several plans in one repo, which muddies `docs/`. Recommend **one repo per project**, named `student-<enrollment>-<project-slug>`.
 3. **Webhook vs polling for the projection.** Webhook is right; polling every N minutes across a cohort is the kind of load the audit already flagged. Needs a public endpoint and a shared secret.
 4. **Do we ever run student tests to verify acceptance?** Out of scope here (§8). If the answer is ever yes, it is a sandbox-execution project of its own.
+5. **Who can override a failed mark-done gate?** (§10.4). Recommend mentors and staff, never the student themselves — a self-override is just the ungated button with extra steps. Needs a decision on whether cohort mentors qualify or only Colaberry staff.
+6. **Does CI count as a check when the student's repo defines one?** Recommend yes, and treated as advisory-but-visible: a red CI does not block mark-done in v1 (students will have half-configured pipelines and we would trap them), but it shows in the panel and on the dashboard.
