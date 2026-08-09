@@ -7,6 +7,7 @@ import PublicLayout from './components/Layout/PublicLayout';
 import publicRoutes from './routes/publicRoutes';
 import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
 import HomeV2 from './pages/publicV2/HomeV2';
+import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -46,6 +47,8 @@ function App() {
             the real "/" happens once V2 is complete and approved. */}
         <Route path="/v2" element={<PublicLayoutV2 />}>
           <Route index element={<HomeV2 />} />
+          <Route path="services" element={<ServicesV2 />} />
+          <Route path="services/:slug" element={<ServiceDetailV2 />} />
         </Route>
         <Route element={<PublicLayout />}>
           {publicRoutes}
