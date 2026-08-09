@@ -41,6 +41,8 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
+import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
+import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
@@ -51,6 +53,7 @@ import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchem
 import { ensureCapeLearningValueRankerSchema } from './db/ensureCapeLearningValueRankerSchema';
 import { ensureCapeTodayPlanSchema } from './db/ensureCapeTodayPlanSchema';
 import { ensureCapeGovernanceSchema } from './db/ensureCapeGovernanceSchema';
+import { ensureCapeAiPulseExposureSchema } from './db/ensureCapeAiPulseExposureSchema';
 
 // Import models to register associations before sync
 import './models';
@@ -436,6 +439,22 @@ async function ensureStudentTaskMergeSchema() {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS blocked_by JSONB`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_story ON student_tasks (story_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_story ON student_tasks (project_id, story_id) WHERE story_id IS NOT NULL`,
+    // SBP-REQ-v1 FR-012: a requirement is fulfilled by MANY stories, so
+    // UNIQUE (project_id, requirement_key) was never a valid constraint. It
+    // aborted importProject on the first task that re-cited a requirement —
+    // in production every student build persisted exactly 3 tasks and then
+    // 500'd (see docs/BUILD_PIPELINE_AUDIT.md, finding F-1). Task identity is
+    // (project_id, story_id), enforced by the partial unique index above.
+    // Recreate ONLY if you can also prove one requirement never spans two
+    // stories, which the product explicitly does not guarantee.
+    // Sequelize's `unique: true` creates a CONSTRAINT, not a bare index, so
+    // `DROP INDEX` fails with "cannot drop index ... because constraint ...
+    // requires it" and — because this loop catches and logs each statement —
+    // fails SILENTLY. Drop the constraint first (that removes its backing index
+    // too), then the bare-index form for any DB where it exists without a
+    // constraint. Both are IF EXISTS, so running this twice is a no-op.
+    `ALTER TABLE student_tasks DROP CONSTRAINT IF EXISTS student_tasks_unique_req_key`,
+    `DROP INDEX IF EXISTS student_tasks_unique_req_key`,
   ];
   for (const sql of statements) {
     try {
@@ -443,6 +462,45 @@ async function ensureStudentTaskMergeSchema() {
     } catch (err: any) {
       console.warn('[DB] student-task merge schema stmt skipped:', err?.message);
     }
+  }
+
+  // Post-condition check. Every statement above is best-effort and its failure is
+  // only warned about, so a statement that MUST take effect cannot be verified by
+  // "it didn't throw" — that is exactly how the first attempt at this drop failed
+  // silently (DROP INDEX against a constraint-backed index). Assert the outcome.
+  try {
+    const [rows]: any = await sequelize.query(
+      `SELECT
+         (SELECT count(*) FROM pg_constraint
+           WHERE conrelid = 'student_tasks'::regclass
+             AND conname = 'student_tasks_unique_req_key') AS con,
+         (SELECT count(*) FROM pg_indexes
+           WHERE tablename = 'student_tasks'
+             AND indexname = 'student_tasks_unique_req_key') AS idx`
+    );
+    const con = Number(rows?.[0]?.con ?? 0);
+    const idx = Number(rows?.[0]?.idx ?? 0);
+    if (con > 0 || idx > 0) {
+      // Loud and structured: while this survives, every student build silently
+      // truncates at the first task that re-cites a requirement (audit F-1).
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'backend',
+        event: 'student_tasks_unique_req_key_still_present',
+        outcome: 'failure',
+        error_class: 'SchemaInvariantViolation',
+        context: {
+          constraint: con, index: idx,
+          impact: 'student build imports will abort on the first duplicate requirement_key',
+          remedy: "ALTER TABLE student_tasks DROP CONSTRAINT IF EXISTS student_tasks_unique_req_key",
+        },
+      }));
+    } else {
+      console.log('[DB] student_tasks_unique_req_key confirmed absent (FR-012)');
+    }
+  } catch (err: any) {
+    console.warn('[DB] student-task schema post-check failed:', err?.message);
   }
 }
 
@@ -2324,6 +2382,7 @@ async function start(): Promise<void> {
   await ensureCapeLearningValueRankerSchema(); // CAPE Phase 4 (T007) — additive columns; must run AFTER ensureTodayFeedSchema
   await ensureCapeTodayPlanSchema(); // CAPE Phase 5 (T003) — new today_plan_feedback table, references enrollments(id)
   await ensureCapeGovernanceSchema(); // CAPE Phase 6 — cape_governance_policy + cape_lifecycle_mode_policy (additive, byte-identical seed defaults)
+  await ensureCapeAiPulseExposureSchema(); // ai_pulse rotation bugfix (2026-08-06) — cape_ai_pulse_exposure table, references enrollments(id)
   await ensureFeedControlSchema();
   await ensureAiNewsSchema();
   import('./services/blog/blogIngestionService')
@@ -2365,6 +2424,12 @@ async function start(): Promise<void> {
   await ensureFriendshipSchema();
   // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
   await ensureMessagingSchema();
+  // Reese Phase 1 — staff-identity columns on admin_users (display_name,
+  // is_ai_operated, agent_id). Additive, idempotent, no flag.
+  await ensureAdminUserIdentitySchema();
+  // Reese Phase 1 — agent-transparency columns on ai_agents (system_prompt,
+  // tools_granted, persona_version). Additive, idempotent, no flag.
+  await ensureAiAgentIdentitySchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {

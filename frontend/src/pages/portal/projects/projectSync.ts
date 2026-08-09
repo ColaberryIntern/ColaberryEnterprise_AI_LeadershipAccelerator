@@ -50,6 +50,58 @@ function toImportPayload(p: StudentProject) {
 /** Map the client TaskState to the backend status the write-through endpoints accept. */
 function statusForBackend(state: TaskState): string { return state === 'done' ? 'complete' : 'not_started'; }
 
+// ── failure reporting (SBP-REQ-v1 FR-015) ────────────────────────────────────
+// These paths used to swallow everything with a bare `catch {}`, which made a
+// 404 (feature flag off) indistinguishable from a 500 (import genuinely broken).
+// That is how finding F-1 stayed invisible in production while every student
+// build silently failed to persist past its 3rd task. A 404 is still expected
+// and quiet; anything else is reported.
+
+/** True when the error is just "the projects API is flag-gated off". */
+function isApiDisabled(err: unknown): boolean {
+  return (err as { response?: { status?: number } })?.response?.status === 404;
+}
+
+function statusOf(err: unknown): number | undefined {
+  return (err as { response?: { status?: number } })?.response?.status;
+}
+
+export type SyncFailure = { op: 'pull' | 'push' | 'task-status'; status?: number; message: string };
+
+type SyncFailureListener = (failure: SyncFailure) => void;
+const failureListeners = new Set<SyncFailureListener>();
+
+/**
+ * Subscribe to sync failures so the UI can surface a non-blocking "we couldn't
+ * save your build" state with a retry. Returns an unsubscribe function.
+ */
+export function onSyncFailure(fn: SyncFailureListener): () => void {
+  failureListeners.add(fn);
+  return () => { failureListeners.delete(fn); };
+}
+
+/** Report a real (non-404) sync failure: structured console error + listeners. */
+function reportFailure(op: SyncFailure['op'], err: unknown): void {
+  if (isApiDisabled(err)) return;   // expected when PROJECT_API_ENABLED is off
+  const failure: SyncFailure = {
+    op,
+    status: statusOf(err),
+    message: (err as Error)?.message || 'Unknown sync error',
+  };
+  // Structured so it is greppable in browser logs and any forwarded telemetry.
+  console.error(JSON.stringify({
+    level: 'error',
+    service: 'frontend',
+    event: `project_sync_${op.replace('-', '_')}_failed`,
+    outcome: 'failure',
+    error_class: (err as Error)?.name || 'Error',
+    context: { status: failure.status, message: failure.message },
+  }));
+  failureListeners.forEach((fn) => {
+    try { fn(failure); } catch { /* a listener must never break sync */ }
+  });
+}
+
 /**
  * Write a single task's status through to the backend by its story key (the same
  * `storyId || id` used on import). Best-effort: the store has already updated
@@ -62,8 +114,10 @@ export async function pushTaskStatusByStory(storyKey: string, state: TaskState):
       `/api/portal/projects/tasks/by-story/${encodeURIComponent(storyKey)}`,
       { status: statusForBackend(state) },
     );
-  } catch {
-    // API off (404) / task not yet imported / transient — the mirror reconciles it.
+  } catch (err) {
+    // API off (404) / task not yet imported — expected, stays quiet. Anything
+    // else is a real failure: the mirror will retry it, but it must be visible.
+    reportFailure('task-status', err);
   }
 }
 
@@ -74,8 +128,8 @@ async function reconcileFromBackend(): Promise<void> {
     const tree = (res.data && Array.isArray(res.data.lists)) ? (res.data as BackendProjectTree) : null;
     const { next, changed } = reconcileProjects(loadProjects(), tree);
     if (changed) hydrateProjects(next);
-  } catch {
-    // API off (404) or transient — nothing to reconcile.
+  } catch (err) {
+    reportFailure('pull', err);
   }
 }
 
@@ -85,8 +139,10 @@ async function mirrorToBackend(): Promise<void> {
   if (!project) return; // only the seeded demo (or nothing) — nothing real to persist
   try {
     await portalApi.post('/api/portal/projects/import', toImportPayload(project));
-  } catch {
-    // API off (404) or transient — localStorage remains the working source.
+  } catch (err) {
+    // localStorage remains the working source either way, but a failure here
+    // means the build exists ONLY in this browser — the student must be told.
+    reportFailure('push', err);
   }
 }
 

@@ -93,7 +93,7 @@ function evidenceHtml(slide: KitSlide): string {
 function diagramHtml(slide: KitSlide): string {
   if (!slide.diagram) return '';
   return (
-    '<div class="kdiagram" onclick="this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
+    '<div class="kdiagram" onclick="window.__toggleDiagramFull ? window.__toggleDiagramFull(this) : this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
     `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
     (slide.diagramCaption ? `<div class="kdiagram-cap"><span class="kdiagram-cap-ico">🧭</span><span>${esc(slide.diagramCaption)}</span></div>` : '') +
     '</div>'
@@ -254,7 +254,7 @@ function slideSection(spec: KitSpec, slide: KitSlide): string {
     `data-mode="${attr(modeForSlide(slide))}" ` +
     `data-segstart="${attr(slide.segStartMin)}" data-segend="${attr(slide.segEndMin)}" ` +
     `data-seglabel="${attr(slide.segmentLabel)}" data-slidetitle="${attr(slide.title)}" ` +
-    `data-tip="${attr(slide.presenterTip || '')}" data-pub="${attr(slide.publicValue || '')}">` +
+    `data-tip="${attr(slide.presenterTip || '')}" data-body="${attr(slide.body || '')}" data-pub="${attr(slide.publicValue || '')}">` +
     `<div class="kinner">${slideInnerHtml(spec, slide)}</div>` +
     '</section>'
   );

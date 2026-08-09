@@ -235,22 +235,38 @@ describe('buildKitSpec — KitConfig wiring', () => {
     expect(overrideSpec.slides.some((s) => s.title === 'Custom preview' && s.body === 'Custom body.')).toBe(true);
   });
 
-  it('opening.hook override adds a hook to a week that has no authored one (Week 3 has none; only Weeks 1 and 2 do — week2-architecture-day-redesign)', async () => {
-    const week3MondaySession: BuildKitSpecInput['session'] = {
-      id: 's-wk3-mon', session_number: 4, title: 'Week 3: Something',
-      session_date: '2026-08-03', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+  it('opening.hook override adds a hook to a week that has no authored one (Week 4 has none; only Weeks 1-3 do — Week 3 gained one in week3-api-and-billing)', async () => {
+    const week4MondaySession: BuildKitSpecInput['session'] = {
+      id: 's-wk4-mon', session_number: 6, title: 'Week 4: Something',
+      session_date: '2026-08-17', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
     };
-    const baseline = buildKitSpec(await inputFor(week3MondaySession));
-    expect(baseline.slides.some((s) => s.kind === 'hook')).toBe(false); // confirms Week 3 truly has none by default
+    const baseline = buildKitSpec(await inputFor(week4MondaySession));
+    expect(baseline.slides.some((s) => s.kind === 'hook')).toBe(false); // confirms Week 4 truly has none by default
 
     const config: KitConfig = {
       ...DEFAULT_KIT_CONFIG,
       opening: { ...DEFAULT_KIT_CONFIG.opening, hook: { enabled: true, override: { headline: 'Added hook', caption: 'Added caption.' } } },
     };
-    const withHook = buildKitSpec({ ...(await inputFor(week3MondaySession)), config });
+    const withHook = buildKitSpec({ ...(await inputFor(week4MondaySession)), config });
     const hookSlide = withHook.slides.find((s) => s.kind === 'hook');
     expect(hookSlide?.title).toBe('Added hook');
     expect(hookSlide?.body).toBe('Added caption.');
+  });
+
+  it('Week 3 Architecture Day has its own authored hook + teach slides in the check-in segment (week3-api-and-billing)', async () => {
+    const week3MondaySession: BuildKitSpecInput['session'] = {
+      id: 's-wk3-mon', session_number: 4, title: 'Week 3: Something',
+      session_date: '2026-08-10', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    };
+    const spec = buildKitSpec(await inputFor(week3MondaySession));
+    expect(spec.slides.find((s) => s.kind === 'hook')?.title).toContain('becomes a build');
+    // The celebration/launch arc renders in check-in — the segment that carried
+    // no teach slides at all before this week was authored.
+    expect(spec.slides.filter((s) => s.kind === 'teach' && s.segmentId === 'checkin').length).toBeGreaterThan(0);
+    // Ram's standing rule, applied to this class: every teach slide carries a diagram.
+    const teach = spec.slides.filter((s) => s.kind === 'teach');
+    expect(teach.length).toBeGreaterThanOrEqual(20);
+    expect(teach.every((s) => !!s.diagram && s.diagram.includes('flowchart'))).toBe(true);
   });
 
   it('Week 2 now has its own authored hook (the dashboard-incident cold open, week2-architecture-day-redesign)', async () => {
@@ -510,12 +526,13 @@ describe('Week 2 Build Day — architecture blueprint redesign (week2-buildday-a
     expect(testLabels.length).toBeGreaterThanOrEqual(3);
   });
 
-  it('mvp-scoper is scoped to Read/Write, produces a visual mockup.html and a marketing one-pager', async () => {
+  it('mvp-scoper is scoped to Read, Write, Bash — Bash for real PDF generation — and produces a visual mockup.html and a PDF one-pager (week2-mvp-scoper-run-prompt)', async () => {
     const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
     const text = JSON.stringify(spec.slides);
     expect(text).toContain('mockup.html');
-    expect(text).toContain('one-pager.md');
-    expect(text).toMatch(/allowed-tools:\s*Read,\s*Write/);
+    expect(text).toContain('one-pager.pdf');
+    expect(text).not.toContain('one-pager.md');
+    expect(text).toMatch(/allowed-tools:\s*Read,\s*Write,\s*Bash/);
   });
 
   it('the tech-stack-recommender output is described as colorful/icon-led with a learn-more prompt per technology', async () => {
@@ -553,6 +570,40 @@ describe('Week 2 Build Day — architecture blueprint redesign (week2-buildday-a
     const html = renderKitHtml(spec, { live: { enabled: false } });
     fs.writeFileSync(path.join(SAMPLE_DIR, 'week2-buildday-architecture-blueprint.html'), html, 'utf8');
     expect(html.length).toBeGreaterThan(4000);
+  });
+
+  it('the git lesson replaces the old Skill-description failure injection in the failure segment', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const text = JSON.stringify(spec.slides);
+    expect(text).toMatch(/git status/);
+    expect(text).toMatch(/git commit/i);
+    expect(text).toMatch(/git log/);
+    expect(text).toMatch(/README\.md/);
+    expect(text).toMatch(/\.gitignore/);
+    expect(text).not.toContain('helps with my idea');
+  });
+
+  it('extra participation polls render for build-map, guided-build, and the (git lesson) failure segment', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const interactionSlides = spec.slides.filter((s) => s.kind === 'interaction');
+    const bySegment = (id: string) => interactionSlides.filter((s) => s.segmentId === id);
+    expect(bySegment('build-map').length).toBeGreaterThanOrEqual(1);
+    expect(bySegment('guided-build').length).toBeGreaterThanOrEqual(2);
+    expect(bySegment('failure').length).toBeGreaterThanOrEqual(1);
+    const text = JSON.stringify(interactionSlides);
+    expect(text).toMatch(/how cool your deliverable/i);
+    expect(text).toMatch(/creative juices/i);
+  });
+
+  it('extra story beats render before the guided-build (skills) segment starts', async () => {
+    const spec = buildKitSpec(await inputFor(WEEK2_THURSDAY_SESSION));
+    const storySlides = spec.slides.filter((s) => s.kind === 'storybeat');
+    expect(storySlides.length).toBeGreaterThanOrEqual(2);
+    const guidedBuildStart = spec.slides.findIndex((s) => s.segmentId === 'guided-build');
+    storySlides.forEach((s) => {
+      const idx = spec.slides.indexOf(s);
+      expect(idx).toBeLessThan(guidedBuildStart);
+    });
   });
 
   it('Week 2 Monday (Architecture Day) is unaffected by this Thursday-only change', async () => {

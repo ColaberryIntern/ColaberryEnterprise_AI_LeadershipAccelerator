@@ -146,6 +146,15 @@ export interface WeekClassContent {
     /** Optional Story Mode before/after comparison, shown before the assignment
      * brief as the transformation payoff. Omit for weeks without one authored. */
     beforeAfter?: { label?: string; before: string[]; after: string[] };
+    /** Optional "change of pace" story beats for Build Day, inserted right
+     * after the named segment's content (segment id -> beats to insert
+     * there). Same shape and splice mechanism as monday.storyBeats — omit
+     * for weeks without any authored. */
+    storyBeats?: Record<string, StoryBeat[]>;
+    /** Optional extra survey questions beyond the fixed readiness-trivia slot,
+     * each tagged with the run-of-show segment to render in. Mirrors
+     * monday.extraInteractions exactly — see that field's doc comment. */
+    extraInteractions?: Array<Interaction & { segment: string; eyebrow?: string; title?: string; presenterTip?: string }>;
   };
 
   /** Prove-it-by-Friday: the graded deliverable. */
@@ -572,8 +581,8 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         { label: 'Recommend the stack', prompt: 'Create an Agent Skill named "tech-stack-recommender" that takes a system architecture and recommends a tech stack, explained simply with icons and a fit rating for each choice.' },
         { label: 'Scope the demo builder', prompt: 'Turn "mvp-scoper" into a multi-file Skill that outputs a Week-1 task list, a visual HTML mockup of the idea, and a short marketing one-pager — restrict its tool access to only what it needs.' },
       ],
-      failureInjection: 'Author a Skill with a vague description ("helps with my idea") and show Claude ignoring it.',
-      recovery: 'Rewrite the description to name the trigger and the output ("Use when the user has a project idea and wants a system architecture with a diagram"). Re-invoke — it fires.',
+      failureInjection: 'The quiet failure nobody notices in the room: an idea that took an hour to architect, stack, and demo — sitting only on disk, one crashed laptop or one overwritten file away from gone.',
+      recovery: 'git init, git add, git commit — the three commands that turn tonight\'s blueprint into something that survives a closed laptop, a reformatted machine, or tomorrow\'s forgetfulness.',
       trivia: {
         kind: 'trivia',
         q: 'Best tool-access setting for a Skill that only writes a Markdown report?',
@@ -581,6 +590,54 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         answer: 1,
         reveal: 'Scope tools to the minimum the Skill needs — least privilege is an architecture habit, not a nicety.',
       },
+      storyBeats: {
+        'result-preview': [
+          {
+            icon: '🏛️', tone: 'violet', eyebrow: 'Before you build — the story behind tonight',
+            title: 'Every real system you have ever used started exactly where you are right now',
+            body: 'Somewhere there is a napkin, a Slack message, or a one-paragraph email that was the entire spec for a system now worth millions. The founders did not wait until the idea was perfect. They wrote down who it was for, what it did, and the one thing it had to get right — then handed that paragraph to whoever could turn it into a diagram. Tonight, that whoever is Claude, and the paragraph is yours.',
+            punch: 'A blueprint is not what you build after the idea is finished. It is what makes an unfinished idea real enough to argue with.',
+          },
+        ],
+        'build-map': [
+          {
+            icon: '📐', tone: 'berry', eyebrow: 'Why architecture comes before code',
+            title: 'Nobody pours a foundation before seeing the blueprint — the same rule applies here',
+            body: 'A contractor who starts pouring concrete before the blueprint exists is not moving fast, they are gambling with the client\'s money. The four checkpoints tonight exist for the same reason a real blueprint exists: so the expensive mistakes get caught on paper, in minutes, instead of in code, in weeks. system-architect is not a formality before the "real" work — it IS the real work, just faster than an architect could ever do it by hand.',
+            punch: 'Slow is not the opposite of fast here. Guessing is.',
+          },
+        ],
+      },
+      extraInteractions: [
+        {
+          segment: 'build-map', kind: 'poll',
+          q: 'How ready do you feel to turn your idea into a real architecture tonight?',
+          options: ['😬 Honestly nervous', '🙂 Cautiously ready', '😎 Let\'s go', '🔥 Already sketching it in my head'],
+          eyebrow: '🌡️ Room check', title: 'Before we start building',
+          presenterTip: 'Quick temperature check, no reveal needed — just read a few answers out loud to loosen the room up before CP0.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'Rate how cool your deliverable is right now, honestly.',
+          options: ['🙂 Solid', '😃 Really good', '🤩 Genuinely impressive', '🚀 I would show this to an investor tomorrow'],
+          eyebrow: '📣 Show it off', title: 'Rate your blueprint',
+          presenterTip: 'Fires right after CP3 lands, while mockups are still open on screen. Read a few of the "🚀" answers out loud by name — this is the peak-energy moment of the night.',
+        },
+        {
+          segment: 'guided-build', kind: 'poll',
+          q: 'How much did tonight get your creative juices flowing for your actual capstone?',
+          options: ['💧 A little', '🌊 A lot', '🌪️ I already have three new ideas', '🎢 I want to redo my whole idea now'],
+          eyebrow: '💡 Spark check', title: 'Did this change how you\'re thinking about your project?',
+          presenterTip: 'Pairs with the poll above — back-to-back reaction round right before the break. If several people pick the last two options, say so out loud; that is the class working.',
+        },
+        {
+          segment: 'failure', kind: 'poll',
+          q: 'Be honest — how comfortable are you with git commands like add and commit right now?',
+          options: ['😅 Still Googling every command', '🙂 I can follow along', '💪 I could teach this to someone else', '🧙 I dream in git log'],
+          eyebrow: '🧠 Self-check', title: 'Where you stand on git, right now',
+          presenterTip: 'Ask this AFTER the git lesson, not before — it is a confidence check on what was just taught, not a cold-open poll. Reveal is unnecessary; just note the spread.',
+        },
+      ],
     },
     assignment: {
       title: 'Your idea, architected and demoed',
@@ -598,31 +655,181 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     publicTitle: 'Build Your First AI Workflow Assistant',
     monday: {
       tension:
-        'A chat window cannot run your business process at 2am. Moving from the CLI to the Claude API turns a conversation into a program: authenticated, multi-turn, structured output, and tool use so Claude can actually act.',
-      payoffPreview: 'By Thursday you ship a Business Workflow Assistant — a small program that automates one real workflow end to end. This is your Intensive 1 deliverable.',
+        'Tonight your build plan gets generated — you start it at the top of class and it is waiting for you about twenty minutes later. Scroll it and you will find task after task where the assistant has to classify something, draft something, or decide something — at 2am, on a schedule, with nobody at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. Those tasks need the other door: the Claude API, called from your own code. Same models, different driver, and — this is the part nobody has told you yet — a completely separate bill.',
+      payoffPreview: 'By Thursday you ship a Business Workflow Assistant — a small program that automates one real workflow from your own build plan, end to end. This is your Intensive 1 deliverable.',
       architectureBeats: [
-        'From CLI to code: API auth, messages, system prompts, streaming',
-        'Structured (JSON) output so downstream code can trust the shape',
-        'Tool use: define a tool schema, handle tool-result blocks, run multi-tool turns',
-        'Evaluation: a test dataset + a grader, so quality is measured not eyeballed',
-        'The Workflow Assistant pattern: input → reason → call tools → structured result',
+        'Two doors into the same models: Claude Code (a human drives) vs the Claude API (a program drives)',
+        'Two separate bills: a Claude subscription pays for your seat; Console credits pay for your code, per token',
+        'The token meter: input + output tokens × the rate of the model you named — output costs ~5× input',
+        'Python is the wrapper that shows up when you do not: trigger → call → structured result → your systems',
+        'One endpoint: system + messages + tools in, one message and a token bill out',
       ],
-      realExample: 'Deconstruct an assistant that works in the demo but has no eval and unbounded tool calls — where it silently breaks in production.',
-      microBuild: 'Make your first authenticated API call from code, then add one tool and get structured output back.',
+      realExample: 'An assistant that never missed in the demo, then met production: prose where the code expected JSON, a tool loop with no cap draining credits overnight, and no eval to tell you it got worse. None of the three raise an error — that is what makes them expensive.',
+      microBuild: 'Get an API key into your environment, make your first authenticated call from a real Python file, force a structured shape you can trust, add one tool — then read the token meter on what you just spent.',
       designChoice: {
         kind: 'poll',
-        q: 'Your assistant sometimes returns malformed output. Best fix?',
-        options: ['Add more prompt pleading', 'Require structured JSON output and validate it', 'Retry forever', 'Ship it'],
-        reveal: 'Ask for structured output and validate at the boundary. Hope is not a parsing strategy.',
+        theater: true,
+        q: 'Your Anthropic subscription is paid up. What does that actually cover?',
+        options: [
+          'Everything — Claude Code and anything I build',
+          'Claude Code and the Claude apps only',
+          'Only the API calls my programs make',
+          'Nothing, it is all pay-as-you-go',
+        ],
+        answer: 1,
+        reveal: 'Your subscription pays for the seat you personally sit in. Anything your CODE calls is a separate meter — API credits from the Console, billed per token. Same login, two wallets.',
       },
       trivia: {
         kind: 'trivia',
-        q: 'How do you know a prompt actually improved?',
-        options: ['It feels better', 'An eval: a dataset + a grader with a score', 'More tokens', 'A colleague nods'],
-        answer: 1,
-        reveal: 'An eval turns "feels better" into a number you can defend.',
+        q: 'What exactly are you billed for on one Claude API call?',
+        options: [
+          'A flat fee per request',
+          'Minutes of compute time',
+          'Input tokens + output tokens, at the rate of the model you named',
+          'One charge per tool the model calls',
+        ],
+        answer: 2,
+        reveal: 'Two meters on every call: everything you sent in, and everything Claude wrote back — and output runs about five times the input rate on every current model.',
       },
-      thursdayTrailer: 'Thursday we ship the Workflow Assistant — API, tools, structured output, and a real eval.',
+      thursdayTrailer: 'Thursday we ship the Workflow Assistant on a workflow from your own build plan — API, one tool, structured output, and a real eval. Bring the task you picked tonight.',
+      hook: {
+        headline: 'Tonight your project stops being an idea and becomes a build.',
+        caption: 'And the moment it does, half your tasks need something you have never done: Claude, running without you.',
+      },
+      storyBeats: {
+        checkin: [
+          {
+            icon: '🧾', tone: 'amber', eyebrow: 'Right now — the paragraph on your screen',
+            title: 'Somewhere there is a napkin that became a company',
+            body: 'Almost every system you use every day started as a paragraph somebody was slightly embarrassed by. The founders did not wait for the idea to be finished; they wrote down who it was for, what it did, and the one thing it had to get right, and handed it to whoever could turn it into a plan. What you are typing into that box right now is that paragraph. It does not have to be right. It has to be real enough to argue with.',
+            punch: 'The paragraph is not the small part of this. It is the only part nobody can do for you.',
+          },
+        ],
+        'business-problem': [
+          {
+            icon: '🏛️', tone: 'violet', eyebrow: 'Change of pace — what you actually are now',
+            title: 'The architect on a job site does not lay the bricks. She also does not leave.',
+            body: 'A building architect is not on site because she is faster with a trowel than the crew. She is there because when a wall goes up two feet off the plan, she is the only one who will notice tonight instead of in six weeks. Your task list already has the prompts written. Claude will lay the bricks faster than you ever could. What it cannot do is care whether what is going up is the building you meant.',
+            punch: 'You were never going to win by typing faster. You win by being the one who notices.',
+          },
+        ],
+        architecture: [
+          {
+            icon: '💡', tone: 'cherry', eyebrow: 'Change of pace — the first invoice',
+            title: 'Everything you have built so far has been free at the point of use',
+            body: 'For two weeks Claude Code has felt like a light switch: you flip it, work happens, and the cost is a flat monthly number you already agreed to. The moment your code makes the call instead of your keyboard, that changes — every run has a price, and the price is set by a decision you make in one line. This is not a warning. It is the first time in this program you get to make a real engineering trade-off, and the trade-off is intelligence against money.',
+            punch: 'Every serious system you will ever build is somebody choosing what to spend on which decision.',
+          },
+        ],
+        deconstruct: [
+          {
+            icon: '🌙', tone: 'berry', eyebrow: 'The 3am story',
+            title: 'The loop that ran all night and nobody was awake to see it',
+            body: 'The demo was flawless at 4pm. At 11pm a customer sent a ticket with a malformed order number, the model got confused, and it asked for the same lookup again. And again. There was no cap, because nothing had ever needed one in the demo. By morning the code had not crashed, had not thrown a single error, and had not sent a single reply — it had just quietly spent all night asking the same question.',
+            punch: 'A system that fails loudly is a nuisance. A system that fails silently is a bill.',
+          },
+        ],
+        'micro-build': [
+          {
+            icon: '🐍', tone: 'leaf', eyebrow: 'Before the code — the locker room talk',
+            title: 'Nobody in this room is becoming a Python developer tonight, and nobody needs to',
+            body: 'Some of you have never written a line of Python and are quietly deciding right now that this is the week you fall behind. Here is the actual bar: you need to be able to read about forty lines and tell whether they do what you meant. That is it. Claude writes the lines. You are the one who has to look at them and say yes or no — which is the same job you have been doing since Week 1, in a file instead of a terminal.',
+            punch: 'You are not learning to write it. You are learning to judge it. You have been doing that for two weeks already.',
+          },
+        ],
+      },
+      extraInteractions: [
+        {
+          segment: 'checkin', kind: 'poll',
+          q: 'Where is your build right now?',
+          options: ['Still typing my idea', 'It is generating', 'I can see my task list', 'I am stuck — I need help'],
+          eyebrow: '🚦 Room check', title: 'Before we go on — is everyone launched?',
+          presenterTip: 'This is an operational poll, not a teaching one. Read the "stuck" count out loud and send a mentor to those students NOW. Do not advance the deck until that number is near zero.',
+        },
+        {
+          segment: 'business-problem', kind: 'poll',
+          q: 'You paste a task prompt, and Claude proposes something that is not what you meant. What does an architect do?',
+          options: [
+            'Accept it and clean it up later',
+            'Delete the task and skip it',
+            'Name exactly what is wrong and have it re-propose',
+            'Give up on the prompt and write the code by hand',
+          ],
+          answer: 2,
+          reveal: 'Redirecting is not the prompt failing. Redirecting IS the job — and naming the specific thing that is wrong is what separates an architect from someone rerolling the dice.',
+          eyebrow: '🏛️ Architect check', title: 'It came back wrong. Now what?',
+          presenterTip: 'Take answers before revealing. If the room splits toward "accept and fix later," that is worth two extra minutes — it is the habit that quietly wrecks a capstone. This question needs no finished build, which is why it comes first.',
+        },
+        {
+          segment: 'business-problem', kind: 'poll',
+          q: 'How many tasks did your build generate?',
+          options: ['Under 10', '10 to 20', '21 to 40', 'More than 40', 'Mine is still building'],
+          eyebrow: '📊 Look at yours', title: 'How big did your plan turn out?',
+          presenterTip: 'No right answer — a room read that also gets everyone to actually open their plan. TIMING: builds take ~20 minutes, so this lands right as they finish and "still building" is a legitimate answer. If most of the room picks it, skip the discussion and re-run this question after the break rather than stalling. Call out the biggest number by name; it makes the plan feel real.',
+        },
+        {
+          segment: 'architecture', kind: 'poll',
+          theater: true,
+          q: 'Same triage job, 1,000 tickets a day. Which model do you put on it?',
+          options: [
+            'Haiku 4.5 — about $90 a month',
+            'Sonnet 5 — about $270 a month',
+            'Opus 5 — about $450 a month',
+            'It depends on whether it passes my eval',
+          ],
+          answer: 3,
+          reveal: 'All three are defensible answers, and exactly one is the architect answer: you pick the cheapest model that still passes your eval. That is why Week 3 ends with building an eval — without one, this is guessing with a price tag.',
+          eyebrow: '💰 The real decision', title: 'You are paying for this. Choose.',
+          presenterTip: 'Full-screen theater moment — lock the votes, show the spread, then reveal. Do not rush it. This is the slide people quote back to you in Week 10.',
+        },
+        {
+          segment: 'architecture', kind: 'trivia',
+          q: 'Where does your API key belong?',
+          options: [
+            'In the Python file, near the top so it is easy to find',
+            'In an environment variable, never committed',
+            'In the README so your team can find it',
+            'In the task prompt so Claude Code can use it',
+          ],
+          answer: 1,
+          reveal: 'Environment variable, every time. A key committed to git is a key you must treat as already stolen — you rotate it, you do not hide it.',
+          eyebrow: '🔑 Knowledge check', title: 'One question before we touch code',
+          presenterTip: 'Fast. Reveal, one line of why, move straight into the key setup. Do not let it become a security lecture — it comes back in Week 9.',
+        },
+        {
+          segment: 'deconstruct', kind: 'poll',
+          q: 'Of these three failures, which one costs you actual money the fastest?',
+          options: [
+            'Prose returned where the code expected JSON',
+            'A tool loop with no cap, running overnight',
+            'No eval, so regressions go unnoticed',
+            'A typo in the system prompt',
+          ],
+          answer: 1,
+          reveal: 'The uncapped loop. The other two cost you trust and time; that one spends real credits all night with nobody awake to notice. It is the first bug in this program with a dollar figure attached.',
+          eyebrow: '💸 Cost check', title: 'Three silent failures. Which one bills you?',
+          presenterTip: 'Ties the failure segment straight back to the money slide. After the reveal, say the number out loud — an uncapped overnight loop on the top-tier model is not a rounding error.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'Did your first API call come back?',
+          options: ['✅ Got a reply', '⏳ Still setting up', '🔑 Stuck on the key', '😵 Completely lost'],
+          eyebrow: '🚦 Build check', title: 'Everyone gets a reply before we move on',
+          presenterTip: 'Operational. Call the numbers out loud ("18 of 22 — four more"). Nobody moves past this until the last two options are near zero.',
+        },
+        {
+          segment: 'micro-build', kind: 'poll',
+          q: 'Honestly — where are you with Python right now?',
+          options: [
+            '😬 I have never written a line',
+            '🙂 I can read it and follow along',
+            '💪 I could write this myself',
+            '🧙 I write Python for a living',
+          ],
+          eyebrow: '🌡️ Self-check', title: 'Where you actually stand, no judgment',
+          presenterTip: 'Ask this AFTER they have run real code, not before — it is a confidence read on what just happened. If most of the room picks the first two options, say so out loud and repeat the bar: read forty lines, judge them. That is the whole requirement.',
+        },
+      ],
     },
     thursday: {
       resultPreview: 'A running Business Workflow Assistant that automates one real workflow, plus a basic eval harness.',
@@ -1292,13 +1499,12 @@ export const ARCHITECTURE_DIAGRAMS: Record<number, string> = {
   T --> B["executive-dashboard-brief"]
   B --> L["Leadership: PUBLISH or BLOCK decision"]`,
   3: `flowchart LR
-  In["Business input"] --> API["Claude API"]
-  API --> SYS["System prompt + streaming"]
-  API --> TOOL["Tool use"]
-  TOOL --> EXT["Real systems / data"]
-  API --> OUT["Structured JSON output"]
-  OUT --> APP["Workflow Assistant"]
-  EVAL["Eval: dataset + grader"] -.measures.-> API`,
+  Y["👤 You"] --> CC["💻 Claude Code<br/>subscription seat"]
+  CC --> APP["🐍 Your Python program"]
+  APP --> API["🔌 Claude API<br/>paid per token"]
+  API --> APP
+  APP --> OUT["📦 Structured result<br/>your systems can use"]
+  KEY["🔑 API key<br/>from the Console"] -.-> API`,
   4: `flowchart TD
   A["Ad-hoc prompt"] --> L["Technique ladder<br/>clear → specific → structured → examples"]
   L --> TPL["Versioned template + variables"]
