@@ -82,7 +82,8 @@ export function getKitConfigDefaults(session: KitSessionInput): KitConfigDefault
   const storyBeats = flattenStoryBeats(
     dayKind === 'orientation' ? ORIENTATION_PLAN.storyBeats
       : dayKind === 'architecture' && wc ? wc.monday.storyBeats
-        : undefined, // Build Day has no authored story beats yet (kitSpecDaySlides.ts comment)
+        : dayKind === 'build' && wc ? wc.thursday.storyBeats
+          : undefined,
   );
 
   const input: BuildKitSpecInput = {

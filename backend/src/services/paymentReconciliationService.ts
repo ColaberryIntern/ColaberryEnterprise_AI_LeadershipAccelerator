@@ -37,18 +37,30 @@ const SETTLED_STATUSES = new Set(['Settled', 'Posted']);
 const RECONCILABLE_STATUSES = new Set(['Settled', 'Posted', 'Authorized']);
 
 /**
- * The cheapest real, full-tuition-shaped charge in the current pricing model
- * is the $199/mo Monthly plan (Annual is $1,788 upfront). A $50 charge is
- * always the Open House seat-hold deposit, not a completed payment -- found
- * live in the first dry run against production (2026-07-30): 19 of 28
- * would-be auto-reconciliations were $50 deposits, which would have
- * incorrectly marked pending-balance students as fully paid. Anything below
- * this line is silently skipped, not flagged -- a $50 deposit alone is the
- * normal, expected state for most Open House attendees, not an anomaly, and
- * flagging every one of them would be exactly the notification noise this
- * job exists to avoid.
+ * The floor that separates a real, full-tuition-shaped charge from the $50
+ * Open House seat-hold deposit. A $50 charge is always the deposit, not a
+ * completed payment -- found live in the first dry run against production
+ * (2026-07-30): 19 of 28 would-be auto-reconciliations were $50 deposits,
+ * which would have incorrectly marked pending-balance students as fully paid.
+ * Anything below this line is silently skipped, not flagged -- a $50 deposit
+ * alone is the normal, expected state for most Open House attendees, not an
+ * anomaly, and flagging every one of them would be exactly the notification
+ * noise this job exists to avoid.
+ *
+ * This was 199, pinned to the then-current $199/mo Monthly plan. Pricing moved
+ * to $149/mo (billed annually) with $199 as the month-to-month rate, and this
+ * constant did not move with it -- so every student paying the $149 rate had
+ * their payment filtered out BEFORE the customer lookup and silently never
+ * reconciled. They stayed payment_status='pending' and were locked out of the
+ * portal despite having paid. Found 2026-08-06 via Hellen Muhonja (paid $149
+ * on 08-04) and Firas Baidhani (paid $149 on 08-06), both of whom emailed that
+ * the portal did not reflect their enrollment.
+ *
+ * Deliberately set to a value BETWEEN the deposit and the cheapest real plan
+ * rather than to any specific price, so the next pricing change cannot
+ * silently reintroduce this. Only the $50 deposit needs to fall below it.
  */
-const MINIMUM_FULL_PAYMENT_AMOUNT = 199;
+const MINIMUM_FULL_PAYMENT_AMOUNT = 100;
 
 export interface AutoReconciledEntry {
   enrollmentId: string;
@@ -86,6 +98,7 @@ export interface ReconciliationResult {
 type EnrollmentMatch =
   | { kind: 'match'; enrollment: Enrollment; matchType: 'customer_id' | 'email' }
   | { kind: 'ambiguous'; candidates: Enrollment[] }
+  | { kind: 'prospect_only'; candidates: Enrollment[] }
   | { kind: 'none' };
 
 /**
@@ -124,13 +137,39 @@ export async function findMatchingEnrollment(
       status: 'active',
       payment_status: { [Op.ne]: 'paid' },
     },
+    include: [{ model: Cohort, as: 'cohort', attributes: ['id', 'cohort_type'], required: false }],
   });
   if (candidates.length === 0) return { kind: 'none' };
 
+  /*
+   * An enrollment sitting in a PROSPECTS cohort (cohort_type='explorer') is a
+   * free Open House signup, not a purchase of anything. Matching a payment onto
+   * one by email alone is unsafe: this PaySimple account is shared with the
+   * legacy bootcamp, so a bootcamp student who once attended an Open House has
+   * BOTH a recurring bootcamp payment plan AND a prospects-bucket enrollment
+   * under the same email. Auto-applying would book bootcamp tuition as
+   * Accelerator revenue and hand out Accelerator access nobody bought.
+   *
+   * Found before it shipped: lowering MINIMUM_FULL_PAYMENT_AMOUNT to catch the
+   * $149 plan made the sweep newly "find" 13 such payments across 9 people --
+   * every one of them in Explorer/Prospects, almost all recurring ACH drafts
+   * (RecurringScheduleId != 0, PaymentType ACH/Web), versus the real Accelerator
+   * checkouts which are one-off card payments (RecurringScheduleId 0, CC/Moto).
+   * Flag them for a human instead of writing. A genuine buyer stranded in the
+   * prospects bucket (this happens -- see the cohort-mismatch fixes) still gets
+   * surfaced, just not auto-applied.
+   *
+   * A prior explicit customer_id link is unaffected: that check returns above,
+   * because someone already tied that PaySimple identity to that enrollment.
+   */
+  const isProspect = (c: any) => String(c?.cohort?.cohort_type ?? '').toLowerCase() === 'explorer';
+  const realCohort = candidates.filter((c) => !isProspect(c));
+  if (realCohort.length === 0) return { kind: 'prospect_only', candidates };
+
   // Prefer the real (non-explorer) seat over a free-preview duplicate that
   // happens to share the email -- same reasoning as pickBestEnrollment.
-  const standard = candidates.filter((c) => c.enrollment_type !== 'explorer');
-  const pool = standard.length > 0 ? standard : candidates;
+  const standard = realCohort.filter((c) => c.enrollment_type !== 'explorer');
+  const pool = standard.length > 0 ? standard : realCohort;
   if (pool.length === 1) return { kind: 'match', enrollment: pool[0], matchType: 'email' };
   return { kind: 'ambiguous', candidates: pool };
 }
@@ -208,6 +247,15 @@ export async function runPaymentReconciliationSweep(
           paymentId: payment.Id, customerId, name, email: customer.Email,
           amount: payment.Amount, status: payment.Status, paymentDate: payment.PaymentDate,
           reason: `${match.candidates.length} open, unpaid enrollments share this email -- pick the right one manually`,
+        });
+        continue;
+      }
+
+      if (match.kind === 'prospect_only') {
+        result.flagged.push({
+          paymentId: payment.Id, customerId, name, email: customer.Email,
+          amount: payment.Amount, status: payment.Status, paymentDate: payment.PaymentDate,
+          reason: `Only match is a free Open House / prospects enrollment (${match.candidates[0]?.id}), which is not a purchase. Most likely a legacy bootcamp payment on a shared PaySimple account. Confirm what this payment is FOR before applying it.`,
         });
         continue;
       }

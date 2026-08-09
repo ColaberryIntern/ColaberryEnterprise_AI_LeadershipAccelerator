@@ -41,6 +41,8 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
+import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
+import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
@@ -2367,6 +2369,12 @@ async function start(): Promise<void> {
   await ensureFriendshipSchema();
   // Messaging extras — DM read cursor + widened notification-type CHECK. Additive.
   await ensureMessagingSchema();
+  // Reese Phase 1 — staff-identity columns on admin_users (display_name,
+  // is_ai_operated, agent_id). Additive, idempotent, no flag.
+  await ensureAdminUserIdentitySchema();
+  // Reese Phase 1 — agent-transparency columns on ai_agents (system_prompt,
+  // tools_granted, persona_version). Additive, idempotent, no flag.
+  await ensureAiAgentIdentitySchema();
   // Colaberry Commons — seed the 10 always-open fruit video rooms (idempotent).
   // Gated on the feature flag so it only populates envs where Rooms is enabled.
   if (env.communityRoomsEnabled) {
