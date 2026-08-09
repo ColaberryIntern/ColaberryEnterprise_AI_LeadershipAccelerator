@@ -1,6 +1,8 @@
 import AiAgent from '../models/AiAgent';
 import type { AiAgentType, AiAgentTriggerType, AiAgentCategory } from '../models/AiAgent';
 import { Op } from 'sequelize';
+import { seedReeseIdentity } from './reese/reeseIdentitySeed';
+import { REESE_PERSONA_BLOCK } from './reese/reeseSystemPrompt';
 
 interface AgentSeedEntry {
   agent_name: string;
@@ -15,6 +17,12 @@ interface AgentSeedEntry {
   // Only honored on first creation (see the findOrCreate loop below) — lets a
   // seed entry ship disabled by default without resetting it on every restart.
   enabled?: boolean;
+  // Reese Phase 1 — agent-transparency fields (additive columns, see
+  // ensureAiAgentIdentitySchema.ts). Optional so every other registry entry is
+  // unaffected.
+  system_prompt?: string;
+  tools_granted?: string[];
+  persona_version?: string;
 }
 
 const AGENT_REGISTRY: AgentSeedEntry[] = [
@@ -2177,6 +2185,31 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     description: 'Sofia Lindqvist. Manual-trigger only. Drafts ONE content idea (one gpt-4o-mini call) grounded in the top ranked signal and queues it in proposed_agent_actions for human review — never posts or sends.',
     enabled: true,
   },
+  // --- Reese Phase 1: real staff AI mentor identity ---
+  {
+    agent_name: 'Reese',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/',
+    // Reactive only in Phase 1 — replies exist purely as a response to an
+    // inbound student DM, never on a schedule. See reeseReplyService.ts (T009).
+    trigger_type: 'event_driven',
+    schedule: '',
+    category: 'student_success',
+    description:
+      'Reese — the student\'s dedicated AI Systems Architect mentor, reachable via ' +
+      'a real, persistent direct-message thread (same DM system as the rest of the ' +
+      'portal). Phase 1 is 100% reactive: Reese only ever replies to an inbound ' +
+      'student message, never initiates contact. Every exchange is backed by a ' +
+      'real ProofDesk ticket. See docs/CORY_PERSONA_SPEC.md for the locked voice ' +
+      'rules this persona is built from.',
+    config: { pilot_cohort_ids: [] },
+    enabled: true,
+    system_prompt: REESE_PERSONA_BLOCK,
+    // Honest, non-aspirational — reflects exactly what Phase 1 code lets Reese do.
+    tools_granted: ['respond_to_dm', 'read_learner_context'],
+    persona_version: '2026-08-06',
+  },
 ];
 
 /**
@@ -2202,6 +2235,12 @@ export async function seedAgentRegistry(): Promise<void> {
         description: entry.description,
         // Only set config if it wasn't customized (still empty)
         ...(Object.keys(agent.config || {}).length === 0 && entry.config ? { config: entry.config } : {}),
+        // Registry-defined identity metadata — refreshed like the other
+        // definitional fields above, not treated as user-customized runtime
+        // state (unlike config/status/run stats).
+        ...(entry.system_prompt !== undefined ? { system_prompt: entry.system_prompt } : {}),
+        ...(entry.tools_granted !== undefined ? { tools_granted: entry.tools_granted } : {}),
+        ...(entry.persona_version !== undefined ? { persona_version: entry.persona_version } : {}),
       });
     } else {
       console.log(`[AI Ops] Registered agent: ${entry.agent_name}`);
@@ -2217,6 +2256,16 @@ export async function seedAgentRegistry(): Promise<void> {
 
   // Assign agent_group to existing agents for super-agent aggregation
   await assignAgentGroups();
+
+  // Reese Phase 1 — create/link the real staff identity (AdminUser, Enrollment,
+  // CommunityMember) now that the 'Reese' AiAgent row above definitely exists.
+  // Failure here must never break the rest of boot (same fail-open posture as
+  // every ensure*Schema() call site) — log and continue.
+  try {
+    await seedReeseIdentity();
+  } catch (err: any) {
+    console.warn('[AI Ops] Reese identity seed failed:', err?.message);
+  }
 }
 
 // ─── Agent Group Assignment ────────────────────────────────────────────────

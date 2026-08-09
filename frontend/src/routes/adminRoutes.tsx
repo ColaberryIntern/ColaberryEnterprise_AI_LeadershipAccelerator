@@ -40,6 +40,7 @@ import AgentOrphansPage from '../pages/admin/AgentOrphansPage';
 import AdminMarketingDashboardPage from '../pages/admin/marketing/AdminMarketingDashboardPage';
 import AdminCommunicationsPage from '../pages/admin/AdminCommunicationsPage';
 import AdminTicketBoardPage from '../pages/admin/AdminTicketBoardPage';
+import AgentDetailPage from '../pages/admin/AgentDetailPage';
 import GovernanceCommandCenter from '../pages/admin/GovernanceCommandCenter';
 import AdminGovernancePolicyPage from '../pages/admin/AdminGovernancePolicyPage';
 import AdminProjectOverview from '../pages/admin/AdminProjectOverview';
@@ -110,6 +111,7 @@ const adminRoutes = (
         <Route path="/admin/communications" element={<AdminCommunicationsPage />} />
         <Route path="/admin/marketing" element={<AdminMarketingDashboardPage />} />
         <Route path="/admin/tickets" element={<AdminTicketBoardPage />} />
+        <Route path="/admin/agents/:id" element={<AgentDetailPage />} />
         <Route path="/admin/governance" element={<GovernanceCommandCenter />} />
         <Route path="/admin/governance-policy" element={<AdminGovernancePolicyPage />} />
         <Route path="/admin/projects" element={<AdminProjectOverview />} />
