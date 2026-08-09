@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   fetchRoom, fetchRoomMessages, postRoomMessage, requestRoomAccess, joinVideoRoom,
   touchRoomPresence, deleteRoom, inviteToRoom, fetchPeople, verifyAnswer, myEnrollmentId,
-  fetchRoomBookings, uploadRoomFile, downloadRoomResource, RoomView, RoomMessage, RoomPerson, BookingCard,
+  fetchRoomBookings, uploadRoomFile, downloadRoomResource, openSessionRecording,
+  RoomView, RoomMessage, RoomPerson, BookingCard,
 } from '../../../services/roomsApi';
 import RoomFilesPanel, { ACCEPT, ALLOWED_MIMES, ALLOWED_EXT, MAX_SIZE, extOf } from './RoomFilesPanel';
 import { fetchClassSessionDetail, ClassSessionInfo, joinSession } from '../../../services/onboardingApi';
@@ -107,6 +108,17 @@ const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
       .catch(() => { /* attendance credit is best-effort */ });
   };
 
+  // recording_url is usually a Bearer-gated API path, so this cannot be a plain
+  // <a href> — see openSessionRecording() for the full why.
+  const [recState, setRecState] = useState<'idle' | 'opening' | 'error'>('idle');
+  const handleWatchRecording = () => {
+    if (!session?.recording_url) return;
+    setRecState('opening');
+    openSessionRecording(session.recording_url, session.title)
+      .then(() => setRecState('idle'))
+      .catch(() => setRecState('error'));
+  };
+
   if (!session) return null;
 
   return (
@@ -120,7 +132,21 @@ const ClassSessionBanner: React.FC<{ sessionId: string }> = ({ sessionId }) => {
 
       {session.status === 'completed' ? (
         session.recording_url
-          ? <a className="te-btn ghost sm" href={session.recording_url} target="_blank" rel="noopener noreferrer">▶ Watch recording</a>
+          ? (
+            <>
+              <button
+                type="button"
+                className="te-btn ghost sm"
+                disabled={recState === 'opening'}
+                onClick={handleWatchRecording}
+              >
+                {recState === 'opening' ? 'Opening…' : '▶ Watch recording'}
+              </button>
+              {recState === 'error' && (
+                <div className="rm-classbanner-time">Could not open the recording. Try again, or find it under Recordings.</div>
+              )}
+            </>
+          )
           : <div className="rm-classbanner-time">This class has ended.</div>
       ) : isLive ? (
         <>

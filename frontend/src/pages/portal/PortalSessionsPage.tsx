@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
+import { openSessionRecording } from '../../services/roomsApi';
 
 interface SessionItem {
   id: string;
@@ -102,14 +103,15 @@ function PortalSessionsPage() {
                         </a>
                       )}
                       {session.status === 'completed' && session.recording_url && (
-                        <a
-                          href={session.recording_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                        // Not an <a href>: recording_url is normally a Bearer-gated
+                        // API path, which a raw navigation cannot authenticate.
+                        <button
+                          type="button"
+                          onClick={() => { openSessionRecording(session.recording_url as string, session.title).catch(() => undefined); }}
                           className="btn btn-outline-secondary btn-sm"
                         >
                           <i className="bi bi-play-circle me-1"></i>Recording
-                        </a>
+                        </button>
                       )}
                       {session.room_id && (
                         <Link
