@@ -393,3 +393,52 @@ export async function downloadRoomResource(roomId: string, resource: { id: strin
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 2000);
 }
+
+/**
+ * Open a session recording for viewing.
+ *
+ * `LiveSession.recording_url` holds one of two very different things, and the
+ * difference is why the "Watch recording" buttons were dead:
+ *
+ *   1. A relative, Bearer-gated API path, when the recording was ingested onto
+ *      our own disk — `/api/portal/community/rooms/:roomId/resources/:id/download`
+ *      (see sessionRecordingService.ingestRecordingForSession).
+ *   2. An absolute provider URL, when someone pasted an external link by hand.
+ *
+ * Both were being rendered straight into `<a href target="_blank">`. For case 2
+ * that is fine. For case 1 it is a plain browser navigation, which carries
+ * cookies but NOT the Authorization header the portal keeps in memory/storage,
+ * so the tab landed on `401 {"error":"Authentication required"}` and the button
+ * looked broken. Same trap downloadRoomResource() above already documents.
+ *
+ * The tab is opened synchronously, before any await, so it is still inside the
+ * click gesture and does not trip the popup blocker; the blob URL is swapped in
+ * once the authenticated fetch resolves.
+ */
+export async function openSessionRecording(recordingUrl: string, title?: string | null): Promise<void> {
+  if (/^https?:\/\//i.test(recordingUrl)) {
+    window.open(recordingUrl, '_blank', 'noopener,noreferrer');
+    return;
+  }
+
+  const tab = window.open('', '_blank');
+  try {
+    const res = await portalApi.get(recordingUrl, { responseType: 'blob' });
+    const url = URL.createObjectURL(res.data as Blob);
+    if (tab) {
+      tab.location.href = url;
+    } else {
+      // Popup blocked — fall back to a download so the recording is still reachable.
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = title || 'recording';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (err) {
+    tab?.close();
+    throw err;
+  }
+}
