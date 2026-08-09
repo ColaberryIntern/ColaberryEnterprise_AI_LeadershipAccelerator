@@ -42,19 +42,19 @@ export const WEEK3_MONDAY: TeachSlide[] = [
   },
   {
     segment: 'checkin', eyebrow: '▶️ Do this right now', title: 'Four clicks, one paragraph, then leave it running',
-    body: 'Open the portal, go to Projects, click "Start a new build", and describe your idea in one paragraph — who it is for, what it does, and the one thing it has to get right. Then hit go and leave the tab open. It takes a few minutes. It does not have to be your final idea; it has to be an idea you care enough about to argue with.',
+    body: 'Open the portal, go to Projects, click "Start a new build", and describe your idea in one paragraph — who it is for, what it does, and the one thing it has to get right. Then hit go and leave the tab open. It takes about twenty minutes to build, which is exactly why you start it now: it runs in the background while we talk, and it will be waiting for you by the time we need it. It does not have to be your final idea; it has to be an idea you care enough about to argue with.',
     bullets: [
       'Portal → Projects → "Start a new build"',
       'One paragraph: who it is for · what it does · the one thing it must get right',
-      'Hit go, then leave the tab running and come back to me',
+      'Hit go, leave the tab running — it takes about 20 minutes',
       'Not final — good enough to react to is the bar tonight',
     ],
     diagram: `flowchart LR
   P["🖥️ Portal"] --> PR["📁 Projects"]
   PR --> S["➕ Start a new build"]
   S --> I["✍️ Your idea,<br/>one paragraph"]
-  I --> G["⏳ Go — leave it<br/>running 3-5 min"]`,
-    script: 'Screen-share the exact click path once, slowly, then stop talking and let the room work. PACING: wait only until most students report their build is GENERATING — never wait for one to finish. The generation runs in the background through the next segment by design, which is why the pipeline explanation comes next; if you sit here watching progress bars the pace bar will read behind for the rest of the class. Anyone stuck goes to a mentor now, not at the break.',
+  I --> G["⏳ Go — it runs<br/>~20 min in the background"]`,
+    script: 'Screen-share the exact click path once, slowly, then stop talking and let the room work. PACING — this matters: the build takes ~20 minutes, so wait only until most students report theirs is GENERATING, never until one finishes. If they launch around minute 5, builds land around minute 25, which is the end of the business-problem segment — that is deliberate, and it is why the pipeline explanation comes next. Sitting here watching progress bars puts you 20 minutes behind for the rest of the night. Anyone stuck goes to a mentor now, not at the break.',
   },
   {
     segment: 'checkin', eyebrow: '🗺️ While it runs', title: 'Three things you leave with tonight',
@@ -137,7 +137,7 @@ export const WEEK3_MONDAY: TeachSlide[] = [
   R -.->|"the code you<br/>just built"| APP["⚙️ Your app,<br/>running at 2am"]
   APP --> API["🔌 Claude API"]
   API --> APP`,
-    script: 'Have students actually scroll their own plan and find one such task before you move on. Ask two people to read theirs out loud. The transition into the API lands ten times harder when it answers a question from their own build.',
+    script: 'Have students scroll their own plan and find one such task before you move on. Ask two people to read theirs out loud — the transition into the API lands ten times harder when it answers a question from their own build. TIMING: builds take ~20 minutes, so at this point in the class some are still finishing. Anyone whose plan is not ready uses yours on screen and checks their own at the break; do not stall the room waiting for stragglers.',
   },
 
   /* ================= architecture · two doors, two bills, Python ========== */
