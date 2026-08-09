@@ -439,6 +439,15 @@ async function ensureStudentTaskMergeSchema() {
     `ALTER TABLE student_tasks ADD COLUMN IF NOT EXISTS blocked_by JSONB`,
     `CREATE INDEX IF NOT EXISTS idx_student_tasks_story ON student_tasks (story_id)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS student_tasks_unique_story ON student_tasks (project_id, story_id) WHERE story_id IS NOT NULL`,
+    // SBP-REQ-v1 FR-012: a requirement is fulfilled by MANY stories, so
+    // UNIQUE (project_id, requirement_key) was never a valid constraint. It
+    // aborted importProject on the first task that re-cited a requirement —
+    // in production every student build persisted exactly 3 tasks and then
+    // 500'd (see docs/BUILD_PIPELINE_AUDIT.md, finding F-1). Task identity is
+    // (project_id, story_id), enforced by the partial unique index above.
+    // Recreate ONLY if you can also prove one requirement never spans two
+    // stories, which the product explicitly does not guarantee.
+    `DROP INDEX IF EXISTS student_tasks_unique_req_key`,
   ];
   for (const sql of statements) {
     try {
