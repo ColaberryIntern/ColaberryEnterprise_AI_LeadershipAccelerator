@@ -43,9 +43,16 @@ export interface TypeRouting {
   feed_cooldown_days?: number | null;
 }
 
-async function getRoutingMap(): Promise<Record<string, TypeRouting>> {
+async function getRoutingMapInternal(): Promise<Record<string, TypeRouting>> {
   const raw = await getSetting(ROUTING_KEY);
   return raw && typeof raw === 'object' ? raw : {};
+}
+
+/** Read-only accessor for the durable per-type routing map (the `feed_type_routing`
+ *  SystemSetting). Exported so sibling read-only services (e.g. feedTypeStatsService)
+ *  can read the same source of truth `getBoard()` uses instead of re-deriving it. */
+export async function getRoutingMap(): Promise<Record<string, TypeRouting>> {
+  return getRoutingMapInternal();
 }
 
 /** Apply one type's stored routing onto the in-memory registry (makes it live). */
