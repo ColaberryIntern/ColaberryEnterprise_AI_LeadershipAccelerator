@@ -225,12 +225,41 @@ interface ZoomRecordingFile {
   file_type: string;
   file_size: number;
   download_url: string;
+  // Zoom returns these on every recording file; they were simply not declared
+  // here before, which is part of why selection had no notion of WHEN a
+  // recording happened and could not tell a pre-class test from the class.
+  recording_start?: string;
+  recording_end?: string;
 }
 interface ZoomRecordingMeeting {
   id: number;
   uuid: string;
   topic: string;
   recording_files: ZoomRecordingFile[];
+  start_time?: string;
+  duration?: number; // minutes
+}
+
+/** When a recording instance actually ran, preferring per-file timings. */
+function instanceTiming(meeting: ZoomRecordingMeeting): { startedAt: Date | null; endedAt: Date | null } {
+  const files = (meeting.recording_files || []).filter((f) => f.recording_start || f.recording_end);
+  const starts = files.map((f) => f.recording_start).filter(Boolean).map((s) => new Date(s as string).getTime());
+  const ends = files.map((f) => f.recording_end).filter(Boolean).map((s) => new Date(s as string).getTime());
+
+  let startMs = starts.length ? Math.min(...starts) : NaN;
+  let endMs = ends.length ? Math.max(...ends) : NaN;
+
+  // Fall back to the meeting-level start_time + duration when the files carry
+  // no timings of their own.
+  if (Number.isNaN(startMs) && meeting.start_time) startMs = new Date(meeting.start_time).getTime();
+  if (Number.isNaN(endMs) && !Number.isNaN(startMs) && typeof meeting.duration === 'number') {
+    endMs = startMs + meeting.duration * 60_000;
+  }
+
+  return {
+    startedAt: Number.isNaN(startMs) ? null : new Date(startMs),
+    endedAt: Number.isNaN(endMs) ? null : new Date(endMs),
+  };
 }
 
 // The recordings-list response is memoized per (from, to) window for ~90s —
@@ -300,6 +329,67 @@ export async function findRecordingForSession(session: LiveSession): Promise<Zoo
 export interface ZoomRecordingInstance {
   uuid: string;
   match: ZoomRecordingMatch;
+  /** When this instance's recording actually started/ended (UTC). */
+  startedAt?: Date | null;
+  endedAt?: Date | null;
+}
+
+/**
+ * Does a recording instance overlap the scheduled class window?
+ *
+ * This is the selection rule that stops a pre-class test start being mistaken
+ * for the class. Real incident (Week 2 Build Day, 2026-08-06, a 6:30-8:30pm CT
+ * class): Zoom held SIX instances for the meeting — four throwaway starts
+ * between 5:27 and 6:00pm, then the class itself in two parts because the
+ * meeting was restarted at the break. The old selector took the first match by
+ * meeting id, so it stored a 5-minute 0.8MB test and the 93MB + 178MB real
+ * recordings were never ingested.
+ *
+ * The rule is: the recording must overlap the (generously padded) class period
+ * by at least `minOverlapMs`. The minimum-overlap requirement is what actually
+ * does the work; the padding only stops a legitimate early start or an
+ * overrunning class from being discarded.
+ *
+ * Bare interval overlap is NOT enough, which is worth recording because it is
+ * the obvious first answer and it is wrong. One of the throwaway starts above
+ * ran 23:00:57 -> 23:01:25 UTC against a 23:30 class start; with any early
+ * grace of 30 minutes or more it touches the padded window and would be
+ * selected on a technicality. Requiring real overlap separates the cases by a
+ * wide margin rather than by a tuned boundary — on the real data the four
+ * tests score 0 and 0.5 minutes while the two class parts score 71 and 83.
+ *
+ * Padding is asymmetric on purpose:
+ *   - before: Part 1 began 14 minutes BEFORE the scheduled start, so a
+ *     "starts inside the window" rule would have dropped half the class.
+ *   - after: Part 2 ran 23 minutes past the scheduled end, and a class that
+ *     overruns and gets restarted should still be captured.
+ *
+ * Trade-off accepted and documented: a genuinely short clip (say an instructor
+ * recording only the last 5 minutes) scores below the floor and is skipped.
+ * That is the safer failure — it lands as "no recording", which is visible,
+ * rather than as a wrong recording presented to students as the class.
+ */
+export function recordingOverlapsWindow(
+  instance: Pick<ZoomRecordingInstance, 'startedAt' | 'endedAt'>,
+  windowStart: Date,
+  windowEnd: Date,
+  opts: { graceBeforeMs?: number; graceAfterMs?: number; minOverlapMs?: number } = {},
+): boolean {
+  const start = instance.startedAt;
+  const end = instance.endedAt ?? instance.startedAt;
+  // No timing from the provider — cannot prove it belongs to this class, and
+  // guessing is exactly what caused the incident. Excluded, not included.
+  if (!start || !end) return false;
+
+  const graceBefore = opts.graceBeforeMs ?? 30 * 60 * 1000;
+  const graceAfter = opts.graceAfterMs ?? 60 * 60 * 1000;
+  const minOverlap = opts.minOverlapMs ?? 10 * 60 * 1000;
+
+  const from = windowStart.getTime() - graceBefore;
+  const to = windowEnd.getTime() + graceAfter;
+
+  const overlapMs = Math.min(end.getTime(), to) - Math.max(start.getTime(), from);
+  return overlapMs >= minOverlap;
 }
 
 // Same numeric meeting ID matching as findRecordingByMeetingId, but returns
@@ -320,9 +410,38 @@ export async function findRecordingInstancesByMeetingId(
   for (const meeting of meetings) {
     if (String(meeting.id) !== meetingId) continue;
     const match = toRecordingMatch(meeting, fallbackName);
-    if (match) out.push({ uuid: meeting.uuid, match });
+    if (match) out.push({ uuid: meeting.uuid, match, ...instanceTiming(meeting) });
   }
   return out;
+}
+
+/**
+ * Every recording instance that plausibly IS this class, earliest first.
+ *
+ * Replaces "first instance whose meeting id matches" for the session path.
+ * Two changes, both load-bearing:
+ *   - filters by recordingOverlapsWindow, so pre-class test starts are not
+ *     mistaken for the class (see that function for the incident);
+ *   - returns ALL matches, because a class restarted at the break is genuinely
+ *     two recordings and returning one silently loses half of it.
+ *
+ * The date range is widened a day either side of the session date so a class
+ * that runs past midnight UTC — every evening Central class does — is not cut
+ * in half by the list-API's date filtering.
+ */
+export async function findClassRecordingInstances(
+  meetingId: string,
+  sessionDate: string,
+  windowStart: Date,
+  windowEnd: Date,
+  fallbackName?: string,
+): Promise<ZoomRecordingInstance[]> {
+  const instances = await findRecordingInstancesByMeetingId(
+    meetingId, addDays(sessionDate, -1), addDays(sessionDate, 1), fallbackName,
+  );
+  return instances
+    .filter((i) => recordingOverlapsWindow(i, windowStart, windowEnd))
+    .sort((a, b) => (a.startedAt?.getTime() ?? 0) - (b.startedAt?.getTime() ?? 0));
 }
 
 // Pulls the numeric Zoom meeting ID out of a join URL like
