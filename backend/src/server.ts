@@ -447,6 +447,13 @@ async function ensureStudentTaskMergeSchema() {
     // (project_id, story_id), enforced by the partial unique index above.
     // Recreate ONLY if you can also prove one requirement never spans two
     // stories, which the product explicitly does not guarantee.
+    // Sequelize's `unique: true` creates a CONSTRAINT, not a bare index, so
+    // `DROP INDEX` fails with "cannot drop index ... because constraint ...
+    // requires it" and — because this loop catches and logs each statement —
+    // fails SILENTLY. Drop the constraint first (that removes its backing index
+    // too), then the bare-index form for any DB where it exists without a
+    // constraint. Both are IF EXISTS, so running this twice is a no-op.
+    `ALTER TABLE student_tasks DROP CONSTRAINT IF EXISTS student_tasks_unique_req_key`,
     `DROP INDEX IF EXISTS student_tasks_unique_req_key`,
   ];
   for (const sql of statements) {
@@ -455,6 +462,45 @@ async function ensureStudentTaskMergeSchema() {
     } catch (err: any) {
       console.warn('[DB] student-task merge schema stmt skipped:', err?.message);
     }
+  }
+
+  // Post-condition check. Every statement above is best-effort and its failure is
+  // only warned about, so a statement that MUST take effect cannot be verified by
+  // "it didn't throw" — that is exactly how the first attempt at this drop failed
+  // silently (DROP INDEX against a constraint-backed index). Assert the outcome.
+  try {
+    const [rows]: any = await sequelize.query(
+      `SELECT
+         (SELECT count(*) FROM pg_constraint
+           WHERE conrelid = 'student_tasks'::regclass
+             AND conname = 'student_tasks_unique_req_key') AS con,
+         (SELECT count(*) FROM pg_indexes
+           WHERE tablename = 'student_tasks'
+             AND indexname = 'student_tasks_unique_req_key') AS idx`
+    );
+    const con = Number(rows?.[0]?.con ?? 0);
+    const idx = Number(rows?.[0]?.idx ?? 0);
+    if (con > 0 || idx > 0) {
+      // Loud and structured: while this survives, every student build silently
+      // truncates at the first task that re-cites a requirement (audit F-1).
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'backend',
+        event: 'student_tasks_unique_req_key_still_present',
+        outcome: 'failure',
+        error_class: 'SchemaInvariantViolation',
+        context: {
+          constraint: con, index: idx,
+          impact: 'student build imports will abort on the first duplicate requirement_key',
+          remedy: "ALTER TABLE student_tasks DROP CONSTRAINT IF EXISTS student_tasks_unique_req_key",
+        },
+      }));
+    } else {
+      console.log('[DB] student_tasks_unique_req_key confirmed absent (FR-012)');
+    }
+  } catch (err: any) {
+    console.warn('[DB] student-task schema post-check failed:', err?.message);
   }
 }
 
