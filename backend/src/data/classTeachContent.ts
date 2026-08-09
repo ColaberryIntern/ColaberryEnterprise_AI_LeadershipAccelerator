@@ -22,6 +22,7 @@
  */
 
 import { GENERATED_WEEK_TEACH } from './classTeachWeeks';
+import { WEEK3_MONDAY } from './classTeachWeek3';
 
 /** A sourced factual claim shown in a small footer + the readiness report. */
 export interface EvidenceClaim {
@@ -301,10 +302,16 @@ const WEEK1: DayTeach = {
 };
 
 /** Deep teaching content per week (1..12). Weeks 2-12 come from the generated
- *  fan-out (classTeachWeeks.ts); the hand-authored Week 1 wins on conflict. */
+ *  fan-out (classTeachWeeks.ts); hand-authored days win on conflict.
+ *
+ *  Week 3 is merged per-DAY, not per-week: Monday is hand-authored (the
+ *  project-build launch + Claude API / billing class) while Thursday still
+ *  comes from the generated set, so replacing the whole `3` key would silently
+ *  drop Build Day's content. */
 export const WEEK_TEACH: Record<number, DayTeach> = {
   ...GENERATED_WEEK_TEACH,
   1: WEEK1,
+  3: { ...GENERATED_WEEK_TEACH[3], monday: WEEK3_MONDAY },
 };
 
 /** Teach slides for a given week + day, or [] if none authored yet. */
