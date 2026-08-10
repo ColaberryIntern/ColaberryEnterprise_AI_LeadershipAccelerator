@@ -132,6 +132,7 @@ import WorkUnitDependency from './WorkUnitDependency';
 import ResourceLease from './ResourceLease';
 import ApprovalRequest from './ApprovalRequest';
 import OutcomeMeasurement from './OutcomeMeasurement';
+import ReeseOutreach from './ReeseOutreach';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -853,6 +854,12 @@ ApprovalRequest.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event'
 Ticket.hasMany(OutcomeMeasurement, { foreignKey: 'ticket_id', as: 'outcomeMeasurements' });
 OutcomeMeasurement.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 
+// Reese Phase 2 (Autonomous Outreach)
+Ticket.hasMany(ReeseOutreach, { foreignKey: 'ticket_id', as: 'reeseOutreaches' });
+ReeseOutreach.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+Enrollment.hasMany(ReeseOutreach, { foreignKey: 'enrollment_id', as: 'reeseOutreaches' });
+ReeseOutreach.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -1216,6 +1223,7 @@ export {
   ResourceLease,
   ApprovalRequest,
   OutcomeMeasurement,
+  ReeseOutreach,
   StudentNavigationEvent,
   Alert,
   AlertEvent,

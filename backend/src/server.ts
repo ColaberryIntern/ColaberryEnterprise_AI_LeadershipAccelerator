@@ -41,12 +41,15 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
+import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
+import { ensureReeseOutreachSchema } from './db/ensureReeseOutreachSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
@@ -2305,6 +2308,8 @@ async function start(): Promise<void> {
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
   // nullable ticket columns (idempotent DDL, shadow mode).
   await ensureWorkLedgerSchema();
+  await ensureSbpSchema();
+  await ensureWorkspaceRepoSchema();
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
@@ -2322,6 +2327,10 @@ async function start(): Promise<void> {
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.
   await ensureOutcomeMeasurementsSchema();
+  // Reese Phase 2 (Autonomous Outreach): 1 new table, reese_autonomous_outreach
+  // (idempotent DDL, additive only). Scheduled by schedulerService.ts's daily
+  // ReeseAutonomousOutreachSweep/ReeseOutreachFollowUps crons.
+  await ensureReeseOutreachSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).

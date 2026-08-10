@@ -2210,6 +2210,46 @@ const AGENT_REGISTRY: AgentSeedEntry[] = [
     tools_granted: ['respond_to_dm', 'read_learner_context'],
     persona_version: '2026-08-06',
   },
+  // --- Reese Phase 2: Autonomous Outreach (the two new scheduled crons) ---
+  // Registered here (not left to run "untracked", the gap Phase 1's own
+  // ReesePresenceHeartbeat cron has today) specifically so
+  // schedulerService.ts's instrumentCronJob() enabled/paused gate actually
+  // applies to them — this is the run's real rollback/kill-switch mechanism:
+  // an admin can pause either job from Admin > Agents (enabled:false or
+  // status:'paused') with no redeploy. See execution-contract.md.
+  {
+    agent_name: 'ReeseAutonomousOutreachSweep',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reeseAutonomousOutreachService.ts',
+    trigger_type: 'cron',
+    schedule: '0 15 * * *',
+    category: 'student_success',
+    description:
+      'Reese Phase 2 — daily scan of the approved pilot cohort for two real ' +
+      'risk signals (inactivity/low-completion, behavior anomaly). On a real, ' +
+      'non-duplicate, non-cadence-capped hit, sends one real autonomous DM and ' +
+      'opens a ProofDesk ticket with the real reason/goal. Hard caps: 7-day ' +
+      'per-student cadence, 12/day combined ceiling shared with the follow-up ' +
+      'job below, R3 governance tagging (shadow-mode, log-only).',
+    enabled: true,
+  },
+  {
+    agent_name: 'ReeseOutreachFollowUps',
+    agent_type: 'ai_staff_mentor',
+    module: 'reese',
+    source_file: 'backend/src/services/reese/reeseOutreachFollowUpService.ts',
+    trigger_type: 'cron',
+    schedule: '0 16 * * *',
+    category: 'student_success',
+    description:
+      'Reese Phase 2 — daily sweep of open autonomous-outreach threads. Closes ' +
+      'with real evidence when the signal clears or the student replies; sends ' +
+      'one more unique follow-up if under the 3-attempt cap; escalates to human ' +
+      'review (never a 4th message, never a silent auto-close) once the cap is ' +
+      'reached.',
+    enabled: true,
+  },
 ];
 
 /**

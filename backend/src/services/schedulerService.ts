@@ -39,6 +39,7 @@ import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
 import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom } from './sessionRecordingService';
+import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 
 /**
@@ -1821,6 +1822,42 @@ export function startScheduler(): void {
     });
   });
 
+  // Reese Phase 2 (Autonomous Outreach) — daily scan of the approved pilot
+  // cohort for two real risk signals; on a real, non-duplicate,
+  // non-cadence-capped hit, sends one real autonomous DM + opens a ProofDesk
+  // ticket (R3, shadow-mode governance). Registered in agentRegistrySeed.ts
+  // ('ReeseAutonomousOutreachSweep') so instrumentCronJob()'s enabled/paused
+  // gate actually applies — pause from Admin > Agents, no redeploy needed.
+  cron.schedule('0 15 * * *', () => {
+    instrumentCronJob('ReeseAutonomousOutreachSweep', async () => {
+      const { runReeseAutonomousOutreachSweep } = await import('./reese/reeseAutonomousOutreachService');
+      const result = await runReeseAutonomousOutreachSweep();
+      console.log('[Scheduler] Reese autonomous outreach sweep:', {
+        evaluated: result.evaluated, sent: result.sent, skipped: result.skipped,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese autonomous outreach sweep error:', err);
+    });
+  });
+
+  // Reese Phase 2 (Autonomous Outreach) — daily follow-up/closure sweep for
+  // already-open autonomous-outreach threads. Runs an hour after the sweep
+  // above so a same-day new send's next_follow_up_due_at (+7 days) never
+  // collides with this run. Registered as 'ReeseOutreachFollowUps' for the
+  // same pause/kill-switch reason as the sweep above.
+  cron.schedule('0 16 * * *', () => {
+    instrumentCronJob('ReeseOutreachFollowUps', async () => {
+      const { processDueReeseOutreachFollowUps } = await import('./reese/reeseOutreachFollowUpService');
+      const result = await processDueReeseOutreachFollowUps();
+      console.log('[Scheduler] Reese outreach follow-ups:', {
+        processed: result.processed, signalCleared: result.signalCleared, goalMet: result.goalMet,
+        followUpSent: result.followUpSent, escalated: result.escalated, dailyCapDeferred: result.dailyCapDeferred,
+      });
+    }).catch((err) => {
+      console.error('[Scheduler] Reese outreach follow-ups error:', err);
+    });
+  });
+
   // Refresh the student podcast catalog once per week (Monday 03:00 America/Chicago).
   // Scrapes the curated training-site index + enriches with Buzzsprout thumbnails/audio.
   cron.schedule(
@@ -2460,6 +2497,20 @@ export function startScheduler(): void {
           }
         } catch (err: any) {
           console.error(`[Scheduler] Recording ingest failed for session ${session.id}:`, err.message);
+        }
+
+        // Class Notes — snapshot the standalone teaching deck into the Room.
+        // Independent of the recording above ON PURPOSE: Sessions 1-4 were
+        // taught on Google Meet and have no recoverable video at all, so notes
+        // must not be conditional on a recording existing. Cheap (renders HTML,
+        // no download) and idempotent, so it is safe on every sweep.
+        try {
+          const notes = await attachClassNotesForSession(session);
+          if (notes.status === 'attached') {
+            console.log(`[Scheduler] Class Notes attached for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Class Notes failed for session ${session.id}:`, err.message);
         }
       }
 

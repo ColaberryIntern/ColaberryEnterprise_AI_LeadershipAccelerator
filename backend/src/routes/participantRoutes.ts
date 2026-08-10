@@ -74,6 +74,7 @@ import { env } from '../config/env';
 import projectRoutes from './projectRoutes';
 import studentOpsRoutes from './studentOpsRoutes';
 import projectsPortalRoutes from './projectsPortalRoutes';
+import sbpRoutes from './sbpRoutes';
 import workspaceRoutes from './workspaceRoutes';
 
 const router = Router();
@@ -417,6 +418,8 @@ router.use(studentOpsRoutes);
 // mount's own comment. Inert unless CONTENT_PAGE_GATE_ENABLED=true (ships dark).
 router.use('/api/portal/projects', requireParticipant, requireContentEntitlement('projects'));
 router.use(projectsPortalRoutes);
+// Student Build Pipeline: idea -> plan -> repo. Flag-gated on projectApiEnabled.
+router.use(sbpRoutes);
 
 // Mentor endpoints
 router.post('/api/portal/mentor/chat', requireParticipant, handleSendMentorMessage);

@@ -69,6 +69,30 @@ const PROVIDERS: Record<string, {
   },
 };
 
+/**
+ * Which Room should hold a session's artefacts (recordings, Class Notes).
+ *
+ * NOT the booking's room. Every class booking points at the cohort's single
+ * PERSISTENT room ("July 2026 - AI Systems Architect"), but each session also
+ * has its own `scheduled` room, and that per-session room is what students
+ * actually open — the portal's "YOUR CLASSES" list links there.
+ *
+ * Attaching to the booking room is why a session room's Recordings tab read
+ * "No recordings yet" while that same session's banner offered a recording:
+ * the file was real, just one level up from where anyone looks. It also meant
+ * a class recorded in two parts exposed only the part the banner linked to,
+ * with no way to reach the second.
+ *
+ * Falls back to the booking room when a session has no room of its own.
+ */
+export async function resolveSessionRoomId(session: LiveSession, bookingRoomId: string): Promise<string> {
+  const sessionRoom = await CommunityRoom.findOne({
+    where: { linked_live_session_id: session.id },
+    attributes: ['id'],
+  });
+  return sessionRoom?.id || bookingRoomId;
+}
+
 // Idempotent findOrCreate of a RoomBooking for a session, mirroring the exact
 // pattern ensureRoomForSession already uses for the room itself. A room must
 // exist first (bookings belong to a room); ensureRoomForSession is itself
@@ -293,6 +317,11 @@ async function ingestZoomRecordingsForSession(
   );
   if (!instances.length) return { status: 'not_found' };
 
+  // Session's own room, not the cohort room the booking points at — see
+  // resolveSessionRoomId. Both parts of a split class must land where the
+  // student actually browses, or only the banner-linked one is reachable.
+  const roomId = await resolveSessionRoomId(session, booking.room_id);
+
   const multi = instances.length > 1;
   let firstResourceId: string | null = null;
   let ingestedAny = false;
@@ -302,7 +331,7 @@ async function ingestZoomRecordingsForSession(
 
     const existing = await RoomResource.findOne({
       where: {
-        room_id: booking.room_id,
+        room_id: roomId,
         resource_type: 'recording',
         metadata: { [Op.contains]: { zoom_uuid: inst.uuid } } as unknown as Record<string, unknown>,
       },
@@ -316,7 +345,7 @@ async function ingestZoomRecordingsForSession(
     const title = multi ? `${base} · Part ${idx + 1} of ${instances.length}` : base;
 
     const result = await attachRecording(
-      booking.room_id,
+      roomId,
       booking.id,
       inst.match,
       (m) => streamZoomFile(m as ZoomRecordingMatch),
@@ -332,7 +361,7 @@ async function ingestZoomRecordingsForSession(
 
   if (firstResourceId) {
     await session.update({
-      recording_url: `/api/portal/community/rooms/${booking.room_id}/resources/${firstResourceId}/download`,
+      recording_url: `/api/portal/community/rooms/${roomId}/resources/${firstResourceId}/download`,
     });
   }
 
