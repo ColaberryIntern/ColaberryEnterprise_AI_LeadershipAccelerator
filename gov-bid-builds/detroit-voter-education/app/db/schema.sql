@@ -123,6 +123,39 @@ CREATE TABLE IF NOT EXISTS subscriptions (
 CREATE INDEX IF NOT EXISTS idx_subscriptions_session ON subscriptions(session_id);
 CREATE INDEX IF NOT EXISTS idx_subscriptions_subject ON subscriptions(subject_id);
 
+-- STORY-017: real government-API ingestion pipeline infrastructure (client,
+-- retry/backoff, circuit breaker, validation, storage, admin alerting).
+-- Pointed at the Federal Register API (federalregister.gov, official U.S.
+-- government, no key required) for legislation/regulation documents --
+-- deliberately NOT a real candidate/officeholder data source. Which source
+-- to use for candidate positions is a separate decision (same reasoning as
+-- STORY-010's content-generation deferral) -- see decision context in
+-- PROGRESS.md for this story.
+CREATE TABLE IF NOT EXISTS government_data_ingestions (
+  id               SERIAL PRIMARY KEY,
+  source           VARCHAR(100) NOT NULL,
+  endpoint         TEXT NOT NULL,
+  status           VARCHAR(20) NOT NULL, -- 'success' | 'failed'
+  attempt_count    INTEGER NOT NULL,
+  result_count     INTEGER,
+  response_summary JSONB,
+  error_message    TEXT,
+  ingested_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Admin alert on ingestion failure. channel='log_stub' -- no real Twilio/
+-- SendGrid wired up, same precedent as STORY-011/016 (new external
+-- dependency + real admin contact info is a decision for a human).
+CREATE TABLE IF NOT EXISTS ingestion_alerts (
+  id           SERIAL PRIMARY KEY,
+  ingestion_id INTEGER NOT NULL REFERENCES government_data_ingestions(id),
+  channel      VARCHAR(30) NOT NULL DEFAULT 'log_stub',
+  message      TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_government_data_ingestions_source ON government_data_ingestions(source);
+CREATE INDEX IF NOT EXISTS idx_ingestion_alerts_ingestion ON ingestion_alerts(ingestion_id);
+
 -- STORY-013: bias/accuracy governance evaluation. method='heuristic_demo_v1' is
 -- a deterministic, explainable stand-in (word-overlap grounding + a loaded-word
 -- stoplist) documented as a heuristic, not a validated bias/accuracy measurement
