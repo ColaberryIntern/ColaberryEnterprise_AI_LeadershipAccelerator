@@ -1,4 +1,5 @@
 import { GitHubConnection, Enrollment } from '../models';
+import Project from '../models/Project';
 
 // studentWorkspaceService — platform-provisioned per-student workspace repos.
 //
@@ -87,10 +88,53 @@ async function getWithRetry(url: string, token: string): Promise<Response> {
   throw new Error(`GitHub API error after ${MAX_READ_RETRIES} attempts (last status ${lastStatus}): ${url}`);
 }
 
-/** Deterministic repo name for a student's workspace. */
-export function workspaceRepoName(enrollmentId: string): string {
-  // Short, stable, DNS/GitHub-safe. Enrollment ids are UUIDs.
-  return `student-workspace-${enrollmentId}`;
+/**
+ * Turn a project name into a GitHub-safe slug. Exported for testing because the
+ * repo name is the student's portfolio artifact — the thing an employer opens —
+ * and a mangled one is a real cost to them.
+ */
+export function slugifyProjectName(name: string | null | undefined): string {
+  const slug = String(name ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
+  return slug || 'build';
+}
+
+/**
+ * Deterministic repo name for a PROJECT's workspace (SBP-GH-v1 §4.1).
+ *
+ * Was `student-workspace-<enrollmentId>` — a bare UUID. This repo is the
+ * student's portfolio artifact, so it reads like one: `sponsor-dashboard-248d9d63`.
+ * The 8-char project-id suffix makes it unique across the org without a
+ * collision check. `projects` has no `slug` column (verified), so the slug is
+ * derived from `name` — the display name derived from the idea — falling back to
+ * `organization_name`.
+ */
+export function workspaceRepoName(project: { id: string; name?: string | null; organization_name?: string | null }): string {
+  const slug = slugifyProjectName(project.name || project.organization_name);
+  return `${slug}-${String(project.id).replace(/-/g, '').slice(0, 8)}`;
+}
+
+/**
+ * Resolve a project the caller owns, or throw. Every entry point calls this
+ * BEFORE any GitHub request, so a foreign projectId never reaches the network —
+ * the tests assert the fetch mock is not merely unsuccessful but never invoked.
+ */
+async function requireOwnedProject(enrollmentId: string, projectId: string): Promise<Project> {
+  if (!enrollmentId) throw new Error('enrollmentId is required');
+  if (!projectId) throw new Error('projectId is required');
+  const project = await Project.findByPk(projectId);
+  if (!project || String((project as any).enrollment_id) !== String(enrollmentId)) {
+    // Deliberately indistinguishable from "does not exist": a caller must not be
+    // able to probe for the existence of another student's project.
+    const err: any = new Error('Project not found');
+    err.status = 404;
+    throw err;
+  }
+  return project;
 }
 
 export interface WorkspaceRepoView {
@@ -114,16 +158,19 @@ export interface WorkspaceRepoView {
  */
 export async function provisionWorkspaceRepo(
   enrollmentId: string,
+  projectId: string,
   githubLogin: string,
 ): Promise<WorkspaceRepoView> {
-  if (!enrollmentId) throw new Error('enrollmentId is required');
+  // Ownership and input validation FIRST — nothing reaches GitHub until the
+  // caller is proven to own this project and the login is well-formed.
+  const project = await requireOwnedProject(enrollmentId, projectId);
   if (!isValidGithubLogin(githubLogin)) {
     throw new Error('A valid GitHub username is required');
   }
   const login = githubLogin.trim();
   const token = requirePlatformToken();
   const owner = org();
-  const repo = workspaceRepoName(enrollmentId);
+  const repo = workspaceRepoName(project as any);
 
   // Guard: the enrollment must exist (avoids orphan connections).
   const enrollment = await Enrollment.findByPk(enrollmentId);
@@ -165,9 +212,11 @@ export async function provisionWorkspaceRepo(
 
   // 3) Upsert the connection. Do NOT persist the platform token.
   const repoUrl = `https://github.com/${owner}/${repo}`;
+  // Keyed on the PROJECT now (FR-037), not the enrollment.
   const [connection] = await GitHubConnection.findOrCreate({
-    where: { enrollment_id: enrollmentId },
+    where: { project_id: projectId },
     defaults: {
+      project_id: projectId,
       enrollment_id: enrollmentId,
       repo_url: repoUrl,
       repo_owner: owner,
@@ -197,11 +246,11 @@ export async function provisionWorkspaceRepo(
  * commit_summary_json / last_sync_at on the connection. Read-only — the portal
  * never commits. Uses the platform token (org owner reads the private repo).
  */
-export async function syncWorkspaceRepo(enrollmentId: string): Promise<WorkspaceRepoView> {
-  if (!enrollmentId) throw new Error('enrollmentId is required');
+export async function syncWorkspaceRepo(enrollmentId: string, projectId: string): Promise<WorkspaceRepoView> {
+  await requireOwnedProject(enrollmentId, projectId);
   const token = requirePlatformToken();
 
-  const connection = await GitHubConnection.findOne({ where: { enrollment_id: enrollmentId } });
+  const connection = await GitHubConnection.findOne({ where: { project_id: projectId } });
   if (!connection || !connection.repo_owner || !connection.repo_name) {
     throw new Error('No workspace repo provisioned for this student');
   }
@@ -251,8 +300,9 @@ export async function syncWorkspaceRepo(enrollmentId: string): Promise<Workspace
 // ── read ──────────────────────────────────────────────────────────────────────
 
 /** Return the workspace repo state for the student (never throws on not-connected). */
-export async function getWorkspaceRepo(enrollmentId: string): Promise<WorkspaceRepoView> {
-  const connection = await GitHubConnection.findOne({ where: { enrollment_id: enrollmentId } });
+export async function getWorkspaceRepo(enrollmentId: string, projectId: string): Promise<WorkspaceRepoView> {
+  await requireOwnedProject(enrollmentId, projectId);
+  const connection = await GitHubConnection.findOne({ where: { project_id: projectId } });
   if (!connection) {
     return {
       connected: false,

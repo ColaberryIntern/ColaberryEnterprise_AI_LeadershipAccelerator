@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 6:52 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">10 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 7:14 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">11 changes</span></div>
   </header>
   <main>
     
@@ -207,6 +207,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**Applied to real `accelerator_dev1` Postgres and confirmed by catalog query.** Post-migration dev reads `project_col=1 old_constraint=0 new_unique=1`; un-migrated prod reads `project_col=0 old_constraint=1 new_unique=0`, i.e. the assertion would report all three problems there — **proving it is not vacuous**. All 9 dev rows intact (dropping a uniqueness constraint only widens what is permitted). Re-running the identical SQL is a proven no-op. `assertWorkspaceRepoSchema()` is exported separately so the post-condition is testable rather than trusted, and emits a structured `SchemaInvariantViolation` naming the student-facing impact and the remedial SQL.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">8 of 17 tasks. **Prod deliberately NOT migrated** — it ships in T15 with its rollback, for approval; the boot path is safe on prod meanwhile since every statement is `IF NOT EXISTS`/`IF EXISTS` and the assertion only logs. Migration remains clean: prod holds 11 `github_connections` rows and zero are real platform-provisioned workspace repos, so no `project_id` needs backfilling. Next is T7 — re-key `studentWorkspaceService` to take `projectId` and verify ownership through the enrollment before any GitHub call.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">11</span>
+          <h2>**Ownership is now enforced before any GitHub call, and the repo name reads like a portfolio artifact instead of a UUID**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`studentWorkspaceService.ts`, `models/GitHubConnection.ts`, `routes/workspaceRoutes.ts`. **T7:** `provisionWorkspaceRepo`, `syncWorkspaceRepo` and `getWorkspaceRepo` now take `(enrollmentId, projectId, …)` and call a new `requireOwnedProject()` **first** — before the token is read, before any fetch. A project the caller does not own throws a 404-shaped error deliberately indistinguishable from &quot;does not exist&quot;, so a student cannot probe for the existence of someone else&#39;s project. `GitHubConnection` gains a nullable `project_id` and loses `unique: true` on `enrollment_id` (the partial unique index on `project_id` lives in `ensureWorkspaceRepoSchema`); the connection is now found/created by `project_id`. `workspaceRepoName` takes a project rather than an enrollment id and returns `sponsor-dashboard-248d9d63` instead of `student-workspace-&lt;uuid&gt;` — this repo is the artifact an employer opens, so it should read like one. The slug derives from `project.name` (the display name derived from the idea), falling back to `organization_name`, because `projects` has no `slug` column. **T8:** all three routes take a Zod-validated `project_id`; the enrollment still comes only from `req.participant.sub`, never the body. A shared `statusFor()` maps ownership failures to 404, missing platform token to 503, and no-repo to 409.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**156/156 tests pass** across seven suites (`JEST_EXIT=0`), up from 130. The ownership tests assert the thing that actually matters: for a foreign project each of the three entry points rejects **and `expect(mockFetch).not.toHaveBeenCalled()`** — not merely that the call failed, but that GitHub was never contacted. A parallel test proves a foreign project and a nonexistent one return the identical 404 shape. Naming is covered against real input: `248d9d63…` + &quot;Sponsor Dashboard&quot; → `sponsor-dashboard-248d9d63`, plus fallbacks, 40-char truncation, and a property-style check that no input (`&#39;&#39;`, `&#39;///&#39;`, `&#39;Ünïcødé&#39;`, `&#39;.hidden&#39;`, `&#39;trailing-&#39;`) can produce a name GitHub would reject or one containing `--`. **Two pre-existing tests failed first** and correctly so: the in-memory mock is now keyed by project, and two assertions still looked up by enrollment id — a real consequence of the re-key that the suite caught rather than papered over.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">10 of 17 tasks. Nothing deployed, nothing merged to main. Next is T9 (validate the GitHub username against the API before provisioning, `awaiting_repo` state) and T10 (provisioning through the bounded queue, FR-040), then the repo writer and the prompt-path guard.</span></div>
           
         </div>
       </article>
