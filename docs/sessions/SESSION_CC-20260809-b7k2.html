@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Sunday, August 9, 2026 at 9:15 PM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">5 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 3:21 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">6 changes</span></div>
   </header>
   <main>
     
@@ -132,6 +132,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**61/61 tests pass** (`JEST_EXIT=0`) across `planGate.test.ts`, `planContract.test.ts`, `planGateFixture.test.ts`. The real pilot output is checked in as `__tests__/fixtures/pilot-dryrun-plan.json` and the gate is graded against it: all four human-rejected layer stories are caught, and the fixture test asserts the flagged set is **exactly** `[STORY-008, STORY-009, STORY-012]` so a rule that over-fires breaks the build. Two named genuine slices are pinned as must-not-catch — STORY-004 (narrated &quot;As a system…&quot;) and STORY-010 (shares REQ-014 with the scaffold). Balance rejects both real skews, 6/12 and 8/12; the earlier &quot;&gt;50%&quot; rule is proven inadequate in a test, since 6/12 is exactly 50% and would not have fired.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**T1 initially FAILED independent verification at 10/12** and the two findings were real. (1) `BUILD_PLAN_JSON_SCHEMA` set `additionalProperties: false` and never declared `blocked_by`, so a model could never emit it and two gate rules (`dangling_blocked_by`, `r0_not_ungated`) were unreachable on real generator output — with T0, which consumes that schema, as the very next task. (2) A code comment claimed &quot;a mismatch is caught by the round-trip test&quot; and **no such test existed anywhere in the repo** — an asserted guard that wasn&#39;t there, the same species of error as this morning&#39;s `DROP INDEX` that shipped green and did nothing. Both fixed: `blocked_by` declared, and `planContract.test.ts` now enforces schema/type representability so the drift cannot recur silently. The verifier also found `gatePlan` would throw on a requirement missing `statement` — a fail-open crash in a function contracted to fail closed; malformed input now returns `malformed_requirement`/`malformed_story` violations. The verifier independently built a mutation harness and killed 11/11 mutants, proving the &quot;fails when the rule is removed&quot; claim rather than accepting it. **3 of 17 tasks done; nothing deployed, nothing merged to main.**</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>**Landed the plan generator as a tested service — grounding and bounded failure both covered without a network call**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">T0 of loop-architect run `20260809-1915-sbp-steps-1-5`. Two new modules: `backend/src/services/sbp/decomposePrompt.ts` (PURE — system prompt, user-prompt assembly, input clamping) and `decomposeService.ts` (the I/O shell: one bounded model call, typed failure). Splitting them is what makes the part that decides *what the model is told* unit-testable with no network, which matters because the pilot proved that is where the quality lives. The system prompt encodes every lesson the pilot produced: the brief is GROUND TRUTH and outranks the generated expansion; anti-invention rules naming the exact things it hallucinated (Stripe, PayPal, HIPAA, an HR integration); `CONSTRAINT` explained as context-not-work-item with the concrete failure it prevents (&quot;System connects to Postgres for data access&quot;); vertical-slice and no-scaffold rules; release spread; walking-skeleton r0 whose demo shows the guarantee holding rather than a happy path. Failure behaviour per CLAUDE.md Failure-First: explicit 240s timeout, SDK retries capped at 1, schema-invalid output retried exactly once (with the rejection reason fed back) and then a clean typed failure — `ConfigError`, `UpstreamTimeout`, `UpstreamError`, `EmptyResponse`, `ContractViolation`. Timeouts are classified separately from other upstream errors so a caller can distinguish &quot;retry later&quot; from &quot;this is broken&quot;. Generation deliberately does NOT gate: the caller runs `gatePlan` and decides, keeping generation and judgement separable.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**80/80 tests pass** across four suites (`JEST_EXIT=0`), up from 61. The client is injected, so all 20 new tests run with no network. Grounding is asserted structurally, not by eyeballing the prompt: `briefPrecedesDocument()` proves the brief is positioned ahead of the document *in the actual outgoing call*, and an injection string planted in the brief is asserted to land **inside** the `&lt;ORIGINAL_BRIEF&gt;` delimiters (SAFE-002). Failure paths each have a test: retry-once-then-succeed, the retry carries the rejection reason, hard failure never makes a third call, a well-formed-but-empty plan is rejected rather than returned, timeout vs upstream-error classification, and empty response. Observability is tested too — the success line carries the correlation id and counts, the failure line carries an `error_class`, and a secret planted in the brief is asserted **never** to appear in any log line.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">4 of 17 tasks. Nothing deployed, nothing merged to main. PR #1315 carries T1-T3; this extends the same branch. Next is T0b (`build_intake`/`build_plans` substrate), which unblocks T4 (persist the reviewed plan, so the plan a human reviews is byte-identical to the plan that ships — currently dry-run and commit each regenerate).</span></div>
           
         </div>
       </article>
