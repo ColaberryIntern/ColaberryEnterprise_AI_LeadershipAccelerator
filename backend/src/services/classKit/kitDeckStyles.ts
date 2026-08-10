@@ -26,10 +26,7 @@ body{font-family:"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);b
 button{font-family:inherit}
 
 #kprogress{position:fixed;top:0;left:0;height:4px;background:var(--cherry);width:0;z-index:60;transition:width .3s ease}
-/* Both of these live bottom-LEFT, stacked. The bottom-right corner is now the
-   join QR's (see #klateqr), and that QR is deliberately large enough to scan
-   off a screenshare — so anything else in that corner would sit underneath it. */
-#kcounter{position:fixed;bottom:calc(var(--pace-h) + 28px);left:16px;z-index:40;font-size:12px;color:var(--subtle);font-weight:700;letter-spacing:1px}
+#kcounter{position:fixed;bottom:calc(var(--pace-h) + 10px);right:16px;z-index:40;font-size:12px;color:var(--subtle);font-weight:700;letter-spacing:1px}
 #khint{position:fixed;bottom:calc(var(--pace-h) + 10px);left:16px;z-index:40;font-size:11px;color:#b8b0aa}
 
 /* Dedicated prev/next nav buttons — the only click-driven way to change
@@ -233,26 +230,28 @@ body.rail-on #krail{display:flex}
  * PLACEMENT (Ali, 2026-08-10): it used to sit top-right, which is exactly
  * where the produced class videos put their overlay — so a QR sized to be
  * scannable was also large enough to cover the thing the recording exists for.
- * It now lives bottom-right in every mode. With the pulse rail on that lands
- * inside the rail's own column, whose lower half is empty by design; with the
- * rail off it sits in the bottom corner above the pace bar. Either way it is
- * out of the top-right video zone and off the slide content, at full
- * scannable size. Do not move it back to a corner the camera overlay uses,
- * and do not shrink it to make a corner fit — shorten the URL instead. */
-#klateqr{position:fixed;right:16px;bottom:calc(var(--pace-h) + 14px);z-index:44;
-  display:none;flex-direction:column;align-items:center;gap:5px;
-  background:rgba(255,255,255,.96);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;
-  padding:10px;box-shadow:0 10px 28px rgba(26,32,44,.16);cursor:pointer;opacity:1;transition:right .2s,bottom .2s}
+ * It now lives INSIDE the Class Pulse rail, pinned to the bottom of that
+ * column (Ali, 2026-08-10: "it should be in the class pulse section"). The
+ * rail is its own panel beside the slide stage, so a QR in it can never sit on
+ * top of slide content or the camera overlay no matter which corner the video
+ * uses — which floating it, in any corner, always could. Do not move it back
+ * out to a floating corner, and do not shrink it to make one fit — shorten the
+ * encoded URL instead. */
+#klateqr{position:fixed;right:16px;bottom:calc(var(--pace-h) + 14px);z-index:52;
+  display:none;flex-direction:column;align-items:center;gap:6px;
+  background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px;
+  box-shadow:0 6px 18px rgba(26,32,44,.10);cursor:pointer;opacity:1;transition:right .2s,bottom .2s}
 #klateqr.show{display:flex}
-/* With the Class Pulse rail showing, shift left of it — otherwise the badge
-   renders underneath the rail panel and is invisible (caught by measuring the
-   rendered box, not by reading the CSS). Off-rail it uses the stage's own
-   bottom-right corner, which every slide layout leaves empty. */
-body.rail-on #klateqr{right:calc(var(--rail-w) + 16px)}
 .klateqr-box{width:148px;height:148px}
 .klateqr-box svg{width:100%;height:100%;display:block}
 .klateqr-label{font-size:11px;font-weight:700;color:var(--berry);text-transform:uppercase;letter-spacing:.3px}
-/* Focus/Video mode: keep it, move it to the free bottom-right corner. */
+/* z-index sits ABOVE the rail (50) on purpose. The QR is anchored into the
+   rail's own column — right:16px is inside the rail when the rail is on — so it
+   reads as the bottom section of Class Pulse while remaining a sibling element.
+   Anchoring it there rather than nesting it is what lets Focus mode below move
+   it, and what stops it ever covering the slide stage the camera is framing. */
+/* Focus/Video mode hides the rail, so the QR moves to the free bottom-right
+   corner rather than disappearing — latecomers still need it there. */
 body.focus #klateqr{top:auto;bottom:20px;right:20px}
 
 /* ---------- overlays / toggles ---------- */

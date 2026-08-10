@@ -395,6 +395,10 @@ ${slidesHtml}
   <div class="kq-list" id="kqlist"><div class="kq-empty">No questions yet. Students ask from their phones.</div></div>
 </aside>
 
+<!-- Sits visually at the bottom of the Class Pulse rail, but deliberately is
+     NOT a child of it: Focus/Video mode hides the rail outright, and the QR has
+     to survive that (latecomers need it most then). Kept a sibling so CSS can
+     reposition it per mode. -->
 <div id="klateqr" title="Scan to check in (Q for full-screen)">
   <div class="klateqr-box">${m.qrSvg}</div>
   <div class="klateqr-label">Scan to join</div>
