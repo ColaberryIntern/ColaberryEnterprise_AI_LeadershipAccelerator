@@ -106,6 +106,64 @@ Written by the platform, read by the student's Claude Code session:
 
 ---
 
+## 4.1 DECIDED — one repo per project, provisioning is mandatory
+
+**Ali, 2026-08-09.** Both were open questions in the first draft; both are now locked.
+
+### One repo per project
+
+The current model is **one repo per enrollment**, and it is enforced in the schema:
+
+```
+github_connections.enrollment_id  UNIQUE
+```
+
+That unique constraint structurally forbids the decision, so it goes. Multi-project is a stated platform capability (first project free, additional paid), and several plans sharing one `docs/` folder would collide on `REQUIREMENTS.md` the moment a student starts a second project.
+
+**Migration is clean.** Production holds 11 `github_connections` rows and **zero** are real platform-provisioned workspace repos — no row matches `ColaberryIntern/student-workspace-%`. They are `octocat/Hello-World` test rows plus one `AI_Pathway`. Nothing to preserve.
+
+| Change | Detail |
+|---|---|
+| Add `project_id` | FK to `projects`, `UNIQUE (project_id)` |
+| Drop `UNIQUE` on `enrollment_id` | keep it as a plain index — still needed to scope access by owner |
+| Re-key the service | `provisionWorkspaceRepo`, `syncWorkspaceRepo`, `getWorkspaceRepo` take `projectId`, and verify the project belongs to the caller's enrollment before acting |
+
+**Repo naming.** `workspaceRepoName()` currently returns `student-workspace-<enrollmentId>` — a bare UUID. Since this repo becomes the student's portfolio artifact, it should read like one:
+
+```
+<project-slug>-<first 8 of projectId>      e.g.  sponsor-dashboard-248d9d63
+```
+
+Readable, unique across the org without a collision check, and stable if the project is renamed. The student may rename or transfer it later; sync follows `repo_owner`/`repo_name` on the connection row, not the derived name, so a rename does not break it as long as we re-read the row.
+
+### Provisioning is mandatory
+
+A project cannot reach the plan-published state without a provisioned repo, because under Option B the repo *is* the system of record — a project without one has nowhere to keep its requirements.
+
+**Where it goes in the wizard:** a fourth step, after the sharpening questions and before "Confirm & build". Asking earlier interrupts the idea; asking later means generation finishes with nowhere to write.
+
+**What it must handle** — mandatory does not mean brittle:
+
+| Case | Behaviour |
+|---|---|
+| No GitHub account | Link out to signup, keep the intake saved, let them return. Never lose the idea over an account they do not have yet. |
+| Username typo'd or does not exist | Validate against the GitHub API **before** provisioning, not by watching the collaborator call fail. The current code checks format only. |
+| Provisioning fails (GitHub 5xx, rate limit, token) | Intake is already persisted (FR-001). Retry with backoff; the project sits in `awaiting_repo` and is resumable. Never a dead end. |
+| Cohort provisioning at once | 20+ repo creations against one platform token in a short window will hit secondary rate limits. Provisioning goes through the same bounded queue as generation (NFR-001), not a burst. |
+
+**Consequence for §7's fallback.** With provisioning mandatory, "no repo" stops being a steady state and becomes a transient one — the window between project creation and successful provisioning, or a provisioning failure. The fallback prompt (inline the context, emit no unresolvable paths) still applies for exactly that window, and the UI should say *"finishing your repo setup"* rather than presenting it as a normal mode.
+
+### Requirements introduced
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-037 | One workspace repo per project, keyed `UNIQUE (project_id)`; access is verified through the owning enrollment | must |
+| FR-038 | A plan cannot publish without a provisioned repo; the project waits in `awaiting_repo` and is resumable | must |
+| FR-039 | The GitHub username is validated against the API before provisioning is attempted | must |
+| FR-040 | Repo provisioning runs through the bounded queue so a cohort start cannot exhaust the platform token's rate limit | must |
+
+---
+
 ## 5. Sync flows
 
 ### 5.1 Platform → repo (write)
@@ -308,6 +366,8 @@ Keep **release** and **story** — those are real industry terms the students ar
 |---|---|---|
 | **1** | Fix release balance + story granularity in the decomposer | Everything downstream renders this data. Do not build a dashboard over a broken plan. |
 | **2** | Document renderers (plan → the `docs/**` file set) | Pure functions, no I/O, fully testable. The riskiest content decisions get made in the cheapest place. |
+| **2a** | Re-key repos to projects: `UNIQUE (project_id)`, drop the unique on `enrollment_id`, re-key the service (FR-037) | Schema change that everything downstream assumes. Migration is clean now — do it before any real repo exists, not after. |
+| **2b** | Mandatory provisioning as wizard step 4, with username validation + `awaiting_repo` (FR-038..FR-040) | Must precede the first repo write, since there is nothing to write to without it. |
 | **3** | Repo write + manifest + path allowlist | Closes the defect. After this, prompts resolve. |
 | **4** | Prompt assembly asserts against the manifest (FR-032) | Makes the class of bug unrepeatable. |
 | **5** | Button hierarchy: one **Open** on the card, tools in the drawer (FR-035) | Small, independent, immediately better. Needs nothing from GitHub. |
@@ -324,8 +384,12 @@ Steps 1–4 make the current pilot correct. 5 is a quick win with no dependencie
 
 ## 13. Open decisions
 
-1. **Repo provisioning becomes mandatory to start a project.** Recommended, and implied by Option B — without a repo there is no system of record. Needs Ali's sign-off because it adds a GitHub-username step to the wizard.
-2. **One repo per project, or one per student holding many projects?** Current code is one per *enrollment*. Multi-project (a stated platform capability) then means several plans in one repo, which muddies `docs/`. Recommend **one repo per project**, named `student-<enrollment>-<project-slug>`.
+**Decided (Ali, 2026-08-09)** — see §4.1:
+1. ~~Repo provisioning mandatory?~~ **Yes.** Mandatory, as a fourth wizard step, with resumable failure handling.
+2. ~~One repo per project or per student?~~ **One per project.** Requires dropping the `UNIQUE` on `github_connections.enrollment_id` and adding `UNIQUE (project_id)`; migration is clean because no real workspace repos exist in production.
+
+Still open:
+
 3. **Webhook vs polling for the projection.** Webhook is right; polling every N minutes across a cohort is the kind of load the audit already flagged. Needs a public endpoint and a shared secret.
 4. **Do we ever run student tests to verify acceptance?** Out of scope here (§8). If the answer is ever yes, it is a sandbox-execution project of its own.
 5. **Who can override a failed mark-done gate?** (§10.4). Recommend mentors and staff, never the student themselves — a self-override is just the ungated button with extra steps. Needs a decision on whether cohort mentors qualify or only Colaberry staff.
