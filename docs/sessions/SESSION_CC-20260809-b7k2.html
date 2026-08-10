@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 2:58 PM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">20 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 4:11 PM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">21 changes</span></div>
   </header>
   <main>
     
@@ -357,6 +357,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**31/31 tests pass** via CRA&#39;s runner (`CI=true react-scripts test --testPathPattern sbpApi`); frontend `tsc --noEmit` **0 errors, exit 0** — the authoritative CI gate. Coverage is weighted to failure paths: a 404 reads as &quot;not enabled&quot; rather than &quot;not found&quot;, a 503 as capacity with a next step, the 409 from a gate-failed publish and the 409 from prompt assembly refusing an unwritten path both surface verbatim, polling stops on a real transport error rather than spinning, honours an abort signal, and treats `gate_failed` as terminal so a student is told to act rather than left waiting. Also asserted: a second `resolveBackendProjectId` call does not create a second project.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**Deliberately stopped before swapping `handleCreate` in `ProjectsPage`** — that is the change that actually kills the fake generator, and I would rather hand over a clean tested client than a half-wired page. **Finding worth acting on: CI does not run frontend unit tests at all.** The four required checks are backend typecheck, backend unit tests, frontend *typecheck*, and secret scan — so these 31 tests, and every other frontend test in the repo, gate nothing. Only `tsc` does. That is a real gap given how much logic lives in the frontend, and adding a job is cheap.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">21</span>
+          <h2>**The fake generator is replaced — with a runtime kill-switch and a fallback that tells the student which path they got**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`ProjectsPage.handleCreate` now calls the real pipeline — resolve the backend project, `POST /api/portal/sbp/builds`, poll to a terminal state — instead of `createProjectFromAnswers`, the browser-side generator that produced a fixed ten-task template behind a 7-second timer. Two safety properties matter more than the feature: (1) **`SBP_PIPELINE_ENABLED` is its own flag and defaults OFF**, so deploying changes nothing until it is set. It is deliberately NOT `projectApiEnabled`, which is already `true` in production and shared with `projectsPortalRoutes` — reusing it would make the pipeline live the instant it deployed with no way to disable it that did not also break the existing projects API. Unsetting it is an instant rollback. (2) **Any failure falls back to the local generator**, and a banner tells the student which path produced their plan. The fallback is deliberate rather than defensive: the local path still produces something workable, so a pipeline problem degrades plan *quality* instead of leaving a student with nothing — and the banner exists because the original defect survived months precisely by making a degraded result look identical to a good one.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Frontend `tsc --noEmit` **0 errors, exit 0** — the authoritative CI gate; 31/31 client tests pass via CRA&#39;s runner. Production state confirmed before deploying: `HEAD == origin/main`, `OPENAI_API_KEY` set (generation will work), `SBP_PIPELINE_ENABLED` absent (so the flag genuinely defaults off), `GITHUB_TOKEN` absent — meaning the repo half will not run yet and the flow will land in `awaiting_repo` with prompts inlining their context rather than citing paths. That is the designed FR-031 fallback, so it is a valid first test rather than a blocker.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Sequencing agreed with Ali — deploy with the flag off, enable for his account, test end to end, then open it to the cohort. Not yet done: `GITHUB_TOKEN` in prod (needed for the repo half; a dedicated fine-grained machine token is the right answer rather than a personal `gh` session token), and the concurrency check before the flag goes on for everyone.</span></div>
           
         </div>
       </article>

@@ -6,8 +6,9 @@
  * enrollment before anything happens, and a foreign project returns 404 rather
  * than 403 so it cannot be probed for existence.
  *
- * Flag-gated on `env.projectApiEnabled`, matching projectsPortalRoutes, so this
- * ships dark until the frontend is switched over.
+ * Flag-gated on `env.sbpPipelineEnabled` (SBP_PIPELINE_ENABLED), which defaults
+ * OFF. Deploying this changes nothing until the flag is set, and unsetting it is
+ * an instant rollback: the frontend falls back to the local path on a 404.
  *
  *   POST  /api/portal/sbp/builds                  start a build from the wizard
  *   GET   /api/portal/sbp/builds/:projectId       poll status + the draft plan
@@ -23,7 +24,9 @@ const router = Router();
 const eid = (req: Request) => req.participant!.sub;
 
 function gate(res: Response): boolean {
-  if (!env.projectApiEnabled) {
+  if (!env.sbpPipelineEnabled) {
+    // 404 rather than 403: the frontend treats this as "pipeline unavailable"
+    // and falls back to the local path, so a student never hits a dead end.
     res.status(404).json({ error: 'Build pipeline not enabled' });
     return false;
   }
