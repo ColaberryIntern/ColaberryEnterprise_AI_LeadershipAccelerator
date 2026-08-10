@@ -1,0 +1,41 @@
+/* ============================================================================
+   tryV2.css -- free-workspace front door.
+   Design-system tokens only; cbv2-* namespace only.
+
+   Same shared-primitive coupling recorded in proofV2.css applies here.
+   ========================================================================== */
+
+.cbv2-try__cta {
+  margin-top: var(--space-6);
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+/* "Free to start -- no credit card" sits beside the button as reassurance, so it
+   must stay legible on the dark page hero rather than inheriting body colour. */
+.cbv2-try__free {
+  /* Same token as .cbv2-pagehero__lede so the two cannot drift apart on the
+     inverse hero. No opacity: dimming an already-muted token is how contrast
+     failures get shipped. */
+  color: var(--text-on-inverse-muted, #a9b4c4);
+  font-size: var(--fs-body-sm);
+}
+
+.cbv2-boundary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.cbv2-boundary__link {
+  margin-top: auto;
+  font-weight: 600;
+  color: var(--text-strong);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  min-height: var(--target-min, 44px);
+  display: inline-flex;
+  align-items: center;
+}
+.cbv2-boundary__link:hover { text-decoration-thickness: 2px; }

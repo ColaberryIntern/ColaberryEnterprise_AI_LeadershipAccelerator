@@ -11,6 +11,7 @@ import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
 import PlatformV2 from './pages/publicV2/PlatformV2';
 import ProofV2 from './pages/publicV2/ProofV2';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
+import TryV2 from './pages/publicV2/TryV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -55,6 +56,7 @@ function App() {
           <Route path="platform" element={<PlatformV2 />} />
           <Route path="proof" element={<ProofV2 />} />
           <Route path="lab" element={<OpportunityLabV2 />} />
+          <Route path="try" element={<TryV2 />} />
         </Route>
         <Route element={<PublicLayout />}>
           {publicRoutes}

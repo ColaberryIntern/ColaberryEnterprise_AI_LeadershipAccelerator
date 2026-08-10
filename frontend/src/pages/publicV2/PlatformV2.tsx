@@ -160,7 +160,7 @@ function PlatformV2(): React.ReactElement {
             <Claim claimKey="surface.free.workspace" route={ROUTE} />
           </p>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/try">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/try">
               Open the free workspace
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/services">

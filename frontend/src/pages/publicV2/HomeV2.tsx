@@ -256,7 +256,7 @@ function HomeV2(): React.ReactElement {
               </h2>
             </div>
             <p style={{ marginTop: 'var(--space-6)' }}>
-              <Link className="cbv2-btn cbv2-btn--primary" to="/try">
+              <Link className="cbv2-btn cbv2-btn--primary" to="/v2/try">
                 Open the Free Company Workspace
               </Link>
             </p>
@@ -272,7 +272,7 @@ function HomeV2(): React.ReactElement {
             Start free, or bring one workflow to an architect.
           </p>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/try">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/try">
               Open the Free Company Workspace
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/contact">
