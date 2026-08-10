@@ -92,10 +92,41 @@ function evidenceHtml(slide: KitSlide): string {
  * diagram is the visual, the caption is the story it tells. */
 function diagramHtml(slide: KitSlide): string {
   if (!slide.diagram) return '';
+  // The zoomed view is its own teaching surface, not just a bigger picture:
+  // while the instructor talks over a full-screened diagram the room is looking
+  // at ONLY this, and it is what the class recording shows. So the zoom carries
+  // the slide's own title, its key points beside the diagram, where the code
+  // gets run when there is code, and the program mark. All of it is
+  // display:none in the inline view — the normal slide is unchanged.
+  const head =
+    '<div class="kdiag-hd">' +
+    (slide.eyebrow ? `<div class="kdiag-hd-eyebrow">${esc(slide.eyebrow)}</div>` : '') +
+    `<h2 class="kdiag-hd-title">${esc(slide.title)}</h2>` +
+    '</div>';
+  const side = slide.bullets && slide.bullets.length
+    ? '<aside class="kdiag-side"><div class="kdiag-side-hd">Key points</div><ol class="kdiag-side-list">' +
+      slide.bullets.map((b) => `<li>${esc(b)}</li>`).join('') +
+      '</ol></aside>'
+    : '';
+  const where = slide.prompt
+    ? (slide.prompt.kind === 'review'
+      ? '<span class="kdiag-where">📖 Read-along — nothing to paste</span>'
+      : `<span class="kdiag-where">▶ Run this in: <b>${esc(slide.prompt.pasteWhere || 'Claude Code')}</b></span>`)
+    : '';
+  const foot =
+    '<div class="kdiag-ft">' +
+    '<span class="kdiag-brand"><b>colaberry</b> · AI Systems Architect Accelerator</span>' +
+    where +
+    '</div>';
   return (
     '<div class="kdiagram" onclick="window.__toggleDiagramFull ? window.__toggleDiagramFull(this) : this.classList.toggle(\'kdiagram--full\')" title="Click to zoom in / out">' +
+    head +
+    '<div class="kdiag-stage">' +
     `<pre class="mermaid">${esc(slide.diagram)}</pre>` +
+    side +
+    '</div>' +
     (slide.diagramCaption ? `<div class="kdiagram-cap"><span class="kdiagram-cap-ico">🧭</span><span>${esc(slide.diagramCaption)}</span></div>` : '') +
+    foot +
     '</div>'
   );
 }

@@ -262,17 +262,47 @@ pre.mermaid svg{max-width:100%;height:auto}
 pre.mermaid[data-processed="true"]{font-size:0;padding:1.6vh 1.4vw;color:transparent}
 .kdiagram-cap{margin-top:1.6vh;display:flex;gap:10px;align-items:flex-start;font-size:clamp(13px,.9vw,16px);color:#1a4a5c;font-weight:600;text-align:left;max-width:64ch;background:#eef7fa;border:1.5px solid var(--berry);border-radius:12px;padding:1.3vh 1.4vw}
 .kdiagram-cap-ico{flex:none;font-size:1.15em;line-height:1}
-.kdiagram--full{cursor:zoom-out;position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4vh 4vw;margin:0}
+/* The enriched full-screen diagram view. Everything below is hidden inline and
+   only composes when .kdiagram--full is on, so the normal slide is untouched. */
+.kdiag-hd,.kdiag-side,.kdiag-ft{display:none}
+.kdiag-stage{display:contents}
+.kdiagram--full{cursor:zoom-out;position:fixed;inset:0;z-index:9999;
+  background:radial-gradient(120% 120% at 50% 0%,#1e293b 0%,#0f172a 62%,#0b1220 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:2.6vh 2vw;margin:0;gap:1.4vh}
 .kdiagram--full::after{content:"⛶ click to close";top:2vh;right:2vw;background:rgba(255,255,255,.9)}
-/* Mermaid emits its own explicit width/height (and sometimes inline style) on
-   the svg, so max-width/max-height alone only ever shrinks an oversized
-   diagram - it never scales a small one up to fill the zoomed view. Sizing
-   the container to a fixed viewport-relative box and forcing the svg to
-   100%/100% with object-fit:contain scales genuinely both directions. */
-.kdiagram--full pre.mermaid{width:92vw;height:82vh;max-width:92vw;max-height:82vh;
-  overflow:hidden;display:flex;align-items:center;justify-content:center}
+.kdiagram--full .kdiag-hd{display:block;flex:none;text-align:center;max-width:92vw}
+.kdiag-hd-eyebrow{font-size:clamp(11px,.9vh + .3vw,15px);font-weight:800;letter-spacing:2.2px;text-transform:uppercase;color:#fca5a5;margin-bottom:.5vh}
+.kdiag-hd-title{font-size:clamp(20px,1.1vw + 1.5vh,40px);line-height:1.14;font-weight:800;color:#f8fafc;letter-spacing:-.4px}
+/* Stage stacks: the diagram gets the FULL width, key points go underneath.
+   These flowcharts are left-to-right chains with viewBox aspect ratios around
+   13:1, so a side rail that steals a quarter of the width costs ~30% of the
+   rendered text size for no benefit — mermaid scales to whichever axis binds,
+   and for a wide diagram that is always the width. Full width, modest height. */
+.kdiagram--full .kdiag-stage{display:flex;flex-direction:column;flex:1 1 auto;min-height:0;width:100%;
+  gap:1.6vh;align-items:center;justify-content:center}
+.kdiagram--full pre.mermaid{flex:none;width:100%;height:46vh;max-width:none;max-height:46vh;
+  overflow:hidden;display:flex;align-items:center;justify-content:center;border:none;border-radius:20px;
+  box-shadow:0 30px 80px rgba(0,0,0,.5)}
 .kdiagram--full pre.mermaid svg{width:100% !important;height:100% !important;
-  max-width:none;max-height:none;object-fit:contain}
+  max-width:none;max-height:none}
+.kdiagram--full .kdiag-side{display:block;width:100%;flex:0 1 auto;min-height:0;
+  background:rgba(255,255,255,.055);border:1.5px solid rgba(255,255,255,.14);border-radius:20px;padding:1.8vh 2vw;overflow:auto}
+.kdiag-side-hd{font-size:clamp(10px,.85vh + .25vw,13px);font-weight:800;letter-spacing:2px;text-transform:uppercase;color:#fca5a5;margin-bottom:1.2vh}
+.kdiag-side-list{list-style:none;counter-reset:kds;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(36ch,1fr));gap:1vh 2.2vw}
+.kdiag-side-list li{counter-increment:kds;position:relative;padding-left:2.4em;
+  font-size:clamp(13px,.34vw + .72vh,19px);line-height:1.4;font-weight:600;color:#e2e8f0}
+.kdiag-side-list li::before{content:counter(kds);position:absolute;left:0;top:.1em;width:1.65em;height:1.65em;
+  display:grid;place-items:center;border-radius:8px;background:var(--cherry);color:#fff;
+  font-size:.78em;font-weight:800}
+.kdiagram--full .kdiagram-cap{flex:none;max-width:88vw;background:rgba(54,120,149,.2);border-color:rgba(125,211,252,.5);color:#e0f2fe}
+.kdiagram--full .kdiag-ft{display:flex;flex:none;width:100%;align-items:center;justify-content:space-between;gap:2vw;
+  border-top:1px solid rgba(255,255,255,.13);padding-top:1.1vh}
+.kdiag-brand{font-size:clamp(11px,.85vh + .28vw,15px);color:#94a3b8;letter-spacing:.4px}
+.kdiag-brand b{color:var(--cherry);font-weight:800;letter-spacing:-.2px}
+.kdiag-where{font-size:clamp(11px,.85vh + .28vw,15px);font-weight:700;color:#fde68a;
+  background:rgba(232,146,12,.16);border:1px solid rgba(232,146,12,.42);border-radius:999px;padding:.5vh 1vw}
+.kdiag-where b{color:#fff}
 .kdiagram--full .kdiagram-cap{max-width:80ch}
 
 /* teach-slide "lead with the conclusion" insight card */
@@ -321,6 +351,9 @@ body.mode-build .ktoggles:hover{opacity:1}
 .kbb-chip b{color:#fff}
 .kbb-chip-n{background:#27405f}
 .kbb-chip-mode{background:#3a2a52;border-color:#5b3f86;color:#c9a8f0}
+/* Read-along code (nobody pastes it) — deliberately a different colour from
+   the paste chip so the room can tell at a glance which kind of block this is. */
+.kbb-chip-review{background:#1f3326;border-color:#3c7a26;color:#a7e08a}
 .kbb-rows{margin-top:2.2vh;display:grid;gap:1.1vh;max-width:72ch}
 .kbb-row{display:flex;gap:10px;align-items:flex-start;padding:1.2vh 1.3vw;border-radius:12px;font-size:clamp(13px,.45vw + .65vh,17px)}
 .kbb-row-label{flex:none;font-weight:800;letter-spacing:.4px;white-space:nowrap}
