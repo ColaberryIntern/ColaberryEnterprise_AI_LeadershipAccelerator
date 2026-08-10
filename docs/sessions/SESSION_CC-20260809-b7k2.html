@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 3:21 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">6 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 3:30 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">7 changes</span></div>
   </header>
   <main>
     
@@ -147,6 +147,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**80/80 tests pass** across four suites (`JEST_EXIT=0`), up from 61. The client is injected, so all 20 new tests run with no network. Grounding is asserted structurally, not by eyeballing the prompt: `briefPrecedesDocument()` proves the brief is positioned ahead of the document *in the actual outgoing call*, and an injection string planted in the brief is asserted to land **inside** the `&lt;ORIGINAL_BRIEF&gt;` delimiters (SAFE-002). Failure paths each have a test: retry-once-then-succeed, the retry carries the rejection reason, hard failure never makes a third call, a well-formed-but-empty plan is rejected rather than returned, timeout vs upstream-error classification, and empty response. Observability is tested too — the success line carries the correlation id and counts, the failure line carries an `error_class`, and a secret planted in the brief is asserted **never** to appear in any log line.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">4 of 17 tasks. Nothing deployed, nothing merged to main. PR #1315 carries T1-T3; this extends the same branch. Next is T0b (`build_intake`/`build_plans` substrate), which unblocks T4 (persist the reviewed plan, so the plan a human reviews is byte-identical to the plan that ships — currently dry-run and commit each regenerate).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>**Added the two tables the pipeline has been missing, with a post-condition assertion proven to discriminate a migrated database from an un-migrated one**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/db/ensureSbpSchema.ts`, wired into `server.ts` boot next to `ensureWorkLedgerSchema`. Two additive tables, nothing existing altered or dropped. **`build_intake`** (FR-001) stores the wizard&#39;s answers BEFORE generation runs, so a failed or interrupted build is replayable and a provisioning failure can park a project in `awaiting_repo` without losing the idea — today the wizard discards all of it client-side. Unique on `project_id`, so re-submitting updates rather than stacking rows and the &quot;same intake twice returns the same build&quot; guarantee has something to key on. **`build_plans`** stores a generated plan keyed `(project_id, version)` with its `plan_sha256`, gate outcome and violations. It exists to fix a real defect: dry-run and commit currently each call the model independently, which is how a reviewed 6/3/1/1/1 plan shipped as 8/1/1/1/1. Versions are immutable — a regeneration is a new version, never an overwrite (FR-004). Also exports `assertSbpSchema()` separately so the post-condition can be tested rather than merely trusted.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Applied to the real `accelerator_dev1` Postgres and verified by catalog query, not by absence of an exception.** Post-condition after apply: `tables_found=2, indexes_found=2`. Re-running the identical SQL is a **proven no-op** — every statement returned `NOTICE: … already exists, skipping` and exited clean, so boot is idempotent. **The assertion is proven non-vacuous**: run against un-migrated `accelerator_prod` it reports `0|0` (all four objects missing → would emit `SchemaInvariantViolation`), against migrated `accelerator_dev1` it reports `2|2` and passes. That discrimination is the whole point — this morning&#39;s `DROP INDEX` shipped green precisely because nothing checked its outcome.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">5 of 17 tasks. **Prod is deliberately NOT migrated** — the migration ships in T15 with its rollback, for Ali&#39;s approval. Nothing deployed, nothing merged to main. The boot path is safe on prod regardless: the statements are `IF NOT EXISTS` and the assertion only logs. Next is T4 (persist the reviewed plan), which this unblocks.</span></div>
           
         </div>
       </article>
