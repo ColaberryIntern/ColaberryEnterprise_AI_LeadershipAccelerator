@@ -347,8 +347,14 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       eyebrow: '🔧 Recover like an architect', title: 'Diagnose and fix', body: t.recovery,
       presenterTip: 'Narrate the diagnosis. This is where they learn architecture thinking, not just syntax.',
     }));
-    pushStoryBeats(out, undefined, 'failure', fail, config);
   }
+  // Story beats for the failure segment are authored content like any other
+  // segment's, so they belong outside the teach/fallback branch. Two bugs
+  // lived here: they were pushed only in the fallback branch (so a week WITH
+  // deep failure teaching silently lost them), and they were passed
+  // `undefined` instead of `t.storyBeats` — which meant an authored
+  // `thursday.storyBeats.failure` never rendered on ANY path.
+  pushStoryBeats(out, t.storyBeats, 'failure', fail, config);
   pushInteractions(out, interactions, 'failure', fail);
 
   const demos = segById(segs, 'demos');

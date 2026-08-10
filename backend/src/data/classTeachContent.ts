@@ -23,6 +23,7 @@
 
 import { GENERATED_WEEK_TEACH } from './classTeachWeeks';
 import { WEEK3_MONDAY } from './classTeachWeek3';
+import { WEEK3_THURSDAY } from './classTeachWeek3Thursday';
 // Type-only import — classSessionPlan.ts is itself dependency-free and never
 // imports this module, so there is no cycle and no runtime coupling.
 import type { BuildBayMeta } from './classSessionPlan';
@@ -313,14 +314,14 @@ const WEEK1: DayTeach = {
 /** Deep teaching content per week (1..12). Weeks 2-12 come from the generated
  *  fan-out (classTeachWeeks.ts); hand-authored days win on conflict.
  *
- *  Week 3 is merged per-DAY, not per-week: Monday is hand-authored (the
- *  project-build launch + Claude API / billing class) while Thursday still
- *  comes from the generated set, so replacing the whole `3` key would silently
- *  drop Build Day's content. */
+ *  Week 3 is now hand-authored on BOTH days — Monday is the project-build
+ *  launch + Claude API / billing class, Thursday is the Workflow Assistant
+ *  build. Both replace the generated set, which carried superseded model IDs
+ *  and the deprecated `output_format` parameter. */
 export const WEEK_TEACH: Record<number, DayTeach> = {
   ...GENERATED_WEEK_TEACH,
   1: WEEK1,
-  3: { ...GENERATED_WEEK_TEACH[3], monday: WEEK3_MONDAY },
+  3: { monday: WEEK3_MONDAY, thursday: WEEK3_THURSDAY },
 };
 
 /** Teach slides for a given week + day, or [] if none authored yet. */
