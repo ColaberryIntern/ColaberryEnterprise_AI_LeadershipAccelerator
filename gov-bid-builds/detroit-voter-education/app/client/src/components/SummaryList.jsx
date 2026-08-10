@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import ProvenanceTrail from './ProvenanceTrail';
+import SubscribeToggle from './SubscribeToggle';
+import UpdatesBanner from './UpdatesBanner';
 
 // STORY-014's parent view: nothing previously fetched/rendered STORY-012's
 // public summaries API (`/api/public/summaries`) -- this is the minimal
@@ -8,16 +10,24 @@ import ProvenanceTrail from './ProvenanceTrail';
 export default function SummaryList({ sessionId }) {
   const [status, setStatus] = useState('loading'); // loading | loaded | error
   const [summaries, setSummaries] = useState([]);
+  const [subscribed, setSubscribed] = useState(new Set());
+  const [busySubjectId, setBusySubjectId] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/public/summaries');
-        if (!res.ok) throw new Error('Failed to load summaries');
-        const data = await res.json();
+        const [summariesRes, subsRes] = await Promise.all([
+          fetch('/api/public/summaries'),
+          fetch(`/api/subscriptions/${sessionId}`),
+        ]);
+        if (!summariesRes.ok) throw new Error('Failed to load summaries');
+        const summariesData = await summariesRes.json();
+        const subsData = subsRes.ok ? await subsRes.json() : { subjectIds: [] };
         if (!cancelled) {
-          setSummaries(data);
+          setSummaries(summariesData);
+          setSubscribed(new Set(subsData.subjectIds || []));
           setStatus('loaded');
         }
       } catch {
@@ -25,12 +35,38 @@ export default function SummaryList({ sessionId }) {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [sessionId]);
+
+  const handleToggleSubscribe = async (subjectId) => {
+    setBusySubjectId(subjectId);
+    const isSubscribed = subscribed.has(subjectId);
+    try {
+      if (isSubscribed) {
+        await fetch(`/api/subscriptions/${subjectId}?sessionId=${encodeURIComponent(sessionId)}`, { method: 'DELETE' });
+      } else {
+        await fetch('/api/subscriptions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, subjectId }),
+        });
+      }
+      setSubscribed((prev) => {
+        const next = new Set(prev);
+        if (isSubscribed) next.delete(subjectId); else next.add(subjectId);
+        return next;
+      });
+      setRefreshKey((k) => k + 1);
+    } finally {
+      setBusySubjectId(null);
+    }
+  };
 
   return (
     <section className="summary-list" aria-label="Officeholder and candidate summaries">
       <h2>Officeholders &amp; Candidates</h2>
       <p>Plain-language summaries of positions on issues you care about.</p>
+
+      <UpdatesBanner sessionId={sessionId} refreshKey={refreshKey} />
 
       {status === 'loading' && <p className="hint">Loading summaries…</p>}
       {status === 'error' && <p className="error">Couldn't load summaries — try again later.</p>}
@@ -45,7 +81,14 @@ export default function SummaryList({ sessionId }) {
               <h3>{s.name}</h3>
               <p className="summary-card__office">{s.office} · {s.jurisdiction}</p>
               <p className="summary-card__text">{s.summary_text}</p>
-              <ProvenanceTrail subjectId={s.subject_id} sessionId={sessionId} />
+              <div className="summary-card__actions">
+                <ProvenanceTrail subjectId={s.subject_id} sessionId={sessionId} />
+                <SubscribeToggle
+                  subscribed={subscribed.has(s.subject_id)}
+                  busy={busySubjectId === s.subject_id}
+                  onToggle={() => handleToggleSubscribe(s.subject_id)}
+                />
+              </div>
             </li>
           ))}
         </ul>

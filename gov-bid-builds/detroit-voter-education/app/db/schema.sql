@@ -107,6 +107,22 @@ CREATE TABLE IF NOT EXISTS admin_notifications (
   payload      JSONB
 );
 
+-- STORY-016: resident "notify me" subscriptions, keyed on the existing
+-- ephemeral per-tab session_id (crypto.randomUUID() in App.jsx) -- there is
+-- no durable resident identity system, so a subscription only lasts as long
+-- as the browser tab. In-app only: no email column/provider here by design.
+-- Integrating a real email provider (SendGrid etc.) is a deliberately
+-- deferred, separate decision -- see decision-record-STORY-016.md.
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id          SERIAL PRIMARY KEY,
+  session_id  UUID NOT NULL,
+  subject_id  INTEGER NOT NULL REFERENCES officeholders_candidates(id),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (session_id, subject_id)
+);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_session ON subscriptions(session_id);
+CREATE INDEX IF NOT EXISTS idx_subscriptions_subject ON subscriptions(subject_id);
+
 -- STORY-013: bias/accuracy governance evaluation. method='heuristic_demo_v1' is
 -- a deterministic, explainable stand-in (word-overlap grounding + a loaded-word
 -- stoplist) documented as a heuristic, not a validated bias/accuracy measurement

@@ -1,4 +1,5 @@
 const pool = require('../db');
+const { notifySubscribers } = require('./userInputAgent');
 
 function validatePosition(position) {
   if (!position || typeof position !== 'object') {
@@ -97,6 +98,27 @@ async function refreshSourceData(subjectId, issue, newPosition) {
       outcome: 'success',
     }));
 
+    // STORY-016: fan out in-app notifications to subscribers, post-commit
+    // (best-effort side effect -- a notification failure here must not roll
+    // back the actual, already-committed data refresh).
+    let notifiedCount = 0;
+    if (staleFlagged) {
+      try {
+        const notifyResult = await notifySubscribers(subjectId, summary.id);
+        notifiedCount = notifyResult.notifiedCount;
+      } catch (notifyErr) {
+        console.error(JSON.stringify({
+          timestamp: new Date().toISOString(),
+          level: 'error',
+          service: 'detroit-voter-education',
+          event: 'notify_subscribers_failed',
+          subject_id: subjectId,
+          error_class: notifyErr.constructor.name,
+          error: notifyErr.message,
+        }));
+      }
+    }
+
     return {
       subjectId,
       issue,
@@ -104,6 +126,7 @@ async function refreshSourceData(subjectId, issue, newPosition) {
       newPosition: newIssuePositions[issue],
       summaryId: summary?.id || null,
       staleFlagged,
+      notifiedCount,
     };
   } catch (err) {
     await client.query('ROLLBACK');
