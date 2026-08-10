@@ -179,11 +179,43 @@ A project cannot reach the plan-published state without a provisioned repo, beca
 
 **Path allowlist (FR-027):** `CLAUDE.md`, `docs/**`, `.colaberry/**`. A write targeting anything else is a bug and must throw, not warn. The student's source tree is untouchable.
 
-### 5.2 Repo → platform (read)
+### 5.2 Repo → platform (read) — DECIDED: webhook primary, reconciliation polling as safety net
 
-**Trigger:** webhook on push (preferred), the portal's "Sync" button, and a low-frequency reconciler for repos whose webhook is missing or failing.
+**Ali, 2026-08-09.** Webhook-only is fast but silently misses deliveries; polling-only is wasteful and late. The combination gives fast updates *and* eventual correctness.
 
-Reads: default branch, recursive tree, recent commits, and the acceptance checkbox state in `docs/stories/*.md`. Persists to the projection (§9).
+|  | Webhook | Polling |
+|---|---|---|
+| Mechanism | GitHub tells us on change | We repeatedly ask |
+| Speed | near-immediate | delayed to next tick |
+| API cost | very low | repeated requests |
+| Failure mode | delivery can fail while we are down | eventually catches up |
+| Role here | **primary** | **reconciliation** |
+
+**Receiver contract:**
+1. Verify GitHub's HMAC signature over the **raw body bytes** before parsing. `buildPlanWebhookController.ts` already does exactly this — reuse its `verifyHmacSignature` + `rawBody` pattern rather than writing a second one.
+2. Return **202 immediately.** Do no work in the request. A slow receiver is how deliveries start failing.
+3. Enqueue the sync as a background job on the bounded queue (NFR-001).
+4. Ignore pushes authored by the platform bot (§5.3) — otherwise our own document write triggers a sync loop.
+
+**Subscription:** `push` on the default branch. Registered at provisioning time (§4.1) so every project repo has one from birth.
+
+**State:** the connection row stores `last_synced_sha`. Every sync records the commit SHA, changed files, outcome and timestamp — that record is what makes the reconciler cheap and the dashboard's "last activity" honest.
+
+**Reconciler:** a scheduled job every 15–60 min compares the repo's head SHA against `last_synced_sha` and repairs a mismatch. This matters because **GitHub does not guarantee redelivery of a failed webhook** — without reconciliation, one delivery lost while the backend restarts leaves a build permanently stale, and the student's mark-done gate stuck closed through no fault of theirs.
+
+**Rate limit:** the reconciler uses conditional requests (`ETag` / `If-None-Match`). An authenticated `304 Not Modified` does not count against the primary rate limit, so reconciling a whole cohort every 15 minutes stays nearly free. Without this, polling 100+ repos hourly is exactly the kind of load the audit already flagged.
+
+Per FR-032 and REL-003 the reconciler holds an advisory lock and skips its tick if a prior run is still in flight.
+
+Reads on sync: default branch, recursive tree, recent commits, and the acceptance checkbox state in `docs/stories/*.md`. Persists to the projection (§9).
+
+**Not applicable here:** for a plain website deploy, a GitHub Actions workflow or a host's native Git integration would give this for free. We need a custom receiver because the payload we care about is *build progress* — which commits touch which story, and which acceptance boxes are ticked — not a deployment trigger.
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-041 | Push webhook on the default branch is registered at provisioning; the receiver verifies the signature over raw bytes and returns 202 without doing work | must |
+| FR-042 | `last_synced_sha` is persisted per project; every sync records commit, changed files, outcome, timestamp | must |
+| FR-043 | A 15–60 min reconciler repairs SHA mismatches using conditional requests, under an advisory lock | must |
 
 ### 5.3 Ordering
 
@@ -388,9 +420,10 @@ Steps 1–4 make the current pilot correct. 5 is a quick win with no dependencie
 1. ~~Repo provisioning mandatory?~~ **Yes.** Mandatory, as a fourth wizard step, with resumable failure handling.
 2. ~~One repo per project or per student?~~ **One per project.** Requires dropping the `UNIQUE` on `github_connections.enrollment_id` and adding `UNIQUE (project_id)`; migration is clean because no real workspace repos exist in production.
 
+3. ~~Webhook vs polling for the projection?~~ **Both** — webhook primary, 15–60 min reconciliation polling with conditional requests. See §5.2 (FR-041..FR-043).
+
 Still open:
 
-3. **Webhook vs polling for the projection.** Webhook is right; polling every N minutes across a cohort is the kind of load the audit already flagged. Needs a public endpoint and a shared secret.
 4. **Do we ever run student tests to verify acceptance?** Out of scope here (§8). If the answer is ever yes, it is a sandbox-execution project of its own.
 5. **Who can override a failed mark-done gate?** (§10.4). Recommend mentors and staff, never the student themselves — a self-override is just the ungated button with extra steps. Needs a decision on whether cohort mentors qualify or only Colaberry staff.
 6. **Does CI count as a check when the student's repo defines one?** Recommend yes, and treated as advisory-but-visible: a red CI does not block mark-done in v1 (students will have half-configured pipelines and we would trap them), but it shows in the panel and on the dashboard.
