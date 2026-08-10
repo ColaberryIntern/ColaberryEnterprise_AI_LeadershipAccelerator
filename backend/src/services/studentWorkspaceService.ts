@@ -149,6 +149,27 @@ export interface WorkspaceRepoView {
   recent_commits: Array<{ sha: string; message: string; author: string; date: string }>;
 }
 
+/**
+ * Confirm the GitHub username actually exists before we try to use it (FR-039).
+ *
+ * `isValidGithubLogin` only checks the FORMAT. Without this, a typo'd-but-
+ * well-formed username sails past validation, the repo gets created, and the
+ * failure surfaces as "GitHub add-collaborator failed (404)" — after we have
+ * already made a repo for a person who does not exist. Checking first means the
+ * student gets "that GitHub username doesn't exist" and nothing is created.
+ */
+export async function githubUserExists(login: string): Promise<boolean> {
+  const token = requirePlatformToken();
+  const res = await getWithRetry(`${apiBase()}/users/${encodeURIComponent(login)}`, token);
+  if (res.status === 404) return false;
+  if (!res.ok) {
+    // A rate limit or outage is NOT "this user does not exist" — say so, rather
+    // than telling a student their correct username is wrong.
+    throw new Error(`Could not verify the GitHub username right now (${res.status}) — please try again`);
+  }
+  return true;
+}
+
 // ── provision ────────────────────────────────────────────────────────────────
 
 /**
@@ -169,6 +190,14 @@ export async function provisionWorkspaceRepo(
   }
   const login = githubLogin.trim();
   const token = requirePlatformToken();
+
+  // FR-039: verify the user exists BEFORE creating anything.
+  if (!(await githubUserExists(login))) {
+    const err: any = new Error(`GitHub user "${login}" does not exist — check the spelling of your username`);
+    err.status = 400;
+    throw err;
+  }
+
   const owner = org();
   const repo = workspaceRepoName(project as any);
 

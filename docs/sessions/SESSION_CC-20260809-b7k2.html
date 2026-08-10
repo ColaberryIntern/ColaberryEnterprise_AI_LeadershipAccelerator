@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 7:14 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">11 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 7:27 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">12 changes</span></div>
   </header>
   <main>
     
@@ -222,6 +222,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**156/156 tests pass** across seven suites (`JEST_EXIT=0`), up from 130. The ownership tests assert the thing that actually matters: for a foreign project each of the three entry points rejects **and `expect(mockFetch).not.toHaveBeenCalled()`** — not merely that the call failed, but that GitHub was never contacted. A parallel test proves a foreign project and a nonexistent one return the identical 404 shape. Naming is covered against real input: `248d9d63…` + &quot;Sponsor Dashboard&quot; → `sponsor-dashboard-248d9d63`, plus fallbacks, 40-char truncation, and a property-style check that no input (`&#39;&#39;`, `&#39;///&#39;`, `&#39;Ünïcødé&#39;`, `&#39;.hidden&#39;`, `&#39;trailing-&#39;`) can produce a name GitHub would reject or one containing `--`. **Two pre-existing tests failed first** and correctly so: the in-memory mock is now keyed by project, and two assertions still looked up by enrollment id — a real consequence of the re-key that the suite caught rather than papered over.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">10 of 17 tasks. Nothing deployed, nothing merged to main. Next is T9 (validate the GitHub username against the API before provisioning, `awaiting_repo` state) and T10 (provisioning through the bounded queue, FR-040), then the repo writer and the prompt-path guard.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">12</span>
+          <h2>**A typo&#39;d username no longer creates a repo for a person who does not exist, and a cohort starting together cannot exhaust the platform token**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**T9** — `githubUserExists()` performs a bounded `GET /users/:login` **before** anything is created (FR-039). `isValidGithubLogin` only ever checked the FORMAT, so a well-formed typo sailed through, the repo got created, and the failure surfaced as &quot;add-collaborator failed (404)&quot; — after we had already made a repo for a nonexistent person. It also distinguishes *&quot;cannot verify right now&quot;* (rate limit, outage → 4xx/5xx other than 404) from *&quot;does not exist&quot;*, because telling a student their correct username is wrong because GitHub was rate-limiting us is its own bug. **T10** — `boundedQueue.ts`: a dependency-free concurrency ceiling with backpressure, plus a process-wide singleton for provisioning wired into the route (FR-040). Twenty students confirming a build in the same minute would otherwise mean twenty repo creations against one platform token, which is a secondary-rate-limit incident. Excess work waits; work beyond `maxDepth` is refused honestly with a 503 rather than accepted and dropped.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**172/172 tests pass** across eight suites (`JEST_EXIT=0`), up from 156. The queue&#39;s load test asserts the thing that matters — not that 20 tasks finished, but that the observed high-water mark **never exceeded the ceiling while they did** — plus that all 20 complete (bounding is not dropping), that a throwing task releases its slot rather than wedging the queue, and that draining continues past a mid-queue failure. T9&#39;s tests assert ordering explicitly: on a bad username exactly **one** fetch happens (the lookup) and no repo is created; on a good one, call 0 is `/users/` and call 1 is `/repos`. **Four tests failed first and two were real defects**: (1) the queue checked `maxDepth` unconditionally, so with `maxDepth: 0` even the *first* caller was rejected though a slot was free — backpressure must apply only to work that would actually wait, now fixed; (2) three pre-existing provision tests asserted `mock.calls[0]` was the repo-create, which the new lookup shifted — a genuine consequence of the change, caught by the suite.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">12 of 17 tasks. Nothing deployed, nothing merged to main. Remaining: T11 (wizard step 4), T12 (repo writer), T13 (**the prompt-path guard** — makes the original defect structurally impossible), T14 (button hierarchy), T15 (migration + handoff), T16 (live end-to-end). T15 and T16 want Ali present: one produces the prod migration for approval, the other creates a real GitHub repo.</span></div>
           
         </div>
       </article>

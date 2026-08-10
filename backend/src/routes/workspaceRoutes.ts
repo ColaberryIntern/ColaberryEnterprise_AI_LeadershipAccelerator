@@ -25,6 +25,7 @@ const provisionSchema = z.object({
 /** A failed ownership check surfaces as 404, never 403 — see requireOwnedProject. */
 function statusFor(err: any): number {
   if (typeof err?.status === 'number') return err.status;
+  if (err?.error_class === 'QueueFull') return 503;
   if (/GITHUB_TOKEN is not configured/.test(err?.message || '')) return 503;
   if (/No workspace repo provisioned/.test(err?.message || '')) return 409;
   return 500;
@@ -70,7 +71,13 @@ router.post('/api/portal/workspace/repo/provision', requireParticipant, async (r
       res.status(400).json({ error: 'A valid GitHub username is required' });
       return;
     }
-    const view = await svc.provisionWorkspaceRepo(req.participant!.sub, body.project_id, body.github_login);
+    // FR-040: provisioning goes through the bounded queue, so a cohort starting
+    // together cannot exhaust the platform token's secondary rate limit.
+    const { getProvisionQueue } = await import('../services/sbp/boundedQueue');
+    const view = await getProvisionQueue().run(
+      () => svc.provisionWorkspaceRepo(req.participant!.sub, body.project_id, body.github_login),
+      body.project_id,
+    );
     res.status(201).json(view);
   } catch (err: any) {
     if (err instanceof z.ZodError) { res.status(400).json({ error: 'Invalid input', issues: err.issues }); return; }

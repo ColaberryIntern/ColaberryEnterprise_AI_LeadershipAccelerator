@@ -96,7 +96,15 @@ describe('isValidGithubLogin', () => {
 });
 
 describe('provisionWorkspaceRepo', () => {
+  /**
+   * FR-039 added a `GET /users/:login` existence check ahead of repo creation,
+   * so every provision path now begins with that call. Scripted here once rather
+   * than repeated in each case.
+   */
+  const userExists = () => mockFetch.mockResolvedValueOnce(res({ ok: true, status: 200, json: { login: LOGIN } }));
+
   it('happy path: creates repo, adds push collaborator, upserts connection (no token persisted)', async () => {
+    userExists();
     mockFetch
       .mockResolvedValueOnce(res({ status: 201 })) // POST create
       .mockResolvedValueOnce(res({ status: 201 })); // PUT collaborator
@@ -109,8 +117,12 @@ describe('provisionWorkspaceRepo', () => {
     expect(view.student_github_login).toBe(LOGIN);
     expect(view.repo_url).toContain('github.com/ColaberryIntern/');
 
+    // call 0 is the FR-039 user-existence lookup; create is call 1.
+    const [userUrl] = mockFetch.mock.calls[0];
+    expect(String(userUrl)).toContain(`/users/${LOGIN}`);
+
     // create call
-    const [createUrl, createInit] = mockFetch.mock.calls[0];
+    const [createUrl, createInit] = mockFetch.mock.calls[1];
     expect(createUrl).toBe('https://api.github.com/orgs/ColaberryIntern/repos');
     expect(createInit.method).toBe('POST');
     const body = JSON.parse(createInit.body);
@@ -120,7 +132,7 @@ describe('provisionWorkspaceRepo', () => {
     expect(createInit.headers.Authorization).toBe('Bearer platform-token');
 
     // collaborator call
-    const [collabUrl, collabInit] = mockFetch.mock.calls[1];
+    const [collabUrl, collabInit] = mockFetch.mock.calls[2];
     expect(collabUrl).toContain(`/collaborators/${LOGIN}`);
     expect(JSON.parse(collabInit.body).permission).toBe('push');
 
@@ -132,6 +144,7 @@ describe('provisionWorkspaceRepo', () => {
   });
 
   it('is idempotent: 422 name-exists on create is treated as success', async () => {
+    userExists();
     mockFetch
       .mockResolvedValueOnce(res({ ok: false, status: 422, text: 'name already exists on this account' }))
       .mockResolvedValueOnce(res({ status: 204 })); // collaborator already present
@@ -142,6 +155,7 @@ describe('provisionWorkspaceRepo', () => {
   });
 
   it('reuses an existing connection row on a repeat provision (findOrCreate returns existing)', async () => {
+    userExists();
     MockConn._seed(PRJ, {
       repo_url: 'https://github.com/ColaberryIntern/old',
       repo_owner: 'ColaberryIntern',
@@ -178,6 +192,7 @@ describe('provisionWorkspaceRepo', () => {
   });
 
   it('surfaces a non-422 create failure', async () => {
+    userExists();
     mockFetch.mockResolvedValueOnce(res({ ok: false, status: 403, text: 'forbidden' }));
     await expect(svc.provisionWorkspaceRepo(ENR, PRJ, LOGIN)).rejects.toThrow(/repo create failed \(403\)/);
   });
@@ -310,5 +325,40 @@ describe('workspaceRepoName', () => {
       expect(name).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
       expect(name).not.toContain('--');
     }
+  });
+});
+
+// ── username validation before anything is created (FR-039) ─────────────────
+describe('githubUserExists / provision pre-check', () => {
+  it('refuses a well-formed but nonexistent username WITHOUT creating a repo', async () => {
+    mockFetch.mockResolvedValueOnce(res({ ok: false, status: 404 }));   // GET /users/:login
+    await expect(svc.provisionWorkspaceRepo(ENR, PRJ, 'ghost-user'))
+      .rejects.toThrow(/does not exist/);
+    // Exactly one call — the lookup. No repo create, no collaborator add.
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    expect(String(mockFetch.mock.calls[0][0])).toContain('/users/ghost-user');
+  });
+
+  it('checks the user BEFORE creating the repo, not after', async () => {
+    mockFetch
+      .mockResolvedValueOnce(res({ ok: true, status: 200, json: { login: LOGIN } }))
+      .mockResolvedValueOnce(res({ ok: true, status: 201, json: {} }))
+      .mockResolvedValueOnce(res({ ok: true, status: 201 }));
+    await svc.provisionWorkspaceRepo(ENR, PRJ, LOGIN);
+    expect(String(mockFetch.mock.calls[0][0])).toContain('/users/');
+    expect(String(mockFetch.mock.calls[1][0])).toContain('/repos');
+  });
+
+  // A rate limit must not be reported to a student as "your username is wrong".
+  it('distinguishes "cannot verify right now" from "does not exist"', async () => {
+    mockFetch.mockResolvedValue(res({ ok: false, status: 403 }));
+    await expect(svc.provisionWorkspaceRepo(ENR, PRJ, LOGIN))
+      .rejects.toThrow(/Could not verify the GitHub username right now/);
+  });
+
+  it('names the offending username so the student can fix it', async () => {
+    mockFetch.mockResolvedValueOnce(res({ ok: false, status: 404 }));
+    await expect(svc.provisionWorkspaceRepo(ENR, PRJ, 'typodname'))
+      .rejects.toThrow(/typodname/);
   });
 });
