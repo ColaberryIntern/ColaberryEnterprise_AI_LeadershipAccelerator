@@ -311,7 +311,7 @@ export async function handleRequestSponsorLink(
 ): Promise<void> {
   try {
     const { email } = requestLinkSchema.parse(req.body);
-    await requestSponsorPortalLink(email);
+    await requestSponsorPortalLink(email, { ip: req.ip, userAgent: req.get('user-agent') });
     res.status(200).json({
       message: 'If that email has a sponsor dashboard, we sent a login link to it.',
     });
@@ -331,7 +331,10 @@ export async function handleVerifySponsorToken(
 ): Promise<void> {
   try {
     const token = String(req.query.token || '');
-    const session = await verifySponsorPortalToken(token);
+    const session = await verifySponsorPortalToken(token, {
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     if (!session) {
       res.status(401).json({ error: 'Invalid or expired link' });
       return;
