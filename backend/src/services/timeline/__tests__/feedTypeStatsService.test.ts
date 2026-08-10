@@ -78,7 +78,7 @@ describe('getTypeStats — healthy anchored type', () => {
 
     const stats = await getTypeStats('implementation_task');
 
-    expect(stats.pool).toEqual({ total: 20, publishedNow: 18, source: 'timeline_cards (status=active)' });
+    expect(stats.pool).toEqual({ total: 20, publishedNow: 18, source: 'timeline_cards (status=active, excludes permanent sample seed)' });
     expect(stats.creation).toEqual({ last7d: 2, last30d: 6, mostRecentAt: '2026-08-01T00:00:00.000Z' });
     expect(stats.triggered).toEqual({ allTime: 120, last7d: 10, last30d: 40 });
     expect(stats.breadth).toEqual({ distinctEnrollments: 15 });
@@ -136,6 +136,17 @@ describe('getTypeStats — pool genuinely exhausted', () => {
 
     expect(stats.diagnostics).toContainEqual(expect.objectContaining({ code: 'INTEL_SOURCE_EXHAUSTED', severity: 'critical' }));
     expect(stats.diagnostics[0].message).toMatch(/static\/curated/i);
+  });
+
+  it('regression (2026-08-10): the pool query excludes the permanent intel_sample_seed card so exhaustion is genuinely detectable, not permanently masked', async () => {
+    mockResolve.mockReturnValue({ ...ANCHORED_TYPE_DEF, slug: 'ai_tool_of_the_day', home_surface: 'today' });
+    mockQueries({ pool: [{ total: 0, published_now: 0 }], intelPending: [{ pending: 0 }] });
+
+    await getTypeStats('ai_tool_of_the_day');
+
+    const poolCall = querySpy.mock.calls.find(([sql]) => String(sql).includes('published_now'));
+    expect(poolCall).toBeDefined();
+    expect(String(poolCall![0])).toMatch(/intel_sample_seed/);
   });
 });
 

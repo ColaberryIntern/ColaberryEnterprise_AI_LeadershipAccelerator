@@ -26,7 +26,14 @@ interface CuratedServer {
   what: string;
 }
 
-/** Authored fallback (constant, not user input) of ~12 well-known MCP servers. */
+/**
+ * Authored fallback (constant, not user input) of well-known MCP servers, grown
+ * from ~12 to ~35 (2026-08-10, content-supply fix) — the live README parse
+ * apparently isn't turning up enough NEW unique entries to outpace
+ * MCP_SERVER_SPOTLIGHT_MAX_PER_RUN=2/day (confirmed: production has fully carded
+ * its entire known pool and gone quiet for 11+ days). Deepening the fallback
+ * catalog is the direct fix available without debugging the live parser itself.
+ */
 const FALLBACK: readonly CuratedServer[] = [
   { name: 'Filesystem', url: `${REPO_TREE_BASE}src/filesystem`, what: 'Secure file operations with configurable access controls.' },
   { name: 'Git', url: `${REPO_TREE_BASE}src/git`, what: 'Read, search, and manipulate Git repositories.' },
@@ -40,6 +47,30 @@ const FALLBACK: readonly CuratedServer[] = [
   { name: 'Cloudflare', url: 'https://github.com/cloudflare/mcp-server-cloudflare', what: 'Manage Cloudflare resources such as Workers, KV, R2, and D1.' },
   { name: 'Notion', url: 'https://github.com/makenotion/notion-mcp-server', what: 'Read and update Notion pages and databases.' },
   { name: 'Playwright', url: 'https://github.com/microsoft/playwright-mcp', what: 'Browser automation and web interaction via Playwright.' },
+  { name: 'Slack', url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/slack', what: 'Send messages and read channel history in Slack workspaces.' },
+  { name: 'Google Drive', url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/gdrive', what: 'Search and read files from Google Drive.' },
+  { name: 'PostgreSQL', url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/postgres', what: 'Read-only access to query and inspect a Postgres database schema.' },
+  { name: 'SQLite', url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/sqlite', what: 'Query and inspect a local SQLite database file.' },
+  { name: 'Puppeteer', url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/puppeteer', what: 'Browser automation and web scraping via headless Chrome.' },
+  { name: 'Brave Search', url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/brave-search', what: 'Web and local search results through the Brave Search API.' },
+  { name: 'Google Maps', url: 'https://github.com/modelcontextprotocol/servers-archived/tree/main/src/google-maps', what: 'Location search, directions, and place details via Google Maps.' },
+  { name: 'AWS', url: 'https://github.com/awslabs/mcp', what: "AWS Labs' official collection of servers for AWS service integration." },
+  { name: 'Stripe', url: 'https://github.com/stripe/agent-toolkit', what: 'Create payments, manage customers, and query Stripe data.' },
+  { name: 'Linear', url: 'https://github.com/tacticlaunch/mcp-linear', what: 'Read and manage Linear issues, projects, and cycles.' },
+  { name: 'Jira/Confluence', url: 'https://github.com/sooperset/mcp-atlassian', what: 'Read and update Jira issues and Confluence pages.' },
+  { name: 'Docker', url: 'https://github.com/docker/mcp-servers', what: "Docker's official collection of containerized MCP servers." },
+  { name: 'HubSpot', url: 'https://github.com/HubSpot/hubspot-mcp-server', what: 'Manage HubSpot CRM contacts, deals, and marketing objects.' },
+  { name: 'Figma', url: 'https://github.com/GLips/Figma-Context-MCP', what: 'Pull design context and layout data directly from Figma files.' },
+  { name: 'Zapier', url: 'https://zapier.com/mcp', what: "Connect an agent to Zapier's thousands of app integrations." },
+  { name: 'Perplexity', url: 'https://github.com/ppl-ai/modelcontextprotocol', what: 'Real-time web search and question-answering via Perplexity.' },
+  { name: 'Redis', url: 'https://github.com/redis/mcp-redis', what: 'Read and write Redis keys, streams, and data structures.' },
+  { name: 'MongoDB', url: 'https://github.com/mongodb-js/mongodb-mcp-server', what: 'Query and manage MongoDB databases and collections.' },
+  { name: 'Grafana', url: 'https://github.com/grafana/mcp-grafana', what: 'Query dashboards, alerts, and datasources in Grafana.' },
+  { name: 'Terraform', url: 'https://github.com/hashicorp/terraform-mcp-server', what: 'Look up Terraform provider docs and module registry data.' },
+  { name: 'Kubernetes', url: 'https://github.com/Flux159/mcp-server-kubernetes', what: 'Inspect and manage Kubernetes cluster resources.' },
+  { name: 'Airtable', url: 'https://github.com/domdomegg/airtable-mcp-server', what: 'Read and update Airtable bases, tables, and records.' },
+  { name: 'Context7', url: 'https://github.com/upstash/context7', what: 'Fetch up-to-date, version-specific library documentation into context.' },
+  { name: 'DeepWiki', url: 'https://github.com/regenrek/deepwiki-mcp', what: 'Query AI-generated documentation and Q&A for open-source GitHub repos.' },
 ];
 
 /** Collapse inline markdown to plain text for a clean excerpt. */

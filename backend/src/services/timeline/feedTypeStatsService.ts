@@ -82,14 +82,21 @@ async function getPool(slug: string): Promise<{ total: number; publishedNow: num
     ).catch(() => [{ total: 0 }]);
     return { total: rows[0]?.total ?? 0, publishedNow: null, source: 'network_videos (is_active, playable)' };
   }
+  // Excludes the permanent 'intel_sample_seed' card every intel-pipeline type
+  // gets planted unconditionally at every server boot (seedIntelSampleCards()) —
+  // without this exclusion `total` is never truly 0 for those types even when
+  // their real generated content has fully run dry, which silently prevented
+  // the INTEL_SOURCE_EXHAUSTED/POOL_EMPTY diagnostics below from ever firing
+  // (found 2026-08-10 investigating why 4 types went quiet with no admin-visible
+  // warning). A no-op for non-intel types, which never carry this source value.
   const rows = await sequelize.query<{ total: number; published_now: number }>(
     `SELECT
-       COUNT(*) FILTER (WHERE status = 'active')::int AS total,
-       COUNT(*) FILTER (WHERE status = 'active' AND visibility = 'published')::int AS published_now
+       COUNT(*) FILTER (WHERE status = 'active' AND metadata->>'source' IS DISTINCT FROM 'intel_sample_seed')::int AS total,
+       COUNT(*) FILTER (WHERE status = 'active' AND visibility = 'published' AND metadata->>'source' IS DISTINCT FROM 'intel_sample_seed')::int AS published_now
      FROM timeline_cards WHERE type = :slug`,
     { replacements: { slug }, type: QueryTypes.SELECT },
   ).catch(() => [{ total: 0, published_now: 0 }]);
-  return { total: rows[0]?.total ?? 0, publishedNow: rows[0]?.published_now ?? 0, source: 'timeline_cards (status=active)' };
+  return { total: rows[0]?.total ?? 0, publishedNow: rows[0]?.published_now ?? 0, source: 'timeline_cards (status=active, excludes permanent sample seed)' };
 }
 
 async function getCreation(slug: string): Promise<{ last7d: number; last30d: number; mostRecentAt: string | null }> {
