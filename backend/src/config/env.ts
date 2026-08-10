@@ -141,6 +141,16 @@ export const env = {
   // per-card/type routing. Default OFF; flag-off keeps the legacy hardcoded
   // CADENCE=2 + fixed provider list + week→bucket→order behavior byte-identical.
   feedControlEnabled: process.env.FEED_CONTROL_ENABLED === 'true',
+  // Feed Control type-level suppression — makes a curriculum type's
+  // feed_frequency_cap/feed_cooldown_days (set via the Feed Control board's gear
+  // icon) actually suppress candidates in gatherAnchored()/classCandidates(), for
+  // both weekBound and evergreenByType. Today these fields only affect the admin
+  // simulate() preview, never a real student's feed (see feedTypeExposureService.ts).
+  // Default OFF everywhere including production — flag-off keeps gatherAnchored()
+  // byte-identical to before (see todayAnchoredSources.suppression.test.ts). Not
+  // documented in .env.example, matching the FEED_CONTROL_ENABLED/
+  // CAPE_LEARNING_VALUE_RANKER_ENABLED inline-only convention.
+  feedControlTypeSuppressionEnabled: process.env.FEED_CONTROL_TYPE_SUPPRESSION_ENABLED === 'true',
   // CAPE Phase 4 — the learning-value ranker (design doc §9, §16 Phase 4). Reorders
   // the ANCHORED candidate queue in todayFeedComposer.ts by an explainable
   // skill-gap/prerequisite/goal-fit score instead of raw gatherAnchored() order.
