@@ -111,6 +111,16 @@ export function blogReaderDoc(
  *  icon term-cards, prereq tiles, callouts, tables). In a sandbox="allow-scripts" iframe
  *  whose origin is opaque (no allow-same-origin): its scripts cannot touch the parent
  *  page/cookies/storage, and the HTML is script/style-stripped as defense-in-depth. */
+/** Sandbox for the Self Study reader iframe, shared by the drawer and the workstation
+ *  so the two surfaces can never drift. `allow-scripts` runs the reader engine (nav +
+ *  read-gate). The popup pair is what makes an authored <a href> actually work: without
+ *  `allow-popups` the click is silently swallowed (same failure the intel band hit), and
+ *  without `allow-popups-to-escape-sandbox` the opened tab INHERITS this sandbox — an
+ *  opaque origin with no cookies — which breaks the login-gated course links (Anthropic
+ *  Skilljar) the readings point at. Deliberately no `allow-same-origin`: the reader still
+ *  cannot touch the parent page, cookies, or storage. */
+export const READER_SANDBOX = 'allow-scripts allow-popups allow-popups-to-escape-sandbox';
+
 export interface ReaderOpts { cardId?: string; doneIds?: string[]; heroIllus?: string; }
 export function readerDoc(bodyHtml: string, title?: string, opts?: ReaderOpts): string {
   const body = stripUnsafe(bodyHtml);
@@ -152,6 +162,12 @@ export function readerDoc(bodyHtml: string, title?: string, opts?: ReaderOpts): 
     .figure figcaption{font-size:13px;color:#4a4a4a;margin-top:12px;line-height:1.5}
     .prereq{display:flex;gap:11px;align-items:flex-start;background:#FDFCFA;border:1px solid #DDD6C9;border-radius:12px;padding:12px 14px;margin:8px 0}
     .prereq b{display:block;margin-bottom:2px}
+    .ss ol li{margin-bottom:9px}.ss ol li::marker{font-weight:700;color:#c20e1e}
+    .ss a{color:#2E6A86;text-decoration:underline;text-underline-offset:2px}.ss a:hover{color:#c20e1e}
+    .cmd{background:#1c2229;color:#e6edf3;border-radius:10px;padding:12px 14px;margin:10px 0;overflow-x:auto;white-space:pre;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .cmd .c{color:#8a99a8}.cmd .g{color:#5BA63C}
+    .ss code{background:#EFEBE4;border-radius:5px;padding:1px 6px;font:13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+    .ss .cmd code{background:none;padding:0;font-size:inherit}
     table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14.5px}
     th,td{border:1px solid #DDD6C9;padding:9px 12px;text-align:left;vertical-align:top}th{background:#EFEBE4;font-weight:700}td:first-child{font-weight:600}
     .dg-txt{fill:#1a1a1a;font-family:Roboto,sans-serif}
@@ -170,7 +186,7 @@ export function readerDoc(bodyHtml: string, title?: string, opts?: ReaderOpts): 
     #nav a.active.read::after{background-color:#fff;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12l4 4L18 7' fill='none' stroke='%233f8f2e' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")}
     .ss section.read>h2::before{content:"";display:inline-block;width:8px;height:8px;border-radius:50%;background:#5BA63C;margin-right:9px;vertical-align:middle}
     @media(prefers-color-scheme:dark){.illus,.stat{background:#2c2723;border-color:#3a342e}.illus figcaption,.stat span{color:#a89f94}.herofig{background:linear-gradient(135deg,#2f3a40,#231f1b);border-color:#3a342e}#nav a.read{color:#8fce6f}}
-    @media(prefers-color-scheme:dark){body{background:#231f1b;color:#ece7e0}#nav{background:rgba(35,31,27,.95);border-color:#3a342e}#nav a{background:#2c2723;border-color:#3a342e;color:#c9beb2}#nav a.active{color:#231f1b;background:#ff6b83;border-color:#ff6b83}.hero .eyebrow{color:#ff6b83}.note,.term,.figure,.prereq{background:#2c2723;border-color:#3a342e}.ss section{border-color:#3a342e}.ss .lead,.term h3,.term h4,.warn b{color:#ff6b83}.term h3,.term h4{color:#ece7e0}.why{color:#a89f94}.warn{background:#2c2723;border-color:#3a342e}th{background:#2c2723}th,td{border-color:#3a342e}.dg-txt{fill:#ece7e0}}
+    @media(prefers-color-scheme:dark){body{background:#231f1b;color:#ece7e0}#nav{background:rgba(35,31,27,.95);border-color:#3a342e}#nav a{background:#2c2723;border-color:#3a342e;color:#c9beb2}#nav a.active{color:#231f1b;background:#ff6b83;border-color:#ff6b83}.hero .eyebrow{color:#ff6b83}.note,.term,.figure,.prereq{background:#2c2723;border-color:#3a342e}.ss section{border-color:#3a342e}.ss .lead,.term h3,.term h4,.warn b{color:#ff6b83}.term h3,.term h4{color:#ece7e0}.why{color:#a89f94}.warn{background:#2c2723;border-color:#3a342e}th{background:#2c2723}th,td{border-color:#3a342e}.dg-txt{fill:#ece7e0}.ss a{color:#7fc4e0}.ss a:hover{color:#ff6b83}.ss code{background:#3a342e}.ss ol li::marker{color:#ff6b83}}
     @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}#pbar>i{transition:none}}
   </style>
   <div id="pbar"><i></i></div><nav id="nav"></nav>
@@ -321,7 +337,7 @@ const CardDetailBody: React.FC<Props> = ({ card, preview, onComplete, onEnterWor
       <div className={`${isReader || isDeepDive ? 'tld-body tld-body--reader' : 'tld-body'}${isSetupLab ? ' tld-body--setuplab' : ''}${isPromptCatalog ? ' tld-body--promptcatalog' : ''}${isArchitectMindset ? ' tld-body--architect' : ''}${isBuildArtifacts ? ' tld-body--buildartifacts' : ''}`}>
         {isReader ? (
           content?.body_html
-            ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox="allow-scripts" srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
+            ? <iframe className="tld-lessonframe tld-readerframe" title="Self Study reading" sandbox={READER_SANDBOX} srcDoc={readerDoc(content.body_html, content.title || card.title, { cardId: card.id, doneIds: readerProg.initialDoneIds })} />
             : generating
               ? <GeneratingReader />
               : <div className="tld-note" style={{ margin: 20 }}>This reading has not been added yet.</div>

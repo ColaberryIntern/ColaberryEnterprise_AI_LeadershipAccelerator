@@ -292,6 +292,7 @@ export const env = {
   vaErpModuleConfigJson: process.env.VA_ERP_MODULE_CONFIG || '[]',
   vaErpRequestTimeoutMs: parseInt(process.env.VA_ERP_REQUEST_TIMEOUT_MS || '15000', 10),
   vaErpMaxRetries: parseInt(process.env.VA_ERP_MAX_RETRIES || '3', 10),
+  vaErpRoleAssignmentsJson: process.env.VA_ERP_ROLE_ASSIGNMENTS || '{}',
   vaErpBatchSize: parseInt(process.env.VA_ERP_BATCH_SIZE || '10', 10),
   vaErpBatchDelayMs: parseInt(process.env.VA_ERP_BATCH_DELAY_MS || '0', 10),
 };

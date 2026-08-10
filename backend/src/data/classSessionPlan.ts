@@ -67,7 +67,17 @@ export interface StoryBeat {
  * rescue line), so this degrades gracefully on the hundreds of existing prompts
  * authored before this model existed. Populate real values for flagship weeks. */
 export interface BuildBayMeta {
-  /** Where the prompt gets pasted. Defaults to "Claude Code" at render time. */
+  /** What this code block IS, which decides the Build Bay's lead chip:
+   *  'paste' (default) → "📋 PASTE INTO <target>" — the student runs it.
+   *  'review' → "📖 REVIEW TOGETHER" — the instructor reads it with the room
+   *  and nobody pastes anything. Needed because a class that directs Claude
+   *  Code to WRITE the code still wants the resulting code on screen to read,
+   *  and labelling that "paste this" teaches the opposite of the lesson. */
+  kind?: 'paste' | 'review';
+  /** Where the prompt gets pasted. Defaults to "Claude Code" at render time.
+   *  Set it explicitly for anything that is NOT a Claude Code prompt — shell
+   *  commands belong in a terminal, and mislabelling them is a real teaching
+   *  error in a program whose whole thesis is "you direct Claude Code". */
   pasteWhere?: string;
   /** e.g. "Plan Mode" | "Manual" | "Auto" — omitted (no chip) if not set. */
   ccMode?: string;
@@ -655,7 +665,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     publicTitle: 'Build Your First AI Workflow Assistant',
     monday: {
       tension:
-        'Tonight your build plan gets generated, and within a few minutes you are looking at your own task list. Scroll it and you will find task after task where the assistant has to classify something, draft something, or decide something — at 2am, on a schedule, with nobody at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. Those tasks need the other door: the Claude API, called from your own code. Same models, different driver, and — this is the part nobody has told you yet — a completely separate bill.',
+        'Tonight your build plan gets generated — you start it at the top of class and it is waiting for you about twenty minutes later. Scroll it and you will find task after task where the assistant has to classify something, draft something, or decide something — at 2am, on a schedule, with nobody at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. Those tasks need the other door: the Claude API, called from your own code. Same models, different driver, and — this is the part nobody has told you yet — a completely separate bill.',
       payoffPreview: 'By Thursday you ship a Business Workflow Assistant — a small program that automates one real workflow from your own build plan, end to end. This is your Intensive 1 deliverable.',
       architectureBeats: [
         'Two doors into the same models: Claude Code (a human drives) vs the Claude API (a program drives)',
@@ -748,13 +758,6 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         },
         {
           segment: 'business-problem', kind: 'poll',
-          q: 'How many tasks did your build generate?',
-          options: ['Under 10', '10 to 20', '21 to 40', 'More than 40'],
-          eyebrow: '📊 Look at yours', title: 'How big did your plan turn out?',
-          presenterTip: 'No right answer — this is a room read that also gets everyone to actually open their plan. Call out the biggest number by name; it usually gets a laugh and it makes the plan feel real.',
-        },
-        {
-          segment: 'business-problem', kind: 'poll',
           q: 'You paste a task prompt, and Claude proposes something that is not what you meant. What does an architect do?',
           options: [
             'Accept it and clean it up later',
@@ -765,7 +768,14 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
           answer: 2,
           reveal: 'Redirecting is not the prompt failing. Redirecting IS the job — and naming the specific thing that is wrong is what separates an architect from someone rerolling the dice.',
           eyebrow: '🏛️ Architect check', title: 'It came back wrong. Now what?',
-          presenterTip: 'Take answers before revealing. If the room splits toward "accept and fix later," that is worth two extra minutes — it is the habit that quietly wrecks a capstone.',
+          presenterTip: 'Take answers before revealing. If the room splits toward "accept and fix later," that is worth two extra minutes — it is the habit that quietly wrecks a capstone. This question needs no finished build, which is why it comes first.',
+        },
+        {
+          segment: 'business-problem', kind: 'poll',
+          q: 'How many tasks did your build generate?',
+          options: ['Under 10', '10 to 20', '21 to 40', 'More than 40', 'Mine is still building'],
+          eyebrow: '📊 Look at yours', title: 'How big did your plan turn out?',
+          presenterTip: 'No right answer — a room read that also gets everyone to actually open their plan. TIMING: builds take ~20 minutes, so this lands right as they finish and "still building" is a legitimate answer. If most of the room picks it, skip the discussion and re-run this question after the break rather than stalling. Call out the biggest number by name; it makes the plan feel real.',
         },
         {
           segment: 'architecture', kind: 'poll',

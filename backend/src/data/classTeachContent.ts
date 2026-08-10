@@ -23,6 +23,9 @@
 
 import { GENERATED_WEEK_TEACH } from './classTeachWeeks';
 import { WEEK3_MONDAY } from './classTeachWeek3';
+// Type-only import — classSessionPlan.ts is itself dependency-free and never
+// imports this module, so there is no cycle and no runtime coupling.
+import type { BuildBayMeta } from './classSessionPlan';
 
 /** A sourced factual claim shown in a small footer + the readiness report. */
 export interface EvidenceClaim {
@@ -44,8 +47,14 @@ export interface TeachSlide {
   /** 2-5 sentences of real teaching substance. */
   body?: string;
   bullets?: string[];
-  /** A copy-ready Claude Code prompt or code/config snippet. */
-  code?: { label: string; code: string };
+  /** A copy-ready prompt or code/config snippet, plus the same optional Build
+   *  Bay metadata a run-of-show ClassPrompt carries — `kind` ('paste' vs
+   *  'review'), `pasteWhere`, `ccMode`, `expectedResult`, `stopCondition`,
+   *  `rescue`. Without this a teach slide's code block always rendered as
+   *  "PASTE INTO Claude Code", which mislabels shell commands and read-along
+   *  code. All fields stay optional, so every previously authored slide is
+   *  unaffected. */
+  code?: { label: string; code: string } & BuildBayMeta;
   /** Optional mermaid diagram source. */
   diagram?: string;
   /** Sourced factual claims (rendered as a source footer + readiness report). */

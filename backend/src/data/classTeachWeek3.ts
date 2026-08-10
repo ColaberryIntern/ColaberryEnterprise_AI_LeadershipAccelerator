@@ -42,19 +42,19 @@ export const WEEK3_MONDAY: TeachSlide[] = [
   },
   {
     segment: 'checkin', eyebrow: '▶️ Do this right now', title: 'Four clicks, one paragraph, then leave it running',
-    body: 'Open the portal, go to Projects, click "Start a new build", and describe your idea in one paragraph — who it is for, what it does, and the one thing it has to get right. Then hit go and leave the tab open. It takes a few minutes. It does not have to be your final idea; it has to be an idea you care enough about to argue with.',
+    body: 'Open the portal, go to Projects, click "Start a new build", and describe your idea in one paragraph — who it is for, what it does, and the one thing it has to get right. Then hit go and leave the tab open. It takes about twenty minutes to build, which is exactly why you start it now: it runs in the background while we talk, and it will be waiting for you by the time we need it. It does not have to be your final idea; it has to be an idea you care enough about to argue with.',
     bullets: [
       'Portal → Projects → "Start a new build"',
       'One paragraph: who it is for · what it does · the one thing it must get right',
-      'Hit go, then leave the tab running and come back to me',
+      'Hit go, leave the tab running — it takes about 20 minutes',
       'Not final — good enough to react to is the bar tonight',
     ],
     diagram: `flowchart LR
   P["🖥️ Portal"] --> PR["📁 Projects"]
   PR --> S["➕ Start a new build"]
   S --> I["✍️ Your idea,<br/>one paragraph"]
-  I --> G["⏳ Go — leave it<br/>running 3-5 min"]`,
-    script: 'Screen-share the exact click path once, slowly, then stop talking and let the room work. PACING: wait only until most students report their build is GENERATING — never wait for one to finish. The generation runs in the background through the next segment by design, which is why the pipeline explanation comes next; if you sit here watching progress bars the pace bar will read behind for the rest of the class. Anyone stuck goes to a mentor now, not at the break.',
+  I --> G["⏳ Go — it runs<br/>~20 min in the background"]`,
+    script: 'Screen-share the exact click path once, slowly, then stop talking and let the room work. PACING — this matters: the build takes ~20 minutes, so wait only until most students report theirs is GENERATING, never until one finishes. If they launch around minute 5, builds land around minute 25, which is the end of the business-problem segment — that is deliberate, and it is why the pipeline explanation comes next. Sitting here watching progress bars puts you 20 minutes behind for the rest of the night. Anyone stuck goes to a mentor now, not at the break.',
   },
   {
     segment: 'checkin', eyebrow: '🗺️ While it runs', title: 'Three things you leave with tonight',
@@ -137,7 +137,7 @@ export const WEEK3_MONDAY: TeachSlide[] = [
   R -.->|"the code you<br/>just built"| APP["⚙️ Your app,<br/>running at 2am"]
   APP --> API["🔌 Claude API"]
   API --> APP`,
-    script: 'Have students actually scroll their own plan and find one such task before you move on. Ask two people to read theirs out loud. The transition into the API lands ten times harder when it answers a question from their own build.',
+    script: 'Have students scroll their own plan and find one such task before you move on. Ask two people to read theirs out loud — the transition into the API lands ten times harder when it answers a question from their own build. TIMING: builds take ~20 minutes, so at this point in the class some are still finishing. Anyone whose plan is not ready uses yours on screen and checks their own at the break; do not stall the room waiting for stragglers.',
   },
 
   /* ================= architecture · two doors, two bills, Python ========== */
@@ -296,43 +296,96 @@ export const WEEK3_MONDAY: TeachSlide[] = [
 
   /* ===================== micro-build · hands on Python ==================== */
   {
-    segment: 'micro-build', eyebrow: '🔑 Your key', title: 'Get an API key — and put it somewhere your code can read but GitHub cannot',
-    body: 'Go to the Anthropic Console, create an API key, and set it as an environment variable called ANTHROPIC_API_KEY. Then the Python client reads it for you with no arguments — which means the key never appears in a file, never gets committed, and never ends up in a screenshot. This is not a style preference. A key committed to git is a key you must treat as already stolen, because it is public the moment you push.',
+    segment: 'micro-build', eyebrow: '📁 Where things live', title: 'One folder, one key, one command — set this up before you write anything',
+    body: 'Two things have to be true before any of tonight works. First, you need a folder to build in: use the project folder Claude Code is already open in, and everything tonight lands inside it. Second, you need an API key from the Anthropic Console, set as an environment variable in the SAME terminal you will run Python from. These commands go in your terminal, not into Claude Code — that distinction matters more than it looks, and the next slide is entirely about why.',
     bullets: [
-      'console.anthropic.com → API keys → create a key',
-      'Set ANTHROPIC_API_KEY in your environment, not in a file',
-      'anthropic.Anthropic() takes no key argument — it reads the environment',
-      'A key in source is a compromised key. Rotate it, do not hide it.',
+      'Work inside the project folder Claude Code already has open — not Downloads',
+      'console.anthropic.com → API keys → Create key → copy it once (it is shown once)',
+      'Set ANTHROPIC_API_KEY in the terminal you will run Python from',
+      'Same window, same session: a new terminal tab does NOT have it until you set it again',
+      'Verify with the echo line before you go on — blank output means it is not set',
     ],
     code: {
-      label: 'Set the key + install the SDK',
-      code: 'pip install anthropic\n\n# macOS / Linux\nexport ANTHROPIC_API_KEY=sk-ant-...\n\n# Windows PowerShell\n$env:ANTHROPIC_API_KEY="sk-ant-..."',
+      kind: 'paste',
+      pasteWhere: 'your TERMINAL (not Claude Code)',
+      label: 'Terminal — install the SDK, set the key, verify it',
+      code: '# 1. from inside your project folder\npip install anthropic\n\n# 2. set the key — macOS / Linux\nexport ANTHROPIC_API_KEY=sk-ant-...\n\n# 2. set the key — Windows PowerShell\n$env:ANTHROPIC_API_KEY="sk-ant-..."\n\n# 3. VERIFY — this must print your key, not a blank line\necho $ANTHROPIC_API_KEY        # macOS / Linux\necho $env:ANTHROPIC_API_KEY    # Windows PowerShell',
+      expectedResult: 'Step 3 prints your key back. A blank line means it never got set — fix it here, before you write any Python.',
+      stopCondition: 'Everyone has a non-blank echo. This is the one checkpoint tonight that blocks everything after it.',
+      rescue: 'Blank echo? You are almost certainly in a different terminal window than the one you set it in. Set it again in THIS window.',
     },
     diagram: `flowchart LR
-  CON["🎛️ Console →<br/>create an API key"] --> ENV["🔐 Set ANTHROPIC_API_KEY<br/>in your environment"]
-  ENV --> CL["🐍 anthropic.Anthropic()<br/>reads it for you"]
-  CL --> OK["✅ Key never in your code,<br/>never on GitHub"]`,
-    script: 'Do this one with them, screen shared, step by step — a broken key here blocks everything that follows. Watch the pulse rail and do not advance until most report a key set.',
+  CON["🎛️ Console —<br/>create key (shown once)"] --> T["⌨️ YOUR terminal —<br/>export ANTHROPIC_API_KEY"]
+  T --> V["✅ echo prints it back"]
+  V --> PY["🐍 Python reads it<br/>at run time"]
+  F[("📁 Your project folder")] -.-> PY`,
+    script: 'Do this one live, screen shared, slowly — a broken key here blocks everything after it. Say out loud that these are TERMINAL commands, not a Claude Code prompt; the chip on the slide says so too. Make everyone run the echo and confirm it is not blank. Do not advance until the pulse rail is nearly all green.',
   },
   {
-    segment: 'micro-build', eyebrow: '⚙️ First call', title: 'Your first Claude call from a file instead of a keyboard',
-    body: 'Everyone runs this now. It is a real Python file — you save it, you run it, and a reply comes back with no chat window anywhere. Notice the last line: every response tells you exactly how many input and output tokens it used. That is your meter, printed on every single call, and reading it is a habit worth forming tonight rather than after your first surprising invoice.',
+    segment: 'micro-build', eyebrow: '🛡️ The part everyone gets wrong', title: 'Claude Code never sees your API key — and that is the whole design',
+    body: 'A fair question at this point: if I never put the key in the prompt, how does Claude Code get it? The answer is that it never does, and it never needs to. You type the key into your own terminal. Claude Code writes Python that refers to the key only by NAME — the four words ANTHROPIC_API_KEY — and when you run that program, Python looks up the value from the environment at that moment. The secret and the code travel on completely separate paths and only meet inside your running process.',
     bullets: [
-      'Save as hello_claude.py, then: python hello_claude.py',
-      'The client takes no key — it reads the environment',
-      'resp.usage tells you what the call cost, every time',
-      'If a sentence comes back, your environment is real',
+      'You → terminal: the real key value, typed by you, once',
+      'Claude Code → your file: the NAME only, never the value',
+      'Python at run time: looks the name up in the environment',
+      'So: never in a prompt, never in a chat, never in a file, never in a commit',
+      'If you ever do paste it somewhere it does not belong — rotate it, do not hide it',
+    ],
+    diagram: `flowchart LR
+  YOU["👤 You"] -->|"the real key,<br/>typed once"| ENV["🔐 Your environment"]
+  CC["💻 Claude Code"] -->|"writes the NAME<br/>ANTHROPIC_API_KEY"| CODE["📄 Your .py file"]
+  ENV --> RUN["▶️ Running program"]
+  CODE --> RUN
+  CC -.->|"never sees<br/>the value"| ENV`,
+    script: 'This is the slide that answers the question the room is already forming. Trace the two paths with your finger — the key goes one way, the code goes the other, and they only meet when the program runs. Then say the rule once, plainly: the key never enters a conversation with any AI, including this one.',
+  },
+  {
+    segment: 'micro-build', eyebrow: '⌨️ Direct it', title: 'You do not write the Python. You tell Claude Code what it must do.',
+    body: 'This is the same job you have done since Week 1, just pointed at a new target. You are not going to type an API client from memory — you are going to specify what the program must do, let Claude Code write it, and then read what came back and decide whether it is right. Paste this prompt, and notice what it does NOT contain: your key. Only the name of the variable it should read.',
+    bullets: [
+      'Paste this into Claude Code — it writes the file, you review it',
+      'The prompt names ANTHROPIC_API_KEY; it never contains the key itself',
+      'Ask for the token usage line — that is your cost meter',
+      'Then READ the file before you run it. That is the whole skill.',
     ],
     code: {
-      label: 'hello_claude.py',
-      code: 'import anthropic\n\nclient = anthropic.Anthropic()   # reads ANTHROPIC_API_KEY from the environment\n\nresp = client.messages.create(\n    model="claude-opus-5",\n    max_tokens=512,\n    system="You are a support-operations assistant. Be concise and factual.",\n    messages=[{"role": "user", "content": "A customer cannot log in after a password reset. What do you need to help?"}],\n)\n\nprint(next(b.text for b in resp.content if b.type == "text"))\nprint("tokens in/out:", resp.usage.input_tokens, resp.usage.output_tokens)',
+      kind: 'paste',
+      pasteWhere: 'Claude Code',
+      ccMode: 'Plan Mode',
+      label: 'Claude Code prompt — build the first call',
+      code: 'Create a file called hello_claude.py in this project.\n\nIt should:\n1. Use the official `anthropic` Python SDK.\n2. Create the client with no arguments, so it reads the API key from the ANTHROPIC_API_KEY environment variable. Never hardcode a key, and never print the key.\n3. Send one message to model "claude-opus-5" with max_tokens 512 and a system prompt that says it is a concise, factual support-operations assistant.\n4. Ask it: "A customer cannot log in after a password reset. What do you need to help?"\n5. Print the reply text.\n6. On the last line, print the input and output token counts from the response usage, labelled clearly.\n\nKeep it under 20 lines and add a short comment on the client line explaining where the key comes from. Show me the file before running it.',
+      expectedResult: 'A new hello_claude.py in your project folder, roughly 15 lines, with no key anywhere in it.',
+      stopCondition: 'You have read the file and can point at the line that reads the key from the environment.',
     },
     diagram: `flowchart LR
-  PY["📄 hello_claude.py"] --> CL["🐍 client.messages.create"]
-  CL --> API["🔌 Claude API"]
-  API --> RSP["📬 resp.content<br/>+ resp.usage"]
-  RSP --> PR["🖨️ print()"]`,
-    script: 'Run it live first so they see the shape of a successful run, then let the room run it. Read the token numbers off your own screen out loud — connect it back to the money slide immediately.',
+  P["⌨️ Your prompt —<br/>what it must do"] --> CC["💻 Claude Code"]
+  CC --> F["📄 hello_claude.py"]
+  F --> R["👀 You read it"]
+  R --> RUN["▶️ python hello_claude.py"]`,
+    script: 'Paste it on screen and let Claude Code work while you narrate the decisions in the prompt — especially requirement 2. Do not run it yet; the next slide is the read-together.',
+  },
+  {
+    segment: 'micro-build', eyebrow: '👀 Review it together', title: 'Read the file before you run it — here is what good looks like',
+    body: 'This is roughly what should be sitting in your folder now. Read it as a group: the client line takes no arguments, which means the key comes from the environment at run time. The message list is the conversation. And the last line prints the meter. Yours will not match this word for word, and that is fine — what matters is that every one of those four things is present and you can point at each of them.',
+    bullets: [
+      'Line 3: no key argument → the environment supplies it',
+      'model + max_tokens: the two decisions that set your bill',
+      'system: the standing rules, separate from the question',
+      'The last line: input and output tokens — your meter, on every call',
+      'Now run it: python hello_claude.py',
+    ],
+    code: {
+      kind: 'review',
+      label: 'hello_claude.py — read it, do not paste it',
+      code: 'import anthropic\n\nclient = anthropic.Anthropic()   # key comes from ANTHROPIC_API_KEY in the environment\n\nresp = client.messages.create(\n    model="claude-opus-5",\n    max_tokens=512,\n    system="You are a support-operations assistant. Be concise and factual.",\n    messages=[{"role": "user", "content": "A customer cannot log in after a password reset. What do you need to help?"}],\n)\n\nprint(next(b.text for b in resp.content if b.type == "text"))\nprint("tokens in/out:", resp.usage.input_tokens, resp.usage.output_tokens)',
+      expectedResult: 'The client line with no arguments, and the usage line at the bottom — those are the two lines to put your finger on.',
+    },
+    diagram: `flowchart LR
+  F["📄 hello_claude.py"] --> C1["🔑 Anthropic()<br/>no key argument"]
+  F --> C2["🎚️ model + max_tokens<br/>= your bill"]
+  F --> C3["📜 system + messages"]
+  F --> C4["📊 usage = the meter"]`,
+    script: 'Open the REAL file Claude Code just wrote on your screen, not this slide, and read it against these four points — the slide is your safety net if the generated file drifted. Then everyone runs it. Read your own token numbers out loud when it returns.',
   },
   {
     segment: 'micro-build', eyebrow: '📦 Trustable output', title: 'Stop parsing prose — declare the shape you want',
@@ -344,8 +397,12 @@ export const WEEK3_MONDAY: TeachSlide[] = [
       'The SDK also offers client.messages.parse() if you prefer typed objects',
     ],
     code: {
-      label: 'A shape your next function can trust',
-      code: 'import json\n\nTRIAGE = {\n    "type": "object",\n    "properties": {\n        "category": {"type": "string", "enum": ["shipping", "billing", "technical", "other"]},\n        "urgency": {"type": "string", "enum": ["low", "normal", "high"]},\n        "order_id": {"type": "string", "description": "The order ID, or an empty string if none was mentioned."},\n        "suggested_reply": {"type": "string"},\n    },\n    "required": ["category", "urgency", "order_id", "suggested_reply"],\n    "additionalProperties": False,\n}\n\nresp = client.messages.create(\n    model="claude-opus-5",\n    max_tokens=1024,\n    output_config={"format": {"type": "json_schema", "schema": TRIAGE}},\n    messages=[{"role": "user", "content": "Where is my order ORD-4471? It has been two weeks!"}],\n)\n\ntriage = json.loads(next(b.text for b in resp.content if b.type == "text"))\nprint(triage["category"], triage["urgency"], triage["order_id"])',
+      kind: 'paste',
+      pasteWhere: 'Claude Code',
+      label: 'Claude Code prompt — force a shape you can trust',
+      code: 'Create triage.py in this project, based on hello_claude.py.\n\nIt should send a support ticket to Claude and get back STRUCTURED JSON instead of prose, using the Messages API `output_config` with a `format` of type `json_schema`.\n\nThe schema must require exactly these four fields, with `additionalProperties` false:\n- category: string, one of shipping / billing / technical / other\n- urgency: string, one of low / normal / high\n- order_id: string — the order ID, or an empty string if the ticket did not mention one\n- suggested_reply: string\n\nUse this ticket as the input: "Where is my order ORD-4471? It has been two weeks!"\n\nParse the JSON out of the response and print each field on its own labelled line, then print the input and output token counts. Keep reading the API key from the environment. Show me the file, then run it.',
+      expectedResult: 'Four labelled lines — category shipping, urgency high, order_id ORD-4471, and a suggested reply — instead of a paragraph.',
+      stopCondition: 'You can see real values in fields, not a sentence you would have to parse by hand.',
     },
     diagram: `flowchart LR
   S["📐 You declare the shape<br/>category · urgency · order_id"] --> R["📨 Request with<br/>output_config.format"]
@@ -354,40 +411,54 @@ export const WEEK3_MONDAY: TeachSlide[] = [
     script: 'Print the paragraph version and the object version side by side and ask: "which of these can your next line of code actually use?" The answer sells structured output without you arguing for it.',
   },
   {
-    segment: 'micro-build', eyebrow: '🛠️ Give it hands', title: 'Tool use: Claude asks, your code runs it, Claude continues',
-    body: 'A model can reason about an order but cannot look one up. So you describe a tool, and when Claude wants it, the reply comes back saying "run lookup_order with this ID." Your code runs your real function, sends the result back, and Claude finishes the thought. Read the diagram carefully, because the most important fact in it is step three: Claude never executes anything. It asks. You decide. That is the whole trust boundary of every agent you will build for the rest of this program.',
+    segment: 'micro-build', eyebrow: '🛠️ Give it hands', title: 'The demo moment: an assistant that looks up a real order and answers like a human',
+    body: 'Here is where it stops being a toy. On its own the model can reason about an order but cannot look one up — so you hand it a tool and a real data file, and it decides on its own when to reach for it. Watch what happens: you ask a messy, human question, and it finds the order, reads the real status, and writes a reply you could actually send a customer. The most important second in the whole demo is step three on the diagram — Claude never runs anything. It asks. Your code decides.',
     bullets: [
-      'You define the tool; Claude decides when to ask for it',
-      'stop_reason == "tool_use" means: run it, then call again',
-      'Match tool_use_id exactly or the follow-up call is rejected',
-      'Claude never runs your code — it asks, you execute',
+      'Claude Code writes BOTH the data file and the assistant — you will see files appear',
+      'You define the tool; Claude decides when it is needed',
+      'stop_reason == "tool_use" means: run it, send the result back, call again',
+      'Claude never executes your code — it asks, you execute, you return',
+      'Try a ticket with NO order number and watch it decline to use the tool',
     ],
     code: {
-      label: 'Define a tool, then handle the round trip',
-      code: 'tools = [{\n    "name": "lookup_order",\n    "description": "Look up an order by ID. Returns status, carrier, and ETA.",\n    "input_schema": {\n        "type": "object",\n        "properties": {"order_id": {"type": "string", "description": "e.g. ORD-4471"}},\n        "required": ["order_id"],\n    },\n}]\n\ndef lookup_order(order_id):\n    return {"order_id": order_id, "status": "in_transit", "carrier": "UPS", "eta": "2 days"}\n\nmessages = [{"role": "user", "content": "Where is order ORD-4471?"}]\nresp = client.messages.create(model="claude-opus-5", max_tokens=1024, tools=tools, messages=messages)\n\nif resp.stop_reason == "tool_use":\n    messages.append({"role": "assistant", "content": resp.content})\n    results = []\n    for block in resp.content:\n        if block.type == "tool_use":\n            out = lookup_order(block.input["order_id"])\n            results.append({"type": "tool_result", "tool_use_id": block.id, "content": json.dumps(out)})\n    messages.append({"role": "user", "content": results})\n    resp = client.messages.create(model="claude-opus-5", max_tokens=1024, tools=tools, messages=messages)\n\nprint(next(b.text for b in resp.content if b.type == "text"))',
+      kind: 'paste',
+      pasteWhere: 'Claude Code',
+      label: 'Claude Code prompt — build the assistant that can actually look things up',
+      code: 'Create two files in this project.\n\nFIRST — orders.json: a small database of 5 believable orders. Each has order_id (ORD-4471 through ORD-4475), customer_name, status (one of in_transit / delivered / delayed / lost), carrier, and eta. Make ORD-4471 "delayed" so the demo has something interesting to say.\n\nSECOND — assistant.py, based on triage.py. It should:\n1. Define one tool called lookup_order with a description saying it looks up an order by ID and returns status, carrier, and ETA. Its input_schema takes a required string order_id.\n2. Implement lookup_order in Python by reading orders.json and returning the matching record, or a clear not-found message.\n3. Send the ticket "Hi - where is order ORD-4471?? It was supposed to be here last week and nobody has told me anything." to claude-opus-5 with that tool available.\n4. Handle the full round trip: if stop_reason is "tool_use", run the real function, append the assistant turn, send back a tool_result block matching the tool_use_id, and call the API again so Claude can finish.\n5. Print, clearly labelled: which tool Claude asked for and with what arguments, what your function returned, and the final customer-ready reply.\n6. Print the total input and output tokens across BOTH API calls.\n\nKeep reading the key from the environment. Show me both files, then run it.',
+      expectedResult: 'A printed trace: Claude asks for lookup_order(ORD-4471) → your function returns the delayed record → a final reply that names the real status and carrier.',
+      stopCondition: 'The final reply contains facts that could only have come from orders.json — that is proof the tool actually fired.',
+      rescue: 'Nothing printed after the tool call? The follow-up request needs the tool_result tool_use_id to match exactly — tell Claude Code that is the bug and let it fix it.',
     },
     diagram: `flowchart LR
-  A["1️⃣ You send the question<br/>+ the tool list"] --> C["2️⃣ Claude asks:<br/>run lookup_order(4471)"]
-  C --> Y["3️⃣ YOUR code<br/>runs the function"]
-  Y --> B["4️⃣ You send<br/>the result back"]
-  B --> F["5️⃣ Claude writes<br/>the final answer"]`,
-    script: 'Walk the five numbered steps on the diagram before you show any code. Say step three twice: "Claude never runs your code." That single sentence answers most of the security questions this room is about to ask.',
+  A["1️⃣ Ticket + tool list"] --> C["2️⃣ Claude asks for<br/>lookup_order(ORD-4471)"]
+  C --> Y["3️⃣ YOUR code reads<br/>orders.json"]
+  Y --> B["4️⃣ You send<br/>the record back"]
+  B --> F["5️⃣ Claude writes the<br/>customer-ready reply"]`,
+    script: 'Walk the five numbered steps on the diagram BEFORE you paste anything, and say step three twice — "Claude never runs your code" answers most of the security questions this room is about to ask. Then run it and read the final reply out loud; it names a real carrier and a real status, which is the moment the room understands what a tool is. If you have time, change the ticket to one with no order number and show it choosing NOT to call the tool — that is the part people remember.',
   },
   {
-    segment: 'micro-build', eyebrow: '💵 Check the meter', title: 'Before you leave: read what tonight actually cost you',
-    body: 'Add up the usage from the calls you just made. It will be a fraction of a cent, and that is exactly the point — you now know how to find the number instead of guessing at it. Every response carries its own bill, so cost is something you can measure per run, per feature, and per model, the same way you measure whether the output was any good. On Thursday you assemble these four moves into one Workflow Assistant, break it on purpose, and harden it.',
+    segment: 'micro-build', eyebrow: '💵 Check the meter', title: 'Exactly how to find out what tonight cost you — two ways',
+    body: 'There are two places to get this number and you should see both. The first is your own program: every response carries its token counts, so you can compute the dollar cost yourself with two multiplications. The second is the Anthropic Console usage page, which is the authoritative bill — it shows real spend per day and per model, and it is where you go when the number matters. Run the calculator below on the token counts you just printed and you will have tonight priced to the fifth decimal.',
     bullets: [
-      'resp.usage.input_tokens + resp.usage.output_tokens on every call',
-      'Cost is a number you measure, not a surprise you receive',
-      'You now have: auth · a call · structured output · one tool',
-      'Thursday: wire them into one assistant, then Build → Break → Harden',
+      'Your program: resp.usage.input_tokens and resp.usage.output_tokens on every call',
+      'The math: (input ÷ 1,000,000 × input rate) + (output ÷ 1,000,000 × output rate)',
+      'Opus 5 rates: $5 in / $25 out per million tokens',
+      'The authoritative bill: console.anthropic.com → Usage (per day, per model)',
+      'Also on that page: set a spend limit and an email alert — do it tonight',
     ],
+    code: {
+      kind: 'paste',
+      pasteWhere: 'Claude Code',
+      label: 'Claude Code prompt — price your own run',
+      code: 'Create cost.py in this project.\n\nIt should define a function price(input_tokens, output_tokens, model) that returns the dollar cost of one API call, using a dict of per-million-token rates for claude-opus-5 (5.00 in / 25.00 out), claude-sonnet-5 (3.00 / 15.00) and claude-haiku-4-5 (1.00 / 5.00).\n\nThen, using the actual token counts I will paste in, print a small table showing what that same call would have cost on each of the three models, formatted to 5 decimal places, plus a line showing what 1,000 calls a day would cost per month on each.\n\nNo API call needed — this is pure arithmetic.',
+      expectedResult: 'A three-row table pricing your own real call on Opus, Sonnet, and Haiku — and the monthly number at 1,000 calls a day.',
+      stopCondition: 'You have a dollar figure for the call you personally made tonight.',
+    },
     diagram: `flowchart LR
-  R["📬 Every response"] --> U["📊 resp.usage"]
-  U --> I["📥 input_tokens"]
-  U --> O["📤 output_tokens"]
-  I --> C["💵 What this run cost"]
-  O --> C`,
-    script: 'Close the loop with a quick round: each student names in one sentence the workflow from their own build plan that they will automate on Thursday. Saying it out loud raises the odds they actually finish it.',
+  R["📬 Your response"] --> U["📊 resp.usage<br/>in + out tokens"]
+  U --> M["✖️ × the per-million<br/>rate for your model"]
+  M --> D["💵 Dollars for THIS run"]
+  CON["🎛️ Console → Usage"] --> BILL["🧾 The authoritative bill<br/>per day, per model"]`,
+    script: 'Do the arithmetic on YOUR real token numbers on screen so the room watches a real invoice get computed from a real run. Then open console.anthropic.com → Usage live and show tonight actually appearing there — that connection, from a printed number to a real bill, is the thing that makes cost feel governable instead of scary. Close with the spend-limit setting; tell them to set one before Thursday. Then a quick round: each student names the workflow from their own build plan they will automate on Build Day.',
   },
 ];
