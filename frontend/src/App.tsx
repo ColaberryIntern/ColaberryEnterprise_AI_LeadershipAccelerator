@@ -9,6 +9,7 @@ import PublicLayoutV2 from './components/publicV2/PublicLayoutV2';
 import HomeV2 from './pages/publicV2/HomeV2';
 import { ServicesV2, ServiceDetailV2 } from './pages/publicV2/ServicesV2';
 import PlatformV2 from './pages/publicV2/PlatformV2';
+import ProofV2 from './pages/publicV2/ProofV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -51,6 +52,7 @@ function App() {
           <Route path="services" element={<ServicesV2 />} />
           <Route path="services/:slug" element={<ServiceDetailV2 />} />
           <Route path="platform" element={<PlatformV2 />} />
+          <Route path="proof" element={<ProofV2 />} />
         </Route>
         <Route element={<PublicLayout />}>
           {publicRoutes}
