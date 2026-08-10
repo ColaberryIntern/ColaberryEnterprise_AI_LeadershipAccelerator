@@ -11,6 +11,7 @@ const summariesRouter = require('./routes/summaries');
 const summaryReviewsRouter = require('./routes/summaryReviews');
 const publicSummariesRouter = require('./routes/publicSummaries');
 const governanceRouter = require('./routes/governance');
+const dataIngestionRouter = require('./routes/dataIngestion');
 const { handleMessage } = require('./ws/handler');
 
 const app = express();
@@ -25,6 +26,7 @@ app.use('/api/summaries', summariesRouter);
 app.use('/api/summary-reviews', summaryReviewsRouter);
 app.use('/api/public/summaries', publicSummariesRouter);
 app.use('/api/governance', governanceRouter);
+app.use('/api/officeholders', dataIngestionRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, 'client/dist');

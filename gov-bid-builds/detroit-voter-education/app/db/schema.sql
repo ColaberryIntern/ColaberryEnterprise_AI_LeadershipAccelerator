@@ -86,6 +86,15 @@ ALTER TABLE summaries ADD COLUMN IF NOT EXISTS review_notes TEXT;
 -- they're temporally instantaneous here.
 ALTER TABLE summaries ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
 
+-- STORY-015: set when a PUBLISHED summary's underlying source data changes
+-- after approval. Deliberately does NOT trigger an automatic rewrite of
+-- summary_text/source_data_ref on the published row -- that would let
+-- approved public content change without admin re-review, undermining the
+-- STORY-011 approval gate. pending_content/rejected summaries need no flag:
+-- they already pull fresh officeholders_candidates.issue_positions the next
+-- time they're composed (see demoPipeline.js).
+ALTER TABLE summaries ADD COLUMN IF NOT EXISTS provenance_stale BOOLEAN NOT NULL DEFAULT false;
+
 -- STORY-011: proof that an admin notification fired when a summary entered
 -- pending_review. channel is 'log_stub' in this build -- no real email/SMS
 -- provider is wired up (would need a new external dependency + real admin
