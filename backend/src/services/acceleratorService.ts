@@ -5,7 +5,7 @@ import {
   ProgramBlueprint,
 } from '../models';
 import { env } from '../config/env';
-import { centralWallClockToInstant } from './centralDate';
+import { convertTo24h, classInstant } from './centralDate';
 
 // PaySimple dashboard base for the admin "open this payer in PaySimple" deep link.
 // Override with PAYSIMPLE_DASHBOARD_BASE if the account uses a different host.
@@ -578,21 +578,8 @@ export async function detectAbsentParticipants(sessionId: string) {
   return absent;
 }
 
-// Live class times are entered and stored as Central wall-clock ("18:30"), but
-// this runs in a UTC container — a naive `new Date(dateStr + "T" + timeStr)`
-// silently parses that wall-clock AS UTC, running the whole session lifecycle
-// (live/completed transitions, recap generation, reminder timing, join windows)
-// 5-6 hours off from the real Central class time. classInstant recovers the
-// true UTC instant via the shared DST-aware Central-time helper. Root-caused
-// 2026-07-23 (Session CC-20260723-t7n4): tonight's Orientation was auto-marked
-// 'completed' hours before its real 6:30pm CT start, blocking check-in.
-// Takes the RAW stored time string (e.g. "18:30:00") — normalizes via
-// convertTo24h internally so every caller gets the seconds-format fix for
-// free instead of having to remember to pre-convert.
-export function classInstant(sessionDate: string, rawTime: string): Date {
-  const naive = new Date(`${sessionDate}T${convertTo24h(rawTime)}:00Z`);
-  return centralWallClockToInstant(naive);
-}
+// classInstant/convertTo24h moved to centralDate.ts — see that file for the
+// full root-cause history of the Central-wall-clock-read-as-UTC incident.
 
 /** Pure: is `session` due to start within (now, cutoff]? Exported for testing. */
 export function isSessionUpcoming(
@@ -677,22 +664,13 @@ export async function getSessionsToMarkCompleted() {
   return sessions.filter((s) => isSessionDueCompleted(s, now));
 }
 
-export function convertTo24h(timeStr: string): string {
-  // Sequelize TIME columns (session start_time/end_time) come back as
-  // "HH:MM:SS" — the trailing seconds must be optional or every call falls
-  // through to the '10:00' default, silently discarding the real time.
-  // Found live 2026-07-23 (Session CC-20260723-t7n4): this masked bug meant
-  // getSessionsToMarkLive/Completed were evaluating every session against a
-  // hardcoded 10am Central instead of its real start/end time.
-  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
-  if (!match) return '10:00';
-  let hours = parseInt(match[1], 10);
-  const minutes = match[2];
-  const period = match[3]?.toUpperCase();
-  if (period === 'PM' && hours < 12) hours += 12;
-  if (period === 'AM' && hours === 12) hours = 0;
-  return `${hours.toString().padStart(2, '0')}:${minutes}`;
-}
+// convertTo24h and classInstant now live in centralDate.ts — recording ingest
+// needs classInstant too, and importing it from here dragged the whole
+// Sequelize model graph into that module. Imported above (this file calls them
+// itself) and re-exported here so existing callers and tests keep working.
+// NOTE: `export { x } from './y'` alone does NOT bind the name locally — doing
+// that broke every session-lifecycle test with "classInstant is not defined".
+export { convertTo24h, classInstant };
 
 // -- Enrollment Management --
 

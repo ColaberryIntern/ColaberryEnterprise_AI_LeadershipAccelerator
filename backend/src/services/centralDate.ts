@@ -47,3 +47,46 @@ export function centralWallClockToInstant(naive: Date): Date {
   const offset = asCentral - guess;
   return new Date(guess - offset);
 }
+
+/**
+ * Normalize a stored class time to 24h "HH:MM".
+ *
+ * Lives here, not in a service, because more than one module needs it and a
+ * per-module copy of exactly this function has already caused a production
+ * incident: a duplicate in meetingService.ts, plus an earlier version of this
+ * regex that did not tolerate the trailing seconds Sequelize TIME columns
+ * return ("HH:MM:SS"), so every call fell through to the '10:00' default and
+ * the session-lifecycle cron evaluated every class against a fake 10am
+ * Central. The seconds group is optional for that reason — do not "tidy" it.
+ */
+export function convertTo24h(timeStr: string): string {
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?$/i);
+  if (!match) return '10:00';
+  let hours = parseInt(match[1], 10);
+  const minutes = match[2];
+  const period = match[3]?.toUpperCase();
+  if (period === 'PM' && hours < 12) hours += 12;
+  if (period === 'AM' && hours === 12) hours = 0;
+  return `${hours.toString().padStart(2, '0')}:${minutes}`;
+}
+
+/**
+ * The real UTC instant of a class's stored Central wall-clock time.
+ *
+ * Live class times are entered and stored as Central wall-clock ("18:30"), but
+ * this runs in a UTC container — a naive `new Date(dateStr + "T" + timeStr)`
+ * silently parses that wall-clock AS UTC, running the whole session lifecycle
+ * (live/completed transitions, recap generation, reminder timing, join windows)
+ * 5-6 hours off from the real Central class time. Root-caused 2026-07-23
+ * (Session CC-20260723-t7n4): that night's Orientation was auto-marked
+ * 'completed' hours before its real 6:30pm CT start, blocking check-in.
+ *
+ * Takes the RAW stored string (e.g. "18:30:00") and normalizes internally, so
+ * a caller cannot forget the conversion step — which is how the bug nearly
+ * regressed while being fixed. Pure; no models, no I/O. Kept importable
+ * without pulling in the Sequelize model graph so recording ingest and the
+ * lifecycle cron can share one implementation.
+ */
+export function classInstant(sessionDate: string, rawTime: string): Date {
+  return centralWallClockToInstant(new Date(`${sessionDate}T${convertTo24h(rawTime)}:00Z`));
+}

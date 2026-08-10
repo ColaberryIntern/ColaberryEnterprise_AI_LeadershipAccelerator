@@ -39,6 +39,7 @@ import LiveSession from '../models/LiveSession';
 import RoomBooking from '../models/RoomBooking';
 import CommunityRoom from '../models/CommunityRoom';
 import { ingestRecordingForSession, ingestRecordingForBooking, ingestRecordingForRoom } from './sessionRecordingService';
+import { attachClassNotesForSession } from './sessionClassNotesService';
 import { extractZoomMeetingId, findRecordingInstancesByMeetingId } from './zoomService';
 
 /**
@@ -2496,6 +2497,20 @@ export function startScheduler(): void {
           }
         } catch (err: any) {
           console.error(`[Scheduler] Recording ingest failed for session ${session.id}:`, err.message);
+        }
+
+        // Class Notes — snapshot the standalone teaching deck into the Room.
+        // Independent of the recording above ON PURPOSE: Sessions 1-4 were
+        // taught on Google Meet and have no recoverable video at all, so notes
+        // must not be conditional on a recording existing. Cheap (renders HTML,
+        // no download) and idempotent, so it is safe on every sweep.
+        try {
+          const notes = await attachClassNotesForSession(session);
+          if (notes.status === 'attached') {
+            console.log(`[Scheduler] Class Notes attached for session ${session.session_number} "${session.title}"`);
+          }
+        } catch (err: any) {
+          console.error(`[Scheduler] Class Notes failed for session ${session.id}:`, err.message);
         }
       }
 

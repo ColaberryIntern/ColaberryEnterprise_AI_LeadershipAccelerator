@@ -17,6 +17,14 @@ import {
   BUILDER_BROADCAST_PROMPTS, PROVE_FORMULA, STEP_EMOJIS, PHONE_RULES,
 } from './kitSpec';
 import { KitConfig, DEFAULT_KIT_CONFIG, InteractionPlacement, Slot, OpeningCopy, HookCopy } from './kitConfig';
+import { packTeach, packNarrative } from '../../data/weekPacks';
+
+/** Teach slides for a week+day: a week's own content pack wins, else the
+ *  original classTeachContent source. Weeks 1-3 have no pack and are
+ *  unaffected. */
+function teachFor(week: number | null, day: 'monday' | 'thursday'): TeachSlide[] {
+  return packTeach(week, day) ?? teachSlidesFor(week, day);
+}
 
 /** Insert story beats right after a segment's own content — the instructor's
  * `config.storyBeats.overrides` (a full replacement set, filtered to this
@@ -74,7 +82,7 @@ export function defaultInteractionsFor(week: number | null, dayKind: DayKind): I
       // Optional extra questions beyond the 3 fixed slots above — empty for
       // every week that doesn't author any (see classSessionPlan.ts's
       // WeekClassContent.monday.extraInteractions doc comment).
-      ...(m.extraInteractions || []),
+      ...((packNarrative(week, 'monday')?.extraInteractions) ?? m.extraInteractions ?? []),
     ];
   }
   const t = wc.thursday;
@@ -82,7 +90,7 @@ export function defaultInteractionsFor(week: number | null, dayKind: DayKind): I
     { ...t.trivia, segment: 'readiness', eyebrow: '🧠 Warm-up', title: 'Quick check', presenterTip: 'One trivia to confirm last week landed before we build on it.' },
     // Optional extra questions beyond the fixed slot above — empty for every
     // week that doesn't author any (see WeekClassContent.thursday.extraInteractions).
-    ...(t.extraInteractions || []),
+    ...((packNarrative(week, 'thursday')?.extraInteractions) ?? t.extraInteractions ?? []),
   ];
 }
 
@@ -103,7 +111,10 @@ export function defaultOpeningFor(week: number | null, dayKind: DayKind): Defaul
   if (dayKind === 'architecture') {
     return {
       coldOpen: { title: 'By Thursday, this will exist', body: wc.monday.payoffPreview },
-      hook: wc.monday.hook ? { headline: wc.monday.hook.headline, caption: wc.monday.hook.caption } : null,
+      hook: (() => {
+        const h = packNarrative(week, 'monday')?.hook ?? wc.monday.hook;
+        return h ? { headline: h.headline, caption: h.caption } : null;
+      })(),
       resultPreview: null,
     };
   }
@@ -176,7 +187,9 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   const out: KitSlide[] = [...openingSlides(meta, segs)];
   if (!wc) return out;
   const m = wc.monday;
-  const mteach = resolveTeachSlides(teachSlidesFor(meta.week, 'monday'), config); // deep teaching slides, inserted per segment
+  const mNarr = packNarrative(meta.week, 'monday');
+  const mBeats = mNarr?.storyBeats ?? m.storyBeats;
+  const mteach = resolveTeachSlides(teachFor(meta.week, 'monday'), config); // deep teaching slides, inserted per segment
   const interactions = resolveInteractions(defaultInteractionsFor(meta.week, 'architecture'), config);
   const opening = defaultOpeningFor(meta.week, 'architecture');
   const hook = resolveSlot(opening.hook, config.opening.hook);
@@ -198,8 +211,13 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   pushInteractions(out, interactions, 'cold-open', cold);
 
   const checkin = segById(segs, 'checkin');
+  // Teach slides keyed 'checkin' are opt-in (empty for every week that doesn't
+  // author one) — they exist so a week can run a real opening arc in the
+  // check-in window (a celebration, a "start this now and leave it running"
+  // instruction) before the prediction poll, instead of only a poll.
+  out.push(...teachToSlides(mteach, 'checkin', checkin));
   pushInteractions(out, interactions, 'checkin', checkin);
-  pushStoryBeats(out, m.storyBeats, 'checkin', checkin, config);
+  pushStoryBeats(out, mBeats, 'checkin', checkin, config);
 
   const prob = segById(segs, 'business-problem');
   out.push(slide(prob, 0, 'bullets', {
@@ -207,7 +225,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
     presenterTip: 'This is the LinkedIn clip. Stay on the business stakes, not the syntax.',
   }));
   out.push(...teachToSlides(mteach, 'business-problem', prob));
-  pushStoryBeats(out, m.storyBeats, 'business-problem', prob, config);
+  pushStoryBeats(out, mBeats, 'business-problem', prob, config);
   pushInteractions(out, interactions, 'business-problem', prob);
 
   const arch = segById(segs, 'architecture');
@@ -218,7 +236,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
     presenterTip: 'Walk the diagram node by node: components, the risky edges, the decisions. This is the evergreen lesson — take your time (≈20 min). Ask the room where the trust boundary is.',
   }));
   out.push(...teachToSlides(mteach, 'architecture', arch));
-  pushStoryBeats(out, m.storyBeats, 'architecture', arch, config);
+  pushStoryBeats(out, mBeats, 'architecture', arch, config);
   pushInteractions(out, interactions, 'architecture', arch);
 
   const dec = segById(segs, 'deconstruct');
@@ -227,7 +245,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
     presenterTip: 'Show the good and the broken. The failure is the breakdown clip.',
   }));
   out.push(...teachToSlides(mteach, 'deconstruct', dec));
-  pushStoryBeats(out, m.storyBeats, 'deconstruct', dec, config);
+  pushStoryBeats(out, mBeats, 'deconstruct', dec, config);
   pushInteractions(out, interactions, 'deconstruct', dec);
 
   out.push(breakSlide(segById(segs, 'reset')));
@@ -242,7 +260,7 @@ function architectureSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig
   // doesn't author one) — added so a week's narrative can continue through
   // the guided-build phase instead of only checkin/business-problem/
   // architecture/deconstruct.
-  pushStoryBeats(out, m.storyBeats, 'micro-build', micro, config);
+  pushStoryBeats(out, mBeats, 'micro-build', micro, config);
   pushInteractions(out, interactions, 'micro-build', micro);
 
   const chal = segById(segs, 'challenge');
@@ -268,7 +286,9 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
   const out: KitSlide[] = [...openingSlides(meta, segs)];
   if (!wc) return out;
   const t = wc.thursday;
-  const tteach = resolveTeachSlides(teachSlidesFor(meta.week, 'thursday'), config); // deep teaching slides, inserted per segment
+  const tNarr = packNarrative(meta.week, 'thursday');
+  const tBeats = tNarr?.storyBeats ?? t.storyBeats;
+  const tteach = resolveTeachSlides(teachFor(meta.week, 'thursday'), config); // deep teaching slides, inserted per segment
   const interactions = resolveInteractions(defaultInteractionsFor(meta.week, 'build'), config);
   const resultPreview = resolveSlot(defaultOpeningFor(meta.week, 'build').resultPreview, config.opening.resultPreview);
 
@@ -279,7 +299,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       presenterTip: 'Show the finished result first. This is the cold open of the episode.',
     }));
   }
-  pushStoryBeats(out, t.storyBeats, 'result-preview', preview, config);
+  pushStoryBeats(out, tBeats, 'result-preview', preview, config);
   pushInteractions(out, interactions, 'result-preview', preview);
 
   const readiness = segById(segs, 'readiness');
@@ -303,7 +323,7 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       presenterTip: i === 0 ? 'Everyone starts here. Confirm CP0 before the first prompt.' : 'Wait for the pulse to catch up before the next checkpoint.',
     }));
   });
-  pushStoryBeats(out, t.storyBeats, 'build-map', map, config);
+  pushStoryBeats(out, tBeats, 'build-map', map, config);
   pushInteractions(out, interactions, 'build-map', map);
 
   // Guided build: the deep teaching steps when authored, else the plain prompt
@@ -342,8 +362,14 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
       eyebrow: '🔧 Recover like an architect', title: 'Diagnose and fix', body: t.recovery,
       presenterTip: 'Narrate the diagnosis. This is where they learn architecture thinking, not just syntax.',
     }));
-    pushStoryBeats(out, undefined, 'failure', fail, config);
   }
+  // Story beats for the failure segment are authored content like any other
+  // segment's, so they belong outside the teach/fallback branch. Two bugs
+  // lived here: they were pushed only in the fallback branch (so a week WITH
+  // deep failure teaching silently lost them), and they were passed
+  // `undefined` instead of `t.storyBeats` — which meant an authored
+  // `thursday.storyBeats.failure` never rendered on ANY path.
+  pushStoryBeats(out, tBeats, 'failure', fail, config);
   pushInteractions(out, interactions, 'failure', fail);
 
   const demos = segById(segs, 'demos');
@@ -363,9 +389,10 @@ function buildSlides(meta: KitMeta, segs: KitSegment[], config: KitConfig): KitS
 
   const cta = segById(segs, 'cta');
   pushInteractions(out, interactions, 'cta', cta);
-  if (t.beforeAfter) {
+  const beforeAfter = tNarr?.beforeAfter ?? t.beforeAfter;
+  if (beforeAfter) {
     out.push(slide(cta, -1, 'beforeafter', {
-      title: t.beforeAfter.label || 'Before → After', beforeAfter: t.beforeAfter,
+      title: beforeAfter.label || 'Before → After', beforeAfter,
       presenterTip: 'Let the two columns do the talking. This is the transformation payoff — pause here.',
     }));
   }

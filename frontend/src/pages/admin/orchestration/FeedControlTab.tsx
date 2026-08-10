@@ -11,34 +11,17 @@
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import api from '../../../utils/api';
+import { Badge, type SurfaceDef, type FCType, type Policy } from './feedControlShared';
+import FeedControlTypeDrawer from './FeedControlTypeDrawer';
+import FeedControlPolicyPanel from './FeedControlPolicyPanel';
 
-interface SurfaceDef { id: string; label: string; description: string; color: string; soft: string; order: number; }
-interface FCType {
-  slug: string; label: string; student_label: string;
-  home_surface: string; feed_mode: string; today_eligible: boolean;
-  bucket: string; render_band: string; difficulty: string;
-  cadence: number | null; frequency_cap: number | null; cooldown_days: number | null;
-}
 interface Lane { surface: SurfaceDef; types: FCType[]; }
-interface Policy {
-  todayCadence: number; ambientProviders: string[];
-  defaultFrequencyCap: number; defaultCooldownDays: number;
-  recencyHalfLifeDays: number; explorationPct: number; priorityWeight: number;
-}
 interface Board { lanes: Lane[]; policy: Policy; buckets: string[]; feedControlEnabled: boolean; }
 interface SimItem { kind: string; type: string; student_label?: string; title: string | null; score?: number; reasons: string[]; render_band?: string; surface?: string; week?: number | null; thumbnail?: string | null; }
 interface SimContext { is_explorer: boolean; total_published: number; candidates: number; locked: number; completed: number; already_seen: number; max_week: number; }
 interface EnrollmentOption { id: string; label: string; cohort_id: string | null; type: string; status: string; }
 interface FeedPreset { id: string; name: string; includes: string[]; created_at: string; }
 const SURF_COLOR: Record<string, string> = { today: '#6d28d9', class: '#2563eb', project: '#059669', community: '#db2777', group: '#d97706' };
-
-const AMBIENT = ['blog', 'podcast', 'testimonial'];
-
-/** LIVE = this control reaches real students now. PREVIEW = it only changes the
- *  simulator below until Feed Control is switched on. */
-function Badge({ kind }: { kind: 'live' | 'preview' }) {
-  return <span className={`fc-badge ${kind}`} title={kind === 'live' ? 'Reaches real students now' : 'Changes the preview only — not the live feed yet'}>{kind === 'live' ? 'LIVE' : 'PREVIEW'}</span>;
-}
 
 export default function FeedControlTab() {
   const [board, setBoard] = useState<Board | null>(null);
@@ -341,90 +324,14 @@ export default function FeedControlTab() {
         )}
       </div>
 
-      {drawer && <TypeDrawer t={drawer} buckets={board.buckets} surfaces={board.lanes.map((l) => l.surface)} busy={busy} live={board.feedControlEnabled}
+      {drawer && <FeedControlTypeDrawer t={drawer} buckets={board.buckets} surfaces={board.lanes.map((l) => l.surface)} busy={busy} live={board.feedControlEnabled}
         onClose={() => setDrawer(null)}
         onSave={async (patch) => { await routeTypes([drawer.slug], patch); setDrawer(null); }} />}
 
-      {policyOpen && <PolicyPanel policy={board.policy} busy={busy} live={board.feedControlEnabled} onClose={() => setPolicyOpen(false)}
+      {policyOpen && <FeedControlPolicyPanel policy={board.policy} busy={busy} live={board.feedControlEnabled} onClose={() => setPolicyOpen(false)}
         onSave={async (patch) => { await savePolicy(patch); setPolicyOpen(false); }} />}
 
       {toast && <div className="fc-toast">{toast}</div>}
-    </div>
-  );
-}
-
-function TypeDrawer({ t, buckets, surfaces, busy, live, onClose, onSave }: {
-  t: FCType; buckets: string[]; surfaces: SurfaceDef[]; busy: boolean; live: boolean;
-  onClose: () => void; onSave: (patch: any) => void;
-}) {
-  const soft: 'live' | 'preview' = live ? 'live' : 'preview';
-  const [surface, setSurface] = useState(t.home_surface);
-  const [feedMode, setFeedMode] = useState(t.feed_mode);
-  const [todayEligible, setTodayEligible] = useState(t.today_eligible);
-  const [bucket, setBucket] = useState(t.bucket);
-  const [cadence, setCadence] = useState<string>(t.cadence != null ? String(t.cadence) : '');
-  const [cap, setCap] = useState<string>(t.frequency_cap != null ? String(t.frequency_cap) : '');
-  const [cool, setCool] = useState<string>(t.cooldown_days != null ? String(t.cooldown_days) : '');
-  const num = (s: string) => (s.trim() === '' ? null : Math.max(0, parseInt(s, 10) || 0));
-  return (
-    <div className="fc-scrim" onClick={onClose}>
-      <aside className="fc-drawer" onClick={(e) => e.stopPropagation()}>
-        <div className="fc-drawer-h"><b>{t.student_label || t.label}</b><button className="fc-x" onClick={onClose}>✕</button></div>
-        <label className="fc-f">Surface <Badge kind="live" />
-          <select value={surface} onChange={(e) => setSurface(e.target.value)}>{surfaces.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</select></label>
-        <label className="fc-f">Feed mode <Badge kind={soft} />
-          <select value={feedMode} onChange={(e) => setFeedMode(e.target.value)}><option value="anchored">anchored (homed, flows into Today)</option><option value="ambient">ambient (Today-only, rotated)</option></select></label>
-        <label className="fc-f row"><input type="checkbox" checked={todayEligible} onChange={(e) => setTodayEligible(e.target.checked)} /> Eligible for the Today feed <Badge kind="live" /></label>
-        <label className="fc-f">Default section (bucket) <Badge kind={soft} />
-          <select value={bucket} onChange={(e) => setBucket(e.target.value)}>{buckets.map((b) => <option key={b} value={b}>{b}</option>)}</select></label>
-        <div className="fc-f3">
-          <label className="fc-f">Cadence <Badge kind={soft} /><input type="number" min={0} placeholder="policy" value={cadence} onChange={(e) => setCadence(e.target.value)} /></label>
-          <label className="fc-f">Freq cap <Badge kind={soft} /><input type="number" min={0} placeholder="policy" value={cap} onChange={(e) => setCap(e.target.value)} /></label>
-          <label className="fc-f">Cooldown d <Badge kind={soft} /><input type="number" min={0} placeholder="policy" value={cool} onChange={(e) => setCool(e.target.value)} /></label>
-        </div>
-        <p className="fc-hint">Blank = inherit the Global Policy default. Cadence = curriculum items between this being injected; freq cap = max times a student sees it; cooldown = days before it can reappear.{!live && ' Fields marked PREVIEW change the simulator only until Feed Control is switched on.'}</p>
-        <div className="fc-drawer-foot">
-          <button className="fc-btn ghost" onClick={onClose}>Cancel</button>
-          <button className="fc-btn" disabled={busy} onClick={() => onSave({
-            home_surface: surface, feed_mode: feedMode, today_eligible: todayEligible, bucket_default: bucket,
-            feed_cadence: num(cadence), feed_frequency_cap: num(cap), feed_cooldown_days: num(cool),
-          })}>{busy ? 'Saving…' : 'Save routing'}</button>
-        </div>
-      </aside>
-    </div>
-  );
-}
-
-function PolicyPanel({ policy, busy, live, onClose, onSave }: { policy: Policy; busy: boolean; live: boolean; onClose: () => void; onSave: (p: Partial<Policy>) => void; }) {
-  const [p, setP] = useState<Policy>(policy);
-  const set = (k: keyof Policy, v: any) => setP((x) => ({ ...x, [k]: v }));
-  const toggleProv = (prov: string) => setP((x) => ({ ...x, ambientProviders: x.ambientProviders.includes(prov) ? x.ambientProviders.filter((a) => a !== prov) : [...x.ambientProviders, prov] }));
-  return (
-    <div className="fc-scrim" onClick={onClose}>
-      <aside className="fc-drawer wide" onClick={(e) => e.stopPropagation()}>
-        <div className="fc-drawer-h"><b>Global Feed Policy</b> {live ? <Badge kind="live" /> : <Badge kind="preview" />}<button className="fc-x" onClick={onClose}>✕</button></div>
-        {!live && <div className="fc-policy-note">These settings shape the <b>preview</b> below, but the live student feed still uses the built-in defaults. They start governing real students the moment Feed Control is switched on.</div>}
-        <label className="fc-f">Today cadence — curriculum items between each ambient injection
-          <input type="number" min={1} max={20} value={p.todayCadence} onChange={(e) => set('todayCadence', parseInt(e.target.value, 10) || 1)} /></label>
-        <div className="fc-f">Ambient providers (rotate into Today)
-          <div className="fc-provs">{AMBIENT.map((a) => (
-            <button key={a} className={`fc-chip-btn ${p.ambientProviders.includes(a) ? 'on' : ''}`} onClick={() => toggleProv(a)}>{a}</button>
-          ))}</div>
-        </div>
-        <div className="fc-f3">
-          <label className="fc-f">Default freq cap<input type="number" min={0} value={p.defaultFrequencyCap} onChange={(e) => set('defaultFrequencyCap', parseInt(e.target.value, 10) || 0)} /></label>
-          <label className="fc-f">Default cooldown d<input type="number" min={0} value={p.defaultCooldownDays} onChange={(e) => set('defaultCooldownDays', parseInt(e.target.value, 10) || 0)} /></label>
-          <label className="fc-f">Recency half-life d<input type="number" min={1} value={p.recencyHalfLifeDays} onChange={(e) => set('recencyHalfLifeDays', parseInt(e.target.value, 10) || 1)} /></label>
-        </div>
-        <label className="fc-f">Exploration ({Math.round(p.explorationPct * 100)}%) — fresh/exploratory share
-          <input type="range" min={0} max={100} value={Math.round(p.explorationPct * 100)} onChange={(e) => set('explorationPct', (parseInt(e.target.value, 10) || 0) / 100)} /></label>
-        <label className="fc-f">Priority weight ({p.priorityWeight}) — how strongly a card's priority boosts rank
-          <input type="range" min={0} max={10} value={Math.round(p.priorityWeight * 100)} onChange={(e) => set('priorityWeight', (parseInt(e.target.value, 10) || 0) / 100)} /></label>
-        <div className="fc-drawer-foot">
-          <button className="fc-btn ghost" onClick={onClose}>Cancel</button>
-          <button className="fc-btn" disabled={busy} onClick={() => onSave(p)}>{busy ? 'Saving…' : 'Save policy'}</button>
-        </div>
-      </aside>
     </div>
   );
 }
@@ -505,6 +412,27 @@ const CSS = `
 .fc-provs{display:flex;gap:8px}
 .fc-hint,.fc-drawer .fc-hint{font-size:11.5px;color:var(--fc-sub);line-height:1.5;font-weight:400}
 .fc-drawer-foot{margin-top:auto;display:flex;gap:10px;justify-content:flex-end;padding-top:8px}
+.fc-stats{border:1px solid var(--fc-bd);border-radius:12px;padding:12px;background:var(--fc-soft);display:flex;flex-direction:column;gap:10px}
+.fc-stats-loading,.fc-stats-err{font-size:12px;color:var(--fc-sub)} .fc-stats-err{color:#dc2626}
+.fc-stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.fc-stat{display:flex;flex-direction:column;background:var(--fc-bg);border:1px solid var(--fc-bd);border-radius:9px;padding:7px 10px}
+.fc-stat b{font-size:16px} .fc-stat span{font-size:10.5px;color:var(--fc-sub);line-height:1.35}
+.fc-diag{display:flex;flex-direction:column;gap:6px}
+.fc-diag-ok{font-size:12px;color:#15803d}
+.fc-diag-item{display:flex;gap:7px;align-items:flex-start;font-size:11.5px;line-height:1.5;border-radius:8px;padding:6px 8px}
+.fc-diag-item.critical{background:#fef2f2;color:#991b1b} .fc-diag-item.warning{background:#fffbeb;color:#92400e} .fc-diag-item.info{background:#eff6ff;color:#1e40af}
+@media(prefers-color-scheme:dark){.fc-diag-item.critical{background:#7f1d1d33;color:#fca5a5}.fc-diag-item.warning{background:#78350f33;color:#fcd34d}.fc-diag-item.info{background:#1e3a8a33;color:#93c5fd}}
+.fc-diag-icon{flex:none} .fc-diag-msg{flex:1}
+.fc-slider-wrap{border:1px dashed var(--fc-acc);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.fc-slider-wrap input[type=range]{width:100%}
+.fc-slider-label{text-align:center;font-size:12px;font-weight:700}
+.fc-preview{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--fc-bd);padding-top:8px}
+.fc-preview-headline{font-size:13px} .fc-preview-headline .up{color:#15803d;font-weight:700} .fc-preview-headline .down{color:#b91c1c;font-weight:700}
+.fc-preview-knobs{font-size:11.5px;color:var(--fc-sub)}
+.fc-displaced{display:flex;flex-direction:column;gap:4px}
+.fc-displaced-item{display:flex;justify-content:space-between;font-size:11.5px;background:var(--fc-bg);border:1px solid var(--fc-bd);border-radius:7px;padding:4px 8px}
+.fc-displaced-item .up{color:#b91c1c;font-weight:700} .fc-displaced-item .down{color:#15803d;font-weight:700}
+.fc-caveats{margin:0;padding-left:16px;font-size:10.5px;color:var(--fc-sub);line-height:1.5;display:flex;flex-direction:column;gap:4px}
 .fc-toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 18px;border-radius:10px;font-size:13px;font-weight:600;z-index:1300}
 .fc-mode{border:1px solid var(--fc-bd);border-radius:11px;padding:10px 14px;margin-bottom:12px;font-size:12.5px;line-height:1.55;color:var(--fc-ink)}
 .fc-mode.preview{background:#fffbeb;border-color:#fde68a}
