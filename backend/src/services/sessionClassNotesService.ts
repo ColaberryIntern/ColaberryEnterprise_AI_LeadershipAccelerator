@@ -4,10 +4,11 @@ import path from 'path';
 import { Op } from 'sequelize';
 import LiveSession from '../models/LiveSession';
 import RoomResource from '../models/RoomResource';
-import CommunityRoom from '../models/CommunityRoom';
 import { ROOM_RESOURCE_DIR } from '../config/upload';
 import { renderSessionKitDoc } from './sessionKitDocService';
-import { ensureBookingForSession } from './sessionRecordingService';
+// resolveSessionRoomId is shared with the recording path — recordings and
+// notes must land in the SAME room as each other, and both had the same bug.
+import { ensureBookingForSession, resolveSessionRoomId } from './sessionRecordingService';
 import { emitRoomEvent } from './communityRooms/roomOutboxService';
 import { ROOM_EVENTS } from './communityRooms/roomEvents';
 import { log } from './communityRooms/roomShared';
@@ -42,30 +43,6 @@ export interface ClassNotesResult {
 
 const CLASS_NOTES_SOURCE = 'class_notes';
 
-/**
- * Which Room should hold this session's Class Notes.
- *
- * NOT the booking's room. Every class booking points at the cohort's single
- * PERSISTENT room ("July 2026 - AI Systems Architect"), but each session also
- * has its own `scheduled` room, and that per-session room is what students
- * actually open — "YOUR CLASSES" in the portal links to it. Attaching to the
- * booking room put the first five Class Notes somewhere real but invisible:
- * the student opened Week 2 Build Day, saw only the Skill Prompt uploads, and
- * the notes were sitting in the cohort room one level up. Recordings have the
- * same split, which is why a session room can read "No recordings yet" while
- * its own banner offers one.
- *
- * Falls back to the booking room when a session has no room of its own, so a
- * session that predates per-session rooms still gets its notes somewhere.
- */
-async function resolveNotesRoomId(session: LiveSession, bookingRoomId: string): Promise<string> {
-  const sessionRoom = await CommunityRoom.findOne({
-    where: { linked_live_session_id: session.id },
-    attributes: ['id'],
-  });
-  return sessionRoom?.id || bookingRoomId;
-}
-
 /** The existing Class Notes snapshot for a session, if one has been taken. */
 async function findExisting(roomId: string, sessionId: string): Promise<RoomResource | null> {
   return RoomResource.findOne({
@@ -82,7 +59,7 @@ export async function attachClassNotesForSession(
   opts: { force?: boolean } = {},
 ): Promise<ClassNotesResult> {
   const booking = await ensureBookingForSession(session);
-  const roomId = await resolveNotesRoomId(session, booking.room_id);
+  const roomId = await resolveSessionRoomId(session, booking.room_id);
 
   const existing = await findExisting(roomId, session.id);
   if (existing && !opts.force) return { status: 'already_present', resourceId: existing.id };

@@ -5,7 +5,11 @@ const mockRenderKitDoc = jest.fn();
 jest.mock('../sessionKitDocService', () => ({ renderSessionKitDoc: (...a: unknown[]) => mockRenderKitDoc(...a) }));
 
 const mockEnsureBooking = jest.fn();
-jest.mock('../sessionRecordingService', () => ({ ensureBookingForSession: (...a: unknown[]) => mockEnsureBooking(...a) }));
+const mockResolveRoom = jest.fn();
+jest.mock('../sessionRecordingService', () => ({
+  ensureBookingForSession: (...a: unknown[]) => mockEnsureBooking(...a),
+  resolveSessionRoomId: (...a: unknown[]) => mockResolveRoom(...a),
+}));
 
 const mockEmit = jest.fn();
 jest.mock('../communityRooms/roomOutboxService', () => ({ emitRoomEvent: (...a: unknown[]) => mockEmit(...a) }));
@@ -48,7 +52,7 @@ beforeEach(() => {
   mockEnsureBooking.mockResolvedValue(booking);
   // Default: the session HAS its own per-session room, distinct from the
   // cohort room the booking points at.
-  mockRoomFindOne.mockResolvedValue({ id: 'session-room-1' });
+  mockResolveRoom.mockResolvedValue('session-room-1');
   mockEmit.mockResolvedValue(undefined);
   jest.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as any);
   writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
@@ -141,7 +145,7 @@ describe('attachClassNotesForSession', () => {
    */
   it('attaches to the SESSION room, not the cohort room the booking points at', async () => {
     mockFindOne.mockResolvedValue(null);
-    mockRoomFindOne.mockResolvedValue({ id: 'session-room-1' });
+    mockResolveRoom.mockResolvedValue('session-room-1');
     mockRenderKitDoc.mockResolvedValue('<html>deck</html>');
     mockCreate.mockResolvedValue({ id: 'notes-r' });
 
@@ -159,7 +163,7 @@ describe('attachClassNotesForSession', () => {
 
   it('falls back to the booking room when the session has no room of its own', async () => {
     mockFindOne.mockResolvedValue(null);
-    mockRoomFindOne.mockResolvedValue(null);
+    mockResolveRoom.mockResolvedValue('room-1'); // helper falls back to booking room
     mockRenderKitDoc.mockResolvedValue('<html>deck</html>');
     mockCreate.mockResolvedValue({ id: 'notes-fb' });
 
