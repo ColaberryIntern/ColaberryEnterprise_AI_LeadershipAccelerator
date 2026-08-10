@@ -235,22 +235,38 @@ describe('buildKitSpec — KitConfig wiring', () => {
     expect(overrideSpec.slides.some((s) => s.title === 'Custom preview' && s.body === 'Custom body.')).toBe(true);
   });
 
-  it('opening.hook override adds a hook to a week that has no authored one (Week 4 has none; only Weeks 1-3 do — Week 3 gained one in week3-api-and-billing)', async () => {
+  it('opening.hook override replaces an authored hook, and enabled:false removes it', async () => {
+    // Every week 1-12 now ships an authored hook (weeks 4-12 gained one with
+    // their content packs), so the meaningful instructor controls are
+    // replace-and-remove rather than add-where-none-exists.
     const week4MondaySession: BuildKitSpecInput['session'] = {
       id: 's-wk4-mon', session_number: 6, title: 'Week 4: Something',
       session_date: '2026-08-17', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
     };
     const baseline = buildKitSpec(await inputFor(week4MondaySession));
-    expect(baseline.slides.some((s) => s.kind === 'hook')).toBe(false); // confirms Week 4 truly has none by default
+    const authored = baseline.slides.find((s) => s.kind === 'hook');
+    expect(authored).toBeDefined();
 
-    const config: KitConfig = {
-      ...DEFAULT_KIT_CONFIG,
-      opening: { ...DEFAULT_KIT_CONFIG.opening, hook: { enabled: true, override: { headline: 'Added hook', caption: 'Added caption.' } } },
-    };
-    const withHook = buildKitSpec({ ...(await inputFor(week4MondaySession)), config });
-    const hookSlide = withHook.slides.find((s) => s.kind === 'hook');
+    const overridden = buildKitSpec({
+      ...(await inputFor(week4MondaySession)),
+      config: {
+        ...DEFAULT_KIT_CONFIG,
+        opening: { ...DEFAULT_KIT_CONFIG.opening, hook: { enabled: true, override: { headline: 'Added hook', caption: 'Added caption.' } } },
+      } as KitConfig,
+    });
+    const hookSlide = overridden.slides.find((s) => s.kind === 'hook');
     expect(hookSlide?.title).toBe('Added hook');
     expect(hookSlide?.body).toBe('Added caption.');
+    expect(hookSlide?.title).not.toBe(authored!.title);
+
+    const removed = buildKitSpec({
+      ...(await inputFor(week4MondaySession)),
+      config: {
+        ...DEFAULT_KIT_CONFIG,
+        opening: { ...DEFAULT_KIT_CONFIG.opening, hook: { enabled: false, override: null } },
+      } as KitConfig,
+    });
+    expect(removed.slides.some((s) => s.kind === 'hook')).toBe(false);
   });
 
   it('Week 3 Architecture Day has its own authored hook + teach slides in the check-in segment (week3-api-and-billing)', async () => {
