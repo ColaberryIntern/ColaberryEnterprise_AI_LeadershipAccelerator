@@ -1145,6 +1145,20 @@ async function ensureFriendReferralSchema() {
   }
 }
 
+// Sponsor portal magic-link audit trail (STORY-001). Append-only; the model is
+// the schema contract and targeted sync creates the table if missing, since
+// boot runs no global sync. Non-fatal on failure: an unavailable audit table
+// must not stop the API from booting, and every audit write is best-effort.
+async function ensureSponsorPortalAuditSchema() {
+  try {
+    const { SponsorPortalAuditLog } = await import('./models');
+    await SponsorPortalAuditLog.sync();
+    console.log('[DB] Sponsor portal audit schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] Sponsor portal audit schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
 // Per-card student comments (Runtime workspace, newest-first). Model is the schema
 // contract; targeted sync creates the table if missing (boot has no global sync).
 async function ensureCardCommentsSchema() {
@@ -2367,6 +2381,8 @@ async function start(): Promise<void> {
   await ensurePodcastSchema();
   // "Recommend a friend" onboarding step — friend_referrals table.
   await ensureFriendReferralSchema();
+  // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
+  await ensureSponsorPortalAuditSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).

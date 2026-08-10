@@ -220,9 +220,14 @@ function SponsorDashboardPage() {
   const [session, setSession] = useState<SponsorSession | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [loginEmail, setLoginEmail] = useState('');
+  const [loginCompany, setLoginCompany] = useState('');
   const [loginSubmitting, setLoginSubmitting] = useState(false);
   const [loginMessage, setLoginMessage] = useState('');
   const [loginError, setLoginError] = useState('');
+  // A `?token=` that the server rejected. Distinct from "never signed in": the
+  // manager did click a link, and silently showing the empty login gate reads
+  // as if the click did nothing.
+  const [linkExpired, setLinkExpired] = useState(false);
 
   // Resolve auth once on mount: exchange a `?token=` from an emailed link for
   // a session, or fall back to whatever's already stored.
@@ -232,6 +237,7 @@ function SponsorDashboardPage() {
       const params = new URLSearchParams(window.location.search);
       const magic = params.get('token');
       let resolved = loadSponsorSession();
+      let expired = false;
       if (magic) {
         try {
           const res = await api.get<SponsorSession>('/api/sponsor/verify', { params: { token: magic } });
@@ -239,12 +245,16 @@ function SponsorDashboardPage() {
           saveSponsorSession(resolved);
         } catch {
           resolved = null;
+          expired = true;
           clearSponsorSession();
         }
+        // Strip the token from the address bar either way, so it stops leaking
+        // into history, bookmarks and referrers.
         window.history.replaceState({}, '', '/sponsor/dashboard');
       }
       if (!active) return;
       setSession(resolved);
+      setLinkExpired(expired);
       setAuthChecked(true);
     })();
     return () => {
@@ -312,8 +322,12 @@ function SponsorDashboardPage() {
     try {
       const res = await api.post<{ message: string }>('/api/sponsor/request-link', {
         email: loginEmail.trim(),
+        // Optional. Omitted rather than sent empty, so the server derives a
+        // placeholder from the email domain instead of storing a blank name.
+        ...(loginCompany.trim() ? { company_name: loginCompany.trim() } : {}),
       });
-      setLoginMessage(res.data.message || 'Check your email for your login link.');
+      setLinkExpired(false);
+      setLoginMessage(res.data.message || 'Check your email for your dashboard link.');
     } catch (err: any) {
       setLoginError(err?.response?.data?.error || 'Could not send the link. Please try again.');
     } finally {
@@ -463,26 +477,51 @@ function SponsorDashboardPage() {
             {loginMessage ? (
               <p style={{ margin: 0 }}>{loginMessage}</p>
             ) : (
-              <form onSubmit={requestLink} noValidate>
-                <div className="row g-2 align-items-end">
-                  <div className="col-sm-8">
-                    <Input
-                      label="Work email"
-                      type="email"
-                      value={loginEmail}
-                      onChange={(e) => setLoginEmail(e.target.value)}
-                      error={loginError}
-                      placeholder="you@yourcompany.com"
-                      autoComplete="email"
-                    />
+              <>
+                {linkExpired && (
+                  <p
+                    role="status"
+                    style={{
+                      marginTop: 0,
+                      marginBottom: 'var(--space-4)',
+                      color: 'var(--text-body)',
+                      fontWeight: 'var(--fw-bold)' as any,
+                    }}
+                  >
+                    That link has expired. Enter your work email and we'll send you a fresh one.
+                  </p>
+                )}
+                <form onSubmit={requestLink} noValidate>
+                  <div className="row g-2 align-items-end">
+                    <div className="col-sm-7">
+                      <Input
+                        label="Work email"
+                        type="email"
+                        value={loginEmail}
+                        onChange={(e) => setLoginEmail(e.target.value)}
+                        error={loginError}
+                        placeholder="you@yourcompany.com"
+                        autoComplete="email"
+                      />
+                    </div>
+                    <div className="col-sm-5">
+                      <Input
+                        label="Company (optional)"
+                        type="text"
+                        value={loginCompany}
+                        onChange={(e) => setLoginCompany(e.target.value)}
+                        placeholder="Acme Corp"
+                        autoComplete="organization"
+                      />
+                    </div>
+                    <div className="col-12 d-grid">
+                      <Button type="submit" disabled={loginSubmitting}>
+                        {loginSubmitting ? 'Sending…' : 'Email me my link'}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="col-sm-4 d-grid">
-                    <Button type="submit" disabled={loginSubmitting}>
-                      {loginSubmitting ? 'Sending…' : 'Email me my link'}
-                    </Button>
-                  </div>
-                </div>
-              </form>
+                </form>
+              </>
             )}
             <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-subtle)', marginTop: 'var(--space-3)', marginBottom: 0 }}>
               Below is sample data so you can see what your dashboard looks like once you're signed in.

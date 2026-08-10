@@ -321,6 +321,7 @@ import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
 import FriendReferral from './FriendReferral';
+import SponsorPortalAuditLog from './SponsorPortalAuditLog';
 import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
 import Subscription from './Subscription';
@@ -1405,6 +1406,7 @@ export {
   ContributionEvent,
   StudentPointsEvent,
   FriendReferral,
+  SponsorPortalAuditLog,
   OpenHouseEvent,
   OnboardingProfile,
   Subscription,

@@ -2,7 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { z, ZodError } from 'zod';
 import { sequelize } from '../config/database';
 import { createLead } from '../services/leadService';
-import { requestSponsorPortalLink, verifySponsorPortalToken } from '../services/sponsorAuthService';
+import {
+  EmailDeliveryError,
+  requestSponsorPortalLink,
+  verifySponsorPortalToken,
+} from '../services/sponsorAuthService';
 import { Cohort, Enrollment } from '../models';
 // These four models are not (yet) re-exported from the models barrel, so they
 // are imported directly from their definition files. Importing the file runs
@@ -298,26 +302,49 @@ export async function handleRedeemSeat(
 /*  GET  /api/sponsor/verify        (public, on leadRoutes)           */
 /* ------------------------------------------------------------------ */
 
+// company_name and name are optional: the login-gate form asks for a work
+// email only, and the service derives placeholders from the address when they
+// are absent. A richer signup form can start sending them without a contract
+// change here.
 const requestLinkSchema = z.object({
   email: z.string().trim().email('Invalid email address').max(255),
+  company_name: z.string().trim().max(255).optional(),
+  name: z.string().trim().max(255).optional(),
 });
 
-// Always a generic response — a nonexistent email or one with no sponsor
-// account must not be distinguishable from a real one (no enumeration).
+// Self-serve: any valid work email gets an account and a link. The response is
+// deliberately identical for a brand-new manager and a returning one, so it
+// still leaks no signal about who already has a sponsor dashboard.
 export async function handleRequestSponsorLink(
   req: Request,
   res: Response,
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { email } = requestLinkSchema.parse(req.body);
-    await requestSponsorPortalLink(email);
+    const parsed = requestLinkSchema.parse(req.body);
+    await requestSponsorPortalLink({
+      email: parsed.email,
+      companyName: parsed.company_name,
+      name: parsed.name,
+      context: { ip: req.ip, userAgent: req.get('user-agent') },
+    });
     res.status(200).json({
-      message: 'If that email has a sponsor dashboard, we sent a login link to it.',
+      message: 'Check your email — we just sent your dashboard link.',
     });
   } catch (error) {
     if (error instanceof ZodError) {
       respondZodError(res, error);
+      return;
+    }
+    // The account exists and the token is saved; only delivery failed. Say so
+    // honestly rather than claiming an email was sent, and let the manager retry.
+    if (error instanceof EmailDeliveryError) {
+      console.error(
+        `[SponsorController] Magic link delivery failed for a sponsor link request: ${error.message}`,
+      );
+      res.status(503).json({
+        error: 'We could not send your link right now. Please try again in a moment.',
+      });
       return;
     }
     next(error);
@@ -331,7 +358,10 @@ export async function handleVerifySponsorToken(
 ): Promise<void> {
   try {
     const token = String(req.query.token || '');
-    const session = await verifySponsorPortalToken(token);
+    const session = await verifySponsorPortalToken(token, {
+      ip: req.ip,
+      userAgent: req.get('user-agent'),
+    });
     if (!session) {
       res.status(401).json({ error: 'Invalid or expired link' });
       return;

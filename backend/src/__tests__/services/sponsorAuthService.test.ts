@@ -1,21 +1,20 @@
 /**
- * Sponsor portal magic-link auth. Replaces the sponsor.id-as-token stopgap
- * in challengeController with a random, expiring, emailed-only token — see
- * the AUTH note in backend/src/controllers/challengeController.ts.
- *  - requestSponsorPortalLink: known lead+sponsor -> token saved + emailed;
- *    unknown email or lead-with-no-sponsor -> silent no-op (no enumeration)
+ * Sponsor portal magic-link auth (STORY-001).
+ *  - requestSponsorPortalLink: self-serve. Any valid work email gets a Lead, a
+ *    Sponsor, a saved token and an emailed link. Idempotent on the email, and
+ *    the send is bounded by a timeout with capped retries.
  *  - verifySponsorPortalToken: valid token -> session, unknown/expired -> null
  *  - isValidSponsorToken: the dashboard gate's pure predicate
  */
 
 jest.mock('../../models', () => ({
   __esModule: true,
-  Lead: { findOne: jest.fn() },
+  Lead: { findOrCreate: jest.fn() },
 }));
 
 jest.mock('../../models/Sponsor', () => ({
   __esModule: true,
-  default: { findOne: jest.fn() },
+  default: { findOne: jest.fn(), findOrCreate: jest.fn() },
 }));
 
 jest.mock('../../services/emailService', () => ({
@@ -23,57 +22,192 @@ jest.mock('../../services/emailService', () => ({
   sendSponsorMagicLink: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../../services/sponsorAuditService', () => ({
+  __esModule: true,
+  recordSponsorPortalAuditEvent: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { Lead } from '../../models';
 import Sponsor from '../../models/Sponsor';
 import { sendSponsorMagicLink } from '../../services/emailService';
+import { recordSponsorPortalAuditEvent } from '../../services/sponsorAuditService';
 import {
+  EmailDeliveryError,
   requestSponsorPortalLink,
   verifySponsorPortalToken,
   isValidSponsorToken,
 } from '../../services/sponsorAuthService';
 
-const leadFindOne = Lead.findOne as jest.Mock;
-const sponsorFindOne = Sponsor.findOne as jest.Mock;
+const leadFindOrCreate = Lead.findOrCreate as unknown as jest.Mock;
+const sponsorFindOne = Sponsor.findOne as unknown as jest.Mock;
+const sponsorFindOrCreate = Sponsor.findOrCreate as unknown as jest.Mock;
 const mockSendSponsorMagicLink = sendSponsorMagicLink as jest.Mock;
+const mockRecordAudit = recordSponsorPortalAuditEvent as jest.Mock;
 
-beforeEach(() => jest.clearAllMocks());
+const HOUR_MS = 60 * 60 * 1000;
 
-describe('requestSponsorPortalLink', () => {
-  it('saves a fresh token and emails it when the lead has a sponsor account', async () => {
-    const update = jest.fn().mockResolvedValue(undefined);
-    leadFindOne.mockResolvedValue({ id: 42, email: 'jordan@acme.com', name: 'Jordan Lee' });
-    sponsorFindOne.mockResolvedValue({
-      id: 'sp-1',
-      company_name: 'Acme Corp',
-      update,
+/** A Sponsor row stub whose update() mutates it, like the real instance does. */
+function sponsorStub(overrides: Record<string, unknown> = {}) {
+  const sponsor: any = {
+    id: 'sp-1',
+    company_name: 'Acme Corp',
+    portal_token: null,
+    portal_token_expires_at: null,
+    ...overrides,
+  };
+  sponsor.update = jest.fn(async (values: Record<string, unknown>) => {
+    Object.assign(sponsor, values);
+    return sponsor;
+  });
+  return sponsor;
+}
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockSendSponsorMagicLink.mockResolvedValue(undefined);
+});
+
+describe('requestSponsorPortalLink — self-serve signup (acceptance: manager fills form, gets a link)', () => {
+  it('creates the Lead and Sponsor for an unknown manager, then emails a token', async () => {
+    leadFindOrCreate.mockResolvedValue([
+      { id: 42, email: 'jordan.lee@acme-corp.com', name: 'Jordan Lee' },
+      true,
+    ]);
+    const sponsor = sponsorStub({ company_name: 'Acme Corp' });
+    sponsorFindOrCreate.mockResolvedValue([sponsor, true]);
+
+    await requestSponsorPortalLink({ email: 'Jordan.Lee@Acme-Corp.com  ' });
+
+    // Email is normalized before it is used as the dedup key.
+    expect(leadFindOrCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { email: 'jordan.lee@acme-corp.com' } }),
+    );
+    // No company field on the login form, so it is derived from the domain.
+    expect(leadFindOrCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaults: expect.objectContaining({ name: 'Jordan Lee', company: 'Acme Corp' }),
+      }),
+    );
+    expect(sponsorFindOrCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { contact_lead_id: 42 } }),
+    );
+
+    // Token persisted before the send, with a future expiry.
+    expect(sponsor.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        portal_token: expect.any(String),
+        portal_token_expires_at: expect.any(Date),
+      }),
+    );
+    expect(sponsor.portal_token_expires_at.getTime()).toBeGreaterThan(Date.now());
+
+    // ...and the emailed token is the one that was saved.
+    expect(mockSendSponsorMagicLink).toHaveBeenCalledTimes(1);
+    expect(mockSendSponsorMagicLink).toHaveBeenCalledWith({
+      to: 'jordan.lee@acme-corp.com',
+      contactName: 'Jordan Lee',
+      companyName: 'Acme Corp',
+      token: sponsor.portal_token,
+    });
+  });
+
+  it('prefers an explicitly supplied company name and contact name over the derived ones', async () => {
+    leadFindOrCreate.mockResolvedValue([{ id: 43, email: 'l&d@globex.com', name: 'Dana Reed' }, true]);
+    sponsorFindOrCreate.mockResolvedValue([sponsorStub({ company_name: 'Globex Industries' }), true]);
+
+    await requestSponsorPortalLink({
+      email: 'l&d@globex.com',
+      companyName: 'Globex Industries',
+      name: 'Dana Reed',
     });
 
-    await requestSponsorPortalLink('Jordan@Acme.com');
-
-    expect(leadFindOne).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { email: 'jordan@acme.com' } }),
-    );
-    expect(update).toHaveBeenCalledWith(
-      expect.objectContaining({ portal_token: expect.any(String), portal_token_expires_at: expect.any(Date) }),
+    expect(sponsorFindOrCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaults: expect.objectContaining({ company_name: 'Globex Industries' }),
+      }),
     );
     expect(mockSendSponsorMagicLink).toHaveBeenCalledWith(
-      expect.objectContaining({ to: 'jordan@acme.com', companyName: 'Acme Corp' }),
+      expect.objectContaining({ contactName: 'Dana Reed', companyName: 'Globex Industries' }),
+    );
+  });
+});
+
+describe('requestSponsorPortalLink — idempotency (running it twice changes nothing)', () => {
+  it('reuses the same Lead, Sponsor and live token on a second submit', async () => {
+    const lead = { id: 42, email: 'jordan@acme.com', name: 'Jordan Lee' };
+    const sponsor = sponsorStub({
+      portal_token: 'live-token',
+      portal_token_expires_at: new Date(Date.now() + 24 * HOUR_MS),
+    });
+    // findOrCreate returns created=false the second time around.
+    leadFindOrCreate.mockResolvedValue([lead, false]);
+    sponsorFindOrCreate.mockResolvedValue([sponsor, false]);
+
+    await requestSponsorPortalLink({ email: 'jordan@acme.com' });
+    await requestSponsorPortalLink({ email: 'jordan@acme.com' });
+
+    // The already-delivered link must keep working: no rotation, no new rows.
+    expect(sponsor.update).not.toHaveBeenCalled();
+    expect(sponsor.portal_token).toBe('live-token');
+    expect(mockSendSponsorMagicLink).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ token: 'live-token' }),
+    );
+    expect(mockSendSponsorMagicLink).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ token: 'live-token' }),
     );
   });
 
-  it('no-ops silently for an unknown email (no enumeration)', async () => {
-    leadFindOne.mockResolvedValue(null);
-    await requestSponsorPortalLink('nobody@nowhere.com');
-    expect(sponsorFindOne).not.toHaveBeenCalled();
-    expect(mockSendSponsorMagicLink).not.toHaveBeenCalled();
-  });
+  it('mints a fresh token when the stored one has expired', async () => {
+    leadFindOrCreate.mockResolvedValue([{ id: 42, email: 'jordan@acme.com', name: 'Jordan Lee' }, false]);
+    const sponsor = sponsorStub({
+      portal_token: 'stale-token',
+      portal_token_expires_at: new Date(Date.now() - HOUR_MS),
+    });
+    sponsorFindOrCreate.mockResolvedValue([sponsor, false]);
 
-  it('no-ops silently for a lead with no sponsor account', async () => {
-    leadFindOne.mockResolvedValue({ id: 7, email: 'someone@company.com', name: 'Someone' });
-    sponsorFindOne.mockResolvedValue(null);
-    await requestSponsorPortalLink('someone@company.com');
-    expect(mockSendSponsorMagicLink).not.toHaveBeenCalled();
+    await requestSponsorPortalLink({ email: 'jordan@acme.com' });
+
+    expect(sponsor.update).toHaveBeenCalledTimes(1);
+    expect(sponsor.portal_token).not.toBe('stale-token');
+    expect(mockSendSponsorMagicLink).toHaveBeenCalledWith(
+      expect.objectContaining({ token: sponsor.portal_token }),
+    );
   });
+});
+
+describe('requestSponsorPortalLink — failure path: email not sent', () => {
+  it('retries a failing send up to 3 attempts, then throws EmailDeliveryError', async () => {
+    leadFindOrCreate.mockResolvedValue([{ id: 42, email: 'jordan@acme.com', name: 'Jordan Lee' }, true]);
+    const sponsor = sponsorStub();
+    sponsorFindOrCreate.mockResolvedValue([sponsor, true]);
+    mockSendSponsorMagicLink.mockRejectedValue(new Error('SMTP 421 service unavailable'));
+
+    await expect(requestSponsorPortalLink({ email: 'jordan@acme.com' })).rejects.toBeInstanceOf(
+      EmailDeliveryError,
+    );
+
+    expect(mockSendSponsorMagicLink).toHaveBeenCalledTimes(3);
+    // The token is already persisted, so the manager's retry works immediately.
+    expect(sponsor.portal_token).toEqual(expect.any(String));
+    expect(sponsor.portal_token_expires_at.getTime()).toBeGreaterThan(Date.now());
+  }, 10_000);
+
+  it('recovers without throwing when a retry succeeds, sending the same token', async () => {
+    leadFindOrCreate.mockResolvedValue([{ id: 42, email: 'jordan@acme.com', name: 'Jordan Lee' }, true]);
+    const sponsor = sponsorStub();
+    sponsorFindOrCreate.mockResolvedValue([sponsor, true]);
+    mockSendSponsorMagicLink
+      .mockRejectedValueOnce(new Error('SMTP 421 service unavailable'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(requestSponsorPortalLink({ email: 'jordan@acme.com' })).resolves.toBeUndefined();
+
+    expect(mockSendSponsorMagicLink).toHaveBeenCalledTimes(2);
+    const [first, second] = mockSendSponsorMagicLink.mock.calls;
+    expect(first[0].token).toBe(second[0].token);
+  }, 10_000);
 });
 
 describe('verifySponsorPortalToken', () => {
@@ -87,6 +221,79 @@ describe('verifySponsorPortalToken', () => {
     sponsorFindOne.mockResolvedValue(null);
     expect(await verifySponsorPortalToken('nope')).toBeNull();
   });
+});
+
+describe('audit trail (acceptance: generation and access events are logged)', () => {
+  it('records link_generated with the request origin when a link is issued', async () => {
+    leadFindOrCreate.mockResolvedValue([{ id: 42, email: 'jordan@acme.com', name: 'Jordan Lee' }, true]);
+    sponsorFindOrCreate.mockResolvedValue([sponsorStub(), true]);
+
+    await requestSponsorPortalLink({
+      email: 'jordan@acme.com',
+      context: { ip: '203.0.113.7', userAgent: 'Mozilla/5.0' },
+    });
+
+    expect(mockRecordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'link_generated',
+        sponsorId: 'sp-1',
+        leadId: 42,
+        email: 'jordan@acme.com',
+        ip: '203.0.113.7',
+        userAgent: 'Mozilla/5.0',
+        correlationId: expect.any(String),
+      }),
+    );
+  });
+
+  it('records link_accessed when a valid link is clicked', async () => {
+    sponsorFindOne.mockResolvedValue({
+      id: 'sp-1',
+      company_name: 'Acme Corp',
+      portal_token: 'tok-abc',
+      contact_lead_id: 42,
+    });
+
+    await verifySponsorPortalToken('tok-abc', { ip: '203.0.113.7', userAgent: 'Mozilla/5.0' });
+
+    expect(mockRecordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'link_accessed',
+        sponsorId: 'sp-1',
+        leadId: 42,
+        token: 'tok-abc',
+        ip: '203.0.113.7',
+      }),
+    );
+  });
+
+  it('records link_rejected for an expired or unknown link', async () => {
+    sponsorFindOne.mockResolvedValue(null);
+
+    await verifySponsorPortalToken('expired-tok', { ip: '203.0.113.9' });
+
+    expect(mockRecordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'link_rejected',
+        token: 'expired-tok',
+        metadata: { reason: 'unknown_or_expired_token' },
+      }),
+    );
+  });
+
+  it('records the generation event even when delivery ultimately fails', async () => {
+    leadFindOrCreate.mockResolvedValue([{ id: 42, email: 'jordan@acme.com', name: 'Jordan Lee' }, true]);
+    sponsorFindOrCreate.mockResolvedValue([sponsorStub(), true]);
+    mockSendSponsorMagicLink.mockRejectedValue(new Error('SMTP 421 service unavailable'));
+
+    await expect(requestSponsorPortalLink({ email: 'jordan@acme.com' })).rejects.toBeInstanceOf(
+      EmailDeliveryError,
+    );
+
+    expect(mockRecordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ event: 'link_generated' }),
+    );
+  }, 10_000);
 });
 
 describe('isValidSponsorToken', () => {

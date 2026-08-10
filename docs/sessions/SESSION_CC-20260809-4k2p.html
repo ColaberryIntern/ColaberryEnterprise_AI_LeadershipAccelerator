@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260809-4k2p — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Sunday, August 9, 2026 at 8:03 PM</div>
+    <div><span class="sid">CC-20260809-4k2p</span><span class="count">1 change</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Fixed the sponsor magic-link flow silently sending nothing to a first-time manager, and gave link generation and access a durable audit trail**</h2>
+          <span class="badge">2026-08-09</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">STORY-001 (REQ-001 `/sponsor/dashboard`, REQ-002 form-to-magic-link) was ~70% already on `main` — the route, the page, the `?token=` exchange, the 30-day TTL and the `sendSponsorMagicLink` email all existed. The defect was that `requestSponsorPortalLink()` returned silently unless a `Lead` **and** a `Sponsor` row with `contact_lead_id = lead.id` already existed, so a manager who had never been in the system submitted the form, saw &quot;Check your email for your login link&quot;, and no mail was ever sent. Made it self-serve: `Lead.findOrCreate` on the normalized email then `Sponsor.findOrCreate` on `contact_lead_id`, with `company_name`/contact name derived from the address (`jordan.lee@acme-corp.com` → *Jordan Lee* / *Acme Corp*) when the form does not supply them, so the existing email-only login gate works unchanged. A still-live token is now **reused rather than rotated**, so a second submit cannot invalidate a link already sitting in the manager&#39;s inbox. The outbound send — an external boundary with no timeout anywhere on the shared nodemailer transport — is wrapped at this call site in a 10s timeout plus 3 capped attempts with 500/1500ms backoff; every attempt carries the same token, so a duplicated delivery is still one working link. All attempts failing throws a classified `EmailDeliveryError`, which the controller turns into a **503 with an honest message** instead of the previous false &quot;check your email&quot;. Second half: new `sponsor_portal_audit_log` table (`SponsorPortalAuditLog` model + `sponsorAuditService`) writing `link_generated` on issue (before the send, so an undeliverable link is still on the record), and `link_accessed` / `link_rejected` on both outcomes of verify, each with correlation id, redacted email, client IP and user agent. Tokens are stored as a **SHA-256 fingerprint, never in plaintext**, so the audit table cannot be read as a credential store while still letting an access event be joined to the generation event that issued it. Audit writes are best-effort — a failed insert logs `sponsor_portal_audit_write_failed` and continues rather than locking a paying customer out of their dashboard. `ensureSponsorPortalAuditSchema()` added to the boot sequence, since boot runs no global sync and the table would otherwise never exist in prod. Frontend: optional Company field on the login gate posting `company_name`, and an expired-link notice with `role=&quot;status&quot;` — a rejected `?token=` previously cleared the session and rendered a bare login form, so clicking a dead link looked like the button was broken.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">35 tests green across 3 suites. The load-bearing one is a new route-level end-to-end test (`src/__tests__/routes/sponsorMagicLinkFlow.e2e.test.ts`, 9 tests) that drives the real Express handlers with only nodemailer, the Sequelize models and the two DB-backed settings lookups stubbed — the **real** `emailService` executes, so the test extracts the magic link out of genuinely generated HTML rather than asserting a mock was called, confirms it is `https://enterprise.colaberry.ai/sponsor/dashboard?token=…`, feeds that exact token back to `GET /api/sponsor/verify` and gets a session. It covers all three acceptance lines plus the three named failure paths: malformed email → 400 and nothing sent, expired link → 401 + `link_rejected`, delivery failure → retries then 503. Idempotency proven against end state, not call counts: submitting twice yields one lead, one sponsor, one unchanged token, and an identical link both times. Credential safety asserted against the whole serialized audit row (`expect(serialized).not.toContain(token)`), so a token leaking into any field including `metadata` fails the test. Backend `tsc --noEmit` (TypeScript 5.9.3) and frontend `tsc --noEmit`: zero errors in all 10 changed files.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Built in a clean worktree off `origin/main` (`C:\Users\ali_m\sponsor-dash-wt`, branch `feature/story-001-sponsor-magic-link`) because the OneDrive checkout was unusable — 1,876 commits behind `main`, 40+ dirty files, and two colliding uncommitted sponsor implementations whose imports do not resolve (`sponsorRoutes.ts` there imports six handlers its `sponsorController.ts` does not export). Nothing in that tree was touched. **Two local typecheck errors are environmental, not code**: backend `@anthropic-ai/sdk` and frontend `@dnd-kit/*` are declared in `package.json` but absent from the junctioned `node_modules`; both sets of errors live in files outside this diff, and since those files are unmodified from `main` — which branch protection only admits on a green frontend typecheck — CI resolves them. Per the standing note that Docker `tsc` is authoritative, a container typecheck is still owed before merge. **Not committed, not merged, not deployed** as of this entry, and no live click-through has been done: the acceptance criteria are proven by the route-level test, not by a real Mandrill send to a real inbox. The rate limiter (5 requests / 15 min) is deliberately not mounted in the E2E app, since a multi-step flow test would fail on request six for reasons unrelated to the story; it remains active on the real `leadRoutes`. One design consequence worth flagging for review: the endpoint now creates a `Lead` for **any** valid email that submits the form, which is a change in what the leads table means — it stays non-enumerating (identical response either way) but it does let an unauthenticated caller write rows. The rate limiter is the only thing bounding that.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260809-4k2p</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
