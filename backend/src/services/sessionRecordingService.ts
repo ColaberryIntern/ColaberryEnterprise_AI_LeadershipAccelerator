@@ -18,10 +18,14 @@ import { findRecordingForSession as findDriveRecording, streamDriveFile, DriveRe
 import {
   findRecordingForSession as findZoomRecording,
   findRecordingByMeetingId as findZoomRecordingByMeetingId,
+  findClassRecordingInstances,
   extractZoomMeetingId,
   streamZoomFile,
   ZoomRecordingMatch,
 } from './zoomService';
+// From centralDate, NOT acceleratorService — the latter pulls in the whole
+// Sequelize model graph, which breaks this module's unit tests.
+import { classInstant } from './centralDate';
 
 // Bridges the accelerator's LiveSession lifecycle (official class sessions),
 // the general Rooms domain (RoomBooking — the "+ Book a session" flow), AND
@@ -197,14 +201,22 @@ export async function ingestRecordingForSession(
   preResolvedMatch?: RecordingMatch,
 ): Promise<IngestResult> {
   const booking = await ensureBookingForSession(session);
+  const provider = PROVIDERS[session.meeting_provider || 'google_meet'];
+  if (!provider) return { status: 'not_found' };
+
+  /*
+   * Zoom sessions go through the window-aware, multi-instance path below.
+   * A webhook-supplied match (preResolvedMatch) skips it: that payload already
+   * IS one specific completed recording, so there is nothing to select.
+   */
+  if (!preResolvedMatch && session.meeting_provider === 'zoom' && session.zoom_meeting_id) {
+    return ingestZoomRecordingsForSession(session, booking);
+  }
 
   const existing = await RoomResource.findOne({
     where: { booking_id: booking.id, resource_type: 'recording' },
   });
   if (existing) return { status: 'already_present', resourceId: existing.id };
-
-  const provider = PROVIDERS[session.meeting_provider || 'google_meet'];
-  if (!provider) return { status: 'not_found' };
 
   const match = preResolvedMatch ?? await provider.findRecording(session);
   if (!match) return { status: 'not_found' };
@@ -230,6 +242,102 @@ export async function ingestRecordingForSession(
       );
     },
   );
+}
+
+/**
+ * Zoom class recordings, selected by class window and ingested in full.
+ *
+ * Fixes three compounding faults behind the Week 2 Build Day incident
+ * (2026-08-06), where students were served a 5-minute pre-class test as the
+ * class while the real 93MB + 178MB recordings sat in Zoom, never ingested:
+ *
+ *  1. Ingest could run BEFORE the class finished. It fired at 5:33pm for a
+ *     6:30pm class and grabbed the only recording that existed then — a test
+ *     start. Now it refuses to run until the class window has closed.
+ *  2. Selection took the first instance matching the meeting id, with no
+ *     notion of when the class actually was. Now it uses
+ *     findClassRecordingInstances (window overlap, see recordingOverlapsWindow).
+ *  3. Idempotency keyed on "does ANY recording exist for this booking", so the
+ *     first pick was pinned forever and later, better recordings were never
+ *     collected. Now it keys per Zoom instance uuid — the same scheme
+ *     ingestRecordingForRoom already used — so a class split across several
+ *     recordings gets all of them, and a later sweep can still pick up a part
+ *     that had not finished processing on the previous run.
+ *
+ * recording_url points at the EARLIEST part, so "Watch recording" starts at
+ * the beginning of class; the rest are listed in the room's Recordings tab.
+ */
+async function ingestZoomRecordingsForSession(
+  session: LiveSession,
+  booking: RoomBooking,
+): Promise<IngestResult> {
+  // classInstant reads the stored Central wall-clock correctly on a UTC host —
+  // a naive new Date(dateStr + 'T' + timeStr) is off by the UTC offset and has
+  // caused a P0 on this exact data before.
+  const windowStart = classInstant(session.session_date, session.start_time);
+  const windowEnd = classInstant(session.session_date, session.end_time);
+
+  if (Date.now() < windowEnd.getTime()) {
+    log('info', 'recording_ingest_too_early', {
+      session_id: session.id, window_end: windowEnd.toISOString(),
+    });
+    return { status: 'not_found' };
+  }
+
+  const instances = await findClassRecordingInstances(
+    session.zoom_meeting_id as string,
+    session.session_date,
+    windowStart,
+    windowEnd,
+    session.title || undefined,
+  );
+  if (!instances.length) return { status: 'not_found' };
+
+  const multi = instances.length > 1;
+  let firstResourceId: string | null = null;
+  let ingestedAny = false;
+
+  for (let idx = 0; idx < instances.length; idx++) {
+    const inst = instances[idx];
+
+    const existing = await RoomResource.findOne({
+      where: {
+        room_id: booking.room_id,
+        resource_type: 'recording',
+        metadata: { [Op.contains]: { zoom_uuid: inst.uuid } } as unknown as Record<string, unknown>,
+      },
+    });
+    if (existing) {
+      if (!firstResourceId) firstResourceId = existing.id;
+      continue;
+    }
+
+    const base = session.title || `Session ${session.session_number} recording`;
+    const title = multi ? `${base} · Part ${idx + 1} of ${instances.length}` : base;
+
+    const result = await attachRecording(
+      booking.room_id,
+      booking.id,
+      inst.match,
+      (m) => streamZoomFile(m as ZoomRecordingMatch),
+      title,
+      { session_id: session.id },
+      { zoom_uuid: inst.uuid, source: 'class_session', part: idx + 1, parts: instances.length },
+    );
+    if (result.resourceId) {
+      ingestedAny = true;
+      if (!firstResourceId) firstResourceId = result.resourceId;
+    }
+  }
+
+  if (firstResourceId) {
+    await session.update({
+      recording_url: `/api/portal/community/rooms/${booking.room_id}/resources/${firstResourceId}/download`,
+    });
+  }
+
+  if (!ingestedAny) return { status: 'already_present', resourceId: firstResourceId ?? undefined };
+  return { status: 'ingested', resourceId: firstResourceId ?? undefined };
 }
 
 // General Room bookings (the "+ Book a session" flow) — Zoom-only. See the
