@@ -1,4 +1,4 @@
-import { getLearnerContextBlock } from '../learnerContextService';
+import { buildAgentSystemPrompt } from '../agentBlueprint/agentSystemPrompt';
 
 /**
  * Reese's system prompt — voice/persona rules transplanted from the locked
@@ -13,6 +13,12 @@ import { getLearnerContextBlock } from '../learnerContextService';
  * Reactive only: this module only BUILDS a prompt string. It never sends a
  * message on its own — see reeseReplyService.ts's inbound-message guard for the
  * Phase 1 non-goal boundary (no autonomous outreach).
+ *
+ * Reese Phase 3 (Agent Blueprint) — the persona-block + learner-context injection
+ * mechanic now lives in backend/src/services/agentBlueprint/agentSystemPrompt.ts as a
+ * generic module any future agent can call. Reese is that module's first caller; this
+ * file supplies Reese's own persona text and closing line and delegates the assembly
+ * mechanic, with byte-for-byte identical output to before the extraction.
  */
 
 // Exported (not just used internally) so reeseIdentitySeed.ts can store the
@@ -51,26 +57,12 @@ GUARDRAILS (never do these):
  * defended again here in case a caller mocks/overrides that function to reject).
  */
 export async function buildReeseSystemPrompt(enrollmentId: string): Promise<string> {
-  const parts: string[] = [REESE_PERSONA_BLOCK];
-
-  let learnerBlock = '';
-  try {
-    learnerBlock = await getLearnerContextBlock(enrollmentId);
-  } catch (e: any) {
-    console.warn(JSON.stringify({
-      level: 'warn', service: 'reese', event: 'learner_context_failed',
-      enrollment_id: enrollmentId, error_class: e?.name || 'Error', message: String(e?.message || e),
-    }));
-    learnerBlock = '';
-  }
-  if (learnerBlock) parts.push('\n' + learnerBlock);
-
-  parts.push(
-    '\nThis is a direct-message conversation, not a lesson-scoped chat — you may ' +
-    "be asked about anything across the student's whole journey. Reply in Reese's " +
-    'voice per the principles above; keep it to a few sentences unless real depth ' +
-    'is asked for.'
-  );
-
-  return parts.join('\n');
+  return buildAgentSystemPrompt(REESE_PERSONA_BLOCK, enrollmentId, {
+    agentLabel: 'reese',
+    closingLine:
+      '\nThis is a direct-message conversation, not a lesson-scoped chat — you may ' +
+      "be asked about anything across the student's whole journey. Reply in Reese's " +
+      'voice per the principles above; keep it to a few sentences unless real depth ' +
+      'is asked for.',
+  });
 }
