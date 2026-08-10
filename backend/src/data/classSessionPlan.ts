@@ -67,7 +67,17 @@ export interface StoryBeat {
  * rescue line), so this degrades gracefully on the hundreds of existing prompts
  * authored before this model existed. Populate real values for flagship weeks. */
 export interface BuildBayMeta {
-  /** Where the prompt gets pasted. Defaults to "Claude Code" at render time. */
+  /** What this code block IS, which decides the Build Bay's lead chip:
+   *  'paste' (default) → "📋 PASTE INTO <target>" — the student runs it.
+   *  'review' → "📖 REVIEW TOGETHER" — the instructor reads it with the room
+   *  and nobody pastes anything. Needed because a class that directs Claude
+   *  Code to WRITE the code still wants the resulting code on screen to read,
+   *  and labelling that "paste this" teaches the opposite of the lesson. */
+  kind?: 'paste' | 'review';
+  /** Where the prompt gets pasted. Defaults to "Claude Code" at render time.
+   *  Set it explicitly for anything that is NOT a Claude Code prompt — shell
+   *  commands belong in a terminal, and mislabelling them is a real teaching
+   *  error in a program whose whole thesis is "you direct Claude Code". */
   pasteWhere?: string;
   /** e.g. "Plan Mode" | "Manual" | "Auto" — omitted (no chip) if not set. */
   ccMode?: string;

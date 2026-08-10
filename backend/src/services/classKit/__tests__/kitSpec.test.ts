@@ -269,6 +269,49 @@ describe('buildKitSpec — KitConfig wiring', () => {
     expect(teach.every((s) => !!s.diagram && s.diagram.includes('flowchart'))).toBe(true);
   });
 
+  it('a teach slide\'s code block carries its Build Bay metadata through to the prompt (kind / pasteWhere)', async () => {
+    // Regression: teachToSlides used to map only {label, code}, silently
+    // dropping pasteWhere/kind — so shell commands rendered as "PASTE INTO
+    // Claude Code" and read-along code claimed to be pasteable.
+    const spec = buildKitSpec(await inputFor({
+      id: 's-wk3-mon-meta', session_number: 4, title: 'Week 3: Something',
+      session_date: '2026-08-10', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    }));
+    const withPrompts = spec.slides.filter((s) => s.kind === 'teach' && s.prompt);
+    expect(withPrompts.length).toBeGreaterThan(0);
+
+    // The terminal slide must NOT claim to be a Claude Code prompt.
+    const terminal = withPrompts.find((s) => /TERMINAL/i.test(s.prompt!.pasteWhere || ''));
+    expect(terminal).toBeDefined();
+    expect(terminal!.prompt!.pasteWhere).not.toBe('Claude Code');
+
+    // The read-along Python must be marked review, not paste.
+    const review = withPrompts.find((s) => s.prompt!.kind === 'review');
+    expect(review).toBeDefined();
+
+    // And the richer rows must survive the mapping too.
+    expect(withPrompts.some((s) => !!s.prompt!.expectedResult)).toBe(true);
+  });
+
+  it('renders the enriched full-screen diagram layer: title, key points, brand, run-location', async () => {
+    // The zoomed diagram is what the room (and the class recording) sees while
+    // the instructor talks over it, so it has to carry more than the picture.
+    const spec = buildKitSpec(await inputFor({
+      id: 's-wk3-mon-zoom', session_number: 4, title: 'Week 3: Something',
+      session_date: '2026-08-10', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    }));
+    const html = renderKitHtml(spec, { live: { enabled: false } });
+    expect(html).toContain('kdiag-hd-title');   // slide title in the zoom layer
+    expect(html).toContain('kdiag-side-list');  // key points beside the diagram
+    expect(html).toContain('kdiag-brand');      // program mark, for the recording
+    expect(html).toContain('kdiag-where');      // where this code gets run
+    // The run-location must name the AUTHORED target, not always the default.
+    expect(html).toContain('your TERMINAL (not Claude Code)');
+    // Review code says read-along instead of offering a paste target.
+    expect(html).toContain('Read-along');
+    expect(html).toContain('kbb-chip-review');
+  });
+
   it('Week 2 now has its own authored hook (the dashboard-incident cold open, week2-architecture-day-redesign)', async () => {
     const week2MondaySession: BuildKitSpecInput['session'] = {
       id: 's-wk2-mon', session_number: 2, title: 'Week 2: Something',

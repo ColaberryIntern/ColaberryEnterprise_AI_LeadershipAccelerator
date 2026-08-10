@@ -27,15 +27,21 @@ export function buildBayHtml(slide: KitSlide, promptOf?: string): string {
   const p = slide.prompt;
   if (!p) return '';
   const paste = p.pasteWhere || 'Claude Code';
+  // A 'review' block is code to READ, not to run — no paste target, and no
+  // rescue row either (nobody can get stuck reading).
+  const isReview = p.kind === 'review';
+  const leadChip = isReview
+    ? '<span class="kbb-chip kbb-chip-review">📖 REVIEW TOGETHER — <b>do not paste</b></span>'
+    : `<span class="kbb-chip kbb-chip-paste">📋 PASTE INTO <b>${esc(paste)}</b></span>`;
   const chips = [
     promptOf ? `<span class="kbb-chip kbb-chip-n">${esc(promptOf)}</span>` : '',
-    `<span class="kbb-chip kbb-chip-paste">📋 PASTE INTO <b>${esc(paste)}</b></span>`,
+    leadChip,
     p.ccMode ? `<span class="kbb-chip kbb-chip-mode">${esc(p.ccMode)}</span>` : '',
   ].join('');
   const rows = [
-    p.expectedResult ? row('👀 YOU SHOULD SEE', p.expectedResult, 'result') : '',
+    p.expectedResult ? row(isReview ? '👀 WHAT TO POINT AT' : '👀 YOU SHOULD SEE', p.expectedResult, 'result') : '',
     p.stopCondition ? row('🛑 STOP WHEN', p.stopCondition, 'stop') : '',
-    row('🆘 IF YOU GET STUCK', p.rescue || GENERIC_RESCUE, 'rescue'),
+    isReview ? '' : row('🆘 IF YOU GET STUCK', p.rescue || GENERIC_RESCUE, 'rescue'),
   ].join('');
   return (
     `<div class="kbb-chips">${chips}</div>` +

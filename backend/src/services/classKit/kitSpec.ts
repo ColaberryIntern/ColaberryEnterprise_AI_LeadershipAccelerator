@@ -198,7 +198,12 @@ export function teachToSlides(teach: TeachSlide[], segId: string, seg: KitSegmen
         title: t.title,
         body: t.body,
         bullets: t.bullets,
-        prompt: t.code ? { label: t.code.label, prompt: t.code.code } : undefined,
+        // Spread the code block's Build Bay metadata (kind / pasteWhere /
+        // ccMode / expectedResult / stopCondition / rescue) through to the
+        // slide's prompt. Only `label` and `code` were carried before, so an
+        // authored `pasteWhere: 'your TERMINAL'` was silently dropped and the
+        // Build Bay fell back to claiming every block belonged in Claude Code.
+        prompt: t.code ? { ...t.code, label: t.code.label, prompt: t.code.code } : undefined,
         diagram: t.diagram,
         evidence: t.evidence,
         presenterTip: t.script || seg.purpose,
