@@ -12,10 +12,13 @@
 import type { TeachSlide } from './classTeachContent';
 import type { WeekPack, DayNarrative } from './weekPack';
 
-// Weeks 4-12 packs are registered here as they land. Weeks 1-3 deliberately
-// keep their original layout (classTeachContent.ts / classTeachWeek3*.ts +
-// classSessionPlan.ts) — they are taught and proven, and migrating them would
-// be churn with no teaching benefit.
+// Weeks 1-2 were migrated into packs to gain the diagram / story-beat /
+// participation layer the later weeks have; their teaching substance was
+// carried over field-for-field, not rewritten (both had already been taught).
+// Week 3 deliberately keeps its original layout (classTeachWeek3*.ts +
+// classSessionPlan.ts) — it is authored to the same standard already, and
+// migrating it would be churn with no teaching benefit.
+import { WEEK1_PACK } from './weeks/week1';
 import { WEEK4_PACK } from './weeks/week4';
 import { WEEK5_PACK } from './weeks/week5';
 import { WEEK6_PACK } from './weeks/week6';
@@ -27,6 +30,7 @@ import { WEEK11_PACK } from './weeks/week11';
 import { WEEK12_PACK } from './weeks/week12';
 
 const PACKS: WeekPack[] = [
+  WEEK1_PACK,
   WEEK4_PACK, WEEK5_PACK, WEEK6_PACK, WEEK7_PACK, WEEK8_PACK,
   WEEK9_PACK, WEEK10_PACK, WEEK11_PACK, WEEK12_PACK,
 ];
