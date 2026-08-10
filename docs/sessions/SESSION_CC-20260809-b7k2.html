@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 12:14 PM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">19 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 2:58 PM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">20 changes</span></div>
   </header>
   <main>
     
@@ -342,6 +342,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**205/205 tests across 10 suites** (`JEST_EXIT=0`) including 18 new orchestrator tests; backend `tsc --noEmit` clean — **zero errors in `sbpRoutes.ts`, `sbpOrchestrator.ts` or `participantRoutes.ts`** (the single reported error is the known local-only missing `@anthropic-ai/sdk`). The two invariants are tested directly: a **gate-failed plan is refused with 409 and neither `publishPlan` nor `writeDocsToRepo` is called**, and publish **promotes the reviewed draft with `decomposeBuild` asserted never invoked** — the pilot regenerated between review and commit, which is how a reviewed 6/3/1/1/1 plan shipped as 8/1/1/1/1. Also covered: intake persisted *before* generation so a failure is replayable, a build already generating is not started twice, a generation failure records `failed` without throwing to the caller, and no-repo publishes to `awaiting_repo` rather than blocking the student on repo setup.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">The prompt endpoint **reads `.colaberry/manifest.json` from the real repo** before assembling, so FR-032&#39;s guard checks against what GitHub actually contains rather than what we believe we wrote — and an unreadable manifest degrades to *no paths at all*, never to &quot;assume they exist&quot;, since assuming is the original bug. One deliberate `TODO(step 6)` marks where the existing manifest should be passed to `writeDocsToRepo` for conflict detection; left visible rather than silent. **Still not deployed, and the frontend still calls `generateSkeleton`** — swapping the wizard onto these endpoints is the next piece.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">20</span>
+          <h2>**Built the client that will replace the browser-side fake generator, with the failure behaviour the old layer lacked**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`frontend/src/services/sbpApi.ts` — `startBuild`, `getBuildState`, `publishBuild`, `getStoryPrompt`, bounded `pollBuild`, and `resolveBackendProjectId`. The last one bridges a real gap: the localStorage store keys projects by a client id (`p1786…`) while every SBP endpoint is scoped to a real `projects.id`, so it reads the active project and only calls `POST /api/portal/projects` when there genuinely is none — that endpoint calls `createNewProjectForEnrollment`, which ALWAYS creates, so a careless call would leave an empty project behind on every build attempt. Two deliberate behaviours: **errors are typed results, never swallowed** (`{ok:false,error}` the caller must handle — the layer this replaces used a bare `catch {}`, which is how a 100%-failing import ran unnoticed for months), and **polling is bounded on both axes** with a hard deadline that reports *&quot;may still be running — reopen this page to check&quot;* rather than &quot;failed&quot;, because a poll that never gives up is the spinner-forever version of the same problem the 7-second timer disguised.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**31/31 tests pass** via CRA&#39;s runner (`CI=true react-scripts test --testPathPattern sbpApi`); frontend `tsc --noEmit` **0 errors, exit 0** — the authoritative CI gate. Coverage is weighted to failure paths: a 404 reads as &quot;not enabled&quot; rather than &quot;not found&quot;, a 503 as capacity with a next step, the 409 from a gate-failed publish and the 409 from prompt assembly refusing an unwritten path both surface verbatim, polling stops on a real transport error rather than spinning, honours an abort signal, and treats `gate_failed` as terminal so a student is told to act rather than left waiting. Also asserted: a second `resolveBackendProjectId` call does not create a second project.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Deliberately stopped before swapping `handleCreate` in `ProjectsPage`** — that is the change that actually kills the fake generator, and I would rather hand over a clean tested client than a half-wired page. **Finding worth acting on: CI does not run frontend unit tests at all.** The four required checks are backend typecheck, backend unit tests, frontend *typecheck*, and secret scan — so these 31 tests, and every other frontend test in the repo, gate nothing. Only `tsc` does. That is a real gap given how much logic lives in the frontend, and adding a job is cheap.</span></div>
           
         </div>
       </article>
