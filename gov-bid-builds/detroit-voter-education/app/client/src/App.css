@@ -57,7 +57,7 @@ header p { color: #555; margin-top: 0.25rem; }
   outline: none;
   transition: border-color 0.15s;
 }
-.field input[type="text"]:focus { border-color: #003366; }
+.field input[type="text"]:focus { border-color: #003366; box-shadow: 0 0 0 3px rgba(0,51,102,0.35); }
 .field input[aria-invalid="true"] { border-color: #dc2626; }
 
 .hint {
@@ -143,7 +143,7 @@ button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
   background: #fff;
   outline: none;
 }
-.field select:focus { border-color: #003366; }
+.field select:focus { border-color: #003366; box-shadow: 0 0 0 3px rgba(0,51,102,0.35); }
 
 .field textarea {
   width: 100%;
@@ -156,10 +156,12 @@ button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
   font-family: inherit;
   transition: border-color 0.15s;
 }
-.field textarea:focus { border-color: #003366; }
+.field textarea:focus { border-color: #003366; box-shadow: 0 0 0 3px rgba(0,51,102,0.35); }
 
 .field label { display: flex; justify-content: space-between; align-items: baseline; }
-.char-count { font-size: 0.75rem; color: #94a3b8; font-weight: 400; }
+/* WCAG 1.4.3: #94a3b8 on white measured 2.56:1, below the 4.5:1 AA minimum
+   for normal text -- #64748b measures 4.76:1 and passes. */
+.char-count { font-size: 0.75rem; color: #64748b; font-weight: 400; }
 
 .link-btn {
   background: none;
@@ -213,7 +215,9 @@ button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
   padding: 0.5rem 0.7rem;
 }
 .provenance-trail__item a { color: #003366; }
-.provenance-trail__date { color: #94a3b8; }
+/* WCAG 1.4.3: #94a3b8 on white measured 2.56:1, below the 4.5:1 AA minimum
+   for normal text -- #64748b measures 4.76:1 and passes. */
+.provenance-trail__date { color: #64748b; }
 
 .summary-card__actions {
   display: flex;
