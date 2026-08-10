@@ -97,7 +97,12 @@ describe('week pack registry', () => {
       expect(tooBig.map((s) => s.title)).toEqual([]);
     });
 
-    it('diagram labels use <br/> rather than a literal \\n, which mermaid renders as text', () => {
+    // CONSISTENCY, not correctness. Verified in a real browser against
+    // mermaid 11: a literal \n inside a quoted label renders as a line break,
+    // pixel-identical to <br/>. Both work. This rule exists only so all 24
+    // sessions use one convention — do not "fix" a week on the belief that \n
+    // renders as visible text, because it does not.
+    it('diagram labels use <br/> for line breaks, one convention across all weeks', () => {
       const bad = d.teach.filter((s: TeachSlide) => /\["[^"]*\\n/.test(s.diagram || ''));
       expect(bad.map((s) => s.title)).toEqual([]);
     });

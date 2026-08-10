@@ -19,6 +19,7 @@ import type { WeekPack, DayNarrative } from './weekPack';
 // classSessionPlan.ts) — it is authored to the same standard already, and
 // migrating it would be churn with no teaching benefit.
 import { WEEK1_PACK } from './weeks/week1';
+import { WEEK2_PACK } from './weeks/week2';
 import { WEEK4_PACK } from './weeks/week4';
 import { WEEK5_PACK } from './weeks/week5';
 import { WEEK6_PACK } from './weeks/week6';
@@ -30,7 +31,7 @@ import { WEEK11_PACK } from './weeks/week11';
 import { WEEK12_PACK } from './weeks/week12';
 
 const PACKS: WeekPack[] = [
-  WEEK1_PACK,
+  WEEK1_PACK, WEEK2_PACK,
   WEEK4_PACK, WEEK5_PACK, WEEK6_PACK, WEEK7_PACK, WEEK8_PACK,
   WEEK9_PACK, WEEK10_PACK, WEEK11_PACK, WEEK12_PACK,
 ];
