@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 9:11 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">16 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 9:37 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">17 changes</span></div>
   </header>
   <main>
     
@@ -297,6 +297,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**Migration and rollback rehearsed end to end on a throwaway database on the prod Postgres host, then dropped.** The catalog round-trips exactly — `BEFORE 0|1|0|1` → `AFTER 2|0|1|1` → `RESTORED 0|1|0|1`, with the seeded `github_connections` row surviving both directions. `BEFORE` and `RESTORED` are identical, so the rollback is proven rather than asserted. Full suite green: **218/218 tests across 10 suites** (`JEST_EXIT=0`); frontend `tsc --noEmit` 0 errors. The handoff gives four numbered things Ali can run himself, all against dev or local, each with what to expect and why it is worth watching — including the live GitHub check and a `--keep` variant so he can read a generated `docs/stories/STORY-001.md` and judge whether he would hand it to an intern.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**Run complete: 17 of 17 tasks. Nothing deployed, nothing merged to main.** Two things I could not do and Ali must: **`GITHUB_TOKEN` is absent from the production `.env`** (provisioning 503s without it), and two scratch repos from the live check need deleting by hand (`sbp-live-check-msnakjkt`, `sbp-live-check-msnapysj`) since the token lacks `delete_repo` scope. T11 (mandatory wizard step) is deliberately deferred rather than counted done — making provisioning mandatory is only honest once it works in production, which needs that token. Steps 6-11 of the architecture (conflict detection, webhook + projection, gated mark-done, workspace page, dashboard, rename) remain out of scope by design. The handoff records the three defects that shipped green and were caught only by checking against reality, because that pattern is the most transferable thing this run produced.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">17</span>
+          <h2>**Re-ran Ali&#39;s actual Sponsor Dashboard brief through the fixed pipeline — every defect the pilot exhibited is gone**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/scripts/sbpCompareToPilot.ts` — a side-by-side against what the pilot actually committed, run on the real 2,245-char brief and the real 110,637-char Architect document rather than a fixture. This is the question the whole workstream turns on: did the fix work on the input that broke it?</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Release balance 8/1/1/1/1 → 3/2/2/2/2** (max 3 of 11 against a 4.4 ceiling — balanced). **Constraints 0 → 3**: PaySimple, Mandrill and Postgres are now typed `CONSTRAINT`, which is precisely the root cause fixed — in the pilot those were `FUNC/must` and the coverage rule manufactured a layer story for each. **Layer stories 3 → 0**: no &quot;Connect to PaySimple, Postgres, Mandrill&quot;, no &quot;Ensure data privacy and security compliance&quot;, no &quot;Zero-manual-step process&quot;. &quot;Send emails via Mandrill&quot; became **&quot;Send magic-link invites to employees&quot;** — same work, now a slice a student can demo. **Hallucinations all clean**: Stripe, PayPal, HIPAA and the invented HR integration are absent. **Brief fidelity 8/8**, including `transfer`, which the earlier run had dropped entirely. Most tellingly, r0 is now `magic link → exactly-once provisioning → audit trail` — the walking skeleton proving the correctness guarantee before features stack, which is what FR-008 asks for and what the pilot&#39;s eight-story r0 conspicuously was not. Generated in **1 attempt**, no retry needed.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The gate flagged **2 uncovered must-haves** (REQ-001 the dashboard itself, REQ-018 zero-manual-steps). That is the gate working, not failing — in the full flow the repair pass covers them before anything persists, and failing closed on a gap is the designed behaviour. Ali&#39;s pilot project `248d9d63` is deliberately **unchanged**: nothing regenerated it, so the old 8/1/1/1/1 plan is still visible in the portal for comparison. Nothing deployed, nothing merged to main.</span></div>
           
         </div>
       </article>
