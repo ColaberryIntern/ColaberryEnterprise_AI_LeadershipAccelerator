@@ -46,6 +46,13 @@ const mockRecordAudit = recordSponsorPortalAuditEvent as jest.Mock;
 
 const HOUR_MS = 60 * 60 * 1000;
 
+// Real tokens are crypto.randomUUID() in a UUID column, and verify now rejects
+// anything not UUID-shaped before it reaches the database. Fixtures must look
+// like the real thing or they exercise the malformed-token guard instead of the
+// path under test.
+const LIVE_TOKEN = '7a1f9c2e-1111-4000-8000-1234567890ab';
+const DEAD_TOKEN = '7a1f9c2e-2222-4000-8000-1234567890ab';
+
 /** A Sponsor row stub whose update() mutates it, like the real instance does. */
 function sponsorStub(overrides: Record<string, unknown> = {}) {
   const sponsor: any = {
@@ -212,14 +219,35 @@ describe('requestSponsorPortalLink — failure path: email not sent', () => {
 
 describe('verifySponsorPortalToken', () => {
   it('returns a session for a valid token', async () => {
-    sponsorFindOne.mockResolvedValue({ id: 'sp-1', company_name: 'Acme Corp', portal_token: 'tok-abc' });
-    const result = await verifySponsorPortalToken('tok-abc');
-    expect(result).toEqual({ sponsor_id: 'sp-1', access_token: 'tok-abc', company_name: 'Acme Corp' });
+    sponsorFindOne.mockResolvedValue({ id: 'sp-1', company_name: 'Acme Corp', portal_token: LIVE_TOKEN });
+    const result = await verifySponsorPortalToken(LIVE_TOKEN);
+    expect(result).toEqual({ sponsor_id: 'sp-1', access_token: LIVE_TOKEN, company_name: 'Acme Corp' });
   });
 
   it('returns null for an unknown/expired token', async () => {
     sponsorFindOne.mockResolvedValue(null);
-    expect(await verifySponsorPortalToken('nope')).toBeNull();
+    expect(await verifySponsorPortalToken('7a1f9c2e-0000-4000-8000-1234567890ab')).toBeNull();
+  });
+
+  // Regression: portal_token is a UUID column, so a malformed literal makes
+  // Postgres throw rather than not-match. That surfaced as a 500 with no audit
+  // row in a live dev run; mocked models never reproduced it, so the guard is
+  // asserted here by proving the query is not even attempted.
+  it.each([
+    ['an empty token', ''],
+    ['a non-UUID token', 'garbage'],
+    ['a UUID-ish but malformed token', '7a1f9c2e-0000-4000-8000-12345'],
+  ])('rejects %s without querying the database', async (_label, badToken) => {
+    const result = await verifySponsorPortalToken(badToken);
+
+    expect(result).toBeNull();
+    expect(sponsorFindOne).not.toHaveBeenCalled();
+    expect(mockRecordAudit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: 'link_rejected',
+        metadata: { reason: 'malformed_token' },
+      }),
+    );
   });
 });
 
@@ -250,18 +278,18 @@ describe('audit trail (acceptance: generation and access events are logged)', ()
     sponsorFindOne.mockResolvedValue({
       id: 'sp-1',
       company_name: 'Acme Corp',
-      portal_token: 'tok-abc',
+      portal_token: LIVE_TOKEN,
       contact_lead_id: 42,
     });
 
-    await verifySponsorPortalToken('tok-abc', { ip: '203.0.113.7', userAgent: 'Mozilla/5.0' });
+    await verifySponsorPortalToken(LIVE_TOKEN, { ip: '203.0.113.7', userAgent: 'Mozilla/5.0' });
 
     expect(mockRecordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'link_accessed',
         sponsorId: 'sp-1',
         leadId: 42,
-        token: 'tok-abc',
+        token: LIVE_TOKEN,
         ip: '203.0.113.7',
       }),
     );
@@ -270,12 +298,12 @@ describe('audit trail (acceptance: generation and access events are logged)', ()
   it('records link_rejected for an expired or unknown link', async () => {
     sponsorFindOne.mockResolvedValue(null);
 
-    await verifySponsorPortalToken('expired-tok', { ip: '203.0.113.9' });
+    await verifySponsorPortalToken(DEAD_TOKEN, { ip: '203.0.113.9' });
 
     expect(mockRecordAudit).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'link_rejected',
-        token: 'expired-tok',
+        token: DEAD_TOKEN,
         metadata: { reason: 'unknown_or_expired_token' },
       }),
     );

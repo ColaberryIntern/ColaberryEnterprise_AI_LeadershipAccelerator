@@ -24,6 +24,10 @@ const SEND_TIMEOUT_MS = 10_000;
 const SEND_MAX_ATTEMPTS = 3; // 1 initial attempt + 2 retries
 const SEND_BACKOFF_MS = [500, 1500];
 
+// Tokens are crypto.randomUUID(), stored in a UUID column. Used to reject
+// non-UUID input before it reaches Postgres — see verifySponsorPortalToken.
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * The magic link could not be delivered after every attempt was exhausted.
  * Thrown (rather than swallowed) so the route returns a real failure instead of
@@ -271,6 +275,31 @@ export async function verifySponsorPortalToken(
   context?: SponsorAuditContext,
 ): Promise<SponsorPortalSession | null> {
   const correlationId = crypto.randomUUID();
+
+  // sponsors.portal_token is a UUID column, so Postgres raises a type error on
+  // a malformed literal rather than simply not matching. Without this guard an
+  // empty or junk `?token=` produced a 500 and — worse — no audit row at all,
+  // because the throw happened before the rejection was recorded. Anything that
+  // is not UUID-shaped cannot be a token we issued, so reject it here, on the
+  // same path and with the same 401 as any other bad link.
+  if (!UUID_PATTERN.test(token)) {
+    logSponsorLink(correlationId, {
+      event: 'sponsor_magic_link_rejected',
+      outcome: 'failure',
+      reason: 'malformed_token',
+    });
+    await recordSponsorPortalAuditEvent({
+      event: 'link_rejected',
+      correlationId,
+      // Deliberately not passed as `token`: fingerprinting a value that was
+      // never a token adds noise to the trail without adding traceability.
+      ip: context?.ip,
+      userAgent: context?.userAgent,
+      metadata: { reason: 'malformed_token' },
+    });
+    return null;
+  }
+
   const sponsor = await Sponsor.findOne({
     where: {
       portal_token: token,

@@ -245,8 +245,32 @@ describe('AC2 — clicking the magic link lands the manager on the dashboard', (
 
   it('401s a token that was never issued', async () => {
     const app = buildApp();
-    const res = await request(app).get('/api/sponsor/verify').query({ token: 'never-issued' });
+    const res = await request(app)
+      .get('/api/sponsor/verify')
+      .query({ token: '7a1f9c2e-0000-4000-8000-1234567890ab' });
     expect(res.status).toBe(401);
+  });
+
+  // Regression from a live dev run: these returned 500 and wrote no audit row,
+  // because portal_token is a UUID column and Postgres rejects a malformed
+  // literal outright. A missing or junk token is a bad link, not a server fault.
+  it.each([
+    ['no token at all', undefined],
+    ['an empty token', ''],
+    ['a non-UUID token', 'garbage'],
+  ])('401s %s rather than 500ing', async (_label, badToken) => {
+    const app = buildApp();
+    const res = await request(app)
+      .get('/api/sponsor/verify')
+      .query(badToken === undefined ? {} : { token: badToken });
+
+    expect(res.status).toBe(401);
+    expect(res.body).toEqual({ error: 'Invalid or expired link' });
+    expect(db.auditRows).toHaveLength(1);
+    expect(db.auditRows[0]).toMatchObject({
+      event: 'link_rejected',
+      metadata: { reason: 'malformed_token' },
+    });
   });
 });
 
@@ -280,7 +304,12 @@ describe('AC3 (trust) — generation and access are recorded for audit', () => {
 
   it('writes link_rejected when a dead link is clicked', async () => {
     const app = buildApp();
-    await request(app).get('/api/sponsor/verify').query({ token: 'dead-token' }).expect(401);
+    // UUID-shaped but never issued — exercises the database lookup miss, not
+    // the malformed-token guard covered separately above.
+    await request(app)
+      .get('/api/sponsor/verify')
+      .query({ token: '7a1f9c2e-2222-4000-8000-1234567890ab' })
+      .expect(401);
 
     expect(db.auditRows).toHaveLength(1);
     expect(db.auditRows[0]).toMatchObject({
