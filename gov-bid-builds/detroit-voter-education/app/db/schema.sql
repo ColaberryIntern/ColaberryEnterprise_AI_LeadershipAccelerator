@@ -156,6 +156,12 @@ CREATE TABLE IF NOT EXISTS ingestion_alerts (
 CREATE INDEX IF NOT EXISTS idx_government_data_ingestions_source ON government_data_ingestions(source);
 CREATE INDEX IF NOT EXISTS idx_ingestion_alerts_ingestion ON ingestion_alerts(ingestion_id);
 
+-- STORY-019: distinguishes a routine single-failure alert ('admin') from an
+-- escalation on repeated/circuit-open failure ('senior_admin'). `channel`
+-- stays 'log_stub' regardless of tier -- channel is the delivery mechanism
+-- (still no real Twilio/SendGrid), tier is who it's addressed to.
+ALTER TABLE ingestion_alerts ADD COLUMN IF NOT EXISTS tier VARCHAR(20) NOT NULL DEFAULT 'admin';
+
 -- STORY-013: bias/accuracy governance evaluation. method='heuristic_demo_v1' is
 -- a deterministic, explainable stand-in (word-overlap grounding + a loaded-word
 -- stoplist) documented as a heuristic, not a validated bias/accuracy measurement

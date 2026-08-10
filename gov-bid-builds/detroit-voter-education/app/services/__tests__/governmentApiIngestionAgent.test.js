@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const {
   computeBackoffDelayMs, isCircuitOpen, recordFailure, recordSuccess, resetCircuit,
-  validateFederalRegisterResponse, CIRCUIT_FAILURE_THRESHOLD,
+  validateFederalRegisterResponse, resolveAlertTier, CIRCUIT_FAILURE_THRESHOLD,
 } = require('../governmentApiIngestionAgent');
 
 let passed = 0;
@@ -58,6 +58,14 @@ test('validateFederalRegisterResponse: rejects a response missing results', () =
 test('validateFederalRegisterResponse: rejects null/undefined', () => {
   assert.throws(() => validateFederalRegisterResponse(null), (err) => err.code === 'VALIDATION_FAILED');
   assert.throws(() => validateFederalRegisterResponse(undefined), (err) => err.code === 'VALIDATION_FAILED');
+});
+
+test('resolveAlertTier: a single failure stays at the routine admin tier', () => {
+  assert.equal(resolveAlertTier(false), 'admin');
+});
+
+test('resolveAlertTier: a repeated/circuit-open failure escalates to senior_admin', () => {
+  assert.equal(resolveAlertTier(true), 'senior_admin');
 });
 
 console.log(`\n${passed} passed`);

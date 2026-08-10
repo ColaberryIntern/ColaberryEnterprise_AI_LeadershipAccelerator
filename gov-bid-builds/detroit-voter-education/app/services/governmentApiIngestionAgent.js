@@ -90,13 +90,21 @@ function validateFederalRegisterResponse(data) {
   }
 }
 
+// STORY-019: a single ingestion-call failure alerts the routine 'admin'
+// tier; a repeated/circuit-open failure escalates to 'senior_admin'. Pure
+// and exported so the decision itself is unit-testable without the DB.
+function resolveAlertTier(isRepeatedFailure) {
+  return isRepeatedFailure ? 'senior_admin' : 'admin';
+}
+
 // Stub only -- no real Twilio/SendGrid account/credentials wired up. See
-// STORY-011/016 decisions for why this stays a decision for a human, not
-// something to assume.
-async function sendAdminAlert(ingestionId, message) {
+// STORY-011/016/019 decisions for why this stays a decision for a human,
+// not something to assume -- the tier changes who it's addressed to, not
+// whether it's a real message.
+async function sendAdminAlert(ingestionId, message, tier = 'admin') {
   await pool.query(
-    `INSERT INTO ingestion_alerts (ingestion_id, channel, message) VALUES ($1, 'log_stub', $2)`,
-    [ingestionId, message],
+    `INSERT INTO ingestion_alerts (ingestion_id, channel, message, tier) VALUES ($1, 'log_stub', $2, $3)`,
+    [ingestionId, message, tier],
   );
   console.error(JSON.stringify({
     timestamp: new Date().toISOString(),
@@ -104,6 +112,7 @@ async function sendAdminAlert(ingestionId, message) {
     service: 'detroit-voter-education',
     event: 'admin_alert_sent',
     channel: 'log_stub',
+    tier,
     ingestion_id: ingestionId,
     message,
   }));
@@ -123,11 +132,20 @@ async function ingestFederalRegisterDocuments(searchTerm) {
        RETURNING id`,
       [source, url],
     );
-    await sendAdminAlert(failedRow.rows[0].id, `Government API ingestion skipped: circuit breaker open for source '${source}'`);
+    const escalationTier = resolveAlertTier(true);
+    await sendAdminAlert(failedRow.rows[0].id, `Government API ingestion skipped: circuit breaker open for source '${source}'`, escalationTier);
     await pool.query(
       `INSERT INTO audit_log (session_id, action, metadata)
        VALUES (NULL, 'INGESTION_FAILED', $1)`,
       [JSON.stringify({ source, endpoint: url, reason: 'circuit_open' })],
+    );
+    // Circuit-open means the source has failed repeatedly, not once -- this
+    // is the "fails multiple times" escalation case, distinct from a single
+    // failed attempt below, which does not escalate.
+    await pool.query(
+      `INSERT INTO audit_log (session_id, action, metadata)
+       VALUES (NULL, 'ESCALATION_TRIGGERED', $1)`,
+      [JSON.stringify({ source, endpoint: url, reason: 'circuit_open', tier: escalationTier })],
     );
     return { source, status: 'failed', reason: 'circuit_open', ingestionId: failedRow.rows[0].id };
   }
@@ -185,7 +203,10 @@ async function ingestFederalRegisterDocuments(searchTerm) {
       [JSON.stringify({ source, endpoint: url, error: err.message, attempts: MAX_ATTEMPTS })],
     );
 
-    await sendAdminAlert(failedRow.rows[0].id, `Government API ingestion failed after ${MAX_ATTEMPTS} attempts: ${source} -- ${err.message}`);
+    // A single ingestion call failing (even after its internal retries) is
+    // not yet "repeated failure" -- the circuit breaker, not this catch
+    // block, is what tracks failures across calls. No escalation here.
+    await sendAdminAlert(failedRow.rows[0].id, `Government API ingestion failed after ${MAX_ATTEMPTS} attempts: ${source} -- ${err.message}`, resolveAlertTier(false));
 
     console.error(JSON.stringify({
       timestamp: new Date().toISOString(),
@@ -211,6 +232,7 @@ module.exports = {
   recordFailure,
   resetCircuit,
   validateFederalRegisterResponse,
+  resolveAlertTier,
   CIRCUIT_FAILURE_THRESHOLD,
   CIRCUIT_COOLDOWN_MS,
 };

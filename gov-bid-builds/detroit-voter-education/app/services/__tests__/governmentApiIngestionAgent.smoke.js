@@ -66,7 +66,14 @@ async function run() {
     const alertRow = await pool.query('SELECT * FROM ingestion_alerts WHERE ingestion_id = $1', [failed.ingestionId]);
     assert.equal(alertRow.rows.length, 1);
     assert.equal(alertRow.rows[0].channel, 'log_stub');
-    console.log('ok - admin alert stored (log_stub channel, no real Twilio/SendGrid call)');
+    assert.equal(alertRow.rows[0].tier, 'admin', 'a single failure must alert the routine admin tier, not escalate');
+    console.log('ok - admin alert stored (log_stub channel, admin tier -- no real Twilio/SendGrid call)');
+
+    const noEscalationYet = await pool.query(
+      `SELECT COUNT(*)::int AS n FROM audit_log WHERE action = 'ESCALATION_TRIGGERED' AND (metadata->>'endpoint') LIKE '%housing%'`,
+    );
+    assert.equal(noEscalationYet.rows[0].n, 0, 'a single failure must not trigger an escalation audit entry');
+    console.log('ok - single failure does not write an ESCALATION_TRIGGERED audit row');
 
     // Repeat failures should open the circuit breaker.
     for (let i = 0; i < CIRCUIT_FAILURE_THRESHOLD; i += 1) {
@@ -80,6 +87,22 @@ async function run() {
     assert.equal(circuitOpenResult.status, 'failed');
     assert.equal(circuitOpenResult.reason, 'circuit_open');
     console.log('ok - while circuit is open, ingestion fails fast with reason=circuit_open');
+
+    // STORY-019: circuit-open is the "fails multiple times" case -- must
+    // escalate to the senior_admin tier and write a dedicated audit entry,
+    // unlike the single-failure case asserted above.
+    const escalationAlertRow = await pool.query('SELECT * FROM ingestion_alerts WHERE ingestion_id = $1', [circuitOpenResult.ingestionId]);
+    assert.equal(escalationAlertRow.rows.length, 1);
+    assert.equal(escalationAlertRow.rows[0].tier, 'senior_admin', 'circuit-open (repeated failure) must escalate to senior_admin');
+    console.log('ok - circuit-open alert stored at the senior_admin tier');
+
+    const escalationAudit = await pool.query(
+      `SELECT * FROM audit_log WHERE action = 'ESCALATION_TRIGGERED' AND (metadata->>'endpoint') LIKE '%healthcare%'`,
+    );
+    assert.equal(escalationAudit.rows.length, 1);
+    assert.equal(escalationAudit.rows[0].metadata.tier, 'senior_admin');
+    assert.equal(escalationAudit.rows[0].metadata.reason, 'circuit_open');
+    console.log('ok - ESCALATION_TRIGGERED audit row written for the circuit-open (repeated) failure');
   } finally {
     global.fetch = realFetch;
     resetCircuit('federal_register');
