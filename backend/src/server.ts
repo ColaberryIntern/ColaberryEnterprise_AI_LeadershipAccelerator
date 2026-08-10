@@ -41,6 +41,14 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
+// Student Build Pipeline. These two were dropped from server.ts when the
+// sponsor magic-link fix (c21cd66e) resolved a conflict in this file by
+// taking one side wholesale. Without them build_intake/build_plans are never
+// created and github_connections is never re-keyed, so the pipeline fails on
+// first use with 'relation does not exist'. Both are idempotent and assert
+// their own post-conditions.
+import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
@@ -2383,6 +2391,8 @@ async function start(): Promise<void> {
   await ensureFriendReferralSchema();
   // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
   await ensureSponsorPortalAuditSchema();
+  await ensureSbpSchema();
+  await ensureWorkspaceRepoSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
