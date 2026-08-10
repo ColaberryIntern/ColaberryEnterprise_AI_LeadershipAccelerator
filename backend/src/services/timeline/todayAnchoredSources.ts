@@ -23,6 +23,8 @@ import AttendanceRecord from '../../models/AttendanceRecord';
 import { resolveCohortId } from '../communityService';
 import { env } from '../../config/env';
 import type { TodayFeedItem } from './todayFeedComposer';
+import { getTypeExposureMap } from './feedTypeExposureService';
+import { getRoutingMap } from './feedControlService';
 
 const CANDIDATE_CAP = 20;
 
@@ -247,6 +249,46 @@ export interface ClassCandidates {
   evergreenByType: Map<string, TodayFeedItem[]>;
 }
 
+/**
+ * Feed Control type-level suppression (`env.feedControlTypeSuppressionEnabled`,
+ * default OFF everywhere including production). A type's `feed_frequency_cap`/
+ * `feed_cooldown_days` (set via the Feed Control board's gear icon) are today
+ * consumed ONLY by the admin simulate() preview — this is what makes them real
+ * for a live student, covering both `weekBound` and `evergreenByType` since
+ * both flow through this one filter before the tiers are split.
+ *
+ * cap: a running per-type counter seeded from real exposure history and
+ * incremented as candidates are kept, so N never-before-shown cards of a
+ * capped type in ONE batch still respects the cap (a stateless per-candidate
+ * check against pre-existing history alone would not).
+ * cooldown: checked against the type's real last-shown timestamp only — never
+ * updated in-batch, since nothing placed in the same request has aged.
+ * Blank/null cap or cooldown = no limit; no fallback to any global default.
+ */
+async function suppressByTypeCapCooldown(enrollmentId: string, candidates: TodayFeedItem[]): Promise<TodayFeedItem[]> {
+  if (!candidates.length) return candidates;
+  const [exposure, routing] = await Promise.all([getTypeExposureMap(enrollmentId), getRoutingMap()]);
+  const inBatchCount = new Map<string, number>();
+  const now = Date.now();
+  const DAY_MS = 24 * 60 * 60 * 1000;
+  const kept: TodayFeedItem[] = [];
+  for (const cand of candidates) {
+    const type = cand.type;
+    const route = routing[type];
+    const exp = exposure.get(type);
+    const cap = route?.feed_frequency_cap;
+    if (typeof cap === 'number' && cap > 0 && (inBatchCount.get(type) ?? exp?.count ?? 0) >= cap) continue;
+    const cooldown = route?.feed_cooldown_days;
+    if (typeof cooldown === 'number' && cooldown > 0 && exp?.lastShownAt) {
+      const daysSince = (now - exp.lastShownAt.getTime()) / DAY_MS;
+      if (daysSince < cooldown) continue;
+    }
+    kept.push(cand);
+    inBatchCount.set(type, (inBatchCount.get(type) ?? exp?.count ?? 0) + 1);
+  }
+  return kept;
+}
+
 async function classCandidates(enrollmentId: string, placedRefs: Set<string>): Promise<ClassCandidates> {
   try {
     const feed = await getFeed(enrollmentId);
@@ -255,7 +297,7 @@ async function classCandidates(enrollmentId: string, placedRefs: Set<string>): P
     // started that week (see weekStartedForToday's docstring) — Classroom is
     // completely unaffected (it never reads this flag or calls this function).
     const weekStartGateOn = env.timelineWeekStartGateEnabled;
-    const eligible = feed.cards
+    let eligible = feed.cards
       .filter((c) => {
         if (!isTodayEligible(c.type) || isAmbient(c.type)) return false;
         if (c.status === 'locked' || c.status === 'completed') return false;
@@ -276,6 +318,9 @@ async function classCandidates(enrollmentId: string, placedRefs: Set<string>): P
         return true;
       })
       .map(anchoredItemFromCard);
+    if (env.feedControlTypeSuppressionEnabled) {
+      eligible = await suppressByTypeCapCooldown(enrollmentId, eligible);
+    }
     const weekBound = eligible.filter((i) => i.week != null);
     const evergreenByType = groupByType(eligible.filter((i) => i.week == null), (i) => i.type);
     return { weekBound, evergreenByType };
