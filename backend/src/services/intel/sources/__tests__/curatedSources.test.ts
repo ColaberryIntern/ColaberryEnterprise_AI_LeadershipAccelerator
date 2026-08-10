@@ -94,7 +94,7 @@ describe('mcp_server_spotlight', () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('network down')) as unknown as typeof fetch;
     const items = await collectMcp();
     assertWellFormed(items, 'mcp:');
-    expect(items.length).toBeGreaterThanOrEqual(12);
+    expect(items.length).toBeGreaterThanOrEqual(30);
   });
 
   it('degrades to the fallback when the README parses zero rows', async () => {
@@ -103,7 +103,7 @@ describe('mcp_server_spotlight', () => {
     }) as unknown as typeof fetch;
     const items = await collectMcp();
     assertWellFormed(items, 'mcp:');
-    expect(items.length).toBeGreaterThanOrEqual(12);
+    expect(items.length).toBeGreaterThanOrEqual(30);
   });
 
   it('parses live-README-shaped markdown into normalized items', () => {
@@ -121,5 +121,34 @@ describe('mcp_server_spotlight', () => {
     const byGuid = Object.fromEntries(items.map((i) => [i.guid, i]));
     expect(byGuid['mcp:filesystem'].url).toBe('https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem');
     expect(byGuid['mcp:github'].url).toBe('https://github.com/github/github-mcp-server'); // absolute url preserved
+  });
+});
+
+describe('content-supply fix (2026-08-10): catalog depth vs. retention math', () => {
+  // At MAX_PER_RUN=2/day and RETENTION_DAYS=18 (generatedContentRetention.ts),
+  // a list needs >=36 items to never fully exhaust before the oldest card ages
+  // out and recycles — locking in a floor well above that so a future edit
+  // can't silently shrink a list back into the dead-zone this fix closed.
+  const MIN_SAFE_DEPTH = 36;
+
+  it('ai_tool_of_the_day has enough items to outlast the retention window', async () => {
+    expect((await collectTool()).length).toBeGreaterThanOrEqual(MIN_SAFE_DEPTH);
+  });
+
+  it('claude_code_technique has enough items to outlast the retention window', async () => {
+    expect((await collectTechnique()).length).toBeGreaterThanOrEqual(MIN_SAFE_DEPTH);
+  });
+
+  it('ai_quote_of_the_day has grown meaningfully, held to a lower floor given the accuracy-risk tradeoff of adding more unverified quotes', async () => {
+    // Deliberately below MIN_SAFE_DEPTH: misattributing a quote is worse than a
+    // shorter list, so this type leans on the shorter RETENTION_DAYS more than
+    // on catalog size to close its gap (see generatedContentRetention.ts).
+    expect((await collectQuote()).length).toBeGreaterThanOrEqual(35);
+  });
+
+  it('mcp_server_spotlight fallback has enough items to outlast the retention window', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('force fallback')) as unknown as typeof fetch;
+    expect((await collectMcp()).length).toBeGreaterThanOrEqual(MIN_SAFE_DEPTH);
+    jest.restoreAllMocks();
   });
 });
