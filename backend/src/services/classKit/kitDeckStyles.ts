@@ -212,26 +212,35 @@ body.rail-on #krail{display:flex}
 .kticker-item.building-leave{border-left:4px solid var(--subtle);color:var(--subtle)}
 .kticker-empty{font-size:12.5px;color:var(--subtle);padding:6px 0}
 
-/* Small persistent QR for latecomers — appears on slides after the cover,
-   once the instructor has pressed Start class (before that, the cover's own
-   big QR is the promoted one; showing a second QR pre-start would just clutter
-   the room-settling moment without helping anyone). Grouped with the existing
-   top-right chrome cluster (.ktoggles) rather than a new corner — every slide
-   layout (centered Story Mode, left-aligned Build Mode, two-column cover) already
-   keeps that zone clear, so it stays out of whatever the video is framing. Fades
-   on idle and hides entirely in Focus/Video mode, same as the rest of that cluster. */
+/* Persistent check-in QR — on every slide after the cover.
+ *
+ * SIZE IS THE WHOLE POINT. This was 52px, and students reported they could not
+ * read it even in normal mode. The check-in URL is ~70 characters
+ * (https://…/portal/class-checkin/<uuid>), which encodes to roughly a 37x37
+ * module QR — at 52px that is about 1.4 screen pixels per module, before the
+ * class is screenshared and re-compressed by the video call. Unscannable by
+ * arithmetic, not by bad luck. 148px puts it near 4px per module, which
+ * survives a shared screen. Do not shrink this back for tidiness; if it needs
+ * to take less room, shorten the encoded URL instead so the QR has fewer
+ * modules to begin with.
+ *
+ * Also deliberately no longer fades on idle: a QR at 0.3 opacity is a QR that
+ * does not scan, and this element exists purely to be scanned.
+ *
+ * Normal mode: top-right, clear of the rail. Focus/Video mode: bottom-right,
+ * which is empty there because the rail and pace bar are hidden — so it stays
+ * out of the framed content while remaining on screen for latecomers. */
 #klateqr{position:fixed;top:56px;right:16px;z-index:44;
-  display:none;flex-direction:column;align-items:center;gap:3px;
-  background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;
-  padding:6px;box-shadow:0 10px 28px rgba(26,32,44,.16);cursor:pointer;opacity:.8;transition:opacity .2s,right .2s}
-#klateqr:hover{opacity:1}
+  display:none;flex-direction:column;align-items:center;gap:5px;
+  background:rgba(255,255,255,.96);backdrop-filter:blur(6px);border:1px solid var(--line);border-radius:12px;
+  padding:10px;box-shadow:0 10px 28px rgba(26,32,44,.16);cursor:pointer;opacity:1;transition:right .2s,bottom .2s}
 #klateqr.show{display:flex}
 body.rail-on #klateqr{right:calc(var(--rail-w) + 14px)}
-body.idle #klateqr{opacity:.3}
-.klateqr-box{width:52px;height:52px}
+.klateqr-box{width:148px;height:148px}
 .klateqr-box svg{width:100%;height:100%;display:block}
-.klateqr-label{font-size:9px;font-weight:700;color:var(--berry);text-transform:uppercase;letter-spacing:.3px}
-body.focus #klateqr{display:none !important}
+.klateqr-label{font-size:11px;font-weight:700;color:var(--berry);text-transform:uppercase;letter-spacing:.3px}
+/* Focus/Video mode: keep it, move it to the free bottom-right corner. */
+body.focus #klateqr{top:auto;bottom:20px;right:20px}
 
 /* ---------- overlays / toggles ---------- */
 /* Control cluster — sits over the STAGE (left of the rail), never overlapping it,

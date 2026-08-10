@@ -5,7 +5,11 @@ const mockRenderKitDoc = jest.fn();
 jest.mock('../sessionKitDocService', () => ({ renderSessionKitDoc: (...a: unknown[]) => mockRenderKitDoc(...a) }));
 
 const mockEnsureBooking = jest.fn();
-jest.mock('../sessionRecordingService', () => ({ ensureBookingForSession: (...a: unknown[]) => mockEnsureBooking(...a) }));
+const mockResolveRoom = jest.fn();
+jest.mock('../sessionRecordingService', () => ({
+  ensureBookingForSession: (...a: unknown[]) => mockEnsureBooking(...a),
+  resolveSessionRoomId: (...a: unknown[]) => mockResolveRoom(...a),
+}));
 
 const mockEmit = jest.fn();
 jest.mock('../communityRooms/roomOutboxService', () => ({ emitRoomEvent: (...a: unknown[]) => mockEmit(...a) }));
@@ -28,6 +32,12 @@ jest.mock('../../models/LiveSession', () => ({
   default: { findAll: (...a: unknown[]) => mockFindAll(...a) },
 }));
 
+const mockRoomFindOne = jest.fn();
+jest.mock('../../models/CommunityRoom', () => ({
+  __esModule: true,
+  default: { findOne: (...a: unknown[]) => mockRoomFindOne(...a) },
+}));
+
 import fs from 'fs';
 import { attachClassNotesForSession, attachClassNotesForCompletedSessions } from '../sessionClassNotesService';
 
@@ -40,6 +50,9 @@ let unlinkSpy: jest.SpyInstance;
 beforeEach(() => {
   jest.clearAllMocks();
   mockEnsureBooking.mockResolvedValue(booking);
+  // Default: the session HAS its own per-session room, distinct from the
+  // cohort room the booking points at.
+  mockResolveRoom.mockResolvedValue('session-room-1');
   mockEmit.mockResolvedValue(undefined);
   jest.spyOn(fs, 'mkdirSync').mockImplementation(() => undefined as any);
   writeSpy = jest.spyOn(fs, 'writeFileSync').mockImplementation(() => undefined);
@@ -58,7 +71,7 @@ describe('attachClassNotesForSession', () => {
     expect(mockRenderKitDoc).toHaveBeenCalledWith('session-5', 'standalone');
     expect(writeSpy).toHaveBeenCalled();
     expect(mockCreate).toHaveBeenCalledWith(expect.objectContaining({
-      room_id: 'room-1',
+      room_id: 'session-room-1',
       booking_id: 'booking-1',
       resource_type: 'file',
       mime_type: 'text/html',
@@ -121,6 +134,42 @@ describe('attachClassNotesForSession', () => {
     const result = await attachClassNotesForSession(session);
 
     expect(result).toEqual({ status: 'attached', resourceId: 'notes-2' });
+  });
+
+  /**
+   * Regression: the first backfill put all five Class Notes in the cohort's
+   * PERSISTENT room, because that is what the booking points at. Students open
+   * the per-session `scheduled` room ("YOUR CLASSES" links there), so the notes
+   * were real but invisible — Week 2 Build Day showed only the Skill Prompt
+   * uploads. Notes must follow the session, not the booking.
+   */
+  it('attaches to the SESSION room, not the cohort room the booking points at', async () => {
+    mockFindOne.mockResolvedValue(null);
+    mockResolveRoom.mockResolvedValue('session-room-1');
+    mockRenderKitDoc.mockResolvedValue('<html>deck</html>');
+    mockCreate.mockResolvedValue({ id: 'notes-r' });
+
+    await attachClassNotesForSession(session);
+
+    const created = mockCreate.mock.calls[0][0];
+    expect(created.room_id).toBe('session-room-1');
+    expect(created.room_id).not.toBe(booking.room_id);
+    // and the idempotency lookup must check that same room, or every sweep
+    // would re-create the notes in the session room forever.
+    expect(mockFindOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ room_id: 'session-room-1' }),
+    }));
+  });
+
+  it('falls back to the booking room when the session has no room of its own', async () => {
+    mockFindOne.mockResolvedValue(null);
+    mockResolveRoom.mockResolvedValue('room-1'); // helper falls back to booking room
+    mockRenderKitDoc.mockResolvedValue('<html>deck</html>');
+    mockCreate.mockResolvedValue({ id: 'notes-fb' });
+
+    await attachClassNotesForSession(session);
+
+    expect(mockCreate.mock.calls[0][0].room_id).toBe('room-1');
   });
 
   it('emits a REAL room event type (guards the bug a mocked roomEvents hid)', async () => {

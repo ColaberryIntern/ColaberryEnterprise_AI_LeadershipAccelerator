@@ -6,7 +6,9 @@ import LiveSession from '../models/LiveSession';
 import RoomResource from '../models/RoomResource';
 import { ROOM_RESOURCE_DIR } from '../config/upload';
 import { renderSessionKitDoc } from './sessionKitDocService';
-import { ensureBookingForSession } from './sessionRecordingService';
+// resolveSessionRoomId is shared with the recording path — recordings and
+// notes must land in the SAME room as each other, and both had the same bug.
+import { ensureBookingForSession, resolveSessionRoomId } from './sessionRecordingService';
 import { emitRoomEvent } from './communityRooms/roomOutboxService';
 import { ROOM_EVENTS } from './communityRooms/roomEvents';
 import { log } from './communityRooms/roomShared';
@@ -57,8 +59,9 @@ export async function attachClassNotesForSession(
   opts: { force?: boolean } = {},
 ): Promise<ClassNotesResult> {
   const booking = await ensureBookingForSession(session);
+  const roomId = await resolveSessionRoomId(session, booking.room_id);
 
-  const existing = await findExisting(booking.room_id, session.id);
+  const existing = await findExisting(roomId, session.id);
   if (existing && !opts.force) return { status: 'already_present', resourceId: existing.id };
 
   const html = await renderSessionKitDoc(session.id, 'standalone');
@@ -86,7 +89,7 @@ export async function attachClassNotesForSession(
     }
 
     const resource = await RoomResource.create({
-      room_id: booking.room_id,
+      room_id: roomId,
       booking_id: booking.id,
       resource_type: 'file',
       title,
@@ -105,7 +108,7 @@ export async function attachClassNotesForSession(
         eventType: ROOM_EVENTS.ArtifactShared,
         aggregateType: 'resource',
         aggregateId: resource.id,
-        payload: { room_id: booking.room_id, booking_id: booking.id, resource_type: 'file', title, source: CLASS_NOTES_SOURCE },
+        payload: { room_id: roomId, booking_id: booking.id, resource_type: 'file', title, source: CLASS_NOTES_SOURCE },
       });
     } catch (err: any) {
       log('warn', 'class_notes_event_failed', { session_id: session.id, message: err?.message });
