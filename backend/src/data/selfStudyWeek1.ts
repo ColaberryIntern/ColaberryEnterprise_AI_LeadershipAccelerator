@@ -67,6 +67,10 @@ export const SELF_STUDY_WEEK1 = {
 </ol>
 <p>Claude Code now runs beside your files. When it edits one, the file updates in the editor in front of you.</p>
 <div class="warn"><p><b>Prefer to watch someone do it?</b> Anthropic's free <a href="https://anthropic.skilljar.com/claude-code-101/469790" target="_blank" rel="noopener noreferrer">Claude Code 101</a> course covers installation and first use on video, and this week's Learn section has a Claude Code 101 card that points at the same course. The official written guide lives in the <a href="https://docs.claude.com/en/docs/claude-code/overview" target="_blank" rel="noopener noreferrer">Claude Code documentation</a>.</p></div>
+<h3>Video walkthroughs</h3>
+<p>If you would rather watch someone set this up before you try it, these cover the same two things this Part does. They are outside resources, not ours, so treat the written steps above as the source of truth if anything differs.</p>
+<div class="prereq"><div><b>Installing Claude Code</b><a href="https://www.youtube.com/watch?v=cH4WmWPEKC8" target="_blank" rel="noopener noreferrer">The Ultimate Beginner Guide to Claude Code</a> walks through download, install and first run. On Windows, <a href="https://www.youtube.com/watch?v=CaHTlfHWd8U" target="_blank" rel="noopener noreferrer">this Windows 11 setup guide</a> follows the same path with Windows-specific steps.</div></div>
+<div class="prereq"><div><b>Claude Code inside VS Code</b><a href="https://www.youtube.com/watch?v=ph5DRCX_g6s" target="_blank" rel="noopener noreferrer">Using Claude Code in VS Code in 3 minutes</a> is the quickest version. <a href="https://www.youtube.com/watch?v=e7EK6rsWiEQ" target="_blank" rel="noopener noreferrer">This longer installation and usage guide</a> goes slower if you want more detail.</div></div>
 </section>
 <section id="p1" data-nav="Agentic Loop">
 <h2>Part 1 - Understanding the Agentic Loop</h2>
@@ -107,6 +111,11 @@ cd my-first-project</pre>
 <p>Skipping straight to "make the change" is where things go wrong. A moment of exploring and planning first leads to smaller, safer steps you can actually trust.</p>
 <figure class="figure" data-diagram="flow" data-items="Explore|Plan|Code|Commit"><figcaption>A dependable loop for getting real work done well.</figcaption></figure>
 <div class="stats"><div class="stat"><b>4</b><span>steps, repeated</span></div><div class="stat"><b>1</b><span>small change at a time</span></div></div>
+<h3>Watch the loop being run</h3>
+<p>Seeing someone work this rhythm on a real change makes it click faster than reading about it. These are outside resources, not ours.</p>
+<div class="prereq"><div><b>The workflow itself</b><a href="https://www.youtube.com/watch?v=AADd9h6FpP8" target="_blank" rel="noopener noreferrer">The explore, plan, code, commit workflow</a> from the Claude Code 101 course - the same lesson the Learn section links, on video.</div></div>
+<div class="prereq"><div><b>A longer worked session</b><a href="https://www.youtube.com/watch?v=YNB9azeiypw" target="_blank" rel="noopener noreferrer">A 25-minute Claude Code workshop</a>, and <a href="https://www.youtube.com/watch?v=gv0WHhKelSE" target="_blank" rel="noopener noreferrer">Claude Code best practices</a> from Anthropic's Code w/ Claude talk.</div></div>
+<div class="warn"><p><b>Then go and do it.</b> Watching is not the same as running it. The <b>Workshop - Explore, Plan, Code, Commit</b> card in this week's practice section walks you through the whole loop on your own project, including the parts these videos raise but do not demonstrate: writing success criteria, giving Claude Code the right tools, building a real test suite, and setting up a code-review agent.</p></div>
 </section>
 <section id="p4" data-nav="CLAUDE.md">
 <h2>Part 4 - Establishing CLAUDE.md</h2>
