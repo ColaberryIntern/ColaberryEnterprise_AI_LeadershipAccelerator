@@ -1,14 +1,23 @@
 /**
- * generatedContentRetention — the shared "use it for a month, then discard, then
+ * generatedContentRetention — the shared "use it for a while, then discard, then
  * make it reusable again" rule for every LLM-generated content card.
  *
  * The content strategy (keeps LLM cost + feed footprint bounded across ALL
  * generators, without special-casing any of them):
- *   1. Each generator materializes at most ~1 fresh card/day (grab one, add it to
- *      the library) — enforced per-generator (AI News: AI_NEWS_MAX_PER_RUN=1).
- *   2. A generated card lives for RETENTION_DAYS (default 30), then is archived
- *      OUT of the feed here. getFeed only returns visibility='published'
- *      (timelineService), so flipping visibility -> 'archived' is the discard.
+ *   1. Each generator materializes at most ~1-2 fresh card/day (grab one, add it
+ *      to the library) — enforced per-generator (AI News: AI_NEWS_MAX_PER_RUN=3).
+ *   2. A generated card lives for RETENTION_DAYS (default 18, was 30 before the
+ *      2026-08-10 content-supply fix), then is archived OUT of the feed here.
+ *      getFeed only returns visibility='published' (timelineService), so
+ *      flipping visibility -> 'archived' is the discard. The 30 -> 18 change:
+ *      even with the reset mechanism below working correctly, a small FIXED
+ *      library (e.g. ~38-80 items after the 2026-08-10 catalog-growth pass) at
+ *      2/day still takes ~19-40 days to first exhaust — under a 30-day window
+ *      that leaves an unavoidable gap where the type goes completely silent
+ *      between "list exhausted" and "oldest card finally ages out." 18 days
+ *      closes that gap for every curated list without materially affecting the
+ *      deep-pool live-feed sources (hundreds of never-shown items; they won't
+ *      approach exhaustion for months regardless of retention length).
  *   3. Archiving the card also resets the source `intel_items.card_id` (the
  *      row's materialization pointer, see intelPipeline.ts materializeIntelCard)
  *      back to NULL. This is what makes the library a rotation instead of a
@@ -35,7 +44,7 @@
  */
 import { sequelize } from '../../config/database';
 
-export const RETENTION_DAYS = Number(process.env.GENERATED_CONTENT_RETENTION_DAYS || 30);
+export const RETENTION_DAYS = Number(process.env.GENERATED_CONTENT_RETENTION_DAYS || 18);
 
 /**
  * Archive generated (`*_pipeline`) content cards older than `days` out of the
