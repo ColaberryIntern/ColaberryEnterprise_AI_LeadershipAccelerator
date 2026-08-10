@@ -305,6 +305,24 @@ function scorePreview(kind: AssessmentKind, answers: Record<number, number>): As
 }
 
 const asCss = `
+/* Self-contained palette.
+ *
+ * These variables live on .rt in runtimeKit.tsx. AssessmentPanel is mounted in
+ * TWO places: inside RuntimeWorkspace (which IS .rt, so they resolved) and
+ * inside CardDetailBody's timeline-card modal (which is NOT), where every
+ * var() below silently resolved to nothing. The visible symptom was reported by
+ * Swati: picking an answer in the Week 1 Evaluation did not highlight it —
+ * .as-opt.chosen sets border-color:var(--berry);background:var(--berry-soft),
+ * and with both undefined the selected option looked identical to the others.
+ * Borders, text colour and the letter badge were unstyled for the same reason.
+ *
+ * Declaring them on .as itself makes the panel render correctly wherever it is
+ * mounted, and a .rt ancestor still overrides nothing because these are set on
+ * the element that uses them. Values mirror .rt — keep them in sync. */
+.as{--ink:#16191C;--paper:#FFFFFF;--mist:#F7F8FA;--sunken:#EFF2F5;--line:#E6EAEE;--line-soft:#EEF1F4;
+  --berry:#367895;--berry-deep:#2E6A86;--berry-soft:#E6F0F3;--cherry:#FB2832;--cherry-deep:#C20E1E;--cherry-soft:#FDE7E8;
+  --leaf:#5BA63C;--leaf-deep:#3C7A26;--leaf-soft:#E9F5E4;--amber:#E8920C;--amber-soft:#FBEFD9;--muted:#6A7680;--muted2:#95A0A8;
+  --mono:'Roboto Mono',ui-monospace,Consolas,monospace}
 .as{padding:2px 2px 8px}
 .as-load{padding:30px 0;color:var(--muted);text-align:center}
 .as-journey{display:flex;align-items:center;gap:8px;margin:2px 0 16px;flex-wrap:wrap}
@@ -333,7 +351,11 @@ const asCss = `
 .as-opt{display:flex;align-items:center;gap:12px;text-align:left;padding:13px 15px;border:1.5px solid var(--line);background:var(--paper);border-radius:11px;cursor:pointer;font-size:14.5px;color:var(--ink);transition:all .12s}
 .as-opt:hover:not(:disabled){border-color:var(--berry)}
 .as-opt:disabled{cursor:default}
-.as-opt.chosen{border-color:var(--berry);background:var(--berry-soft)}
+/* Selection must be unmistakable — this is the state a student relies on to
+   know their answer registered. Border tint alone reads as "nothing happened"
+   on a light background, so the letter badge fills too. */
+.as-opt.chosen{border-color:var(--berry);background:var(--berry-soft);box-shadow:inset 0 0 0 1px var(--berry)}
+.as-opt.chosen .as-optk{background:var(--berry);color:#fff}
 .as-opt.correct{border-color:var(--leaf);background:var(--leaf-soft)}
 .as-opt.wrong{border-color:var(--cherry);background:var(--cherry-soft)}
 .as-optk{width:26px;height:26px;border-radius:7px;background:var(--sunken);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:800;font-size:12.5px;color:var(--muted);flex:none}
