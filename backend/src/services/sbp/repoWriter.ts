@@ -151,8 +151,32 @@ export function parseManifestHashes(manifestContent: string | null | undefined):
  * Which files actually differ from what the manifest says is already committed.
  * PURE — the heart of the idempotency guarantee, so it is testable without a network.
  */
+export const MANIFEST_PATH = '.colaberry/manifest.json';
+
+/**
+ * Which files actually differ from what the manifest says is already committed.
+ * PURE — the heart of the idempotency guarantee, so it is testable without a network.
+ *
+ * The manifest is EXCLUDED from the comparison and only rides along when
+ * something else changed. Two reasons, both found by the live check against real
+ * GitHub after every mocked test had passed:
+ *   1. A manifest cannot contain its own hash, so it never matches and always
+ *      looks modified.
+ *   2. Its `generated_at` is a fresh timestamp on every render, so its bytes
+ *      genuinely differ each time even when nothing it describes has.
+ * Left alone, that meant every sync committed the manifest — churning the
+ * student's history with commits that change nothing, which is precisely the
+ * guarantee this function exists to provide.
+ */
 export function changedFiles(files: RenderedFile[], existing: Record<string, string>): RenderedFile[] {
-  return files.filter((f) => existing[f.path] !== sha256(f.content));
+  const substantive = files.filter(
+    (f) => f.path !== MANIFEST_PATH && existing[f.path] !== sha256(f.content),
+  );
+  if (substantive.length === 0) return [];
+
+  // Something real changed, so the manifest must be refreshed alongside it.
+  const manifest = files.find((f) => f.path === MANIFEST_PATH);
+  return manifest ? [...substantive, manifest] : substantive;
 }
 
 /**

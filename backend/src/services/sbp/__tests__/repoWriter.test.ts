@@ -201,3 +201,53 @@ describe('failure behaviour', () => {
     }
   });
 });
+
+// ── the manifest must not make every sync look dirty ────────────────────────
+// Regression from the T16 live check: every mocked test passed while the real
+// run committed on the second write. The manifest cannot hold its own hash, and
+// its generated_at is fresh each render, so it always looked modified.
+describe('the manifest never triggers a commit on its own', () => {
+  const withManifest = (fs: RenderedFile[], generatedAt: string): RenderedFile[] => [
+    ...fs,
+    {
+      path: '.colaberry/manifest.json',
+      content: JSON.stringify({
+        generated_at: generatedAt,
+        files: fs.map((f) => ({ path: f.path, sha256: sha(f.content) })),
+      }),
+    },
+  ];
+
+  it('makes NO commit when only the manifest timestamp moved', async () => {
+    const before = withManifest(files, '2026-08-10T00:00:00Z');
+    const after = withManifest(files, '2026-08-10T09:99:99Z');   // re-rendered later
+    const manifestContent = before.find((f) => f.path === '.colaberry/manifest.json')!.content;
+
+    const { impl, mock } = githubStub();
+    const result = await writeDocsToRepo(TARGET, after, manifestContent, { fetchImpl: impl });
+
+    expect(result.committed).toBe(false);
+    expect(mock).not.toHaveBeenCalled();
+  });
+
+  it('does carry the manifest along when something real changed', async () => {
+    const before = withManifest(files, '2026-08-10T00:00:00Z');
+    const edited = [...files.slice(0, 2), { ...files[2], content: '# CLAUDE.md\nCHANGED.' }];
+    const after = withManifest(edited, '2026-08-10T09:00:00Z');
+    const manifestContent = before.find((f) => f.path === '.colaberry/manifest.json')!.content;
+
+    const { impl } = githubStub();
+    const result = await writeDocsToRepo(TARGET, after, manifestContent, { fetchImpl: impl });
+
+    expect(result.committed).toBe(true);
+    expect(result.changedPaths).toContain('CLAUDE.md');
+    // The manifest rides along so it stays truthful about what is committed.
+    expect(result.changedPaths).toContain('.colaberry/manifest.json');
+  });
+
+  it('changedFiles returns nothing when only the manifest differs', () => {
+    const existing = Object.fromEntries(files.map((f) => [f.path, sha(f.content)]));
+    const set = withManifest(files, 'any-time');
+    expect(changedFiles(set, existing)).toEqual([]);
+  });
+});

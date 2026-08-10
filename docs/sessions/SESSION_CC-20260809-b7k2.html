@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 8:45 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">14 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 8:59 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">15 changes</span></div>
   </header>
   <main>
     
@@ -267,6 +267,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**Frontend `tsc --noEmit`: 0 errors, exit 0** — the authoritative CI gate, run with TypeScript 5.7.3 (the junctioned root `node_modules` is 4.9.5 and misparses zod v4). Confirmed the drawer already exposes Copy Prompt, Mark Done and Skip, so no action was lost in the move — only relocated behind a read. The Open button carries an `aria-label` naming the task, since an icon-plus-&quot;Open&quot; alone is ambiguous to a screen reader when repeated down a list of cards.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">15 of 17 tasks. Nothing deployed, nothing merged to main. **T15 (prod migration + handoff) and T16 (live end-to-end) are deliberately held for Ali** — T15 produces a migration against the production database and T16 creates a real repo under the `ColaberryIntern` org and runs the pipeline end to end against it. Neither is blocked; both are the kind of thing worth doing with the owner present. T11 (wizard step 4) is deferred with them, since a mandatory provisioning step is only truthful once provisioning is live.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">15</span>
+          <h2>**Proved the prompt-path defect is closed against a real clone, and caught an idempotency bug that every mocked test had passed**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/scripts/sbpLiveEndToEnd.ts` — the one check in this workstream that does NOT mock GitHub, because the defect it exists to close is precisely &quot;the prompt names files that are not there&quot;, and only a real clone can prove they are. Chain: plan → render → commit to a real repo → assemble prompt → clone → open every path the prompt cites. Also a real fix to `repoWriter.changedFiles`.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**LIVE CHECK PASSED** against real GitHub (repo `ColaberryIntern/sbp-live-check-msnapysj`, commit `958ff05`). 19 files rendered and committed in one commit; **all four prompt-cited paths resolve in a real clone** — `docs/REQUIREMENTS.md` (3,741 bytes), `docs/STORIES.md` (2,487), `docs/stories/STORY-001.md` (1,562), `CLAUDE.md` (2,109); the story file carries unticked acceptance boxes and quotes its requirement verbatim; `git ls-files` confirms nothing was written outside the allowlist. **This is the original defect, closed and proven end to end rather than asserted.**</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**The live run found a genuine bug that all 22 mocked repoWriter tests had passed.** The first run reported `changed: 1, skipped: 18` on the SECOND write — it committed again. Cause: `.colaberry/manifest.json` cannot contain its own hash, and its `generated_at` is a fresh timestamp on every render, so it always looked modified. Left alone, every sync would commit the manifest and churn a student&#39;s git history with commits that change nothing — exactly the guarantee the code claims to provide. Fixed by excluding the manifest from the comparison and only carrying it along when something substantive changed; 3 regression tests added (25 total in that suite). The mocks missed it because they compared a manifest I had handed them rather than one the renderer produced — a fair reminder that a mock encodes the author&#39;s assumptions, and the live check is where those get tested. Two housekeeping items for Ali: **the scratch repos `sbp-live-check-msnakjkt` and `sbp-live-check-msnapysj` could not be auto-deleted** (the `gh` token lacks `delete_repo` scope) and should be removed by hand; and **`GITHUB_TOKEN` is absent from the production `.env`**, so repo provisioning would return 503 there today — it needs setting before students use this. 16 of 17 tasks; only T15 (prod migration + handoff) remains.</span></div>
           
         </div>
       </article>
