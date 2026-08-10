@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 11:09 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">18 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 12:14 PM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">19 changes</span></div>
   </header>
   <main>
     
@@ -327,6 +327,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` with TypeScript 5.7.3 — **1 error, the known local-only missing `@anthropic-ai/sdk`; zero in `GitHubConnection.ts`**. Full suite still green at 218/218 after merging 17 commits from main.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">**Honest account of why this got through.** I ran the backend typecheck after T1, then never again after touching this model in T7/T8 — and Jest passed throughout because the tests mock `../../models` entirely, so nothing ever compiled the real model against Sequelize&#39;s types. 218 green tests and a clean *frontend* typecheck sat on top of a backend file that would not build. CI caught it on the merge. The rule this argues for: run the backend typecheck after **any** model change, not once per session, because mocked-model tests structurally cannot see this class of error — the same shape as the DROP INDEX and the manifest bug earlier in this run.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">19</span>
+          <h2>**Closed a gap I should have caught earlier: seven tested services existed and NO route called any of them**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/sbp/sbpOrchestrator.ts` and `backend/src/routes/sbpRoutes.ts`, mounted in `participantRoutes.ts`. A grep for callers of `decomposeBuild`/`savePlanDraft`/`renderDocs`/`writeDocsToRepo`/`buildStoryPrompt` returned only the services themselves, their tests, and two scripts — so deploying the merged work would have changed **nothing** a student sees. Steps 1-5 were scoped as &quot;make the pieces correct&quot; and I followed that literally without noticing nothing connected them. The orchestrator runs the chain — intake → generate → gate → persist(draft) → [review] → publish → render → commit — and four participant-scoped endpoints expose it: `POST /api/portal/sbp/builds` (202, generation continues on the bounded queue), `GET .../builds/:projectId` (poll; returns a summary rather than a 200KB plan per tick), `POST .../publish`, and `GET .../stories/:storyId/prompt`. Enrollment comes from the verified JWT and never the body; a foreign project returns 404 rather than 403 so it cannot be probed. Flag-gated on `projectApiEnabled`, matching `projectsPortalRoutes`, so it ships dark.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**205/205 tests across 10 suites** (`JEST_EXIT=0`) including 18 new orchestrator tests; backend `tsc --noEmit` clean — **zero errors in `sbpRoutes.ts`, `sbpOrchestrator.ts` or `participantRoutes.ts`** (the single reported error is the known local-only missing `@anthropic-ai/sdk`). The two invariants are tested directly: a **gate-failed plan is refused with 409 and neither `publishPlan` nor `writeDocsToRepo` is called**, and publish **promotes the reviewed draft with `decomposeBuild` asserted never invoked** — the pilot regenerated between review and commit, which is how a reviewed 6/3/1/1/1 plan shipped as 8/1/1/1/1. Also covered: intake persisted *before* generation so a failure is replayable, a build already generating is not started twice, a generation failure records `failed` without throwing to the caller, and no-repo publishes to `awaiting_repo` rather than blocking the student on repo setup.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">The prompt endpoint **reads `.colaberry/manifest.json` from the real repo** before assembling, so FR-032&#39;s guard checks against what GitHub actually contains rather than what we believe we wrote — and an unreadable manifest degrades to *no paths at all*, never to &quot;assume they exist&quot;, since assuming is the original bug. One deliberate `TODO(step 6)` marks where the existing manifest should be passed to `writeDocsToRepo` for conflict detection; left visible rather than silent. **Still not deployed, and the frontend still calls `generateSkeleton`** — swapping the wizard onto these endpoints is the next piece.</span></div>
           
         </div>
       </article>
