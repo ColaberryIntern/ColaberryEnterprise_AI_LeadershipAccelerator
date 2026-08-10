@@ -156,6 +156,7 @@ router.post('/api/portal/sbp/builds/:projectId/publish', requireParticipant, asy
 
     const { publishBuild } = await import('../services/sbp/sbpOrchestrator');
     const result = await publishBuild(projectId, {
+      enrollmentId: eid(req),
       expectedSha: body.expected_sha256,
       repo: await repoFor(projectId),
     });
