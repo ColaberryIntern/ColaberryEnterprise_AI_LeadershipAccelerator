@@ -10,7 +10,7 @@
     "db:migrate": "psql $DATABASE_URL -f app/db/schema.sql",
     "seed": "node seeds/index.js",
     "lint": "echo 'TODO: lint' && exit 0",
-    "test": "node app/services/__tests__/summaryGenerationAgent.test.js && node app/services/__tests__/coordinatorAgent.test.js && node app/services/__tests__/summaryComposer.test.js && node app/services/__tests__/trustGovernanceAgent.test.js && node app/services/__tests__/jurisdictionFixtures.test.js"
+    "test": "node app/services/__tests__/summaryGenerationAgent.test.js && node app/services/__tests__/coordinatorAgent.test.js && node app/services/__tests__/summaryComposer.test.js && node app/services/__tests__/trustGovernanceAgent.test.js && node app/services/__tests__/jurisdictionFixtures.test.js && node app/services/__tests__/provenanceAgent.test.js"
   },
   "dependencies": {
     "express": "^4.18.2",
