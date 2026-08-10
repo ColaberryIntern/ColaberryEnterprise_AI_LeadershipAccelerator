@@ -1,0 +1,199 @@
+/* ============================================================================
+   opportunityLabV2.css -- AI Opportunity Lab.
+   Design-system tokens only; cbv2-* namespace only.
+
+   Same coupling recorded in proofV2.css applies: .cbv2-lede / .cbv2-wrap--narrow
+   are defined in homeV2.css and resolve only because App.tsx imports every V2
+   page statically.
+   ========================================================================== */
+
+/* ------------------------------------------------------------- progress ---- */
+
+.cbv2-steps {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-8);
+  padding: 0;
+}
+.cbv2-steps__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: var(--border-1) solid var(--border-subtle);
+  color: var(--text-subtle);
+  font-size: var(--fs-caption);
+}
+.cbv2-steps__n {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--surface-sunken);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+}
+/* Current and completed states carry a text/shape difference, not colour alone. */
+.cbv2-steps__item.is-current {
+  border-color: var(--text-strong);
+  color: var(--text-strong);
+  font-weight: 700;
+}
+.cbv2-steps__item.is-current .cbv2-steps__n {
+  background: var(--text-strong);
+  color: var(--surface-card);
+}
+.cbv2-steps__item.is-done .cbv2-steps__n::after { content: none; }
+.cbv2-steps__item.is-done .cbv2-steps__n {
+  background: var(--color-leaf, var(--text-strong));
+  color: var(--surface-card);
+}
+
+@media (max-width: 620px) {
+  .cbv2-steps__label { display: none; }
+}
+
+/* ----------------------------------------------------------------- form ---- */
+
+.cbv2-lab {
+  background: var(--surface-card);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-7);
+}
+.cbv2-lab__q {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  color: var(--text-strong);
+  line-height: 1.25;
+}
+/* The heading receives focus on step change; it must show that it has it. */
+.cbv2-lab__q:focus-visible {
+  outline: var(--border-3) solid var(--focus-ring, currentColor);
+  outline-offset: 4px;
+}
+.cbv2-lab__help {
+  margin: var(--space-2) 0 var(--space-6);
+  color: var(--text-muted);
+}
+.cbv2-lab__fieldset { border: 0; margin: 0; padding: 0; }
+
+.cbv2-choices { display: grid; gap: var(--space-3); }
+
+.cbv2-choice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-1) var(--space-3);
+  align-items: start;
+  padding: var(--space-4);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  min-height: var(--target-min, 44px);
+}
+.cbv2-choice:hover { border-color: var(--text-subtle); }
+.cbv2-choice input { margin-top: 3px; }
+.cbv2-choice__label { color: var(--text-strong); font-weight: 600; }
+.cbv2-choice__hint {
+  grid-column: 2;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+}
+/* Selection is marked by weight and border as well as colour. */
+.cbv2-choice.is-selected {
+  border-color: var(--text-strong);
+  border-width: var(--border-2, 2px);
+  background: var(--surface-sunken);
+}
+
+/* --------------------------------------------------------------- fields ---- */
+
+.cbv2-fields { display: grid; gap: var(--space-5); }
+.cbv2-fields__row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+@media (max-width: 620px) {
+  .cbv2-fields__row { grid-template-columns: minmax(0, 1fr); }
+}
+
+.cbv2-field { display: grid; gap: var(--space-2); }
+.cbv2-field__label { font-weight: 600; color: var(--text-strong); font-size: var(--fs-body-sm); }
+.cbv2-field__input {
+  width: 100%;
+  min-height: var(--target-min, 44px);
+  padding: var(--space-3);
+  border: var(--border-1) solid var(--border-default);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card);
+  color: var(--text-strong);
+  font: inherit;
+}
+.cbv2-field__input[aria-invalid='true'] { border-color: var(--color-cherry, currentColor); }
+
+.cbv2-consent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  color: var(--text-muted);
+  font-size: var(--fs-body-sm);
+  line-height: 1.6;
+}
+.cbv2-consent input { margin-top: 3px; min-width: 18px; min-height: 18px; }
+
+/* Errors are announced and prefixed, never signalled by colour alone. */
+.cbv2-err {
+  margin: var(--space-2) 0 0;
+  color: var(--color-cherry, currentColor);
+  font-size: var(--fs-body-sm);
+  font-weight: 600;
+}
+.cbv2-err::before { content: '! '; }
+.cbv2-err--server {
+  margin-top: var(--space-5);
+  padding: var(--space-3) var(--space-4);
+  border-left: var(--border-3) solid var(--color-cherry, currentColor);
+  background: var(--surface-sunken);
+}
+
+.cbv2-lab__nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-7);
+}
+
+/* ------------------------------------------------------------- received ---- */
+
+.cbv2-recap {
+  margin-top: var(--space-6);
+  border: var(--border-1) solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-sunken);
+  padding: var(--space-5);
+}
+.cbv2-recap__title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fs-body-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+}
+.cbv2-recap__body {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: var(--fs-body-sm);
+  line-height: 1.6;
+  color: var(--text-strong);
+}
