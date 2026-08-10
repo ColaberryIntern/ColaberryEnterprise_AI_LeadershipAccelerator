@@ -172,6 +172,42 @@ CREATE TABLE IF NOT EXISTS governance_evaluations (
   evaluated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- STORY-018: data export with an approval gate. The actual export payload is
+-- generated ONLY on approval, never before -- same gate pattern as STORY-011
+-- (nothing is exported until a human approves the request). scope is always
+-- 'published_summaries' in this build: the export can only ever contain the
+-- same fields already safe to show a resident publicly (reuses
+-- coordinatorAgent.listPublishedSummaries(), which never selects admin-only
+-- columns like reviewed_by/review_notes) -- deliberately not a raw table dump.
+CREATE TABLE IF NOT EXISTS export_requests (
+  id             SERIAL PRIMARY KEY,
+  format         VARCHAR(10) NOT NULL, -- 'json' | 'csv' | 'xml' | 'odbc'
+  scope          VARCHAR(30) NOT NULL DEFAULT 'published_summaries',
+  requested_by   TEXT NOT NULL,
+  status         VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending | approved | rejected | exported
+  reviewed_by    TEXT,
+  reviewed_at    TIMESTAMPTZ,
+  review_notes   TEXT,
+  export_payload TEXT,
+  row_count      INTEGER,
+  requested_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_export_requests_status ON export_requests(status);
+
+-- STORY-018 / STD-001 (RFP compliance matrix): "ODBC" is a database
+-- connectivity protocol, not a file format -- there is no such thing as
+-- generating an "ODBC file" the way there is a JSON/CSV/XML file. What
+-- STD-001 actually asked for was "direct database access, or access to a
+-- reporting database (ODBC-compatible)". This read-only view is that: any
+-- standard PostgreSQL ODBC driver can connect and query it directly. It is
+-- the real deliverable for the 'odbc' export format, not a generated file.
+CREATE OR REPLACE VIEW published_summaries_report AS
+  SELECT s.subject_id, o.name, o.office, o.jurisdiction, s.summary_text,
+         s.issues_covered, s.coverage_pct, s.published_at
+  FROM summaries s
+  JOIN officeholders_candidates o ON o.id = s.subject_id
+  WHERE s.status = 'published';
+
 CREATE INDEX IF NOT EXISTS idx_jurisdictions_zip ON jurisdictions(zip_code);
 CREATE INDEX IF NOT EXISTS idx_user_preferences_session ON user_preferences(session_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_session        ON audit_log(session_id);
