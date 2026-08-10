@@ -42,6 +42,7 @@ import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureSbpSchema } from './db/ensureSbpSchema';
+import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
@@ -2307,6 +2308,7 @@ async function start(): Promise<void> {
   // nullable ticket columns (idempotent DDL, shadow mode).
   await ensureWorkLedgerSchema();
   await ensureSbpSchema();
+  await ensureWorkspaceRepoSchema();
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();

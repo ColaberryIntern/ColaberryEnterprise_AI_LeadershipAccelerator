@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 3:49 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">9 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 6:52 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">10 changes</span></div>
   </header>
   <main>
     
@@ -192,6 +192,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**130/130 tests pass** across six suites (`JEST_EXIT=0`), up from 98. Rendering is graded against the real pilot plan, not a toy: one story file per story asserted against the actual 12, every requirement&#39;s statement present verbatim, the traceability matrix carrying a row per requirement, and a CONSTRAINT correctly shown as `_(constraint — no story)_` rather than counted as a coverage gap. **One test failed first and caught a real bug**: `.colaberry/plan.json` serialized the plan *as handed in*, so the same logical plan with reversed arrays produced a different hash — which would make `repoWriter` commit a file whose content had not changed, breaking the &quot;unchanged ⇒ no commit&quot; guarantee (FR-026) and churning the student&#39;s git history. Fixed by serializing a canonically ordered plan; the order-independence test now passes. Determinism is covered four ways: byte-identical across renders, order-independent, timestamp supplied rather than sampled, and the input plan proven unmutated.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">7 of 17 tasks. Nothing deployed, nothing merged to main. Next is the GitHub half — T6 (re-key `github_connections` to projects) and T7 (re-key the service with ownership checks), which unblock T12 (repo writer) and then T13, the prompt-path guard that makes the defect Ali found structurally impossible.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">10</span>
+          <h2>**Dropped the UNIQUE that structurally forbade one-repo-per-project, verified against real Postgres, with the assertion proven to discriminate**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/db/ensureWorkspaceRepoSchema.ts`, wired into `server.ts` boot. Implements Ali&#39;s 2026-08-09 decision (SBP-GH-v1 §4.1, FR-037): one repo per project, not one per student. The blocker was in the schema — `github_connections.enrollment_id` was UNIQUE, which structurally forbids a student owning a second project&#39;s repo. That uniqueness drops to a plain index (still needed to scope access by owner) and a partial `UNIQUE (project_id) WHERE project_id IS NOT NULL` replaces it; partial because existing rows carry a NULL `project_id` and several NULLs must not collide. **Checked the catalog before writing the migration this time**: `github_connections_enrollment_id_key` is a CONSTRAINT (`pg_constraint.contype=&#39;u&#39;`) backed by a same-named index in *both* databases, so `DROP INDEX` alone would have failed — precisely the mistake that shipped green this morning inside a warn-only loop and fixed nothing. The migration issues `ALTER TABLE … DROP CONSTRAINT IF EXISTS` first (which removes the backing index too) and keeps the bare `DROP INDEX IF EXISTS` for any database where it exists without a constraint.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Applied to real `accelerator_dev1` Postgres and confirmed by catalog query.** Post-migration dev reads `project_col=1 old_constraint=0 new_unique=1`; un-migrated prod reads `project_col=0 old_constraint=1 new_unique=0`, i.e. the assertion would report all three problems there — **proving it is not vacuous**. All 9 dev rows intact (dropping a uniqueness constraint only widens what is permitted). Re-running the identical SQL is a proven no-op. `assertWorkspaceRepoSchema()` is exported separately so the post-condition is testable rather than trusted, and emits a structured `SchemaInvariantViolation` naming the student-facing impact and the remedial SQL.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">8 of 17 tasks. **Prod deliberately NOT migrated** — it ships in T15 with its rollback, for approval; the boot path is safe on prod meanwhile since every statement is `IF NOT EXISTS`/`IF EXISTS` and the assertion only logs. Migration remains clean: prod holds 11 `github_connections` rows and zero are real platform-provisioned workspace repos, so no `project_id` needs backfilling. Next is T7 — re-key `studentWorkspaceService` to take `projectId` and verify ownership through the enrollment before any GitHub call.</span></div>
           
         </div>
       </article>
