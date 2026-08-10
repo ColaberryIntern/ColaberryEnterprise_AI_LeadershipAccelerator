@@ -9,7 +9,10 @@ jest.mock('../sessionRecordingService', () => ({ ensureBookingForSession: (...a:
 
 const mockEmit = jest.fn();
 jest.mock('../communityRooms/roomOutboxService', () => ({ emitRoomEvent: (...a: unknown[]) => mockEmit(...a) }));
-jest.mock('../communityRooms/roomEvents', () => ({ ROOM_EVENTS: { RESOURCE_ADDED: 'resource.added' } }));
+// roomEvents is deliberately NOT mocked. Mocking it hid a real bug: the service
+// referenced ROOM_EVENTS.RESOURCE_ADDED, which does not exist, and the mock
+// invented it so local tsc and these tests both passed. CI caught it. Use the
+// real constants so an invalid event name fails here first.
 jest.mock('../communityRooms/roomShared', () => ({ log: jest.fn() }));
 jest.mock('../../config/upload', () => ({ ROOM_RESOURCE_DIR: '/fake/room-resources' }));
 
@@ -118,6 +121,20 @@ describe('attachClassNotesForSession', () => {
     const result = await attachClassNotesForSession(session);
 
     expect(result).toEqual({ status: 'attached', resourceId: 'notes-2' });
+  });
+
+  it('emits a REAL room event type (guards the bug a mocked roomEvents hid)', async () => {
+    mockFindOne.mockResolvedValue(null);
+    mockRenderKitDoc.mockResolvedValue('<html>deck</html>');
+    mockCreate.mockResolvedValue({ id: 'notes-3' });
+
+    await attachClassNotesForSession(session);
+
+    const { ROOM_EVENTS } = jest.requireActual('../communityRooms/roomEvents');
+    const emitted = mockEmit.mock.calls[0][0];
+    expect(Object.values(ROOM_EVENTS)).toContain(emitted.eventType);
+    expect(emitted.eventType).toBe(ROOM_EVENTS.ArtifactShared);
+    expect(emitted.aggregateId).toBe('notes-3');
   });
 });
 

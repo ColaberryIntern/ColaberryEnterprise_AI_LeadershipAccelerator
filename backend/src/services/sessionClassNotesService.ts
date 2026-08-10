@@ -97,14 +97,16 @@ export async function attachClassNotesForSession(
     } as any);
 
     // Best-effort, exactly like the recording path — a feed hiccup must never
-    // undo a snapshot that is already on disk and in the table.
+    // undo a snapshot that is already on disk and in the table. Shape mirrors
+    // attachRecording's emit; ArtifactShared is the resource-level event
+    // (RecordingAttached is video-specific).
     try {
       await emitRoomEvent({
-        roomId: booking.room_id,
-        type: ROOM_EVENTS.RESOURCE_ADDED,
+        eventType: ROOM_EVENTS.ArtifactShared,
+        aggregateType: 'resource',
         aggregateId: resource.id,
-        payload: { resource_type: 'file', title },
-      } as any);
+        payload: { room_id: booking.room_id, booking_id: booking.id, resource_type: 'file', title, source: CLASS_NOTES_SOURCE },
+      });
     } catch (err: any) {
       log('warn', 'class_notes_event_failed', { session_id: session.id, message: err?.message });
     }
