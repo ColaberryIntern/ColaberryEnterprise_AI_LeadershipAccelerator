@@ -293,6 +293,46 @@ describe('buildKitSpec — KitConfig wiring', () => {
     expect(withPrompts.some((s) => !!s.prompt!.expectedResult)).toBe(true);
   });
 
+  it('Week 3 Build Day is hand-authored: diagrams everywhere, current API, no superseded model ids', async () => {
+    const spec = buildKitSpec(await inputFor({
+      id: 's-wk3-thu', session_number: 7, title: 'Week 3 · Build Day — Claude API + Workflow Assistant',
+      session_date: '2026-08-13', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    }));
+    expect(spec.meta.dayKind).toBe('build');
+    const teach = spec.slides.filter((s) => s.kind === 'teach');
+    expect(teach.length).toBeGreaterThanOrEqual(12);
+    expect(teach.every((s) => !!s.diagram && s.diagram.includes('flowchart'))).toBe(true);
+
+    const json = JSON.stringify(spec.slides);
+    // The generated content this replaced carried a superseded model id.
+    expect(json).not.toContain('claude-opus-4-8');
+    expect(json).toContain('claude-opus-5');
+    // Structured output must use the current parameter. `output_format` may
+    // still appear, but ONLY inside an explicit "not the deprecated" warning.
+    expect(json).toContain('output_config');
+    const badUses = (json.match(/output_format/g) || []).length;
+    const warnings = (json.match(/deprecated[^"]{0,40}output_format/g) || []).length;
+    expect(badUses).toBe(warnings);
+
+    // Build Day teaches direct-then-review too.
+    expect(spec.slides.some((s) => s.prompt?.kind === 'review')).toBe(true);
+  });
+
+  it('failure-segment story beats render even when the segment has deep teach slides', async () => {
+    // Regression: these were pushed only in the no-teach fallback branch, and
+    // even there with `undefined` instead of the authored set — so an authored
+    // thursday.storyBeats.failure never rendered on any path.
+    const spec = buildKitSpec(await inputFor({
+      id: 's-wk3-thu-beats', session_number: 7, title: 'Week 3 · Build Day — Claude API + Workflow Assistant',
+      session_date: '2026-08-13', start_time: '18:30:00', end_time: '20:30:00', status: 'scheduled',
+    }));
+    const failBeats = spec.slides.filter((s) => s.kind === 'storybeat' && s.segmentId === 'failure');
+    expect(failBeats.length).toBeGreaterThan(0);
+    // and the segment genuinely has deep teach slides, i.e. the fallback path
+    // is NOT what produced them.
+    expect(spec.slides.some((s) => s.kind === 'teach' && s.segmentId === 'failure')).toBe(true);
+  });
+
   it('renders the enriched full-screen diagram layer: title, key points, brand, run-location', async () => {
     // The zoomed diagram is what the room (and the class recording) sees while
     // the instructor talks over it, so it has to carry more than the picture.
