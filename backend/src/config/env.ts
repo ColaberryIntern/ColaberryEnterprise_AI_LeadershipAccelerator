@@ -130,6 +130,12 @@ export const env = {
   // Project backend v2 — persisted student-projects read API (P1). Default OFF;
   // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
   projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
+  // Student Build Pipeline. SEPARATE from projectApiEnabled deliberately: that
+  // flag is already true in production and shared with projectsPortalRoutes, so
+  // reusing it would make the new pipeline live the moment it deploys and give
+  // no way to turn it off without breaking the existing projects API. Defaults
+  // OFF — deploying changes nothing until this is set.
+  sbpPipelineEnabled: process.env.SBP_PIPELINE_ENABLED === 'true',
   // Today aggregation — blend Project + Community cards into the Today feed
   // (Phase 2). Default OFF; the feed stays Class-only until enabled.
   todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',
