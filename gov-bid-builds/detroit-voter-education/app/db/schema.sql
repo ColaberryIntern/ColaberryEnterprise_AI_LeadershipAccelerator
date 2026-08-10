@@ -78,6 +78,14 @@ ALTER TABLE summaries ADD COLUMN IF NOT EXISTS reviewed_by  TEXT;
 ALTER TABLE summaries ADD COLUMN IF NOT EXISTS reviewed_at  TIMESTAMPTZ;
 ALTER TABLE summaries ADD COLUMN IF NOT EXISTS review_notes TEXT;
 
+-- STORY-012: publication timestamp. In this build, approval and publication
+-- happen in the same transaction (no separate scheduler -- see coordinatorAgent.js
+-- reviewSummary()), so published_at == reviewed_at for every published row.
+-- Kept as its own column/audit event because Trust (TBI) requires a distinct
+-- "publication time" and the two are conceptually separate steps even though
+-- they're temporally instantaneous here.
+ALTER TABLE summaries ADD COLUMN IF NOT EXISTS published_at TIMESTAMPTZ;
+
 -- STORY-011: proof that an admin notification fired when a summary entered
 -- pending_review. channel is 'log_stub' in this build -- no real email/SMS
 -- provider is wired up (would need a new external dependency + real admin

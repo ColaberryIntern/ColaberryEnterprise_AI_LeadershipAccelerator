@@ -1,5 +1,8 @@
 const assert = require('node:assert/strict');
-const { computeNotificationLatencyMs, NOTIFICATION_SLA_MS } = require('../coordinatorAgent');
+const {
+  computeNotificationLatencyMs, NOTIFICATION_SLA_MS,
+  computePublishLatencyMs, PUBLISH_SLA_MS,
+} = require('../coordinatorAgent');
 
 let passed = 0;
 
@@ -50,6 +53,34 @@ test('negative latency (notified before submitted) never meets SLA', () => {
   const result = computeNotificationLatencyMs(submitted, notified);
   assert.equal(result.latencyMs, -1000);
   assert.equal(result.meetsSla, false);
+});
+
+test('immediate publish — zero latency meets the 1-hour SLA', () => {
+  const t = new Date('2026-07-14T12:00:00.000Z');
+  const result = computePublishLatencyMs(t, t);
+  assert.equal(result.latencyMs, 0);
+  assert.equal(result.meetsSla, true);
+});
+
+test('publish at exactly 1 hour meets SLA (boundary)', () => {
+  const approved = new Date('2026-07-14T12:00:00.000Z');
+  const published = new Date(approved.getTime() + PUBLISH_SLA_MS);
+  const result = computePublishLatencyMs(approved, published);
+  assert.equal(result.latencyMs, PUBLISH_SLA_MS);
+  assert.equal(result.meetsSla, true);
+});
+
+test('publish past 1 hour misses SLA', () => {
+  const approved = new Date('2026-07-14T12:00:00.000Z');
+  const published = new Date('2026-07-14T13:00:01.000Z');
+  const result = computePublishLatencyMs(approved, published);
+  assert.equal(result.meetsSla, false);
+});
+
+test('publish latency and notification latency use independent SLA windows', () => {
+  assert.equal(PUBLISH_SLA_MS, 60 * 60 * 1000);
+  assert.equal(NOTIFICATION_SLA_MS, 15 * 60 * 1000);
+  assert.notEqual(PUBLISH_SLA_MS, NOTIFICATION_SLA_MS);
 });
 
 console.log(`\n${passed} passed`);
