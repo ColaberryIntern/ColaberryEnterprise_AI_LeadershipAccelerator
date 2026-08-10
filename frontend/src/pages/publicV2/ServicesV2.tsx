@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
-import SEOHead from '../../components/SEOHead';
+import SeoV2 from '../../components/publicV2/SeoV2';
 import { Claim } from '../../components/publicV2/Claim';
 import { SERVICE_DETAILS, getServiceBySlug } from '../../config/v2Services';
 import './servicesV2.css';
@@ -23,7 +23,7 @@ const ROUTE = '/services';
 export function ServicesV2(): React.ReactElement {
   return (
     <>
-      <SEOHead
+      <SeoV2
         title="What outcome do you need next?"
         description={
           'Five productized engagements: opportunity and readiness, a Claude production ' +
@@ -123,7 +123,7 @@ export function ServiceDetailV2(): React.ReactElement {
 
   return (
     <>
-      <SEOHead title={service.name} description={service.happens} />
+      <SeoV2 title={service.name} description={service.happens} />
 
       <section className="cbv2-pagehero" aria-labelledby="cbv2-svcd-title">
         <div className="cbv2-wrap">

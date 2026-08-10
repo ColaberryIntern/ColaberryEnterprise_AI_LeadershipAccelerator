@@ -19,41 +19,60 @@ interface FooterGroup {
   readonly links: readonly { readonly label: string; readonly to: string }[];
 }
 
+/**
+ * Footer destinations.
+ *
+ * FIXED IN 1.10, AND IT WAS MY BUG: these were written as root paths (/platform,
+ * /proof, /services/...) while every V2 page is mounted under /v2. Nine of the
+ * thirteen links 404'd. The original tests asserted the links rendered, which
+ * they did -- to nowhere. `FooterLinkResolution` in the footer test now checks
+ * every entry against the real route table instead.
+ *
+ * Two entries were removed rather than repaired:
+ *   - "Terms", which pointed at /terms. No terms page exists and drafting one is
+ *     legal work, not something to invent to satisfy a link.
+ *   - "Evidence classes", which pointed at /proof#evidence. No such anchor
+ *     exists; the Proof Room link covers it.
+ * A link to a policy that does not exist is worse than no link, because it
+ * implies a document someone has written.
+ */
 const GROUPS: readonly FooterGroup[] = [
   {
     heading: 'Services',
     links: [
-      { label: 'Opportunity Sprint', to: '/services/ai-opportunity-sprint' },
-      { label: 'Production Pilot', to: '/services/claude-production-pilot' },
-      { label: 'Build & Modernization', to: '/services/enterprise-build-modernization' },
-      { label: 'Workforce Accelerator', to: '/services/workforce-architect-accelerator' },
-      { label: 'Embedded AI Ops', to: '/services/embedded-ai-operations' },
+      { label: 'Opportunity Sprint', to: '/v2/services/ai-opportunity-sprint' },
+      { label: 'Production Pilot', to: '/v2/services/claude-production-pilot' },
+      { label: 'Build & Modernization', to: '/v2/services/enterprise-build-modernization' },
+      { label: 'Workforce Accelerator', to: '/v2/services/workforce-architect-accelerator' },
+      { label: 'Embedded AI Ops', to: '/v2/services/embedded-ai-operations' },
     ],
   },
   {
     heading: 'Platform',
     links: [
-      { label: 'Platform', to: '/platform' },
-      { label: 'Free workspace', to: '/try' },
+      { label: 'Platform', to: '/v2/platform' },
+      { label: 'Free workspace', to: '/v2/try' },
       { label: 'Pricing', to: '/pricing' },
     ],
   },
   {
     heading: 'Proof',
     links: [
-      { label: 'Proof Room', to: '/proof' },
-      { label: 'Evidence classes', to: '/proof#evidence' },
+      { label: 'Proof Room', to: '/v2/proof' },
+      { label: 'Map an opportunity', to: '/v2/lab' },
     ],
   },
   {
     heading: 'Company',
     links: [
       { label: 'Contact', to: '/contact' },
-      { label: 'Privacy Policy', to: '/privacy' },
-      { label: 'Terms', to: '/terms' },
+      { label: 'What we collect', to: '/v2/privacy' },
     ],
   },
 ];
+
+/** Exported so the test can check each destination resolves to a real route. */
+export const FOOTER_LINKS: readonly string[] = GROUPS.flatMap((g) => g.links.map((l) => l.to));
 
 function PublicFooterV2(): React.ReactElement {
   const year = new Date().getFullYear();

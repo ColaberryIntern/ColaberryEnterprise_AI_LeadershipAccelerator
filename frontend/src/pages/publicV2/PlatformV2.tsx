@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import SEOHead from '../../components/SEOHead';
+import SeoV2 from '../../components/publicV2/SeoV2';
 import { Claim, canShow, Metric, SampleBadge, CapabilityNotice } from '../../components/publicV2/Claim';
 import { SHOWROOM_SURFACES, STUDIO_DESCRIPTION, DATA_EARNED } from '../../config/v2Platform';
 import './platformV2.css';
@@ -26,7 +26,7 @@ function PlatformV2(): React.ReactElement {
 
   return (
     <>
-      <SEOHead
+      <SeoV2
         title="The platform your team logs into"
         description={
           'Organization AI readiness, the team roster and ladder, and a free company ' +

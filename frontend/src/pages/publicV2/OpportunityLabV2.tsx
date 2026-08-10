@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { getUTMPayloadFields } from '../../services/utmService';
-import SEOHead from '../../components/SEOHead';
+import SeoV2 from '../../components/publicV2/SeoV2';
 import { CapabilityNotice } from '../../components/publicV2/Claim';
 import {
   LAB_STEPS,
@@ -26,9 +26,9 @@ import './opportunityLabV2.css';
  *
  * PRIVACY
  * The existing LeadCaptureForm attaches `visitor_fingerprint` from localStorage.
- * This page does not. The site audit flagged visitor fingerprinting running
- * without a privacy policy or consent, and consent is task 1.10 -- so until that
- * lands, this form collects only what the person knowingly typed, plus UTM
+ * This page does not, and that stays true now that consent exists (task 1.10):
+ * agreeing to measurement is not agreeing to have a device id stapled to a form
+ * submission. This form sends only what the person knowingly typed, plus UTM
  * parameters already present in the URL they arrived on.
  */
 
@@ -144,7 +144,7 @@ function OpportunityLabV2(): React.ReactElement {
   if (submitted) {
     return (
       <>
-        <SEOHead title="Received" description="Your opportunity has been sent to a person." />
+        <SeoV2 title="Received" description="Your opportunity has been sent to a person." />
         <section className="cbv2-section" aria-labelledby="cbv2-lab-done">
           <div className="cbv2-wrap cbv2-wrap--narrow">
             <p className="cbv2-eyebrow">Received</p>
@@ -175,7 +175,7 @@ function OpportunityLabV2(): React.ReactElement {
 
   return (
     <>
-      <SEOHead
+      <SeoV2
         title="Map an AI opportunity"
         description={
           'Describe one process in five steps and a person will reply. No automated score, ' +

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import SEOHead from '../../components/SEOHead';
+import SeoV2 from '../../components/publicV2/SeoV2';
 import { EvidenceBadge, CapabilityNotice, Metric } from '../../components/publicV2/Claim';
 import { blockedClaims } from '../../config/claimsRegistry';
 import { EVIDENCE_CLASSES, WITHDRAWN, GATES, PLANNED_PROOF_ROOM } from '../../config/v2Proof';
@@ -39,7 +39,7 @@ function ProofV2(): React.ReactElement {
 
   return (
     <>
-      <SEOHead
+      <SeoV2
         title="The proof standard"
         description={
           'What we count as evidence, the two gates every claim passes before it is ' +

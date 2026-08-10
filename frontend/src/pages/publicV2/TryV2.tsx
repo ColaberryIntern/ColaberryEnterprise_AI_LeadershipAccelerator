@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import SEOHead from '../../components/SEOHead';
+import SeoV2 from '../../components/publicV2/SeoV2';
 import { Claim, canShow } from '../../components/publicV2/Claim';
 import { FREE_INCLUDES, ARRIVAL_NOTE, PAID_BOUNDARIES } from '../../config/v2Try';
 import './tryV2.css';
@@ -21,7 +21,7 @@ const ROUTE = '/try';
 function TryV2(): React.ReactElement {
   return (
     <>
-      <SEOHead
+      <SeoV2
         title="Start free"
         description={
           'One free account gives a manager both the learner experience and the ' +

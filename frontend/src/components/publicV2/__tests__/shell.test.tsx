@@ -64,12 +64,21 @@ describe('PublicHeaderV2', () => {
 });
 
 describe('PublicFooterV2', () => {
-  it('links Privacy Policy and Terms — the audit called their absence a launch blocker', () => {
+  /**
+   * REWRITTEN IN 1.10. This previously asserted href="/privacy" and href="/terms".
+   * Both assertions passed while both links 404'd — no such routes existed. The
+   * test was checking that the words had been written, not that they led
+   * anywhere, which is precisely the failure mode this suite exists to catch.
+   *
+   * Now: the data notice must exist and resolve, and Terms must be absent rather
+   * than linked to nothing. See FooterLinkResolution in consentAndSeo.test.tsx
+   * for the check that every footer destination is a declared route.
+   */
+  it('links a data notice that actually resolves, and claims no terms page', () => {
     const html = at('/', <PublicFooterV2 />);
-    expect(html).toContain('href="/privacy"');
-    expect(html).toContain('href="/terms"');
-    expect(textOf(html)).toContain('Privacy Policy');
-    expect(textOf(html)).toContain('Terms');
+    expect(html).toContain('href="/v2/privacy"');
+    expect(textOf(html)).toContain('What we collect');
+    expect(html).not.toContain('href="/terms"');
   });
 
   it('renders the positioning line through the claims registry', () => {

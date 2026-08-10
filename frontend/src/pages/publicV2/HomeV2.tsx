@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import SEOHead from '../../components/SEOHead';
+import SeoV2 from '../../components/publicV2/SeoV2';
 import { Claim, canShow, Metric, SampleBadge } from '../../components/publicV2/Claim';
 import { GOALS, ENGINE, SERVICES } from '../../config/v2Content';
 import './homeV2.css';
@@ -28,7 +28,7 @@ function HomeV2(): React.ReactElement {
 
   return (
     <>
-      <SEOHead
+      <SeoV2
         title="Build the system. Build the people. Prove the capability."
         description={
           'Colaberry helps organizations identify high-value AI opportunities, deploy governed ' +
