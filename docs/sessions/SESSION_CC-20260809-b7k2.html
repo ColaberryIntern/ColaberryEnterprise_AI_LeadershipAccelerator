@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 3:34 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">8 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 3:49 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">9 changes</span></div>
   </header>
   <main>
     
@@ -177,6 +177,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**98/98 tests pass** across six suites (`JEST_EXIT=0`), up from 80. The invariant is tested directly rather than asserted: the publish test checks the promoted plan hashes identically to the reviewed one **and** scans every issued query to prove no `INSERT INTO build_plans` occurred on that path — a regeneration would fail the test. A tampering test swaps the stored plan and confirms publish raises `HashMismatch` instead of shipping it. Hash tests cover stability, key-order independence, content sensitivity, and specifically that **moving a story between releases changes the hash** — the exact skew that went undetected in the pilot. Version selection is asserted to happen inside the INSERT (`COALESCE(MAX(version),0)+1`) so two concurrent generations cannot claim the same version, with the unique index as backstop. Intake tests cover ON CONFLICT idempotency, a 4,000-char idea stored verbatim, and that absent fields default to NULL rather than being invented.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">6 of 17 tasks. Nothing deployed, nothing merged to main. Next is T5 (pure document renderers), which is the last piece before the GitHub write path.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">09</span>
+          <h2>**Rendered the file set the prompts have been pointing at but nothing was writing**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/sbp/renderDocs.ts` — PURE, no I/O, no clock, no randomness. Turns a plan into `docs/REQUIREMENTS.md`, `docs/STORIES.md`, `docs/TRACEABILITY.md`, one `docs/stories/STORY-nnn.md` per story, `CLAUDE.md`, and `.colaberry/{plan,manifest,progress}.json`. These are the files every generated prompt opens with — `&quot;Read this first: ./docs/REQUIREMENTS.md&quot;` — and which currently resolve to nothing for a student because nothing writes them (audit F-3, SBP-GH-v1 §1). Acceptance renders as **unticked checkboxes** because that is the progress signal §8 reads to unlock mark-done. The generated `CLAUDE.md` teaches the commit convention (`STORY-001: …`) the progress signal depends on, and says plainly that if a requirement is wrong the student should fix the requirement — they are the architect. The path allowlist (FR-027) is enforced *at render time*, throwing rather than warning, so a path outside `CLAUDE.md` / `docs/**` / `.colaberry/**` cannot even be produced, let alone committed. `manifestPaths()` exposes what the manifest declares, which is what T13&#39;s prompt-path assertion will check against.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**130/130 tests pass** across six suites (`JEST_EXIT=0`), up from 98. Rendering is graded against the real pilot plan, not a toy: one story file per story asserted against the actual 12, every requirement&#39;s statement present verbatim, the traceability matrix carrying a row per requirement, and a CONSTRAINT correctly shown as `_(constraint — no story)_` rather than counted as a coverage gap. **One test failed first and caught a real bug**: `.colaberry/plan.json` serialized the plan *as handed in*, so the same logical plan with reversed arrays produced a different hash — which would make `repoWriter` commit a file whose content had not changed, breaking the &quot;unchanged ⇒ no commit&quot; guarantee (FR-026) and churning the student&#39;s git history. Fixed by serializing a canonically ordered plan; the order-independence test now passes. Determinism is covered four ways: byte-identical across renders, order-independent, timestamp supplied rather than sampled, and the input plan proven unmutated.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">7 of 17 tasks. Nothing deployed, nothing merged to main. Next is the GitHub half — T6 (re-key `github_connections` to projects) and T7 (re-key the service with ownership checks), which unblock T12 (repo writer) and then T13, the prompt-path guard that makes the defect Ali found structurally impossible.</span></div>
           
         </div>
       </article>
