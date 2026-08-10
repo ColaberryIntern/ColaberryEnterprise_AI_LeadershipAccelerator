@@ -98,6 +98,22 @@ CREATE TABLE IF NOT EXISTS admin_notifications (
   payload      JSONB
 );
 
+-- STORY-013: bias/accuracy governance evaluation. method='heuristic_demo_v1' is
+-- a deterministic, explainable stand-in (word-overlap grounding + a loaded-word
+-- stoplist) documented as a heuristic, not a validated bias/accuracy measurement
+-- methodology -- see decision-record-STORY-013.md. Safe to run against demo data
+-- (fictional officeholders/candidates only -- see seeds/index.js).
+CREATE TABLE IF NOT EXISTS governance_evaluations (
+  id              SERIAL PRIMARY KEY,
+  summary_id      INTEGER NOT NULL REFERENCES summaries(id),
+  accuracy_score  NUMERIC(5,4) NOT NULL,
+  bias_score      NUMERIC(5,4) NOT NULL,
+  meets_threshold BOOLEAN NOT NULL,
+  method          VARCHAR(50) NOT NULL DEFAULT 'heuristic_demo_v1',
+  details         JSONB,
+  evaluated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE INDEX IF NOT EXISTS idx_jurisdictions_zip ON jurisdictions(zip_code);
 CREATE INDEX IF NOT EXISTS idx_user_preferences_session ON user_preferences(session_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_session        ON audit_log(session_id);
@@ -105,3 +121,4 @@ CREATE INDEX IF NOT EXISTS idx_feedback_session         ON feedback(session_id);
 CREATE INDEX IF NOT EXISTS idx_summaries_subject         ON summaries(subject_id);
 CREATE INDEX IF NOT EXISTS idx_summaries_status          ON summaries(status);
 CREATE INDEX IF NOT EXISTS idx_admin_notifications_summary ON admin_notifications(summary_id);
+CREATE INDEX IF NOT EXISTS idx_governance_evaluations_summary ON governance_evaluations(summary_id);

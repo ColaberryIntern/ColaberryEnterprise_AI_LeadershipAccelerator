@@ -10,6 +10,7 @@ const jurisdictionsRouter = require('./routes/jurisdictions');
 const summariesRouter = require('./routes/summaries');
 const summaryReviewsRouter = require('./routes/summaryReviews');
 const publicSummariesRouter = require('./routes/publicSummaries');
+const governanceRouter = require('./routes/governance');
 const { handleMessage } = require('./ws/handler');
 
 const app = express();
@@ -23,6 +24,7 @@ app.use('/api/jurisdictions', jurisdictionsRouter);
 app.use('/api/summaries', summariesRouter);
 app.use('/api/summary-reviews', summaryReviewsRouter);
 app.use('/api/public/summaries', publicSummariesRouter);
+app.use('/api/governance', governanceRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, 'client/dist');
