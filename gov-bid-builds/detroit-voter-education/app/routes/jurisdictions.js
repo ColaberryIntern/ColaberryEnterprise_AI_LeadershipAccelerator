@@ -63,7 +63,7 @@ router.get('/:zipCode', async (req, res) => {
     await client.query(
       `INSERT INTO audit_log (session_id, action, metadata)
        VALUES (NULL, 'JURISDICTION_RESOLVED', $1)`,
-      [JSON.stringify({ zip_code: zipCode, source: 'api' })],
+      [JSON.stringify({ zip_code: zipCode, source: resolved.source })],
     );
     await client.query('COMMIT');
 
@@ -73,6 +73,7 @@ router.get('/:zipCode', async (req, res) => {
       service: 'detroit-voter-education',
       event: 'jurisdiction_resolved',
       zip_code: zipCode,
+      source: resolved.source,
       outcome: 'success',
     }));
 
@@ -82,7 +83,7 @@ router.get('/:zipCode', async (req, res) => {
       state: { name: resolved.stateName, abbreviation: resolved.stateAbbr },
       federal: { congressionalDistrict: resolved.congressionalDistrict },
       resolvedAt: new Date().toISOString(),
-      source: 'api',
+      source: resolved.source,
     });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});

@@ -1,3 +1,5 @@
+const { lookupFixture, lookupGenericFallback } = require('./jurisdictionFixtures');
+
 const ZIPPOPOTAM_URL = 'https://api.zippopotam.us/us';
 const CENSUS_URL = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates';
 const TIMEOUT_MS = 8000;
@@ -13,7 +15,7 @@ async function fetchWithTimeout(url, ms) {
   }
 }
 
-async function resolveZip(zipCode) {
+async function resolveViaApi(zipCode) {
   // Step 1: ZIP → city, state, lat/lng via Zippopotam.us
   const zipRes = await fetchWithTimeout(`${ZIPPOPOTAM_URL}/${zipCode}`, TIMEOUT_MS);
   if (zipRes.status === 404) throw Object.assign(new Error('ZIP code not found'), { code: 'ZIP_NOT_FOUND' });
@@ -67,8 +69,46 @@ async function resolveZip(zipCode) {
     stateName,
     stateAbbr,
     congressionalDistrict,
+    source: 'api',
     raw: { zippopotam: zipData },
   };
+}
+
+// Fixture-first for known Detroit-area ZIPs: instant, zero network dependency,
+// so the demo's primary path never depends on Zippopotam/Census being
+// reachable. Falls through to the live API for anything not in the fixture
+// (real capability for arbitrary ZIP codes is preserved). If the live API
+// itself fails and the ZIP looks Detroit-area, a generic fallback answers
+// rather than hard-failing -- see jurisdictionFixtures.js for why this is
+// safe (real, stable city/county/state facts; congressional district is a
+// clearly-labeled best-effort demo value, not verified).
+async function resolveZip(zipCode) {
+  const fixture = lookupFixture(zipCode);
+  if (fixture) {
+    return { ...fixture, raw: { source: 'fixture' } };
+  }
+
+  try {
+    return await resolveViaApi(zipCode);
+  } catch (err) {
+    if (err.code === 'ZIP_NOT_FOUND') throw err;
+
+    const genericFallback = lookupGenericFallback(zipCode);
+    if (genericFallback) {
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'warn',
+        service: 'detroit-voter-education',
+        event: 'jurisdiction_api_failed_using_generic_fallback',
+        zip_code: zipCode,
+        error_class: err.constructor.name,
+        error: err.message,
+      }));
+      return { ...genericFallback, raw: { source: 'fixture-generic', apiError: err.message } };
+    }
+
+    throw err;
+  }
 }
 
 module.exports = { resolveZip };
