@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 7:48 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">13 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 8:45 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">14 changes</span></div>
   </header>
   <main>
     
@@ -252,6 +252,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**215/215 tests pass** across ten suites (`JEST_EXIT=0`), up from 172. The guard is tested against the manifest the **real renderers** produce, so T5 and T13 are proven to fit together rather than each being right in isolation — and a test builds a prompt for all 12 stories of the real pilot plan without throwing. Removing any one of the four cited documents from the manifest makes assembly throw, each covered. The no-repo path asserts the output contains no `./docs/` substring at all. T12&#39;s idempotency test asserts **zero network calls** when every hash matches — not merely that no commit was made. The allowlist test proves a bad path throws *before the token is even read*. Two secret-safety tests: the token never appears in a log line, and is sent as a Bearer header rather than in a URL. **One test failed first and the test was wrong, not the code**: I asserted an empty manifest should throw, but an empty manifest correctly means &quot;nothing written yet&quot; and takes the no-paths fallback; the dangerous case is a *partially* written repo, which is what the test now exercises.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">14 of 17 tasks. Nothing deployed, nothing merged to main. Remaining: T11 (wizard step 4) and T14 (button hierarchy) are frontend and unblocked; **T15 (prod migration + handoff) and T16 (live end-to-end) are deliberately held for Ali** — one produces a migration against the production database, the other creates a real GitHub repo under the org.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">14</span>
+          <h2>**Task cards drop from four flat buttons to one Open; tool choice moves into the drawer, after the student has read the story**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`frontend/src/pages/portal/projects/ProjectInterior.tsx`. The card (and hero) carried **Copy Prompt · Open Workspace · Mark Done · Skip** — four equal-weight buttons repeated on every task, which asked a student to choose a tool before reading the task, and let them declare a story finished having done nothing. Now: one primary **Open**, plus a quiet **Skip**. Copy-prompt and open-workspace live in the drawer, where the student has already seen the narrative, the requirement and the acceptance criteria. Mark-done also stays in the drawer only — leaving it on the card would preserve exactly the click-to-declare-done affordance this change removes, and it becomes evidence-gated in a later release (FR-033). Skip stays on the card and stays ungated: skipping is an honest &quot;not doing this now&quot;, and a skipped prerequisite still does not clear a downstream gate. Removed the dead code this orphaned rather than leaving it: `useCallback`, `markTaskDone`, `buildProjectTaskPrompt`, `loadDeliveryMode`, `loadTaskNotes` + its key prefix, `listNameFor`, and the now-unused `IC_COPY`/`IC_DONE` icons — the card no longer builds a prompt, so it no longer needs to read the notes that prompt would have included.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Frontend `tsc --noEmit`: 0 errors, exit 0** — the authoritative CI gate, run with TypeScript 5.7.3 (the junctioned root `node_modules` is 4.9.5 and misparses zod v4). Confirmed the drawer already exposes Copy Prompt, Mark Done and Skip, so no action was lost in the move — only relocated behind a read. The Open button carries an `aria-label` naming the task, since an icon-plus-&quot;Open&quot; alone is ambiguous to a screen reader when repeated down a list of cards.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">15 of 17 tasks. Nothing deployed, nothing merged to main. **T15 (prod migration + handoff) and T16 (live end-to-end) are deliberately held for Ali** — T15 produces a migration against the production database and T16 creates a real repo under the `ColaberryIntern` org and runs the pipeline end to end against it. Neither is blocked; both are the kind of thing worth doing with the owner present. T11 (wizard step 4) is deferred with them, since a mandatory provisioning step is only truthful once provisioning is live.</span></div>
           
         </div>
       </article>
