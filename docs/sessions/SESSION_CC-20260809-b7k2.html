@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Monday, August 10, 2026 at 3:30 AM</div>
-    <div><span class="sid">CC-20260809-b7k2</span><span class="count">7 changes</span></div>
+    <div class="meta">Generated Monday, August 10, 2026 at 3:34 AM</div>
+    <div><span class="sid">CC-20260809-b7k2</span><span class="count">8 changes</span></div>
   </header>
   <main>
     
@@ -162,6 +162,21 @@
           <div class="row"><span class="k">Verification</span><span class="v ver">**Applied to the real `accelerator_dev1` Postgres and verified by catalog query, not by absence of an exception.** Post-condition after apply: `tables_found=2, indexes_found=2`. Re-running the identical SQL is a **proven no-op** — every statement returned `NOTICE: … already exists, skipping` and exited clean, so boot is idempotent. **The assertion is proven non-vacuous**: run against un-migrated `accelerator_prod` it reports `0|0` (all four objects missing → would emit `SchemaInvariantViolation`), against migrated `accelerator_dev1` it reports `2|2` and passes. That discrimination is the whole point — this morning&#39;s `DROP INDEX` shipped green precisely because nothing checked its outcome.</span></div>
           
         <div class="row"><span class="k">Notes</span><span class="v">5 of 17 tasks. **Prod is deliberately NOT migrated** — the migration ships in T15 with its rollback, for Ali&#39;s approval. Nothing deployed, nothing merged to main. The boot path is safe on prod regardless: the statements are `IF NOT EXISTS` and the assertion only logs. Next is T4 (persist the reviewed plan), which this unblocks.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>**Closed the defect where dry-run and commit each regenerated, so a reviewed plan was not the plan persisted**</h2>
+          <span class="badge">2026-08-10</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/services/sbp/planHash.ts` (PURE) and `planStore.ts` (I/O). The pilot&#39;s dry-run and commit each called the model independently — which is exactly how a plan reviewed at 6/3/1/1/1 was persisted as 8/1/1/1/1, with different requirement numbering. Now the plan is written **once** at generation as a `draft` in `build_plans`, review reads that row, and `publishPlan` **promotes the same row** — there is no INSERT on the publish path at all. `publishPlan` optionally takes the SHA the reviewer was shown and refuses with `HashMismatch` if the stored row has changed underneath them, which turns &quot;the reviewed plan is the published plan&quot; from an intention into an enforced invariant. Hashing is canonical (keys sorted recursively before serialization) so a structurally identical plan built in a different key order does not hash differently and get rejected as tampered. Publish is idempotent, and promoting a version supersedes any previously published one. `saveIntake` stores the wizard answers verbatim, idempotent on `project_id` so a retry after a failed generation reuses the same intake rather than stacking rows. Raw SQL with results typed at the call site — `build_plans`/`build_intake` have no Sequelize model, which `backend/CLAUDE.md` explicitly permits on that condition.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**98/98 tests pass** across six suites (`JEST_EXIT=0`), up from 80. The invariant is tested directly rather than asserted: the publish test checks the promoted plan hashes identically to the reviewed one **and** scans every issued query to prove no `INSERT INTO build_plans` occurred on that path — a regeneration would fail the test. A tampering test swaps the stored plan and confirms publish raises `HashMismatch` instead of shipping it. Hash tests cover stability, key-order independence, content sensitivity, and specifically that **moving a story between releases changes the hash** — the exact skew that went undetected in the pilot. Version selection is asserted to happen inside the INSERT (`COALESCE(MAX(version),0)+1`) so two concurrent generations cannot claim the same version, with the unique index as backstop. Intake tests cover ON CONFLICT idempotency, a 4,000-char idea stored verbatim, and that absent fields default to NULL rather than being invented.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">6 of 17 tasks. Nothing deployed, nothing merged to main. Next is T5 (pure document renderers), which is the last piece before the GitHub write path.</span></div>
           
         </div>
       </article>
