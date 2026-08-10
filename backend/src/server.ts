@@ -41,15 +41,12 @@ import { ensureIntelligenceTables, runDiscoveryAgent, intelligenceMiddleware } f
 import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
-import { ensureSbpSchema } from './db/ensureSbpSchema';
-import { ensureWorkspaceRepoSchema } from './db/ensureWorkspaceRepoSchema';
 import { ensureAdminUserIdentitySchema } from './db/ensureAdminUserIdentitySchema';
 import { ensureAiAgentIdentitySchema } from './db/ensureAiAgentIdentitySchema';
 import { ensureEvidenceSchema } from './db/ensureEvidenceSchema';
 import { ensureWorkGraphSchema } from './db/ensureWorkGraphSchema';
 import { ensureApprovalRequestsSchema } from './db/ensureApprovalRequestsSchema';
 import { ensureOutcomeMeasurementsSchema } from './db/ensureOutcomeMeasurementsSchema';
-import { ensureReeseOutreachSchema } from './db/ensureReeseOutreachSchema';
 import { ensureCapeSchema } from './db/ensureCapeSchema';
 import { ensureCapePlacementSchema } from './db/ensureCapePlacementSchema';
 import { ensureCapeCurriculumMapSchema } from './db/ensureCapeCurriculumMapSchema';
@@ -1145,6 +1142,20 @@ async function ensureFriendReferralSchema() {
     console.log('[DB] FriendReferral schema ensured');
   } catch (err: any) {
     console.warn('[DB] FriendReferral schema ensure failed:', err.message?.split('\n')[0]);
+  }
+}
+
+// Sponsor portal magic-link audit trail (STORY-001). Append-only; the model is
+// the schema contract and targeted sync creates the table if missing, since
+// boot runs no global sync. Non-fatal on failure: an unavailable audit table
+// must not stop the API from booting, and every audit write is best-effort.
+async function ensureSponsorPortalAuditSchema() {
+  try {
+    const { SponsorPortalAuditLog } = await import('./models');
+    await SponsorPortalAuditLog.sync();
+    console.log('[DB] Sponsor portal audit schema ensured');
+  } catch (err: any) {
+    console.warn('[DB] Sponsor portal audit schema ensure failed:', err.message?.split('\n')[0]);
   }
 }
 
@@ -2308,8 +2319,6 @@ async function start(): Promise<void> {
   // ProofDesk Work Ledger — Milestone 1 (Foundation): 4 ledger tables + 12 additive
   // nullable ticket columns (idempotent DDL, shadow mode).
   await ensureWorkLedgerSchema();
-  await ensureSbpSchema();
-  await ensureWorkspaceRepoSchema();
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
@@ -2327,10 +2336,6 @@ async function start(): Promise<void> {
   // (idempotent DDL, additive only). Scheduled by ticketService.ts's done-hook,
   // processed by schedulerService.ts's daily cron.
   await ensureOutcomeMeasurementsSchema();
-  // Reese Phase 2 (Autonomous Outreach): 1 new table, reese_autonomous_outreach
-  // (idempotent DDL, additive only). Scheduled by schedulerService.ts's daily
-  // ReeseAutonomousOutreachSweep/ReeseOutreachFollowUps crons.
-  await ensureReeseOutreachSchema();
   // CAPE (Colaberry Adaptive Path Engine) Phase 0-1 — skill ontology, evidence-band
   // weights, append-only skill-evidence ledger, derived skill state (idempotent DDL,
   // additive only, parallel to the existing XP/promotion tables).
@@ -2376,6 +2381,8 @@ async function start(): Promise<void> {
   await ensurePodcastSchema();
   // "Recommend a friend" onboarding step — friend_referrals table.
   await ensureFriendReferralSchema();
+  // Sponsor portal magic-link audit trail (STORY-001) — sponsor_portal_audit_log.
+  await ensureSponsorPortalAuditSchema();
   // Per-card student comments (Runtime workspace).
   await ensureCardCommentsSchema();
   // Weekly feedback Survey answers (idempotent).
