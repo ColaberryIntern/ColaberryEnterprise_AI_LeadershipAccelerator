@@ -665,7 +665,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
     publicTitle: 'Build Your First AI Workflow Assistant',
     monday: {
       tension:
-        'Tonight your build plan gets generated — you start it at the top of class and it is waiting for you about twenty minutes later. Scroll it and you will find task after task where the assistant has to classify something, draft something, or decide something — at 2am, on a schedule, with nobody at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. Those tasks need the other door: the Claude API, called from your own code. Same models, different driver, and — this is the part nobody has told you yet — a completely separate bill.',
+        'Tonight your build plan gets generated — you start it at the top of class and open it after the break, once it has had time to turn your paragraph into real requirements and real tasks. Scroll it and you will find task after task where the assistant has to classify something, draft something, or decide something — at 2am, on a schedule, with nobody at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. Those tasks need the other door: the Claude API, called from your own code. Same models, different driver, and — this is the part nobody has told you yet — a completely separate bill.',
       payoffPreview: 'By Thursday you ship a Business Workflow Assistant — a small program that automates one real workflow from your own build plan, end to end. This is your Intensive 1 deliverable.',
       architectureBeats: [
         'Two doors into the same models: Claude Code (a human drives) vs the Claude API (a program drives)',
@@ -675,7 +675,7 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
         'One endpoint: system + messages + tools in, one message and a token bill out',
       ],
       realExample: 'An assistant that never missed in the demo, then met production: prose where the code expected JSON, a tool loop with no cap draining credits overnight, and no eval to tell you it got worse. None of the three raise an error — that is what makes them expensive.',
-      microBuild: 'Get an API key into your environment, make your first authenticated call from a real Python file, force a structured shape you can trust, add one tool — then read the token meter on what you just spent.',
+      microBuild: 'First, open the build plan that has been generating all night and find one task that needs Claude to decide something — that is the task you are about to learn how to build. Then: an API key into your environment, your first authenticated call from a real Python file, a structured shape you can trust, one tool — and the token meter on what you just spent.',
       designChoice: {
         kind: 'poll',
         theater: true,
@@ -751,10 +751,10 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
       extraInteractions: [
         {
           segment: 'checkin', kind: 'poll',
-          q: 'Where is your build right now?',
-          options: ['Still typing my idea', 'It is generating', 'I can see my task list', 'I am stuck — I need help'],
+          q: 'Where are you right now?',
+          options: ['Still writing my idea', 'Submitted — it is generating', 'I cannot find the button', 'Something errored'],
           eyebrow: '🚦 Room check', title: 'Before we go on — is everyone launched?',
-          presenterTip: 'This is an operational poll, not a teaching one. Read the "stuck" count out loud and send a mentor to those students NOW. Do not advance the deck until that number is near zero.',
+          presenterTip: 'Operational, not teaching. You only need "submitted" — the plan itself takes a long time to generate and nobody will have one yet, so do not ask about task lists here. Read the last two counts out loud and send a mentor to those students NOW. Do not advance until they are near zero.',
         },
         {
           segment: 'business-problem', kind: 'poll',
@@ -771,11 +771,11 @@ export const WEEK_CLASS_CONTENT: WeekClassContent[] = [
           presenterTip: 'Take answers before revealing. If the room splits toward "accept and fix later," that is worth two extra minutes — it is the habit that quietly wrecks a capstone. This question needs no finished build, which is why it comes first.',
         },
         {
-          segment: 'business-problem', kind: 'poll',
-          q: 'How many tasks did your build generate?',
+          segment: 'micro-build', kind: 'poll',
+          q: 'Open your build plan now — how many tasks did it generate?',
           options: ['Under 10', '10 to 20', '21 to 40', 'More than 40', 'Mine is still building'],
           eyebrow: '📊 Look at yours', title: 'How big did your plan turn out?',
-          presenterTip: 'No right answer — a room read that also gets everyone to actually open their plan. TIMING: builds take ~20 minutes, so this lands right as they finish and "still building" is a legitimate answer. If most of the room picks it, skip the discussion and re-run this question after the break rather than stalling. Call out the biggest number by name; it makes the plan feel real.',
+          presenterTip: 'Deliberately AFTER the break, not in the first half. Generating requirements and decomposing them takes a real while — asking in the business-problem segment lands before most plans exist and the honest answer is just "still building", which teaches nothing. By this point in the night everyone has one. No right answer; call out the biggest number by name to make the plan feel real.',
         },
         {
           segment: 'architecture', kind: 'poll',

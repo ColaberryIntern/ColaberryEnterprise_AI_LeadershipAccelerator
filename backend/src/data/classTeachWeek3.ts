@@ -42,19 +42,19 @@ export const WEEK3_MONDAY: TeachSlide[] = [
   },
   {
     segment: 'checkin', eyebrow: '▶️ Do this right now', title: 'Four clicks, one paragraph, then leave it running',
-    body: 'Open the portal, go to Projects, click "Start a new build", and describe your idea in one paragraph — who it is for, what it does, and the one thing it has to get right. Then hit go and leave the tab open. It takes about twenty minutes to build, which is exactly why you start it now: it runs in the background while we talk, and it will be waiting for you by the time we need it. It does not have to be your final idea; it has to be an idea you care enough about to argue with.',
+    body: 'Open the portal, go to Projects, click "Start a new build", and describe your idea in one paragraph — who it is for, what it does, and the one thing it has to get right. Then hit go and leave the tab open. It takes a good while — it is writing your requirements and decomposing them into real work, not filling in a template — which is exactly why you start it now: it runs in the background all through the first half, and it will be waiting for you after the break. It does not have to be your final idea; it has to be an idea you care enough about to argue with.',
     bullets: [
       'Portal → Projects → "Start a new build"',
       'One paragraph: who it is for · what it does · the one thing it must get right',
-      'Hit go, leave the tab running — it takes about 20 minutes',
+      'Hit go and leave the tab running — you will open it after the break',
       'Not final — good enough to react to is the bar tonight',
     ],
     diagram: `flowchart LR
   P["🖥️ Portal"] --> PR["📁 Projects"]
   PR --> S["➕ Start a new build"]
   S --> I["✍️ Your idea,<br/>one paragraph"]
-  I --> G["⏳ Go — it runs<br/>~20 min in the background"]`,
-    script: 'Screen-share the exact click path once, slowly, then stop talking and let the room work. PACING — this matters: the build takes ~20 minutes, so wait only until most students report theirs is GENERATING, never until one finishes. If they launch around minute 5, builds land around minute 25, which is the end of the business-problem segment — that is deliberate, and it is why the pipeline explanation comes next. Sitting here watching progress bars puts you 20 minutes behind for the rest of the night. Anyone stuck goes to a mentor now, not at the break.',
+  I --> G["⏳ Go — it runs<br/>in the background"]`,
+    script: 'Screen-share the exact click path once, slowly, then stop talking and let the room work. PACING — this matters: generating requirements and decomposing them takes a long time, well past the first half of class. Wait only until most students report theirs is SUBMITTED, never until one finishes. Nobody opens their plan until after the break; every slide before then teaches off YOUR plan on screen. Sitting here watching progress bars costs you the whole night. Anyone stuck goes to a mentor now, not at the break.',
   },
   {
     segment: 'checkin', eyebrow: '🗺️ While it runs', title: 'Three things you leave with tonight',
@@ -87,7 +87,7 @@ export const WEEK3_MONDAY: TeachSlide[] = [
   RQ --> RL["📦 Releases"]
   RL --> ST["📘 Stories"]
   ST --> TK["✅ Tasks<br/>prompt + acceptance"]`,
-    script: 'Walk the diagram left to right, one node at a time. Then pull up a real student build on screen and point at each layer in the actual UI. Seeing their own words at the top of that chain is the moment this lands.',
+    script: 'Walk the diagram left to right, one node at a time. Then pull up a FINISHED build on your own screen — one you generated before class — and point at each layer in the real UI. Theirs are still generating, so this is the moment to have a prepared example ready; a half-built plan on a student screen teaches the opposite of what you want here.',
   },
   {
     segment: 'business-problem', eyebrow: '🧭 Read your plan', title: 'Release, story, task — and why the acceptance line matters most',
@@ -123,13 +123,13 @@ export const WEEK3_MONDAY: TeachSlide[] = [
     script: 'This is the highest-value slide of the first hour. Say the line plainly: "the prompt is not the skill — reading the answer is the skill." Then demo one redirect live so they see it is a normal, unremarkable thing to do.',
   },
   {
-    segment: 'business-problem', eyebrow: '🔌 The bridge', title: 'Now look at your task list — half of it needs something you have never done',
-    body: 'Scroll your own build plan and find the tasks that say the assistant classifies, drafts, summarizes, or decides something. Those tasks need Claude to run inside your product — at 2am, on a schedule, with no human at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. That is a different door into the same building, and it has a different lock and a different bill.',
+    segment: 'business-problem', eyebrow: '🔌 The bridge', title: 'Half of every build plan needs something you have never done',
+    body: 'Look at the plan on my screen and find the tasks that say the assistant classifies, drafts, summarizes, or decides something. Yours is still generating — decomposing requirements properly takes a while — but every plan has these, and they are the ones that need Claude running inside your product at 2am, on a schedule, with no human at the keyboard. Everything you know how to do so far involves you sitting in VS Code watching Claude Code work. That is a different door into the same building, and it has a different lock and a different bill.',
     bullets: [
       'Claude Code = you are there, watching, approving',
       'Your app = nobody is there; it still has to run',
       'The tasks that say "classify / draft / decide" are API tasks',
-      'That is the rest of tonight',
+      'You will find yours after the break — the pattern is the same',
     ],
     diagram: `flowchart LR
   Y["👤 You"] --> CC["💻 Claude Code<br/>you are watching"]
@@ -137,7 +137,7 @@ export const WEEK3_MONDAY: TeachSlide[] = [
   R -.->|"the code you<br/>just built"| APP["⚙️ Your app,<br/>running at 2am"]
   APP --> API["🔌 Claude API"]
   API --> APP`,
-    script: 'Have students scroll their own plan and find one such task before you move on. Ask two people to read theirs out loud — the transition into the API lands ten times harder when it answers a question from their own build. TIMING: builds take ~20 minutes, so at this point in the class some are still finishing. Anyone whose plan is not ready uses yours on screen and checks their own at the break; do not stall the room waiting for stragglers.',
+    script: 'TIMING — this is the slide the class pacing turns on: generating requirements and decomposing them into tasks takes a real while, so at this point in the night almost nobody has a finished plan. Do NOT ask them to open theirs here. Teach it entirely off YOUR plan on screen, point at two or three genuinely API-shaped tasks in it, and promise them the same in their own plan after the break. The payoff still lands — it just lands at minute 70 instead of minute 25, when it is actually true.',
   },
 
   /* ================= architecture · two doors, two bills, Python ========== */
