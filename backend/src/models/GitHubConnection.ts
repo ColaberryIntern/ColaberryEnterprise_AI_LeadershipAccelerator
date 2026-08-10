@@ -77,10 +77,14 @@ GitHubConnection.init(
       type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'enrollments', key: 'id' },
+    },
     // Nullable while legacy enrollment-keyed rows exist; the partial unique
     // index (project_id) WHERE project_id IS NOT NULL is created in
     // db/ensureWorkspaceRepoSchema.ts.
-    project_id: { type: DataTypes.UUID, allowNull: true, references: { model: 'projects', key: 'id' } },
+    project_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+      references: { model: 'projects', key: 'id' },
     },
     repo_url: {
       type: DataTypes.STRING(500),
