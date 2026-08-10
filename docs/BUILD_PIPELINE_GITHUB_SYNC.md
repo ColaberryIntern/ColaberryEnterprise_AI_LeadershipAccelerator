@@ -2,7 +2,7 @@
 
 **Document ID:** SBP-GH-v1
 **Session:** CC-20260809-b7k2 · **Date:** 2026-08-09
-**Status:** Proposed — decision required on §3, §6, §9
+**Status:** Approved — all six open decisions closed by Ali 2026-08-09 (§13)
 **Companions:** `BUILD_PIPELINE_AUDIT.md` · `BUILD_PIPELINE_REQUIREMENTS.md` · `BUILD_PIPELINE_RELEASES_AND_STORIES.md`
 
 ---
@@ -40,7 +40,7 @@ The prompts now generated for a student's story open with:
 | FR-031 | A build with no provisioned repo degrades to a documented fallback, never to a broken prompt | must |
 | FR-032 | Every prompt path is verified to resolve before the prompt is offered for copying | must |
 | FR-033 | Mark-done is disabled until repo evidence satisfies every applicable check | must |
-| FR-034 | Every gate has a documented path forward (re-check, mentor override, document-evidence stories) | must |
+| FR-034 | Every gate has a documented path forward: re-check, **staff override** (recorded, never self-applied), document-evidence stories | must |
 | FR-035 | The task card exposes one primary action; tool choice happens after the student reads the story | should |
 | FR-036 | A full-page workspace exists per story, with a story-seeded AI agent and a repo/checks rail | should |
 
@@ -340,7 +340,7 @@ Checks, all derived from the projection (§8, §9):
 | **Repo** | a workspace repo is provisioned for this project |
 | **Commits** | ≥1 commit whose message references this story id |
 | **Acceptance** | every `- [ ]` in `docs/stories/STORY-nnn.md` is ticked |
-| **CI** *(only if the repo defines checks)* | the latest run on the default branch is green |
+| **CI** *(informational only — never blocks)* | shown red/green when the repo defines checks; a red CI does not hold the gate closed (Ali, 2026-08-09) |
 
 The panel shows each check with its state and, when failing, **what to do about it** — never a bare greyed-out button:
 
@@ -360,7 +360,7 @@ The panel shows each check with its state and, when failing, **what to do about 
 A hard gate with no escape hatch is a trap. Three releases:
 
 1. **Re-check** — re-syncs from GitHub on demand. The webhook may be late or absent; the student should never wait on our plumbing.
-2. **Request review** — sends the story to a mentor with the failing checks attached. The mentor can pass it. Every override is recorded with who and why.
+2. **Request review** — sends the story to staff with the failing checks attached. **Staff can override and pass it** (Ali, 2026-08-09); the override is recorded with who and why, and is never self-applied by the student whose gate it is.
 3. **Not-applicable stories** — a story with no code outcome (a decision, a written artifact) is marked `evidence: document` at generation time and gates on the artifact existing in `docs/`, not on commits.
 
 **Skip** stays unchanged and ungated — skipping is an honest "not doing this now", and a skipped prerequisite still does not clear a downstream gate.
@@ -422,8 +422,8 @@ Steps 1–4 make the current pilot correct. 5 is a quick win with no dependencie
 
 3. ~~Webhook vs polling for the projection?~~ **Both** — webhook primary, 15–60 min reconciliation polling with conditional requests. See §5.2 (FR-041..FR-043).
 
-Still open:
+**All six decisions are now closed (Ali, 2026-08-09).**
 
-4. **Do we ever run student tests to verify acceptance?** Out of scope here (§8). If the answer is ever yes, it is a sandbox-execution project of its own.
-5. **Who can override a failed mark-done gate?** (§10.4). Recommend mentors and staff, never the student themselves — a self-override is just the ungated button with extra steps. Needs a decision on whether cohort mentors qualify or only Colaberry staff.
-6. **Does CI count as a check when the student's repo defines one?** Recommend yes, and treated as advisory-but-visible: a red CI does not block mark-done in v1 (students will have half-configured pipelines and we would trap them), but it shows in the panel and on the dashboard.
+4. ~~Do we ever run student tests to verify acceptance?~~ **No.** Executing a student's test suite on our infrastructure means running arbitrary code we did not write — a sandboxing project with real security surface, and not one this build needs. The dashboard labels a completed story as *"claimed done, with commits backing it"* rather than implying we verified it. Revisit only as a deliberate, separately-scoped piece of work.
+5. ~~Who can override a failed mark-done gate?~~ **Ali (staff) can.** Overrides are staff-held, recorded with who and why, and never self-applied by the student whose gate it is — a self-override is just the ungated button with extra steps. Whether cohort mentors are later granted the same power is a permissions question, not a design one; default is staff-only until someone asks.
+6. ~~Does CI block mark-done when the student's repo defines checks?~~ **No — visible, not blocking.** A red CI shows in the checks panel and on the dashboard but does not hold the gate closed. Students will have half-configured pipelines, and trapping them behind YAML they wrote badly and cannot yet debug punishes the wrong thing. Our four checks (repo, commits, acceptance, ownership) are the gate; their CI is information.
