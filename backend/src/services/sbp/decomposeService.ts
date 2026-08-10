@@ -51,6 +51,12 @@ export interface DecomposeResult {
   /** How many model calls it took (1 = clean first pass). */
   attempts: number;
   model: string;
+  /**
+   * The bounded client this call used. Returned so the repair pass reuses the
+   * same configured connection — same timeout, same capped retries — rather
+   * than constructing a second one with different failure behaviour.
+   */
+  client: Pick<OpenAI['chat']['completions'], 'create'>;
 }
 
 function log(event: string, correlationId: string | undefined, outcome: string, ctx: Record<string, unknown>): void {
@@ -169,7 +175,7 @@ export async function decomposeBuild(opts: DecomposeOptions): Promise<DecomposeR
       releases: parsed.releases.length,
       stories: parsed.stories.length,
     });
-    return { plan: parsed, attempts: attempt, model };
+    return { plan: parsed, attempts: attempt, model, client };
   }
 
   /* istanbul ignore next -- the loop always returns or throws; this satisfies the compiler. */

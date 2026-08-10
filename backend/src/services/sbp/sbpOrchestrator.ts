@@ -23,10 +23,12 @@
  */
 import { randomUUID } from 'crypto';
 import { decomposeBuild } from './decomposeService';
-import { gatePlan, GateResult, formatViolations } from './planGate';
+import { GateResult, formatViolations } from './planGate';
+import { gateAndRepair } from './planRepair';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
 import { writeDocsToRepo } from './repoWriter';
+import { materializePlanAsTasks } from './materializeTasks';
 import { hashPlan } from './planHash';
 import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
@@ -128,24 +130,38 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
 async function runGeneration(input: StartBuildInput, correlationId: string): Promise<void> {
   const started = Date.now();
   try {
-    const { plan, attempts, model } = await decomposeBuild({
+    const { plan, attempts, model, client } = await decomposeBuild({
       brief: buildBriefText(input),
       document: input.document ?? '',
       correlationId,
     });
 
     const source = `${buildBriefText(input)}\n${input.document ?? ''}`;
-    const gate = gatePlan(plan, source);
 
-    await savePlanDraft(input.projectId, plan, { gate, model, attempts, correlationId });
+    // The gate is strict by design, so a first pass usually has a gap — the
+    // first live run produced 3 violations. Repair closes them in place rather
+    // than failing the student at the first one: without it a build stops at
+    // "your plan has a gap" with no way forward, which is a worse experience
+    // than the generic template this replaced.
+    const repaired = await gateAndRepair(plan, source, {
+      client, model, correlationId,
+      onAttempt: (attempt, violations) => log('sbp_build_repairing', correlationId, 'partial', {
+        projectId: input.projectId, attempt, violations,
+      }),
+    });
+    const gate = repaired.gate;
+
+    await savePlanDraft(input.projectId, repaired.plan, { gate, model, attempts, correlationId });
     await setStatus(input.projectId, gate.ok ? 'drafted' : 'gate_failed');
 
     log('sbp_build_generated', correlationId, gate.ok ? 'success' : 'partial', {
       projectId: input.projectId,
       duration_ms: Date.now() - started,
       attempts,
-      requirements: plan.requirements.length,
-      stories: plan.stories.length,
+      requirements: repaired.plan.requirements.length,
+      stories: repaired.plan.stories.length,
+      repair_attempts: repaired.attempts,
+      repaired_stories: repaired.changed.flat(),
       gate_ok: gate.ok,
       violations: gate.violations.length,
     });
@@ -171,7 +187,16 @@ export function buildBriefText(input: StartBuildInput): string {
   if (input.users) parts.push(`WHO USES IT: ${input.users}`);
   if (input.dataSources) parts.push(`DATA SOURCES IT MUST CONNECT TO: ${input.dataSources}`);
   if (input.doneDefinition) parts.push(`WHAT DONE LOOKS LIKE (the guardrail): ${input.doneDefinition}`);
-  if (input.targetWeeks) parts.push(`TIMELINE: ${input.targetWeeks} weeks.`);
+  // Scheduling context only. Phrased so it shapes release week ranges without
+  // becoming a requirement — the first live run turned "TIMELINE: 6 weeks" into
+  // REQ-016 "The system must be deployed within 6 weeks", which no story can
+  // fulfil and which the coverage rule then flagged as an uncovered must-have.
+  if (input.targetWeeks) {
+    parts.push(
+      `SCHEDULE (context for release planning, NOT a requirement — do not emit a requirement about the timeline): ` +
+      `fit the releases into ${input.targetWeeks} weeks.`,
+    );
+  }
   return parts.join('\n\n');
 }
 
@@ -213,7 +238,7 @@ export interface PublishResult {
  */
 export async function publishBuild(
   projectId: string,
-  opts: { expectedSha?: string; repo?: { owner: string; repo: string; url: string } | null } = {},
+  opts: { enrollmentId: string; expectedSha?: string; repo?: { owner: string; repo: string; url: string } | null },
 ): Promise<PublishResult> {
   const draft = await getPlan(projectId);
   if (!draft) {
@@ -231,8 +256,15 @@ export async function publishBuild(
   const correlationId = published.correlation_id;
 
   if (!opts.repo) {
+    // No repo yet, but the plan must still reach the portal — otherwise a
+    // student completes a build and sees nothing change on screen, which is the
+    // exact failure this pipeline was built to fix. Prompts fall back to
+    // inlining their context instead of citing paths (FR-031).
+    const m = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, {});
     await setStatus(projectId, 'awaiting_repo');
-    log('sbp_build_published_no_repo', correlationId, 'partial', { projectId, version: published.version });
+    log('sbp_build_published_no_repo', correlationId, 'partial', {
+      projectId, version: published.version, lists: m.lists, tasks: m.tasks,
+    });
     return { status: 'awaiting_repo', planVersion: published.version, commitSha: null, filesWritten: 0, repoUrl: null };
   }
 
@@ -251,9 +283,16 @@ export async function publishBuild(
     { correlationId: correlationId ?? undefined },
   );
 
+  // Materialize AFTER the write, so prompts can cite paths now proven to exist.
+  const materialized = await materializePlanAsTasks(projectId, opts.enrollmentId, published.plan as BuildPlan, {
+    repoUrl: opts.repo.url,
+    manifestPaths: files.map((f) => f.path),
+  });
+
   await setStatus(projectId, 'published');
   log('sbp_build_published', correlationId, 'success', {
     projectId, version: published.version, commit: write.commitSha, files: write.changedPaths.length,
+    lists: materialized.lists, tasks: materialized.tasks, preserved_complete: materialized.preservedComplete,
   });
 
   return {

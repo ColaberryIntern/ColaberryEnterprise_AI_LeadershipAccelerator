@@ -15,6 +15,8 @@ const mockSaveDraft = jest.fn();
 const mockGetPlan = jest.fn();
 const mockPublishPlan = jest.fn();
 const mockWriteDocs = jest.fn();
+const mockRepairCreate = jest.fn();
+const mockMaterialize = jest.fn();
 
 jest.mock('../decomposeService', () => ({ decomposeBuild: (...a: any[]) => mockDecompose(...a) }));
 jest.mock('../planStore', () => ({
@@ -25,6 +27,7 @@ jest.mock('../planStore', () => ({
   publishPlan: (...a: any[]) => mockPublishPlan(...a),
 }));
 jest.mock('../repoWriter', () => ({ writeDocsToRepo: (...a: any[]) => mockWriteDocs(...a) }));
+jest.mock('../materializeTasks', () => ({ materializePlanAsTasks: (...a: any[]) => mockMaterialize(...a) }));
 
 import { startBuild, publishBuild, getBuildState, buildBriefText } from '../sbpOrchestrator';
 import { BuildPlan } from '../planContract';
@@ -70,11 +73,15 @@ beforeEach(() => {
   jest.spyOn(console, 'log').mockImplementation(() => undefined);
   mockGetIntake.mockResolvedValue({ project_id: PROJECT, idea: INPUT.idea, status: 'captured', correlation_id: 'corr-1' });
   mockSaveIntake.mockResolvedValue({ project_id: PROJECT, status: 'generating' });
-  mockDecompose.mockResolvedValue({ plan: goodPlan, attempts: 1, model: 'gpt-4o' });
+  // Repair reuses the client the decomposer returns; a repair is only attempted
+  // when the gate fails, so this stub throws if called for a clean plan.
+  mockRepairCreate.mockResolvedValue({ choices: [{ message: { content: JSON.stringify({ stories: [] }) } }] });
+  mockDecompose.mockResolvedValue({ plan: goodPlan, attempts: 1, model: 'gpt-4o', client: { create: mockRepairCreate } });
   mockSaveDraft.mockResolvedValue(storedPlan());
   mockGetPlan.mockResolvedValue(storedPlan());
   mockPublishPlan.mockResolvedValue(storedPlan({ status: 'published', published_at: 'now' }));
   mockWriteDocs.mockResolvedValue({ committed: true, commitSha: 'abc1234', changedPaths: ['docs/REQUIREMENTS.md'], skippedUnchanged: 0 });
+  mockMaterialize.mockResolvedValue({ lists: 5, tasks: 12, preservedComplete: 0 });
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -139,12 +146,16 @@ describe('startBuild', () => {
       ...goodPlan,
       requirements: [...goodPlan.requirements, { id: 'REQ-002', statement: 'Uncovered must.', kind: 'FUNC', priority: 'must', cluster: 'X' }],
     };
-    mockDecompose.mockResolvedValue({ plan: gapped, attempts: 1, model: 'gpt-4o' });
+    mockDecompose.mockResolvedValue({ plan: gapped, attempts: 1, model: 'gpt-4o', client: { create: mockRepairCreate } });
     await startBuild(INPUT as any);
     await flush();
     expect(mockSaveDraft).toHaveBeenCalled();
     expect(mockSaveDraft.mock.calls[0][2].gate.ok).toBe(false);
-    expect(mockSaveIntake.mock.calls.map((c) => c[0].status)).toContain('gate_failed');
+    // FINAL status, not "contains". An earlier version of this test used
+    // toContain and passed while the code threw immediately afterwards and
+    // ended up in 'failed' — the status was set, then the run died.
+    const statuses = mockSaveIntake.mock.calls.map((c) => c[0].status);
+    expect(statuses[statuses.length - 1]).toBe('gate_failed');
   });
 
   it('records a generation failure without throwing to the caller', async () => {
@@ -161,25 +172,25 @@ describe('publishBuild', () => {
 
   it('REFUSES to publish a plan that failed the gate', async () => {
     mockGetPlan.mockResolvedValue(storedPlan({ gate_ok: false }));
-    await expect(publishBuild(PROJECT, { repo })).rejects.toMatchObject({ status: 409 });
+    await expect(publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo })).rejects.toMatchObject({ status: 409 });
     expect(mockPublishPlan).not.toHaveBeenCalled();
     expect(mockWriteDocs).not.toHaveBeenCalled();
   });
 
   it('promotes the reviewed draft and never regenerates', async () => {
-    await publishBuild(PROJECT, { repo });
+    await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo });
     expect(mockPublishPlan).toHaveBeenCalledWith(PROJECT, 1, undefined);
     expect(mockDecompose).not.toHaveBeenCalled();
   });
 
   it('passes the reviewer\'s hash through so a changed plan is refused downstream', async () => {
     const sha = hashPlan(goodPlan);
-    await publishBuild(PROJECT, { repo, expectedSha: sha });
+    await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo, expectedSha: sha });
     expect(mockPublishPlan).toHaveBeenCalledWith(PROJECT, 1, sha);
   });
 
   it('writes the documents into the repo and reports the commit', async () => {
-    const result = await publishBuild(PROJECT, { repo });
+    const result = await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo });
     expect(mockWriteDocs).toHaveBeenCalled();
     expect(result.commitSha).toBe('abc1234');
     expect(result.status).toBe('published');
@@ -189,8 +200,26 @@ describe('publishBuild', () => {
     expect(files.some((f: any) => f.path === 'docs/stories/STORY-001.md')).toBe(true);
   });
 
+  // The gap Ali found: a plan that never reaches student_tasks is invisible in
+  // the portal, however correct it is.
+  it('materializes the plan into student tasks so the portal can render it', async () => {
+    await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo });
+    expect(mockMaterialize).toHaveBeenCalledWith(PROJECT, ENROLLMENT, goodPlan, expect.objectContaining({ repoUrl: repo.url }));
+  });
+
+  it('materializes even with NO repo — the plan must still be visible', async () => {
+    await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo: null });
+    expect(mockMaterialize).toHaveBeenCalledWith(PROJECT, ENROLLMENT, goodPlan, {});
+  });
+
+  it('does not materialize a gate-failed plan', async () => {
+    mockGetPlan.mockResolvedValue(storedPlan({ gate_ok: false }));
+    await expect(publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo })).rejects.toMatchObject({ status: 409 });
+    expect(mockMaterialize).not.toHaveBeenCalled();
+  });
+
   it('publishes to awaiting_repo when there is no repo, rather than failing', async () => {
-    const result = await publishBuild(PROJECT, { repo: null });
+    const result = await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo: null });
     expect(result.status).toBe('awaiting_repo');
     expect(result.commitSha).toBeNull();
     expect(mockWriteDocs).not.toHaveBeenCalled();
@@ -200,7 +229,7 @@ describe('publishBuild', () => {
 
   it('404s when there is no plan to publish', async () => {
     mockGetPlan.mockResolvedValue(null);
-    await expect(publishBuild(PROJECT, { repo })).rejects.toMatchObject({ status: 404 });
+    await expect(publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo })).rejects.toMatchObject({ status: 404 });
   });
 });
 
