@@ -44,7 +44,10 @@ export default function SystemHealthDashboard() {
       ws.onclose = () => setStatus((prev) => (prev === 'connected' ? 'error' : prev));
       ws.onmessage = (evt) => {
         const msg = JSON.parse(evt.data);
-        if (msg.type === 'HEALTH_UPDATE') setHealth(msg.health);
+        // STORY-026: server.js's admin push channels were generalized to a
+        // shared { type, data } shape when the pending-approvals channel
+        // was added, reusing the same helper this channel already used.
+        if (msg.type === 'HEALTH_UPDATE') setHealth(msg.data);
       };
     } catch {
       setStatus('error');

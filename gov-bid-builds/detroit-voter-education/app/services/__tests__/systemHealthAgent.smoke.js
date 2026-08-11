@@ -43,7 +43,10 @@ async function run() {
     if (pathname !== '/admin/health') { ws.close(); return; }
     const providedKey = searchParams.get('key');
     if (providedKey !== process.env.ADMIN_API_KEY) { ws.close(4001, 'Unauthorized'); return; }
-    const push = async () => ws.send(JSON.stringify({ type: 'HEALTH_UPDATE', health: await getSystemHealth() }));
+    // STORY-026: server.js's real admin push channels now use a shared
+    // { type, data } shape (see handleAdminPushChannel) -- mirrored here
+    // so this independent reimplementation stays representative.
+    const push = async () => ws.send(JSON.stringify({ type: 'HEALTH_UPDATE', data: await getSystemHealth() }));
     push();
     const interval = setInterval(push, 200);
     ws.on('close', () => clearInterval(interval));
@@ -99,7 +102,7 @@ async function run() {
       setTimeout(() => reject(new Error('timed out waiting for 2 HEALTH_UPDATE pushes')), 5000);
     });
     assert.equal(updates.length, 2);
-    assert.ok(updates.every((u) => u.type === 'HEALTH_UPDATE' && u.health.status));
+    assert.ok(updates.every((u) => u.type === 'HEALTH_UPDATE' && u.data.status));
     console.log('ok - WS /admin/health with a valid key receives real, repeated HEALTH_UPDATE pushes (proves the interval push actually works, not just a one-shot send)');
 
     console.log('\nAll live-DB smoke assertions passed.');

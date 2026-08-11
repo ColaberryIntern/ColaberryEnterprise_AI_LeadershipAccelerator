@@ -152,6 +152,12 @@ async function main() {
     await scanFragment('SystemHealthDashboard', html);
   });
 
+  await test('PendingApprovalsDashboard: renders with no axe violations', async () => {
+    const PendingApprovalsDashboard = compileComponent('PendingApprovalsDashboard.jsx');
+    const html = renderToStaticMarkup(React.createElement(PendingApprovalsDashboard));
+    await scanFragment('PendingApprovalsDashboard', html);
+  });
+
   if (fs.existsSync(TMP_DIR)) fs.rmdirSync(TMP_DIR);
 
   console.log(`\n${passed} passed`);

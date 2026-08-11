@@ -21,8 +21,44 @@ const systemHealthRouter = require('./routes/systemHealth');
 const metricsEndpointRouter = require('./routes/metricsEndpoint');
 const { handleMessage } = require('./ws/handler');
 const { getSystemHealth } = require('./services/systemHealthAgent');
+const { listPendingReview } = require('./services/coordinatorAgent');
 
 const HEALTH_WS_PUSH_INTERVAL_MS = 5000;
+const PENDING_APPROVALS_WS_PUSH_INTERVAL_MS = 5000;
+
+// STORY-025/026: shared shape for an admin-only, key-authenticated,
+// periodic-push WebSocket channel -- STORY-025's health channel was the
+// first instance of this, STORY-026's pending-approvals channel is the
+// second copy-pasted verbatim, so it's extracted here rather than becoming
+// a third near-identical `if (pathname === ...)` block once a future
+// dashboard story needs the same shape again.
+function handleAdminPushChannel(ws, searchParams, { messageType, getData, intervalMs }) {
+  const providedKey = searchParams.get('key');
+  if (!process.env.ADMIN_API_KEY || providedKey !== process.env.ADMIN_API_KEY) {
+    ws.close(4001, 'Unauthorized');
+    return;
+  }
+
+  const push = async () => {
+    try {
+      ws.send(JSON.stringify({ type: messageType, data: await getData() }));
+    } catch (err) {
+      console.error(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: 'error',
+        service: 'detroit-voter-education',
+        event: 'admin_push_channel_failed',
+        message_type: messageType,
+        error_class: err.constructor.name,
+        error: err.message,
+      }));
+    }
+  };
+
+  push();
+  const interval = setInterval(push, intervalMs);
+  ws.on('close', () => clearInterval(interval));
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -51,39 +87,29 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
-// STORY-025: reuses this same WebSocket server for a distinct admin-only
-// health channel, routed by req.url rather than a second WebSocketServer
-// instance. Scoped to its own path so it never reaches resident-facing
-// connections on the voter-preferences path -- those behave exactly as
-// before, zero change to the SET_PREFERENCES flow below.
+// STORY-025/026: reuses this same WebSocket server for distinct admin-only
+// channels, routed by req.url rather than a second WebSocketServer
+// instance. Each is scoped to its own path so it never reaches
+// resident-facing connections on the voter-preferences path -- those
+// behave exactly as before, zero change to the SET_PREFERENCES flow below.
 wss.on('connection', (ws, req) => {
   const { pathname, searchParams } = new URL(req.url, 'http://localhost');
 
   if (pathname === '/admin/health') {
-    const providedKey = searchParams.get('key');
-    if (!process.env.ADMIN_API_KEY || providedKey !== process.env.ADMIN_API_KEY) {
-      ws.close(4001, 'Unauthorized');
-      return;
-    }
+    handleAdminPushChannel(ws, searchParams, {
+      messageType: 'HEALTH_UPDATE',
+      getData: getSystemHealth,
+      intervalMs: HEALTH_WS_PUSH_INTERVAL_MS,
+    });
+    return;
+  }
 
-    const pushHealth = async () => {
-      try {
-        ws.send(JSON.stringify({ type: 'HEALTH_UPDATE', health: await getSystemHealth() }));
-      } catch (err) {
-        console.error(JSON.stringify({
-          timestamp: new Date().toISOString(),
-          level: 'error',
-          service: 'detroit-voter-education',
-          event: 'health_ws_push_failed',
-          error_class: err.constructor.name,
-          error: err.message,
-        }));
-      }
-    };
-
-    pushHealth();
-    const interval = setInterval(pushHealth, HEALTH_WS_PUSH_INTERVAL_MS);
-    ws.on('close', () => clearInterval(interval));
+  if (pathname === '/admin/pending-approvals') {
+    handleAdminPushChannel(ws, searchParams, {
+      messageType: 'PENDING_APPROVALS_UPDATE',
+      getData: listPendingReview,
+      intervalMs: PENDING_APPROVALS_WS_PUSH_INTERVAL_MS,
+    });
     return;
   }
 
