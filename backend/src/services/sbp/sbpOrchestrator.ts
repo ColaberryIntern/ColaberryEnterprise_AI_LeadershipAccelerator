@@ -161,6 +161,7 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       requirements: repaired.plan.requirements.length,
       stories: repaired.plan.stories.length,
       repair_attempts: repaired.attempts,
+      repair_rejected: repaired.rejected,
       repaired_stories: repaired.changed.flat(),
       gate_ok: gate.ok,
       violations: gate.violations.length,

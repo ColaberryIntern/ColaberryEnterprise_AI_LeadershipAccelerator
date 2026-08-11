@@ -142,12 +142,38 @@ describe('layer detection (T2)', () => {
 });
 
 describe('the rules are load-bearing, not decorative', () => {
+  /** Subjects flagged by the fulfils-based rule specifically, not the title backstop. */
+  const byFulfilsRule = (plan: BuildPlan): Set<string> =>
+    new Set(
+      gatePlan(plan).violations
+        .filter((v) => v.rule === 'story_is_layer' && /fulfils only implementation constraints/.test(v.message))
+        .map((v) => v.subject!),
+    );
+
   it('re-typing REQ-011/012 as CONSTRAINT is what makes rule 1 fire', () => {
     // Untyped (as the pilot actually emitted it) STORY-008/009 escape rule 1 —
-    // which is precisely why the pilot shipped them.
-    const untyped = layerRulesFor(pilot);
-    expect(untyped.has('STORY-008')).toBe(false);
-    expect(layerRulesFor(withConstraintsTyped(pilot)).has('STORY-008')).toBe(true);
+    // which is precisely why the pilot shipped them. Asserted against the
+    // fulfils rule specifically: STORY-008 is ALSO caught by the title backstop
+    // ("System connects to Postgres…"), so a check that merely asked "is it
+    // flagged?" would pass for the wrong reason and stop proving anything.
+    expect(byFulfilsRule(pilot).has('STORY-008')).toBe(false);
+    expect(byFulfilsRule(pilot).has('STORY-009')).toBe(false);
+    expect(byFulfilsRule(withConstraintsTyped(pilot)).has('STORY-008')).toBe(true);
+    expect(byFulfilsRule(withConstraintsTyped(pilot)).has('STORY-009')).toBe(true);
+  });
+
+  it('the title backstop catches STORY-008 even with the constraints mistyped', () => {
+    // The backstop's whole job: a second, independent chance at the one layer
+    // story whose title announces itself as plumbing. It was silently dead until
+    // 2026-08-10 (see planGateRegexes.test.ts) — this pins it alive.
+    const titled = gatePlan(pilot).violations
+      .filter((v) => v.rule === 'story_is_layer' && /titled as infrastructure work/.test(v.message))
+      .map((v) => v.subject);
+    expect(titled).toContain('STORY-008');
+    // And it stays a backstop: it does not reach past the one obvious case.
+    expect(titled).not.toContain('STORY-009');
+    expect(titled).not.toContain('STORY-004');
+    expect(titled).not.toContain('STORY-010');
   });
 
   it('the >=2 subsumption threshold is what spares STORY-010', () => {

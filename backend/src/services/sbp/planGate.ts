@@ -77,15 +77,22 @@ const SUSPECT_TERMS = [
  * regulations" — which no test can fail, and which existed only because a story
  * had to be written to satisfy it. Rejecting the requirement removes the whole
  * class of vague story, rather than pattern-matching one instance of it.
+ *
+ * These are EXPORTED solely so a test can assert each one still matches the
+ * phrase it was written for. Five of the seven were dead for a week: the file
+ * was first written through a shell heredoc that interpreted `\b` and left a
+ * literal 0x08 backspace in the source, so `/\bhigh[- ]quality\b/` demanded a
+ * control character and never fired. It looked correct in every editor and diff.
+ * A dead rule is worse than a missing one, because the suite still reports green.
  */
-const UNFALSIFIABLE = [
+export const UNFALSIFIABLE_PATTERNS = [
   /relevant regulations/i,
-  /industry (best )?practices?/i,
+  /\bindustry (best )?practices?\b/i,
   /user[- ]friendly/i,
-  /as (needed|appropriate|required)/i,
-  /high[- ]quality/i,
-  /where possible/i,
-  /good (performance|security|ux)/i,
+  /\bas (needed|appropriate|required)\b/i,
+  /\bhigh[- ]quality\b/i,
+  /\bwhere possible\b/i,
+  /\bgood (performance|security|ux)\b/i,
 ];
 
 /**
@@ -94,7 +101,7 @@ const UNFALSIFIABLE = [
  * load-bearing rules are fulfils-based (see story_is_layer / redundant_scaffold).
  */
 const LAYER_TITLE =
-  /^(system )?(connects?|integrat\w+|set[- ]?up|configur\w+|establish\w*|wire[s]? up).*(postgres|database|db|schema|table|queue|cache|smtp|mail|storage|infrastructure|api|auth)/i;
+  /^(system )?(connects?|integrat\w+|set[- ]?up|configur\w+|establish\w*|wire[s]? up)\b.*\b(postgres|database|db|schema|table|queue|cache|smtp|mail|storage|infrastructure|api|auth)\b/i;
 
 function acceptanceLines(s: PlanStory): string[] {
   return Array.isArray(s.acceptance) ? s.acceptance : [];
@@ -269,7 +276,7 @@ export function gatePlan(plan: BuildPlan, sourceText?: string): GateResult {
   // Rule 3 — reject unfalsifiable requirements at source.
   for (const r of requirements) {
     if (typeof r?.statement !== 'string') continue;
-    if (UNFALSIFIABLE.some((re) => re.test(r.statement))) {
+    if (UNFALSIFIABLE_PATTERNS.some((re) => re.test(r.statement))) {
       v.push({
         rule: 'requirement_unfalsifiable',
         subject: r.id,
