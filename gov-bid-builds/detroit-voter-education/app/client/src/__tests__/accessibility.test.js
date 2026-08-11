@@ -146,6 +146,12 @@ async function main() {
     await scanFragment('AdminFeedbackDashboard', html);
   });
 
+  await test('SystemHealthDashboard: renders with no axe violations', async () => {
+    const SystemHealthDashboard = compileComponent('SystemHealthDashboard.jsx');
+    const html = renderToStaticMarkup(React.createElement(SystemHealthDashboard));
+    await scanFragment('SystemHealthDashboard', html);
+  });
+
   if (fs.existsSync(TMP_DIR)) fs.rmdirSync(TMP_DIR);
 
   console.log(`\n${passed} passed`);

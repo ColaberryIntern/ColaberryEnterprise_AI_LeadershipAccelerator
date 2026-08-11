@@ -285,3 +285,42 @@ button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
 .admin-feedback-dashboard__review-actions label { font-size: 0.8rem; font-weight: 600; color: #333; }
 .admin-feedback-dashboard__review-actions input { flex: 1; padding: 0.4rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; }
 .admin-feedback-dashboard__review-actions button { width: auto; margin-top: 0; padding: 0.4rem 0.9rem; font-size: 0.85rem; }
+
+/* STORY-025: badge colors reuse the exact ws-badge pairs already verified
+   passing WCAG contrast in STORY-020 (healthy=connected green, down=error
+   red, degraded=connecting yellow) -- no new unverified hex values. */
+.system-health-dashboard {
+  background: #fff;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  margin-top: 1.5rem;
+}
+.system-health-dashboard h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.25rem; }
+.system-health-dashboard > p { color: #555; margin-bottom: 1.5rem; font-size: 0.9rem; }
+.system-health-dashboard > button {
+  padding: 0.6rem 1.2rem;
+  background: #003366;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.system-health-dashboard > button:disabled { background: #94a3b8; cursor: not-allowed; }
+.system-health-dashboard__panel { margin-top: 1.5rem; }
+.system-health-dashboard__badge {
+  display: inline-block;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  margin-bottom: 1rem;
+}
+.system-health-dashboard__badge--healthy { background: #d1fae5; color: #065f46; }
+.system-health-dashboard__badge--degraded { background: #fef9c3; color: #854d0e; }
+.system-health-dashboard__badge--down { background: #fee2e2; color: #991b1b; }
+.system-health-dashboard__metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; }
+.system-health-dashboard__metrics dt { font-size: 0.8rem; color: #64748b; }
+.system-health-dashboard__metrics dd { font-size: 0.95rem; font-weight: 600; margin: 0 0 0.5rem; }
