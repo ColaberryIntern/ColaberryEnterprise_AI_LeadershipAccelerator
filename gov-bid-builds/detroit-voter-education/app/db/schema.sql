@@ -214,6 +214,28 @@ CREATE OR REPLACE VIEW published_summaries_report AS
   JOIN officeholders_candidates o ON o.id = s.subject_id
   WHERE s.status = 'published';
 
+-- STORY-021: persisted history of quarterly accessibility audit runs. Each
+-- row is one manually-triggered run of the STORY-020 axe-core suite
+-- (app/client/src/__tests__/accessibility.test.js), plus a snapshot of how
+-- much accessibility-tagged resident feedback (feedback.type='accessibility',
+-- STORY-005) arrived since the previous audit. components_passed reflects
+-- exactly what the suite's own "ok - ..." lines report -- the suite aborts
+-- at the first failure, so on a failed run this is "how many completed
+-- cleanly before the abort," not "N of a known total," which is the honest
+-- number this repo can actually produce (see STORY-020's decision record for
+-- the same honesty-over-completeness reasoning re: contrast checking).
+CREATE TABLE IF NOT EXISTS accessibility_audits (
+  id                            SERIAL PRIMARY KEY,
+  run_at                        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  triggered_by                  TEXT NOT NULL,
+  status                        VARCHAR(10) NOT NULL, -- 'pass' | 'fail'
+  components_passed             INTEGER NOT NULL,
+  accessibility_feedback_count  INTEGER NOT NULL,
+  raw_output                    TEXT,
+  notes                         TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_accessibility_audits_run_at ON accessibility_audits(run_at);
+
 CREATE INDEX IF NOT EXISTS idx_jurisdictions_zip ON jurisdictions(zip_code);
 CREATE INDEX IF NOT EXISTS idx_user_preferences_session ON user_preferences(session_id);
 CREATE INDEX IF NOT EXISTS idx_audit_log_session        ON audit_log(session_id);

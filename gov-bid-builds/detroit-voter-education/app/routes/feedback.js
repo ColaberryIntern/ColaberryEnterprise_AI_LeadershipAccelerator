@@ -1,5 +1,6 @@
 const express = require('express');
 const pool = require('../db');
+const { requireAdminKey } = require('../middleware/requireAdminKey');
 
 const router = express.Router();
 
@@ -65,6 +66,42 @@ router.post('/', async (req, res) => {
     return res.status(500).json({ error: 'Failed to submit feedback' });
   } finally {
     client.release();
+  }
+});
+
+// STORY-021: no admin read path existed for submitted feedback at all --
+// including the accessibility-tagged reports the FeedbackForm has accepted
+// since STORY-005. Supports an optional ?type= filter so the quarterly
+// accessibility audit can pull just the accessibility-tagged rows without a
+// second, duplicate query living in accessibilityAuditAgent.js.
+router.get('/', requireAdminKey, async (req, res) => {
+  const { type } = req.query;
+  if (type !== undefined && !VALID_TYPES.includes(type)) {
+    return res.status(400).json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` });
+  }
+
+  try {
+    const result = type
+      ? await pool.query(
+        `SELECT id, session_id, type, message, created_at FROM feedback
+         WHERE type = $1 ORDER BY created_at DESC LIMIT 100`,
+        [type],
+      )
+      : await pool.query(
+        `SELECT id, session_id, type, message, created_at FROM feedback
+         ORDER BY created_at DESC LIMIT 100`,
+      );
+    return res.json(result.rows);
+  } catch (err) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'detroit-voter-education',
+      event: 'feedback_list_failed',
+      error_class: err.constructor.name,
+      error: err.message,
+    }));
+    return res.status(500).json({ error: 'Internal error' });
   }
 });
 

@@ -15,6 +15,7 @@ const dataIngestionRouter = require('./routes/dataIngestion');
 const subscriptionsRouter = require('./routes/subscriptions');
 const governmentDataRouter = require('./routes/governmentData');
 const dataExportRouter = require('./routes/dataExport');
+const accessibilityAuditRouter = require('./routes/accessibilityAudit');
 const { handleMessage } = require('./ws/handler');
 
 const app = express();
@@ -33,6 +34,7 @@ app.use('/api/officeholders', dataIngestionRouter);
 app.use('/api/subscriptions', subscriptionsRouter);
 app.use('/api/government-data', governmentDataRouter);
 app.use('/api/exports', dataExportRouter);
+app.use('/api/accessibility-audits', accessibilityAuditRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, 'client/dist');
