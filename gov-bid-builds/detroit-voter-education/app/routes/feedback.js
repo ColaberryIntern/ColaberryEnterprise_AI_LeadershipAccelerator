@@ -83,13 +83,13 @@ router.get('/', requireAdminKey, async (req, res) => {
   try {
     const result = type
       ? await pool.query(
-        `SELECT id, session_id, type, message, created_at FROM feedback
-         WHERE type = $1 ORDER BY created_at DESC LIMIT 100`,
+        `SELECT id, session_id, type, message, created_at, reviewed_by, reviewed_at, review_notes
+         FROM feedback WHERE type = $1 ORDER BY created_at DESC LIMIT 100`,
         [type],
       )
       : await pool.query(
-        `SELECT id, session_id, type, message, created_at FROM feedback
-         ORDER BY created_at DESC LIMIT 100`,
+        `SELECT id, session_id, type, message, created_at, reviewed_by, reviewed_at, review_notes
+         FROM feedback ORDER BY created_at DESC LIMIT 100`,
       );
     return res.json(result.rows);
   } catch (err) {
@@ -98,6 +98,57 @@ router.get('/', requireAdminKey, async (req, res) => {
       level: 'error',
       service: 'detroit-voter-education',
       event: 'feedback_list_failed',
+      error_class: err.constructor.name,
+      error: err.message,
+    }));
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+// STORY-022: marks a feedback item reviewed. Not an approve/reject gate
+// (unlike reviewExportRequest/reviewSummary elsewhere in this app) --
+// feedback review doesn't block or unlock anything downstream, it's just a
+// record that a City content admin looked at it. Once reviewed, immutable
+// via this endpoint -- re-reviewing throws rather than silently
+// overwriting who reviewed it and when.
+router.post('/:id/review', requireAdminKey, async (req, res) => {
+  const feedbackId = Number(req.params.id);
+  if (!Number.isInteger(feedbackId)) {
+    return res.status(400).json({ error: 'id must be an integer' });
+  }
+  const { adminId, notes } = req.body;
+  if (typeof adminId !== 'string' || adminId.trim().length === 0) {
+    return res.status(400).json({ error: 'adminId must be a non-empty string' });
+  }
+
+  try {
+    const existing = await pool.query('SELECT id, reviewed_at FROM feedback WHERE id = $1', [feedbackId]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ error: 'No feedback found for this id' });
+    }
+    if (existing.rows[0].reviewed_at) {
+      return res.status(409).json({ error: 'This feedback has already been reviewed', code: 'ALREADY_REVIEWED' });
+    }
+
+    const updated = await pool.query(
+      `UPDATE feedback SET reviewed_by = $1, reviewed_at = NOW(), review_notes = $2
+       WHERE id = $3 RETURNING id, reviewed_at`,
+      [adminId, notes || null, feedbackId],
+    );
+
+    await pool.query(
+      `INSERT INTO audit_log (session_id, action, metadata)
+       VALUES (NULL, 'FEEDBACK_REVIEWED', $1)`,
+      [JSON.stringify({ feedback_id: feedbackId, admin_id: adminId })],
+    );
+
+    return res.json({ feedbackId, reviewedAt: updated.rows[0].reviewed_at });
+  } catch (err) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'detroit-voter-education',
+      event: 'feedback_review_failed',
       error_class: err.constructor.name,
       error: err.message,
     }));

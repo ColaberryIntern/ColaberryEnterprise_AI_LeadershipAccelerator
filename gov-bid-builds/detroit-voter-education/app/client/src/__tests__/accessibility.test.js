@@ -140,6 +140,12 @@ async function main() {
     await scanFragment('UpdatesBanner', html);
   });
 
+  await test('AdminFeedbackDashboard: renders with no axe violations', async () => {
+    const AdminFeedbackDashboard = compileComponent('AdminFeedbackDashboard.jsx');
+    const html = renderToStaticMarkup(React.createElement(AdminFeedbackDashboard));
+    await scanFragment('AdminFeedbackDashboard', html);
+  });
+
   if (fs.existsSync(TMP_DIR)) fs.rmdirSync(TMP_DIR);
 
   console.log(`\n${passed} passed`);

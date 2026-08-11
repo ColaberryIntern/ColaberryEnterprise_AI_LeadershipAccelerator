@@ -48,7 +48,7 @@ header p { color: #555; margin-top: 0.25rem; }
   margin-bottom: 0.4rem;
   color: #333;
 }
-.field input[type="text"] {
+.field input[type="text"], .field input[type="password"] {
   width: 100%;
   padding: 0.55rem 0.75rem;
   border: 1px solid #cbd5e1;
@@ -57,7 +57,7 @@ header p { color: #555; margin-top: 0.25rem; }
   outline: none;
   transition: border-color 0.15s;
 }
-.field input[type="text"]:focus { border-color: #003366; box-shadow: 0 0 0 3px rgba(0,51,102,0.35); }
+.field input[type="text"]:focus, .field input[type="password"]:focus { border-color: #003366; box-shadow: 0 0 0 3px rgba(0,51,102,0.35); }
 .field input[aria-invalid="true"] { border-color: #dc2626; }
 
 .hint {
@@ -249,3 +249,39 @@ button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
   font-size: 0.85rem;
   margin-bottom: 1.25rem;
 }
+
+/* STORY-022: reuses only already-verified-passing colors from elsewhere in
+   this stylesheet (#555, #64748b, #003366, #dc2626) -- no new hex values
+   introduced without contrast verification, per STORY-020's practice. */
+.admin-feedback-dashboard {
+  background: #fff;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  margin-top: 1.5rem;
+}
+.admin-feedback-dashboard h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.25rem; }
+.admin-feedback-dashboard > p { color: #555; margin-bottom: 1.5rem; font-size: 0.9rem; }
+.admin-feedback-dashboard > button {
+  padding: 0.6rem 1.2rem;
+  background: #003366;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.admin-feedback-dashboard > button:disabled { background: #94a3b8; cursor: not-allowed; }
+.admin-feedback-dashboard__list { list-style: none; display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
+.admin-feedback-dashboard__item {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+}
+.admin-feedback-dashboard__meta { font-size: 0.8rem; color: #64748b; margin-bottom: 0.4rem; }
+.admin-feedback-dashboard__reviewed { font-size: 0.85rem; color: #64748b; margin-top: 0.5rem; }
+.admin-feedback-dashboard__review-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; }
+.admin-feedback-dashboard__review-actions label { font-size: 0.8rem; font-weight: 600; color: #333; }
+.admin-feedback-dashboard__review-actions input { flex: 1; padding: 0.4rem 0.6rem; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; }
+.admin-feedback-dashboard__review-actions button { width: auto; margin-top: 0; padding: 0.4rem 0.9rem; font-size: 0.85rem; }

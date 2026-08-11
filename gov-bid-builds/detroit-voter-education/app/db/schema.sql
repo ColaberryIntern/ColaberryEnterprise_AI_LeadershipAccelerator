@@ -29,6 +29,12 @@ CREATE TABLE IF NOT EXISTS feedback (
   message     TEXT         NOT NULL,
   created_at  TIMESTAMPTZ  DEFAULT NOW()
 );
+-- STORY-022: review tracking so a City content admin can mark feedback
+-- reviewed, same reviewed_by/reviewed_at/review_notes shape already used by
+-- summaries (STORY-011) and export_requests (STORY-018) elsewhere in this app.
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS reviewed_by   TEXT;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS reviewed_at   TIMESTAMPTZ;
+ALTER TABLE feedback ADD COLUMN IF NOT EXISTS review_notes  TEXT;
 
 CREATE TABLE IF NOT EXISTS jurisdictions (
   id              SERIAL PRIMARY KEY,
