@@ -7,8 +7,9 @@ import SystemHealthDashboard from './components/SystemHealthDashboard';
 import PendingApprovalsDashboard from './components/PendingApprovalsDashboard';
 import RecentActionsDashboard from './components/RecentActionsDashboard';
 import AnomaliesDashboard from './components/AnomaliesDashboard';
+import GovernanceScoreDashboard from './components/GovernanceScoreDashboard';
 
-// STORY-022/025/026/027/028: a plain pathname lookup, not a routing
+// STORY-022/025/026/027/028/029: a plain pathname lookup, not a routing
 // library -- this app has a small, fixed set of admin pages and no other
 // reason to add react-router-dom as a dependency. Works in both Vite dev
 // (SPA fallback serves index.html for unmatched paths by default) and
@@ -21,6 +22,7 @@ const ADMIN_ROUTES = {
   '/admin/pending-approvals': PendingApprovalsDashboard,
   '/admin/recent-actions': RecentActionsDashboard,
   '/admin/anomalies': AnomaliesDashboard,
+  '/admin/governance': GovernanceScoreDashboard,
 };
 
 export default function App() {

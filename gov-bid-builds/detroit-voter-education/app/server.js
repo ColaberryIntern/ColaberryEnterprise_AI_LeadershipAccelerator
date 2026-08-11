@@ -23,12 +23,14 @@ const { handleMessage } = require('./ws/handler');
 const { getSystemHealth } = require('./services/systemHealthAgent');
 const { listPendingReview } = require('./services/coordinatorAgent');
 const { listRecentActions, listAnomalies } = require('./services/auditLogAgent');
+const { getGovernanceScore } = require('./services/trustGovernanceAgent');
 const { hasPermission, logAccessAttempt } = require('./middleware/rbac');
 
 const HEALTH_WS_PUSH_INTERVAL_MS = 5000;
 const PENDING_APPROVALS_WS_PUSH_INTERVAL_MS = 5000;
 const RECENT_ACTIONS_WS_PUSH_INTERVAL_MS = 5000;
 const ANOMALIES_WS_PUSH_INTERVAL_MS = 5000;
+const GOVERNANCE_WS_PUSH_INTERVAL_MS = 5000;
 
 // STORY-027/028: an `authorize` predicate for handleAdminPushChannel that
 // checks a role-based permission (via rbac.js's hasPermission) instead of
@@ -160,6 +162,20 @@ wss.on('connection', (ws, req) => {
       getData: listAnomalies,
       intervalMs: ANOMALIES_WS_PUSH_INTERVAL_MS,
       authorize: dataStewardAuthorize('audit_log:read', '/admin/anomalies'),
+    });
+    return;
+  }
+
+  if (pathname === '/admin/governance') {
+    // STORY-029: governance score is a content-quality metric, not
+    // audit-log-derived security data -- stays on the default flat
+    // ADMIN_API_KEY gate (same as health/pending-approvals), matching the
+    // existing GET /api/governance/score route's requireAdminKey (STORY-013).
+    // See decision-record-STORY-029.md.
+    handleAdminPushChannel(ws, searchParams, {
+      messageType: 'GOVERNANCE_UPDATE',
+      getData: getGovernanceScore,
+      intervalMs: GOVERNANCE_WS_PUSH_INTERVAL_MS,
     });
     return;
   }

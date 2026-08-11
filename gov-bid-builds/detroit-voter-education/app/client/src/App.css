@@ -447,3 +447,33 @@ button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
 }
 .anomalies-dashboard__severity--high { background: #fee2e2; color: #991b1b; }
 .anomalies-dashboard__severity--medium { background: #fef9c3; color: #854d0e; }
+
+/* STORY-029: reuses only already-verified-passing colors from elsewhere in
+   this stylesheet (#fff, #555, #003366, #94a3b8, #64748b). */
+.governance-score-dashboard {
+  background: #fff;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  margin-top: 1.5rem;
+}
+.governance-score-dashboard h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.25rem; }
+.governance-score-dashboard > p { color: #555; margin-bottom: 1.5rem; font-size: 0.9rem; }
+.governance-score-dashboard > button {
+  padding: 0.6rem 1.2rem;
+  background: #003366;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.governance-score-dashboard > button:disabled { background: #94a3b8; cursor: not-allowed; }
+.governance-score-dashboard__panel { margin-top: 1.5rem; }
+.governance-score-dashboard__headline { display: flex; align-items: baseline; gap: 0.6rem; margin-bottom: 0.4rem; }
+.governance-score-dashboard__headline-value { font-size: 2.4rem; font-weight: 700; color: #003366; }
+.governance-score-dashboard__headline-label { font-size: 0.9rem; color: #64748b; }
+.governance-score-dashboard__metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem 1rem; margin-top: 1rem; }
+.governance-score-dashboard__metrics dt { font-size: 0.8rem; color: #64748b; }
+.governance-score-dashboard__metrics dd { font-size: 0.95rem; font-weight: 600; margin: 0 0 0.5rem; }

@@ -170,6 +170,12 @@ async function main() {
     await scanFragment('AnomaliesDashboard', html);
   });
 
+  await test('GovernanceScoreDashboard: renders with no axe violations', async () => {
+    const GovernanceScoreDashboard = compileComponent('GovernanceScoreDashboard.jsx');
+    const html = renderToStaticMarkup(React.createElement(GovernanceScoreDashboard));
+    await scanFragment('GovernanceScoreDashboard', html);
+  });
+
   if (fs.existsSync(TMP_DIR)) fs.rmdirSync(TMP_DIR);
 
   console.log(`\n${passed} passed`);
