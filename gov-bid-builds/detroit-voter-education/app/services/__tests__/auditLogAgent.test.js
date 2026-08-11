@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 // deployment's actual secret.
 process.env.AUDIT_LOG_SIGNING_KEY = '0'.repeat(64);
 
-const { computeSignature, verifyAuditLogEntry, boundLimit } = require('../auditLogAgent');
+const { computeSignature, verifyAuditLogEntry, boundLimit, buildAnomalyList } = require('../auditLogAgent');
 
 let passed = 0;
 function test(name, fn) {
@@ -110,6 +110,63 @@ test('boundLimit: clamps a value above the max down to the max', () => {
 
 test('boundLimit: accepts a numeric string (query params arrive as strings)', () => {
   assert.equal(boundLimit('30'), 30);
+});
+
+const HEALTHY = { status: 'healthy', timestamp: NOW, database: { status: 'up' }, recentErrors: { count: 0 } };
+const DEGRADED = { status: 'degraded', timestamp: NOW, database: { status: 'up' }, recentErrors: { count: 15 } };
+const DOWN = { status: 'down', timestamp: NOW, database: { status: 'down' }, recentErrors: { count: 3 } };
+
+test('buildAnomalyList: no anomalies when everything is quiet', () => {
+  const anomalies = buildAnomalyList({ escalationRows: [], accessDenialCount: 0, accessDenialLastAt: null, health: HEALTHY });
+  assert.deepEqual(anomalies, []);
+});
+
+test('buildAnomalyList: a circuit-breaker escalation row becomes a high-severity anomaly', () => {
+  const anomalies = buildAnomalyList({
+    escalationRows: [{ id: 1, created_at: NOW, metadata: { source: 'federal_register' } }],
+    accessDenialCount: 0,
+    accessDenialLastAt: null,
+    health: HEALTHY,
+  });
+  assert.equal(anomalies.length, 1);
+  assert.equal(anomalies[0].type, 'circuit_breaker_open');
+  assert.equal(anomalies[0].severity, 'high');
+  assert.match(anomalies[0].detail, /federal_register/);
+});
+
+test('buildAnomalyList: access denials below the threshold are not flagged', () => {
+  const anomalies = buildAnomalyList({ escalationRows: [], accessDenialCount: 2, accessDenialLastAt: NOW, health: HEALTHY });
+  assert.deepEqual(anomalies, []);
+});
+
+test('buildAnomalyList: access denials at or above the threshold are flagged as medium severity', () => {
+  const anomalies = buildAnomalyList({ escalationRows: [], accessDenialCount: 3, accessDenialLastAt: NOW, health: HEALTHY });
+  assert.equal(anomalies.length, 1);
+  assert.equal(anomalies[0].type, 'repeated_access_denials');
+  assert.equal(anomalies[0].severity, 'medium');
+});
+
+test('buildAnomalyList: degraded health is a medium-severity anomaly, down health is high-severity', () => {
+  const degradedAnomalies = buildAnomalyList({ escalationRows: [], accessDenialCount: 0, accessDenialLastAt: null, health: DEGRADED });
+  assert.equal(degradedAnomalies.length, 1);
+  assert.equal(degradedAnomalies[0].severity, 'medium');
+
+  const downAnomalies = buildAnomalyList({ escalationRows: [], accessDenialCount: 0, accessDenialLastAt: null, health: DOWN });
+  assert.equal(downAnomalies.length, 1);
+  assert.equal(downAnomalies[0].severity, 'high');
+});
+
+test('buildAnomalyList: multiple simultaneous anomalies are all included, most recent first', () => {
+  const anomalies = buildAnomalyList({
+    escalationRows: [{ id: 1, created_at: '2026-08-11T10:00:00.000Z', metadata: { source: 'x' } }],
+    accessDenialCount: 5,
+    accessDenialLastAt: '2026-08-11T12:00:00.000Z',
+    health: DOWN,
+  });
+  assert.equal(anomalies.length, 3);
+  // DOWN uses NOW ('2026-08-11T12:00:00.000Z'), tied with the access-denial
+  // timestamp -- both must sort ahead of the older escalation regardless.
+  assert.equal(anomalies[2].type, 'circuit_breaker_open');
 });
 
 console.log(`\n${passed} passed`);

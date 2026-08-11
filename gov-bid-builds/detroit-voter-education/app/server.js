@@ -22,12 +22,27 @@ const metricsEndpointRouter = require('./routes/metricsEndpoint');
 const { handleMessage } = require('./ws/handler');
 const { getSystemHealth } = require('./services/systemHealthAgent');
 const { listPendingReview } = require('./services/coordinatorAgent');
-const { listRecentActions } = require('./services/auditLogAgent');
+const { listRecentActions, listAnomalies } = require('./services/auditLogAgent');
 const { hasPermission, logAccessAttempt } = require('./middleware/rbac');
 
 const HEALTH_WS_PUSH_INTERVAL_MS = 5000;
 const PENDING_APPROVALS_WS_PUSH_INTERVAL_MS = 5000;
 const RECENT_ACTIONS_WS_PUSH_INTERVAL_MS = 5000;
+const ANOMALIES_WS_PUSH_INTERVAL_MS = 5000;
+
+// STORY-027/028: an `authorize` predicate for handleAdminPushChannel that
+// checks a role-based permission (via rbac.js's hasPermission) instead of
+// the flat ADMIN_API_KEY default, and logs the attempt the same way
+// requireRole() does over HTTP -- STORY-027's recent-actions channel was
+// the first inline use of this shape, STORY-028's anomalies channel would
+// have been the second copy-paste, so it's a small reusable factory here.
+function dataStewardAuthorize(permission, channelName) {
+  return async (key) => {
+    const permitted = hasPermission(key, permission);
+    await logAccessAttempt(permitted, key, permission, { channel: `ws:${channelName}` });
+    return permitted;
+  };
+}
 
 // STORY-025/026/027: shared shape for an admin-only, key-authenticated,
 // periodic-push WebSocket channel -- STORY-025's health channel was the
@@ -126,20 +141,25 @@ wss.on('connection', (ws, req) => {
   }
 
   if (pathname === '/admin/recent-actions') {
+    // STORY-024/027: this resource is gated by the data_steward role, not
+    // the general admin key -- see decision-record-STORY-027.md.
     handleAdminPushChannel(ws, searchParams, {
       messageType: 'RECENT_ACTIONS_UPDATE',
       getData: () => listRecentActions(),
       intervalMs: RECENT_ACTIONS_WS_PUSH_INTERVAL_MS,
-      // STORY-024/027: this resource is gated by the data_steward role,
-      // not the general admin key -- see decision-record-STORY-027.md.
-      // Logs the attempt the same way requireRole() does over HTTP, so
-      // WS connection attempts to the audit trail are just as observable
-      // as REST ones.
-      authorize: async (key) => {
-        const permitted = hasPermission(key, 'audit_log:read');
-        await logAccessAttempt(permitted, key, 'audit_log:read', { channel: 'ws:/admin/recent-actions' });
-        return permitted;
-      },
+      authorize: dataStewardAuthorize('audit_log:read', '/admin/recent-actions'),
+    });
+    return;
+  }
+
+  if (pathname === '/admin/anomalies') {
+    // STORY-024/027/028: same data_steward gate as recent-actions -- see
+    // decision-record-STORY-028.md.
+    handleAdminPushChannel(ws, searchParams, {
+      messageType: 'ANOMALIES_UPDATE',
+      getData: listAnomalies,
+      intervalMs: ANOMALIES_WS_PUSH_INTERVAL_MS,
+      authorize: dataStewardAuthorize('audit_log:read', '/admin/anomalies'),
     });
     return;
   }

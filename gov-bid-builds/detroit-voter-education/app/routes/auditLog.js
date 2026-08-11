@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireRole } = require('../middleware/rbac');
-const { getAuditLogEntry, listRecentActions } = require('../services/auditLogAgent');
+const { getAuditLogEntry, listRecentActions, listAnomalies } = require('../services/auditLogAgent');
 
 const router = express.Router();
 
@@ -10,8 +10,9 @@ const router = express.Router();
 // (granted and denied) are logged by requireRole() itself via signed
 // logAction(), correctly labeled AUDIT_LOG_ACCESS_GRANTED/DENIED.
 //
-// STORY-027: /recent must be declared before /:id, or Express would treat
-// "recent" as the :id param and this route would never be reached.
+// STORY-027/028: /recent and /anomalies must be declared before /:id, or
+// Express would treat them as the :id param and these routes would never
+// be reached.
 router.get('/recent', requireRole('audit_log:read'), async (req, res) => {
   try {
     const rows = await listRecentActions(req.query.limit);
@@ -22,6 +23,23 @@ router.get('/recent', requireRole('audit_log:read'), async (req, res) => {
       level: 'error',
       service: 'detroit-voter-education',
       event: 'audit_log_recent_failed',
+      error_class: err.constructor.name,
+      error: err.message,
+    }));
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
+router.get('/anomalies', requireRole('audit_log:read'), async (_req, res) => {
+  try {
+    const anomalies = await listAnomalies();
+    return res.json(anomalies);
+  } catch (err) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'detroit-voter-education',
+      event: 'audit_log_anomalies_failed',
       error_class: err.constructor.name,
       error: err.message,
     }));

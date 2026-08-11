@@ -164,6 +164,12 @@ async function main() {
     await scanFragment('RecentActionsDashboard', html);
   });
 
+  await test('AnomaliesDashboard: renders with no axe violations', async () => {
+    const AnomaliesDashboard = compileComponent('AnomaliesDashboard.jsx');
+    const html = renderToStaticMarkup(React.createElement(AnomaliesDashboard));
+    await scanFragment('AnomaliesDashboard', html);
+  });
+
   if (fs.existsSync(TMP_DIR)) fs.rmdirSync(TMP_DIR);
 
   console.log(`\n${passed} passed`);

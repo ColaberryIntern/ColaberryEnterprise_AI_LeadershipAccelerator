@@ -10,6 +10,7 @@
 // third-party non-repudiation. Named honestly, not oversold as PKI-grade.
 const crypto = require('node:crypto');
 const pool = require('../db');
+const { getSystemHealth } = require('./systemHealthAgent');
 
 // Same 64-hex-char (32-byte) convention as the existing ENCRYPTION_KEY --
 // see app/middleware/encryption.js.
@@ -122,6 +123,91 @@ async function listRecentActions(limit = RECENT_ACTIONS_DEFAULT_LIMIT) {
   return result.rows.map((row) => ({ ...row, signatureStatus: verifyAuditLogEntry(row) }));
 }
 
+// STORY-028: "integrate monitoring tools to detect anomalies" reshaped to a
+// real, deterministic, rule-based detector over data this app already
+// produces -- no external monitoring integration, no fabricated ML/
+// statistical scoring. See decision-record-STORY-028.md. Three real
+// signals: the circuit breaker opening (STORY-019's ESCALATION_TRIGGERED),
+// repeated audit-log access denials clustering (STORY-024's
+// AUDIT_LOG_ACCESS_DENIED), and system health dropping below 'healthy'
+// (STORY-025).
+const ANOMALY_ESCALATION_WINDOW_MINUTES = 60;
+const ANOMALY_ACCESS_DENIAL_WINDOW_MINUTES = 15;
+const ANOMALY_ACCESS_DENIAL_THRESHOLD = 3;
+
+// Pure -- builds the anomaly list from already-fetched raw signals, kept
+// separate from the I/O below (same split as STORY-025's
+// deriveOverallStatus/checkDatabase) so the detection rules themselves are
+// unit-testable without a database.
+function buildAnomalyList({
+  escalationRows, accessDenialCount, accessDenialLastAt, health,
+}) {
+  const anomalies = [];
+
+  for (const row of escalationRows) {
+    anomalies.push({
+      type: 'circuit_breaker_open',
+      severity: 'high',
+      detail: `Circuit breaker opened for source '${row.metadata?.source || 'unknown'}' after repeated failures`,
+      detectedAt: row.created_at,
+      auditLogId: row.id,
+    });
+  }
+
+  if (accessDenialCount >= ANOMALY_ACCESS_DENIAL_THRESHOLD) {
+    anomalies.push({
+      type: 'repeated_access_denials',
+      severity: 'medium',
+      detail: `${accessDenialCount} denied audit-log access attempts in the last ${ANOMALY_ACCESS_DENIAL_WINDOW_MINUTES} minutes`,
+      detectedAt: accessDenialLastAt,
+      auditLogId: null,
+    });
+  }
+
+  if (health.status !== 'healthy') {
+    anomalies.push({
+      type: 'system_health',
+      severity: health.status === 'down' ? 'high' : 'medium',
+      detail: `System health is ${health.status} (database ${health.database.status}, ${health.recentErrors.count} recent errors)`,
+      detectedAt: health.timestamp,
+      auditLogId: null,
+    });
+  }
+
+  return anomalies.sort((a, b) => new Date(b.detectedAt) - new Date(a.detectedAt));
+}
+
+async function listAnomalies() {
+  const escalations = await pool.query(
+    `SELECT id, created_at, metadata FROM audit_log
+     WHERE action = 'ESCALATION_TRIGGERED' AND created_at > NOW() - ($1 || ' minutes')::interval
+     ORDER BY created_at DESC`,
+    [ANOMALY_ESCALATION_WINDOW_MINUTES],
+  );
+
+  const denials = await pool.query(
+    `SELECT COUNT(*)::int AS n, MAX(created_at) AS last_at FROM audit_log
+     WHERE action = 'AUDIT_LOG_ACCESS_DENIED' AND created_at > NOW() - ($1 || ' minutes')::interval`,
+    [ANOMALY_ACCESS_DENIAL_WINDOW_MINUTES],
+  );
+
+  const health = await getSystemHealth();
+
+  return buildAnomalyList({
+    escalationRows: escalations.rows,
+    accessDenialCount: denials.rows[0].n,
+    accessDenialLastAt: denials.rows[0].last_at,
+    health,
+  });
+}
+
 module.exports = {
-  logAction, getAuditLogEntry, listRecentActions, verifyAuditLogEntry, computeSignature, boundLimit,
+  logAction,
+  getAuditLogEntry,
+  listRecentActions,
+  listAnomalies,
+  buildAnomalyList,
+  verifyAuditLogEntry,
+  computeSignature,
+  boundLimit,
 };
