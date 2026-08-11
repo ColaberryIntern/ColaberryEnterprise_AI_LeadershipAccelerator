@@ -90,9 +90,13 @@ const REMEDIES: Record<string, string> = {
     'that plumbing actually serves, and retitle it as the user-visible outcome ' +
     '(not "Connect to the RSS feed" but "Director is warned two weeks before a deadline").',
   story_redundant_scaffold:
-    'A story that subsumes two or more others is duplicate scope. Fix it by REMOVING it ' +
-    '(put its id in remove_story_ids), or by REPLACING it with a narrowed `fulfills` that no ' +
-    'longer covers the others. Never resolve this by adding a story.',
+    'A story that subsumes two or more others is duplicate scope. Look at BOTH sides before ' +
+    'choosing: often the subsuming story is the legitimate one (the r0 trust spine must cite ' +
+    'the notification AND the audit requirement — that is its job) and the real duplication is ' +
+    'a SUBSUMED story already covered by a third. Fix by either (a) REMOVING the genuinely ' +
+    'duplicated story — subsuming or subsumed — via remove_story_ids, or (b) REPLACING a story ' +
+    'with a narrowed `fulfills`. Removing the subsumed duplicate is usually right when the ' +
+    'subsuming story is the trust spine. Never resolve this by adding a story.',
   requirement_unfalsifiable:
     'REPLACE the requirement with the SAME id and a statement a test could fail. Name the ' +
     'observable behaviour and its threshold. "Should be user-friendly" becomes ' +

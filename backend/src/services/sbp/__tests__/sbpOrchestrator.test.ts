@@ -170,11 +170,52 @@ describe('startBuild', () => {
 describe('publishBuild', () => {
   const repo = { owner: 'ColaberryIntern', repo: 'sponsor-dashboard-11111111', url: 'https://github.com/ColaberryIntern/sponsor-dashboard-11111111' };
 
-  it('REFUSES to publish a plan that failed the gate', async () => {
-    mockGetPlan.mockResolvedValue(storedPlan({ gate_ok: false }));
+  it('REFUSES to publish a plan with a BLOCKING violation', async () => {
+    mockGetPlan.mockResolvedValue(storedPlan({
+      gate_ok: false,
+      gate_violations: [{ rule: 'must_uncovered', subject: 'REQ-007', message: 'must-have REQ-007 is fulfilled by no story' }],
+    }));
     await expect(publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo })).rejects.toMatchObject({ status: 409 });
     expect(mockPublishPlan).not.toHaveBeenCalled();
     expect(mockWriteDocs).not.toHaveBeenCalled();
+  });
+
+  it('names the blocking violation in the refusal, so the student is not told "something is wrong"', async () => {
+    mockGetPlan.mockResolvedValue(storedPlan({
+      gate_ok: false,
+      gate_violations: [{ rule: 'must_uncovered', subject: 'REQ-007', message: 'must-have REQ-007 is fulfilled by no story' }],
+    }));
+    await expect(publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo }))
+      .rejects.toThrow(/REQ-007/);
+  });
+
+  it('PUBLISHES a plan whose only violations are advisory', async () => {
+    // The production case (project 2c9953ce): one `story_redundant_scaffold`
+    // left after repair exhausted its attempts. Failing closed on that meant an
+    // empty Projects page; a slightly redundant story beats no plan at all.
+    mockGetPlan.mockResolvedValue(storedPlan({
+      gate_ok: false,
+      gate_violations: [
+        { rule: 'story_redundant_scaffold', subject: 'STORY-010', message: 'STORY-010 subsumes STORY-003, STORY-009' },
+        { rule: 'release_unbalanced', subject: 'r0', message: 'release r0 holds 4 of 10 stories' },
+      ],
+    }));
+    const result = await publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo });
+    expect(result.status).toBe('published');
+    expect(mockPublishPlan).toHaveBeenCalled();
+    expect(mockMaterialize).toHaveBeenCalled();
+  });
+
+  it('still refuses when a blocking violation sits alongside advisory ones', async () => {
+    mockGetPlan.mockResolvedValue(storedPlan({
+      gate_ok: false,
+      gate_violations: [
+        { rule: 'story_redundant_scaffold', subject: 'STORY-010', message: 'overlap' },
+        { rule: 'dangling_blocked_by', subject: 'STORY-004', message: 'STORY-004 is blocked by unknown story STORY-099' },
+      ],
+    }));
+    await expect(publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo })).rejects.toMatchObject({ status: 409 });
+    expect(mockMaterialize).not.toHaveBeenCalled();
   });
 
   it('promotes the reviewed draft and never regenerates', async () => {
@@ -212,8 +253,11 @@ describe('publishBuild', () => {
     expect(mockMaterialize).toHaveBeenCalledWith(PROJECT, ENROLLMENT, goodPlan, {});
   });
 
-  it('does not materialize a gate-failed plan', async () => {
-    mockGetPlan.mockResolvedValue(storedPlan({ gate_ok: false }));
+  it('does not materialize a plan blocked on coverage', async () => {
+    mockGetPlan.mockResolvedValue(storedPlan({
+      gate_ok: false,
+      gate_violations: [{ rule: 'must_uncovered', subject: 'REQ-007', message: 'must-have REQ-007 is fulfilled by no story' }],
+    }));
     await expect(publishBuild(PROJECT, { enrollmentId: ENROLLMENT, repo })).rejects.toMatchObject({ status: 409 });
     expect(mockMaterialize).not.toHaveBeenCalled();
   });
