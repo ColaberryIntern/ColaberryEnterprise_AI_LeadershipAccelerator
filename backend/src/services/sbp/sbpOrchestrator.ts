@@ -23,7 +23,7 @@
  */
 import { randomUUID } from 'crypto';
 import { decomposeBuild } from './decomposeService';
-import { GateResult, formatViolations } from './planGate';
+import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
@@ -151,8 +151,13 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
     });
     const gate = repaired.gate;
 
+    // A plan that repair could not make perfect still reaches the student, as
+    // long as nothing left is BLOCKING. A lone `story_redundant_scaffold` used
+    // to mean an empty Projects page; a slightly redundant story beats no plan.
+    const publishable = isPublishable(gate.violations);
+
     await savePlanDraft(input.projectId, repaired.plan, { gate, model, attempts, correlationId });
-    await setStatus(input.projectId, gate.ok ? 'drafted' : 'gate_failed');
+    await setStatus(input.projectId, publishable ? 'drafted' : 'gate_failed');
 
     log('sbp_build_generated', correlationId, gate.ok ? 'success' : 'partial', {
       projectId: input.projectId,
@@ -164,7 +169,10 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       repair_rejected: repaired.rejected,
       repaired_stories: repaired.changed.flat(),
       gate_ok: gate.ok,
+      publishable,
       violations: gate.violations.length,
+      blocking: blockingViolations(gate.violations).map((v) => v.rule),
+      advisory: advisoryViolations(gate.violations).map((v) => v.rule),
     });
     if (!gate.ok) console.log(formatViolations(gate));
   } catch (err: any) {
@@ -245,9 +253,14 @@ export async function publishBuild(
   if (!draft) {
     const e: any = new Error('no plan to publish'); e.status = 404; throw e;
   }
-  if (!draft.gate_ok) {
+  // Refuse only on BLOCKING violations. "Published" still means every must-have
+  // is covered, every reference resolves, and r0 is startable — the invariant
+  // that makes the word worth anything. It no longer means "stylistically
+  // perfect", because enforcing that stranded students with nothing at all.
+  const blocking = blockingViolations((draft.gate_violations as any) ?? []);
+  if (blocking.length > 0) {
     const e: any = new Error(
-      'this plan has unresolved gate violations and cannot be published — regenerate or repair it first',
+      `this plan cannot be published: ${blocking.map((b) => b.message).join('; ')}`,
     );
     e.status = 409;
     throw e;

@@ -179,10 +179,17 @@ const ProjectsPage: React.FC = () => {
 
     if (!result.ok) { setPipeline({ state: 'local', reason: result.error.message }); return; }
     if (result.state.status === 'gate_failed') {
+      // Say what is actually wrong. The backend only reports gate_failed for
+      // BLOCKING violations now — uncovered must-haves, broken references, an
+      // r0 nobody can start — and those are not all "not covered by a story",
+      // which is what this used to claim regardless of the real cause.
+      const blocking = result.state.gate?.violations ?? [];
       setPipeline({
         state: 'gate_failed',
         projectId: resolved.projectId,
-        reason: `${result.state.gate?.violations.length ?? 0} requirement(s) are not yet covered by a story.`,
+        reason: blocking.length
+          ? blocking.slice(0, 3).map((v) => v.message).join(' ')
+          : 'The plan could not be verified against your requirements.',
       });
       return;
     }

@@ -47,8 +47,60 @@ export type GateRule =
   | 'release_empty';
 
 export interface GateResult {
+  /** No violations at all. The bar repair aims for. */
   ok: boolean;
   violations: GateViolation[];
+}
+
+/**
+ * Rules that mean the plan is WRONG, as opposed to imperfect.
+ *
+ * The distinction earns its keep: a plan that fails only on style still tells a
+ * student the truth about what they are building, and shipping it beats the
+ * alternative. Before this split, a single `story_redundant_scaffold` — one
+ * story overlapping two others — left the student staring at an empty Projects
+ * page, which is strictly worse than a plan with a slightly redundant story in it.
+ *
+ * The line is: **would this mislead the student about what they are building, or
+ * write broken data?** If yes it blocks; if it is merely untidy it warns.
+ *
+ *  - `must_uncovered` — the plan claims a requirement it delivers with nothing.
+ *  - `dangling_*` / `malformed_*` — materialization would write broken rows
+ *    (a `blocked_by` pointing at no story locks a task forever).
+ *  - `r0_missing` / `r0_not_ungated` — no first release, or every r0 story
+ *    blocked, which locks the student out of starting at all.
+ *  - `invented_vendor` — actively misleading: tells them to integrate Stripe
+ *    when their brief said PaySimple.
+ *
+ * Everything else is a quality warning: surfaced on the plan, never a dead end.
+ * Repair still tries to clear all of them — this only decides what happens when
+ * it cannot.
+ */
+export const BLOCKING_RULES: ReadonlySet<GateRule> = new Set<GateRule>([
+  'must_uncovered',
+  'dangling_requirement',
+  'dangling_release',
+  'dangling_blocked_by',
+  'malformed_requirement',
+  'malformed_story',
+  'r0_missing',
+  'r0_not_ungated',
+  'invented_vendor',
+]);
+
+/** The violations that stop a plan reaching a student. */
+export function blockingViolations(violations: GateViolation[]): GateViolation[] {
+  return violations.filter((v) => BLOCKING_RULES.has(v.rule));
+}
+
+/** The quality warnings that ride along with a published plan. */
+export function advisoryViolations(violations: GateViolation[]): GateViolation[] {
+  return violations.filter((v) => !BLOCKING_RULES.has(v.rule));
+}
+
+/** True when nothing left is bad enough to justify showing the student nothing. */
+export function isPublishable(violations: GateViolation[]): boolean {
+  return blockingViolations(violations).length === 0;
 }
 
 /** Acceptance line asserting audit/guardrail behaviour, e.g. "Trust - …" or "🛡 Trust — …". */
