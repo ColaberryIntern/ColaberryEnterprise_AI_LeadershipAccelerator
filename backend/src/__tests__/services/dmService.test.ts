@@ -17,8 +17,14 @@ jest.mock('../../services/reese/reeseIdentitySeed', () => ({ getReeseEnrollmentI
 // import never pulls in the real model-association graph (reeseSystemPrompt ->
 // learnerContextService -> models/index.ts) into this mocked test environment.
 jest.mock('../../services/reese/reeseReplyService', () => ({ maybeTriggerReeseReply: jest.fn() }));
+// sendDmMessage() dynamically imports communityNotificationService the same
+// way it dynamically imports reeseReplyService above — mock the whole module
+// so this file only asserts dmService.ts calls it correctly (its own
+// internals are unit-tested in communityNotificationService.test.ts).
+jest.mock('../../services/communityNotificationService', () => ({ createNotification: jest.fn() }));
 
 import { openDm, sendDmMessage, listDmMessages, listConversations, markDmRead } from '../../services/communityRooms/dmService';
+import { createNotification } from '../../services/communityNotificationService';
 import CommunityRoom from '../../models/CommunityRoom';
 import RoomMembership from '../../models/RoomMembership';
 import RoomMessage from '../../models/RoomMessage';
@@ -42,6 +48,7 @@ const listMock = listMessages as jest.Mock;
 const isStaffOrMgmtMock = isStaffOrMgmt as jest.Mock;
 const getReeseEnrollmentIdMock = getReeseEnrollmentId as jest.Mock;
 const maybeTriggerReeseReplyMock = maybeTriggerReeseReply as jest.Mock;
+const createNotificationMock = createNotification as jest.Mock;
 
 const me = '11111111-1111-1111-1111-111111111111';
 const other = '22222222-2222-2222-2222-222222222222';
@@ -65,6 +72,11 @@ beforeEach(() => {
   // pre-existing test that isn't specifically testing Reese reply behavior.
   findOneMember.mockResolvedValue(null);
   maybeTriggerReeseReplyMock.mockResolvedValue(undefined);
+  // Default DM-recipient-notification lookup: "other" is the sole other room
+  // member, matching openDm's real 2-person room shape. Tests in the "inbox"
+  // describe block override this with their own mockImplementation.
+  findAllMember.mockResolvedValue([{ enrollment_id: other }]);
+  createNotificationMock.mockResolvedValue(undefined);
 });
 
 describe('openDm', () => {
@@ -183,6 +195,62 @@ describe('send / list guards', () => {
     findByPkRoom.mockResolvedValue({ id: 'room-9', room_type: 'persistent' });
     await expect(sendDmMessage(ctx, 'room-9', 'hi')).rejects.toMatchObject({ name: 'DmError' });
     expect(postMock).not.toHaveBeenCalled();
+  });
+
+  describe('DM recipient notification (offline-DM-notification fix)', () => {
+    it('happy: sending a DM to an ordinary recipient creates exactly one new_message/dm notification for THEM, not the sender', async () => {
+      findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+      postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+      findAllMember.mockResolvedValue([{ enrollment_id: other }]);
+
+      await sendDmMessage(ctx, 'room-1', 'hi');
+
+      expect(createNotificationMock).toHaveBeenCalledTimes(1);
+      expect(createNotificationMock).toHaveBeenCalledWith(other, me, 'new_message', 'dm', 'm1');
+    });
+
+    it('boundary: sending a DM where the other participant is Reese creates zero notifications', async () => {
+      findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+      postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+      findAllMember.mockResolvedValue([{ enrollment_id: reese }]);
+      getReeseEnrollmentIdMock.mockResolvedValue(reese);
+
+      await sendDmMessage(ctx, 'room-1', 'hi');
+
+      expect(createNotificationMock).not.toHaveBeenCalled();
+    });
+
+    it('failure path: if the Reese-id lookup throws, the DM still sends successfully and still notifies (fail-closed = notify, not fail-open = silently skip)', async () => {
+      findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+      postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+      findAllMember.mockResolvedValue([{ enrollment_id: other }]);
+      getReeseEnrollmentIdMock.mockRejectedValue(new Error('db connection reset'));
+
+      const m = await sendDmMessage(ctx, 'room-1', 'hi');
+
+      expect(m).toEqual({ id: 'm1', content: 'hi' });
+      expect(createNotificationMock).toHaveBeenCalledWith(other, me, 'new_message', 'dm', 'm1');
+    });
+
+    it('failure path: sendDmMessage still returns the posted message even if createNotification rejects (best-effort — never breaks the sender\'s own request)', async () => {
+      findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+      postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+      findAllMember.mockResolvedValue([{ enrollment_id: other }]);
+      createNotificationMock.mockRejectedValue(new Error('notification service down'));
+
+      const m = await sendDmMessage(ctx, 'room-1', 'hi');
+      expect(m).toEqual({ id: 'm1', content: 'hi' });
+    });
+
+    it('boundary: an unexpected empty membership lookup (no other participant found) skips notification cleanly, no crash', async () => {
+      findByPkRoom.mockResolvedValue({ id: 'room-1', room_type: 'dm' });
+      postMock.mockResolvedValue({ id: 'm1', content: 'hi' });
+      findAllMember.mockResolvedValue([]);
+
+      const m = await sendDmMessage(ctx, 'room-1', 'hi');
+      expect(m).toEqual({ id: 'm1', content: 'hi' });
+      expect(createNotificationMock).not.toHaveBeenCalled();
+    });
   });
 
   it('listDmMessages delegates to listMessages with the since cursor', async () => {
