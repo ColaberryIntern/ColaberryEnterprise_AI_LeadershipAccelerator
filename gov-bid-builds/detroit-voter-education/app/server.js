@@ -16,6 +16,7 @@ const subscriptionsRouter = require('./routes/subscriptions');
 const governmentDataRouter = require('./routes/governmentData');
 const dataExportRouter = require('./routes/dataExport');
 const accessibilityAuditRouter = require('./routes/accessibilityAudit');
+const auditLogRouter = require('./routes/auditLog');
 const { handleMessage } = require('./ws/handler');
 
 const app = express();
@@ -35,6 +36,7 @@ app.use('/api/subscriptions', subscriptionsRouter);
 app.use('/api/government-data', governmentDataRouter);
 app.use('/api/exports', dataExportRouter);
 app.use('/api/accessibility-audits', accessibilityAuditRouter);
+app.use('/api/audit-log', auditLogRouter);
 
 if (process.env.NODE_ENV === 'production') {
   const clientDist = path.join(__dirname, 'client/dist');

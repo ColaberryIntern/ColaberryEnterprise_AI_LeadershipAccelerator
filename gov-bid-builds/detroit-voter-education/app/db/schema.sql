@@ -22,6 +22,33 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- NOT NULL violation hit by feedback.js, requireAdminKey.js, and jurisdictions.js.
 ALTER TABLE audit_log ALTER COLUMN session_id DROP NOT NULL;
 
+-- STORY-023: HMAC-SHA256 integrity signature (Node's built-in crypto module,
+-- see app/services/auditLogAgent.js) -- nullable because the 13 existing
+-- call sites elsewhere in this app write unsigned rows and stay that way
+-- (decided: sign new writes going forward only, don't retrofit existing
+-- code in this story -- see decision-record-STORY-023.md). "Digital
+-- signature" here means HMAC tamper-evidence to holders of the signing
+-- key, not asymmetric non-repudiation -- named honestly, not oversold.
+ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS signature TEXT;
+
+-- Database-level append-only enforcement: blocks UPDATE and DELETE on
+-- every row (signed or legacy-unsigned) regardless of which DB role issues
+-- the statement -- REVOKE-based enforcement would be bypassed by a
+-- superuser connection (which is how this app's local/demo DATABASE_URL
+-- typically connects), a raising trigger is not. Verified via smoke test
+-- that no existing code path in this app ever attempts an UPDATE or
+-- DELETE against audit_log, so this does not break any prior story.
+CREATE OR REPLACE FUNCTION prevent_audit_log_mutation() RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'audit_log is append-only: % is not permitted', TG_OP;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS audit_log_append_only ON audit_log;
+CREATE TRIGGER audit_log_append_only
+  BEFORE UPDATE OR DELETE ON audit_log
+  FOR EACH ROW EXECUTE FUNCTION prevent_audit_log_mutation();
+
 CREATE TABLE IF NOT EXISTS feedback (
   id          SERIAL PRIMARY KEY,
   session_id  UUID,
