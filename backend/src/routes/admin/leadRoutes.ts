@@ -3,6 +3,7 @@ import { requireAdmin, requireSalesOrAdmin } from '../../middlewares/authMiddlew
 import {
   handleAdminListLeads,
   handleAdminGetLeadStats,
+  handleAdminGetLeadSourceGroups,
   handleAdminGetLead,
   handleAdminUpdateLead,
   handleAdminExportLeads,
@@ -49,6 +50,9 @@ const router = Router();
 // Leads — sales reps can read + update stage/temperature; PII export, create,
 // batch, and delete stay admin-only.
 router.get('/api/admin/leads/stats', requireSalesOrAdmin, handleAdminGetLeadStats);
+// MUST stay above '/api/admin/leads/:id' — Express matches in order, and the
+// param route would otherwise swallow 'source-groups' as an id.
+router.get('/api/admin/leads/source-groups', requireSalesOrAdmin, handleAdminGetLeadSourceGroups);
 router.get('/api/admin/leads/export', requireAdmin, handleAdminExportLeads);
 router.get('/api/admin/leads', requireSalesOrAdmin, handleAdminListLeads);
 router.post('/api/admin/leads', requireAdmin, handleAdminCreateLead);

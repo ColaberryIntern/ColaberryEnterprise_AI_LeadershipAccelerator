@@ -1,9 +1,17 @@
 import { z } from 'zod';
-import { Op } from 'sequelize';
+import { Op, literal, col, fn, type Order } from 'sequelize';
 import Lead from '../models/Lead';
 import { AdminUser, AutomationLog, Campaign, FollowUpSequence } from '../models';
 import { Parser } from 'json2csv';
 import { enrollLeadInSequence } from './sequenceService';
+import {
+  LEAD_SOURCE_GROUPS,
+  UNGROUPED_KEY,
+  sourcesForGroup,
+  allKnownSources,
+  sourcePriorityPairs,
+  type LeadSourceGroupSummary,
+} from './leads/leadSourceGroups';
 
 /* ── Phone normalization ─────────────────────────────────────────── */
 
@@ -208,6 +216,12 @@ interface ListLeadsParams {
   status?: string;
   search?: string;
   source?: string;
+  /**
+   * Website filter: one or more `leadSourceGroups` keys, comma-separated.
+   * Distinct from `source`, which (confusingly, for historical reasons) filters
+   * `form_type`. This one filters the real origin.
+   */
+  website?: string;
   scoreMin?: number;
   scoreMax?: number;
   dateFrom?: string;
@@ -216,6 +230,70 @@ interface ListLeadsParams {
   limit?: number;
   sort?: string;
   order?: 'ASC' | 'DESC';
+}
+
+/**
+ * SQL that maps `leads.source` to its priority tier, so "website signups
+ * first" is done by the database and survives pagination. Built from
+ * leadSourceGroups, escaped here because raw source strings reach SQL.
+ */
+function priorityCaseSql(): string {
+  const escape = (v: string) => `'${v.replace(/'/g, "''")}'`;
+  const byTier = new Map<number, string[]>();
+  for (const { source, tier } of sourcePriorityPairs()) {
+    if (!byTier.has(tier)) byTier.set(tier, []);
+    byTier.get(tier)!.push(source);
+  }
+  const whens = [...byTier.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([tier, sources]) => `WHEN "Lead"."source" IN (${sources.map(escape).join(', ')}) THEN ${tier}`);
+  // Unrecognised sources fall to 5 — after internal (4), before test (9) —
+  // matching priorityForSource() so the SQL and the TS agree.
+  return `CASE ${whens.join(' ')} ELSE 5 END`;
+}
+
+/**
+ * Every website/origin group with its current lead count, for the filter
+ * dropdown. Groups with zero leads are still returned so a rep can see that a
+ * site is wired but quiet, rather than wondering where it went. The catch-all
+ * 'other' group is appended only when something actually landed in it.
+ */
+export async function getLeadSourceGroups(): Promise<LeadSourceGroupSummary[]> {
+  const rows = (await Lead.findAll({
+    attributes: ['source', [fn('COUNT', col('id')), 'count']],
+    group: ['source'],
+    raw: true,
+  })) as unknown as Array<{ source: string | null; count: string }>;
+
+  const countBySource = new Map<string, number>();
+  for (const r of rows) {
+    countBySource.set((r.source ?? '').toLowerCase(), Number(r.count) || 0);
+  }
+
+  const groups: LeadSourceGroupSummary[] = LEAD_SOURCE_GROUPS.map((g) => ({
+    key: g.key,
+    label: g.label,
+    domain: g.domain,
+    kind: g.kind,
+    count: g.sources.reduce((n, s) => n + (countBySource.get(s.toLowerCase()) ?? 0), 0),
+  }));
+
+  const known = new Set(allKnownSources().map((s) => s.toLowerCase()));
+  const ungrouped = rows
+    .filter((r) => !known.has((r.source ?? '').toLowerCase()))
+    .reduce((n, r) => n + (Number(r.count) || 0), 0);
+
+  if (ungrouped > 0) {
+    groups.push({
+      key: UNGROUPED_KEY,
+      label: 'Other',
+      domain: 'source not recognised yet',
+      kind: 'internal',
+      count: ungrouped,
+    });
+  }
+
+  return groups;
 }
 
 export async function listLeads(params: ListLeadsParams) {
@@ -235,6 +313,41 @@ export async function listLeads(params: ListLeadsParams) {
     where.sponsorship_kit_requested = true;
   } else if (params.source) {
     where.form_type = params.source;
+  }
+
+  // Website filter. Each key expands to the raw `source` values it covers;
+  // 'other' is the complement of everything we know about, so it cannot be an
+  // IN list. An unknown key yields an empty list and therefore matches nothing,
+  // which is the safe direction for a bad query string.
+  if (params.website) {
+    const keys = params.website.split(',').map((k) => k.trim()).filter(Boolean);
+    const inList: string[] = [];
+    let includeUngrouped = false;
+
+    for (const key of keys) {
+      if (key === UNGROUPED_KEY) { includeUngrouped = true; continue; }
+      inList.push(...(sourcesForGroup(key) ?? []));
+    }
+
+    const clauses: any[] = [];
+    if (inList.length) clauses.push({ source: { [Op.in]: inList } });
+    if (includeUngrouped) {
+      clauses.push({
+        [Op.or]: [
+          { source: null },
+          { source: { [Op.notIn]: allKnownSources() } },
+        ],
+      });
+    }
+
+    if (!clauses.length) {
+      // Every key was unrecognised — match nothing rather than everything.
+      where.id = { [Op.is]: null };
+    } else if (clauses.length === 1) {
+      Object.assign(where, clauses[0]);
+    } else {
+      where[Op.and] = [...(where[Op.and] || []), { [Op.or]: clauses }];
+    }
   }
 
   if (params.scoreMin !== undefined || params.scoreMax !== undefined) {
@@ -269,10 +382,17 @@ export async function listLeads(params: ListLeadsParams) {
     ];
   }
 
+  // 'priority' is the sales-facing default: website signups above pulled-list
+  // names, then newest first inside each tier. Every other sort is unchanged.
+  const orderBy: Order =
+    sort === 'priority'
+      ? [[literal(priorityCaseSql()), 'ASC'], ['created_at', 'DESC']]
+      : [[sort, order]];
+
   const { rows: leads, count: total } = await Lead.findAndCountAll({
     where,
     include: [{ model: AdminUser, as: 'assignedAdmin', attributes: ['id', 'email'] }],
-    order: [[sort, order]],
+    order: orderBy,
     limit,
     offset,
   });

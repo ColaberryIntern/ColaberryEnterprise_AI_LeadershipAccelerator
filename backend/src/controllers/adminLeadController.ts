@@ -11,6 +11,7 @@ import {
   getPipelineStats,
   createLeadAdmin,
   batchUpdateLeads,
+  getLeadSourceGroups,
 } from '../services/leadService';
 import { logStageChange } from '../services/activityService';
 import { getTemperatureHistory, classifyLeadManual } from '../services/leadClassificationService';
@@ -34,6 +35,23 @@ export async function handleAdminListLeads(
       res.status(400).json({ error: 'Invalid query parameters' });
       return;
     }
+    next(error);
+  }
+}
+
+/**
+ * Website/origin groups with counts, for the Leads page filter. Sales-visible:
+ * a rep cannot choose which sites to work without first seeing the list.
+ */
+export async function handleAdminGetLeadSourceGroups(
+  _req: Request,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  try {
+    const groups = await getLeadSourceGroups();
+    res.json({ groups });
+  } catch (error) {
     next(error);
   }
 }
