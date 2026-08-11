@@ -5,18 +5,20 @@ import SummaryList from './components/SummaryList';
 import AdminFeedbackDashboard from './components/AdminFeedbackDashboard';
 import SystemHealthDashboard from './components/SystemHealthDashboard';
 import PendingApprovalsDashboard from './components/PendingApprovalsDashboard';
+import RecentActionsDashboard from './components/RecentActionsDashboard';
 
-// STORY-022/025/026: a plain pathname lookup, not a routing library -- this
-// app has a small, fixed set of admin pages and no other reason to add
-// react-router-dom as a dependency. Works in both Vite dev (SPA fallback
-// serves index.html for unmatched paths by default) and production
-// (server.js's catch-all route does the same). Three near-identical
-// per-path `if` blocks (STORY-022, STORY-025) became this map when
-// STORY-026 would have been a fourth copy-paste.
+// STORY-022/025/026/027: a plain pathname lookup, not a routing library --
+// this app has a small, fixed set of admin pages and no other reason to
+// add react-router-dom as a dependency. Works in both Vite dev (SPA
+// fallback serves index.html for unmatched paths by default) and
+// production (server.js's catch-all route does the same). Three
+// near-identical per-path `if` blocks (STORY-022, STORY-025) became this
+// map when STORY-026 would have been a fourth copy-paste.
 const ADMIN_ROUTES = {
   '/admin/feedback': AdminFeedbackDashboard,
   '/admin/health': SystemHealthDashboard,
   '/admin/pending-approvals': PendingApprovalsDashboard,
+  '/admin/recent-actions': RecentActionsDashboard,
 };
 
 export default function App() {

@@ -22,19 +22,30 @@ const metricsEndpointRouter = require('./routes/metricsEndpoint');
 const { handleMessage } = require('./ws/handler');
 const { getSystemHealth } = require('./services/systemHealthAgent');
 const { listPendingReview } = require('./services/coordinatorAgent');
+const { listRecentActions } = require('./services/auditLogAgent');
+const { hasPermission, logAccessAttempt } = require('./middleware/rbac');
 
 const HEALTH_WS_PUSH_INTERVAL_MS = 5000;
 const PENDING_APPROVALS_WS_PUSH_INTERVAL_MS = 5000;
+const RECENT_ACTIONS_WS_PUSH_INTERVAL_MS = 5000;
 
-// STORY-025/026: shared shape for an admin-only, key-authenticated,
+// STORY-025/026/027: shared shape for an admin-only, key-authenticated,
 // periodic-push WebSocket channel -- STORY-025's health channel was the
-// first instance of this, STORY-026's pending-approvals channel is the
-// second copy-pasted verbatim, so it's extracted here rather than becoming
-// a third near-identical `if (pathname === ...)` block once a future
-// dashboard story needs the same shape again.
-function handleAdminPushChannel(ws, searchParams, { messageType, getData, intervalMs }) {
+// first instance of this, STORY-026's pending-approvals channel the
+// second copy-pasted verbatim, so it was extracted rather than becoming a
+// third near-identical `if (pathname === ...)` block. `authorize` defaults
+// to the original flat ADMIN_API_KEY check (health/pending-approvals pass
+// nothing and get byte-for-byte the same behavior as before); STORY-027's
+// recent-actions channel passes a role-aware `authorize` instead, since
+// that resource is deliberately gated by the stronger data_steward role
+// (see STORY-024) rather than the general admin key.
+async function handleAdminPushChannel(ws, searchParams, {
+  messageType, getData, intervalMs, authorize,
+}) {
   const providedKey = searchParams.get('key');
-  if (!process.env.ADMIN_API_KEY || providedKey !== process.env.ADMIN_API_KEY) {
+  const defaultAuthorize = async (key) => Boolean(process.env.ADMIN_API_KEY) && key === process.env.ADMIN_API_KEY;
+  const isAuthorized = await (authorize || defaultAuthorize)(providedKey);
+  if (!isAuthorized) {
     ws.close(4001, 'Unauthorized');
     return;
   }
@@ -87,11 +98,12 @@ if (process.env.NODE_ENV === 'production') {
   app.get('*', (_req, res) => res.sendFile(path.join(clientDist, 'index.html')));
 }
 
-// STORY-025/026: reuses this same WebSocket server for distinct admin-only
-// channels, routed by req.url rather than a second WebSocketServer
-// instance. Each is scoped to its own path so it never reaches
-// resident-facing connections on the voter-preferences path -- those
-// behave exactly as before, zero change to the SET_PREFERENCES flow below.
+// STORY-025/026/027: reuses this same WebSocket server for distinct
+// admin-only channels, routed by req.url rather than a second
+// WebSocketServer instance. Each is scoped to its own path so it never
+// reaches resident-facing connections on the voter-preferences path --
+// those behave exactly as before, zero change to the SET_PREFERENCES flow
+// below.
 wss.on('connection', (ws, req) => {
   const { pathname, searchParams } = new URL(req.url, 'http://localhost');
 
@@ -109,6 +121,25 @@ wss.on('connection', (ws, req) => {
       messageType: 'PENDING_APPROVALS_UPDATE',
       getData: listPendingReview,
       intervalMs: PENDING_APPROVALS_WS_PUSH_INTERVAL_MS,
+    });
+    return;
+  }
+
+  if (pathname === '/admin/recent-actions') {
+    handleAdminPushChannel(ws, searchParams, {
+      messageType: 'RECENT_ACTIONS_UPDATE',
+      getData: () => listRecentActions(),
+      intervalMs: RECENT_ACTIONS_WS_PUSH_INTERVAL_MS,
+      // STORY-024/027: this resource is gated by the data_steward role,
+      // not the general admin key -- see decision-record-STORY-027.md.
+      // Logs the attempt the same way requireRole() does over HTTP, so
+      // WS connection attempts to the audit trail are just as observable
+      // as REST ones.
+      authorize: async (key) => {
+        const permitted = hasPermission(key, 'audit_log:read');
+        await logAccessAttempt(permitted, key, 'audit_log:read', { channel: 'ws:/admin/recent-actions' });
+        return permitted;
+      },
     });
     return;
   }

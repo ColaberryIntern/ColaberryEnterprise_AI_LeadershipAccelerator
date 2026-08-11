@@ -20,6 +20,25 @@ function getSigningKey() {
   return key;
 }
 
+// STORY-027 bug fix: PostgreSQL's JSONB column does NOT preserve object key
+// insertion order on round-trip (verified directly: {permission,role,ip,path}
+// came back as {ip,path,role,permission}) -- but JSON.stringify() depends on
+// key order, so a signature computed at write time (JS insertion order)
+// would never match one recomputed after a SELECT (JSONB's reordered form),
+// even with zero tampering. Sorting keys before stringifying, on BOTH the
+// signing and verifying paths, makes the canonical form independent of
+// whatever order the object's keys happen to arrive in.
+function sortKeysDeep(value) {
+  if (Array.isArray(value)) return value.map(sortKeysDeep);
+  if (value && typeof value === 'object') {
+    return Object.keys(value).sort().reduce((acc, key) => {
+      acc[key] = sortKeysDeep(value[key]);
+      return acc;
+    }, {});
+  }
+  return value;
+}
+
 // Pure -- canonical payload a signature is computed over. createdAt is
 // generated in application code (not left to the DB's DEFAULT NOW()) so it
 // can be included in the signed payload before the row is ever written --
@@ -28,7 +47,7 @@ function canonicalPayload(sessionId, action, metadata, createdAtIso) {
   return JSON.stringify({
     sessionId: sessionId || null,
     action,
-    metadata: metadata || null,
+    metadata: metadata ? sortKeysDeep(metadata) : null,
     createdAt: createdAtIso,
   });
 }
@@ -80,6 +99,29 @@ async function getAuditLogEntry(id) {
   return { ...row, signatureStatus: verifyAuditLogEntry(row) };
 }
 
+const RECENT_ACTIONS_DEFAULT_LIMIT = 50;
+const RECENT_ACTIONS_MAX_LIMIT = 200;
+
+// Pure -- clamps an arbitrary (possibly client-supplied, possibly
+// missing/non-numeric/negative/huge) limit into [1, RECENT_ACTIONS_MAX_LIMIT],
+// falling back to the default for anything that isn't a usable number.
+function boundLimit(limit) {
+  const numeric = Number(limit);
+  const base = Number.isFinite(numeric) && numeric > 0 ? numeric : RECENT_ACTIONS_DEFAULT_LIMIT;
+  return Math.min(Math.max(1, base), RECENT_ACTIONS_MAX_LIMIT);
+}
+
+// STORY-027: the most recent N audit_log rows, each annotated with its
+// signature status -- reuses verifyAuditLogEntry() so this dashboard also
+// surfaces STORY-023's integrity work, not just raw log text.
+async function listRecentActions(limit = RECENT_ACTIONS_DEFAULT_LIMIT) {
+  const result = await pool.query(
+    'SELECT * FROM audit_log ORDER BY created_at DESC LIMIT $1',
+    [boundLimit(limit)],
+  );
+  return result.rows.map((row) => ({ ...row, signatureStatus: verifyAuditLogEntry(row) }));
+}
+
 module.exports = {
-  logAction, getAuditLogEntry, verifyAuditLogEntry, computeSignature,
+  logAction, getAuditLogEntry, listRecentActions, verifyAuditLogEntry, computeSignature, boundLimit,
 };

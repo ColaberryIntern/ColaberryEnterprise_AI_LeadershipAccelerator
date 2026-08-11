@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireRole } = require('../middleware/rbac');
-const { getAuditLogEntry } = require('../services/auditLogAgent');
+const { getAuditLogEntry, listRecentActions } = require('../services/auditLogAgent');
 
 const router = express.Router();
 
@@ -9,6 +9,26 @@ const router = express.Router();
 // is not sufficient here, a deliberate strengthening. Access attempts
 // (granted and denied) are logged by requireRole() itself via signed
 // logAction(), correctly labeled AUDIT_LOG_ACCESS_GRANTED/DENIED.
+//
+// STORY-027: /recent must be declared before /:id, or Express would treat
+// "recent" as the :id param and this route would never be reached.
+router.get('/recent', requireRole('audit_log:read'), async (req, res) => {
+  try {
+    const rows = await listRecentActions(req.query.limit);
+    return res.json(rows);
+  } catch (err) {
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'error',
+      service: 'detroit-voter-education',
+      event: 'audit_log_recent_failed',
+      error_class: err.constructor.name,
+      error: err.message,
+    }));
+    return res.status(500).json({ error: 'Internal error' });
+  }
+});
+
 router.get('/:id', requireRole('audit_log:read'), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {

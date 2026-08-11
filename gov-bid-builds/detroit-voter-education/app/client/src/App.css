@@ -371,3 +371,39 @@ button[type="submit"]:disabled { background: #94a3b8; cursor: not-allowed; }
 .pending-approvals-dashboard__actions button:disabled { background: #94a3b8; cursor: not-allowed; }
 .pending-approvals-dashboard__actions button.pending-approvals-dashboard__reject { background: #fff; color: #dc2626; border: 1px solid #dc2626; }
 .pending-approvals-dashboard__actions button.pending-approvals-dashboard__reject:disabled { background: #fff; color: #94a3b8; border-color: #cbd5e1; }
+
+/* STORY-027: reuses only already-verified-passing colors from elsewhere in
+   this stylesheet -- signature badge colors match the exact ws-badge pairs
+   verified passing WCAG contrast in STORY-020, same as STORY-025's health
+   badges. */
+.recent-actions-dashboard {
+  background: #fff;
+  border-radius: 8px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  margin-top: 1.5rem;
+}
+.recent-actions-dashboard h2 { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.25rem; }
+.recent-actions-dashboard > p { color: #555; margin-bottom: 1.5rem; font-size: 0.9rem; }
+.recent-actions-dashboard > button {
+  padding: 0.6rem 1.2rem;
+  background: #003366;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.recent-actions-dashboard > button:disabled { background: #94a3b8; cursor: not-allowed; }
+.recent-actions-dashboard__list { list-style: none; display: flex; flex-direction: column; gap: 0.75rem; margin-top: 1.5rem; }
+.recent-actions-dashboard__item {
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+.recent-actions-dashboard__meta { font-size: 0.9rem; }
+.recent-actions-dashboard__signature { font-size: 0.78rem; font-weight: 600; margin-top: 0.3rem; }
+.recent-actions-dashboard__signature--valid { color: #065f46; }
+.recent-actions-dashboard__signature--invalid { color: #991b1b; }
+.recent-actions-dashboard__signature--unsigned { color: #64748b; }
