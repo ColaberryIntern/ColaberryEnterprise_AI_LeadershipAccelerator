@@ -1,10 +1,15 @@
 const express = require('express');
-const { requireAdminKey } = require('../middleware/requireAdminKey');
+const { requireRole } = require('../middleware/rbac');
 const { getAuditLogEntry } = require('../services/auditLogAgent');
 
 const router = express.Router();
 
-router.get('/:id', requireAdminKey, async (req, res) => {
+// STORY-024: audit-log access requires the data_steward role specifically
+// -- the general ADMIN_API_KEY used by every other admin route in this app
+// is not sufficient here, a deliberate strengthening. Access attempts
+// (granted and denied) are logged by requireRole() itself via signed
+// logAction(), correctly labeled AUDIT_LOG_ACCESS_GRANTED/DENIED.
+router.get('/:id', requireRole('audit_log:read'), async (req, res) => {
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) {
     return res.status(400).json({ error: 'id must be an integer' });
