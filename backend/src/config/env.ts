@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { resolveExplorerGrowthFlags } from './explorerGrowthFlags';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -124,6 +125,12 @@ export const env = {
   enableVisitorTracking: process.env.ENABLE_VISITOR_TRACKING === 'true',
   visitorSessionTimeoutMinutes: parseInt(process.env.VISITOR_SESSION_TIMEOUT || '30', 10),
   enableChat: process.env.ENABLE_CHAT === 'true',
+  // Explorer Growth OS (docs/EXPLORER_GROWTH_OS_PLAN.md §34). Resolved by the
+  // pure helper rather than inlined here so the nine flags have ONE parse site
+  // and cannot drift between this object and the accessor module. Every flag is
+  // default OFF; sub-flags are subordinate to the master and must be read via
+  // isExplorerFeatureEnabled(), never directly.
+  explorerGrowth: resolveExplorerGrowthFlags(process.env),
   // Today Timeline v2 — the never-ending engagement feed (Phase 1). Default OFF;
   // set TODAY_FEED_V2_ENABLED=true to expose GET /api/portal/runtime/today.
   todayFeedV2Enabled: process.env.TODAY_FEED_V2_ENABLED === 'true',
