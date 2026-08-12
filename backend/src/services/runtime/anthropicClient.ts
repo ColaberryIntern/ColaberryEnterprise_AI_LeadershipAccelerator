@@ -21,8 +21,19 @@ function client(): Anthropic {
   return _client;
 }
 
-// Default to Opus 4.8 (the recommended model); override per-env to tune cost for
-// a high-volume coaching bot (e.g. MENTOR_ANTHROPIC_MODEL=claude-haiku-4-5).
+// Default to Opus 4.8; override per-env to tune cost for a high-volume coaching
+// bot (e.g. MENTOR_ANTHROPIC_MODEL=claude-haiku-4-5).
+//
+// ⚠️ Do NOT point this at a thinking-by-default model (claude-opus-5,
+// claude-sonnet-5) without raising max_tokens at the CALL SITES first. On those
+// models thinking is on unless disabled, and max_tokens caps thinking + reply
+// TOGETHER — while our callers pass tight budgets: 400 (architectMindsetService)
+// and 500 (mentorService coach turn + reflection). Thinking would eat the budget
+// and the student would get a truncated or empty answer, which reads as "the
+// mentor is broken" rather than "the ceiling is too low". Opus 4.8 does not think
+// unless asked, so 400-500 is all reply and these budgets are safe as-is.
+// To move to Opus 5: raise those call sites, or pass thinking {type:'disabled'}
+// (accepted only at effort 'high' or below).
 const MENTOR_MODEL = process.env.MENTOR_ANTHROPIC_MODEL || 'claude-opus-4-8';
 
 // $ per 1M tokens (input, output).
