@@ -4,6 +4,7 @@ import { getTestOverrides, getSetting } from './settingsService';
 import { isKillSwitchActive } from './launchSafety';
 import type { DigestData } from './digestService';
 import { redactForLogs } from '../utils/piiRedaction';
+import { formatCentralClock } from './centralDate';
 
 // Prefer Mandrill SMTP relay when API key is set, fall back to generic SMTP
 const transporter = env.mandrillApiKey
@@ -1293,7 +1294,7 @@ function buildSessionReminderHtml(data: SessionReminderData): string {
   <div class="highlight">
     <strong>Session:</strong> #${data.sessionNumber} - ${data.sessionTitle}<br>
     <strong>Date:</strong> ${data.sessionDate}<br>
-    <strong>Time:</strong> ${data.startTime} ET
+    <strong>Time:</strong> ${formatCentralClock(data.sessionDate, data.startTime)}
   </div>
 
   ${data.meetingLink ? `<p><a href="${data.meetingLink}" class="cta">Join Session</a></p>` : '<p><em>Meeting link will be shared before the session starts.</em></p>'}
