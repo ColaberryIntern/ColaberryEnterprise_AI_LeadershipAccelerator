@@ -34,7 +34,7 @@ export interface BackfillResult {
   updated: number;
   batches: number;
   remaining: number;
-  stoppedBecause: 'complete' | 'max_batches' | 'dry_run';
+  stoppedBecause: 'complete' | 'max_batches' | 'dry_run' | 'stalled';
 }
 
 export const DEFAULTS: BackfillOptions = {
@@ -95,6 +95,42 @@ const sleep = (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
+/**
+ * Rows affected by an UPDATE, across the shapes Sequelize actually returns.
+ *
+ * FOUND IN PRODUCTION, NOT IN TEST. The original implementation did
+ * `const [, affected] = result; typeof affected === 'number' ? affected : 0`,
+ * which is wrong for Postgres: `sequelize.query()` resolves to
+ * `[results, metadata]` where metadata is the **pg Result object**, not a row
+ * count. So it always evaluated to 0.
+ *
+ * That was not merely cosmetic under-reporting. The batch loop terminates on
+ * `rows === 0`, so it stopped after ONE batch while still reporting
+ * `outcome: 'complete'`. The first production run happened to have 65
+ * attributable rows — under one batch — so it finished correctly by luck. With
+ * more than `batchSize` rows it would have silently left the remainder
+ * unattributed.
+ *
+ * The unit test missed it because it mocked the resolved value as `[[], rows]`,
+ * i.e. it asserted my assumption about the driver rather than the driver's
+ * actual behaviour. Handled here defensively across shapes so a Sequelize or
+ * dialect change cannot silently reintroduce it.
+ */
+export function extractRowCount(raw: unknown): number {
+  if (typeof raw === 'number') return raw;
+  const candidates: unknown[] = Array.isArray(raw) ? [raw[1], raw[0]] : [raw];
+  for (const c of candidates) {
+    if (typeof c === 'number') return c;
+    if (c && typeof c === 'object' && typeof (c as { rowCount?: unknown }).rowCount === 'number') {
+      return (c as { rowCount: number }).rowCount;
+    }
+    if (c && typeof c === 'object' && typeof (c as { affectedRows?: unknown }).affectedRows === 'number') {
+      return (c as { affectedRows: number }).affectedRows;
+    }
+  }
+  return 0;
+}
+
 async function countCandidates(): Promise<number> {
   const rows = await sequelize.query<{ n: number }>(COUNT_SQL, { type: QueryTypes.SELECT });
   return rows[0]?.n ?? 0;
@@ -133,11 +169,11 @@ export async function backfillPageEventLeadId(
   let stoppedBecause: BackfillResult['stoppedBecause'] = 'complete';
 
   while (batches < opts.maxBatches) {
-    const [, affected] = (await sequelize.query(UPDATE_SQL, {
+    const raw = await sequelize.query(UPDATE_SQL, {
       replacements: { batchSize: opts.batchSize },
-    })) as unknown as [unknown, number];
+    });
 
-    const rows = typeof affected === 'number' ? affected : 0;
+    const rows = extractRowCount(raw);
     batches++;
     updated += rows;
 
@@ -151,9 +187,31 @@ export async function backfillPageEventLeadId(
       }),
     );
 
-    // Zero rows means there is nothing left to attribute — the loop's real
-    // termination condition. maxBatches is only a backstop.
-    if (rows === 0) break;
+    // Zero rows normally means there is nothing left to attribute. But that is
+    // exactly the signal the row-count bug faked, so it is no longer trusted on
+    // its own: confirm against a fresh candidate count before declaring victory.
+    // If rows are still attributable while the UPDATE claims it changed nothing,
+    // something is wrong with the driver contract and the run must say so
+    // loudly rather than exit reporting 'complete'.
+    if (rows === 0) {
+      const stillOutstanding = await countCandidates();
+      if (stillOutstanding > 0) {
+        stoppedBecause = 'stalled';
+        console.warn(
+          JSON.stringify({
+            event: 'backfill_page_event_lead_id.stalled',
+            service: 'backfill',
+            level: 'warn',
+            outcome: 'failure',
+            error_class: 'BackfillStalled',
+            rows_reported: 0,
+            still_attributable: stillOutstanding,
+            detail: 'UPDATE reported 0 rows while candidates remain — row-count extraction may be wrong for this dialect',
+          }),
+        );
+      }
+      break;
+    }
     if (batches >= opts.maxBatches) {
       stoppedBecause = 'max_batches';
       break;
