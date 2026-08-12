@@ -13,6 +13,7 @@ import {
   StudentProject, ProjectTask, ProjectList, NewBuildAnswers,
 } from './projectsStore';
 import { syncProjectsWithBackend } from './projectSync';
+import { deriveLegacyScope } from './deriveLegacyScope';
 import './projects.css';
 import '../today/TodayShell.css';
 
@@ -148,8 +149,13 @@ const ProjectsPage: React.FC = () => {
    * tells them which one they got — silently serving the worse result is how
    * the original defect stayed invisible for months.
    */
-  const handleCreate = useCallback(async (a: NewBuildAnswers) => {
+  const handleCreate = useCallback(async (raw: NewBuildAnswers) => {
     if (demo) return;   // demo — the wizard's create button is disabled; guard the store too
+
+    // The interview is generated now, so the three legacy scoping fields are
+    // derived from it rather than asked directly. Both the local fallback and
+    // the server read them, so derive once and use the same object for both.
+    const a: NewBuildAnswers = { ...raw, ...deriveLegacyScope(raw.answers) };
 
     // Optimistic local build first, so the student sees their project
     // immediately either way and the page has something to show.
@@ -168,6 +174,7 @@ const ProjectsPage: React.FC = () => {
       users: a.users || undefined,
       data_sources: a.dataSources || undefined,
       done_definition: a.done || undefined,
+      answers: a.answers && a.answers.length ? a.answers : undefined,
       target_weeks: a.weeks,
     });
     if (!started.ok) { setPipeline({ state: 'local', reason: started.error.message }); return; }

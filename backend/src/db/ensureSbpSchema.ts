@@ -46,6 +46,10 @@ export async function ensureSbpSchema(): Promise<void> {
     // One live intake per project: re-submitting the wizard updates rather than
     // stacking rows, so the "same intake twice returns the same build" guarantee
     // (FR-001 idempotency) has something to key on.
+    // The adaptive interview's Q&A. Added after the fixed users/data_sources/
+    // done_definition columns, which only ever fit the three hardcoded questions
+    // the wizard used to ask; those stay for older clients and existing rows.
+    `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS answers JSONB`,
     `CREATE UNIQUE INDEX IF NOT EXISTS build_intake_unique_project ON build_intake (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_enrollment ON build_intake (enrollment_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_intake_status ON build_intake (status)`,
