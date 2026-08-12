@@ -42,6 +42,7 @@ import { ensureLiveSessionSchema } from './db/ensureLiveSessionSchema';
 import { ensureInboxCaseSchema } from './db/ensureInboxCaseSchema';
 import { ensureWorkLedgerSchema } from './db/ensureWorkLedgerSchema';
 import { ensureExplorerGrowthSchema } from './db/ensureExplorerGrowthSchema';
+import { ensurePageEventLeadId } from './db/ensurePageEventLeadId';
 // Student Build Pipeline. These two were dropped from server.ts when the
 // sponsor magic-link fix (c21cd66e) resolved a conflict in this file by
 // taking one side wholesale. Without them build_intake/build_plans are never
@@ -2332,6 +2333,10 @@ async function start(): Promise<void> {
   // layer (idempotent DDL, additive only). Nothing reads or writes them until the
   // EXPLORER_GROWTH_OS_ENABLED flag is on, which it is not by default.
   await ensureExplorerGrowthSchema();
+  // D1 fix: page_events.lead_id. contextGraphService has always queried this
+  // column and it has never existed, so buildCompositeContext() throws and every
+  // campaign email silently falls back to the legacy prompt. Additive + nullable.
+  await ensurePageEventLeadId();
   // ProofDesk Evidence — Milestone 2 (Proof & Ticket Experience): 3 evidence/decision
   // tables (idempotent DDL, additive only, no binary storage).
   await ensureEvidenceSchema();
