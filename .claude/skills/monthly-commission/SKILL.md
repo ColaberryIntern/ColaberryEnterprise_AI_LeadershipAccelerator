@@ -41,9 +41,11 @@ Attachments (4):
 3. `IPBC Group <Mon> <Year>.xlsx`
 4. `<Mon> <Year> Staff Commission.png` (Feb was a separate attachment; Mar was inline `cid:`. Either is accepted.)
 
-Verified against the two known-good sends:
+Sends to date:
 - `Feb 2026 Commission (Mentor/Instructor/SMI)` — 2026-06-06 — Staff $11,325 / Ali $1,907.19
 - `Mar 2026 Commission (Mentor/Instructor/SMI)` — 2026-07-09 — Staff $10,000 / Ali $2,143.44
+- `Apr 2026 Commission (Mentor/Instructor/SMI)` — 2026-08-12 — Staff $11,950.00 / Ali $2,077.45
+  (first run of this skill end to end)
 
 ---
 
@@ -122,46 +124,66 @@ Tab layout, columns A–I (all pasted values — **there are no formulas anywher
 | B | `SMIC_Name` (student; the IPBC invoices roll up to one row named `IPBC - Enrollment`) |
 | C–D | `OrderMonth`, `OrderYear` |
 | E | `TotalPaid` |
-| F | `AliComm` = `TotalPaid × 0.1125` (**11.25%**) |
-| G | `SalesRepComm` (`NULL` for SMI rows) |
+| F | `AliComm` (tiered — see below) |
+| G | `SalesRepComm` (`NULL` for SMI rows; the export writes the literal string `NULL`) |
 | H–I | `MonthlyPaid`, `MonthlyPaidMinus25per` — the month total, repeated on every row |
 
 Columns K–N hold the running summary: `Name | OrderMonth | OrderYear | Comm`, one row per
 month, `Name = ALI`.
 
-**Ali Commission = the month's `Comm` in that K:N block = SUM(column F) = month `TotalPaid` × 11.25%.**
+**Ali Commission = the month's `Comm` in that K:N block = `ROUND(SUM(AliComm), 2)`.**
 
-Verified on both known months:
-- Feb 2026: TotalPaid 16,952.80 × 0.1125 = **1,907.19** ✓ matches the sent email
-- Mar 2026: TotalPaid 19,052.83 × 0.1125 = **2,143.4434** → **$2,143.44** ✓ matches
+### The rate is TIERED — do not hardcode 11.25%
 
-### Where the export comes from — UNRESOLVED
+`TotalPaidMinus25Per` is `TotalPaid × 0.75`, and the rate on it depends on `CompanyPaid`
+(the month's SMI total):
 
-**Ask Ali for this file. Do not attempt to rebuild it from CCPP.**
+| Row type | AliComm |
+|---|---|
+| `SMIC_SalesRep = 'SMI'`, CompanyPaid **< 20,000** | `TotalPaidMinus25Per × 0.15` → effective **11.25%** |
+| `SMIC_SalesRep = 'SMI'`, CompanyPaid **20,000–50,999** | `TotalPaidMinus25Per × 0.17` → effective **12.75%** |
+| `SMIC_SalesRep = 'SMI'`, CompanyPaid **≥ 51,000** | `TotalPaidMinus25Per × 0.20` → effective **15%** |
+| Named sales rep (not SMI, not Job Referral) | `TotalPaidMinus25Per × 0.05` |
+| Job Referral Sales Rep, or NULL | `(TotalPaid × 0.75) × 0.15` |
 
-An investigation on 2026-08-12 established that it is *not* reproducible from the database:
+Every month processed so far has sat in the bottom tier, which is the only reason a flat
+11.25% appeared to work. **A month clearing $20,000 changes the rate.** Let the SQL decide.
 
-- No SQL module in CCPP mentions `AliComm`, `MonthlyPaid`, or `MonthlyPaidMinus25per`
-  (`sys.sql_modules` search returned zero rows), and no table has those columns.
-- The closest source, `vw_ADF_PaySimple`, reproduces most rows exactly (Betty Scott $2,060,
-  Carol Gasva $649, Christian Fala $500, Joi-Damaris Blue $49 all match to the cent) but
-  lands **$1,916.67 short** for March and **$1,922.67 short** for February.
-- The gap is two students — `FIKRU CHEKLIE` and `Sharita Wright` — each appearing at exactly
-  **2×** their PaySimple total. Their `SMIC_PaymentAmount` values (1000 and 916.67) equal the
-  surplus precisely, so the report adds a scheduled ISA/SMI contract payment on top of actual
-  payments. Which students qualify in a given month could not be pinned down: the
-  schedule-window population is 44 students with multi-year windows, most long dormant, and
-  summing them overshoots badly.
+### The source query
 
-So the report applies selection logic that lives outside CCPP. Rebuilding it from a guess
-would put a wrong number into payroll. **Get the export from Ali** (or whoever runs it), then
-validate before use:
+`C:\Users\ali_m\OneDrive\Business\Colaberry Novedea\Stats\Commissions\SMI Comm\SMI Commission.sql`
+
+That folder is also the archive — every month's `<YYYY>_<MM>_SMI Commisions.xlsx` and
+`IPBC Group <Mon> <Year>.xlsx` lives there. **Copy the new month's files back into it** after
+sending.
+
+The file is **UTF-16LE**; decode before use (`open(p,'rb').read().decode('utf-16')`).
+
+Three things to know before running it:
+
+1. **Drop the hand-toggled filter.** The two trailing `SELECT`s carry
+   `WHERE OrderMonth NOT IN (2,3,4,5)` — a leftover Ali edits by hand. Run the pipeline up to
+   and including the `INTO #SMI_CommIII` statement, then supply your own unfiltered SELECTs.
+   `scripts/commission/run_smi_pipeline.js` does exactly that.
+2. **It depends on `GETDATE()`.** The `#AdjustAmount` block projects contracted payments
+   forward for `DATEDIFF(MM, GETDATE(), SMIC_PayEndDate)` months, so *historical row counts
+   shift between runs*. This is normal and visible in the archive — the Jan/Feb/Mar 2026 tabs
+   hold 6,556 / 5,316 / 5,377 rows. **Monthly totals are stable even though row counts are
+   not**; verified by reproducing Nov 2025 through Mar 2026 to the cent months later.
+3. **`#AdjustAmount` is why a couple of students show at ~2× their actual payments.** Students
+   with `SMIC_Status = 11` who paid more than once in a month get their contracted
+   `SMIC_PaymentAmount` projected forward, and the `NOT IN` de-dup misses when the name join
+   resolves differently — so the actual and contracted rows both land. It is longstanding
+   behaviour baked into every prior month; do not "fix" it silently.
+
+After building the tab, validate:
 
 - The new tab's `MonthlyPaid` is identical on every row of the month.
-- `SUM(F) == E-column total × 0.1125`, to the cent.
 - The K:N `ALI` row for the month equals `SUM(F)` rounded to 2dp.
-- Prior months' figures in K:N still match what was emailed for those months — if an old
-  month changed, the basis was restated and that needs flagging, not silently shipping.
+- **Prior months in K:N still match what was emailed for those months.** This is the real
+  regression test — Feb must be 1,907.19, Mar 2,143.44, Dec 2025 3,768.11, Nov 2025 1,177.93.
+  If an old month moved, the basis was restated and that needs flagging, not shipping.
+- Carried-over tabs survived the openpyxl round-trip unchanged (row count + `TotalPaid` sum).
 
 ## Step 4 — IPBC Group workbook
 
@@ -173,16 +195,27 @@ Cross-check: **the tab's `Amount Paid` must sum to the `IPBC - Enrollment` row's
 in the SMI tab.** Verified for March 2026: `0.01 + 49 + 0.01 + 0.01 = 49.03`, matching the
 SMI tab's `IPBC - Enrollment  49.03` exactly. If the two disagree, one of the exports is stale.
 
-These rows *are* queryable from CCPP if the workbook needs rebuilding:
+These are the same rows the main query rolls up — the ones with no name match, which is what
+makes them `IPBC - Enrollment`:
 
 ```sql
-SELECT [Customer #], Source, [Order Date], Status, Total, [Amount Paid], [Balance Due],
-       ModifiedDate, SMIC_SalesRep, SMIC_CommID, SMIC_UserID
-FROM   vw_ADF_PaySimple
-WHERE  [Order Date] >= @monthStart AND [Order Date] < @monthEnd
+SELECT p.[Customer #], p.Source, p.[Order Date], p.Status, p.Total,
+       p.[Amount Paid], p.[Balance Due], p.ModifiedDate,
+       p.SMIC_SalesRep, p.SMIC_CommID, p.SMIC_UserID
+FROM   [dbo].[vw_ADF_PaySimple] p
+LEFT JOIN ( SELECT DISTINCT SMIC_Name, SMIC_ID, PS_CUSTOMERID
+            FROM dbo.vw_ADF_Student_Marketing_SalesRepsCommSystem
+            UNION ALL
+            SELECT StudentName, SMIC_ID, PS_CustomerID
+            FROM [dbo].[vw_ADF_Student_Marketing_SalesRepsIPBC_Signups] ) b
+  ON p.[Customer #] = b.PS_CUSTOMERID
+WHERE  p.[Amount Paid] > 0 AND b.SMIC_Name IS NULL
+AND    Month(p.[Order Date]) = @mm AND Year(p.[Order Date]) = @yyyy
 ```
 
-filtered to the IPBC enrolment customers. Run it from the prod backend (see below).
+**If it returns nothing, the month still gets a tab** containing the single cell
+`No Data for the month` — the established convention (see the Feb/Mar/May 2024 tabs). April
+2026 was such a month: no IPBC enrolments, so no `IPBC - Enrollment` row in the SMI tab either.
 
 ## Step 5 — Send
 
@@ -253,7 +286,17 @@ spaces and must be bracketed: `[Customer #]`, `[Order Date]`, `[Amount Paid]`.
 
 ## Bundled scripts
 
-| Script | Purpose |
-|---|---|
-| `scripts/commission/build_staff_png.py` | Reads `Staff Commissions`, prints the total, renders the table PNG. Self-validates against February. |
-| `scripts/commission/gmail_dl.js` | Downloads a Gmail attachment by message id using the prod backend's Gmail credentials. |
+Run them in this order. All the `.js` ones execute inside `accelerator-backend`.
+
+| # | Script | Purpose |
+|---|---|---|
+| 1 | `scripts/commission/gmail_dl.js` | Downloads Jackie's attachment by message id using the prod backend's Gmail credentials (the Gmail MCP connector cannot read attachments). |
+| 2 | `scripts/commission/build_staff_png.py` | Reads `Staff Commissions`, prints the staff total, renders the table PNG. Self-validates against February. |
+| 3 | `scripts/commission/run_smi_pipeline.js` | Runs Ali's `SMI Commission.sql` through `#SMI_CommIII` (minus the hand-toggled month filter) and writes `smi_detail.json`, `smi_summary.json`, `ipbc_<mon>.json`. Needs `smi_pipeline.sql` — the decoded SQL truncated at the end of the `INTO #SMI_CommIII` statement — copied to `/app`. |
+| 4 | `scripts/commission/build_month_tabs.py` | Copies last month's SMI + IPBC workbooks, prepends the new `<Mon> <Year>` tab to each, writes them under the new month's name. |
+| 5 | `scripts/commission/verify_month.py` | Independent read-back: month totals, the K:N summary, the prior-month regression against what was actually emailed, and that carried-over tabs survived unchanged. **Run this before sending.** |
+| 6 | `scripts/commission/send_commission_email.js` | Sends via Mandrill SMTP with all four attachments and the PNG inline as `cid:staffcomm`. Edit `STAFF`, `ALI`, `SUBJECT`, `DIR` at the top. |
+
+Step 6 uses raw nodemailer rather than `sendWithBcAttach`, which hard-requires a Basecamp
+`ticketId`. This email has no originating ticket — Feb and Mar went straight from Outlook with
+no BC attachment — and the helper's own guard directs that case to raw nodemailer.
