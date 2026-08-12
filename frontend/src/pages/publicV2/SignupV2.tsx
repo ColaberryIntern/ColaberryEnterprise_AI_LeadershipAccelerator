@@ -75,10 +75,24 @@ function SignupV2(): React.ReactElement {
       const res = await registerOrg(buildAccountBody(account));
       persistParticipantSession(res.jwt);
       setCreated(true);
-    } catch {
+    } catch (err) {
+      /*
+       * The endpoint returns a specific, human-readable reason on a 400
+       * (`{ error: 'a valid email is required' }` and similar, straight from its
+       * Zod schema). Showing our own generic sentence instead would hide the one
+       * piece of information that tells the person how to fix it.
+       *
+       * Registering twice is NOT an error worth guarding: registerManager is
+       * idempotent -- free account by email, organization by owner, roster row by
+       * (org, email) -- so a repeat signup returns the existing account with a
+       * fresh session rather than failing.
+       */
+      const e = err as { response?: { status?: number; data?: { error?: string } } };
+      const fromServer = e.response?.data?.error;
       setServerError(
-        'We could not create the account just then. Nothing was lost -- try again, or use the ' +
-          'contact form and a person will set it up.',
+        fromServer ||
+          'We could not create the account just then. Nothing was lost -- try again, or use the ' +
+            'contact form and a person will set it up.',
       );
     } finally {
       setCreating(false);
