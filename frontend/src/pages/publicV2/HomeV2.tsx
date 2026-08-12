@@ -107,7 +107,7 @@ function HomeV2(): React.ReactElement {
       </section>
 
       {/* 2 ──────────────────────────────────────── what we can state today ── */}
-      <section className="cbv2-section cbv2-section--sunken" aria-label="What we can state today">
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-label="What we can state today">
         <div className="cbv2-wrap cbv2-grid cbv2-grid--3">
           <article className="cbv2-card">
             <span className="cbv2-icon-tile cbv2-icon-tile--blue">
@@ -149,7 +149,7 @@ function HomeV2(): React.ReactElement {
       </section>
 
       {/* 3 ─────────────────────────────────────────────────── goal chooser ── */}
-      <section className="cbv2-section" aria-labelledby="cbv2-goal-title">
+      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-goal-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">Start where you are</p>
@@ -203,7 +203,7 @@ function HomeV2(): React.ReactElement {
       </section>
 
       {/* 4 ────────────────────────────────────────── dual transformation ──── */}
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-engine-title">
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-engine-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">The operating model</p>
@@ -241,7 +241,7 @@ function HomeV2(): React.ReactElement {
       </section>
 
       {/* 5 ──────────────────────────────────────────────────────── services ── */}
-      <section className="cbv2-section" aria-labelledby="cbv2-services-title">
+      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-services-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">Services</p>
@@ -266,25 +266,52 @@ function HomeV2(): React.ReactElement {
 
       {/* 6 ────────────────────────────────────────────── free workspace ────── */}
       {canShow('surface.free.workspace', ROUTE) ? (
-        <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-free-title">
-          <div className="cbv2-wrap">
-            <div className="cbv2-section__head">
+        <section
+          className="cbv2-rv cbv2-section cbv2-section--sunken cbv2-section--spot"
+          aria-labelledby="cbv2-free-title"
+        >
+          <div className="cbv2-wrap cbv2-split">
+            <div>
               <p className="cbv2-eyebrow">Free to start</p>
               <h2 id="cbv2-free-title">
                 <Claim claimKey="surface.free.workspace" route={ROUTE} />
               </h2>
+              <p className="cbv2-lede" style={{ marginTop: 'var(--space-4)' }}>
+                It opens on sample data, arranged in the metrics the product actually captures,
+                so you are judging the real shape of the thing before anyone signs anything.
+                Invite your team and the sample gives way to their own progress.
+              </p>
+              <p style={{ marginTop: 'var(--space-6)' }}>
+                <Link className="cbv2-btn cbv2-btn--primary" to="/v2/try">
+                  Open the Free Company Workspace
+                </Link>
+              </p>
             </div>
-            <p style={{ marginTop: 'var(--space-6)' }}>
-              <Link className="cbv2-btn cbv2-btn--primary" to="/v2/try">
-                Open the Free Company Workspace
-              </Link>
-            </p>
+            {/*
+              The accomplishments feed: promotions, validated evidence, evaluations
+              passed and streaks, each attached to a person. Chosen here over
+              another chart because this is the screen that shows movement, which
+              is what a manager is actually buying.
+            */}
+            <figure className="cbv2-shot-frame">
+              <img
+                className="cbv2-shot"
+                src="/site-v2/shot-accomplishments.png"
+                alt="The team accomplishments feed: a promotion to Architect after clearing the final evidence gate, a shipped portfolio artifact, validated evidence logged from a GitHub pull request, an evaluation passed at 86 percent, a seven-day build streak, and a most-improved entry."
+                loading="lazy"
+                decoding="async"
+              />
+              <figcaption className="cbv2-shot-caption">
+                <SampleBadge />
+                <span>Sample team, real event types.</span>
+              </figcaption>
+            </figure>
           </div>
         </section>
       ) : null}
 
       {/* 7 ────────────────────────────────────────────────────── final CTA ── */}
-      <section className="cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-cta-title">
+      <section className="cbv2-rv cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-cta-title">
         <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
           <h2 id="cbv2-cta-title">See what AI could become inside your company.</h2>
           <p className="cbv2-lede" style={{ marginInline: 'auto' }}>

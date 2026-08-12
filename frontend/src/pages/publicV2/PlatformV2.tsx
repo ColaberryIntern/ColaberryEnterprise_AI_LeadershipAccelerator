@@ -47,7 +47,7 @@ function PlatformV2(): React.ReactElement {
       </section>
 
       {active ? (
-        <section className="cbv2-section" aria-labelledby="cbv2-surfaces-title">
+        <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-surfaces-title">
           <div className="cbv2-wrap">
             <div className="cbv2-section__head">
               <p className="cbv2-eyebrow">Explore the surfaces</p>
@@ -127,7 +127,7 @@ function PlatformV2(): React.ReactElement {
       ) : null}
 
       {/* The console is unbuilt. Saying so is truthful; depicting it would not be. */}
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-soon-title">
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-soon-title">
         <div className="cbv2-wrap cbv2-wrap--narrow">
           <h2 id="cbv2-soon-title">Role-based views</h2>
           <p className="cbv2-lede" style={{ margin: 'var(--space-3) 0 var(--space-5)' }}>
@@ -138,7 +138,7 @@ function PlatformV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section" aria-labelledby="cbv2-earned-title">
+      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-earned-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">How the data is earned</p>
@@ -180,7 +180,7 @@ function PlatformV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-studio-title">
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-studio-title">
         <div className="cbv2-wrap cbv2-wrap--narrow">
           <p className="cbv2-eyebrow">Behind the curriculum</p>
           <h2 id="cbv2-studio-title">{STUDIO_DESCRIPTION.label}</h2>
@@ -191,7 +191,7 @@ function PlatformV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-plat-cta">
+      <section className="cbv2-rv cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-plat-cta">
         <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
           <h2 id="cbv2-plat-cta">See where your team would start.</h2>
           <p className="cbv2-lede" style={{ marginInline: 'auto' }}>

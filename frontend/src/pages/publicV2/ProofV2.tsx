@@ -78,7 +78,7 @@ function ProofV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section" aria-labelledby="cbv2-classes-title">
+      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-classes-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">The standard</p>
@@ -103,7 +103,7 @@ function ProofV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-gates-title">
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-gates-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">How a claim reaches this site</p>
@@ -141,7 +141,7 @@ function ProofV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section" aria-labelledby="cbv2-withdrawn-title">
+      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-withdrawn-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">What we took down</p>
@@ -162,7 +162,7 @@ function ProofV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-planned-title">
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-planned-title">
         <div className="cbv2-wrap cbv2-wrap--narrow">
           <p className="cbv2-eyebrow">Next</p>
           <h2 id="cbv2-planned-title">Per-record proof</h2>
@@ -173,7 +173,7 @@ function ProofV2(): React.ReactElement {
         </div>
       </section>
 
-      <section className="cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-proof-cta">
+      <section className="cbv2-rv cbv2-section cbv2-section--inverse" aria-labelledby="cbv2-proof-cta">
         <div className="cbv2-wrap cbv2-wrap--narrow" style={{ textAlign: 'center' }}>
           <h2 id="cbv2-proof-cta">Hold us to it.</h2>
           <p className="cbv2-lede" style={{ marginInline: 'auto' }}>
