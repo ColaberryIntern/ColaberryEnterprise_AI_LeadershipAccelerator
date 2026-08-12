@@ -137,7 +137,12 @@ function summariseReleases(project) {
   return releases;
 }
 
+// Gates render through the same list component as tasks, so they must carry the
+// same shape. Omitting assignees/commentsCount here threw at render time for any
+// project that actually had gates, which stayed hidden while the first project
+// in sort order happened to have none.
 function summariseGates(project, nowMs) {
+  const today = isoDay(nowMs);
   return project.todos
     .filter((t) => t.groupKind === 'approval_gate')
     .map((t) => ({
@@ -145,7 +150,14 @@ function summariseGates(project, nowMs) {
       title: t.title,
       url: t.url,
       completed: t.completed,
+      completedAt: t.completedAt,
       dueOn: t.dueOn,
+      createdAt: t.createdAt,
+      groupName: t.groupName,
+      groupKind: t.groupKind,
+      commentsCount: t.commentsCount || 0,
+      assignees: (t.assignees || []).map((a) => a.name),
+      overdue: !t.completed && !!t.dueOn && t.dueOn < today,
       ageDays: daysBetween(t.createdAt, nowMs),
       projectName: project.name,
       projectUrl: project.url,

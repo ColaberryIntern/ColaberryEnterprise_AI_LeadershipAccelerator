@@ -341,11 +341,15 @@
     openDrawer(esc(p.name), 'Portfolio <b>&rsaquo;</b> ' + esc(p.stream) + ' <b>&rsaquo;</b> ' + esc(personName(p.ownerId)) + ' <b>&rsaquo;</b> Project', body);
   }
 
+  // Renders both delivery tasks and approval gates, which reach here from
+  // different builders. Tolerate a missing field rather than blanking the whole
+  // drawer: one malformed record must not cost the reader the other thirty.
   function taskLi(t) {
+    var who = Array.isArray(t.assignees) ? t.assignees : [];
     return '<li class="' + (t.completed ? 'done' : '') + '">'
       + '<span class="tick ' + (t.completed ? 'done' : t.overdue ? 'over' : '') + '">' + (t.completed ? '✓' : '') + '</span>'
       + '<span class="tt"><span>' + esc(t.title) + '</span><small>'
-      + (t.assignees.length ? esc(t.assignees.join(', ')) : 'unassigned')
+      + (who.length ? esc(who.join(', ')) : 'unassigned')
       + (t.dueOn ? ' &middot; due ' + shortDate(t.dueOn) + (t.overdue ? ' (overdue)' : '') : '')
       + (t.completedAt ? ' &middot; closed ' + shortDate(t.completedAt) : '')
       + (t.commentsCount ? ' &middot; ' + t.commentsCount + ' ' + plural(t.commentsCount, 'comment') : '')
