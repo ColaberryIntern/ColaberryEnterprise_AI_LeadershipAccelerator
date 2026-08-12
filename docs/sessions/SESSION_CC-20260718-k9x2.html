@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260718-k9x2 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Sunday, July 19, 2026 at 4:58 PM</div>
+    <div><span class="sid">CC-20260718-k9x2</span><span class="count">8 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Overhaul `deep_dive` into the &quot;Field Guide&quot; experience; Week 0 (read-only SDLC Field Guide) rendered in the portal via a new `deepdive` renderer + seed (pending Dev 1 verify). Week 1 (Business Analysis) designed.</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">base64 round-trips byte-identical to the source HTML and carries the postMessage bridge + embedded-mode + inlined logo + SVG diagrams (validated locally). Renderer mirrors the certified Self-Study `allow-scripts` iframe + postMessage pattern. FULL `tsc --noEmit` (frontend + backend) and the **Dev 1 deploy + in-portal Week 0 test are PENDING** — this Windows host has no frontend/backend `node_modules` (validation runs on the Docker/dev build, per prior sessions). Prod deploys after-hours.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/deep-dive-overhaul` off origin/main. `deepdive` render_band is SHARED with `blog` — the `type===&#39;deep_dive&#39;` guard is load-bearing. Card placed at `week:0`; if the timeline UI only surfaces weeks 1-12, it may need week reassignment (verify on Dev 1). deep_dive not yet in `seedComponentAuthoring.ts` (not required for the direct-seeded card to render; `approved` only gates the Composer). Week 1 backend wiring (incl. project-context injection for Wk3+) is a deferred follow-on.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Week 0 (SDLC, read-only) + Week 1 (Business Analysis, build-prompt) Deep Dive &quot;Field Guides&quot; are LIVE on prod, rendering in BOTH the drawer and the workspace runtime</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Week 0 (bb9a1f6a) + Week 1 (b4f22d0a) published/locked on prod, 54KB each. Drawer confirmed working by Ali. Workspace fix DEPLOYED via PR #393 → prod at HEAD 9e28f344 (`docker compose up -d --build backend nginx`); backend tsc gate + nginx CRA build both passed (the TS check I can&#39;t run locally). Served bundle `main.5286e7ec.js` contains the workspace deepdive arm (`allow-scripts allow-modals`); site 200. Idempotent seed re-run against prod returned `created:false` for both weeks → committed base64 reproduces live content byte-for-byte (durability proven). Workspace browser test (labeled sidebar, JS/nav, gated complete) is Ali&#39;s to confirm.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Branch `workstream/deep-dive-overhaul`. `deepdive` render_band SHARED with `blog` — the `type===&#39;deep_dive&#39;` guard is load-bearing in BOTH CardDetailBody and RuntimeWorkspace. Week 1 upload is still a placeholder (click-through); the real upload → Architect Library → 100-points-on-upload is the deferred backend build. Weeks 2-12 are now mostly content. See [[reference_deep_dive_field_guide_platform]].</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>A section only counts as read after 5 continuous seconds on it (no more scroll-past-to-complete) — Wk0 + Wk1</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">The IntersectionObserver in both guides (`docs/deep-dive/wk0-sdlc-command-center.html`, `wk1-business-analysis-command-center.html`) previously called `markSeen(id)` the instant a section entered the center band — so fast-scrolling marked everything read. Now each section starts a 5000ms dwell timer when it becomes the active (centered) section; the section is marked read only if the timer completes, and leaving the section (`!isIntersecting`) clears it. Same `postMessage`/gated-complete flow downstream (Wk1&#39;s read-checkpoint still feeds its 3-step gate). Regenerated the base64 modules `backend/src/data/deepDiveWeek0Html.ts` + `deepDiveWeek1Html.ts` (round-trip byte-identical); guides now 54792 / 55231 bytes (still &lt; 64KB srcDoc limit).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Hot-deployed to both live cards (bb9a1f6a wk0, b4f22d0a wk1); DB content query confirms the dwell code is present in both (`&#39;%5 continuous seconds%&#39;` → DWELL-PRESENT). base64 round-trip OK. Reconciled the prod image via backend rebuild + idempotent reseed so `seedDeepDiveFieldGuides` reproduces the live content.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">[[reference_deep_dive_field_guide_platform]] Content-only change (HTML + base64); no frontend/nginx change needed — the renderer is unchanged.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>A student uploads the HTML Field Guide they built in their own Claude Code; it is stored, awards a one-time 100 points, and gates Week-1 completion (server-side)</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Replaced the Week-1 placeholder (an `alert()` that faked the upload) with a real, idempotent upload flow reusing existing machinery.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #405 → prod at HEAD e857c9be; backend tsc gate + nginx CRA build both passed. Reseed set `requires_field_guide_upload=true` on Week 1 (bb9a1f6a wk0=false/read-only, b4f22d0a wk1=true, HOST-WIRED). Served bundle contains the `field-guide`/`deepdive-host` upload code; route responds 401 (auth-gated, exists). End-to-end smoke test on the live backend (synthetic enrollments, cleaned up) — 9/9 PASS: first upload awards 100, re-upload awards 0 (idempotent), exactly one artifact + one points event, status uploaded, gate PASSES when uploaded, gate BLOCKS with 422 `field_guide_required` when not, non-html rejected 400. Pure guards also covered by `fieldGuideService.test.ts` (jest not runnable locally — no worktree node_modules; test files are excluded from the prod tsc build).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">[[reference_deep_dive_field_guide_platform]] The uploaded guide lands in the EXISTING portfolio feed (readiness.portfolio); a dedicated branded &quot;Architect Library&quot; page + an in-app sandboxed viewer of the uploaded guide are noted follow-ons. Points: 100 on upload is SEPARATE from the card&#39;s small base completion points; flag me if it should be exactly 100.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Reskinned both guides to the official Colaberry brand and fixed the completion-unlock + progress-reset bugs Ali reported</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #409 → prod at HEAD 5e4c66b5; backend tsc + nginx CRA builds both passed. Reseed pushed the reskinned guides; DB confirms both cards carry BRAND (#FB2832), the scroll-position read-tracker (&quot;scroll-position&quot;), and the host contract (&quot;deepdive-host&quot;); served bundle contains the `dd:progress` host-persistence key. Upload regression re-run on the live backend: 9/9 PASS (100 once, idempotent, gate pass/block, non-html reject). Both guides&#39; JS parses clean (vm.Script), round-trip base64 OK, &lt; 64 KB, zero emoji.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Structural color = berry blue (authoritative), cherry = fixed accent, green = progress — matches the brand hierarchy. Roboto loads via Google Fonts @import with a system fallback (sandboxed iframe still fetches fonts; degrades gracefully).</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>Read progress now truly carries drawer→workspace (the prior host-persistence fix had a race that wiped it)</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">`useDeepDiveHost` persisted the guide&#39;s progress on every tick by OVERWRITING localStorage with the posted ids. On workspace load the guide&#39;s `seen` is empty, so its FIRST render posts `ids:[]` BEFORE the `ready`→`restore` round-trip — which overwrote the stored `[s1,s2,s3]` with `[]`, so restore then sent back nothing and the guide started over. Fix: persistence is now MONOTONIC — the host UNIONs the posted ids with what&#39;s already stored (`new Set(prev.seenIds.concat(ids))`) and OR-s `copied`, so an empty initial render can never erase saved progress. Restore then finds the real ids and re-checks the sections.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #413 → prod at HEAD d21a7faf; nginx CRA build passed (tsc gate), new bundle main.65df4491.js served with the `dd:progress` persistence key; site 200. Logic verified by trace (empty-first-render no longer clobbers stored ids; restore re-checks). Frontend-only (useDeepDiveHost.ts) — no backend/base64/reseed; guides unchanged. Browser retest of drawer→workspace carry-over is Ali&#39;s to confirm.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">[[reference_deep_dive_field_guide_platform]] Key lesson: a host that mirrors an iframe&#39;s self-reported progress must treat progress as accumulate-only, or the iframe&#39;s fresh-load empty state clobbers the restore it is about to receive.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Three Week-1 fixes from Ali&#39;s screenshots</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">&lt;FILL: prod backend+nginx build + reseed&gt;. wk1 JS parses clean (vm.Script), base64 round-trip OK, 56991 bytes (&lt; 64 KB), zero `completeBtn`/&quot;Business Analysis&quot; left.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Auto-return scoped to `isDeepDive` only (other card types keep the stay-on-workspace + readiness behavior). Weeks 2-12 (same format) are the next build — arc from the Wk0 roadmap: Solution Architecture, Project Management, Software Engineering, UX, QA, Integration, AI Systems, Data Architecture, DevOps, Ops &amp; Governance, AI Solution Architecture.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">08</span>
+          <h2>All 11 remaining Deep Dive Field Guides (Wk2 Solution Architect → Wk12 AI Solution Architect capstone) authored in the Week-1 format and seeded into the canonical program&#39;s Learn section</h2>
+          <span class="badge">2026-07-19</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v"></span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">DEPLOYED via PR #426 → prod at HEAD 18053a51; backend tsc (over the 11 new base64 imports) + nginx builds passed. Reseed created 9 new Learn cards + filled the 2 stray empty deep_dive cards (wk4 fa0f8624, wk11 838e6f88) — no duplicates. DB confirms all 13 weeks: bucket `learn`, published, role titles, 55.9-63.2 KB body_html (&lt; 64 KB), requires_field_guide_upload true (2-12) / false (wk0). Live-card spot-check (wk2/6/12): MACHINERY-OK (deepdive-host + scroll-position read-tracker + #FB2832 brand + uploadBtn all present). All 11 validated by buildWeeks (15 sections, machinery byte-identical to wk1, JS parses, no emoji, no double-escape). Renders via the already-verified deep_dive drawer+workspace arm; upload/points/gate covered by the prior 9/9 backend smoke.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">11 content specs authored by parallel subagents against a shared brief; oversized ones (wk9/11/12 near 64 KB) trimmed to &lt; 58.5 KB. The generator makes future weeks / edits a one-file change. [[reference_deep_dive_field_guide_platform]]</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260718-k9x2</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

@@ -9,12 +9,20 @@ import { Avatar } from '../colaberry/components/core/Avatar';
 import { Progress } from '../colaberry/components/core/Progress';
 import { Table } from '../colaberry/components/core/Table';
 import { Skeleton } from '../colaberry/components/core/Skeleton';
+import { Input } from '../colaberry/components/core/Input';
 
 // SponsorDashboardPage — /sponsor/dashboard (Door B: employer view).
 // DS-only, semantic tokens only. Reads GET /api/sponsor/dashboard via the
 // axios client with a graceful sample-data fallback so the page always
 // renders something credible while the endpoint is wired. The shapes in
 // SponsorDashboard / Participant below ARE the contract that endpoint returns.
+//
+// Auth: magic-link, same email-possession model as the participant portal
+// (see backend/src/services/sponsorAuthService.ts). A `?token=` in the URL
+// (from the emailed link) is exchanged once for a session and stored in
+// localStorage; the dashboard fetch then sends it via the x-sponsor-token
+// header. No session yet — including a first-time visitor — sees the sample
+// data below plus a small "email me my link" gate rather than a blank page.
 //
 // Strategy framing: corporate value is TALENT DISCOVERY, not training. The
 // copy answers "who are my real AI builders?" — not "did people finish a course?"
@@ -44,6 +52,7 @@ function CtaButton({ to, children, ...rest }: CtaButtonProps) {
 type TierName = 'Gold' | 'Silver' | 'Bronze' | 'Unranked';
 
 interface Participant {
+  id: string; // stable react key; enrollment_id for live data
   rank: number;
   name: string;
   email: string;
@@ -69,15 +78,9 @@ interface SponsorDashboard {
 // ----------------------------- Sample fallback ----------------------------
 // Realistic data shown only if the endpoint is unreachable. Mirrors the
 // contract exactly so the live view drops in with no shape changes.
-const SAMPLE: SponsorDashboard = {
-  company: 'Meridian Freight',
-  season: 'Season 3',
-  seatsPurchased: 25,
-  seatsRedeemed: 19,
-  seatsAvailable: 6,
-  seatsReassignable: 3,
-  tierMax: 600,
-  participants: [
+// Ids are injected below rather than written on every row — they exist only to
+// give React a stable key, and live data keys off enrollment_id instead.
+const SAMPLE_PARTICIPANTS: Omit<Participant, 'id'>[] = [
     { rank: 1, name: 'Priya Nandakumar', email: 'priya.n@meridianfreight.com', tier: 'Gold', points: 540, projects: 9, certified: true, demoDayCandidate: true },
     { rank: 2, name: 'Grace Mwangi', email: 'grace.m@meridianfreight.com', tier: 'Gold', points: 505, projects: 8, certified: true, demoDayCandidate: true },
     { rank: 3, name: 'Daniel Okonkwo', email: 'daniel.o@meridianfreight.com', tier: 'Silver', points: 472, projects: 7, certified: true, demoDayCandidate: true },
@@ -88,8 +91,110 @@ const SAMPLE: SponsorDashboard = {
     { rank: 8, name: 'Lena Fischer', email: 'lena.f@meridianfreight.com', tier: 'Bronze', points: 188, projects: 3, certified: false, demoDayCandidate: false },
     { rank: 9, name: 'Omar Haddad', email: 'omar.h@meridianfreight.com', tier: 'Bronze', points: 121, projects: 2, certified: false, demoDayCandidate: false },
     { rank: 10, name: 'Beatriz Santos', email: 'beatriz.s@meridianfreight.com', tier: 'Unranked', points: 40, projects: 1, certified: false, demoDayCandidate: false },
-  ],
+];
+
+// Shown only when the endpoint is unreachable or its payload does not match
+// the contract below.
+const SAMPLE: SponsorDashboard = {
+  company: 'Meridian Freight',
+  season: 'Season 3',
+  seatsPurchased: 25,
+  seatsRedeemed: 19,
+  seatsAvailable: 6,
+  seatsReassignable: 3,
+  tierMax: 600,
+  participants: SAMPLE_PARTICIPANTS.map((p, i) => ({ ...p, id: `sample-${i + 1}` })),
 };
+
+/* ------------------- API response -> view model ---------------------------
+ * GET /api/sponsor/dashboard speaks snake_case and nests its seat counts; this
+ * page renders flat camelCase fields. The two were never reconciled, and the
+ * only boundary check was `Array.isArray(payload.participants)` — which an
+ * empty array passes — so the page accepted a live payload and then rendered
+ * `undefined` into the heading and all four stat cards. Map it explicitly, and
+ * fall back to sample data when the shape does not match.
+ * -------------------------------------------------------------------------*/
+
+interface ApiParticipant {
+  rank: number;
+  enrollment_id: string;
+  full_name: string;
+  points: number;
+  projects_shipped: number;
+  cert_earned: boolean;
+  tier: string;
+}
+
+interface ApiSponsorDashboard {
+  sponsor_id: string;
+  company_name: string;
+  seats: { purchased: number; redeemed: number; available: number; reassignable: number };
+  participants: ApiParticipant[];
+  demo_day_candidates: ApiParticipant[];
+}
+
+// The API has no notion of a season or a points ceiling; both are presentation
+// concerns owned here.
+const DEFAULT_SEASON = 'Current season';
+const DEFAULT_TIER_MAX = 600;
+
+// Backend tiers are lowercase bronze/silver/gold. This page's tone helpers key
+// off capitalised names and know an 'Unranked' state the API never sends, so an
+// unmapped value must land somewhere sane rather than fall through as-is.
+function toTierName(tier: string): TierName {
+  switch ((tier || '').toLowerCase()) {
+    case 'gold':
+      return 'Gold';
+    case 'silver':
+      return 'Silver';
+    case 'bronze':
+      return 'Bronze';
+    default:
+      return 'Unranked';
+  }
+}
+
+function isApiSponsorDashboard(payload: unknown): payload is ApiSponsorDashboard {
+  const p = payload as Partial<ApiSponsorDashboard> | null;
+  return (
+    !!p &&
+    typeof p.company_name === 'string' &&
+    !!p.seats &&
+    typeof p.seats.purchased === 'number' &&
+    Array.isArray(p.participants)
+  );
+}
+
+function mapApiSponsorDashboard(payload: unknown): SponsorDashboard | null {
+  if (!isApiSponsorDashboard(payload)) return null;
+
+  // Demo-Day membership is the server's judgement (cert earned or work shipped);
+  // read it off the list it already sends rather than re-deriving the rule here.
+  const demoDayIds = new Set((payload.demo_day_candidates || []).map((c) => c.enrollment_id));
+
+  return {
+    company: payload.company_name,
+    season: DEFAULT_SEASON,
+    seatsPurchased: payload.seats.purchased,
+    seatsRedeemed: payload.seats.redeemed,
+    seatsAvailable: payload.seats.available,
+    seatsReassignable: payload.seats.reassignable,
+    tierMax: DEFAULT_TIER_MAX,
+    participants: payload.participants.map((p) => ({
+      id: p.enrollment_id,
+      rank: p.rank,
+      name: p.full_name,
+      // The endpoint deliberately does not expose participant emails to the
+      // sponsor surface; nothing on this page renders one.
+      email: '',
+      tier: toTierName(p.tier),
+      points: p.points,
+      projects: p.projects_shipped,
+      certified: p.cert_earned,
+      demoDayCandidate: demoDayIds.has(p.enrollment_id),
+    })),
+  };
+}
 
 const tierTone = (t: TierName): 'red' | 'neutral' | 'warning' =>
   t === 'Gold' ? 'red' : t === 'Silver' ? 'neutral' : 'warning';
@@ -158,6 +263,32 @@ const CSS = `
 @media(max-width:680px){.cbsd-stats{grid-template-columns:1fr}.cbsd-progcell{display:none}}
 `;
 
+// ------------------------------ Auth session -------------------------------
+const SESSION_KEY = 'cb_sponsor_session';
+
+interface SponsorSession {
+  sponsor_id: string;
+  access_token: string;
+  company_name: string;
+}
+
+function loadSponsorSession(): SponsorSession | null {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    return raw ? (JSON.parse(raw) as SponsorSession) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSponsorSession(session: SponsorSession): void {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+}
+
+function clearSponsorSession(): void {
+  localStorage.removeItem(SESSION_KEY);
+}
+
 // --------------------------- Loading skeleton -----------------------------
 function StatsSkeleton() {
   return (
@@ -183,26 +314,80 @@ function SponsorDashboardPage() {
   const [loading, setLoading] = useState<boolean>(true);
   const [usingSample, setUsingSample] = useState<boolean>(false);
 
+  const [session, setSession] = useState<SponsorSession | null>(null);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginSubmitting, setLoginSubmitting] = useState(false);
+  const [loginMessage, setLoginMessage] = useState('');
+  const [loginError, setLoginError] = useState('');
+
+  // Resolve auth once on mount: exchange a `?token=` from an emailed link for
+  // a session, or fall back to whatever's already stored.
   useEffect(() => {
+    let active = true;
+    (async () => {
+      const params = new URLSearchParams(window.location.search);
+      const magic = params.get('token');
+      let resolved = loadSponsorSession();
+      if (magic) {
+        try {
+          const res = await api.get<SponsorSession>('/api/sponsor/verify', { params: { token: magic } });
+          resolved = res.data;
+          saveSponsorSession(resolved);
+        } catch {
+          resolved = null;
+          clearSponsorSession();
+        }
+        window.history.replaceState({}, '', '/sponsor/dashboard');
+      }
+      if (!active) return;
+      setSession(resolved);
+      setAuthChecked(true);
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Load the real dashboard once auth is resolved. No session -> sample data
+  // only, no network call (the endpoint requires sponsor_id + a token).
+  useEffect(() => {
+    if (!authChecked) return;
+    if (!session) {
+      setData(SAMPLE);
+      setUsingSample(true);
+      setLoading(false);
+      return;
+    }
     let active = true;
     setLoading(true);
     api
-      .get<SponsorDashboard>('/api/sponsor/dashboard')
+      .get<unknown>('/api/sponsor/dashboard', {
+        params: { sponsor_id: session.sponsor_id },
+        headers: { 'x-sponsor-token': session.access_token },
+      })
       .then((res) => {
         if (!active) return;
-        const payload = res.data;
-        // Validate the contract at the boundary; fall back if it's malformed.
-        if (payload && Array.isArray(payload.participants)) {
-          setData(payload);
+        // Validate and translate the contract at the boundary; fall back if the
+        // payload does not match what the endpoint is documented to return.
+        const mapped = mapApiSponsorDashboard(res.data);
+        if (mapped) {
+          setData(mapped);
           setUsingSample(false);
         } else {
           setData(SAMPLE);
           setUsingSample(true);
         }
       })
-      .catch(() => {
-        // Graceful degradation — never show an empty page to a sponsor.
+      .catch((err) => {
+        // Graceful degradation — never show an empty page to a sponsor. A
+        // rejected/expired token drops the stale session so the login gate
+        // reappears instead of retrying it forever.
         if (!active) return;
+        if (err?.response?.status === 401) {
+          clearSponsorSession();
+          setSession(null);
+        }
         setData(SAMPLE);
         setUsingSample(true);
       })
@@ -212,7 +397,27 @@ function SponsorDashboardPage() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [authChecked, session]);
+
+  const requestLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginEmail.trim()) {
+      setLoginError('Enter your work email.');
+      return;
+    }
+    setLoginError('');
+    setLoginSubmitting(true);
+    try {
+      const res = await api.post<{ message: string }>('/api/sponsor/request-link', {
+        email: loginEmail.trim(),
+      });
+      setLoginMessage(res.data.message || 'Check your email for your login link.');
+    } catch (err: any) {
+      setLoginError(err?.response?.data?.error || 'Could not send the link. Please try again.');
+    } finally {
+      setLoginSubmitting(false);
+    }
+  };
 
   const view = data ?? SAMPLE;
   const tierMax = view.tierMax || 600;
@@ -349,6 +554,41 @@ function SponsorDashboardPage() {
         </div>
       </header>
 
+      {/* LOGIN GATE — shown until a magic-link session is established */}
+      {authChecked && !session && (
+        <section className="cbsd-wrap" style={{ marginTop: 'var(--space-6)' }} aria-label="Sponsor login">
+          <Card elevation="sm" style={{ padding: 'var(--space-6)', maxWidth: 520 }}>
+            {loginMessage ? (
+              <p style={{ margin: 0 }}>{loginMessage}</p>
+            ) : (
+              <form onSubmit={requestLink} noValidate>
+                <div className="row g-2 align-items-end">
+                  <div className="col-sm-8">
+                    <Input
+                      label="Work email"
+                      type="email"
+                      value={loginEmail}
+                      onChange={(e) => setLoginEmail(e.target.value)}
+                      error={loginError}
+                      placeholder="you@yourcompany.com"
+                      autoComplete="email"
+                    />
+                  </div>
+                  <div className="col-sm-4 d-grid">
+                    <Button type="submit" disabled={loginSubmitting}>
+                      {loginSubmitting ? 'Sending…' : 'Email me my link'}
+                    </Button>
+                  </div>
+                </div>
+              </form>
+            )}
+            <p style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-subtle)', marginTop: 'var(--space-3)', marginBottom: 0 }}>
+              Below is sample data so you can see what your dashboard looks like once you're signed in.
+            </p>
+          </Card>
+        </section>
+      )}
+
       {/* SEAT STAT CARDS */}
       <section className="cbsd-wrap" aria-label="Seat usage">
         {loading ? (
@@ -405,7 +645,7 @@ function SponsorDashboardPage() {
         ) : candidates.length > 0 ? (
           <div className="cbsd-dd-grid">
             {candidates.map((p) => (
-              <Card key={p.email} className="cbsd-dd-card" elevation="sm" hoverable accent="red">
+              <Card key={p.id} className="cbsd-dd-card" elevation="sm" hoverable accent="red">
                 <Avatar name={p.name} src={p.avatar} size="md" ring />
                 <span className="meta cb-min0">
                   <span className="nm">{p.name}</span>

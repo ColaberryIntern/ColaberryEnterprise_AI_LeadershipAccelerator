@@ -27,7 +27,9 @@ function getClient(): OpenAI {
   if (!openaiClient) {
     const apiKey = env.openaiApiKey;
     if (!apiKey) throw new Error('OpenAI API key not configured');
-    openaiClient = getInstrumentedOpenAI({ workflow_id: 'maya_chat' }, { apiKey });
+    // prompt_version bumps whenever buildMayaSystemPrompt/buildChatSystemPrompt's
+    // instructions change in a way that could affect Maya's behavior (TBI T003 / P2-3).
+    openaiClient = getInstrumentedOpenAI({ workflow_id: 'maya_chat', prompt_version: 'maya-chat-v1' }, { apiKey });
   }
   return openaiClient;
 }

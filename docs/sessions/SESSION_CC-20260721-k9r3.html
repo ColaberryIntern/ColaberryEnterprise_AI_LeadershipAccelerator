@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260721-k9r3 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, July 22, 2026 at 7:53 AM</div>
+    <div><span class="sid">CC-20260721-k9r3</span><span class="count">7 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>Class Kit: per-class interactive teaching deck (&quot;AI Architect Today · Learn It Monday / Build It Thursday&quot;) + renamed all 25 July sessions to blueprint titles + rich descriptions + stored run-of-show</h2>
+          <span class="badge">2026-07-21</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Built the **Class Kit** — a self-contained, Open-House-style interactive HTML teaching deck per class that runs the session. (1) `data/classSessionPlan.ts`: per-week Monday (Architecture Day) + Thursday (Build Day) content beats + Orientation (Ali 60 / Taiwo 30 / Swati 30), grounded in `data/weekBlueprints.ts` + the 12-week show slate from the content-strategy brief. (2) `services/classKit/`: `runOfShow.ts` (the strategy&#39;s 120-min Architecture/Build/Orientation segment templates + TZ-safe time helpers + duration scaling), `kitSpec.ts` (assembles a deck spec — slides tagged with their pace segment — from the blueprint), `kitDeckStyles.ts` / `kitDeckScript.ts` / `kitHtml.ts` (the self-contained deck engine). Deck features: a **live pace tracker** (Start class → clock; ON TIME / BEHIND / AHEAD vs the run-of-show + mini-timeline — the &quot;when to speed up / falling behind&quot; magic, fully client-side), a **pulse rail** + presenter feedback (ready to receive the live student feed — next increment), polls/trivia/predictions with reveal, copy-ready Claude Code prompts, checkpoints, failure+recovery, **Builder Broadcast**, **Mark-this-moment** (downloadable clip list), presenter notes, **Compact** mode for docking beside Claude Code, and a full-screen check-in QR. (3) `sessionKitDocService.renderSessionKitDoc` + `GET /api/admin/accelerator/sessions/:id/kit-doc` (requireAdmin) render the deck; admin **&quot;Kit ▶&quot;** button (AdminAcceleratorPage) opens it in a new tab (synchronous window.open + document.write to dodge popup blockers). (4) `live_sessions.kit_json` JSONB column (idempotent DDL in `ensureLiveSessionSchema`) stores the run-of-show. (5) `scripts/updateClassSessionContent.ts` renamed all 25 July sessions from generic role names (&quot;Week 1: Business Analyst&quot;) to `Week N · Architecture/Build Day — &lt;Blueprint Title&gt;`, wrote Monday/Thursday descriptions, and populated kit_json (canonical-compare so re-runs are true no-ops).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">`tsc --noEmit` 0 errors in src/ (the 267 are pre-existing zod-v4/d3 node_modules parse noise); CI green (backend typecheck, backend unit tests, frontend typecheck, secret/route-auth lint) on PR #656; independent checker review PASS on 8/9 checks (1 cosmetic regex bug found + fixed). PROD VERIFIED (2026-07-21): backend `/health` 200; `[DB] Live Sessions schema ensured` + `kit_json` column present; 25 sessions renamed with kit_json (Orientation 4 segs / Architecture 10 / Build 9); `kit-doc` endpoint → HTTP 401 unauth (admin-gated); direct render of a real prod session = 43,789 bytes with pace bar + prompts + blueprint title + inline QR + deck runtime; served frontend bundle `main.a071b7a9.js` contains the `kit-doc` opener.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PRs #656 (build) + #658 (idempotent-writer follow-up), branch `workstream/class-kit-live-sessions`. Deployed backend then nginx `--no-deps` (sequential, to avoid parallel-build OOM). Cohort `1f1d86f4-6da5-4767-a250-cd8310570bea` (Cohort - July 2026, 40 enrolled). **STAGED next increment (not yet built):** the live student-phone pulse (a `session_pulse` table + phone companion: here/building/stuck/finished + questions) wired to the deck&#39;s pulse rail via a kit token — the rail + presenter-feedback logic are already built to receive it. Shipped the deck + pace tracker + naming first because Orientation is 2026-07-23.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>Live student-phone pulse (here/building/stuck/finished + questions) wired to the deck&#39;s rail; clicking a class title opens the presentation deck</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**(flow, from Ali&#39;s feedback)** Clicking a session TITLE now opens the Class Kit presentation deck in a new tab (the check-in QR is on the first slides); the primary row button is **&quot;▶ Present&quot;** (was &quot;Kit ▶&quot;); the QR modal is demoted to a small **&quot;QR&quot;** (printable backup); the confusing Class Details curriculum popup was removed (the deck is the details). **(live pulse — the deck&#39;s &quot;edges&quot;)** New `session_pulse` table (idempotent DDL in `ensureLiveSessionSchema`, one upserted row per enrollment+session, unique index, ON CONFLICT) + `SessionPulse` model (registered in models/index). `POST /api/portal/sessions/:id/pulse` (requireParticipant) sets here/building/stuck/finished; `GET /api/portal/sessions/:id/live-state` returns aggregate counts + recent questions, guarded by a **session-scoped kit token** (baked into the admin-opened deck) OR an admin JWT — questions reuse `session_chat_messages`. `services/classKit/kitToken.ts` mints/verifies the token (12h, `env.jwtSecret`). `sessionKitDocService` now renders the deck with **live enabled**, pointing at an **absolute same-origin** live-state URL (a relative URL won&#39;t resolve from the `about:blank` window the deck is `document.write`n into) + a minted token. **Student phone companion:** after check-in, `ClassCheckinPage` becomes the class controller — big here/building/stuck/finished buttons + Ask-a-question (reuses class chat) — which light up the deck&#39;s pulse rail + presenter feedback.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` 0 errors in src/; CI green (backend typecheck, backend unit tests, frontend typecheck, secret/route-auth lint) on PR #662. PROD deploy + verify in this session (backend for the new table/routes + nginx for the frontend).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #662, branch `workstream/class-kit-live-pulse`. Deploy = backend (`up -d --build backend`) then nginx (`--no-deps`). The route-auth lint only scans `routes/admin/`; the live-state route is in `participantRoutes` with a kit-token-or-admin guard. The &quot;We couldn&#39;t check you in&quot; Ali saw was an instructor account hitting the *student* check-in on a non-enrolled session — expected; instructors use &quot;▶ Present&quot;, students scan the deck&#39;s QR.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">03</span>
+          <h2>The student phone is slaved to the instructor&#39;s deck (auto-switches to the live question/broadcast as the deck advances); live participation stats + poll tallies; visual &quot;Prove It&quot; assignment briefs</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">**(two-way sync)** New `session_broadcast` (one row/session = the deck&#39;s current view) + `session_poll_responses` (one answer/student/poll, upsert) tables (idempotent DDL). `sessionLiveStateService` gains `setBroadcast/getBroadcast`, `recordPollResponse/getPollTally`, `getCompanionState`, and `getLiveState` now also returns `present` (checked-in via attendance) + `participated` (distinct pulse/answer/ask) + the active poll&#39;s live tally. Routes: `POST /broadcast` + `GET /live-state` (kit-token-or-admin), `GET /companion-state` + `POST /poll-response` + `POST /pulse` (requireParticipant). **Deck** (`kitDeckScript`) `broadcastCurrent()` POSTs its current slide/segment/active-question on every advance + on Reveal (poll_key = deterministic slide id); the rail shows checked-in + participating counts and **live poll result bars** (correct highlighted on reveal). **Phone** (`ClassCheckinPage`) polls `companion-state` every 2.5s and **switches view to match the screen** — status controller ↔ live question (tappable options, my_choice, reveal) ↔ Builder Broadcast prompts. `sessionKitDocService` passes ABSOLUTE endpoint + broadcastEndpoint (the deck runs in an about:blank window) + a minted kit token. **(visual assignments)** New `AssignmentBrief` + `&#39;assignment&#39;` slide kind: an emoji &quot;Prove It&quot; brief (difficulty / ⏱ time / 🏆 XP chips, an emoji deliverable journey, a 📸 proof callout, competency tags) built from the week blueprint + the class assignment.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Backend `tsc --noEmit` 0 errors in src/; CI (PR #674); independent checker review; PROD deploy + end-to-end sync verify in this session.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #674, branch `workstream/class-kit-sync`. Deploy = backend (new tables/routes) + nginx (deck + phone). Broadcast auth = kit token (deck) so students can&#39;t forge it; poll answers are participant-auth. The route-auth lint only scans `routes/admin/`; the sync routes are in `participantRoutes` with kit-token-or-admin / requireParticipant guards.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">04</span>
+          <h2>The teaching deck is now real teaching material: per-week mermaid architecture diagrams, a Focus/Video mode, non-overlapping auto-hiding chrome, emoji headers, and a teaching-script notes view</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">From Ali&#39;s feedback (the deck must let him learn/review/practice a 2-hr class, be far more visual, and not wreck the video). **Mermaid diagrams**: `ARCHITECTURE_DIAGRAMS` (12 authored flowcharts, one per week) render on the Architecture Day &quot;architecture story&quot; slide + a generated checkpoint-flow (`buildCheckpointDiagram`) on the Build Day build-map slide. Rendered client-side via a mermaid CDN module, per slide on activation (`window.__renderMermaid` called from `show()` so hidden slides size correctly); raw source + caption remain if the CDN is unreachable. `securityLevel: &#39;loose&#39;` is safe — diagram source is authored constants only, never user input. **Clean chrome**: the control cluster (`.ktoggles`) shifts left of the pulse rail when the rail is on (was overlapping), gets a glass style, and **fades out on mouse-idle** (body.idle) so it stays out of the recording. **Focus/Video mode** (V or 🎥 Focus button, `body.focus`): hides ALL chrome (toggles, rail, pace bar, notes) for a clean full-bleed scene + an unobtrusive Exit control. **Teaching depth**: emoji headers on every key slide; presenter notes expanded into a teaching-script view (segment + planned minutes + what to teach + on-camera value + next).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">pure-module `tsc --noEmit` 0 errors; CI (PR #685); rendered samples served on localhost — mermaid renders, Focus mode + idle-hide work, diagrams on Architecture + Build slides. Backend-only (deck is server-rendered) → backend deploy + prod verify in this session.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #685, branch `workstream/class-kit-visuals`. Backend-only deploy (`up -d --build backend`). Mermaid loads from jsdelivr CDN — the app has no CSP and the deck opens same-origin via the ▶ Present path, so the module import resolves; a file:// open shows raw diagram source (fallback). Deeper per-slide scripting for all 24 sessions can continue iteratively.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>Every class deck now carries real 2-hour teaching material (multi-slide segments with substance + code + diagrams + a teaching script), not just the run-of-show skeleton</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali — &quot;not enough content for 2 hrs.&quot; The deck was one beat per segment; now each segment carries multiple substantive teaching slides. New `data/classTeachContent.ts` = `TeachSlide` model (body + bullets + copy-ready `code` + optional mermaid + a teaching `script` that flows to the presenter notes) + `DayTeach` (monday/thursday). Hand-authored: **Orientation** (Ali big-picture / Taiwo platform / Swati setup, real substance) + **Week 1** (Architecture + Build) — the imminent classes. **Weeks 2-12** were authored by an **11-way parallel subagent fan-out** (each grounded in its `weekBlueprints.ts` entry + the mapped Anthropic course), written as JSON and integrated by `scripts/buildTeachWeeks.js` (validates segment ids + sanitizes + emits typed `data/classTeachWeeks.ts` = `GENERATED_WEEK_TEACH`, merged under the hand-authored Week 1). `kitSpec.teachToSlides` inserts teach slides into the matching run-of-show segment (append after business-problem/architecture/deconstruct/micro-build on Monday; guided-build + failure REPLACE the thin beats on Thursday when authored, else fall back); `kitHtml` renders the `teach` kind (eyebrow + title + body + bullets + terminal code + mermaid). Total **308 teaching slides**; every class renders ~22-27 slides.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">pure-module `tsc --noEmit` 0 errors (incl. generated `classTeachWeeks.ts`); CI (PR #689); rendered — Orientation 24, Week 1 Arch 25 / Build 22, Week 9 Build 27 (all up from ~9-20). Backend-only (deck server-rendered) → backend deploy + prod verify in this session.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #689, branch `workstream/class-kit-deep-content`. Backend-only deploy. The 11-agent fan-out ran in parallel (~5-8 min each), grounded in the blueprints; each returned 26-29 slides. Re-run the fan-out + `buildTeachWeeks.js` to regenerate. Content quality is solid-first-pass; per-slide polish per week can continue iteratively.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">06</span>
+          <h2>A readable one-page class Outline generated from the deck content, openable per session from the admin</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Ali wanted to REVIEW a readable outline of the class (not click through slides) and found the deck&#39;s run-of-show &quot;playbook&quot; opaque. `services/classKit/outlineHtml.renderClassOutline(spec)` renders a one-page teaching plan from the same KitSpec the deck uses: each run-of-show segment with its time window + purpose, and the teaching points under it (title + a one-line summary + ⌨️ on copy-ready prompts + 📊 on diagrams), clean/scannable/printable. `renderSessionOutline` + `GET /api/admin/accelerator/sessions/:id/outline` (requireAdmin) + a per-row &quot;📋 Outline&quot; button in AdminAcceleratorPage (opens in a new tab, same document.write flow as ▶ Present). renderClassKitSamples also emits a `-outline.html` per sample.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">pure-module `tsc` 0 errors; CI (PR #691); generated outlines for Orientation + Week 1 (Arch/Build) render the full segment-by-segment teaching plan. Deploy = backend (endpoint) + nginx (button).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #691, branch `workstream/class-kit-outline`. The outline is auto-generated from the deck spec, so it stays in sync and covers all 12 weeks for free.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">07</span>
+          <h2>Factual corrections (PwC 62%, WEF projections labeled, Manual/Plan/Auto), a source/evidence ledger, and a Present menu (Rehearse / Download standalone / Readiness report)</h2>
+          <span class="badge">2026-07-22</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Highest-value slice of Ali&#39;s Class-Experience upgrade spec (CLAUDE_CODE_PROMPT_PRESENT_CLASS_EXPERIENCE.md). **Corrections:** Orientation PwC wage premium → **62%** (2026 Global AI Jobs Barometer, was 56%/2025); WEF figures explicitly labeled **projections** (170M created / 92M displaced / net +78M / 39% skills by 2030); Week 1 permission modes → **Manual / Plan / Auto** (current Claude Code behavior + a &quot;product terms can shift&quot; caveat) in both classTeachContent + classSessionPlan architectureBeats; Dario Amodei line reframed as a reported paraphrase, Huang quote kept exact. **Source ledger:** `EvidenceClaim` on `TeachSlide` (+ KitSlide) → a small &quot;📎 Sources:&quot; footer on factual slides (kitHtml `evidenceHtml`) + surfaced in the readiness report. **Present menu:** `▶ Present` split-button dropdown in AdminAcceleratorPage — Present (live), 🎓 Rehearse (`?mode=rehearse`, live OFF so practice doesn&#39;t broadcast), ⬇️ Download standalone HTML (`?mode=standalone` → blob download), 📋 Readiness report. Backend: `renderSessionKitDoc(mode)` + `renderSessionReadinessReport` (counts + evidence ledger + prep + basic gates) + `GET .../kit-doc?mode=` + `GET .../readiness` (requireAdmin).</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">pure-module `tsc` 0 errors; CI (PR #700); rendered — 62% / PwC / projection / &quot;Manual (approve each)&quot; / &quot;Sources:&quot; footers all present. Deploy = backend (render + endpoints) + nginx (Present menu).</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">PR #700, branch `workstream/class-kit-experience-v2`. Budget-limited straight shot per Ali; deferred items noted above for a future phase.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260721-k9r3</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>

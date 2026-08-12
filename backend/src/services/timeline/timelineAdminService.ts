@@ -20,6 +20,7 @@ import { resolve as resolveType, allTypes, CardTypeDef } from './typeRegistry';
 import { normalizeCapabilities } from './timelineService';
 import { recomputeForCard, recomputeMany, recomputeBlueprintHours } from '../composer/blueprintRollup';
 import { normalizeRules, UnlockPredicate } from './timelineGatingService';
+import { REFLECT_GATED_TYPES, reflectGateFor, reflectSiblingFlags } from './reflectGating';
 
 export const BUCKETS: TimelineBucket[] = ['pre_class', 'learn', 'practice', 'build', 'reflect', 'share', 'advance'];
 const VISIBILITIES = ['draft', 'scheduled', 'published', 'archived'] as const;
@@ -43,7 +44,7 @@ export interface CreateCardInput {
   unlock_rules?: any;   // per-card gating predicates (UnlockPredicate[]) — normalized on write
   video?: { url?: string | null; presenter?: string | null; poster?: string | null } | null;
   content?: { title?: string; summary?: string; body_html?: string; questions?: string[]; reflection?: string } | null;
-  course?: { name?: string | null; url?: string | null; completion?: 'certificate' | 'progress' | null; sections?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link + completion mode
+  course?: { name?: string | null; url?: string | null; completion?: 'certificate' | 'progress' | null; sections?: string | null; certName?: string | null } | null;   // Anthropic Skills Course (skills_jar): class name + link + completion mode. certName: the name AS IT APPEARS ON THE ACTUAL CERTIFICATE, when it differs from the display `name` (e.g. a split course renamed per-week for the timeline) — used only for AI cert-match verification.
   image?: string | null;   // the item's OWN display image (blog cover etc.) — tiles show it over the generic type visual
   testimonial?: { mode?: string | null; category?: string | null } | null;   // Testimonials type: link vs random personalized
   podcast?: { mode?: string | null; category?: string | null } | null;       // Podcast type: link vs random personalized episode
@@ -80,7 +81,7 @@ export function buildContentMeta(content: CreateCardInput['content']): Record<st
 
 /** PURE — normalize a Skills Course link (class name + SkillsJar URL) into the
  *  stored metadata shape, or null when neither is given. */
-export function buildCourseMeta(course: CreateCardInput['course']): { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string } | null {
+export function buildCourseMeta(course: CreateCardInput['course']): { name: string | null; url: string | null; completion?: 'certificate' | 'progress'; sections?: string; certName?: string } | null {
   if (!course || typeof course !== 'object') return null;
   const str = (s: any) => (typeof s === 'string' && s.trim() ? s.trim() : null);
   const name = str(course.name);
@@ -90,7 +91,8 @@ export function buildCourseMeta(course: CreateCardInput['course']): { name: stri
   // split course's first part); default/omitted = 'certificate' (whole-course cert).
   const completion = course.completion === 'progress' ? 'progress' : undefined;
   const sections = str(course.sections) || undefined;
-  return { name, url, ...(completion ? { completion } : {}), ...(sections ? { sections } : {}) };
+  const certName = str(course.certName) || undefined;
+  return { name, url, ...(completion ? { completion } : {}), ...(sections ? { sections } : {}), ...(certName ? { certName } : {}) };
 }
 
 /** PURE — normalize the Testimonials source config into the stored metadata
@@ -268,6 +270,24 @@ async function assertTypeLaunched(slug: string): Promise<void> {
   }
 }
 
+/**
+ * Auto-apply the reflect-chain gate to a newly created eval/survey/reflection
+ * card, unless the author explicitly supplied unlock_rules (an explicit choice
+ * — including a deliberate `[]` — is never overridden). Cross-sibling drift
+ * (e.g. an evaluation added after its week's survey already existed) is swept
+ * up by the boot-time reflectGatingReconciler, not here.
+ */
+async function autoGateReflectCard(card: TimelineCard, input: CreateCardInput): Promise<void> {
+  if (input.unlock_rules !== undefined) return;
+  if (card.bucket !== 'reflect' || !(REFLECT_GATED_TYPES as readonly string[]).includes(card.type)) return;
+  const siblings = await TimelineCard.findAll({
+    where: { cohort_id: null, program_id: card.program_id, week: card.week, bucket: 'reflect' },
+    attributes: ['type'],
+  });
+  const rules = reflectGateFor(card.type, reflectSiblingFlags(siblings));
+  if (rules) await card.update({ unlock_rules: rules });
+}
+
 export async function createCard(input: CreateCardInput): Promise<TimelineCard> {
   const def = resolveType(input.type);
   if (!def) throw Object.assign(new Error(`Unknown card type "${input.type}"`), { status: 400 });
@@ -288,6 +308,7 @@ export async function createCard(input: CreateCardInput): Promise<TimelineCard> 
   }
   const card = await TimelineCard.create(attrs as any);
   await recomputeForCard(card); // keep the week's blueprint est_hours in sync
+  await autoGateReflectCard(card, input); // wire the reflect-chain lock so new eval/survey/reflection cards aren't born ungated
   return card;
 }
 

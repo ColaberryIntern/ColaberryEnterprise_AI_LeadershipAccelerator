@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Enrollment &amp; Access Fix — Review · CC-20260729-w4t8</title>
+<style>
+  :root {
+    --color-primary: #1a365d; --color-primary-light: #2b6cb0;
+    --color-success: #10b981; --color-success-bg: rgba(16,185,129,0.08);
+    --color-danger: #ef4444; --color-danger-bg: rgba(239,68,68,0.08);
+    --color-warning: #f59e0b; --color-warning-bg: rgba(245,158,11,0.08);
+    --color-bg: #ffffff; --color-bg-alt: #f7fafc; --color-text: #2d3748;
+    --color-text-light: #718096; --color-border: #e2e8f0;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: var(--color-text);
+    background: var(--color-bg-alt); font-size: 14px; line-height: 1.55; margin: 0; padding-bottom: 100px; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 1.25rem; }
+  .doc-header { background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-light) 100%);
+    color: white; padding: 1.7rem 0; margin-bottom: 1.25rem; }
+  .doc-header h1 { font-weight: 600; letter-spacing: -0.02em; margin: 0 0 0.4rem; font-size: 1.5rem; }
+  .doc-header .subtitle { font-size: 0.9rem; opacity: 0.92; max-width: 900px; }
+  .doc-header .meta { margin-top: 0.9rem; display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.75rem; }
+  .doc-header .meta-item { background: rgba(255,255,255,0.13); padding: 0.3rem 0.7rem; border-radius: 4px; }
+
+  .summary-bar { background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    padding: 0.9rem 1.1rem; margin-bottom: 1.25rem; display: flex; gap: 2rem; flex-wrap: wrap; }
+  .summary-bar .stat .num { font-size: 1.4rem; font-weight: 700; color: var(--color-primary); line-height: 1; }
+  .summary-bar .stat .lab { font-size: 0.7rem; color: var(--color-text-light); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 3px; }
+
+  .stop { background: white; border: 1px solid var(--color-border); border-radius: 6px;
+    margin-bottom: 1.5rem; box-shadow: 0 1px 2px rgba(0,0,0,0.04); overflow: hidden; }
+  .stop-header { padding: 1rem 1.4rem 0.8rem; border-bottom: 1px solid var(--color-border); background: var(--color-bg-alt); }
+  .stop-header h2 { font-size: 1.15rem; font-weight: 600; color: var(--color-primary); margin: 0;
+    display: flex; align-items: center; gap: 0.6rem; }
+  .stop-header h2 .num { background: var(--color-primary); color: white; font-weight: 600; font-size: 0.8rem;
+    width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .stop-header h2 .pill { margin-left: auto; font-size: 0.68rem; padding: 0.15rem 0.55rem; border-radius: 3px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .pill.fixed { background: var(--color-success-bg); color: var(--color-success); }
+  .pill.reconciled { background: var(--color-warning-bg); color: var(--color-warning); }
+  .stop-header .lead { font-size: 0.85rem; color: var(--color-text-light); margin: 0.4rem 0 0; padding-left: 34px; }
+
+  .stop-band { padding: 1rem 1.4rem; border-top: 1px solid var(--color-border); }
+  .stop-band:first-of-type { border-top: none; }
+  .stop-band h3 { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--color-text-light); margin: 0 0 0.6rem; }
+  .stop-band ul { margin: 0; padding-left: 1.2rem; font-size: 0.86rem; }
+  .stop-band li { margin-bottom: 0.3rem; }
+
+  .screenshot { border: 1px solid var(--color-border); border-radius: 6px; overflow: hidden;
+    background: #0f172a; padding: 10px; }
+  .screenshot img { width: 100%; display: block; border-radius: 3px; }
+  .screenshot .cap { color: #cbd5e1; font-size: 0.72rem; padding: 6px 4px 0; display: flex; justify-content: space-between; }
+  .screenshot .cap a { color: #93c5fd; }
+
+  table.recon { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  table.recon th, table.recon td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--color-border); }
+  table.recon th { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--color-text-light); }
+  table.recon tr:last-child td { border-bottom: none; }
+  .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600; }
+  .badge.paid { background: var(--color-success-bg); color: var(--color-success); }
+  .badge.retry { background: var(--color-warning-bg); color: var(--color-warning); }
+
+  .callout { border-left: 4px solid; border-radius: 5px; padding: 0.65rem 0.9rem; margin: 0.9rem 0; font-size: 0.85rem; }
+  .callout.warn { background: var(--color-warning-bg); border-color: var(--color-warning); }
+  .callout.info { background: rgba(59,130,246,0.08); border-color: #3b82f6; }
+
+  .verdict-card { border: 1px solid var(--color-border); border-radius: 6px; padding: 0.85rem 1rem; background: var(--color-bg-alt); }
+  .verdict-card .row1 { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .verdict-card .label-text { font-size: 0.82rem; font-weight: 600; }
+  .verdict-card .verdict-options { display: flex; gap: 4px; }
+  .verdict-card input[type="radio"] { display: none; }
+  .verdict-card label.opt { padding: 0.3rem 0.7rem; border: 1px solid var(--color-border); border-radius: 4px;
+    font-size: 0.78rem; cursor: pointer; background: white; }
+  .verdict-card input:checked + label.good { background: var(--color-success); color: white; border-color: var(--color-success); }
+  .verdict-card input:checked + label.tweak { background: var(--color-warning); color: white; border-color: var(--color-warning); }
+  .verdict-card input:checked + label.broken { background: var(--color-danger); color: white; border-color: var(--color-danger); }
+  .verdict-card textarea { width: 100%; margin-top: 0.6rem; border: 1px solid var(--color-border); border-radius: 4px;
+    padding: 0.5rem; font-size: 0.82rem; font-family: inherit; resize: vertical; min-height: 60px; }
+
+  .action-bar { position: fixed; bottom: 0; left: 0; right: 0; background: white; border-top: 1px solid var(--color-border);
+    padding: 0.8rem 1.25rem; display: flex; gap: 0.6rem; justify-content: flex-end; box-shadow: 0 -2px 8px rgba(0,0,0,0.06); }
+  .btn { padding: 0.55rem 1.1rem; border-radius: 5px; font-size: 0.85rem; font-weight: 600; border: 1px solid var(--color-border);
+    background: white; cursor: pointer; }
+  .btn.primary { background: var(--color-primary); color: white; border-color: var(--color-primary); }
+  #compileOut { max-width: 1100px; margin: 1rem auto 0; padding: 0 1.25rem; }
+  #compileOut textarea { width: 100%; min-height: 220px; font-family: 'Cascadia Code', Consolas, monospace; font-size: 0.78rem;
+    border: 1px solid var(--color-border); border-radius: 6px; padding: 0.8rem; }
+</style>
+</head>
+<body>
+<div class="doc-header"><div class="container">
+  <h1>Enrollment &amp; Access Fix — Review</h1>
+  <div class="subtitle">Student payment/access incident triage on enterprise.colaberry.ai. Two stops: the dead-enrollment-funnel fix (verified live post-rebuild) and the portal_enabled payment-gate fix (PR #771, merged + deployed). Real screenshots against production, not mockups.</div>
+  <div class="meta">
+    <div class="meta-item">Session CC-20260729-w4t8</div>
+    <div class="meta-item">Captured 2026-07-30</div>
+    <div class="meta-item">enterprise.colaberry.ai</div>
+  </div>
+</div></div>
+
+<div class="container">
+  <div class="summary-bar">
+    <div class="stat"><div class="num">2</div><div class="lab">stops verified</div></div>
+    <div class="stat"><div class="num">5</div><div class="lab">students reconciled</div></div>
+    <div class="stat"><div class="num">1</div><div class="lab">real regression caught &amp; fixed</div></div>
+    <div class="stat"><div class="num">1</div><div class="lab">stale-deploy incident found &amp; fixed</div></div>
+  </div>
+
+  <div class="callout warn">
+    <strong>What this review doc exists to catch:</strong> the first verification attempt against this fix, using only a raw <code>/api/cohorts</code> curl check, said the enrollment funnel was fixed. It was not — the backend and frontend containers had not actually been rebuilt in 6 days, so the real page still showed &ldquo;No upcoming cohorts are currently available.&rdquo; That was caught by <em>this exact screenshot step</em>, before any student was told it was fixed. See Stop 1.
+  </div>
+
+  <!-- STOP 1 -->
+  <div class="stop">
+    <div class="stop-header">
+      <h2><span class="num">1</span> Public enrollment funnel <span class="pill fixed">Fixed &amp; verified live</span></h2>
+      <div class="lead">/enroll — cohort selection was hard-empty for 6 days (2026-07-24 to 07-29), blocking every new signup. Fix: commit b1c71248 (another session). This step is the actual browser-level proof it works, run after a real container rebuild.</div>
+    </div>
+    <div class="stop-band">
+      <h3>① See it</h3>
+      <div class="screenshot">
+        <img src="screenshots/2026-07-30-enrollment-fix-verify/02-cohort-selected.png" alt="Enroll page with a real cohort selected and Proceed to Payment enabled">
+        <div class="cap"><span>enterprise.colaberry.ai/enroll — post-rebuild, cohort selected, submit enabled</span>
+          <a href="screenshots/2026-07-30-enrollment-fix-verify/02-cohort-selected.png" target="_blank">open full size</a></div>
+      </div>
+    </div>
+    <div class="stop-band">
+      <h3>② What shipped here</h3>
+      <ul>
+        <li><strong>Before:</strong> "No upcoming cohorts are currently available. Please check back soon..." — the Select Cohort dropdown was empty and the submit button hard-disabled, for anyone, since 07-24.</li>
+        <li><strong>After:</strong> "Cohort - July 2026 — Starts July 23, 2026 (7 seats remaining)" is a real, selectable option; "Proceed to Payment" is enabled.</li>
+        <li>This directly unblocks Chuks Eneh, Jude Mofunanya, Marione Nkerbu, and Firas Baidhani, who all reported "registration/enrollment failing" this week.</li>
+      </ul>
+    </div>
+    <div class="stop-band">
+      <h3>③ Possible changes — flagged, not yet actioned</h3>
+      <ul>
+        <li><label><input type="checkbox"> "Timeline Demo Cohort" is also appearing as a selectable public option — per the original fix's own intent, internal/demo cohorts should be excluded from the public picker via an allowlist. Worth a follow-up look, does not block this fix.</label></li>
+      </ul>
+    </div>
+    <div class="stop-band">
+      <h3>④ Your verdict + notes</h3>
+      <div class="verdict-card" data-surface-verdict="Enrollment funnel">
+        <div class="row1"><span class="label-text">Verdict:</span>
+          <span class="verdict-options">
+            <input type="radio" name="v1" id="v1-good" value="good"><label class="opt good" for="v1-good">👍 Good</label>
+            <input type="radio" name="v1" id="v1-tweak" value="tweak"><label class="opt tweak" for="v1-tweak">⚠ Tweak</label>
+            <input type="radio" name="v1" id="v1-broken" value="broken"><label class="opt broken" for="v1-broken">✕ Broken</label>
+          </span>
+        </div>
+        <textarea placeholder="Notes for the next pass..." data-notes="Enrollment funnel"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <!-- STOP 2 -->
+  <div class="stop">
+    <div class="stop-header">
+      <h2><span class="num">2</span> Paid-but-locked reconciliation <span class="pill reconciled">5 reconciled, code fix live</span></h2>
+      <div class="lead">markEnrollmentPaid never set portal_enabled=true on confirmed payment (PR #771, merged + deployed). Separately, 5 students paid through PaySimple's side-hosted product page, which never had a matching paysimple_external_id, so the webhook silently no-opped — verified against Ali's own PaySimple order-confirmation emails, then manually reconciled.</div>
+    </div>
+    <div class="stop-band">
+      <h3>① See it — code fix</h3>
+      <div class="screenshot" style="background:#0f172a;">
+        <div style="color:#e2e8f0; font-family: Consolas, monospace; font-size: 0.78rem; padding: 0.5rem;">
++ enrollment.portal_enabled = true;<br>
+&nbsp;&nbsp;if (paymentDetails) { ... }<br>
+&nbsp;&nbsp;await enrollment.save();
+        </div>
+        <div class="cap"><span>backend/src/services/enrollmentService.ts — markEnrollmentPaid()</span>
+          <a href="https://github.com/ColaberryIntern/ColaberryEnterprise_AI_LeadershipAccelerator/pull/771" target="_blank">PR #771</a></div>
+      </div>
+    </div>
+    <div class="stop-band">
+      <h3>② What shipped + who was reconciled</h3>
+      <table class="recon">
+        <tr><th>Student</th><th>PaySimple order</th><th>Amount</th><th>Status</th></tr>
+        <tr><td>Mohsin Ali</td><td>#N13022</td><td>$199.00</td><td><span class="badge paid">paid + access granted</span></td></tr>
+        <tr><td>Abirahim Nur</td><td>#N13015</td><td>$1,788.00 (annual)</td><td><span class="badge paid">paid + access granted</span></td></tr>
+        <tr><td>Liza Ayele</td><td>#N12987</td><td>$199.00</td><td><span class="badge paid">paid + access granted</span></td></tr>
+        <tr><td>Britiana Okoduwa</td><td>#N12994</td><td>$199.00</td><td><span class="badge paid">paid + access granted (cohort_id was also wrong — fixed)</span></td></tr>
+        <tr><td>Regina Asafor</td><td>#N12993</td><td>$199.00</td><td><span class="badge paid">paid + access granted</span></td></tr>
+        <tr><td>Million Abate</td><td>none found</td><td>—</td><td><span class="badge retry">no confirmed payment — needs to retry checkout, funnel now works</span></td></tr>
+      </table>
+    </div>
+    <div class="stop-band">
+      <h3>③ Possible changes — flagged, not yet actioned</h3>
+      <ul>
+        <li><label><input type="checkbox"> Sonya Parker's dashboard doesn't reflect her $50 deposit credit against the checkout amount — separate bug, not yet root-caused (Cluster D).</label></li>
+        <li><label><input type="checkbox"> The QR check-in failures (Tanmayi, Firas, Mohsin) are being worked by a separate, already-active session — left alone to avoid collision.</label></li>
+        <li><label><input type="checkbox"> Every affected student also had a duplicate "Explorer" (free preview) enrollment row auto-created by the Open House signup flow around 2026-07-24 — worth a broader look at whether this is confusing the access-gating logic more generally, beyond these 5 cases.</label></li>
+      </ul>
+    </div>
+    <div class="stop-band">
+      <h3>④ Your verdict + notes</h3>
+      <div class="verdict-card" data-surface-verdict="Reconciliation">
+        <div class="row1"><span class="label-text">Verdict:</span>
+          <span class="verdict-options">
+            <input type="radio" name="v2" id="v2-good" value="good"><label class="opt good" for="v2-good">👍 Good</label>
+            <input type="radio" name="v2" id="v2-tweak" value="tweak"><label class="opt tweak" for="v2-tweak">⚠ Tweak</label>
+            <input type="radio" name="v2" id="v2-broken" value="broken"><label class="opt broken" for="v2-broken">✕ Broken</label>
+          </span>
+        </div>
+        <textarea placeholder="Notes for the next pass..." data-notes="Reconciliation"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout info">
+    <strong>Self-correction record:</strong> two mistakes were made and caught in this same session, both from building a commit off a stale local file instead of pulling origin/main's real current content first — one silently reverted unrelated functions in <code>enrollmentService.ts</code> (caught by CI), the other truncated 5,543 lines of <code>PROGRESS.md</code> history (caught by inspecting the deploy diffstat). Both were fixed before this doc was generated. Full writeup in PROGRESS.md under this session's entry.
+  </div>
+</div>
+
+<div id="compileOut" style="display:none;">
+  <h3 style="font-size:0.85rem; text-transform:uppercase; letter-spacing:0.05em; color:var(--color-text-light);">Compiled feedback</h3>
+  <textarea id="compileText" readonly></textarea>
+</div>
+
+<div class="action-bar">
+  <button class="btn" onclick="resetAll()">Reset</button>
+  <button class="btn primary" onclick="compileAll()">Compile feedback</button>
+</div>
+
+<script>
+function resetAll() {
+  document.querySelectorAll('input[type=radio]').forEach(r => r.checked = false);
+  document.querySelectorAll('textarea[data-notes]').forEach(t => t.value = '');
+  document.querySelectorAll('input[type=checkbox]').forEach(c => c.checked = false);
+  document.getElementById('compileOut').style.display = 'none';
+}
+function compileAll() {
+  const lines = ['# Enrollment & Access Fix — review feedback', ''];
+  document.querySelectorAll('.verdict-card').forEach(card => {
+    const surface = card.getAttribute('data-surface-verdict');
+    const checked = card.querySelector('input[type=radio]:checked');
+    const notes = card.querySelector('textarea[data-notes]').value.trim();
+    lines.push('## ' + surface);
+    lines.push('- Verdict: ' + (checked ? checked.value : '(none selected)'));
+    if (notes) lines.push('- Notes: ' + notes);
+    lines.push('');
+  });
+  const flagged = Array.from(document.querySelectorAll('input[type=checkbox]:checked')).map(c => c.closest('label').textContent.trim());
+  if (flagged.length) {
+    lines.push('## Flagged for follow-up');
+    flagged.forEach(f => lines.push('- ' + f));
+  }
+  document.getElementById('compileText').value = lines.join('\n');
+  document.getElementById('compileOut').style.display = 'block';
+  document.getElementById('compileOut').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+</body>
+</html>

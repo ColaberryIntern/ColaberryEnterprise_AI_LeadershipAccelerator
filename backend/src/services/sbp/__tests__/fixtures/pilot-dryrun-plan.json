@@ -1,0 +1,448 @@
+{
+  "project_name": "AI Systems Architect Accelerator Sponsor Dashboard",
+  "descriptor": "A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.",
+  "requirements": [
+    {
+      "id": "REQ-001",
+      "statement": "The system must provide a dashboard at /sponsor/dashboard for corporate buyers to manage team enrollments.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Dashboard"
+    },
+    {
+      "id": "REQ-002",
+      "statement": "The system must allow managers to add employees by name and email to a roster.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Roster Management"
+    },
+    {
+      "id": "REQ-003",
+      "statement": "The system must integrate with PaySimple for payment processing at $1,788 per seat per year.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Payment Processing"
+    },
+    {
+      "id": "REQ-004",
+      "statement": "The system must send a magic link to managers for dashboard access without a password.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Authentication"
+    },
+    {
+      "id": "REQ-005",
+      "statement": "The system must provision employees and send magic-link invites atomically upon payment confirmation.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Provisioning"
+    },
+    {
+      "id": "REQ-006",
+      "statement": "The system must track seats used vs free and employee progress through the course.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Monitoring"
+    },
+    {
+      "id": "REQ-007",
+      "statement": "The system must allow seat transfers between employees.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Seat Management"
+    },
+    {
+      "id": "REQ-008",
+      "statement": "The system must ensure exactly-once processing of PaySimple webhooks to prevent double-provisioning.",
+      "kind": "SAFE",
+      "priority": "must",
+      "cluster": "Provisioning"
+    },
+    {
+      "id": "REQ-009",
+      "statement": "The system must provide a management view for Colaberry ops to see sponsor purchases without database access.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Ops Management"
+    },
+    {
+      "id": "REQ-010",
+      "statement": "The system must support an optional 'enroll me too' checkbox for managers.",
+      "kind": "FUNC",
+      "priority": "should",
+      "cluster": "Enrollment Options"
+    },
+    {
+      "id": "REQ-011",
+      "statement": "The system must connect to Postgres for Enrollment, Cohort, and ProgramBlueprint data.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Data Integration"
+    },
+    {
+      "id": "REQ-012",
+      "statement": "The system must use Mandrill for sending magic-link and welcome emails.",
+      "kind": "FUNC",
+      "priority": "must",
+      "cluster": "Email Integration"
+    },
+    {
+      "id": "REQ-013",
+      "statement": "The system must provide a user-friendly interface for non-technical L&D managers.",
+      "kind": "NFR",
+      "priority": "should",
+      "cluster": "User Experience"
+    },
+    {
+      "id": "REQ-014",
+      "statement": "The system must handle PaySimple webhook retries gracefully to avoid duplicate actions.",
+      "kind": "SAFE",
+      "priority": "must",
+      "cluster": "Provisioning"
+    },
+    {
+      "id": "REQ-015",
+      "statement": "The system must log all enrollment and payment actions for auditing purposes.",
+      "kind": "OBS",
+      "priority": "must",
+      "cluster": "Audit"
+    },
+    {
+      "id": "REQ-016",
+      "statement": "The system must allow managers to add more seats as needed.",
+      "kind": "FUNC",
+      "priority": "should",
+      "cluster": "Seat Management"
+    },
+    {
+      "id": "REQ-017",
+      "statement": "The system must provide real-time updates on enrollment status and payment confirmations.",
+      "kind": "FUNC",
+      "priority": "should",
+      "cluster": "Monitoring"
+    },
+    {
+      "id": "REQ-018",
+      "statement": "The system must ensure data privacy and security in compliance with relevant regulations.",
+      "kind": "SAFE",
+      "priority": "must",
+      "cluster": "Security"
+    }
+  ],
+  "releases": [
+    {
+      "key": "r0",
+      "name": "Initial Skeleton",
+      "goal": "Establish the basic dashboard with authentication and roster management.",
+      "demo": "Manager logs in via magic link, accesses dashboard, and adds employees to a roster.",
+      "week_start": 1,
+      "week_end": 1
+    },
+    {
+      "key": "r1",
+      "name": "Payment Integration",
+      "goal": "Integrate PaySimple for payment processing and ensure webhook handling.",
+      "demo": "Manager pays for seats, triggering a webhook that provisions employees and sends invites.",
+      "week_start": 2,
+      "week_end": 3
+    },
+    {
+      "key": "r2",
+      "name": "Monitoring and Seat Management",
+      "goal": "Implement seat usage tracking and transfer capabilities.",
+      "demo": "Manager views seat usage and transfers a seat to another employee.",
+      "week_start": 4,
+      "week_end": 4
+    },
+    {
+      "key": "r3",
+      "name": "Ops Management and Audit",
+      "goal": "Provide Colaberry ops view and implement audit logging.",
+      "demo": "Ops view sponsor purchases and audit logs show enrollment actions.",
+      "week_start": 5,
+      "week_end": 5
+    },
+    {
+      "key": "r4",
+      "name": "User Experience Enhancements",
+      "goal": "Enhance the user interface and add optional features like 'enroll me too'.",
+      "demo": "Manager uses an improved interface and opts to enroll themselves.",
+      "week_start": 6,
+      "week_end": 6
+    }
+  ],
+  "stories": [
+    {
+      "id": "STORY-001",
+      "release": "r0",
+      "title": "Manager accesses dashboard via magic link",
+      "narrative": "As a corporate L&D manager, I want to access the dashboard via a magic link, so that I can manage enrollments without a password.",
+      "fulfills": [
+        "REQ-001",
+        "REQ-004"
+      ],
+      "owner_agent": "Frontend Developer",
+      "acceptance": [
+        "Given a manager receives a magic link, when they click it, then they access the dashboard without a password.",
+        "Given the dashboard loads, when the manager is not authenticated, then they are redirected to a magic link request page.",
+        "Trust - All access attempts are logged with timestamps and IP addresses."
+      ],
+      "task_guidance": "Implement the magic link authentication using Mandrill for email delivery. Ensure the dashboard is accessible only via the magic link and log all access attempts for auditing.",
+      "failure_paths": [
+        "Magic link expired",
+        "Email delivery failure",
+        "Unauthorized access attempt"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-001.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r0 - Initial Skeleton (weeks 1-1).\nThis release lands when: Manager logs in via magic link, accesses dashboard, and adds employees to a roster.\n\n## Your task\nSTORY-001 - Manager accesses dashboard via magic link\nAs a corporate L&D manager, I want to access the dashboard via a magic link, so that I can manage enrollments without a password.\nOwning agent(s): Frontend Developer\n\n## The requirement this satisfies\nREQ-001 (FUNC, must) - \"The system must provide a dashboard at /sponsor/dashboard for corporate buyers to manage team enrollments.\"\nREQ-004 (FUNC, must) - \"The system must send a magic link to managers for dashboard access without a password.\"\n\n## How we build here\nImplement the magic link authentication using Mandrill for email delivery. Ensure the dashboard is accessible only via the magic link and log all access attempts for auditing.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Magic link expired\n- Email delivery failure\n- Unauthorized access attempt\n\n## Acceptance - your stop condition\n- Given a manager receives a magic link, when they click it, then they access the dashboard without a password.\n- Given the dashboard loads, when the manager is not authenticated, then they are redirected to a magic link request page.\n- Trust - All access attempts are logged with timestamps and IP addresses.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-002",
+      "release": "r0",
+      "title": "Manager adds employees to roster",
+      "narrative": "As a corporate L&D manager, I want to add employees to a roster by name and email, so that I can prepare for enrollment.",
+      "fulfills": [
+        "REQ-002"
+      ],
+      "owner_agent": "Backend Developer",
+      "acceptance": [
+        "Given the manager is on the dashboard, when they add an employee's name and email, then the employee is added to the roster.",
+        "Given an invalid email format, when the manager submits, then an error message is displayed.",
+        "Trust - All roster changes are logged with user ID and timestamp."
+      ],
+      "task_guidance": "Create a form on the dashboard for adding employees. Validate email format and ensure all changes are logged in the Postgres database.",
+      "failure_paths": [
+        "Invalid email format",
+        "Duplicate employee entry",
+        "Database connection error"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-002.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r0 - Initial Skeleton (weeks 1-1).\nThis release lands when: Manager logs in via magic link, accesses dashboard, and adds employees to a roster.\n\n## Your task\nSTORY-002 - Manager adds employees to roster\nAs a corporate L&D manager, I want to add employees to a roster by name and email, so that I can prepare for enrollment.\nOwning agent(s): Backend Developer\n\n## The requirement this satisfies\nREQ-002 (FUNC, must) - \"The system must allow managers to add employees by name and email to a roster.\"\n\n## How we build here\nCreate a form on the dashboard for adding employees. Validate email format and ensure all changes are logged in the Postgres database.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Invalid email format\n- Duplicate employee entry\n- Database connection error\n\n## Acceptance - your stop condition\n- Given the manager is on the dashboard, when they add an employee's name and email, then the employee is added to the roster.\n- Given an invalid email format, when the manager submits, then an error message is displayed.\n- Trust - All roster changes are logged with user ID and timestamp.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-003",
+      "release": "r1",
+      "title": "Manager pays for seats via PaySimple",
+      "narrative": "As a corporate L&D manager, I want to pay for seats via PaySimple, so that my team can be enrolled in the course.",
+      "fulfills": [
+        "REQ-003"
+      ],
+      "owner_agent": "Payment Integration Specialist",
+      "acceptance": [
+        "Given the manager has a roster, when they proceed to payment, then they are redirected to PaySimple's hosted payment page.",
+        "Given a successful payment, when the webhook is triggered, then the payment status is updated in the system.",
+        "Trust - Payment actions are logged with transaction ID and timestamp."
+      ],
+      "task_guidance": "Integrate PaySimple's hosted payment link into the dashboard. Ensure webhook handling updates the payment status and logs all transactions.",
+      "failure_paths": [
+        "Payment gateway timeout",
+        "Webhook delivery failure",
+        "Incorrect payment amount"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-003.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r1 - Payment Integration (weeks 2-3).\nThis release lands when: Manager pays for seats, triggering a webhook that provisions employees and sends invites.\n\n## Your task\nSTORY-003 - Manager pays for seats via PaySimple\nAs a corporate L&D manager, I want to pay for seats via PaySimple, so that my team can be enrolled in the course.\nOwning agent(s): Payment Integration Specialist\n\n## The requirement this satisfies\nREQ-003 (FUNC, must) - \"The system must integrate with PaySimple for payment processing at $1,788 per seat per year.\"\n\n## How we build here\nIntegrate PaySimple's hosted payment link into the dashboard. Ensure webhook handling updates the payment status and logs all transactions.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Payment gateway timeout\n- Webhook delivery failure\n- Incorrect payment amount\n\n## Acceptance - your stop condition\n- Given the manager has a roster, when they proceed to payment, then they are redirected to PaySimple's hosted payment page.\n- Given a successful payment, when the webhook is triggered, then the payment status is updated in the system.\n- Trust - Payment actions are logged with transaction ID and timestamp.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-004",
+      "release": "r1",
+      "title": "Provision employees upon payment confirmation",
+      "narrative": "As a system, I want to provision employees upon payment confirmation, so that they receive access to the course.",
+      "fulfills": [
+        "REQ-005",
+        "REQ-008"
+      ],
+      "owner_agent": "Backend Developer",
+      "acceptance": [
+        "Given a payment confirmation webhook, when it is received, then employees are provisioned and emailed invites atomically.",
+        "Given a duplicate webhook, when it is received, then no duplicate actions occur.",
+        "Trust - All provisioning actions are logged with employee ID and timestamp."
+      ],
+      "task_guidance": "Implement webhook processing to handle PaySimple's payment confirmation. Ensure idempotency by checking for duplicate webhook events before provisioning.",
+      "failure_paths": [
+        "Duplicate webhook event",
+        "Provisioning service failure",
+        "Email delivery failure"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-004.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r1 - Payment Integration (weeks 2-3).\nThis release lands when: Manager pays for seats, triggering a webhook that provisions employees and sends invites.\n\n## Your task\nSTORY-004 - Provision employees upon payment confirmation\nAs a system, I want to provision employees upon payment confirmation, so that they receive access to the course.\nOwning agent(s): Backend Developer\n\n## The requirement this satisfies\nREQ-005 (FUNC, must) - \"The system must provision employees and send magic-link invites atomically upon payment confirmation.\"\nREQ-008 (SAFE, must) - \"The system must ensure exactly-once processing of PaySimple webhooks to prevent double-provisioning.\"\n\n## How we build here\nImplement webhook processing to handle PaySimple's payment confirmation. Ensure idempotency by checking for duplicate webhook events before provisioning.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Duplicate webhook event\n- Provisioning service failure\n- Email delivery failure\n\n## Acceptance - your stop condition\n- Given a payment confirmation webhook, when it is received, then employees are provisioned and emailed invites atomically.\n- Given a duplicate webhook, when it is received, then no duplicate actions occur.\n- Trust - All provisioning actions are logged with employee ID and timestamp.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-005",
+      "release": "r2",
+      "title": "Manager views seat usage and transfers seats",
+      "narrative": "As a corporate L&D manager, I want to view seat usage and transfer seats, so that I can manage my team's enrollment effectively.",
+      "fulfills": [
+        "REQ-006",
+        "REQ-007"
+      ],
+      "owner_agent": "Frontend Developer",
+      "acceptance": [
+        "Given the manager is on the dashboard, when they view seat usage, then they see used vs free seats.",
+        "Given a seat transfer request, when it is submitted, then the seat is transferred to another employee.",
+        "Trust - All seat transfers are logged with source and destination employee IDs and timestamp."
+      ],
+      "task_guidance": "Develop a dashboard view for seat usage. Implement a feature to transfer seats between employees, ensuring all actions are logged.",
+      "failure_paths": [
+        "Incorrect seat count",
+        "Transfer to non-existent employee",
+        "Database update failure"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-005.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r2 - Monitoring and Seat Management (weeks 4-4).\nThis release lands when: Manager views seat usage and transfers a seat to another employee.\n\n## Your task\nSTORY-005 - Manager views seat usage and transfers seats\nAs a corporate L&D manager, I want to view seat usage and transfer seats, so that I can manage my team's enrollment effectively.\nOwning agent(s): Frontend Developer\n\n## The requirement this satisfies\nREQ-006 (FUNC, must) - \"The system must track seats used vs free and employee progress through the course.\"\nREQ-007 (FUNC, must) - \"The system must allow seat transfers between employees.\"\n\n## How we build here\nDevelop a dashboard view for seat usage. Implement a feature to transfer seats between employees, ensuring all actions are logged.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Incorrect seat count\n- Transfer to non-existent employee\n- Database update failure\n\n## Acceptance - your stop condition\n- Given the manager is on the dashboard, when they view seat usage, then they see used vs free seats.\n- Given a seat transfer request, when it is submitted, then the seat is transferred to another employee.\n- Trust - All seat transfers are logged with source and destination employee IDs and timestamp.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-006",
+      "release": "r3",
+      "title": "Ops view sponsor purchases and audit logs",
+      "narrative": "As Colaberry ops, I want to view sponsor purchases and audit logs, so that I can monitor enrollments without database access.",
+      "fulfills": [
+        "REQ-009",
+        "REQ-015"
+      ],
+      "owner_agent": "Ops Developer",
+      "acceptance": [
+        "Given ops access the management view, when they view sponsor purchases, then they see a list of purchases with details.",
+        "Given an audit log request, when it is made, then the system displays all logged actions.",
+        "Trust - All access to the ops view is logged with user ID and timestamp."
+      ],
+      "task_guidance": "Create a management view for ops to access sponsor purchase data and audit logs. Ensure all access and actions are logged for auditing.",
+      "failure_paths": [
+        "Unauthorized access attempt",
+        "Data retrieval error",
+        "Incomplete audit logs"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-006.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r3 - Ops Management and Audit (weeks 5-5).\nThis release lands when: Ops view sponsor purchases and audit logs show enrollment actions.\n\n## Your task\nSTORY-006 - Ops view sponsor purchases and audit logs\nAs Colaberry ops, I want to view sponsor purchases and audit logs, so that I can monitor enrollments without database access.\nOwning agent(s): Ops Developer\n\n## The requirement this satisfies\nREQ-009 (FUNC, must) - \"The system must provide a management view for Colaberry ops to see sponsor purchases without database access.\"\nREQ-015 (OBS, must) - \"The system must log all enrollment and payment actions for auditing purposes.\"\n\n## How we build here\nCreate a management view for ops to access sponsor purchase data and audit logs. Ensure all access and actions are logged for auditing.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Unauthorized access attempt\n- Data retrieval error\n- Incomplete audit logs\n\n## Acceptance - your stop condition\n- Given ops access the management view, when they view sponsor purchases, then they see a list of purchases with details.\n- Given an audit log request, when it is made, then the system displays all logged actions.\n- Trust - All access to the ops view is logged with user ID and timestamp.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-007",
+      "release": "r4",
+      "title": "Manager uses improved interface and enrolls self",
+      "narrative": "As a corporate L&D manager, I want to use an improved interface and enroll myself, so that I can participate in the course with my team.",
+      "fulfills": [
+        "REQ-010",
+        "REQ-013"
+      ],
+      "owner_agent": "UX Designer",
+      "acceptance": [
+        "Given the manager is on the dashboard, when they opt to enroll themselves, then they are added to the roster.",
+        "Given the improved interface, when the manager navigates, then they find it intuitive and user-friendly.",
+        "Trust - All self-enrollment actions are logged with manager ID and timestamp."
+      ],
+      "task_guidance": "Enhance the dashboard interface for better usability. Add an 'enroll me too' option for managers and ensure all actions are logged.",
+      "failure_paths": [
+        "Interface navigation issues",
+        "Self-enrollment failure",
+        "Usability feedback not addressed"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-007.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r4 - User Experience Enhancements (weeks 6-6).\nThis release lands when: Manager uses an improved interface and opts to enroll themselves.\n\n## Your task\nSTORY-007 - Manager uses improved interface and enrolls self\nAs a corporate L&D manager, I want to use an improved interface and enroll myself, so that I can participate in the course with my team.\nOwning agent(s): UX Designer\n\n## The requirement this satisfies\nREQ-010 (FUNC, should) - \"The system must support an optional 'enroll me too' checkbox for managers.\"\nREQ-013 (NFR, should) - \"The system must provide a user-friendly interface for non-technical L&D managers.\"\n\n## How we build here\nEnhance the dashboard interface for better usability. Add an 'enroll me too' option for managers and ensure all actions are logged.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Interface navigation issues\n- Self-enrollment failure\n- Usability feedback not addressed\n\n## Acceptance - your stop condition\n- Given the manager is on the dashboard, when they opt to enroll themselves, then they are added to the roster.\n- Given the improved interface, when the manager navigates, then they find it intuitive and user-friendly.\n- Trust - All self-enrollment actions are logged with manager ID and timestamp.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-008",
+      "release": "r0",
+      "title": "System connects to Postgres for data access",
+      "narrative": "As a system administrator, I want the system to connect to Postgres, so that Enrollment, Cohort, and ProgramBlueprint data can be accessed.",
+      "fulfills": [
+        "REQ-011"
+      ],
+      "owner_agent": "System Administrator",
+      "acceptance": [
+        "Given the system is running, when it attempts to connect to Postgres, then it should establish a connection successfully.",
+        "Given the system is running, when it queries Enrollment data, then it should retrieve the correct data from Postgres.",
+        "Trust - Given an audit log is enabled, when the system accesses Postgres, then the access should be logged with timestamp and user details."
+      ],
+      "task_guidance": "Implement a connection to the Postgres database using the provided credentials. Ensure that the connection is tested for Enrollment, Cohort, and ProgramBlueprint data retrieval. Set up an audit log to record all access attempts to the database, including successful and failed connections.",
+      "failure_paths": [
+        "Database connection fails due to incorrect credentials",
+        "Network issues prevent database access",
+        "Query returns incorrect data due to schema mismatch"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-008.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r0 - Initial Skeleton (weeks 1-1).\nThis release lands when: Manager logs in via magic link, accesses dashboard, and adds employees to a roster.\n\n## Your task\nSTORY-008 - System connects to Postgres for data access\nAs a system administrator, I want the system to connect to Postgres, so that Enrollment, Cohort, and ProgramBlueprint data can be accessed.\nOwning agent(s): System Administrator\n\n## The requirement this satisfies\nREQ-011 (FUNC, must) - \"The system must connect to Postgres for Enrollment, Cohort, and ProgramBlueprint data.\"\n\n## How we build here\nImplement a connection to the Postgres database using the provided credentials. Ensure that the connection is tested for Enrollment, Cohort, and ProgramBlueprint data retrieval. Set up an audit log to record all access attempts to the database, including successful and failed connections.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Database connection fails due to incorrect credentials\n- Network issues prevent database access\n- Query returns incorrect data due to schema mismatch\n\n## Acceptance - your stop condition\n- Given the system is running, when it attempts to connect to Postgres, then it should establish a connection successfully.\n- Given the system is running, when it queries Enrollment data, then it should retrieve the correct data from Postgres.\n- Trust - Given an audit log is enabled, when the system accesses Postgres, then the access should be logged with timestamp and user details.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-009",
+      "release": "r0",
+      "title": "Send magic-link and welcome emails via Mandrill",
+      "narrative": "As a system user, I want to receive magic-link and welcome emails, so that I can access the system and get started.",
+      "fulfills": [
+        "REQ-012"
+      ],
+      "owner_agent": "System User",
+      "acceptance": [
+        "Given a new user signs up, when the system sends an email, then it should be sent via Mandrill.",
+        "Given a user requests a magic link, when the system sends an email, then it should be sent via Mandrill.",
+        "Trust - Given an email is sent, when the system logs the event, then it should include the email type and timestamp."
+      ],
+      "task_guidance": "Integrate Mandrill API for sending emails. Configure the system to send magic-link and welcome emails through Mandrill. Ensure that each email sent is logged with details such as email type and timestamp for audit purposes.",
+      "failure_paths": [
+        "Mandrill API key is invalid",
+        "Email fails to send due to network issues",
+        "Email content is malformed"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-009.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r0 - Initial Skeleton (weeks 1-1).\nThis release lands when: Manager logs in via magic link, accesses dashboard, and adds employees to a roster.\n\n## Your task\nSTORY-009 - Send magic-link and welcome emails via Mandrill\nAs a system user, I want to receive magic-link and welcome emails, so that I can access the system and get started.\nOwning agent(s): System User\n\n## The requirement this satisfies\nREQ-012 (FUNC, must) - \"The system must use Mandrill for sending magic-link and welcome emails.\"\n\n## How we build here\nIntegrate Mandrill API for sending emails. Configure the system to send magic-link and welcome emails through Mandrill. Ensure that each email sent is logged with details such as email type and timestamp for audit purposes.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Mandrill API key is invalid\n- Email fails to send due to network issues\n- Email content is malformed\n\n## Acceptance - your stop condition\n- Given a new user signs up, when the system sends an email, then it should be sent via Mandrill.\n- Given a user requests a magic link, when the system sends an email, then it should be sent via Mandrill.\n- Trust - Given an email is sent, when the system logs the event, then it should include the email type and timestamp.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-010",
+      "release": "r1",
+      "title": "Handle PaySimple webhook retries gracefully",
+      "narrative": "As a system administrator, I want the system to handle PaySimple webhook retries, so that duplicate actions are avoided.",
+      "fulfills": [
+        "REQ-014"
+      ],
+      "owner_agent": "System Administrator",
+      "acceptance": [
+        "Given a PaySimple webhook is received, when it is a retry, then the system should recognize it and avoid duplicate processing.",
+        "Given a PaySimple webhook is received, when it is processed, then it should update the system state only once.",
+        "Trust - Given a webhook is processed, when the system logs the event, then it should include the webhook ID and processing status."
+      ],
+      "task_guidance": "Implement idempotency checks for PaySimple webhooks by storing processed webhook IDs. Ensure that retries are recognized and do not trigger duplicate actions. Log each webhook processing attempt with its ID and status for audit purposes.",
+      "failure_paths": [
+        "Webhook ID is not recognized as a retry",
+        "Duplicate actions occur due to missing idempotency check",
+        "Webhook processing fails due to malformed data"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-010.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r1 - Payment Integration (weeks 2-3).\nThis release lands when: Manager pays for seats, triggering a webhook that provisions employees and sends invites.\n\n## Your task\nSTORY-010 - Handle PaySimple webhook retries gracefully\nAs a system administrator, I want the system to handle PaySimple webhook retries, so that duplicate actions are avoided.\nOwning agent(s): System Administrator\n\n## The requirement this satisfies\nREQ-014 (SAFE, must) - \"The system must handle PaySimple webhook retries gracefully to avoid duplicate actions.\"\n\n## How we build here\nImplement idempotency checks for PaySimple webhooks by storing processed webhook IDs. Ensure that retries are recognized and do not trigger duplicate actions. Log each webhook processing attempt with its ID and status for audit purposes.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Webhook ID is not recognized as a retry\n- Duplicate actions occur due to missing idempotency check\n- Webhook processing fails due to malformed data\n\n## Acceptance - your stop condition\n- Given a PaySimple webhook is received, when it is a retry, then the system should recognize it and avoid duplicate processing.\n- Given a PaySimple webhook is received, when it is processed, then it should update the system state only once.\n- Trust - Given a webhook is processed, when the system logs the event, then it should include the webhook ID and processing status.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-011",
+      "release": "r0",
+      "title": "Ensure data privacy and security compliance",
+      "narrative": "As a compliance officer, I want the system to ensure data privacy and security, so that it complies with relevant regulations.",
+      "fulfills": [
+        "REQ-018"
+      ],
+      "owner_agent": "Compliance Officer",
+      "acceptance": [
+        "Given the system handles user data, when it is stored, then it should be encrypted at rest.",
+        "Given the system processes user data, when it is transmitted, then it should be encrypted in transit.",
+        "Trust - Given a data access event occurs, when the system logs the event, then it should include user ID, timestamp, and access type."
+      ],
+      "task_guidance": "Implement encryption for data at rest and in transit using industry-standard protocols. Ensure that all data access events are logged with user ID, timestamp, and access type for compliance auditing. Review system architecture to identify and mitigate any potential security vulnerabilities.",
+      "failure_paths": [
+        "Data is stored without encryption",
+        "Data is transmitted without encryption",
+        "Access logs are incomplete or missing"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-011.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r0 - Initial Skeleton (weeks 1-1).\nThis release lands when: Manager logs in via magic link, accesses dashboard, and adds employees to a roster.\n\n## Your task\nSTORY-011 - Ensure data privacy and security compliance\nAs a compliance officer, I want the system to ensure data privacy and security, so that it complies with relevant regulations.\nOwning agent(s): Compliance Officer\n\n## The requirement this satisfies\nREQ-018 (SAFE, must) - \"The system must ensure data privacy and security in compliance with relevant regulations.\"\n\n## How we build here\nImplement encryption for data at rest and in transit using industry-standard protocols. Ensure that all data access events are logged with user ID, timestamp, and access type for compliance auditing. Review system architecture to identify and mitigate any potential security vulnerabilities.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Data is stored without encryption\n- Data is transmitted without encryption\n- Access logs are incomplete or missing\n\n## Acceptance - your stop condition\n- Given the system handles user data, when it is stored, then it should be encrypted at rest.\n- Given the system processes user data, when it is transmitted, then it should be encrypted in transit.\n- Trust - Given a data access event occurs, when the system logs the event, then it should include user ID, timestamp, and access type.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    },
+    {
+      "id": "STORY-012",
+      "release": "r0",
+      "title": "Establish trust spine with audit trail and idempotency",
+      "narrative": "As a system architect, I want to establish a trust spine, so that the system's correctness guarantees are demonstrated end-to-end.",
+      "fulfills": [
+        "REQ-011",
+        "REQ-012",
+        "REQ-014",
+        "REQ-018"
+      ],
+      "owner_agent": "System Architect",
+      "acceptance": [
+        "Given a user action triggers a system process, when the process completes, then it should be logged with a unique transaction ID.",
+        "Given a system process is triggered, when it is retried, then it should not duplicate actions due to idempotency checks.",
+        "Trust - Given an audit log is reviewed, when it includes a transaction, then it should show the transaction ID, user ID, and outcome."
+      ],
+      "task_guidance": "Design and implement a trust spine that includes an audit trail for all critical system processes. Ensure idempotency by using unique transaction IDs for processes and logging each transaction with comprehensive details. Review the system's logging and idempotency mechanisms to ensure they meet the specified correctness guarantees.",
+      "failure_paths": [
+        "Transaction ID is not unique",
+        "Idempotency checks fail, leading to duplicate actions",
+        "Audit logs are incomplete or inaccurate"
+      ],
+      "_prompt": "## Read this first\nBefore you write any code, open and read these - they are the source of truth for this build:\n  1. ./docs/REQUIREMENTS.md          - the full requirements document for this project\n  2. ./docs/STORIES.md               - every story, its release, and how they gate each other\n  3. ./docs/stories/STORY-012.md   - this story in full, with its acceptance criteria\n  4. ./CLAUDE.md                     - how this project is built and what \"done\" means here\n\nIf those files are not present you have not cloned your workspace repo yet - clone it first:\n  git clone <your workspace repo>\n\n## What we're building\nAI Systems Architect Accelerator Sponsor Dashboard - A self-service dashboard for corporate L&D managers to enroll teams in the AI Systems Architect Accelerator, manage enrollments, and ensure exactly-once payment provisioning.\nYou are in Release r0 - Initial Skeleton (weeks 1-1).\nThis release lands when: Manager logs in via magic link, accesses dashboard, and adds employees to a roster.\n\n## Your task\nSTORY-012 - Establish trust spine with audit trail and idempotency\nAs a system architect, I want to establish a trust spine, so that the system's correctness guarantees are demonstrated end-to-end.\nOwning agent(s): System Architect\n\n## The requirement this satisfies\nREQ-011 (FUNC, must) - \"The system must connect to Postgres for Enrollment, Cohort, and ProgramBlueprint data.\"\nREQ-012 (FUNC, must) - \"The system must use Mandrill for sending magic-link and welcome emails.\"\nREQ-014 (SAFE, must) - \"The system must handle PaySimple webhook retries gracefully to avoid duplicate actions.\"\nREQ-018 (SAFE, must) - \"The system must ensure data privacy and security in compliance with relevant regulations.\"\n\n## How we build here\nDesign and implement a trust spine that includes an audit trail for all critical system processes. Ensure idempotency by using unique transaction IDs for processes and logging each transaction with comprehensive details. Review the system's logging and idempotency mechanisms to ensure they meet the specified correctness guarantees.\nWe build the walking skeleton first, then harden it. Work in small, testable, reversible steps. Every external call gets an explicit timeout and capped retries. Every side effect is idempotent - running it twice must produce the same end state, with no duplicate emails, rows, or charges.\n\n## Failure paths you must handle\n- Transaction ID is not unique\n- Idempotency checks fail, leading to duplicate actions\n- Audit logs are incomplete or inaccurate\n\n## Acceptance - your stop condition\n- Given a user action triggers a system process, when the process completes, then it should be logged with a unique transaction ID.\n- Given a system process is triggered, when it is retried, then it should not duplicate actions due to idempotency checks.\n- Trust - Given an audit log is reviewed, when it includes a transaction, then it should show the transaction ID, user ID, and outcome.\n\nWhen every line above passes, the task is done - stop the build loop and show me the demo.\n\n## Definition of done\n- Tests cover the happy path AND at least one failure path from the list above.\n- Typecheck passes and no secrets are introduced.\n- A junior developer can read the change and understand why it is correct.\n- The acceptance criteria above are demonstrably met, not asserted.\n\n## How I want you to work\nWork as a paced co-pilot. Move one step at a time: propose the next change, wait for me to confirm, then make it. Never batch several edits together. After each step, tell me what you did and what the next step is.\n\n## Your workspace repo\nProvision your workspace repo from the portal to get a private repo for this build.\n\nBegin."
+    }
+  ]
+}

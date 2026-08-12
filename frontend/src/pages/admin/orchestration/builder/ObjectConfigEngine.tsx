@@ -14,23 +14,10 @@ import { AdminPreviewMentorProvider, useMentorContext } from '../../../../contex
 import PreviewMentorChat from './PreviewMentorChat';
 import { generateMockV2Content, MockV2Content } from './mockDataGenerator';
 import { PromptOption } from './types';
+import { CorySpark } from '../../../../components/portal/CoryMark';
 
-/* Mentor face SVG — matches the FAB in PortalMentorChat for admin preview */
-const PreviewMentorFace = ({ size = 40 }: { size?: number }) => (
-  <svg width={size} height={size} viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="32" cy="32" r="30" fill="var(--neutral-50)" stroke="var(--border-subtle)" strokeWidth="2" />
-    <path d="M12 28c0-11 9-20 20-20s20 9 20 20" stroke="var(--chart-5)" strokeWidth="3" strokeLinecap="round" fill="none" />
-    <circle cx="22" cy="30" r="3.5" fill="var(--chart-5)" />
-    <circle cx="42" cy="30" r="3.5" fill="var(--chart-5)" />
-    <circle cx="23.2" cy="28.8" r="1.2" fill="var(--surface-card)" />
-    <circle cx="43.2" cy="28.8" r="1.2" fill="var(--surface-card)" />
-    <path d="M22 40c3 4 8 6 10 6s7-2 10-6" stroke="var(--chart-5)" strokeWidth="2.5" strokeLinecap="round" fill="none" />
-    <rect x="7" y="24" width="6" height="10" rx="3" fill="var(--chart-7)" />
-    <rect x="51" y="24" width="6" height="10" rx="3" fill="var(--chart-7)" />
-    <path d="M10 34v6c0 3 2 5 5 5h3" stroke="var(--chart-7)" strokeWidth="2" strokeLinecap="round" fill="none" />
-    <circle cx="19" cy="45" r="2" fill="var(--chart-7)" />
-  </svg>
-);
+/* Cory's mark on the admin preview launcher — faceless spark, white on the gradient. */
+const PreviewMentorFace = ({ size = 40 }: { size?: number }) => <CorySpark size={Math.round(size * 0.62)} color="#fff" />;
 
 interface Props {
   editing: Partial<MiniSection> | null;
@@ -136,7 +123,7 @@ function PreviewContent({ mockContent, lessonId, lessonTitle, token, apiUrl, wor
           <button
             className="btn p-0"
             onClick={openMentorPanel}
-            title="Open AI Mentor Preview"
+            title="Open Cory Preview"
             style={{
               width: 48,
               height: 48,
@@ -468,7 +455,7 @@ export default function ObjectConfigEngine(props: Props) {
                           const combinedValue = sysVal && usrVal ? sysVal + '\n\n' + usrVal : sysVal || usrVal;
                           const implLabels: Record<string, { label: string; tooltip: string }> = {
                             build: { label: 'Task Requirements Prompt', tooltip: 'Defines requirements, deliverables, and grading criteria. Analyzed for skill derivation.' },
-                            mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how the AI Mentor briefs the student before they start (Step 2 of workflow).' },
+                            mentor: { label: 'Mentor Preparation Prompt', tooltip: 'Configures how Cory briefs the student before they start (Step 2 of workflow).' },
                             reflection: { label: 'AI Workstation Prompt', tooltip: 'Sent to the student\'s chosen external LLM (ChatGPT, Claude, etc.) when they click Open AI Workspace.' },
                           };
                           const displayLabel = editType === 'implementation_task' && implLabels[pair.key]
@@ -556,7 +543,7 @@ export default function ObjectConfigEngine(props: Props) {
                         <p className="small mb-0" style={{ color: 'var(--status-warning)', fontSize: 10, lineHeight: 1.5 }}>
                           When a student answers incorrectly, a recovery drawer opens automatically with:
                           alternative explanation, step-by-step breakdown, real-world example, and common misconceptions.
-                          Uses the AI Mentor with question context — no additional prompt needed.
+                          Uses Cory with question context — no additional prompt needed.
                         </p>
                       </div>
                     </div>

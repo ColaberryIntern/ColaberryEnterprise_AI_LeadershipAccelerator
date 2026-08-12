@@ -7,13 +7,26 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { openCard, completeActivity, readinessSummary, cardContext } from '../services/runtime/runtimeService';
 import { recordWatchBeat } from '../services/runtime/watchProgressService';
+import { recordReadBeat, collectBlog } from '../services/runtime/blogReadGateService';
+import { getBlogReader } from '../services/blog/blogReaderService';
+import { recordDwellBeat } from '../services/runtime/cardDwellService';
 import { coach, reflectionPrompts, MentorMode } from '../services/runtime/mentorService';
+import { getNudge } from '../services/runtime/mentorNudgeService';
 import { evaluatePrompt } from '../services/runtime/promptLabRuntime';
 import { listNotes, createNote, deleteNote } from '../services/runtime/notebookService';
 import { getSurvey, saveSurvey } from '../services/runtime/surveyResponseService';
+import { getWeekReview, saveReflectionSignals } from '../services/runtime/weekReviewService';
+import { getRitualWall, submitRitualPost } from '../services/runtime/peerWinsService';
+import { toggleLike } from '../services/communityService';
 import { getAssessment, submitAssessment, sectionResultsSummary } from '../services/runtime/assessmentService';
+import {
+  getState as architectState, advance as architectAdvance, saveInterview as architectSaveInterview,
+  evaluate as architectEvaluate, complete as architectComplete, getLedger as architectLedger,
+} from '../services/runtime/architectMindsetService';
 import { ensureFreshContent } from '../services/timeline/cardContentService';
 import { uploadCertificate, getCertificateFile } from '../services/runtime/certificateService';
+import { uploadFieldGuide, getFieldGuideStatus } from '../services/runtime/fieldGuideService';
+import { uploadBuildArtifact } from '../services/runtime/buildArtifactService';
 import fs from 'fs/promises';
 
 function fail(res: Response, err: any, next: NextFunction) {
@@ -24,7 +37,9 @@ function fail(res: Response, err: any, next: NextFunction) {
 const eid = (req: Request) => req.participant!.sub;
 
 export async function handleOpenCard(req: Request, res: Response, next: NextFunction) {
-  try { res.json(await openCard(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+  // Read-only "view as": open the card for viewing but never create a progress
+  // row (which would mark the member as having started it).
+  try { res.json(await openCard(eid(req), String(req.params.cardId), { readOnly: !!req.participant?.read_only })); } catch (e) { fail(res, e, next); }
 }
 
 const mentorSchema = z.object({ mode: z.enum(['ask', 'hint', 'explain', 'review']).default('ask'), message: z.string().default(''), history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })).optional() });
@@ -34,6 +49,12 @@ export async function handleMentor(req: Request, res: Response, next: NextFuncti
     const ctx = await cardContext(String(req.params.cardId));
     res.json(await coach(eid(req), ctx, b.mode as MentorMode, b.message, b.history || []));
   } catch (e) { fail(res, e, next); }
+}
+
+// Proactive nudge: on card open, if the student looks stuck, the mentor offers
+// help unprompted. Read-only + fail-safe; returns { struggling, reasons, message }.
+export async function handleNudge(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getNudge(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
 }
 
 export async function handleReflection(req: Request, res: Response, next: NextFunction) {
@@ -73,6 +94,27 @@ export async function handleGetCertificate(req: Request, res: Response, next: Ne
   } catch (e) { fail(res, e, next); }
 }
 
+// Deep Dive Field Guide: the student uploads the .html they built in Claude Code.
+// Stores it as a portfolio artifact + awards a one-time 100-point bonus. GET = status.
+export async function handleUploadFieldGuide(req: Request, res: Response, next: NextFunction) {
+  try {
+    const file = (req as any).file;
+    if (!file) { res.status(400).json({ error: 'No Field Guide file uploaded.' }); return; }
+    res.json(await uploadFieldGuide(eid(req), String(req.params.cardId), file));
+  } catch (e) { fail(res, e, next); }
+}
+export async function handleGetFieldGuide(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getFieldGuideStatus(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+
+// Build Artifact(s) Lab: the student uploads the document they built in Claude
+// Code. It is stored as a PortfolioArtifact linked to (enrollment, card) so it
+// lands in the portfolio + is available for instructor review. The client then
+// completes the card (points on the first build; completion is idempotent).
+export async function handleBuildArtifactUpload(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await uploadBuildArtifact(eid(req), String(req.params.cardId), (req as any).file)); } catch (e) { fail(res, e, next); }
+}
+
 const labSchema = z.object({ prompt: z.string().min(1), output: z.string().optional() });
 export async function handlePromptLab(req: Request, res: Response, next: NextFunction) {
   try {
@@ -98,6 +140,47 @@ export async function handleWatchBeat(req: Request, res: Response, next: NextFun
   } catch (err) { fail(res, err, next); }
 }
 
+const readBeatSchema = z.object({ delta_s: z.number().min(0).max(600) });
+const blogIdSchema = z.string().uuid();
+
+/** POST /api/portal/runtime/today/blog/:blogId/read — throttled read heartbeat for
+ *  the blog 2-minute read gate. Returns { read_s, required_s, met }. */
+export async function handleBlogReadBeat(req: Request, res: Response, next: NextFunction) {
+  try {
+    const blogId = blogIdSchema.parse(req.params.blogId);
+    const beat = readBeatSchema.parse(req.body);
+    res.json(await recordReadBeat(eid(req), blogId, beat));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** POST /api/portal/runtime/today/blog/:blogId/collect — award blog points once the
+ *  read gate is met (422 otherwise). Idempotent per blog. */
+export async function handleBlogCollect(req: Request, res: Response, next: NextFunction) {
+  try {
+    const blogId = blogIdSchema.parse(req.params.blogId);
+    res.json(await collectBlog(eid(req), blogId));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** GET /api/portal/runtime/today/blog/:blogId/reader — the post's article, fetched +
+ *  sanitized server-side for in-Workspace reading (the training site refuses to be
+ *  iframed). Fail-soft: { ok:false, source_url } lets the client fall back to the link. */
+export async function handleBlogReader(req: Request, res: Response, next: NextFunction) {
+  try {
+    const blogId = blogIdSchema.parse(req.params.blogId);
+    res.json(await getBlogReader(blogId));
+  } catch (err) { fail(res, err, next); }
+}
+
+/** POST /api/portal/runtime/cards/:cardId/dwell — heartbeat for the generic dwell
+ *  gate (passive-content types). Returns { dwell_s, required_s, met }. */
+export async function handleDwellBeat(req: Request, res: Response, next: NextFunction) {
+  try {
+    const beat = readBeatSchema.parse(req.body);
+    res.json(await recordDwellBeat(eid(req), String(req.params.cardId), beat));
+  } catch (err) { fail(res, err, next); }
+}
+
 export async function handleComplete(req: Request, res: Response, next: NextFunction) {
   try { res.json(await completeActivity(eid(req), String(req.params.cardId), completeSchema.parse(req.body || {}))); } catch (e) { fail(res, e, next); }
 }
@@ -112,6 +195,43 @@ export async function handleGetSurvey(req: Request, res: Response, next: NextFun
 }
 export async function handleSaveSurvey(req: Request, res: Response, next: NextFunction) {
   try { res.json(await saveSurvey(eid(req), String(req.params.cardId), req.body || {})); } catch (e) { fail(res, e, next); }
+}
+
+// Week in Review (reflection) — the PER-STUDENT data behind the weekly reflection
+// panel (real completions, scores, survey, skill deltas, saved signals), and the
+// upsert of the strategic signals the student captures (readiness/application/direction).
+export async function handleGetWeekReview(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getWeekReview(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+const reflectionSignalsSchema = z.object({
+  readiness: z.number().int().min(1).max(5).nullable().optional(),
+  application: z.string().max(64).nullable().optional(),
+  application_text: z.string().max(1000).nullable().optional(),
+  direction: z.string().max(64).nullable().optional(),
+  note: z.string().max(2000).nullable().optional(),
+});
+export async function handleSaveReflectionSignals(req: Request, res: Response, next: NextFunction) {
+  try {
+    const body = reflectionSignalsSchema.parse(req.body || {});
+    res.json(await saveReflectionSignals(eid(req), String(req.params.cardId), body));
+  } catch (e) { fail(res, e, next); }
+}
+
+// Community Rituals (community_discussion) — read the week's ritual + the cohort
+// wall for a card, post/edit your own guided answer, and cheer a classmate's.
+// Field values are ritual-specific (see communityRituals.ts); the service validates
+// required fields against the resolved ritual, so the schema here is intentionally open.
+const submitRitualSchema = z.object({
+  values: z.record(z.string(), z.union([z.string(), z.array(z.string())])).default({}),
+});
+export async function handleGetPeerWins(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await getRitualWall(eid(req), String(req.params.cardId))); } catch (e) { fail(res, e, next); }
+}
+export async function handleSubmitWin(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await submitRitualPost(eid(req), String(req.params.cardId), submitRitualSchema.parse(req.body || {}).values)); } catch (e) { fail(res, e, next); }
+}
+export async function handleCheerWin(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await toggleLike(eid(req), 'post', String(req.params.winId))); } catch (e) { fail(res, e, next); }
 }
 
 // Knowledge Check (quiz) + Evaluation — load questions (no answers leaked) / submit + score
@@ -129,6 +249,36 @@ export async function handleGetAssessment(req: Request, res: Response, next: Nex
 }
 export async function handleSubmitAssessment(req: Request, res: Response, next: NextFunction) {
   try { res.json(await submitAssessment(eid(req), String(req.params.cardId), submitAssessmentSchema.parse(req.body || {}))); } catch (e) { fail(res, e, next); }
+}
+
+// ── Architect Time Machine (curriculum type: architect_mindset) ──────────────
+// A gap-aware error responder: gate/transition failures carry `code`/`gaps`/
+// `questions` so the client can show exactly what remains (fail() sends only the message).
+function failArchitect(res: Response, err: any, next: NextFunction) {
+  if (err instanceof z.ZodError) return res.status(400).json({ error: 'Invalid input', issues: err.issues });
+  if (err && typeof err.status === 'number') return res.status(err.status).json({ error: err.message, code: err.code, gaps: err.gaps, questions: err.questions });
+  return next(err);
+}
+const architectAdvanceSchema = z.object({ to: z.string().min(1), patch: z.record(z.string(), z.any()).optional() });
+const architectInterviewSchema = z.object({ part: z.union([z.literal(1), z.literal(2)]), answers: z.record(z.string(), z.any()).default({}) });
+
+export async function handleArchitectState(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectState(eid(req), String(req.params.cardId))); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectAdvance(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectAdvance(eid(req), String(req.params.cardId), architectAdvanceSchema.parse(req.body || {}))); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectInterview(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectSaveInterview(eid(req), String(req.params.cardId), architectInterviewSchema.parse(req.body || {}) as any)); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectEvaluate(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectEvaluate(eid(req), String(req.params.cardId))); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectComplete(req: Request, res: Response, next: NextFunction) {
+  try { res.json(await architectComplete(eid(req), String(req.params.cardId))); } catch (e) { failArchitect(res, e, next); }
+}
+export async function handleArchitectLedger(req: Request, res: Response, next: NextFunction) {
+  try { res.json({ ledger: await architectLedger(eid(req)) }); } catch (e) { failArchitect(res, e, next); }
 }
 
 // notebook

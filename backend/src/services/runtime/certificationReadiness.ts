@@ -20,7 +20,7 @@ const NEXT_FOR: Record<string, string> = {
   'Context Engineering': 'deep_dive',
   'Agents & Tool Use': 'implementation_task',
   'Evaluation & Testing': 'evaluation',
-  'Deployment & Ops': 'github_sync',
+  'Deployment & Ops': 'implementation_task',
   'Safety & Governance': 'certification_exercise',
 };
 

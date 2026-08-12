@@ -3,7 +3,7 @@
  * DB-touching functions (create/reorder/clone) are covered by integration; this
  * pins the registry-default + author-override logic that everything relies on.
  */
-import { composeCardAttributes, buildVideoMeta, buildImageMeta, CreateCardInput } from '../timelineAdminService';
+import { composeCardAttributes, buildVideoMeta, buildImageMeta, buildCourseMeta, CreateCardInput } from '../timelineAdminService';
 import { videoFromMetadata, imageFromMetadata } from '../timelineService';
 import { resolveOrThrow } from '../typeRegistry';
 
@@ -37,9 +37,9 @@ describe('composeCardAttributes', () => {
   });
 
   it('lets author overrides win over registry defaults', () => {
-    const def = resolveOrThrow('overview');
+    const def = resolveOrThrow('deep_dive');
     const input: CreateCardInput = {
-      cohort_id: COHORT, type: 'overview',
+      cohort_id: COHORT, type: 'deep_dive',
       title: '  Week 1 kickoff  ', bucket: 'pre_class', week: 1,
       difficulty: 'stretch', estimated_time: 90,
       points: { learning: 5, builder: 0, community: 0 },
@@ -87,6 +87,23 @@ describe('buildVideoMeta', () => {
     expect(buildVideoMeta({ url: '   ' })).toBeNull();
     expect(buildVideoMeta(null)).toBeNull();
     expect(buildVideoMeta(undefined)).toBeNull();
+  });
+});
+
+describe('buildCourseMeta', () => {
+  it('carries certName through alongside the display name', () => {
+    expect(buildCourseMeta({ name: 'Building with the Claude API · Part 2', certName: 'Claude with the Anthropic API' }))
+      .toEqual({ name: 'Building with the Claude API · Part 2', url: null, certName: 'Claude with the Anthropic API' });
+  });
+  it('omits certName when not given (unaffected — matches pre-existing cards)', () => {
+    expect(buildCourseMeta({ name: 'Claude Code 101' })).toEqual({ name: 'Claude Code 101', url: null });
+  });
+  it('omits certName when it is blank', () => {
+    expect(buildCourseMeta({ name: 'Claude Code 101', certName: '   ' })).toEqual({ name: 'Claude Code 101', url: null });
+  });
+  it('returns null without a usable name or url', () => {
+    expect(buildCourseMeta({})).toBeNull();
+    expect(buildCourseMeta(null)).toBeNull();
   });
 });
 

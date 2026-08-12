@@ -5,8 +5,21 @@ export type TicketStatus = 'backlog' | 'todo' | 'in_progress' | 'in_review' | 'd
 export type TicketPriority = 'critical' | 'high' | 'medium' | 'low';
 export type TicketType = 'task' | 'bug' | 'feature' | 'curriculum' | 'agent_action' | 'strategic'
   | 'strategic_initiative' | 'ai_optimization' | 'agent_restructure' | 'agent_creation' | 'workflow_redesign' | 'system_automation'
-  | 'company_directive' | 'workforce_decision' | 'bpos_execution';
-export type TicketActorType = 'human' | 'cory' | 'agent';
+  | 'company_directive' | 'workforce_decision' | 'bpos_execution'
+  // Reese Phase 1 — a real student DM conversation with the Reese AI staff mentor,
+  // ProofDesk-linked. See backend/src/services/reese/.
+  | 'student_support'
+  // Reese Phase 2 — an autonomous (Reese-initiated, not student-initiated)
+  // outreach thread for one student on one detected risk signal. See
+  // backend/src/services/reese/reeseAutonomousOutreachService.ts. Distinct
+  // from 'student_support' (which is reactive-only) so ticket-board filtering
+  // and dedup never conflate the two conversation kinds.
+  | 'reese_autonomous_outreach';
+export type TicketActorType = 'human' | 'cory' | 'agent'
+  // Reese Phase 1 — a real AI staff-mentor identity, distinct from generic
+  // autonomous background agents ('agent') so ticket activity attributed to Reese
+  // reads as a first-class staff actor.
+  | 'ai_staff';
 
 interface TicketAttributes {
   id?: string;
@@ -34,6 +47,19 @@ interface TicketAttributes {
   completed_at?: Date | null;
   created_at?: Date;
   updated_at?: Date;
+  // --- ProofDesk Work Ledger fields (Milestone 1 - Foundation, additive/nullable) ---
+  phase?: string | null;
+  work_intent?: string | null;
+  domain?: string | null;
+  risk_tier?: string | null;
+  proof_readiness?: string | null;
+  environment?: string | null;
+  verification_status?: string | null;
+  outcome_status?: string | null;
+  owner_department?: string | null;
+  orchestrator_run_id?: string | null;
+  summary_current?: string | null;
+  last_meaningful_activity_at?: Date | null;
 }
 
 class Ticket extends Model<TicketAttributes> implements TicketAttributes {
@@ -62,6 +88,18 @@ class Ticket extends Model<TicketAttributes> implements TicketAttributes {
   declare completed_at: Date | null;
   declare created_at: Date;
   declare updated_at: Date;
+  declare phase: string | null;
+  declare work_intent: string | null;
+  declare domain: string | null;
+  declare risk_tier: string | null;
+  declare proof_readiness: string | null;
+  declare environment: string | null;
+  declare verification_status: string | null;
+  declare outcome_status: string | null;
+  declare owner_department: string | null;
+  declare orchestrator_run_id: string | null;
+  declare summary_current: string | null;
+  declare last_meaningful_activity_at: Date | null;
 }
 
 Ticket.init(
@@ -170,6 +208,55 @@ Ticket.init(
       defaultValue: DataTypes.NOW,
     },
     updated_at: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    // --- ProofDesk Work Ledger fields (Milestone 1 - Foundation, additive/nullable) ---
+    phase: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    work_intent: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    domain: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+    },
+    risk_tier: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+    },
+    proof_readiness: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    environment: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    verification_status: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    outcome_status: {
+      type: DataTypes.STRING(20),
+      allowNull: true,
+    },
+    owner_department: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    orchestrator_run_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
+    },
+    summary_current: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+    last_meaningful_activity_at: {
       type: DataTypes.DATE,
       allowNull: true,
     },

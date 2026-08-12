@@ -333,11 +333,11 @@ function DemoDayPage() {
             crowns the winners, and sponsoring employers meet the people who actually deliver.
           </p>
           <div className="cbdd-hero-cta">
-            <CtaButton to="/enroll" size="lg" trailingIcon={<span aria-hidden>→</span>}>
-              Join the Challenge
+            <CtaButton to="/try" size="lg" data-track="demoday_hero_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
-            <CtaButton to="/sponsorship" size="lg" variant="outline">
-              Sponsor Your Team
+            <CtaButton to="/contact" size="lg" variant="outline" data-track="demoday_hero_book_walkthrough">
+              Book a walkthrough
             </CtaButton>
           </div>
           <div className="cbdd-when">
@@ -406,7 +406,7 @@ function DemoDayPage() {
               ]}
               caption="Season 2 finals — capstone presentations, live online."
               side="right"
-              cta={{ label: 'Join the Challenge', to: '/enroll' }}
+              cta={{ label: 'Start free', to: '/try' }}
             />
           </div>
         </div>
@@ -488,11 +488,11 @@ function DemoDayPage() {
             <Badge solid>For Employers</Badge>
             <h2 className="cbdd-mt4">Demo Day is the best hour of talent discovery you will run all year.</h2>
             <p>
-              Watch your sponsored team present real builds, side by side. Find out who your real AI builders are —
-              without ever taking anyone off the job. Reassignable seats mean a departure never wastes your spend.
+              Start free and see the platform yourself first. Then bring your team, watch them present real builds
+              side by side, and find out who your real AI builders are, without ever taking anyone off the job.
             </p>
-            <CtaButton to="/sponsorship" variant="solid" tone="red" trailingIcon={<span aria-hidden>→</span>}>
-              Sponsor Your Team
+            <CtaButton to="/try" variant="solid" tone="red" data-track="demoday_sponsor_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
           </div>
         </div>
@@ -504,12 +504,12 @@ function DemoDayPage() {
           <div className="cbdd-eyebrow">Your Capstone Starts Now</div>
           <h2 className="cb-balance cbdd-mt4">The next stage is open. Earn your slot.</h2>
           <p className="cbdd-lead">
-            Demo Day belongs to the people who built all season. Join the Challenge, climb to Silver, and the
+            Demo Day belongs to the people who built all season. Start free, climb to Silver, and the
             stage is yours.
           </p>
           <div className="cbdd-closing-cta">
-            <CtaButton to="/enroll" size="lg" trailingIcon={<span aria-hidden>→</span>}>
-              Join the Challenge
+            <CtaButton to="/try" size="lg" data-track="demoday_final_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
             <CtaButton to="/leaderboard" size="lg" variant="outline">
               View the Leaderboard

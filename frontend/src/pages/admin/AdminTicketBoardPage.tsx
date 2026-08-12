@@ -3,6 +3,8 @@ import { useAuth } from '../../contexts/AuthContext';
 import TicketDetailModal from '../../components/admin/TicketDetailModal';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
+import { getAgentDisplayName } from '../../utils/agentDisplayNames';
+import { buildTicketTypeFilterOptions, getTicketTypeTone } from '../../utils/ticketTypeMeta';
 
 interface Ticket {
   id: string;
@@ -68,20 +70,17 @@ const PRIORITY_TONE: Record<string, Tone> = {
   low: 'neutral',
 };
 
-// Ticket type -> StatusBadge tone.
-const TYPE_TONE: Record<string, Tone> = {
-  task: 'neutral',
-  bug: 'danger',
-  feature: 'success',
-  curriculum: 'info',
-  agent_action: 'primary',
-  strategic: 'warning',
-};
+// Ticket type -> StatusBadge tone/label now lives in utils/ticketTypeMeta.ts — a
+// single source of truth shared with the Type filter dropdown below, instead of a
+// third hardcoded map here. (Previously this table had no entries for
+// 'student_support'/'reese_autonomous_outreach', so those real, ticketed types
+// rendered with the generic neutral fallback — see getTicketTypeTone().)
 
 const SOURCE_ICONS: Record<string, string> = {
   cory: 'cpu-line',
   manual: 'user-line',
   system: 'settings-3-line',
+  ai_workforce: 'team-line',
 };
 
 export default function AdminTicketBoardPage() {
@@ -120,6 +119,18 @@ export default function AdminTicketBoardPage() {
   }, [token, filterPriority, filterType, filterSource]);
 
   useEffect(() => { fetchBoard(); }, [fetchBoard]);
+
+  // Deep-link support: ?open=<ticketId> (the approval email's link) opens that
+  // ticket's detail modal directly; ?source=<value> pre-applies the source filter
+  // (used by the Trust Center's "View tickets" link per director). Read once on
+  // mount — the filter select below stays the source of truth after that.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const open = params.get('open');
+    const source = params.get('source');
+    if (open) setSelectedTicket(open);
+    if (source) setFilterSource(source);
+  }, []);
 
   const handleDragStart = (e: React.DragEvent, ticketId: string) => {
     e.dataTransfer.setData('ticketId', ticketId);
@@ -240,20 +251,22 @@ export default function AdminTicketBoardPage() {
           <option value="medium">Medium</option>
           <option value="low">Low</option>
         </select>
-        <select className="form-select form-select-sm" style={{ width: 140 }} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+        <select className="form-select form-select-sm" style={{ width: 160 }} value={filterType} onChange={(e) => setFilterType(e.target.value)}>
           <option value="">All Types</option>
-          <option value="task">Task</option>
-          <option value="bug">Bug</option>
-          <option value="feature">Feature</option>
-          <option value="curriculum">Curriculum</option>
-          <option value="agent_action">Agent Action</option>
-          <option value="strategic">Strategic</option>
+          {/* Data-driven from real ticket data (stats.byType), not a hardcoded list —
+              every type that actually exists on a real ticket appears here, agent-
+              generated types included, so this can never again silently omit a new
+              TicketType the way it omitted student_support/reese_autonomous_outreach. */}
+          {buildTicketTypeFilterOptions(stats?.byType).map((opt) => (
+            <option key={opt.value} value={opt.value}>{opt.label} ({opt.count})</option>
+          ))}
         </select>
         <select className="form-select form-select-sm" style={{ width: 140 }} value={filterSource} onChange={(e) => setFilterSource(e.target.value)}>
           <option value="">All Sources</option>
           <option value="cory">Cory</option>
           <option value="manual">Manual</option>
           <option value="system">System</option>
+          <option value="ai_workforce">AI Workforce</option>
         </select>
         <button className="btn btn-sm btn-outline-secondary" onClick={() => { setFilterPriority(''); setFilterType(''); setFilterSource(''); }}>
           Clear
@@ -298,7 +311,7 @@ export default function AdminTicketBoardPage() {
                       </div>
                       <p className="mb-1 small fw-medium" style={{ lineHeight: 1.3 }}>{ticket.title}</p>
                       <div className="d-flex gap-1 flex-wrap align-items-center">
-                        <StatusBadge label={ticket.type} tone={TYPE_TONE[ticket.type] || 'neutral'} />
+                        <StatusBadge label={ticket.type} tone={getTicketTypeTone(ticket.type)} />
                         {ticket.assigned_to_id && (
                           <StatusBadge
                             label={ticket.assigned_to_id.length > 20 ? ticket.assigned_to_id.slice(0, 20) + '...' : ticket.assigned_to_id}
@@ -307,6 +320,9 @@ export default function AdminTicketBoardPage() {
                         )}
                         {ticket.source.startsWith('cory') && (
                           <StatusBadge label="Cory" tone="primary" icon={getSourceIcon(ticket.source)} />
+                        )}
+                        {ticket.source === 'ai_workforce' && (
+                          <StatusBadge label={getAgentDisplayName(ticket.created_by_id)} tone="primary" icon={getSourceIcon(ticket.source)} />
                         )}
                       </div>
                     </div>
@@ -376,11 +392,17 @@ export default function AdminTicketBoardPage() {
                     </div>
                     <div className="col-6">
                       <label className="form-label small fw-medium">Type</label>
+                      {/* Deliberately human-scoped, not the same list as the board's Type
+                          filter above: a person creating a ticket by hand should only see
+                          types a human would reasonably pick. Agent-only types
+                          (student_support, reese_autonomous_outreach) are intentionally
+                          excluded here. */}
                       <select className="form-select form-select-sm" value={newTicket.type} onChange={(e) => setNewTicket({ ...newTicket, type: e.target.value })}>
                         <option value="task">Task</option>
                         <option value="bug">Bug</option>
                         <option value="feature">Feature</option>
                         <option value="curriculum">Curriculum</option>
+                        <option value="agent_action">Agent Action</option>
                         <option value="strategic">Strategic</option>
                       </select>
                     </div>

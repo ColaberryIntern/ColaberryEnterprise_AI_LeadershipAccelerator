@@ -8,6 +8,7 @@ import { resolve } from '../timeline/typeRegistry';
 import { PlanCard } from './types';
 import { checkDependencies } from './dependencyEngine';
 import { estimateEvidence } from './evidenceEngine';
+import { resolveCompetencies, domainTouched } from './competencyDictionary';
 
 export interface BlueprintLike {
   competencies?: string[];
@@ -15,6 +16,9 @@ export interface BlueprintLike {
   learning_objectives?: string[];
   difficulty?: string | null;
   estimated_hours?: number | null;
+  /** Competencies taught by the week's live session / Anthropic Academy course
+   *  but represented by no typed card. Counted toward coverage. */
+  session_competencies?: string[];
 }
 
 export type CheckStatus = 'pass' | 'warn' | 'fail';
@@ -33,10 +37,11 @@ export interface ValidationResult {
 }
 
 function pct(n: number): number { return Math.round(n * 100); }
-function coverFrac(required: string[] | undefined, present: Set<string>): number {
-  const req = (required || []).filter(Boolean);
-  if (req.length === 0) return 1;
-  return req.filter((r) => present.has(r)).length / req.length;
+function fracCovered(required: Set<string>, present: Set<string>): number {
+  if (required.size === 0) return 1;
+  let hit = 0;
+  for (const r of required) if (present.has(r)) hit += 1;
+  return hit / required.size;
 }
 
 /** PURE — validate a plan against its blueprint. */
@@ -49,18 +54,18 @@ export function validateCurriculum(cards: PlanCard[], blueprint: BlueprintLike =
   const mix = { intro: 0, core: 0, stretch: 0 };
   let minutes = 0;
   const typeCounts = new Map<string, number>();
-  const compsPresent = new Set<string>();
-  const domainsPresent = new Set<string>();
+  const compsPresent = new Set<string>();   // canonical competency ids actually taught this span
   for (const c of cards) {
     if (c.difficulty in mix) (mix as any)[c.difficulty] += 1;
     minutes += c.estimated_time || 0;
     typeCounts.set(c.type, (typeCounts.get(c.type) || 0) + 1);
-    (c.competencies || []).forEach((k) => compsPresent.add(k));
+    resolveCompetencies(c.competencies).forEach((k) => compsPresent.add(k));
     const def = resolve(c.type);
-    (def?.competencies || []).forEach((k) => compsPresent.add(k));
+    resolveCompetencies(def?.competencies).forEach((k) => compsPresent.add(k));
   }
-  // architect domains are derived from blueprint intent + competency spread here.
-  (blueprint.architect_domains || []).forEach((d) => { if (compsPresent.has(d)) domainsPresent.add(d); });
+  // Non-card coverage: competencies taught by the week's live session / Anthropic
+  // Academy course but represented by no typed card. Declared on the blueprint.
+  resolveCompetencies(blueprint.session_competencies).forEach((k) => compsPresent.add(k));
   const workload_hours = Math.round((minutes / 60) * 10) / 10;
 
   const add = (key: string, label: string, ok: boolean, warnOnly: boolean, detail: string) =>
@@ -73,10 +78,11 @@ export function validateCurriculum(cards: PlanCard[], blueprint: BlueprintLike =
     cards.some((c) => resolve(c.type)?.bucket === 'advance');
   add('completion', 'Has a completion / capstone', hasCompletion, false, hasCompletion ? 'Ends on an advance-bucket capstone.' : 'No terminal evaluation, capstone, or completion card.');
 
-  const compCov = coverFrac(blueprint.competencies, compsPresent);
+  const compCov = fracCovered(resolveCompetencies(blueprint.competencies), compsPresent);
   add('competencies', 'Competency coverage', compCov >= 0.75, compCov >= 0.5, `${pct(compCov)}% of blueprint competencies covered.`);
 
-  const domCov = coverFrac(blueprint.architect_domains, domainsPresent);
+  const reqDomains = (blueprint.architect_domains || []).filter(Boolean);
+  const domCov = reqDomains.length === 0 ? 1 : reqDomains.filter((d) => domainTouched(d, compsPresent)).length / reqDomains.length;
   add('domains', 'Architect domain coverage', domCov >= 0.6, true, `${pct(domCov)}% of targeted architect domains touched.`);
 
   add('evidence', 'Produces evidence', ev.counts.evidence_items >= 2, false, `${ev.counts.evidence_items} evidence-producing activities.`);

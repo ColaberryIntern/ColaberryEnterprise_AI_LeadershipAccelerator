@@ -1,7 +1,7 @@
 // Demo Day wins, AI Champion stories, and sponsor talent-discovery outcomes.
-// Reframed for the "One Class, Many Doors" strategy: individuals join the
-// Challenge (Door A) and employers sponsor teams to discover their real
-// AI builders (Door B).
+// Single-persona strategy: the decision-maker starts free and explores the
+// whole platform themselves, then brings their team when ready. Individual
+// champion stories and employer talent-discovery outcomes both feature.
 //
 // NOTE: Stories below are realistic, specific placeholders pending client
 // consent. No lorem ipsum. Replace attribution with real names + logos as
@@ -220,7 +220,7 @@ function CaseStudiesPage() {
     <>
       <SEOHead
         title="Demo Day Wins & AI Champion Stories"
-        description="Real outcomes from the Challenge: individuals who shipped working AI at Demo Day, and employers who discovered their real AI builders through sponsored seats. One class, many doors."
+        description="Real outcomes from the Challenge: individuals who shipped working AI at Demo Day, and employers who discovered their real AI builders through sponsored seats. Start free and see it for yourself."
       />
 
       {/* Hero */}
@@ -271,9 +271,9 @@ function CaseStudiesPage() {
               margin: '0 auto var(--space-8)',
             }}
           >
-            One program. Two doors. Individuals join the Challenge and ship real projects.
-            Employers sponsor seats and discover who their real AI builders are — without
-            taking anyone off the job. Here is what came out the other side.
+            One platform. Individuals start free and ship real projects. Employers bring
+            their teams and discover who their real AI builders are, without taking anyone
+            off the job. Here is what came out the other side.
           </p>
 
           {/* Hero stat band */}
@@ -325,7 +325,7 @@ function CaseStudiesPage() {
         <div style={{ maxWidth: 'var(--container-lg)', margin: '0 auto' }}>
           <header style={{ maxWidth: '64ch', marginBottom: 'var(--space-12)' }}>
             <Badge tone="blue" style={{ marginBottom: 'var(--space-3)' }}>
-              Door A · Individuals
+              Individuals
             </Badge>
             <h2 style={{ fontSize: 'var(--fs-h1)', margin: '0 0 var(--space-3)' }}>
               AI Champion stories
@@ -577,7 +577,7 @@ function CaseStudiesPage() {
         <div style={{ maxWidth: 'var(--container-lg)', margin: '0 auto' }}>
           <header style={{ maxWidth: '64ch', marginBottom: 'var(--space-12)' }}>
             <Badge tone="red" style={{ marginBottom: 'var(--space-3)' }}>
-              Door B · Employers
+              Employers
             </Badge>
             <h2 style={{ fontSize: 'var(--fs-h1)', margin: '0 0 var(--space-3)' }}>
               Sponsor outcomes: talent discovery, not training
@@ -602,7 +602,7 @@ function CaseStudiesPage() {
                 'Sponsors put their people in Anthropic-partner hands. Employees train hands-on with Claude Code and ship against their own real data — no one is pulled off the day job.',
                 'By Demo Day, a company-scoped leaderboard shows you exactly who can build, and your champions graduate as Certified Anthropic AI Systems Architects.',
               ]}
-              cta={{ label: 'Sponsor Your Team', to: '/sponsorship' }}
+              cta={{ label: 'Start free', to: '/try' }}
             />
           </div>
 
@@ -736,19 +736,20 @@ function CaseStudiesPage() {
                 directly on react-router Link to preserve client-side navigation.
                 On the dark inverse band, secondary actions get an explicit light
                 outline so they read against the surface. */}
-            <Link className="cb-btn cb-btn--primary cb-btn--lg" to="/enroll">
-              <span>Join the Challenge</span>
+            <Link className="cb-btn cb-btn--primary cb-btn--lg" to="/try" data-track="casestudies_final_start_free">
+              <span>Start free</span>
             </Link>
             <Link
               className="cb-btn cb-btn--lg"
-              to="/sponsorship"
+              to="/contact"
+              data-track="casestudies_final_book_walkthrough"
               style={{
                 background: 'transparent',
                 color: 'var(--text-on-inverse)',
                 boxShadow: 'inset 0 0 0 var(--border-2) var(--text-on-inverse)',
               }}
             >
-              <span>Sponsor Your Team</span>
+              <span>Book a walkthrough</span>
             </Link>
             <Button
               variant="ghost"

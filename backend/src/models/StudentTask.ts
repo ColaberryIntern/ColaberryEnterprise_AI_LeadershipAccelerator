@@ -27,6 +27,7 @@ export interface StudentTaskAttributes {
   execution_mode?: string | null;
   fulfills?: any;
   release_key?: string | null;
+  blocked_by?: string[] | null;   // story_ids this task waits on (walking-skeleton release gate)
   created_at?: Date;
   updated_at?: Date;
 }
@@ -51,6 +52,7 @@ class StudentTask extends Model<StudentTaskAttributes> implements StudentTaskAtt
   declare execution_mode: string | null;
   declare fulfills: any;
   declare release_key: string | null;
+  declare blocked_by: string[] | null;
   declare created_at: Date;
   declare updated_at: Date;
 }
@@ -82,6 +84,7 @@ StudentTask.init(
     execution_mode: { type: DataTypes.STRING(30), allowNull: true },
     fulfills: { type: DataTypes.JSONB, allowNull: true },
     release_key: { type: DataTypes.STRING(60), allowNull: true },
+    blocked_by: { type: DataTypes.JSONB, allowNull: true },
   },
   {
     sequelize,
@@ -93,7 +96,12 @@ StudentTask.init(
       { fields: ['project_id'] },
       { fields: ['requirement_map_id'] },
       { fields: ['story_id'] },
-      { unique: true, fields: ['project_id', 'requirement_key'], name: 'student_tasks_unique_req_key' },
+      // NO unique on (project_id, requirement_key): one requirement is fulfilled
+      // by many stories (SBP-REQ-v1 FR-012). The old `student_tasks_unique_req_key`
+      // is dropped in ensureStudentTaskMergeSchema(). Task identity is
+      // (project_id, story_id) — see `student_tasks_unique_story`, created there
+      // as a partial unique so requirement-based rows (story_id NULL) are exempt.
+      { fields: ['requirement_key'] },
     ],
   }
 );

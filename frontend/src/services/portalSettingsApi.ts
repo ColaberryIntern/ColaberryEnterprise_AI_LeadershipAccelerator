@@ -11,6 +11,10 @@ export interface SettingsAccount {
   status: string;
   cohort_name: string | null;
   member_since: string | null;
+  // Organization / manager layer: true when this enrollment owns or manages an
+  // org; `org` is that org's identity (drives the "Your company" nav + page).
+  is_org_manager: boolean;
+  org: { id: string; name: string } | null;
 }
 export interface SettingsProfile {
   title: string | null;

@@ -12,7 +12,7 @@ import { Input } from '../colaberry/components/core/Input';
 import { Textarea } from '../colaberry/components/core/Textarea';
 import { Checkbox } from '../colaberry/components/core/Checkbox';
 
-type Segment = 'individual' | 'sponsor';
+const TRY_PATH = '/try';
 
 const COMPANY_SIZES = [
   '1-49 employees',
@@ -34,22 +34,13 @@ const INDUSTRIES = [
   'Other',
 ] as const;
 
-const SPONSOR_RULES: ValidationRules = {
-  required: ['fullName', 'email', 'company', 'companySize'],
-  email: ['email'],
-  phone: ['phone'],
-};
-
-const INDIVIDUAL_RULES: ValidationRules = {
+const CONTACT_RULES: ValidationRules = {
   required: ['fullName', 'email'],
   email: ['email'],
   phone: ['phone'],
 };
 
-const FORM_TYPE: Record<Segment, string> = {
-  individual: 'enterprise_inquiry',
-  sponsor: 'sponsor_inquiry',
-};
+const FORM_TYPE = 'enterprise_inquiry';
 
 interface ContactForm {
   fullName: string;
@@ -59,7 +50,6 @@ interface ContactForm {
   title: string;
   companySize: string;
   industry: string;
-  seatsInterest: string;
   message: string;
   consentContact: boolean;
 }
@@ -72,28 +62,17 @@ const EMPTY_FORM: ContactForm = {
   title: '',
   companySize: '',
   industry: '',
-  seatsInterest: '',
   message: '',
   consentContact: false,
 };
 
 function ContactPage() {
-  const [segment, setSegment] = useState<Segment>('individual');
   const [showBooking, setShowBooking] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [serverError, setServerError] = useState('');
   const [form, setForm] = useState<ContactForm>(EMPTY_FORM);
-
-  const isSponsor = segment === 'sponsor';
-
-  const switchSegment = (next: Segment) => {
-    if (next === segment) return;
-    setSegment(next);
-    setErrors({});
-    setServerError('');
-  };
 
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>,
@@ -108,10 +87,9 @@ function ContactPage() {
     e.preventDefault();
     setServerError('');
 
-    const rules = isSponsor ? SPONSOR_RULES : INDIVIDUAL_RULES;
     const validationErrors = validateForm(
       form as unknown as Record<string, unknown>,
-      rules,
+      CONTACT_RULES,
     );
     if (!form.consentContact) {
       validationErrors.consentContact = 'You must agree to be contacted';
@@ -123,13 +101,6 @@ function ContactPage() {
 
     setSubmitting(true);
     try {
-      const seatsLine = isSponsor && form.seatsInterest
-        ? `Seats of interest: ${form.seatsInterest}`
-        : '';
-      const composedMessage = [form.message.trim(), seatsLine]
-        .filter(Boolean)
-        .join('\n');
-
       const lead: EnterpriseLead = {
         fullName: form.fullName,
         email: form.email,
@@ -138,10 +109,9 @@ function ContactPage() {
         title: form.title || undefined,
         companySize: form.companySize || undefined,
         industry: form.industry || undefined,
-        willSeekCorporateSponsorship: isSponsor,
-        message: composedMessage || undefined,
+        message: form.message.trim() || undefined,
         consentContact: form.consentContact,
-        formType: FORM_TYPE[segment],
+        formType: FORM_TYPE,
         ...getUTMParams(),
         pageOrigin: window.location.href,
       };
@@ -167,7 +137,7 @@ function ContactPage() {
     <>
       <SEOHead
         title="Contact"
-        description="Talk to Colaberry. Join the AI Challenge as an individual, or sponsor your team to discover your real AI builders without taking anyone off the job."
+        description="Prefer to talk first? Reach the Colaberry team or book a walkthrough. The easiest way to see the platform is to start free and explore the whole thing yourself, no credit card."
       />
 
       {/* Hero */}
@@ -198,7 +168,7 @@ function ContactPage() {
           style={{ position: 'relative', zIndex: 1, maxWidth: 820 }}
         >
           <Badge tone="red" dot style={{ marginBottom: 'var(--space-5)' }}>
-            We respond within one business day
+            Start free anytime, no credit card
           </Badge>
           <h1
             className="cb-balance"
@@ -211,9 +181,7 @@ function ContactPage() {
               color: 'var(--text-on-accent)',
             }}
           >
-            Most people consume AI.
-            <br />
-            Very few learn to build with it.
+            Prefer to talk it through first?
           </h1>
           <p
             style={{
@@ -221,12 +189,18 @@ function ContactPage() {
               lineHeight: 1.6,
               opacity: 0.88,
               maxWidth: 620,
-              margin: '0 auto',
+              margin: '0 auto var(--space-6)',
             }}
           >
-            One program, two doors. Join the Challenge yourself, or sponsor your
-            team and find out who your real AI builders are.
+            The easiest way to see the platform is to start free and explore the whole
+            thing yourself, as both the learner and the admin. No credit card. If you would
+            rather talk first, send a note below and we&rsquo;ll get back within one business day.
           </p>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <Button as="a" href={TRY_PATH} size="lg" data-track="contact_hero_start_free">
+              Start free
+            </Button>
+          </div>
         </div>
       </section>
 
@@ -240,7 +214,7 @@ function ContactPage() {
             <Card elevation="md" padded accent="green" role="alert">
               <div className="text-center" style={{ padding: 'var(--space-6) 0' }}>
                 <Badge tone="green" dot style={{ marginBottom: 'var(--space-4)' }}>
-                  {isSponsor ? 'Sponsorship inquiry received' : 'Inquiry received'}
+                  Message received
                 </Badge>
                 <h2
                   style={{
@@ -250,7 +224,7 @@ function ContactPage() {
                     margin: '0 0 var(--space-3)',
                   }}
                 >
-                  Thanks — we'll be in touch.
+                  Thanks, we&rsquo;ll be in touch.
                 </h2>
                 <p
                   style={{
@@ -260,10 +234,14 @@ function ContactPage() {
                     margin: '0 auto var(--space-5)',
                   }}
                 >
-                  {isSponsor
-                    ? 'Our team will reach out to scope annual seats, reassignable codes, and your company-scoped leaderboard so you can discover talent without taking anyone off the job.'
-                    : 'Our team will follow up shortly with next steps to join the Challenge.'}
+                  Our team will follow up shortly. In the meantime, you can start free and
+                  explore the whole platform yourself, no credit card.
                 </p>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 'var(--space-5)' }}>
+                  <Button as="a" href={TRY_PATH} size="lg" data-track="contact_success_start_free">
+                    Start free
+                  </Button>
+                </div>
                 <p style={{ color: 'var(--text-muted)', margin: 0 }}>
                   Time-sensitive? Reach us at{' '}
                   <a href="mailto:info@colaberry.com" style={{ color: 'var(--brand-accent)' }}>
@@ -275,50 +253,18 @@ function ContactPage() {
             </Card>
           ) : (
             <Card elevation="md" padded>
-              {/* Segment switcher — the two doors */}
-              <div
-                role="tablist"
-                aria-label="Choose how you'd like to connect"
+              <p
                 style={{
-                  display: 'inline-flex',
-                  gap: 'var(--space-1)',
-                  padding: 'var(--space-1)',
-                  background: 'var(--surface-sunken)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-pill)',
-                  marginBottom: 'var(--space-6)',
-                  maxWidth: '100%',
-                  flexWrap: 'wrap',
+                  fontSize: 'var(--fs-body)',
+                  color: 'var(--text-body)',
+                  lineHeight: 1.6,
+                  margin: '0 0 var(--space-5)',
                 }}
               >
-                <SegmentTab
-                  id="contact-tab-individual"
-                  controls="contact-form-panel"
-                  active={!isSponsor}
-                  onClick={() => switchSegment('individual')}
-                  label="Join the Challenge"
-                  sub="For individuals"
-                />
-                <SegmentTab
-                  id="contact-tab-sponsor"
-                  controls="contact-form-panel"
-                  active={isSponsor}
-                  onClick={() => switchSegment('sponsor')}
-                  label="Sponsor Your Team"
-                  sub="For employers"
-                />
-              </div>
-
-              <div
-                id="contact-form-panel"
-                role="tabpanel"
-                aria-labelledby={isSponsor ? 'contact-tab-sponsor' : 'contact-tab-individual'}
-              >
-              {isSponsor ? (
-                <SponsorIntro />
-              ) : (
-                <IndividualIntro />
-              )}
+                This is the optional path. Start free whenever you like, no credit card. Or use
+                this form to reach us with a question or to book a walkthrough, and we&rsquo;ll
+                respond within one business day.
+              </p>
 
               {serverError && (
                 <div
@@ -377,7 +323,7 @@ function ContactPage() {
                     </div>
                     <div className="col-md-6">
                       <Input
-                        label={isSponsor ? 'Your title' : 'Title (optional)'}
+                        label="Title (optional)"
                         name="title"
                         value={form.title}
                         onChange={handleChange}
@@ -388,15 +334,11 @@ function ContactPage() {
                   </div>
                 </FieldGroup>
 
-                {/* Employer block — only the sponsor door requires company + size */}
-                <FieldGroup
-                  label={isSponsor ? 'Your organization' : 'Company (optional)'}
-                >
+                <FieldGroup label="Company (optional)">
                   <div className="row g-3">
                     <div className="col-md-6">
                       <Input
                         label="Company"
-                        required={isSponsor}
                         name="company"
                         value={form.company}
                         onChange={handleChange}
@@ -407,7 +349,6 @@ function ContactPage() {
                     <div className="col-md-6">
                       <SelectField
                         label="Company size"
-                        required={isSponsor}
                         name="companySize"
                         value={form.companySize}
                         onChange={handleChange}
@@ -424,35 +365,17 @@ function ContactPage() {
                         options={INDUSTRIES}
                       />
                     </div>
-                    {isSponsor && (
-                      <div className="col-md-6">
-                        <Input
-                          label="Seats you're considering"
-                          name="seatsInterest"
-                          value={form.seatsInterest}
-                          onChange={handleChange}
-                          placeholder="e.g., 10–25"
-                          helperText="Seats are reassignable — reassign if someone leaves."
-                        />
-                      </div>
-                    )}
                   </div>
                 </FieldGroup>
 
-                <FieldGroup
-                  label={isSponsor ? 'What are you hoping to discover?' : 'Anything to add?'}
-                >
+                <FieldGroup label="Anything to add?">
                   <Textarea
                     label="Message"
                     name="message"
                     rows={3}
                     value={form.message}
                     onChange={handleChange}
-                    placeholder={
-                      isSponsor
-                        ? 'Tell us about your team and the AI capability you want to surface.'
-                        : 'Tell us what you want to build.'
-                    }
+                    placeholder="Tell us what you want to build, or what you'd like to cover on a walkthrough."
                   />
                 </FieldGroup>
 
@@ -463,7 +386,7 @@ function ContactPage() {
                     onChange={handleChange}
                     label={
                       <span style={{ fontSize: 'var(--fs-body-sm)', color: 'var(--text-body)' }}>
-                        I agree to be contacted by Colaberry about the AI Challenge.{' '}
+                        I agree to be contacted by Colaberry.{' '}
                         <span style={{ color: 'var(--status-danger)' }}>*</span>
                       </span>
                     }
@@ -488,11 +411,7 @@ function ContactPage() {
                   fullWidth
                   disabled={submitting}
                 >
-                  {submitting
-                    ? 'Submitting…'
-                    : isSponsor
-                      ? 'Sponsor Your Team'
-                      : 'Join the Challenge'}
+                  {submitting ? 'Sending…' : 'Send message'}
                 </Button>
               </form>
 
@@ -508,7 +427,6 @@ function ContactPage() {
               >
                 We never sell your information. Your data is used solely to respond to your request.
               </p>
-              </div>
             </Card>
           )}
         </div>
@@ -545,8 +463,8 @@ function ContactPage() {
               maxWidth: 580,
             }}
           >
-            Prefer to talk it through first? Book a 30-minute session to map seats,
-            timing, and how the company-scoped leaderboard works.
+            Want a guided tour before you start free? Book a 30-minute walkthrough and we&rsquo;ll
+            show you the learner experience and your management dashboard, side by side.
           </p>
           <Button variant="solid" tone="red" size="lg" onClick={() => setShowBooking(true)}>
             Schedule an Executive AI Strategy Call
@@ -557,7 +475,7 @@ function ContactPage() {
           >
             <span style={{ fontSize: 'var(--fs-body-sm)' }}>30-minute focused session</span>
             <span style={{ fontSize: 'var(--fs-body-sm)' }}>No obligation</span>
-            <span style={{ fontSize: 'var(--fs-body-sm)' }}>Talent discovery, not training</span>
+            <span style={{ fontSize: 'var(--fs-body-sm)' }}>Start free whenever you like</span>
           </div>
         </div>
       </section>
@@ -605,7 +523,7 @@ function ContactPage() {
             </div>
             <div className="col-md-4">
               <Card elevation="sm" padded hoverable style={{ height: '100%' }}>
-                <h3 style={infoTitle}>Strategy Call</h3>
+                <h3 style={infoTitle}>Walkthrough</h3>
                 <p style={{ ...infoBody, marginBottom: 'var(--space-3)' }}>
                   Book a 30-minute call with our team.
                 </p>
@@ -636,47 +554,6 @@ const infoBody: React.CSSProperties = {
   color: 'var(--text-muted)',
   margin: 0,
 };
-
-interface SegmentTabProps {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  sub: string;
-  id: string;
-  controls: string;
-}
-
-function SegmentTab({ active, onClick, label, sub, id, controls }: SegmentTabProps) {
-  return (
-    <button
-      type="button"
-      role="tab"
-      id={id}
-      aria-controls={controls}
-      aria-selected={active}
-      tabIndex={active ? 0 : -1}
-      onClick={onClick}
-      style={{
-        border: 'none',
-        cursor: 'pointer',
-        borderRadius: 'var(--radius-pill)',
-        padding: 'var(--space-2) var(--space-5)',
-        background: active ? 'var(--action-bg)' : 'transparent',
-        color: active ? 'var(--text-on-accent)' : 'var(--text-muted)',
-        transition: 'background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out)',
-        textAlign: 'left',
-        minHeight: 48,
-      }}
-    >
-      <span style={{ display: 'block', fontWeight: 700, fontSize: 'var(--fs-body-sm)' }}>
-        {label}
-      </span>
-      <span style={{ display: 'block', fontSize: 'var(--fs-caption)', opacity: 0.85 }}>
-        {sub}
-      </span>
-    </button>
-  );
-}
 
 interface FieldGroupProps {
   label: string;
@@ -765,48 +642,6 @@ function SelectField({ label, name, value, onChange, options, required, error }:
           {error}
         </div>
       )}
-    </div>
-  );
-}
-
-function IndividualIntro() {
-  return (
-    <p
-      style={{
-        fontSize: 'var(--fs-body)',
-        color: 'var(--text-body)',
-        lineHeight: 1.6,
-        margin: '0 0 var(--space-5)',
-      }}
-    >
-      Self-serve your seat in the cohort. Learn on Claude, build real systems with
-      Colaberry, and present at Demo Day. Tell us about you and we'll get you started.
-    </p>
-  );
-}
-
-function SponsorIntro() {
-  return (
-    <div style={{ marginBottom: 'var(--space-5)' }}>
-      <p
-        style={{
-          fontSize: 'var(--fs-body)',
-          color: 'var(--text-body)',
-          lineHeight: 1.6,
-          margin: '0 0 var(--space-3)',
-        }}
-      >
-        <strong style={{ color: 'var(--text-strong)' }}>
-          Find out who your real AI builders are — without taking anyone off the job.
-        </strong>{' '}
-        Sponsor annual seats; your people redeem codes, learn on their own time, and
-        climb a company-scoped leaderboard, then present at Demo Day.
-      </p>
-      <div className="d-flex flex-wrap gap-2">
-        <Badge tone="blue">Reassignable seats</Badge>
-        <Badge tone="blue">Company-scoped leaderboard</Badge>
-        <Badge tone="blue">Talent discovery, not training</Badge>
-      </div>
     </div>
   );
 }

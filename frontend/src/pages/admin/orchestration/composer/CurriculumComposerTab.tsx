@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import {
-  composerApi, composerCss, Blueprint, Course, Plan, Assessment, PlanCard,
+  composerApi, composerCss, Blueprint, Course, Plan, Assessment, PlanCard, CuratedVideoPreview,
   Chip, Lab, Btn, Meter, Ring, money, bandTone, initials, livePlanForWeek,
 } from './composerKit';
 
@@ -38,6 +38,9 @@ const CurriculumComposerTab: React.FC = () => {
   const [liveOrig, setLiveOrig] = useState<Plan | null>(null);
   // True once the operator has renamed/reordered a live card but not yet Applied.
   const [dirty, setDirty] = useState(false);
+  // Coverage gap-fill: curated video candidates awaiting operator approval (null = no preview open).
+  const [vpreview, setVpreview] = useState<CuratedVideoPreview[] | null>(null);
+  const [vpick, setVpick] = useState<Record<string, boolean>>({});
 
   // Pull the LIVE published Timeline cards for a blueprint's week into the canvas
   // so the Composer mirrors exactly what students see (and in section order).
@@ -202,6 +205,39 @@ const CurriculumComposerTab: React.FC = () => {
     } catch (e: any) { setError(e?.response?.data?.error || 'Generation failed.'); } finally { setBusy(''); }
   };
 
+  // Coverage gap-fill — read-only: curate short videos for the uncovered competencies.
+  // Unlike the old rec "Apply" (which regenerated the whole week), this adds nothing
+  // until the operator approves candidates below.
+  const curateVideos = async () => {
+    if (!sel) return; setBusy('curate'); setError(''); setNote('');
+    try {
+      const r = await composerApi.curateVideos(sel.id);
+      const vids = r.curation?.videos || [];
+      setVpreview(vids);
+      setVpick(Object.fromEntries(vids.map((v) => [v.url, true])));
+      if (!vids.length) setNote(r.curation?.notes?.[0] || 'No videos found for the current gaps.');
+    } catch (e: any) { setError(e?.response?.data?.error || 'Curation failed.'); } finally { setBusy(''); }
+  };
+
+  // Non-destructive apply: add only the approved videos, each tagged with the
+  // competency it fills (so coverage moves for a real reason). No LLM regen.
+  const applyVideos = async () => {
+    if (!sel || !vpreview) return;
+    const chosen = vpreview.filter((v) => vpick[v.url]).map((v) => ({
+      video_url: v.url, title: v.title, channel: v.channel,
+      duration_seconds: v.duration_seconds, competency: v.competency, competency_label: v.competency_label,
+    }));
+    if (!chosen.length) { setVpreview(null); return; }
+    setBusy('applyvid'); setError('');
+    try {
+      const r = await composerApi.applyVideos(sel.id, chosen);
+      setPlan(r.plan); setLive(false); setLiveOrig(null); setDirty(false); setAssess(r.assessment);
+      setSel({ ...sel, status: 'generated' });
+      setVpreview(null);
+      setNote(`Added ${r.added} video${r.added === 1 ? '' : 's'} to the draft plan — publish to push them live.`);
+    } catch (e: any) { setError(e?.response?.data?.error || 'Apply videos failed.'); } finally { setBusy(''); }
+  };
+
   const publish = async () => {
     if (!sel) return; setBusy('publish'); setError('');
     try {
@@ -337,9 +373,28 @@ const CurriculumComposerTab: React.FC = () => {
               <Meter label="Architect readiness" value={(ev?.architect_readiness || 0) * 100} tone="amber" />
               {jr && <div style={{ margin: '12px 0', fontSize: 11.5, color: 'var(--muted)' }}><Lab>Focus stage</Lab><b style={{ color: 'var(--cherry-deep)' }}>{jr.focus_stage}</b> — {jr.why}</div>}
               <h5 style={{ marginTop: 14 }}>Recommendations</h5>
-              {assess!.recommendations.length === 0 ? <div className="cc-muted">No fixes — this week is sound.</div> : assess!.recommendations.slice(0, 5).map((r) => (
-                <div className="cc-rec" key={r.rank}><div className="rt"><Chip tone={r.severity === 'high' ? 'cherry' : r.severity === 'medium' ? 'amber' : 'berry'}>{r.severity}</Chip>{r.title}</div><p>{r.why}</p><button className="ap" disabled={busy === 'generate'} onClick={() => generate(r.title)}>＋ Apply</button></div>
-              ))}
+              {assess!.recommendations.length === 0 ? <div className="cc-muted">No fixes — this week is sound.</div> : assess!.recommendations.slice(0, 5).map((r) => {
+                const isVideo = (r.patch as any)?.op === 'add_videos';
+                return (
+                <div className="cc-rec" key={r.rank}><div className="rt"><Chip tone={r.severity === 'high' ? 'cherry' : r.severity === 'medium' ? 'amber' : 'berry'}>{r.severity}</Chip>{r.title}</div><p>{r.why}</p>
+                  <button className="ap" disabled={busy !== ''} onClick={() => (isVideo ? curateVideos() : generate(r.title))}>{isVideo ? (busy === 'curate' ? 'Finding videos…' : '＋ Find videos') : '＋ Apply'}</button></div>
+                );
+              })}
+              {vpreview && (
+                <div style={{ marginTop: 10, background: 'var(--paper)', border: '1px solid var(--line)', borderRadius: 11, padding: 11 }}>
+                  <div className="rt" style={{ marginBottom: 6 }}><b>Curated videos</b> <span className="cc-muted">({vpreview.length}) — approve to add</span></div>
+                  {vpreview.length === 0 ? <div className="cc-muted">No candidates — check the gaps or the YouTube key.</div> : vpreview.map((v) => (
+                    <label key={v.url} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 0', fontSize: 12, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!vpick[v.url]} onChange={(e) => setVpick((p) => ({ ...p, [v.url]: e.target.checked }))} />
+                      <span><b>{v.title}</b><br /><span className="cc-muted">{v.competency_label} · {v.duration_label} · {v.channel}</span></span>
+                    </label>
+                  ))}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button className="ap" disabled={busy === 'applyvid'} onClick={applyVideos}>{busy === 'applyvid' ? 'Adding…' : 'Add selected'}</button>
+                    <button className="ap" style={{ background: 'transparent', color: 'var(--muted)' }} onClick={() => setVpreview(null)}>Cancel</button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

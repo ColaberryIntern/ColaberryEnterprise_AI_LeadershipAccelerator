@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { resolveExplorerGrowthFlags } from './explorerGrowthFlags';
 
 dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
@@ -105,6 +106,16 @@ export const env = {
   // Discover its id with `node backend/src/scripts/discoverFamilyCalendar.js`.
   googleFamilyCalendarId: process.env.GOOGLE_FAMILY_CALENDAR_ID || '',
 
+  // Zoom (Server-to-Server OAuth app) — replaces Google Meet as the class
+  // video/recording provider; see zoomService.ts. zoomHostEmail is the Zoom
+  // user every class meeting is created under (the account with Cloud
+  // Recording + auto_recording enabled), not the app's own identity.
+  zoomAccountId: process.env.ZOOM_ACCOUNT_ID || '',
+  zoomClientId: process.env.ZOOM_CLIENT_ID || '',
+  zoomClientSecret: process.env.ZOOM_CLIENT_SECRET || '',
+  zoomWebhookSecretToken: process.env.ZOOM_WEBHOOK_SECRET_TOKEN || '',
+  zoomHostEmail: process.env.ZOOM_HOST_EMAIL || '',
+
   // Feature Flags
   enableVoiceCalls: process.env.ENABLE_VOICE_CALLS === 'true',
   enableVoiceCallForOverview: process.env.ENABLE_VOICE_CALL_FOR_OVERVIEW === 'true',
@@ -114,6 +125,94 @@ export const env = {
   enableVisitorTracking: process.env.ENABLE_VISITOR_TRACKING === 'true',
   visitorSessionTimeoutMinutes: parseInt(process.env.VISITOR_SESSION_TIMEOUT || '30', 10),
   enableChat: process.env.ENABLE_CHAT === 'true',
+  // Explorer Growth OS (docs/EXPLORER_GROWTH_OS_PLAN.md §34). Resolved by the
+  // pure helper rather than inlined here so the nine flags have ONE parse site
+  // and cannot drift between this object and the accessor module. Every flag is
+  // default OFF; sub-flags are subordinate to the master and must be read via
+  // isExplorerFeatureEnabled(), never directly.
+  explorerGrowth: resolveExplorerGrowthFlags(process.env),
+  // Today Timeline v2 — the never-ending engagement feed (Phase 1). Default OFF;
+  // set TODAY_FEED_V2_ENABLED=true to expose GET /api/portal/runtime/today.
+  todayFeedV2Enabled: process.env.TODAY_FEED_V2_ENABLED === 'true',
+  // Project backend v2 — persisted student-projects read API (P1). Default OFF;
+  // set PROJECT_API_ENABLED=true to expose GET /api/portal/projects.
+  projectApiEnabled: process.env.PROJECT_API_ENABLED === 'true',
+  // Student Build Pipeline. SEPARATE from projectApiEnabled deliberately: that
+  // flag is already true in production and shared with projectsPortalRoutes, so
+  // reusing it would make the new pipeline live the moment it deploys and give
+  // no way to turn it off without breaking the existing projects API. Defaults
+  // OFF — deploying changes nothing until this is set.
+  sbpPipelineEnabled: process.env.SBP_PIPELINE_ENABLED === 'true',
+  // Today aggregation — blend Project + Community cards into the Today feed
+  // (Phase 2). Default OFF; the feed stays Class-only until enabled.
+  todayAggregateSources: process.env.TODAY_AGGREGATE_SOURCES === 'true',
+  // Live Sessions Phase 4 — "you missed it" replay cards (a completed session +
+  // AI recap) into the Today feed for absentees. Default OFF; matches the
+  // per-source gating convention of the other aggregated Today sources.
+  todaySessionReplays: process.env.TODAY_SESSION_REPLAYS === 'true',
+  // Feed Control plane — config-driven cadence/providers + rule-based ranker +
+  // per-card/type routing. Default OFF; flag-off keeps the legacy hardcoded
+  // CADENCE=2 + fixed provider list + week→bucket→order behavior byte-identical.
+  feedControlEnabled: process.env.FEED_CONTROL_ENABLED === 'true',
+  // Feed Control type-level suppression — makes a curriculum type's
+  // feed_frequency_cap/feed_cooldown_days (set via the Feed Control board's gear
+  // icon) actually suppress candidates in gatherAnchored()/classCandidates(), for
+  // both weekBound and evergreenByType. Today these fields only affect the admin
+  // simulate() preview, never a real student's feed (see feedTypeExposureService.ts).
+  // Default OFF everywhere including production — flag-off keeps gatherAnchored()
+  // byte-identical to before (see todayAnchoredSources.suppression.test.ts). Not
+  // documented in .env.example, matching the FEED_CONTROL_ENABLED/
+  // CAPE_LEARNING_VALUE_RANKER_ENABLED inline-only convention.
+  feedControlTypeSuppressionEnabled: process.env.FEED_CONTROL_TYPE_SUPPRESSION_ENABLED === 'true',
+  // Today daily auto-refresh — once per Central-time calendar day, a student's
+  // Today feed opportunistically tops up with a small batch of already-generated
+  // content BEFORE serving, instead of only extending when the student scrolls
+  // past everything already materialized (see todayDailyRefreshService.ts). Zero
+  // new generation cost: only surfaces content the intel-pipeline crons already
+  // produced on their own independent, capped daily budget. Default OFF
+  // everywhere including production — flag-off keeps getTodayPage() byte-identical
+  // to before. Not documented in .env.example, matching the FEED_CONTROL_ENABLED/
+  // CAPE_LEARNING_VALUE_RANKER_ENABLED inline-only convention.
+  todayDailyRefreshEnabled: process.env.TODAY_DAILY_REFRESH_ENABLED === 'true',
+  // Bounded top-up size for the above — kept small and tunable so the feature
+  // stays "economical" (Ali's own requirement) without a redeploy to retune it.
+  todayDailyRefreshTopupSize: Number(process.env.TODAY_DAILY_REFRESH_TOPUP_SIZE || 4),
+  // CAPE Phase 4 — the learning-value ranker (design doc §9, §16 Phase 4). Reorders
+  // the ANCHORED candidate queue in todayFeedComposer.ts by an explainable
+  // skill-gap/prerequisite/goal-fit score instead of raw gatherAnchored() order.
+  // Default OFF everywhere including production — flag-off keeps Today feed
+  // ranking byte-identical to pre-Phase-4 behavior (see
+  // todayFeedComposer.capeFlagOff.test.ts). Not documented in .env.example,
+  // matching the established convention for this flag family (FEED_CONTROL_ENABLED/
+  // TODAY_FEED_V2_ENABLED/TODAY_AGGREGATE_SOURCES are likewise inline-only).
+  capeLearningValueRankerEnabled: process.env.CAPE_LEARNING_VALUE_RANKER_ENABLED === 'true',
+  // CAPE Phase 5 — the finite "Today Plan" section, card-treatment chips (Why
+  // this/Level/Proof), learner feedback controls, skill-detail drawer, and
+  // real filter chips (design doc §10, §11, §16 Phase 5). Default OFF
+  // everywhere including production — flag-off keeps the Today page byte-
+  // identical to pre-Phase-5 behavior (see the flag-off regression tests
+  // added for this phase). UNLIKE the Phase 4 ranker flag above, this one IS
+  // documented in .env.example and exposed to the frontend via
+  // portalFlagsService.getPortalFlags() -> GET /api/portal/flags, because it
+  // gates a section students actually see (same convention as
+  // PORTAL_TODAY_REDESIGN_ENABLED), not a silent backend-only reorder.
+  capeTodayPlanEnabled: process.env.CAPE_TODAY_PLAN_ENABLED === 'true',
+  // Content paywall — gate the full 12-week curriculum behind PAYMENT (paid /
+  // admin-comp / staff / business-workspace), not just enrollment_type='explorer'.
+  // Default OFF: flag-off preserves the legacy explorer-only Week-0 gate byte-for-
+  // byte. Flip to true at launch (with the enrollment migration) so enrolled-but-
+  // unpaid members see the free preview until they pay. See
+  // services/access/contentEntitlement.ts.
+  contentPaidGateEnabled: process.env.CONTENT_PAID_GATE_ENABLED === 'true',
+  // Week-start gating — TODAY TIMELINE ONLY (does not affect Classroom): a
+  // curriculum week's cards stay off the Today feed (except that week's own
+  // first/entry card) until the student completes >=1 completable card in that
+  // week. Classroom (`/portal/classroom`, timelineGatingService.evaluateCardLock)
+  // is completely unaffected — this flag is only read inside
+  // todayAnchoredSources.classCandidates. Default OFF: flag-off preserves the
+  // legacy "everything visible" behavior byte-for-byte. See
+  // todayFeedPlan.weekStartedForToday.
+  timelineWeekStartGateEnabled: process.env.TIMELINE_WEEK_START_GATE_ENABLED === 'true',
   enableArtifactGraph: process.env.ENABLE_ARTIFACT_GRAPH !== 'false',
   enableArtifactCompiler: process.env.ENABLE_ARTIFACT_COMPILER !== 'false',
   enableRequirementsMatching: process.env.ENABLE_REQUIREMENTS_MATCHING !== 'false',
@@ -122,6 +221,61 @@ export const env = {
   // feed the top-right HUD total. ON by default; set PORTAL_POINTS_AWARD_ENABLED=false
   // to dark-disable coursework awards (streak + RSVP awards are unaffected).
   portalPointsAwardEnabled: process.env.PORTAL_POINTS_AWARD_ENABLED !== 'false',
+  // Paid/entitlement gate on the build + evidence subsystem (/api/portal/project*).
+  // Free "Explorer" accounts get HTTP 402 with an upgrade payload; paid / comped /
+  // staff / sponsor-seat enrollments pass. Default OFF (inverted vs the points flag
+  // above) so merging/deploying changes NOTHING until BUILD_PAID_GATE_ENABLED=true.
+  buildPaidGateEnabled: process.env.BUILD_PAID_GATE_ENABLED === 'true',
+  // Page-level content paywall — blocks whole pages (Classroom, Projects, Cert
+  // Prep) behind a "preview + upsell" screen for anyone without full curriculum
+  // access (see PageGate.tsx + services/access/contentEntitlement.resolveContentPageAccess).
+  // Deliberately a SEPARATE flag from contentPaidGateEnabled above (which controls
+  // the older week-filtering/card-lock enforcement): different blast radius,
+  // independent rollback. Default OFF — dark-ships with zero behavior change.
+  contentPageGateEnabled: process.env.CONTENT_PAGE_GATE_ENABLED === 'true',
+  // Community level reconcile — fold the legacy CommunityMember.level tiers
+  // (0/1500/2700/4200 in communityService.LEVEL_TIERS) onto the ONE canonical
+  // points ladder (pointsService.levelForPoints, 0/150/400/900). Default OFF:
+  // communityService.levelFor keeps its legacy tiers byte-identical. When ON,
+  // levelFor defers to the canonical ladder, eliminating the A/B threshold
+  // disagreement. Leaderboard ranking is unaffected — it reads the canonical
+  // StudentPointsEvent total, not levelFor.
+  communityLevelUseCanonical: process.env.COMMUNITY_LEVEL_USE_CANONICAL === 'true',
+  // Anti-cheat daily point caps (progression/dailyCap.ts): clamp low-value
+  // ambient-feed completions (AMBIENT_LEARNING_CAP/day) and community
+  // post/comment/like awards (COMMUNITY_CAP/day) so neither category can be
+  // farmed for unbounded points in a single Central day. Default OFF — flag off
+  // is byte-identical to today (no clamping; every award fires at full value).
+  pointsDailyCapsEnabled: process.env.POINTS_DAILY_CAPS_ENABLED === 'true',
+  // Community post-quality gate: withhold a post's +5 creation reward until a
+  // PEER (someone other than the author) likes it, so spam-posting earns
+  // nothing. The +5 is released — idempotently, on the post's own event key —
+  // on the first peer like (see communityService.toggleLike). Default OFF:
+  // posts reward +5 on creation exactly as today.
+  communityPostQualityGateEnabled: process.env.COMMUNITY_POST_QUALITY_GATE_ENABLED === 'true',
+  // Five-band UI — the frontend re-skin to the canonical 5-band ladder (AI Aware →
+  // AI Enabled → AI Builder → AI Architect) as the primary level identity, plus the
+  // free-ceiling "Become an AI Builder" upgrade card. Surfaced to the client in the
+  // GET /api/portal/points response (additive) so the SPA switches at runtime without
+  // a rebuild. Default OFF: flag-off keeps the legacy "Level N · Apprentice/…/Principal"
+  // HUD byte-identical.
+  fiveBandUiEnabled: process.env.FIVE_BAND_UI_ENABLED === 'true',
+  // Role-aware "People" right-rail panel. Staff/admin see cross-cohort presence
+  // (online now) + a classes list + a sponsors/businesses list; students see their
+  // class first, then recently-active people OUTSIDE their cohort. Default OFF:
+  // flag-off makes GET /api/portal/people/panel return { enabled:false } and the rail
+  // keeps its cohort-scoped presence behavior byte-identical (ships dark).
+  peoplePanelRolesEnabled: process.env.PEOPLE_PANEL_ROLES_ENABLED === 'true',
+  // Colaberry Commons — Community Rooms (rooms / bookings / RSVP / live-session
+  // links). Master switch OFF by default: the community-room routes return 404,
+  // the outbox drain cron no-ops, and createSession skips linked-room creation
+  // until COMMUNITY_ROOMS_ENABLED=true is set explicitly in an environment.
+  communityRoomsEnabled: process.env.COMMUNITY_ROOMS_ENABLED === 'true',
+  // Peer Wins — the Cohort Wins grid behind the community_discussion type. ON by
+  // default; set PEER_WINS_ENABLED=false to revert the type to the plain 'community'
+  // reading render (a full-stack kill switch — typeRegistry picks the render_band
+  // from this, and the boot type-seed re-asserts it to the DB).
+  peerWinsEnabled: process.env.PEER_WINS_ENABLED !== 'false',
   chatModel: process.env.CHAT_MODEL || 'gpt-4o-mini',
   chatMaxTokens: parseInt(process.env.CHAT_MAX_TOKENS || '512', 10),
 
@@ -174,4 +328,7 @@ export const env = {
   vaErpModuleConfigJson: process.env.VA_ERP_MODULE_CONFIG || '[]',
   vaErpRequestTimeoutMs: parseInt(process.env.VA_ERP_REQUEST_TIMEOUT_MS || '15000', 10),
   vaErpMaxRetries: parseInt(process.env.VA_ERP_MAX_RETRIES || '3', 10),
+  vaErpRoleAssignmentsJson: process.env.VA_ERP_ROLE_ASSIGNMENTS || '{}',
+  vaErpBatchSize: parseInt(process.env.VA_ERP_BATCH_SIZE || '10', 10),
+  vaErpBatchDelayMs: parseInt(process.env.VA_ERP_BATCH_DELAY_MS || '0', 10),
 };

@@ -1,13 +1,18 @@
 /**
- * Admin-facing community moderation (REQ-C9, BC #10077100017). Separate from
- * communityService.ts (participant-facing actions) — this module is the
- * staff-only surface: review reported posts, remove them. Moderation actions
- * are audited automatically by auditMiddleware on the admin router this is
- * mounted under, not re-implemented here.
+ * Community moderation core (REQ-C9, BC #10077100017; comment removal added
+ * 2026-08-05 for the Community Organizer role). Owns the actual soft-delete
+ * for posts and comments. Two callers reach it: the admin console
+ * (communityModerationRoutes.ts, admin JWT via requireAdmin — reports queue +
+ * post removal, audited by auditMiddleware on that router) and the portal
+ * feed itself (communityService.removePostAsModerator/removeCommentAsModerator,
+ * participant JWT — this is how Owner/Admin/Community Organizer delete
+ * someone else's post/comment right from the Belong feed, per Ali 2026-08-05).
+ * Neither caller re-implements the soft-delete logic here.
  */
 import CommunityPost from '../models/CommunityPost';
 import CommunityPostReport from '../models/CommunityPostReport';
 import CommunityMember from '../models/CommunityMember';
+import CommunityComment from '../models/CommunityComment';
 
 function notFoundError(message: string): Error {
   return Object.assign(new Error(message), { error_class: 'NotFoundError' });
@@ -91,4 +96,31 @@ export async function removePost(adminUserId: string, postId: string): Promise<R
   }
 
   return { post_id: post.id, status: post.status };
+}
+
+export interface RemoveCommentResult {
+  comment_id: string;
+  status: 'visible' | 'removed';
+}
+
+/**
+ * Idempotent — removing an already-removed comment is a no-op that returns
+ * the same end state, not an error. `actorId` is whoever took the action
+ * (an admin User id from the admin console, or a CommunityMember id from a
+ * Community Organizer acting in the portal feed — see
+ * communityService.removeCommentAsModerator) recorded for audit only, no FK.
+ */
+export async function removeComment(actorId: string, commentId: string): Promise<RemoveCommentResult> {
+  const comment = await CommunityComment.findByPk(commentId);
+  if (!comment) {
+    throw notFoundError('Comment not found');
+  }
+
+  if (comment.status !== 'removed') {
+    await comment.update({ status: 'removed', removed_at: new Date(), removed_by: actorId });
+    await CommunityPost.decrement('comment_count', { by: 1, where: { id: comment.post_id } });
+    log('info', 'comment_removed', { comment_id: commentId, actor_id: actorId, outcome: 'success' });
+  }
+
+  return { comment_id: comment.id, status: comment.status };
 }

@@ -12,7 +12,14 @@ function fmt(sec: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
-const OpenOnPhone: React.FC = () => {
+type Props = {
+  /** Icon-only pill (no "Open on your phone" text) — used in tight spaces
+   *  like the scroll-condensed header slot, where the full label doesn't fit
+   *  next to a next-step CTA. */
+  compact?: boolean;
+};
+
+const OpenOnPhone: React.FC<Props> = ({ compact }) => {
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<HandoffCreate | null>(null);
   const [error, setError] = useState('');
@@ -54,9 +61,15 @@ const OpenOnPhone: React.FC = () => {
 
   return (
     <>
-      <button type="button" className="phonebtn" onClick={() => setOpen(true)}>
+      <button
+        type="button"
+        className={`phonebtn${compact ? ' compact' : ''}`}
+        onClick={() => setOpen(true)}
+        aria-label="Open on your phone"
+        title={compact ? 'Open on your phone' : undefined}
+      >
         <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="2" width="10" height="20" rx="2.5" stroke="currentColor" strokeWidth="2" /><path d="M11 18h2" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
-        Open on your phone
+        {!compact && <span className="label-text">Open on your phone</span>}
       </button>
 
       {open && (

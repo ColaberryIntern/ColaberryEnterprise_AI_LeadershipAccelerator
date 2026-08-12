@@ -5,6 +5,7 @@ import PodcastView from './PodcastView';
 import TimelineCardComment from './TimelineCardComment';
 import CardSurveyResponse from './CardSurveyResponse';
 import AssessmentAttempt from './AssessmentAttempt';
+import ReflectionEntry from './ReflectionEntry';
 import AdminUser from './AdminUser';
 import Lead from './Lead';
 import AutomationLog from './AutomationLog';
@@ -40,6 +41,7 @@ import UserCurriculumProfile from './UserCurriculumProfile';
 import SessionGate from './SessionGate';
 import MentorConversation from './MentorConversation';
 import SessionChatMessage from './SessionChatMessage';
+import SessionPulse from './SessionPulse';
 import SkillMastery from './SkillMastery';
 import PromptTemplate from './PromptTemplate';
 import SectionConfig from './SectionConfig';
@@ -94,6 +96,7 @@ import CampaignHealth from './CampaignHealth';
 import CampaignError from './CampaignError';
 import AiSystemEvent from './AiSystemEvent';
 import AiEvent from './AiEvent';
+import DeadLetterJob from './DeadLetterJob';
 import DatasetRegistry from './DatasetRegistry';
 import SystemProcess from './SystemProcess';
 import EntitySummary from './EntitySummary';
@@ -117,6 +120,18 @@ import CallbackRequest from './CallbackRequest';
 import DocumentDeliveryLog from './DocumentDeliveryLog';
 import Ticket from './Ticket';
 import TicketActivity from './TicketActivity';
+import WorkContext from './WorkContext';
+import AgentRun from './AgentRun';
+import WorkLedgerEvent from './WorkLedgerEvent';
+import TicketActionLink from './TicketActionLink';
+import EvidenceArtifact from './EvidenceArtifact';
+import EvidenceLink from './EvidenceLink';
+import DecisionRecord from './DecisionRecord';
+import TicketWorkUnit from './TicketWorkUnit';
+import WorkUnitDependency from './WorkUnitDependency';
+import ResourceLease from './ResourceLease';
+import ApprovalRequest from './ApprovalRequest';
+import OutcomeMeasurement from './OutcomeMeasurement';
 import StudentNavigationEvent from './StudentNavigationEvent';
 import Alert from './Alert';
 import AlertEvent from './AlertEvent';
@@ -154,6 +169,7 @@ import Project from './Project';
 import ProjectArtifact from './ProjectArtifact';
 import ShowcaseArtifact from './ShowcaseArtifact';
 import Artifact from './Artifact';
+import BuildLogDraft from './BuildLogDraft';
 import ProposedAgentAction from './ProposedAgentAction';
 import AgentWriteAudit from './AgentWriteAudit';
 import StrategicInitiative from './StrategicInitiative';
@@ -219,10 +235,19 @@ import InboxStyleProfile from './InboxStyleProfile';
 import InboxLearningEvent from './InboxLearningEvent';
 import InboxDigestLog from './InboxDigestLog';
 import InboxAuditLog from './InboxAuditLog';
+import CoraReplyLog from './CoraReplyLog';
 import InboxOpportunityScore from './InboxOpportunityScore';
 import InboxFalseNegativeFeedback from './InboxFalseNegativeFeedback';
 import InboxSurfacePreference from './InboxSurfacePreference';
 import InboxDeletedEmail from './InboxDeletedEmail';
+
+// Inbox Intel — Case Resolution Engine models
+import InboxCase from './InboxCase';
+import InboxCaseItem from './InboxCaseItem';
+import InboxIdentityAlias from './InboxIdentityAlias';
+import InboxCaseQuestion from './InboxCaseQuestion';
+import InboxCaseAction from './InboxCaseAction';
+import InboxCaseEvent from './InboxCaseEvent';
 
 // --- Universal Lead Ingestion associations ---
 LeadSource.hasMany(EntryPoint, { foreignKey: 'source_id', as: 'entryPoints', onDelete: 'CASCADE' });
@@ -252,6 +277,18 @@ InboxEmail.hasMany(InboxOpportunityScore, { foreignKey: 'email_id', as: 'opportu
 InboxOpportunityScore.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
 InboxEmail.hasMany(InboxFalseNegativeFeedback, { foreignKey: 'email_id', as: 'falseNegativeFeedback' });
 InboxFalseNegativeFeedback.belongsTo(InboxEmail, { foreignKey: 'email_id', as: 'email' });
+
+// --- Inbox Intel — Case Resolution Engine associations ---
+InboxCase.hasMany(InboxCaseItem, { foreignKey: 'case_id', as: 'items' });
+InboxCaseItem.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCaseQuestion, { foreignKey: 'case_id', as: 'questions' });
+InboxCaseQuestion.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCase.hasMany(InboxCaseAction, { foreignKey: 'case_id', as: 'actions' });
+InboxCaseAction.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
+InboxCaseItem.hasMany(InboxCaseAction, { foreignKey: 'item_id', as: 'actions' });
+InboxCaseAction.belongsTo(InboxCaseItem, { foreignKey: 'item_id', as: 'item' });
+InboxCase.hasMany(InboxCaseEvent, { foreignKey: 'case_id', as: 'events' });
+InboxCaseEvent.belongsTo(InboxCase, { foreignKey: 'case_id', as: 'case' });
 
 // --- Preview Stack associations ---
 Project.hasOne(PreviewStack, { foreignKey: 'project_id', as: 'previewStack' });
@@ -283,6 +320,8 @@ import CurriculumCourseLink from './CurriculumCourseLink';
 import StudentTaskList from './StudentTaskList';
 import StudentTask from './StudentTask';
 import StudentPointsEvent from './StudentPointsEvent';
+import FriendReferral from './FriendReferral';
+import SponsorPortalAuditLog from './SponsorPortalAuditLog';
 import OpenHouseEvent from './OpenHouseEvent';
 import OnboardingProfile from './OnboardingProfile';
 import Subscription from './Subscription';
@@ -303,11 +342,29 @@ import CommunityLike from './CommunityLike';
 import CommunityPostReport from './CommunityPostReport';
 import CommunityLeaderboardEntry from './CommunityLeaderboardEntry';
 import CommunityPointsEvent from './CommunityPointsEvent';
+import CommunityNotification from './CommunityNotification';
+import CommunityDigestLog from './CommunityDigestLog';
 import CommunityEvent from './CommunityEvent';
+
+// Colaberry Commons — Community Rooms layer (rooms/bookings/rsvp/messages/outbox)
+import CommunityRoom from './CommunityRoom';
+import RoomMembership from './RoomMembership';
+import Friendship from './Friendship'; // portal Contacts rail friend graph
+import RoomBooking from './RoomBooking';
+import RoomBookingAttendee from './RoomBookingAttendee';
+import RoomMessage from './RoomMessage';
+import RoomResource from './RoomResource';
+import RoomOutboxEvent from './RoomOutboxEvent';
+import RoomReport from './RoomReport';
+import RoomPresence from './RoomPresence';
+import ContributionEvent from './ContributionEvent';
 
 // One Class, Many Doors — Employer Sponsorship (Door B) + Challenge/Leaderboard
 import Sponsor from './Sponsor';
 import SponsorSeat from './SponsorSeat';
+// Free-trial Organization / Manager layer (dual account + team roster).
+import Organization from './Organization';
+import OrgMember from './OrgMember';
 import Challenge from './Challenge';
 import ChallengeParticipant from './ChallengeParticipant';
 import LeaderboardScore from './LeaderboardScore';
@@ -324,6 +381,29 @@ import BuilderLevel from './BuilderLevel';
 import StudentLevel from './StudentLevel';
 import ComponentVersion from './ComponentVersion';   // Experience Builder (Phase 1)
 import ComponentAnalytics from './ComponentAnalytics';
+
+// CAPE — Colaberry Adaptive Path Engine (Phase 0-1: skill ontology + evidence ledger)
+import ArchitectureSkillDefinition from './ArchitectureSkillDefinition';
+import ArchitectureSkillEvidenceBandWeights from './ArchitectureSkillEvidenceBandWeights';
+import StudentSkillEvidence from './StudentSkillEvidence';
+import StudentArchitectureSkill from './StudentArchitectureSkill';
+// CAPE Phase 2: resume/LinkedIn placement + adaptive diagnostic
+import ResumeSkillClaim from './ResumeSkillClaim';
+import DiagnosticAttempt from './DiagnosticAttempt';
+// CAPE Phase 3: curriculum-to-skill mapping
+import CurriculumSkillMap from './CurriculumSkillMap';
+import ArchitectureSkillPrerequisite from './ArchitectureSkillPrerequisite';
+// CAPE Phase 5: Today Plan learner feedback controls
+import TodayPlanFeedback from './TodayPlanFeedback';
+// CAPE Phase 6: Feed Control governance board (rerank caps, pacing knobs, lifecycle mixes)
+import CapeGovernancePolicy from './CapeGovernancePolicy';
+import CapeLifecycleModePolicy from './CapeLifecycleModePolicy';
+// --- Explorer Growth OS (docs/EXPLORER_GROWTH_OS_PLAN.md EPIC 1) ---
+import ExplorerJourneyProfile from './ExplorerJourneyProfile';
+import ExplorerJourneyDecision from './ExplorerJourneyDecision';
+import ExplorerScoreSnapshot from './ExplorerScoreSnapshot';
+import ExplorerExperimentAssignment from './ExplorerExperimentAssignment';
+import ExplorerContentAsset from './ExplorerContentAsset';
 
 // Associations
 Cohort.hasMany(Enrollment, { foreignKey: 'cohort_id', as: 'enrollments' });
@@ -716,6 +796,70 @@ TicketActivity.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
 Ticket.hasMany(Ticket, { foreignKey: 'parent_ticket_id', as: 'subTasks' });
 Ticket.belongsTo(Ticket, { foreignKey: 'parent_ticket_id', as: 'parentTicket' });
 
+// --- ProofDesk Work Ledger associations (Milestone 1 - Foundation, shadow mode) ---
+Ticket.hasMany(WorkContext, { foreignKey: 'ticket_id', as: 'workContexts' });
+WorkContext.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(AgentRun, { foreignKey: 'ticket_id', as: 'agentRuns' });
+AgentRun.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkContext.hasMany(AgentRun, { foreignKey: 'work_context_id', as: 'agentRuns' });
+AgentRun.belongsTo(WorkContext, { foreignKey: 'work_context_id', as: 'workContext' });
+
+Ticket.hasMany(WorkLedgerEvent, { foreignKey: 'ticket_id', as: 'workLedgerEvents' });
+WorkLedgerEvent.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+AgentRun.hasMany(WorkLedgerEvent, { foreignKey: 'run_id', as: 'events' });
+WorkLedgerEvent.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+
+Ticket.hasMany(TicketActionLink, { foreignKey: 'ticket_id', as: 'actionLinks' });
+TicketActionLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkLedgerEvent.hasMany(TicketActionLink, { foreignKey: 'event_id', as: 'ticketLinks' });
+TicketActionLink.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+
+// --- ProofDesk Evidence associations (Milestone 2 - Proof & Ticket Experience) ---
+Ticket.hasMany(EvidenceArtifact, { foreignKey: 'ticket_id', as: 'evidenceArtifacts' });
+EvidenceArtifact.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkLedgerEvent.hasMany(EvidenceArtifact, { foreignKey: 'source_event_id', as: 'evidenceArtifacts' });
+EvidenceArtifact.belongsTo(WorkLedgerEvent, { foreignKey: 'source_event_id', as: 'sourceEvent' });
+
+EvidenceArtifact.hasMany(EvidenceLink, { foreignKey: 'evidence_id', as: 'links' });
+EvidenceLink.belongsTo(EvidenceArtifact, { foreignKey: 'evidence_id', as: 'evidence' });
+Ticket.hasMany(EvidenceLink, { foreignKey: 'ticket_id', as: 'evidenceLinks' });
+EvidenceLink.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+Ticket.hasMany(DecisionRecord, { foreignKey: 'ticket_id', as: 'decisionRecords' });
+DecisionRecord.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
+// ProofDesk Work Graph (Milestone 3 - Multi-Agent Work Graph) associations.
+Ticket.hasMany(TicketWorkUnit, { foreignKey: 'ticket_id', as: 'workUnits' });
+TicketWorkUnit.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+WorkContext.hasMany(TicketWorkUnit, { foreignKey: 'work_context_id', as: 'workUnits' });
+TicketWorkUnit.belongsTo(WorkContext, { foreignKey: 'work_context_id', as: 'workContext' });
+AgentRun.hasMany(TicketWorkUnit, { foreignKey: 'assigned_run_id', as: 'assignedWorkUnits' });
+TicketWorkUnit.belongsTo(AgentRun, { foreignKey: 'assigned_run_id', as: 'assignedRun' });
+
+TicketWorkUnit.hasMany(WorkUnitDependency, { foreignKey: 'work_unit_id', as: 'dependencies' });
+WorkUnitDependency.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+TicketWorkUnit.hasMany(WorkUnitDependency, { foreignKey: 'depends_on_work_unit_id', as: 'dependents' });
+WorkUnitDependency.belongsTo(TicketWorkUnit, { foreignKey: 'depends_on_work_unit_id', as: 'dependsOnWorkUnit' });
+
+TicketWorkUnit.hasMany(ResourceLease, { foreignKey: 'work_unit_id', as: 'leases' });
+ResourceLease.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+AgentRun.hasMany(ResourceLease, { foreignKey: 'run_id', as: 'leases' });
+ResourceLease.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+
+// ProofDesk Governance (Milestone 4 - shadow mode) associations.
+Ticket.hasMany(ApprovalRequest, { foreignKey: 'ticket_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+TicketWorkUnit.hasMany(ApprovalRequest, { foreignKey: 'work_unit_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(TicketWorkUnit, { foreignKey: 'work_unit_id', as: 'workUnit' });
+AgentRun.hasMany(ApprovalRequest, { foreignKey: 'run_id', as: 'approvalRequests' });
+ApprovalRequest.belongsTo(AgentRun, { foreignKey: 'run_id', as: 'run' });
+WorkLedgerEvent.hasOne(ApprovalRequest, { foreignKey: 'event_id', as: 'approvalRequest' });
+ApprovalRequest.belongsTo(WorkLedgerEvent, { foreignKey: 'event_id', as: 'event' });
+// ProofDesk Milestone 5 (Outcomes & Learning)
+Ticket.hasMany(OutcomeMeasurement, { foreignKey: 'ticket_id', as: 'outcomeMeasurements' });
+OutcomeMeasurement.belongsTo(Ticket, { foreignKey: 'ticket_id', as: 'ticket' });
+
 // --- Alert Intelligence Layer associations ---
 Alert.hasMany(AlertEvent, { foreignKey: 'alert_id', as: 'events' });
 AlertEvent.belongsTo(Alert, { foreignKey: 'alert_id', as: 'alert' });
@@ -755,6 +899,11 @@ ShowcaseArtifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' })
 
 Project.hasMany(Artifact, { foreignKey: 'project_id', as: 'artifacts', onDelete: 'CASCADE' });
 Artifact.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+
+Project.hasMany(BuildLogDraft, { foreignKey: 'project_id', as: 'buildLogDrafts', onDelete: 'CASCADE' });
+BuildLogDraft.belongsTo(Project, { foreignKey: 'project_id', as: 'project' });
+Artifact.hasOne(BuildLogDraft, { foreignKey: 'source_artifact_id', as: 'buildLogDraft' });
+BuildLogDraft.belongsTo(Artifact, { foreignKey: 'source_artifact_id', as: 'sourceArtifact' });
 
 ArtifactDefinition.hasMany(ProjectArtifact, { foreignKey: 'artifact_definition_id', as: 'projectArtifacts' });
 ProjectArtifact.belongsTo(ArtifactDefinition, { foreignKey: 'artifact_definition_id', as: 'artifactDefinition' });
@@ -926,6 +1075,8 @@ RequirementsMap.hasMany(StudentTask, { foreignKey: 'requirement_map_id', as: 'st
 StudentTask.belongsTo(RequirementsMap, { foreignKey: 'requirement_map_id', as: 'requirementMap' });
 Enrollment.hasMany(StudentPointsEvent, { foreignKey: 'enrollment_id', as: 'pointsEvents', onDelete: 'CASCADE' });
 StudentPointsEvent.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(FriendReferral, { foreignKey: 'enrollment_id', as: 'friendReferrals', onDelete: 'CASCADE' });
+FriendReferral.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 // Self-serve subscriptions (student billing).
 Enrollment.hasMany(Subscription, { foreignKey: 'enrollment_id', as: 'subscriptions', onDelete: 'CASCADE' });
@@ -984,8 +1135,20 @@ ChallengeParticipant.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'e
 ChallengeParticipant.hasOne(LeaderboardScore, { foreignKey: 'challenge_participant_id', as: 'score', onDelete: 'CASCADE' });
 LeaderboardScore.belongsTo(ChallengeParticipant, { foreignKey: 'challenge_participant_id', as: 'participant' });
 
+// --- Free-trial Organization / Manager associations ---
+// An Organization owns a roster of OrgMembers; each member links (nullable) to
+// the teammate's free student enrollment so metrics roll up over the real ledgers.
+Organization.hasMany(OrgMember, { foreignKey: 'org_id', as: 'members', onDelete: 'CASCADE' });
+OrgMember.belongsTo(Organization, { foreignKey: 'org_id', as: 'organization' });
+
+Organization.belongsTo(Enrollment, { foreignKey: 'owner_enrollment_id', as: 'owner', onDelete: 'CASCADE' });
+Enrollment.hasMany(Organization, { foreignKey: 'owner_enrollment_id', as: 'ownedOrganizations' });
+
+OrgMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment', onDelete: 'SET NULL' });
+Enrollment.hasMany(OrgMember, { foreignKey: 'enrollment_id', as: 'orgMemberships' });
+
 export {
-  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, AdminUser, Lead, AutomationLog,
+  Cohort, Enrollment, Podcast, PodcastView, TimelineCardComment, CardSurveyResponse, AssessmentAttempt, ReflectionEntry, AdminUser, Lead, AutomationLog,
   Activity, Appointment, FollowUpSequence, ScheduledEmail,
   SystemSetting, EventLedger, Campaign, CampaignLead,
   InteractionOutcome, ICPInsight, LeadTemperatureHistory,
@@ -999,6 +1162,7 @@ export {
   CurriculumModule, CurriculumLesson, LessonInstance,
   UserCurriculumProfile, SessionGate, MentorConversation,
   SessionChatMessage,
+  SessionPulse,
   SkillMastery,
   PromptTemplate,
   SectionConfig,
@@ -1017,6 +1181,7 @@ export {
   AiAgent,
   AiAgentActivityLog,
   AiEvent,
+  DeadLetterJob,
   CampaignHealth,
   CampaignError,
   AiSystemEvent,
@@ -1046,6 +1211,23 @@ export {
   DocumentDeliveryLog,
   Ticket,
   TicketActivity,
+  WorkContext,
+  AgentRun,
+  WorkLedgerEvent,
+  TicketActionLink,
+  EvidenceArtifact,
+  EvidenceLink,
+  DecisionRecord,
+  TicketWorkUnit,
+  ExplorerJourneyProfile,
+  ExplorerJourneyDecision,
+  ExplorerScoreSnapshot,
+  ExplorerExperimentAssignment,
+  ExplorerContentAsset,
+  WorkUnitDependency,
+  ResourceLease,
+  ApprovalRequest,
+  OutcomeMeasurement,
   StudentNavigationEvent,
   Alert,
   AlertEvent,
@@ -1083,6 +1265,7 @@ export {
   ProjectArtifact,
   ShowcaseArtifact,
   Artifact,
+  BuildLogDraft,
   ProposedAgentAction,
   AgentWriteAudit,
   StrategicInitiative,
@@ -1125,10 +1308,17 @@ export {
   InboxLearningEvent,
   InboxDigestLog,
   InboxAuditLog,
+  CoraReplyLog,
   InboxOpportunityScore,
   InboxFalseNegativeFeedback,
   InboxSurfacePreference,
   InboxDeletedEmail,
+  InboxCase,
+  InboxCaseItem,
+  InboxIdentityAlias,
+  InboxCaseQuestion,
+  InboxCaseAction,
+  InboxCaseEvent,
   LeadSource,
   EntryPoint,
   FormDefinition,
@@ -1190,6 +1380,9 @@ export {
   Challenge,
   ChallengeParticipant,
   LeaderboardScore,
+  // Free-trial Organization / Manager layer
+  Organization,
+  OrgMember,
   // Curriculum + enrollment + Skilljar sync (from main)
   CurriculumCourseLink,
   EnrollmentLead,
@@ -1208,8 +1401,23 @@ export {
   CommunityPostReport,
   CommunityLeaderboardEntry,
   CommunityPointsEvent,
+  CommunityNotification,
+  CommunityDigestLog,
   CommunityEvent,
+  // Colaberry Commons — Community Rooms layer
+  CommunityRoom,
+  RoomMembership,
+  RoomBooking,
+  RoomBookingAttendee,
+  RoomMessage,
+  RoomResource,
+  RoomOutboxEvent,
+  RoomReport,
+  RoomPresence,
+  ContributionEvent,
   StudentPointsEvent,
+  FriendReferral,
+  SponsorPortalAuditLog,
   OpenHouseEvent,
   OnboardingProfile,
   Subscription,
@@ -1221,6 +1429,22 @@ export {
   // Experience Builder (Phase 1)
   ComponentVersion,
   ComponentAnalytics,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 0-1)
+  ArchitectureSkillDefinition,
+  ArchitectureSkillEvidenceBandWeights,
+  StudentSkillEvidence,
+  StudentArchitectureSkill,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 2: resume placement + diagnostic)
+  ResumeSkillClaim,
+  DiagnosticAttempt,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 3: curriculum-to-skill mapping)
+  CurriculumSkillMap,
+  ArchitectureSkillPrerequisite,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 5: Today Plan learner feedback)
+  TodayPlanFeedback,
+  // CAPE — Colaberry Adaptive Path Engine (Phase 6: Feed Control governance board)
+  CapeGovernancePolicy,
+  CapeLifecycleModePolicy,
 };
 
 // --- Enrollment Lead associations ---
@@ -1274,6 +1498,12 @@ CoraKbEntry.belongsTo(ResponsiblePerson, { foreignKey: 'primary_person_id', as: 
 
 // --- Community + Gamification associations (Epic 4) ---
 Enrollment.hasOne(CommunityMember, { foreignKey: 'enrollment_id', as: 'communityMember' });
+// Friendships — two FKs to Enrollment (requester + addressee), aliased both ways.
+// The service queries Friendship directly (no includes); these register the graph.
+Enrollment.hasMany(Friendship, { foreignKey: 'requester_id', as: 'sentFriendRequests' });
+Enrollment.hasMany(Friendship, { foreignKey: 'addressee_id', as: 'receivedFriendRequests' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'requester_id', as: 'requester' });
+Friendship.belongsTo(Enrollment, { foreignKey: 'addressee_id', as: 'addressee' });
 CommunityMember.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 
 Cohort.hasMany(CommunityPost, { foreignKey: 'cohort_id', as: 'communityPosts' });
@@ -1306,8 +1536,37 @@ CommunityLeaderboardEntry.belongsTo(CommunityMember, { foreignKey: 'member_id', 
 CommunityMember.hasMany(CommunityPointsEvent, { foreignKey: 'member_id', as: 'pointsEvents' });
 CommunityPointsEvent.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
 
+CommunityMember.hasMany(CommunityNotification, { foreignKey: 'member_id', as: 'notifications' });
+CommunityNotification.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+CommunityNotification.belongsTo(CommunityMember, { foreignKey: 'actor_member_id', as: 'actor' });
+
+CommunityMember.hasMany(CommunityDigestLog, { foreignKey: 'member_id', as: 'digestLogs' });
+CommunityDigestLog.belongsTo(CommunityMember, { foreignKey: 'member_id', as: 'member' });
+
 Cohort.hasMany(CommunityEvent, { foreignKey: 'cohort_id', as: 'communityEvents' });
 CommunityEvent.belongsTo(Cohort, { foreignKey: 'cohort_id', as: 'cohort' });
+
+// --- Colaberry Commons — Community Rooms associations ---
+Cohort.hasMany(CommunityRoom, { foreignKey: 'linked_cohort_id', as: 'communityRooms' });
+CommunityRoom.belongsTo(Cohort, { foreignKey: 'linked_cohort_id', as: 'linkedCohort' });
+
+LiveSession.hasOne(CommunityRoom, { foreignKey: 'linked_live_session_id', as: 'communityRoom' });
+CommunityRoom.belongsTo(LiveSession, { foreignKey: 'linked_live_session_id', as: 'liveSession' });
+
+CommunityRoom.hasMany(RoomMembership, { foreignKey: 'room_id', as: 'memberships', onDelete: 'CASCADE' });
+RoomMembership.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+CommunityRoom.hasMany(RoomBooking, { foreignKey: 'room_id', as: 'bookings', onDelete: 'CASCADE' });
+RoomBooking.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+RoomBooking.hasMany(RoomBookingAttendee, { foreignKey: 'booking_id', as: 'attendees', onDelete: 'CASCADE' });
+RoomBookingAttendee.belongsTo(RoomBooking, { foreignKey: 'booking_id', as: 'booking' });
+
+CommunityRoom.hasMany(RoomMessage, { foreignKey: 'room_id', as: 'messages', onDelete: 'CASCADE' });
+RoomMessage.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
+
+CommunityRoom.hasMany(RoomResource, { foreignKey: 'room_id', as: 'resources', onDelete: 'CASCADE' });
+RoomResource.belongsTo(CommunityRoom, { foreignKey: 'room_id', as: 'room' });
 
 // --- Timeline Engine associations (Classroom rebuild) ---
 TimelineCard.hasMany(TimelineCardProgress, { foreignKey: 'card_id', as: 'progress', onDelete: 'CASCADE' });
@@ -1316,3 +1575,57 @@ Enrollment.hasMany(TimelineCardProgress, { foreignKey: 'enrollment_id', as: 'tim
 TimelineCardProgress.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
 TimelineEvent.hasMany(TimelineCard, { foreignKey: 'event_id', as: 'cards' });
 TimelineCard.belongsTo(TimelineEvent, { foreignKey: 'event_id', as: 'event' });
+
+// --- CAPE (Colaberry Adaptive Path Engine) associations — Phase 0-1 ---
+// Additive only: parallel to, and independent of, the XpEvent/EvidenceRecord/
+// StudentCompetency promotion graph above. See ensureCapeSchema.ts.
+Enrollment.hasMany(StudentSkillEvidence, { foreignKey: 'enrollment_id', as: 'capeSkillEvidence' });
+StudentSkillEvidence.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(StudentArchitectureSkill, { foreignKey: 'enrollment_id', as: 'capeArchitectureSkills' });
+StudentArchitectureSkill.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 2 (resume placement + adaptive diagnostic) ---
+// Additive only; parallel to the verified ledger above. See
+// ensureCapePlacementSchema.ts. Neither table is ever joined against
+// student_skill_evidence/student_architecture_skill in application code —
+// capePlacementService.ts reads both independently and writes only
+// placement_score.
+Enrollment.hasMany(ResumeSkillClaim, { foreignKey: 'enrollment_id', as: 'resumeSkillClaims' });
+ResumeSkillClaim.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+Enrollment.hasMany(DiagnosticAttempt, { foreignKey: 'enrollment_id', as: 'diagnosticAttempts' });
+DiagnosticAttempt.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- CAPE associations — Phase 3 (curriculum-to-skill mapping) ---
+// A card-scoped curriculum_skill_maps row references the TimelineCard it overrides.
+// Type-scoped and week-scoped rows have card_id:null and are not FK-joined to any
+// card — they resolve by (type_slug) / (week_number) directly, not via association.
+TimelineCard.hasMany(CurriculumSkillMap, { foreignKey: 'card_id', as: 'skillMapOverrides' });
+CurriculumSkillMap.belongsTo(TimelineCard, { foreignKey: 'card_id', as: 'card' });
+
+Enrollment.hasMany(TodayPlanFeedback, { foreignKey: 'enrollment_id', as: 'todayPlanFeedback' });
+TodayPlanFeedback.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// --- Explorer Growth OS associations (EPIC 1) ---
+// Additive only. Nothing outside the explorerGrowth services reads these tables.
+// hasOne (not hasMany) for the profile: exactly one per learner, enforced by the
+// table's PK being enrollment_id itself.
+Enrollment.hasOne(ExplorerJourneyProfile, { foreignKey: 'enrollment_id', as: 'explorerProfile' });
+ExplorerJourneyProfile.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+// The identity bridge: a profile points at the CRM lead it resolved to. Nullable —
+// an unresolved learner is a reportable condition, not an error.
+ExplorerJourneyProfile.belongsTo(Lead, { foreignKey: 'lead_id', as: 'lead' });
+Lead.hasOne(ExplorerJourneyProfile, { foreignKey: 'lead_id', as: 'explorerProfile' });
+
+Enrollment.hasMany(ExplorerJourneyDecision, { foreignKey: 'enrollment_id', as: 'explorerDecisions' });
+ExplorerJourneyDecision.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(ExplorerScoreSnapshot, { foreignKey: 'enrollment_id', as: 'explorerScoreSnapshots' });
+ExplorerScoreSnapshot.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+Enrollment.hasMany(ExplorerExperimentAssignment, { foreignKey: 'enrollment_id', as: 'explorerExperimentAssignments' });
+ExplorerExperimentAssignment.belongsTo(Enrollment, { foreignKey: 'enrollment_id', as: 'enrollment' });
+
+// ExplorerContentAsset intentionally has NO association: it is an INDEX over other
+// systems (network_videos, blog_posts, cohorts, ...) keyed by (source_system,
+// source_id), not a FK-joined entity. Associating it would imply a referential
+// integrity this table deliberately does not have.

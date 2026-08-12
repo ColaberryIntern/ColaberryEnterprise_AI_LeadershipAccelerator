@@ -8,7 +8,7 @@
 // Failure-first: validation is pure + total (no throw) and returns a typed
 // error the caller maps to a 400; only genuine DB faults bubble to a 500.
 
-import { Enrollment, OnboardingProfile, Cohort } from '../models';
+import { Enrollment, OnboardingProfile, Cohort, Organization, OrgMember } from '../models';
 
 // ── Caps + allow-lists ───────────────────────────────────────────────────────
 
@@ -55,6 +55,8 @@ export interface SettingsView {
     status: string;
     cohort_name: string | null;
     member_since: Date | null;
+    is_org_manager: boolean;
+    org: { id: string; name: string } | null;
   };
   profile: {
     title: string | null;
@@ -182,6 +184,21 @@ function readIntakeViews(intakeRaw: unknown): Pick<SettingsView, 'personalizatio
 
 // ── Reads ────────────────────────────────────────────────────────────────────
 
+/** The organization this enrollment manages (owner OR role='manager'), or null.
+ *  Mirrors requireOrgManager's resolution so the Settings account block and the
+ *  org routes agree on who is a manager. */
+async function resolveManagedOrg(enrollmentId: string): Promise<{ id: string; name: string } | null> {
+  let org: any = await Organization.findOne({
+    where: { owner_enrollment_id: enrollmentId },
+    order: [['created_at', 'ASC']],
+  });
+  if (!org) {
+    const membership: any = await OrgMember.findOne({ where: { enrollment_id: enrollmentId, role: 'manager' } });
+    if (membership) org = await Organization.findByPk(membership.org_id);
+  }
+  return org ? { id: org.id, name: org.name } : null;
+}
+
 export async function getSettings(enrollmentId: string): Promise<SettingsView | null> {
   const e: any = await Enrollment.findByPk(enrollmentId, {
     include: [
@@ -191,6 +208,7 @@ export async function getSettings(enrollmentId: string): Promise<SettingsView | 
   });
   if (!e) return null;
   const op = e.onboardingProfile || null;
+  const managedOrg = await resolveManagedOrg(enrollmentId);
   return {
     account: {
       id: e.id,
@@ -201,6 +219,8 @@ export async function getSettings(enrollmentId: string): Promise<SettingsView | 
       status: e.status || 'active',
       cohort_name: e.cohort?.name ?? null,
       member_since: e.created_at ?? null,
+      is_org_manager: managedOrg !== null,
+      org: managedOrg,
     },
     profile: {
       title: e.title || null,
@@ -304,6 +324,17 @@ export async function setResume(
     if (text && text.trim().length > 40) await ingestResumeFileText(enrollmentId, text);
   } catch (err: any) {
     console.warn('[Settings] resume parse (non-fatal):', err?.message);
+  }
+
+  // Award the one-time "profile set up" points (+25) for uploading a resume /
+  // LinkedIn PDF — this is the "Upload your resume" setup step. Idempotent per
+  // enrollment (event_key 'profile_completed'), so re-uploading never re-awards.
+  // Best-effort: a points failure must never fail the upload.
+  try {
+    const { award } = await import('./pointsService');
+    await award(enrollmentId, { eventType: 'profile_completed' });
+  } catch (err: any) {
+    console.warn('[Settings] resume points award (non-fatal):', err?.message);
   }
 
   return getSettings(enrollmentId);

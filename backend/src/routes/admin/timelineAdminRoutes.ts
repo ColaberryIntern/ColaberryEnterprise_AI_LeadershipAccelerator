@@ -8,7 +8,7 @@ import {
   handleListTimeline, handleCreateCard, handleUpdateCard,
   handleDeleteCard, handleReorderCards, handleCloneCard, handleGenerateCardContent,
   handleGenerateVideoDraft, handleGenerateCourseDraft, handleGetBlueprintContext,
-  handleGetSectionRules, handleSetSectionRule,
+  handleGetSectionRules, handleSetSectionRule, handleGetWorkspacePreviewUrl,
 } from '../../controllers/timelineAdminController';
 
 const router = Router();
@@ -31,5 +31,7 @@ router.post('/api/admin/orchestration/timeline/generate-course-draft', requireAd
 router.post('/api/admin/orchestration/timeline/cards/:id/generate', requireAdmin, handleGenerateCardContent);
 router.put('/api/admin/orchestration/timeline/cards/:id', requireAdmin, handleUpdateCard);
 router.delete('/api/admin/orchestration/timeline/cards/:id', requireAdmin, handleDeleteCard);
+// Read-only "open the workspace" deep-link for one published card.
+router.get('/api/admin/orchestration/timeline/cards/:cardId/workspace-preview-url', requireAdmin, handleGetWorkspacePreviewUrl);
 
 export default router;

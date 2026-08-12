@@ -337,18 +337,18 @@ function ExecutiveROICalculatorPage() {
       {/* CLOSING */}
       <section className="cbroi-sec" style={{ background: 'var(--surface-subtle)' }}>
         <div className="cbroi-wrap cbroi-closing">
-          <div className="cbroi-eyebrow">Pick Your Door</div>
-          <h2 className="cb-balance cbroi-mt4">Sponsor your team — or join the Challenge yourself.</h2>
+          <div className="cbroi-eyebrow">Start Free</div>
+          <h2 className="cb-balance cbroi-mt4">See it for yourself, then sponsor your team.</h2>
           <p className="cbroi-lead">
-            Sponsor a seat block to discover the AI builders already inside your company, or join the same class
-            as an individual. One program, two doors, one leaderboard.
+            Start free and explore the whole platform yourself, as both the learner and the admin. When you are
+            ready, sponsor a seat block and discover the AI builders already inside your company.
           </p>
           <div className="cbroi-closing-cta">
-            <CtaButton to="/sponsorship" size="lg" trailingIcon={<span aria-hidden>→</span>}>
-              Sponsor Your Team
+            <CtaButton to="/try" size="lg" data-track="roi_final_start_free" trailingIcon={<span aria-hidden>→</span>}>
+              Start free
             </CtaButton>
-            <CtaButton to="/enroll" size="lg" variant="outline">
-              Join the Challenge
+            <CtaButton to="/contact" size="lg" variant="outline" data-track="roi_final_book_walkthrough">
+              Book a walkthrough
             </CtaButton>
           </div>
         </div>

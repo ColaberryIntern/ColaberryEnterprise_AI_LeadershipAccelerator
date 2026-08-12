@@ -141,9 +141,20 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
 
   // --- 0b. Cora support inbox → route to Cora auto-reply agent ---
   // Emails delivered to support@colaberry.com are forwarded to Ali's Gmail.
-  // We detect them by checking To/Cc/Delivered-To/X-Original-To headers.
+  // We detect them by checking To/Cc/Delivered-To/X-Original-To headers ONLY.
   // Classified AUTOMATION so they're archived after Cora sends the reply.
   // The inboxStateManager dispatches to coraAgentService before archiving.
+  //
+  // 2026-07-14 mail-loop incident (BC #10095332194): this used to also
+  // substring-match support@colaberry.com against a blob of EVERY header
+  // joined together. Cora's own outgoing replies carry
+  // `From: Cora (Colaberry Enterprise AI) <support@colaberry.com>` — that
+  // header alone satisfied the old check, so once her reply landed back in
+  // the synced mailbox (see inboxSyncService's Sent-folder exclusion fix),
+  // she matched her own rule and replied to herself, forever. Fixed by (a)
+  // checking only the headers that legitimately indicate delivery TO
+  // support@ (never From/Reply-To/anything else), and (b) an explicit guard
+  // that a message FROM Cora's own sending address can never match.
   const coraSupportAddress = (process.env.CORA_SUPPORT_ADDRESS || 'support@colaberry.com').toLowerCase();
   const toAddrs = (email.to_addresses || []).map((a: any) =>
     (typeof a === 'string' ? a : a?.email || a?.address || '').toLowerCase()
@@ -151,13 +162,23 @@ export async function evaluateHardRules(email: NormalizedEmail): Promise<HardRul
   const ccAddrs2 = (email.cc_addresses || []).map((a: any) =>
     (typeof a === 'string' ? a : a?.email || a?.address || '').toLowerCase()
   );
-  const headerBlock = Object.entries(headers)
-    .map(([k, v]) => `${k.toLowerCase()}: ${String(v).toLowerCase()}`)
-    .join('\n');
+  const deliveredToHeader = String(
+    headers['delivered-to'] ?? headers['Delivered-To'] ?? ''
+  ).toLowerCase();
+  const originalToHeader = String(
+    headers['x-original-to'] ?? headers['X-Original-To'] ?? ''
+  ).toLowerCase();
+  const isFromCoraHerself = fromLower === coraSupportAddress;
   const isCoraInquiry =
-    toAddrs.includes(coraSupportAddress) ||
-    ccAddrs2.includes(coraSupportAddress) ||
-    headerBlock.includes(coraSupportAddress);
+    !isFromCoraHerself &&
+    (toAddrs.includes(coraSupportAddress) ||
+      ccAddrs2.includes(coraSupportAddress) ||
+      deliveredToHeader.includes(coraSupportAddress) ||
+      originalToHeader.includes(coraSupportAddress));
+
+  if (isFromCoraHerself) {
+    console.log(`${LOG_PREFIX} Skipping self-sent Cora message ${email.id} (from=${coraSupportAddress}) — loop guard`);
+  }
 
   if (isCoraInquiry) {
     const reason = `Cora support inquiry — recipient is ${coraSupportAddress}`;

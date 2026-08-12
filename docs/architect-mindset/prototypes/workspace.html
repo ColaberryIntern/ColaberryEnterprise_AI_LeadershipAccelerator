@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architect Time Machine — Full Workspace (Design 3)</title>
+<style>
+  :root{
+    --berry:#367895; --berry-hover:#2E6A86; --cherry:#FB2832; --cherry-deep:#c81e26;
+    --leaf:#5BA63C; --leaf-soft:#eef5ef; --amber:#E8920C;
+    --page:#FFFFFF; --subtle:#F8F8F7; --sunken:#F1F1F0;
+    --strong:#1A1A1A; --body:#2B2B2B; --muted:#6B6B6B; --line:#D8D8D8; --line2:#E4E4E3;
+    --sans:'Roboto','Segoe UI',system-ui,sans-serif; --mono:'Roboto Mono',ui-monospace,monospace;
+    --ease:cubic-bezier(.22,1,.36,1);
+    /* the dark cinematic stage (always dark, framed by the light chrome) */
+    --stage1:#0e1a20; --stage2:#12303c; --stagink:#e7eef1; --stagsub:#9fbcc7;
+  }
+  html[data-theme="dark"]{
+    --page:#15242c; --subtle:#12222a; --sunken:#0f1d24; --strong:#f3f6f7; --body:#d7e0e3; --muted:#93a3a9; --line:#26424e; --line2:#1e343d;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;font-family:var(--sans);color:var(--body);background:var(--sunken);overflow:hidden}
+  .app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+
+  /* ============ TOP BAR ============ */
+  .topbar{display:flex;align-items:center;gap:14px;padding:9px 16px;background:var(--page);border-bottom:1px solid var(--line2);z-index:20}
+  .brand{display:flex;flex-direction:column;line-height:1.15}
+  .brand .s{font:700 10px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--berry)}
+  .brand .w{font-size:13.5px;font-weight:700;color:var(--strong)}
+  .tb-prog{flex:1;max-width:460px;margin:0 6px}
+  .tb-prog .row{display:flex;justify-content:space-between;font:600 10.5px var(--mono);letter-spacing:.03em;color:var(--muted);text-transform:uppercase;margin-bottom:4px}
+  .track{height:6px;border-radius:99px;background:var(--sunken);overflow:hidden}
+  .fill{height:100%;background:linear-gradient(90deg,var(--berry),#5fb0cc);width:8%;transition:width .5s var(--ease)}
+  .save{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
+  .save .d{width:7px;height:7px;border-radius:99px;background:var(--leaf)}
+  .tb-btn{border:1px solid var(--line);background:var(--page);color:var(--body);border-radius:999px;font:600 12px var(--sans);padding:6px 12px;cursor:pointer}
+  .tb-btn:hover{background:var(--sunken)} .tb-btn:focus-visible{outline:3px solid var(--berry);outline-offset:2px}
+  .tb-btn.exit{color:var(--cherry-deep);border-color:#f0c9cb}
+  .demoflags{display:flex;gap:5px;flex-wrap:wrap}
+  .demoflags button{font:600 10.5px var(--mono);border:1px dashed var(--line);background:transparent;color:var(--muted);border-radius:7px;padding:4px 7px;cursor:pointer}
+  .demoflags button:hover{color:var(--berry);border-color:var(--berry)}
+
+  /* ============ BODY GRID ============ */
+  .grid{display:grid;grid-template-columns:210px 1fr 300px;min-height:0}
+  /* LEFT NAV */
+  nav.rail{background:var(--page);border-right:1px solid var(--line2);padding:14px 10px;overflow-y:auto}
+  .rail h6{font:700 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:6px 8px 10px}
+  .step{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;background:transparent;color:var(--body);
+    font:500 13px var(--sans);padding:8px 9px;border-radius:9px;cursor:pointer;position:relative}
+  .step:hover{background:var(--sunken)} .step:focus-visible{outline:3px solid var(--berry);outline-offset:1px}
+  .step .ic{flex:none;width:22px;height:22px;border-radius:99px;background:var(--sunken);color:var(--muted);
+    font:700 10.5px var(--mono);display:grid;place-items:center;border:1px solid var(--line2)}
+  .step.done .ic{background:var(--leaf);color:#fff;border-color:var(--leaf)}
+  .step.active{background:var(--subtle)} html[data-theme="dark"] .step.active{background:#12303c33}
+  .step.active .ic{background:var(--cherry);color:#fff;border-color:var(--cherry)}
+  .step.active{font-weight:700;color:var(--strong)}
+  .step.locked{opacity:.5;cursor:not-allowed}
+  .step .lk{margin-left:auto;font-size:11px;color:var(--muted)}
+
+  /* CENTER STAGE — cinematic dark canvas */
+  .stagewrap{padding:16px;min-height:0;overflow:hidden;display:flex}
+  .stage{flex:1;border-radius:18px;position:relative;overflow:hidden;color:var(--stagink);
+    background:radial-gradient(1000px 520px at 24% 0%,#1c4658,transparent 60%),linear-gradient(160deg,var(--stage1),var(--stage2) 62%,#0a1a22);
+    display:flex;flex-direction:column}
+  .stage.consequence{background:radial-gradient(900px 500px at 60% -5%,#5a2f10,transparent 60%),linear-gradient(160deg,#1a0f0a,#3a1d10 70%,#12060a)}
+  /* moving tunnel + blueprint drift */
+  .fx{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+  .tunnel{position:absolute;left:-8%;top:50%;width:520px;height:520px;transform:translateY(-50%);opacity:.5}
+  .tunnel circle{fill:none;stroke:#5fb0cc;stroke-opacity:.18}
+  .blueline{position:absolute;inset:0;background-image:
+     linear-gradient(#5fb0cc12 1px,transparent 1px),linear-gradient(90deg,#5fb0cc12 1px,transparent 1px);
+     background-size:44px 44px;animation:drift 26s linear infinite}
+  @keyframes drift{from{background-position:0 0}to{background-position:44px 44px}}
+  .stage-body{position:relative;z-index:2;padding:26px 30px;overflow-y:auto;flex:1}
+  .stage-foot{position:relative;z-index:3;border-top:1px solid #ffffff1a;padding:12px 22px;display:flex;align-items:center;gap:12px;justify-content:space-between;background:#0000001f}
+
+  .timedial{display:inline-flex;gap:0;align-items:center;font:700 10.5px var(--mono);letter-spacing:.08em;margin-bottom:16px}
+  .timedial span{padding:5px 11px;border:1px solid #ffffff2e;color:var(--stagsub)}
+  .timedial span:first-child{border-radius:99px 0 0 99px} .timedial span:last-child{border-radius:0 99px 99px 0}
+  .timedial span.on{background:#8fc7db;color:#0e1a20;border-color:#8fc7db}
+  .stage.consequence .timedial span.on{background:var(--amber);color:#1a0f0a;border-color:var(--amber)}
+
+  .kicker{font:700 11px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:#8fc7db;margin:0}
+  .stage.consequence .kicker{color:#ffce8a}
+  .stg-h{font-size:26px;font-weight:800;color:#fff;margin:6px 0 4px;line-height:1.2;max-width:22ch}
+  .stg-lead{font-size:15px;color:#cfe0e6;max-width:60ch}
+  .stage.consequence .stg-lead{color:#f2ddc7}
+
+  .memo{background:#0000002e;border:1px solid #ffffff26;border-radius:14px;padding:18px 20px;max-width:60ch;margin:18px 0}
+  .memo .from{font:600 11px var(--mono);color:#8fc7db;letter-spacing:.06em;text-transform:uppercase}
+  .memo p{font-size:16px;color:#eef6f9;margin:8px 0 0;line-height:1.5}
+
+  /* selectable option chips */
+  .opts{display:flex;flex-direction:column;gap:9px;max-width:62ch;margin:16px 0}
+  .opt{display:flex;gap:12px;align-items:flex-start;text-align:left;border:1px solid #ffffff2b;background:#ffffff0f;color:#eaf3f6;
+    border-radius:12px;padding:12px 14px;font:500 14px var(--sans);cursor:pointer;transition:.15s var(--ease)}
+  .opt:hover{background:#ffffff1c;border-color:#8fc7db}
+  .opt:focus-visible{outline:3px solid #8fc7db;outline-offset:2px}
+  .opt[aria-pressed="true"]{background:#8fc7db26;border-color:#8fc7db;box-shadow:inset 0 0 0 1px #8fc7db}
+  .opt .box{flex:none;width:18px;height:18px;border-radius:5px;border:2px solid #8fc7db;margin-top:1px;display:grid;place-items:center;font-size:12px;color:#0e1a20;background:transparent}
+  .opt[aria-pressed="true"] .box{background:#8fc7db}
+  .opt.custom{border-style:dashed}
+  .customwrap{margin:2px 0 0}
+  textarea.free{width:100%;max-width:62ch;background:#0b1519;border:1px solid #ffffff2e;border-radius:10px;color:#eef6f9;
+    font:14px var(--sans);padding:11px 13px;min-height:76px;resize:vertical}
+  textarea.free:focus-visible{outline:3px solid #8fc7db;outline-offset:1px}
+  label.flab{display:block;font:600 12px var(--mono);letter-spacing:.03em;color:#9fbcc7;margin:14px 0 6px;text-transform:uppercase}
+
+  /* required-state validation */
+  .reqbanner{display:none;align-items:center;gap:10px;background:#3a1416;border:1px solid #7a2a2e;color:#ffb9bd;
+    border-radius:10px;padding:10px 13px;font-size:13px;margin:14px 0;max-width:62ch}
+  .reqbanner.show{display:flex}
+  .reqbanner .i{font-weight:800}
+  .opt.invalid{border-color:#ff7a80;box-shadow:0 0 0 1px #ff7a80}
+
+  /* zoom-out layers */
+  .layers{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:70ch;margin:16px 0}
+  .layer{background:#ffffff10;border:1px solid #ffffff24;border-radius:12px;padding:13px 15px}
+  .layer h5{margin:0 0 8px;font:700 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:#8fc7db}
+  .layer .tags{display:flex;flex-wrap:wrap;gap:6px}
+  .tag{font-size:11.5px;background:#0e1a2099;border:1px solid #ffffff26;border-radius:99px;padding:3px 9px;color:#d6e6ec}
+  .reveal{margin:14px 0;max-width:62ch;border-left:3px solid var(--cherry);background:#ffffff0d;border-radius:0 10px 10px 0;padding:12px 15px;font-size:15px;color:#fff;font-weight:600}
+
+  /* interviewer bubble */
+  .interviewer{display:flex;gap:13px;align-items:flex-start;max-width:64ch;margin:6px 0 4px}
+  .orb{flex:none;width:44px;height:44px;border-radius:99px;background:radial-gradient(circle at 35% 30%,#bfe4f2,#367895 70%);box-shadow:0 0 22px #367895aa}
+  .interviewer .q{background:#ffffff12;border:1px solid #ffffff24;border-radius:4px 14px 14px 14px;padding:12px 15px;font-size:15px;color:#eef6f9}
+  .interviewer .q .who{font:600 10.5px var(--mono);color:#8fc7db;letter-spacing:.06em;text-transform:uppercase;display:block;margin-bottom:3px}
+
+  /* charts */
+  .chartcard{background:#ffffff0d;border:1px solid #ffffff20;border-radius:14px;padding:16px;margin:14px 0;max-width:64ch}
+  .chartcard h5{margin:0 0 3px;font-size:14px;color:#fff} .chartcard .cap{font-size:12px;color:#9fbcc7;margin-bottom:10px}
+  .ba-row{display:grid;grid-template-columns:150px 1fr;gap:10px;align-items:center;margin:8px 0;font-size:12.5px;color:#cfe0e6}
+  .ba-bars{display:flex;gap:6px;align-items:center}
+  .bar{height:14px;border-radius:4px}
+  .bar.before{background:#6b7d84} .bar.after{background:#5fb0cc}
+  .ba-leg{display:flex;gap:16px;font-size:11.5px;color:#9fbcc7;margin-top:6px}
+  .ba-leg i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+  /* completion validation */
+  .gates{columns:2;column-gap:26px;max-width:66ch;margin:12px 0}
+  .gate{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:#dce9ee;break-inside:avoid;margin-bottom:7px}
+  .gate .c{flex:none;width:18px;height:18px;border-radius:99px;background:var(--leaf);color:#fff;font-size:11px;display:grid;place-items:center}
+
+  .receipt2{background:#ffffff0d;border:1px dashed #8fc7db;border-radius:14px;padding:16px 18px;max-width:64ch;margin:14px 0}
+  .receipt2 .rg{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 16px;margin:10px 0}
+  .receipt2 .rg div{font-size:11.5px;color:#9fbcc7} .receipt2 .rg b{display:block;font:700 18px var(--mono);color:#fff}
+  .qual2{font-size:11.5px;line-height:1.55;color:#cfe0e6;background:#0e1a2099;border:1px solid #ffffff20;border-radius:9px;padding:10px 12px;margin-top:6px}
+  .qual2 strong{color:#ffce8a}
+
+  /* ADR / project transfer fields */
+  .adr{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;max-width:66ch;margin:12px 0}
+  .adr .f{background:#ffffff0d;border:1px solid #ffffff20;border-radius:10px;padding:10px 12px}
+  .adr .f label{font:700 10px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:#8fc7db;display:block;margin-bottom:4px}
+  .adr .f p{margin:0;font-size:13px;color:#eef6f9}
+
+  /* buttons in stage */
+  .sbtn{border:0;border-radius:999px;font:700 14px var(--sans);padding:11px 20px;cursor:pointer}
+  .sbtn.pri{background:#8fc7db;color:#0e1a20} .sbtn.pri:hover{background:#a8d6e6}
+  .sbtn.cta{background:var(--cherry);color:#fff}.sbtn.cta:hover{background:var(--cherry-deep)}
+  .sbtn.ghost{background:transparent;color:#cfe0e6;border:1px solid #ffffff33}
+  .sbtn:focus-visible{outline:3px solid #fff;outline-offset:2px}
+  .steplabel{font:600 12px var(--mono);color:#9fbcc7}
+  /* the platform's shared complete button */
+  .ss-complete-btn{background:var(--leaf);color:#fff;border:0;border-radius:999px;font:700 15px var(--sans);padding:13px 26px;cursor:pointer}
+  .ss-complete-btn:hover{background:#4f9433}
+
+  /* RIGHT INSIGHT RAIL */
+  aside.insight{background:var(--page);border-left:1px solid var(--line2);padding:16px 14px;overflow-y:auto}
+  .insight h6{font:700 10px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--berry);margin:2px 0 10px}
+  .ledger .lrow{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 0;border-bottom:1px solid var(--line2);color:var(--body)}
+  .ledger .lrow b{font-family:var(--mono);color:var(--strong)}
+  .radar{margin:6px 0 4px}
+  .insCard{background:var(--subtle);border:1px solid var(--line2);border-radius:11px;padding:11px 12px;margin:10px 0;font-size:12.5px;color:var(--body)}
+  html[data-theme="dark"] .insCard{background:#12262f}
+  .insCard .t{font-weight:700;color:var(--strong);font-size:12.5px;margin-bottom:3px;display:flex;gap:6px;align-items:center}
+  .insCard .t .k{width:8px;height:8px;border-radius:99px;background:var(--berry)}
+  .insCard.warn .t .k{background:var(--amber)} .insCard.risk .t .k{background:var(--cherry)}
+
+  /* exit dialog */
+  .modal{position:fixed;inset:0;background:#06121899;display:none;place-items:center;z-index:60}
+  .modal.show{display:grid}
+  .sheet{background:var(--page);border-radius:16px;max-width:420px;width:92%;padding:22px 24px;box-shadow:0 30px 80px #000a}
+  .sheet h3{margin:0 0 8px;color:var(--strong);font-size:18px}
+  .sheet p{margin:0 0 16px;font-size:14px;color:var(--body)}
+  .sheet .btns{display:flex;gap:10px;justify-content:flex-end}
+
+  .hint{font-size:12px;color:#9fbcc7;margin-top:8px}
+  html[data-theme="dark"] body{background:var(--sunken)}
+
+  /* reduced motion */
+  html[data-reduced="true"] .blueline{animation:none}
+  html[data-reduced="true"] .tunnel{opacity:.32}
+  @media (prefers-reduced-motion: reduce){ .blueline{animation:none} .fill{transition:none} }
+
+  /* responsive */
+  @media (max-width:1100px){ .grid{grid-template-columns:64px 1fr 0}
+    .rail h6, .step span.txt{display:none} .step{justify-content:center;padding:8px}
+    aside.insight{display:none} }
+  @media (max-width:720px){
+    .app{overflow:auto;height:auto;min-height:100vh}
+    .grid{grid-template-columns:1fr;height:auto}
+    nav.rail{display:flex;gap:6px;overflow-x:auto;border-right:0;border-bottom:1px solid var(--line2);position:sticky;top:0}
+    nav.rail h6{display:none} .step{width:auto;flex:none}.step span.txt{display:none}
+    .stagewrap{padding:10px} .stage{min-height:70vh}
+    .layers,.adr{grid-template-columns:1fr} .gates{columns:1} .receipt2 .rg{grid-template-columns:1fr 1fr}
+    .demoflags{display:none}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- ============ TOP BAR ============ -->
+  <header class="topbar">
+    <div class="brand"><span class="s">Architect Mindset</span><span class="w">Week 0 · The Architect Time Machine</span></div>
+    <div class="tb-prog">
+      <div class="row"><span id="stgName">Arrival</span><span id="stgPct">Stage 1 of 10</span></div>
+      <div class="track"><div class="fill" id="topFill"></div></div>
+    </div>
+    <div class="save"><span class="d" id="saveDot"></span><span id="saveTxt">All changes saved</span></div>
+    <div class="demoflags" aria-label="Jump to a demonstrated state">
+      <button data-jump="interview">Required-unanswered</button>
+      <button data-jump="interviewCustom">Custom-answer</button>
+      <button data-jump="consequence">Consequence reveal</button>
+      <button data-jump="complete">Completed</button>
+    </div>
+    <button class="tb-btn" id="rmBtn" aria-pressed="false" title="Reduced motion">Reduced motion: off</button>
+    <button class="tb-btn" id="thBtn">Dark</button>
+    <button class="tb-btn exit" id="exitBtn">Exit</button>
+  </header>
+
+  <div class="grid">
+    <!-- ============ LEFT NAV ============ -->
+    <nav class="rail" aria-label="Experience stages">
+      <h6>The experience</h6>
+      <div id="steps"></div>
+    </nav>
+
+    <!-- ============ CENTER STAGE ============ -->
+    <div class="stagewrap">
+      <main class="stage" id="stage" aria-live="polite">
+        <div class="fx" aria-hidden="true">
+          <svg class="tunnel" viewBox="-260 -260 520 520">
+            <circle r="240"/><circle r="200"/><circle r="160"/><circle r="122"/><circle r="88"/><circle r="58"/><circle r="32"/>
+          </svg>
+          <div class="blueline"></div>
+        </div>
+        <div class="stage-body" id="stageBody"><!-- injected --></div>
+        <div class="stage-foot">
+          <span class="steplabel" id="footLabel">Arrival</span>
+          <div style="display:flex;gap:10px">
+            <button class="sbtn ghost" id="prevBtn">Back</button>
+            <button class="sbtn pri" id="nextBtn">Enter the machine →</button>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- ============ RIGHT INSIGHT RAIL ============ -->
+    <aside class="insight">
+      <div id="insightTop">
+        <h6>Architect Interviewer</h6>
+        <div class="insCard"><div class="t"><span class="k"></span>Listening</div>The Interviewer knows what happened before this decision, what is happening now, and what your decision will cause. It will ask you to explain your thinking, not to guess a correct answer.</div>
+      </div>
+      <h6 style="margin-top:16px">Mindset Ledger</h6>
+      <div class="ledger" id="ledger">
+        <div class="lrow"><span>Lessons completed</span><b id="lLessons">0</b></div>
+        <div class="lrow"><span>Decisions recorded</span><b id="lDec">0</b></div>
+        <div class="lrow"><span>Assumptions found</span><b id="lAsm">0</b></div>
+        <div class="lrow"><span>Failure modes examined</span><b id="lFail">0</b></div>
+        <div class="lrow"><span>Perspectives met</span><b id="lPersp">0</b></div>
+        <div class="lrow"><span>Represented exposure</span><b id="lHours">0 h</b></div>
+      </div>
+      <h6 style="margin-top:16px">Architect Radar</h6>
+      <div class="radar" id="radar"></div>
+      <p style="font-size:11px;color:var(--muted);margin:4px 2px">Baseline is set in Week 0. Scored growth begins Week 1.</p>
+    </aside>
+  </div>
+</div>
+
+<!-- exit dialog -->
+<div class="modal" id="exitModal" role="dialog" aria-modal="true" aria-labelledby="exH">
+  <div class="sheet">
+    <h3 id="exH">Leave the Time Machine?</h3>
+    <p>Your progress is saved, so you can return exactly here. You are partway through the experience and it is not yet complete.</p>
+    <div class="btns">
+      <button class="tb-btn" id="exStay">Stay</button>
+      <button class="tb-btn exit" id="exGo">Save &amp; exit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================= *
+ *  Prototype controller. Design mock only — not production code. *
+ * ============================================================= */
+var root=document.documentElement;
+var STEPS=[
+  {id:'arrival',   label:'Arrival'},
+  {id:'request',   label:'The Request'},
+  {id:'decision1', label:'First Decision'},
+  {id:'zoom',      label:'System Zoom-Out'},
+  {id:'interview', label:'Architect Interview'},
+  {id:'consequence',label:'Consequences'},
+  {id:'rearch',    label:'Re-Architecture'},
+  {id:'receipt',   label:'Experience Receipt'},
+  {id:'record',    label:'Decision Record'},
+  {id:'transfer',  label:'Project Transfer'}
+];
+var cur=0, reached=0, interviewCustom=false, consequenceRevealed=false, completed=false;
+
+/* ---------- stage content ---------- */
+function content(id){
+  switch(id){
+  case 'arrival': return `
+    <div class="timedial"><span class="on">BEFORE</span><span>AFTER</span><span>FUTURE</span></div>
+    <p class="kicker">Week 0 · Baseline demonstration</p>
+    <h2 class="stg-h">You don't become an architect by learning more tools.</h2>
+    <p class="stg-lead">The machine is calibrating to your Week 0 request. Over the next few minutes you will make a decision, watch its consequences unfold across time, and be interviewed about what you saw, and what you missed. This week is a baseline. It is not scored as your first lesson.</p>
+    <p class="hint">Reduced-motion, keyboard, and screen-reader support are on by default. Your work autosaves at every step.</p>`;
+  case 'request': return `
+    <div class="timedial"><span class="on">BEFORE</span><span>AFTER</span><span>FUTURE</span></div>
+    <p class="kicker">The Request</p>
+    <h2 class="stg-h">A deceptively simple assignment.</h2>
+    <div class="memo">
+      <div class="from">Incoming · from the sponsor</div>
+      <p>"Build an AI assistant that answers employee questions using company documents. We need a demonstration in two weeks."</p>
+    </div>
+    <p class="stg-lead">Right now the system looks like three boxes: an <b>employee</b>, an <b>AI assistant</b>, and <b>company documents</b>. That is all the information you would normally have on day one.</p>`;
+  case 'decision1': return `
+    <div class="timedial"><span class="on">BEFORE</span><span>AFTER</span><span>FUTURE</span></div>
+    <p class="kicker">First Decision · before the lesson</p>
+    <h2 class="stg-h">What would you do first?</h2>
+    <p class="stg-lead">There is no penalty here. We capture your instinct <em>before</em> teaching anything, so you can compare it later.</p>
+    <div class="opts" id="d1opts">
+      ${['Choose the AI model','Build the chat interface','Upload the company documents','Ask more questions about the system','Create a project plan','Start a proof of concept']
+        .map((t,i)=>`<button class="opt" role="button" aria-pressed="false" data-i="${i}"><span class="box">✓</span>${t}</button>`).join('')}
+      <button class="opt custom" role="button" aria-pressed="false" data-i="6"><span class="box">✓</span>I would do something else</button>
+    </div>
+    <div class="customwrap" id="d1custom" style="display:none">
+      <label class="flab" for="d1free">Tell us what you would do</label>
+      <textarea class="free" id="d1free" placeholder="In my own words..."></textarea>
+    </div>
+    <label class="flab" for="d1why">Why? (one line captures your reasoning)</label>
+    <textarea class="free" id="d1why" placeholder="I would start by..."></textarea>`;
+  case 'zoom': return `
+    <div class="timedial"><span class="on">BEFORE</span><span>AFTER</span><span>FUTURE</span></div>
+    <p class="kicker">System Zoom-Out</p>
+    <h2 class="stg-h">The system was never three boxes.</h2>
+    <div class="layers">
+      <div class="layer"><h5>People · 8 roles</h5><div class="tags">${['Employees','Contractors','Managers','Executives','HR','Legal','IT support','Administrators'].map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>
+      <div class="layer"><h5>Information · 10 classes</h5><div class="tags">${['Handbook','Benefits','Compensation','Performance','Legal policy','Security','Customer data','Strategy','Outdated versions','Conflicting drafts'].map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>
+      <div class="layer"><h5>Decisions · 6 categories</h5><div class="tags">${['Low-risk factual','Personal info retrieval','Policy interpretation','Legal escalation','Unauthorized request','Abstention'].map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>
+      <div class="layer"><h5>Operations · ongoing</h5><div class="tags">${['Ownership','Updates','Access changes','Logging','Monitoring','Incident response','Cost','Model changes','Escalation','Maintenance'].map(t=>`<span class="tag">${t}</span>`).join('')}</div></div>
+    </div>
+    <div class="reveal">"The request contained one user. The real system contained at least eight roles."</div>
+    <div class="reveal" style="border-color:var(--amber)">"It was described as question answering. It was actually an identity, access, policy, evidence, governance, and operational system."</div>`;
+  case 'interview': return interviewHTML();
+  case 'consequence': return consequenceHTML();
+  case 'rearch': return `
+    <div class="timedial"><span>BEFORE</span><span class="on">AFTER</span><span>FUTURE</span></div>
+    <p class="kicker">Re-Architecture · Interview, Part Two</p>
+    <h2 class="stg-h">Now, what would you change?</h2>
+    <div class="interviewer"><div class="orb"></div><div class="q"><span class="who">Architect Interviewer</span>You have seen where this decision led. Change at least one decision, or defend one you would keep. Then tell me the single most important thing you originally missed.</div></div>
+    <div class="chartcard">
+      <h5>Before vs. After your thinking</h5><div class="cap">Same request, compared to your first pass. Longer teal = you accounted for more.</div>
+      ${baRow('Problems identified',20,90)}${baRow('Stakeholders considered',12,88)}${baRow('Assumptions exposed',10,80)}${baRow('Failure modes anticipated',5,84)}${baRow('Alternatives compared',15,70)}${baRow('Success metrics defined',8,76)}
+      <div class="ba-leg"><span><i style="background:#6b7d84"></i>Before</span><span><i style="background:#5fb0cc"></i>After</span></div>
+    </div>
+    <label class="flab" for="raWhy">The most important thing I originally missed</label>
+    <textarea class="free" id="raWhy" placeholder="I planned for the successful path but did not design the..."></textarea>`;
+  case 'receipt': return `
+    <div class="timedial"><span>BEFORE</span><span>AFTER</span><span class="on">FUTURE</span></div>
+    <p class="kicker">Experience Receipt</p>
+    <h2 class="stg-h">What this session represented.</h2>
+    <div class="receipt2">
+      <div class="rg">
+        <div><b>1</b>feature request</div><div><b>8</b>user roles</div><div><b>10</b>information classes</div>
+        <div><b>6</b>decision categories</div><div><b>7</b>architectural concerns</div><div><b>4</b>strategies</div>
+        <div><b>12</b>hidden assumptions</div><div><b>5</b>perspectives</div><div><b>~450 h</b>represented</div>
+      </div>
+      <div class="qual2"><strong>Illustrative and scenario-based.</strong> This experience represents patterns distributed across approximately 450 collective project hours, compressed into roughly 13 minutes. This represents patterns studied, not employment experience earned, and is not a guarantee of competence or job readiness.</div>
+    </div>`;
+  case 'record': return `
+    <div class="timedial"><span>BEFORE</span><span>AFTER</span><span class="on">FUTURE</span></div>
+    <p class="kicker">Architect Decision Record</p>
+    <h2 class="stg-h">Your record, in your words.</h2>
+    <p class="stg-lead">A structured, portfolio-ready record you own. Generated from what you actually decided.</p>
+    <div class="adr">
+      <div class="f"><label>Context</label><p>A two-week demo request for a document Q&amp;A assistant, which is really an identity, access, and governance system.</p></div>
+      <div class="f"><label>Decision</label><p>Map the system, owners, and failure paths before choosing any model or interface.</p></div>
+      <div class="f"><label>Assumption surfaced</label><p>"Company documents" is one trusted source. (False: many classes, owners, conflicting versions.)</p></div>
+      <div class="f"><label>Consequence guarded</label><p>A confident wrong answer on a compensation or legal question with no abstention path.</p></div>
+      <div class="f"><label>Tradeoff accepted</label><p>Slower day-one demo in exchange for a system the organization will not regret.</p></div>
+      <div class="f"><label>Owner after demo</label><p>Named owner for content, access, and escalation, not "the AI team, later".</p></div>
+    </div>`;
+  case 'transfer': return `
+    <div class="timedial"><span>BEFORE</span><span>AFTER</span><span class="on">FUTURE</span></div>
+    <p class="kicker">Project Transfer</p>
+    <h2 class="stg-h">Apply it to your own project.</h2>
+    <div class="interviewer"><div class="orb"></div><div class="q"><span class="who">Architect Interviewer</span>Before you leave: what solution have you already assumed for your own project, and what outcome should it actually create?</div></div>
+    <label class="flab" for="ptA">The solution I have already assumed</label>
+    <textarea class="free" id="ptA" placeholder="I assumed I would build..."></textarea>
+    <label class="flab" for="ptB">The outcome it should create (no technology named)</label>
+    <textarea class="free" id="ptB" placeholder="Success would look like..."></textarea>
+    <p class="hint">Your commitment: "Before I build, I will always ____." completes your baseline and unlocks completion.</p>`;
+  case 'complete': return completeHTML();
+  }
+}
+function baRow(label,b,a){
+  return `<div class="ba-row"><span>${label}</span><div><div class="ba-bars"><div class="bar before" style="width:${b}%"></div></div>
+  <div class="ba-bars" style="margin-top:3px"><div class="bar after" style="width:${a}%"></div></div></div></div>`;
+}
+function interviewHTML(){
+  var q1=[
+    'I focused on how quickly I could build the requested feature.',
+    'I focused on which model, framework, and tools I would use.',
+    'I focused on understanding the users, data, decisions, risks, and owners around the feature.',
+    'I focused on clarifying the business outcome and how success would be measured.'
+  ];
+  return `
+    <div class="timedial"><span>BEFORE</span><span class="on">AFTER</span><span>FUTURE</span></div>
+    <p class="kicker">Architect Interview · Part One · required</p>
+    <h2 class="stg-h">Tell me how you were thinking.</h2>
+    <div class="reqbanner" id="reqBanner"><span class="i">!</span><span>This question is required. Choose the answer closest to your thinking, or write your own before continuing.</span></div>
+    <div class="interviewer"><div class="orb"></div><div class="q"><span class="who">Question 1 of 8 · choose one</span>What did you focus on when you first received the request?</div></div>
+    <div class="opts" id="ivopts">
+      ${q1.map((t,i)=>`<button class="opt" role="button" aria-pressed="false" data-i="${i}"><span class="box">✓</span>${t}</button>`).join('')}
+      <button class="opt custom" role="button" aria-pressed="false" data-i="9"><span class="box">✓</span>I see it differently — let me write my own answer.</button>
+    </div>
+    <div class="customwrap" id="ivcustom" style="display:${interviewCustom?'block':'none'}">
+      <label class="flab" for="ivfree">Your answer <span style="color:#ffce8a">(required when this option is chosen)</span></label>
+      <textarea class="free" id="ivfree" placeholder="When I first read it, I actually focused on..."></textarea>
+    </div>
+    <label class="flab" for="ivfollow">Optional: one line on why (helps the Interviewer understand you)</label>
+    <textarea class="free" id="ivfollow" style="min-height:56px" placeholder="Because..."></textarea>
+    <p class="hint">Questions 2 to 8 follow the same pattern (revealed one at a time). Single-answer and multi-answer questions are clearly labelled. Nothing here is a memorization test.</p>`;
+}
+function consequenceHTML(){
+  return `
+    <div class="timedial"><span>BEFORE</span><span>AFTER</span><span class="on">FUTURE</span></div>
+    <p class="kicker">Consequence Simulation · the machine advances time</p>
+    <h2 class="stg-h">Watch what your first instinct caused.</h2>
+    <div class="chartcard" style="max-width:66ch">
+      <h5>Consequence Horizon</h5><div class="cap">The same decision, seen at each point in the system's life.</div>
+      <svg viewBox="0 0 640 150" width="100%" role="img" aria-label="Consequence horizon from first build to long-term operation">
+        <line x1="20" y1="112" x2="620" y2="112" stroke="#ffffff33"/>
+        ${['First build','First user','1,000 users','First failure','First audit','Ownership handoff','Vendor swap','Long-term ops']
+          .map((t,i)=>{var x=40+i*80;var risk=[10,14,30,64,86,74,58,44][i];var y=112-risk;var col=risk>60?'#FB2832':risk>36?'#E8920C':'#77BB4A';
+          return `<circle cx="${x}" cy="${y}" r="5" fill="${col}"/><text x="${x}" y="132" fill="#9fbcc7" font-size="8.5" font-family="'Roboto Mono',monospace" text-anchor="middle">${t}</text>`}).join('')}
+        <polyline fill="none" stroke="#8fc7db" stroke-opacity=".5" stroke-width="2" points="${['First build','First user','1,000 users','First failure','First audit','Ownership handoff','Vendor swap','Long-term ops'].map((t,i)=>{var x=40+i*80;var risk=[10,14,30,64,86,74,58,44][i];return x+','+(112-risk)}).join(' ')}"/>
+      </svg>
+    </div>
+    <div class="reveal">"At the first audit, no one could say which document version an answer came from, or who approved it. The demo had no owner."</div>
+    <p class="stg-lead">The system that looked finished at the demo became the organization's problem at the audit. This is the gap between building the assistant and architecting it.</p>`;
+}
+function completeHTML(){
+  var gates=['Initial decision submitted','All stages traversed','Consequence reveal viewed','Every required interview question answered','Custom answers are meaningful','Revised decision submitted','At least one tradeoff explained','At least one assumption identified','At least one failure risk identified','Final reflection submitted','Architect Decision Record generated','Experience evaluated','All progress saved','Backend confirmed eligibility'];
+  return `
+    <div class="timedial"><span>BEFORE</span><span>AFTER</span><span class="on">FUTURE</span></div>
+    <p class="kicker">Completion · verified on the backend</p>
+    <h2 class="stg-h">Baseline set. You are ready for Week 1.</h2>
+    <p class="stg-lead">All fourteen completion gates passed server-side. Draft progress never counts as completion, and reopening this card will not re-award anything.</p>
+    <div class="gates">${gates.map(g=>`<div class="gate"><span class="c">✓</span>${g}</div>`).join('')}</div>
+    <div class="receipt2" style="border-color:var(--leaf)">
+      <div class="t" style="font-weight:700;color:#fff;margin-bottom:6px">Your Architect Commitment</div>
+      <p style="margin:0;font-size:15px;font-style:italic;color:#eef6f9">"Before I build, I will always map the whole system, its owners, and its failure paths, before choosing a tool."</p>
+    </div>
+    <p class="hint">Week 0 records a baseline Mindset observation (you entered as a Feature Thinker). It is not scored as your first lesson. Week 1 begins your scored growth.</p>`;
+}
+
+/* ---------- render ---------- */
+function radarSVG(after){
+  var axes=['Big picture','Boundaries','Reliability','Data','Security','Observability','AI gov','Business','Ownership','Comms'];
+  var base=[.3,.2,.15,.2,.15,.1,.2,.25,.15,.2];
+  var grown=[.62,.5,.44,.5,.42,.4,.55,.6,.48,.52];
+  var vals=after?grown:base; var cx=110,cy=95,R=72,n=axes.length;
+  function pt(i,r){var a=-Math.PI/2+i*2*Math.PI/n;return [cx+Math.cos(a)*R*r, cy+Math.sin(a)*R*r];}
+  var ring=[.25,.5,.75,1].map(r=>`<polygon points="${axes.map((_,i)=>pt(i,r).join(',')).join(' ')}" fill="none" stroke="var(--line)" stroke-opacity=".7"/>`).join('');
+  var poly=`<polygon points="${vals.map((v,i)=>pt(i,v).join(',')).join(' ')}" fill="#3678954d" stroke="#367895" stroke-width="2"/>`;
+  var labels=axes.map((t,i)=>{var p=pt(i,1.16);return `<text x="${p[0]}" y="${p[1]}" font-size="7.5" fill="var(--muted)" font-family="'Roboto Mono',monospace" text-anchor="middle">${t}</text>`}).join('');
+  return `<svg viewBox="0 0 220 200" width="100%" role="img" aria-label="Architect Radar across 10 dimensions">${ring}${poly}${labels}</svg>`;
+}
+function renderSteps(){
+  var el=document.getElementById('steps'); el.innerHTML='';
+  STEPS.forEach(function(s,i){
+    var st=i<reached?'done':(i===cur?'active':(i<=reached?'':'locked'));
+    var b=document.createElement('button');
+    b.className='step '+(i===cur?'active':'')+(i<reached?' done':'')+(i>reached?' locked':'');
+    b.innerHTML='<span class="ic">'+(i<reached?'✓':(i+1))+'</span><span class="txt">'+s.label+'</span>'+(i>reached?'<span class="lk">🔒</span>':'');
+    b.onclick=function(){ if(i<=reached) go(i); };
+    el.appendChild(b);
+  });
+}
+function updateLedger(){
+  var done=completed;
+  document.getElementById('lLessons').textContent=done?'1 (baseline)':'0';
+  document.getElementById('lDec').textContent=cur>=2?'1':'0';
+  document.getElementById('lAsm').textContent=cur>=3?'12':'0';
+  document.getElementById('lFail').textContent=cur>=5?'8':'0';
+  document.getElementById('lPersp').textContent=cur>=3?'5':'0';
+  document.getElementById('lHours').textContent=(cur>=7||done)?'~450 h':(cur>=3?'~180 h':'0 h');
+  document.getElementById('radar').innerHTML=radarSVG(cur>=6);
+}
+function go(i){
+  cur=i; reached=Math.max(reached,i);
+  var s=STEPS[i]||{id:'complete',label:'Completion'};
+  var id=(i>=STEPS.length)?'complete':s.id;
+  var stage=document.getElementById('stage');
+  stage.classList.toggle('consequence', id==='consequence' && consequenceRevealed);
+  document.getElementById('stageBody').innerHTML=content(id);
+  document.getElementById('stgName').textContent=s.label||'Completion';
+  document.getElementById('footLabel').textContent=s.label||'Completion';
+  var total=STEPS.length;
+  document.getElementById('stgPct').textContent=(i>=total)?'Complete':('Stage '+(i+1)+' of '+total);
+  document.getElementById('topFill').style.width=Math.min(100,Math.round(((i+1)/(total+1))*100))+'%';
+  document.getElementById('prevBtn').style.visibility=i===0?'hidden':'visible';
+  var nb=document.getElementById('nextBtn');
+  if(id==='arrival') nb.textContent='Enter the machine →';
+  else if(id==='consequence' && !consequenceRevealed) nb.textContent='Advance time →';
+  else if(id==='transfer') nb.textContent='Validate & finish →';
+  else if(id==='complete') nb.style.display='none';
+  else { nb.textContent='Continue →'; nb.style.display=''; }
+  if(id==='complete'){ nb.style.display='none'; document.getElementById('footLabel').innerHTML='<button class="ss-complete-btn" onclick="alert(\'Completion confirmed by the backend (idempotent).\')">Complete Week 0</button>'; }
+  wireStage(id);
+  renderSteps(); updateLedger();
+  showSaving();
+}
+function wireStage(id){
+  document.querySelectorAll('.opt').forEach(function(o){
+    o.addEventListener('click',function(){
+      var grp=o.parentElement.querySelectorAll('.opt');
+      grp.forEach(x=>{x.setAttribute('aria-pressed','false');x.classList.remove('invalid');});
+      o.setAttribute('aria-pressed','true');
+      var cw=o.parentElement.parentElement.querySelector('.customwrap');
+      if(cw){ var isCustom=o.classList.contains('custom'); cw.style.display=isCustom?'block':'none'; if(id==='interview') interviewCustom=isCustom; }
+      var rb=document.getElementById('reqBanner'); if(rb) rb.classList.remove('show');
+    });
+  });
+}
+/* validation demo on Continue for the interview stage */
+function tryAdvance(){
+  var id=(cur>=STEPS.length)?'complete':STEPS[cur].id;
+  if(id==='interview'){
+    var picked=document.querySelector('#ivopts .opt[aria-pressed="true"]');
+    var custom=picked && picked.classList.contains('custom');
+    var free=document.getElementById('ivfree');
+    if(!picked || (custom && (!free || !free.value.trim()))){
+      document.getElementById('reqBanner').classList.add('show');
+      if(!picked) document.querySelectorAll('#ivopts .opt').forEach(x=>x.classList.add('invalid'));
+      if(custom && free){ free.focus(); }
+      return;
+    }
+  }
+  if(id==='consequence' && !consequenceRevealed){ consequenceRevealed=true; go(cur); return; }
+  if(cur>=STEPS.length-1){ completed=true; go(STEPS.length); return; }
+  go(cur+1);
+}
+document.getElementById('nextBtn').addEventListener('click',tryAdvance);
+document.getElementById('prevBtn').addEventListener('click',function(){ if(cur>0) go(cur-1); });
+
+/* demo jumps */
+document.querySelectorAll('[data-jump]').forEach(function(b){
+  b.addEventListener('click',function(){
+    var j=b.dataset.jump;
+    if(j==='interview'){ interviewCustom=false; reached=Math.max(reached,4); go(4); setTimeout(function(){document.getElementById('reqBanner').classList.add('show');document.querySelectorAll('#ivopts .opt').forEach(x=>x.classList.add('invalid'));},60); }
+    if(j==='interviewCustom'){ interviewCustom=true; reached=Math.max(reached,4); go(4); setTimeout(function(){var c=document.querySelector('#ivopts .opt.custom'); if(c){c.click();}},60); }
+    if(j==='consequence'){ consequenceRevealed=true; reached=Math.max(reached,5); go(5); }
+    if(j==='complete'){ completed=true; consequenceRevealed=true; reached=STEPS.length; go(STEPS.length); }
+  });
+});
+
+/* chrome controls */
+function showSaving(){
+  var t=document.getElementById('saveTxt'), d=document.getElementById('saveDot');
+  d.style.background='var(--amber)'; t.textContent='Saving…';
+  setTimeout(function(){ d.style.background='var(--leaf)'; t.textContent='All changes saved'; },600);
+}
+document.getElementById('thBtn').addEventListener('click',function(){
+  var d=root.getAttribute('data-theme')==='dark'; root.setAttribute('data-theme',d?'light':'dark'); this.textContent=d?'Dark':'Light';
+});
+document.getElementById('rmBtn').addEventListener('click',function(){
+  var on=root.getAttribute('data-reduced')==='true'; root.setAttribute('data-reduced',String(!on));
+  this.textContent='Reduced motion: '+(!on?'on':'off'); this.setAttribute('aria-pressed',String(!on));
+});
+var exitModal=document.getElementById('exitModal');
+document.getElementById('exitBtn').addEventListener('click',function(){ if(completed){ alert('Exit — already complete, nothing unsaved.'); } else { exitModal.classList.add('show'); } });
+document.getElementById('exStay').addEventListener('click',function(){ exitModal.classList.remove('show'); });
+document.getElementById('exGo').addEventListener('click',function(){ exitModal.classList.remove('show'); alert('Saved. You can resume exactly here.'); });
+exitModal.addEventListener('click',function(e){ if(e.target===exitModal) exitModal.classList.remove('show'); });
+document.addEventListener('keydown',function(e){ if(e.key==='Escape') exitModal.classList.remove('show'); });
+
+go(0);
+</script>
+</body>
+</html>
