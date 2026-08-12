@@ -260,6 +260,7 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:12.5px;border-top:1px so
 .shots figure{margin:0}
 .shots img{width:100%;border:1px solid var(--border);border-radius:var(--r-sm);cursor:zoom-in;display:block;background:#fff}
 .shots figcaption{font-size:11px;color:var(--muted);margin-top:5px;display:flex;align-items:center;gap:6px}
+.reqnote{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
 .kind{font-size:9.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:2px 6px;border-radius:3px}
 .kind.terminal{background:var(--neutral-bg);color:var(--muted)}
 .kind.ui{background:var(--good-bg);color:var(--good)}
@@ -280,6 +281,8 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:12.5px;border-top:1px so
   <div class="brand"><span class="dot"></span>TalentSignal &middot; what Megan built</div>
   <div class="navlinks" id="navlinks">
     <a href="#summary" data-scroll>Summary</a>
+    <a href="#origin" data-scroll>Origin</a>
+    <a href="#reqs" data-scroll>Requirements</a>
     <a href="#how" data-scroll>How it works</a>
     <a href="#R0Walkingskeleton" data-scroll>R0</a><a href="#R1Coreintelligencesurfaces" data-scroll>R1</a><a href="#R2Pipelineandhumanintheloop" data-scroll>R2</a><a href="#R3Analyticstrustandcompliance" data-scroll>R3</a><a href="#R4Launchreadiness" data-scroll>R4</a><a href="#MILESTONEAPPROVALSAli" data-scroll>Your gates</a>
     <a href="#verdict" data-scroll>What to do</a>
@@ -322,8 +325,173 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:12.5px;border-top:1px so
   </div>
 </div></section>
 
+<section id="origin"><div class="wrap">
+  <div class="sechead"><div><span class="num">02</span><h2>Where this project came from</h2></div></div>
+  <p class="seclede">Worth reading first if you do not remember commissioning it.</p>
+  <div class="card pad">
+    <dl class="dl">
+      <dt>Created</dt><dd><strong>2026-07-21 at 15:06</strong>, under Ali's Basecamp identity.</dd>
+      <dt>Generated from</dt><dd>A 160 KB document, <em>TalentSignal Revenue Engine - Build Guide v1</em>, dated the same day and still attached in the project's Docs &amp; Files folder.</dd>
+      <dt>How that document was made</dt><dd>It reads as machine output, not something written by hand. Its opening profile is a set of slugs: <code>Problem: hidden_demand</code>, <code>Target User: staffing_agencies</code>, <code>Value Proposition: proactive_sales</code>, <code>Monetization: subscription_fee</code>. That is the shape the AI Project Architect produces when it expands a short idea into a full build guide.</dd>
+      <dt>How it became a Basecamp plan</dt><dd>The story-build pipeline turned the guide into 20 requirements, 20 stories across 5 releases, and the to-do list Megan has been working from. That pipeline runs identity-guarded as Ali, which is why every document and the list itself show him as the author.</dd>
+    </dl>
+    <div class="note">So the chain was: a short idea, expanded by one tool into a build guide, expanded by a second tool into a work plan, published under Ali's name. It is entirely possible for this project to exist, and to be well specified, without Ali having consciously specified it. That is worth knowing before judging the work inside it.</div>
+  </div>
+  <div class="card callout warn">
+    <h3>Three features in the source guide never became requirements</h3>
+    <p>The Build Guide lists <strong>Automated Email Follow-ups</strong>, <strong>Client Engagement Tools</strong> and <strong>Real-time Analytics</strong> among its selected features. None of them appear in the 20 requirements.</p>
+    <p>Dropping the email follow-ups was the right call and probably deliberate: automatic outbound email would directly contradict REQ-020, the rule that nothing leaves the platform without a human releasing it. The other two simply fell away between the two documents.</p>
+  </div>
+</div></section>
+
+<section id="reqs"><div class="wrap">
+  <div class="sechead"><div><span class="num">03</span><h2>Requirements versus what shipped</h2></div>
+    <span class="badge warning">18 of 20 met</span></div>
+  <p class="seclede">All 20 requirements from the requirements document, checked against the build. Every requirement maps to at least one story and every story cites a requirement, so there are no orphans on either side.</p>
+  <div class="tablewrap card"><table>
+    <thead><tr><th class="nosort">Req</th><th class="nosort">Priority</th><th class="nosort">What it asks for</th><th class="nosort">Stories</th><th class="nosort">State</th></tr></thead>
+    <tbody><tr class="norow">
+      <td><strong>REQ-001</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Hidden Demand Analysis with a confidence score</td>
+      <td><small>S-03, S-04</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-002</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Client Matchmaking: ranked, explained candidates</td>
+      <td><small>S-05, S-06</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-003</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Opportunity Scoring, 0..1 from transparent factors<div class="reqnote">Score breakdown is inspectable and versioned. Opportunities scored before S-07 cannot be reconstructed and are marked non-auditable rather than given a fake breakdown.</div></td>
+      <td><small>S-07</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-004</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Sales Pipeline Management</td>
+      <td><small>S-08</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-005</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>AI drafts an opportunity package, human releases</td>
+      <td><small>S-09</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-006</strong></td>
+      <td><span class="badge warning">should</span></td>
+      <td>Warm Relationship Identification</td>
+      <td><small>S-10</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-007</strong></td>
+      <td><span class="badge warning">should</span></td>
+      <td>Predictive Analysis with a confidence interval<div class="reqnote">Marked complete but shipped with no write-up comment, so this is one of only two stories with no evidence trail at all.</div></td>
+      <td><small>S-13</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-008</strong></td>
+      <td><span class="badge warning">should</span></td>
+      <td>Recommendation Engine with feedback loop<div class="reqnote">Her open decision 019: only the latest rating per recruiter is kept, not full history, which may not satisfy the stated &quot;correct bias over time&quot; intent.</div></td>
+      <td><small>S-11</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-009</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Reporting and Analytics KPI dashboard</td>
+      <td><small>S-12</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-010</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Authentication, JWT, MFA-ready<div class="reqnote">MFA-ready, not MFA. The requirement only asks for ready.</div></td>
+      <td><small>S-02</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-011</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Role-Based Access Control per route and resource</td>
+      <td><small>S-14</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-012</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Data Privacy: consent, encryption, access and erasure<div class="reqnote">Shipped with no write-up comment. Given this is the GDPR/CCPA requirement, it is the one place the missing evidence actually matters.</div></td>
+      <td><small>S-15</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-013</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Append-only audit trail<div class="reqnote">Enforced by a database trigger rather than application code, so a bug in the app cannot rewrite history.</div></td>
+      <td><small>S-15</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-014</strong></td>
+      <td><span class="badge warning">should</span></td>
+      <td>CRM Pollution Prevention, rollback on bad update<div class="reqnote">Where she found the rollback-versus-erasure contradiction and raised it instead of picking the convenient answer.</div></td>
+      <td><small>S-16</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-015</strong></td>
+      <td><span class="badge neutral">could</span></td>
+      <td>Client Segmentation and Targeting</td>
+      <td><small>S-17</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-016</strong></td>
+      <td><span class="badge neutral">could</span></td>
+      <td>Revenue anomaly detection with alerting</td>
+      <td><small>S-17</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-017</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Performance: p95 under 200ms, 1000 concurrent users<div class="reqnote">Not started. Also amended on 2026-08-12: authentication endpoints are now scoped out of the 200ms budget, because bcrypt at cost 12 exceeds it by design and weakening it to hit a dashboard number would trade real security for a metric.</div></td>
+      <td><small>S-18</small></td>
+      <td><span class="badge risk">not built</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-018</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Dockerized, CI on GitHub Actions, public demo URL<div class="reqnote">Docker is done (S-01). CI and end-to-end tests (S-19) are not started. The public demo URL (S-20) was cancelled outright on 2026-08-12, so as written this requirement can no longer be fully satisfied and needs rewording to a recorded local walkthrough.</div></td>
+      <td><small>S-01, S-19, S-20</small></td>
+      <td><span class="badge warning">partial</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-019</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Data Ingestion through provider adapters (mocked for the demo)<div class="reqnote">Built exactly as specified. The requirement itself says mocked, so the absence of a real data source is a decision recorded in the requirements, not an oversight by the builder. It is still the single biggest thing between this and something real.</div></td>
+      <td><small>S-03, S-04</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr><tr class="norow">
+      <td><strong>REQ-020</strong></td>
+      <td><span class="badge risk">must</span></td>
+      <td>Nothing outbound without explicit human release<div class="reqnote">Proven by disabling every outbound path and showing nothing fires, during drafting and during release.</div></td>
+      <td><small>S-09</small></td>
+      <td><span class="badge good">met</span></td>
+    </tr></tbody>
+  </table></div>
+  <div class="card callout" style="margin-top:16px">
+    <h3>The short version</h3>
+    <p><strong>17 of 20 requirements are met outright.</strong> Every single "must" is met except two, and both gaps are in the same place: <strong>launch readiness, which she has not started</strong>.</p>
+    <p><strong>REQ-017 (performance) is not built</strong>, and has also been amended: authentication is now scoped out of the 200ms budget, because bcrypt exceeds it by design and weakening it would trade real security for a metric.</p>
+    <p><strong>REQ-018 (deployment) is partial and can no longer be met as written</strong>: Docker is done, CI and end-to-end tests are not started, and the public demo URL was cancelled on 2026-08-12. It needs rewording to a recorded local walkthrough.</p>
+  </div>
+  <div class="card callout warn">
+    <h3>The mocked-data question, answered precisely</h3>
+    <p>The demand board ranks companies on invented signals. That is real, and it is why the demo is hard to follow: there is no provenance to show behind any row.</p>
+    <p><strong>But it is not a gap someone forgot.</strong> REQ-019 says, in the requirements document itself, "pull job-board and market signals through provider adapters <strong>(mocked for the demo)</strong>". Megan built exactly what she was asked for, and built the adapter seam a real source would plug into. The decision to run on mocked data was made in the requirements on day one, not by her.</p>
+    <p>It remains the single biggest thing standing between this and something real, and no story in the plan changes it.</p>
+  </div>
+  <div class="card callout">
+    <h3>Two stories shipped with no evidence at all</h3>
+    <p><strong>S-13 (predictive analysis)</strong> and <strong>S-15 (data privacy and audit trail)</strong> are both marked complete with no write-up comment and no screenshots, unlike the other fifteen. S-15 is the GDPR and CCPA requirement, so that is the one place the missing evidence actually matters. Worth asking her for the verification on that one specifically before approving Phase 2.</p>
+  </div>
+</div></section>
+
 <section id="how"><div class="wrap">
-  <div class="sechead"><div><span class="num">02</span><h2>How it works</h2></div></div>
+  <div class="sechead"><div><span class="num">04</span><h2>How it works</h2></div></div>
   <p class="seclede">Signals come in on the left. Nothing leaves on the right without a person deciding it should.</p>
   <div class="card mermaidbox"><pre class="mermaid">flowchart LR
   A["Job signals<br/>(reposted roles,<br/>days open, no salary)"] --> B["SignalAgent<br/>scores hidden demand"]
@@ -343,7 +511,7 @@ footer{padding:34px 0 50px;color:var(--muted);font-size:12.5px;border-top:1px so
 
 
 <section id="R0Walkingskeleton"><div class="wrap">
-  <div class="relhead sechead"><div><span class="num">03</span><h2>R0 - Walking skeleton</h2></div>
+  <div class="relhead sechead"><div><span class="num">05</span><h2>R0 - Walking skeleton</h2></div>
     <span class="badge good">3 / 3 built</span></div>
   <p class="relblurb">The thinnest slice that works end to end: an app that runs, people who can log in, and one signal turning into one scored opportunity. Nothing here is impressive on its own. It is the floor everything else stands on.</p>
   <article class="card story " id="S-01">
@@ -476,7 +644,7 @@ There are 42 backend tests and 11 frontend tests. TSC is clean on both sides.
 </article>
 </div></section>
 <section id="R1Coreintelligencesurfaces"><div class="wrap">
-  <div class="relhead sechead"><div><span class="num">04</span><h2>R1 - Core intelligence surfaces</h2></div>
+  <div class="relhead sechead"><div><span class="num">06</span><h2>R1 - Core intelligence surfaces</h2></div>
     <span class="badge good">4 / 4 built</span></div>
   <p class="relblurb">The actual product appears. Companies ranked by hidden hiring demand, real client and candidate records behind it, and candidates ranked against a job.</p>
   <article class="card story " id="S-04">
@@ -616,7 +784,7 @@ The weight versioning is recorded as decision 012; the weights remain as in deci
 </article>
 </div></section>
 <section id="R2Pipelineandhumanintheloop"><div class="wrap">
-  <div class="relhead sechead"><div><span class="num">05</span><h2>R2 - Pipeline and human-in-the-loop</h2></div>
+  <div class="relhead sechead"><div><span class="num">07</span><h2>R2 - Pipeline and human-in-the-loop</h2></div>
     <span class="badge good">4 / 4 built</span></div>
   <p class="relblurb">Where it becomes a working sales tool, and where the trust line gets drawn: the AI drafts, a human releases. Nothing leaves the platform on its own.</p>
   <article class="card story " id="S-08">
@@ -771,7 +939,7 @@ There is one question that I have for you (decision 019): the feedback table ret
 </article>
 </div></section>
 <section id="R3Analyticstrustandcompliance"><div class="wrap">
-  <div class="relhead sechead"><div><span class="num">06</span><h2>R3 - Analytics, trust and compliance</h2></div>
+  <div class="relhead sechead"><div><span class="num">08</span><h2>R3 - Analytics, trust and compliance</h2></div>
     <span class="badge good">6 / 6 built</span></div>
   <p class="relblurb">The manager view, plus the unglamorous work that makes the numbers trustworthy: roles, erasure, duplicate prevention and an audit trail the database itself protects.</p>
   <article class="card story " id="S-12">
@@ -928,7 +1096,7 @@ Suite 230 ran and produced zero failures, with the type checking passing. Three 
 </article>
 </div></section>
 <section id="R4Launchreadiness"><div class="wrap">
-  <div class="relhead sechead"><div><span class="num">07</span><h2>R4 - Launch readiness</h2></div>
+  <div class="relhead sechead"><div><span class="num">09</span><h2>R4 - Launch readiness</h2></div>
     <span class="badge neutral">0 / 3 built</span></div>
   <p class="relblurb">Not started. Load testing, automated end-to-end tests, and what was going to be a public demo.</p>
   <article class="card story todo" id="S-18">
@@ -976,7 +1144,7 @@ Suite 230 ran and produced zero failures, with the type checking passing. Three 
 </article>
 </div></section>
 <section id="MILESTONEAPPROVALSAli"><div class="wrap">
-  <div class="relhead sechead"><div><span class="num">08</span><h2>MILESTONE APPROVALS - Ali</h2></div>
+  <div class="relhead sechead"><div><span class="num">10</span><h2>MILESTONE APPROVALS - Ali</h2></div>
     <span class="badge neutral">0 / 3 built</span></div>
   <p class="relblurb">Your three gates. All three are open, the oldest for 22 days, on a project that is 17 of 20 done.</p>
   <article class="card story todo" id="null">
@@ -1025,7 +1193,7 @@ Suite 230 ran and produced zero failures, with the type checking passing. Three 
 </div></section>
 
 <section id="verdict"><div class="wrap">
-  <div class="sechead"><div><span class="num">09</span><h2>What to do with this</h2></div></div>
+  <div class="sechead"><div><span class="num">11</span><h2>What to do with this</h2></div></div>
   <div class="card callout">
     <h3>The three gates are the easy part</h3>
     <p>Phases 1 and 2 cover R0 through R3, which are built and evidenced above. Phase 3 covers R4, which has not started, so that one is genuinely premature and can wait.</p>

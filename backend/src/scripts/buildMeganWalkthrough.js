@@ -134,6 +134,32 @@ function renderStory(task) {
 </article>`;
 }
 
+// The 20 requirements from "TalentSignal Revenue Engine - 01 - Requirements"
+// (Basecamp doc, created 2026-07-21), checked against what actually shipped.
+// `state`: met | partial | unbuilt. `note` explains anything other than a clean met.
+const REQS = [
+  ['REQ-001', 'must', 'Hidden Demand Analysis with a confidence score', 'S-03, S-04', 'met', ''],
+  ['REQ-002', 'must', 'Client Matchmaking: ranked, explained candidates', 'S-05, S-06', 'met', ''],
+  ['REQ-003', 'must', 'Opportunity Scoring, 0..1 from transparent factors', 'S-07', 'met', 'Score breakdown is inspectable and versioned. Opportunities scored before S-07 cannot be reconstructed and are marked non-auditable rather than given a fake breakdown.'],
+  ['REQ-004', 'must', 'Sales Pipeline Management', 'S-08', 'met', ''],
+  ['REQ-005', 'must', 'AI drafts an opportunity package, human releases', 'S-09', 'met', ''],
+  ['REQ-006', 'should', 'Warm Relationship Identification', 'S-10', 'met', ''],
+  ['REQ-007', 'should', 'Predictive Analysis with a confidence interval', 'S-13', 'met', 'Marked complete but shipped with no write-up comment, so this is one of only two stories with no evidence trail at all.'],
+  ['REQ-008', 'should', 'Recommendation Engine with feedback loop', 'S-11', 'met', 'Her open decision 019: only the latest rating per recruiter is kept, not full history, which may not satisfy the stated "correct bias over time" intent.'],
+  ['REQ-009', 'must', 'Reporting and Analytics KPI dashboard', 'S-12', 'met', ''],
+  ['REQ-010', 'must', 'Authentication, JWT, MFA-ready', 'S-02', 'met', 'MFA-ready, not MFA. The requirement only asks for ready.'],
+  ['REQ-011', 'must', 'Role-Based Access Control per route and resource', 'S-14', 'met', ''],
+  ['REQ-012', 'must', 'Data Privacy: consent, encryption, access and erasure', 'S-15', 'met', 'Shipped with no write-up comment. Given this is the GDPR/CCPA requirement, it is the one place the missing evidence actually matters.'],
+  ['REQ-013', 'must', 'Append-only audit trail', 'S-15', 'met', 'Enforced by a database trigger rather than application code, so a bug in the app cannot rewrite history.'],
+  ['REQ-014', 'should', 'CRM Pollution Prevention, rollback on bad update', 'S-16', 'met', 'Where she found the rollback-versus-erasure contradiction and raised it instead of picking the convenient answer.'],
+  ['REQ-015', 'could', 'Client Segmentation and Targeting', 'S-17', 'met', ''],
+  ['REQ-016', 'could', 'Revenue anomaly detection with alerting', 'S-17', 'met', ''],
+  ['REQ-017', 'must', 'Performance: p95 under 200ms, 1000 concurrent users', 'S-18', 'unbuilt', 'Not started. Also amended on 2026-08-12: authentication endpoints are now scoped out of the 200ms budget, because bcrypt at cost 12 exceeds it by design and weakening it to hit a dashboard number would trade real security for a metric.'],
+  ['REQ-018', 'must', 'Dockerized, CI on GitHub Actions, public demo URL', 'S-01, S-19, S-20', 'partial', 'Docker is done (S-01). CI and end-to-end tests (S-19) are not started. The public demo URL (S-20) was cancelled outright on 2026-08-12, so as written this requirement can no longer be fully satisfied and needs rewording to a recorded local walkthrough.'],
+  ['REQ-019', 'must', 'Data Ingestion through provider adapters (mocked for the demo)', 'S-03, S-04', 'met', 'Built exactly as specified. The requirement itself says mocked, so the absence of a real data source is a decision recorded in the requirements, not an oversight by the builder. It is still the single biggest thing between this and something real.'],
+  ['REQ-020', 'must', 'Nothing outbound without explicit human release', 'S-09', 'met', 'Proven by disabling every outbound path and showing nothing fires, during drafting and during release.'],
+];
+
 const ARCH = `flowchart LR
   A["Job signals<br/>(reposted roles,<br/>days open, no salary)"] --> B["SignalAgent<br/>scores hidden demand"]
   B --> C["Demand board<br/>ranked companies"]
@@ -183,6 +209,7 @@ const html = `<!doctype html>
 .shots figure{margin:0}
 .shots img{width:100%;border:1px solid var(--border);border-radius:var(--r-sm);cursor:zoom-in;display:block;background:#fff}
 .shots figcaption{font-size:11px;color:var(--muted);margin-top:5px;display:flex;align-items:center;gap:6px}
+.reqnote{font-size:12px;color:var(--muted);margin-top:5px;line-height:1.5}
 .kind{font-size:9.5px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;padding:2px 6px;border-radius:3px}
 .kind.terminal{background:var(--neutral-bg);color:var(--muted)}
 .kind.ui{background:var(--good-bg);color:var(--good)}
@@ -203,6 +230,8 @@ const html = `<!doctype html>
   <div class="brand"><span class="dot"></span>TalentSignal &middot; what Megan built</div>
   <div class="navlinks" id="navlinks">
     <a href="#summary" data-scroll>Summary</a>
+    <a href="#origin" data-scroll>Origin</a>
+    <a href="#reqs" data-scroll>Requirements</a>
     <a href="#how" data-scroll>How it works</a>
     ${releases.map((r) => `<a href="#${r.name.replace(/[^A-Za-z0-9]/g, '')}" data-scroll>${esc(r.name.split(' - ')[0].replace('MILESTONE APPROVALS', 'Your gates'))}</a>`).join('')}
     <a href="#verdict" data-scroll>What to do</a>
@@ -245,8 +274,59 @@ const html = `<!doctype html>
   </div>
 </div></section>
 
+<section id="origin"><div class="wrap">
+  <div class="sechead"><div><span class="num">02</span><h2>Where this project came from</h2></div></div>
+  <p class="seclede">Worth reading first if you do not remember commissioning it.</p>
+  <div class="card pad">
+    <dl class="dl">
+      <dt>Created</dt><dd><strong>2026-07-21 at 15:06</strong>, under Ali's Basecamp identity.</dd>
+      <dt>Generated from</dt><dd>A 160 KB document, <em>TalentSignal Revenue Engine - Build Guide v1</em>, dated the same day and still attached in the project's Docs &amp; Files folder.</dd>
+      <dt>How that document was made</dt><dd>It reads as machine output, not something written by hand. Its opening profile is a set of slugs: <code>Problem: hidden_demand</code>, <code>Target User: staffing_agencies</code>, <code>Value Proposition: proactive_sales</code>, <code>Monetization: subscription_fee</code>. That is the shape the AI Project Architect produces when it expands a short idea into a full build guide.</dd>
+      <dt>How it became a Basecamp plan</dt><dd>The story-build pipeline turned the guide into 20 requirements, 20 stories across 5 releases, and the to-do list Megan has been working from. That pipeline runs identity-guarded as Ali, which is why every document and the list itself show him as the author.</dd>
+    </dl>
+    <div class="note">So the chain was: a short idea, expanded by one tool into a build guide, expanded by a second tool into a work plan, published under Ali's name. It is entirely possible for this project to exist, and to be well specified, without Ali having consciously specified it. That is worth knowing before judging the work inside it.</div>
+  </div>
+  <div class="card callout warn">
+    <h3>Three features in the source guide never became requirements</h3>
+    <p>The Build Guide lists <strong>Automated Email Follow-ups</strong>, <strong>Client Engagement Tools</strong> and <strong>Real-time Analytics</strong> among its selected features. None of them appear in the 20 requirements.</p>
+    <p>Dropping the email follow-ups was the right call and probably deliberate: automatic outbound email would directly contradict REQ-020, the rule that nothing leaves the platform without a human releasing it. The other two simply fell away between the two documents.</p>
+  </div>
+</div></section>
+
+<section id="reqs"><div class="wrap">
+  <div class="sechead"><div><span class="num">03</span><h2>Requirements versus what shipped</h2></div>
+    <span class="badge ${REQS.filter((r) => r[4] === 'met').length === REQS.length ? 'good' : 'warning'}">${REQS.filter((r) => r[4] === 'met').length} of ${REQS.length} met</span></div>
+  <p class="seclede">All 20 requirements from the requirements document, checked against the build. Every requirement maps to at least one story and every story cites a requirement, so there are no orphans on either side.</p>
+  <div class="tablewrap card"><table>
+    <thead><tr><th class="nosort">Req</th><th class="nosort">Priority</th><th class="nosort">What it asks for</th><th class="nosort">Stories</th><th class="nosort">State</th></tr></thead>
+    <tbody>${REQS.map(([id, pri, what, st, state, note]) => `<tr class="norow">
+      <td><strong>${esc(id)}</strong></td>
+      <td>${pri === 'must' ? '<span class="badge risk">must</span>' : pri === 'should' ? '<span class="badge warning">should</span>' : '<span class="badge neutral">could</span>'}</td>
+      <td>${esc(what)}${note ? `<div class="reqnote">${esc(note)}</div>` : ''}</td>
+      <td><small>${esc(st)}</small></td>
+      <td><span class="badge ${state === 'met' ? 'good' : state === 'partial' ? 'warning' : 'risk'}">${state === 'met' ? 'met' : state === 'partial' ? 'partial' : 'not built'}</span></td>
+    </tr>`).join('')}</tbody>
+  </table></div>
+  <div class="card callout" style="margin-top:16px">
+    <h3>The short version</h3>
+    <p><strong>17 of 20 requirements are met outright.</strong> Every single "must" is met except two, and both gaps are in the same place: <strong>launch readiness, which she has not started</strong>.</p>
+    <p><strong>REQ-017 (performance) is not built</strong>, and has also been amended: authentication is now scoped out of the 200ms budget, because bcrypt exceeds it by design and weakening it would trade real security for a metric.</p>
+    <p><strong>REQ-018 (deployment) is partial and can no longer be met as written</strong>: Docker is done, CI and end-to-end tests are not started, and the public demo URL was cancelled on 2026-08-12. It needs rewording to a recorded local walkthrough.</p>
+  </div>
+  <div class="card callout warn">
+    <h3>The mocked-data question, answered precisely</h3>
+    <p>The demand board ranks companies on invented signals. That is real, and it is why the demo is hard to follow: there is no provenance to show behind any row.</p>
+    <p><strong>But it is not a gap someone forgot.</strong> REQ-019 says, in the requirements document itself, "pull job-board and market signals through provider adapters <strong>(mocked for the demo)</strong>". Megan built exactly what she was asked for, and built the adapter seam a real source would plug into. The decision to run on mocked data was made in the requirements on day one, not by her.</p>
+    <p>It remains the single biggest thing standing between this and something real, and no story in the plan changes it.</p>
+  </div>
+  <div class="card callout">
+    <h3>Two stories shipped with no evidence at all</h3>
+    <p><strong>S-13 (predictive analysis)</strong> and <strong>S-15 (data privacy and audit trail)</strong> are both marked complete with no write-up comment and no screenshots, unlike the other fifteen. S-15 is the GDPR and CCPA requirement, so that is the one place the missing evidence actually matters. Worth asking her for the verification on that one specifically before approving Phase 2.</p>
+  </div>
+</div></section>
+
 <section id="how"><div class="wrap">
-  <div class="sechead"><div><span class="num">02</span><h2>How it works</h2></div></div>
+  <div class="sechead"><div><span class="num">04</span><h2>How it works</h2></div></div>
   <p class="seclede">Signals come in on the left. Nothing leaves on the right without a person deciding it should.</p>
   <div class="card mermaidbox"><pre class="mermaid">${ARCH}</pre></div>
   <div class="note">The dotted line is the important one: the release gate has no automatic path through it, and the compliance layer touches every surface rather than being bolted on at the end.</div>
@@ -254,14 +334,14 @@ const html = `<!doctype html>
 
 ${releases.map((r, i) => `
 <section id="${r.name.replace(/[^A-Za-z0-9]/g, '')}"><div class="wrap">
-  <div class="relhead sechead"><div><span class="num">${String(i + 3).padStart(2, '0')}</span><h2>${esc(r.name)}</h2></div>
+  <div class="relhead sechead"><div><span class="num">${String(i + 5).padStart(2, '0')}</span><h2>${esc(r.name)}</h2></div>
     <span class="badge ${r.done === r.tasks.length ? 'good' : r.done === 0 ? 'neutral' : 'warning'}">${r.done} / ${r.tasks.length} built</span></div>
   <p class="relblurb">${esc(RELEASE_BLURB[r.name] || '')}</p>
   ${r.tasks.map(renderStory).join('')}
 </div></section>`).join('')}
 
 <section id="verdict"><div class="wrap">
-  <div class="sechead"><div><span class="num">${String(releases.length + 3).padStart(2, '0')}</span><h2>What to do with this</h2></div></div>
+  <div class="sechead"><div><span class="num">${String(releases.length + 5).padStart(2, '0')}</span><h2>What to do with this</h2></div></div>
   <div class="card callout">
     <h3>The three gates are the easy part</h3>
     <p>Phases 1 and 2 cover R0 through R3, which are built and evidenced above. Phase 3 covers R4, which has not started, so that one is genuinely premature and can wait.</p>
