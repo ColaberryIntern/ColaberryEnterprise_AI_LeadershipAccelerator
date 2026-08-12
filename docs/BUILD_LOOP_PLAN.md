@@ -85,40 +85,133 @@ Because it is rendered *from* the plan, "build this structure" is automatically 
 
 ---
 
-## 5. Points
+## 5. Points — corrected after reading the actual economy
 
-### The fairness problem to avoid
+An earlier draft of this plan proposed "300 / 600 / 1000 points per tier". **That was wrong in
+both the currency and the magnitude.** What the system actually has:
 
-Points must not scale with how verbose a plan happened to be. Two students building comparable systems, whose plans came out at 8 and 15 stories, must be able to earn the same amount. Otherwise the incentive is to generate more tasks, not to build better.
-
-**So: a fixed points budget per tier, divided across that plan's stories.**
-
-| tier | build-points budget | typical stories | ≈ per story |
+| currency | table | what it drives | ceiling |
 |---|---|---|---|
-| workflow | 300 | 6–9 | 40 |
-| project | 600 | 10–14 | 50 |
-| autonomous | 1000 | 14–20 | 60 |
+| **Points** | `student_points_events` | the HUD total and leaderboard | ladder is **0 / 150 / 400 / 900**, and points alone can **never** exceed "AI Enabled" |
+| **builder_xp** | `XpEvent` stream `builder` | the build side of progression | awarded **only** by the evidence engine |
+| **Competency** | `student_competency` | `evidence_count` + `confidence` per domain | what actually promotes someone to **AI Builder / AI Architect** |
 
-Budget is set by the tier the student chose — a real decision with a real reward attached — and division is by story weight, so a hard story is worth more than a trivial one within the same plan.
+So 600 "points" for one capstone would have been two thirds of the entire points ladder, in a
+currency that structurally cannot reach a build band. The build bands are **evidence-gated**, and
+evidence is the currency this repo already says progression runs on.
 
-### Weighting inside the budget
+### The right integration already exists and is not wired
 
-| weight factor | why |
+`evidenceEngine.recordEvidence()` takes `source: 'github_commit'`, a `sourceRef` documented as
+"commit sha", is idempotency-keyed, awards `builder_xp` from `points_config`, and contributes
+weighted competency signal. Its own header says *"used by GitHub sync too."*
+
+`githubEvidenceService` already exists to feed it — and **nothing calls it.** It also counts
+*commit days*, which rewards showing up rather than shipping.
+
+**So: a completed, test-verified story becomes one evidence record**, keyed on the commit that
+completed it. That single call awards builder_xp, moves competency, and cannot double-count on a
+re-push. No new ledger, no new table.
+
+### Calibration against what exists
+
+Current `builder_xp` per card type: `implementation_task` **80**, `artifact_submission` 60,
+`mock_interview` 60, `prompt_challenge` 50, `prompt_lab` 40, `deep_dive` 10.
+
+A capstone story is at least as much work as an `implementation_task`. Add new `points_config`
+rows — `capstone_story`, `capstone_release`, `capstone_shipped` — so the numbers live **in the
+database and are tunable without a deploy**, exactly like every other card type.
+
+### The fairness control still applies
+
+The same project produced **8 to 15 stories** across repeated runs. That spread is noise, not a
+measure of ambition, so per-story XP must not be flat or a chattier plan out-earns a concise one.
+
+Normalise: **a fixed builder_xp budget for the capstone, divided across that plan's stories**,
+weighted ×1.5 for the r0 trust-spine story, ×1.25 for stories carrying a `SAFE` requirement, and
+×1.25 for the standout. Weights computed once at publish and stored on the task, so a republish
+cannot re-price work already done.
+
+### When it is awarded
+
+On **verified** completion only — the progress file and CI agreeing. Not on claiming, not on
+pushing.
+
+---
+
+## 5b. Do we still need the three tiers?
+
+Probably not as an **upfront question**. The tier currently sets the interview length (5/7/10) and
+the plan targets. But it asks the student to size something they have not thought about yet, and
+the interview answers predict size far better than the guess does:
+
+| signal from the interview | what it implies |
 |---|---|
-| base share | every story earns something |
-| ×1.5 if it is the r0 trust-spine story | it is the hardest and the most valuable thing they build |
-| ×1.25 if it carries a `SAFE` requirement | the guardrail work is what makes the system trustworthy |
-| ×1.25 if it is the standout story | rewards the ambition the interview asked for |
+| count of distinct systems named | integration surface |
+| runs unattended vs. always human-approved | autonomy depth |
+| volume, now and at peak | reliability work |
+| whether the uncertainty path needs its own escalation route | extra slices |
+| breadth of the standout | ambition |
 
-Weights are computed once at publish and stored on the task, so a republish cannot silently re-price work already done.
+**Proposal: derive the size, then let them confirm it.** Run the interview, compute a suggested
+tier from the answers, and show it *after*: "This looks like a full project — about 12–16 tasks.
+Scale down to a workflow, or up to autonomous." The system does the sizing; the student keeps the
+commitment decision, which is the only part that was ever really theirs.
 
-### When points are awarded
+This also removes the current oddity that a student picks their tier before being asked a single
+question about their project.
 
-**On verified completion only** — signals 1 and 2 agreeing. Not on claiming, not on pushing. This is the difference between a points system that measures building and one that measures typing.
+---
 
-Awarded through the existing ledger (`StudentPointsEvent` via `pointsService`), keyed on `(enrollment, story_id)` so a re-push cannot double-award — the idempotency rule this repo already enforces everywhere else.
+## 6. The business translation problem
 
-Build work should also feed **`builder_xp`** through `evidenceEngine`, which is what the band ladder reads. Right now a student can complete an entire capstone and their build competency band does not move.
+The hardest gap is not technical. A student receives requirements, stories and prompts — all
+engineering artifacts — and never has to articulate *why any of it is worth building*. They can
+finish the capstone and still not be able to explain it to a stakeholder.
+
+Four things, all derived from material the plan already holds:
+
+**a. The one-pager, generated.** Problem, who it is for, the measure and today's number, the
+guardrail, what is deliberately out. Every field already comes from the interview. Written into
+their repo as `docs/BRIEF.md` and shown in the dashboard. This is the artifact they would hand a
+manager, and they did not have to write it — they have to *defend* it, which is the skill.
+
+**b. A decision log — the open ones, in business terms.** The plan implies decisions the student
+never consciously made. Surface them:
+
+> You said nothing over $200 is scrapped without review. At 300 returns a day that routes roughly
+> 12 items to a person daily. Is $200 the right line, or is it $500?
+
+These are generated from the answers plus the plan, and each one is a real trade with a real cost.
+This is the single highest-value piece for the translation problem: it forces the student to make
+business calls, not just implement.
+
+**c. Value framing per release.** Every release already carries a `demo`. Add what it is worth,
+tied to their own measure: r0 is "proves it works end to end"; the release containing the
+prediction story is "this is where 18% → 12% starts moving". They see which work moves the number.
+
+**d. Let their Claude Code draw the system.** Instruct it in their `CLAUDE.md`: after finishing a
+release, update `docs/ARCHITECTURE.md` with a Mermaid diagram of what now actually exists. We
+render it in the dashboard. It stays current because the thing that changes the code also changes
+the diagram, and it is *their* system explaining itself rather than our mockup of it.
+
+(d) is the same pattern as the progress protocol: the mechanism is a paragraph of prompt, not a
+subsystem.
+
+---
+
+## 6b. On tests
+
+Staff should not be doing manual verification — that was the wrong suggestion. **Tests are the
+gate, full stop.** Two consequences:
+
+- The interview should capture how this project proves itself (one more question, or folded into
+  the trigger angle). For most student projects that is `npm test`; for some it is not.
+- The story prompt must instruct their Claude Code to write the test **alongside** the code, from
+  the acceptance criteria that are already on every story. The acceptance criteria are already
+  Given/When/Then — they are tests that have not been written down yet.
+
+No self-attestation, no staff review queue.
 
 ---
 
@@ -131,8 +224,8 @@ Each phase is independently shippable and useful on its own.
 | **A** | Delete the fake `ToolPreview`. Extend the student `CLAUDE.md` with the progress protocol, the ownership boundary, and the verification contract | everything — the protocol has to exist in repos before anything can read it back |
 | **B** | Webhook route + `progress.json` reader + reconciliation poll. Bot-authored commits already carry a prefix so the loop cannot feed itself | progress, points, the live diagram |
 | **C** | CI workflow written into the student repo; `mark done` gated on checks green | trustworthy completion |
-| **D** | Points: weights at publish, award on verified completion, `builder_xp` to the band ladder | the incentive actually connects to building |
-| **E** | The diagram in the project interior, rendered from plan + progress | the visible payoff |
+| **D** | Evidence on verified completion: one `recordEvidence` call per story, `points_config` rows for capstone types, weights stored at publish | competency and the band ladder finally move when someone builds |
+| **E** | The business layer — generated one-pager, decision log, per-release value framing — plus the architecture diagram their own Claude Code maintains | the translation problem, and the visible payoff |
 
 A before B is not negotiable: repos need the protocol in their CLAUDE.md before there is anything meaningful to read back.
 
@@ -140,7 +233,7 @@ A before B is not negotiable: repos need the protocol in their CLAUDE.md before 
 
 ## 7. Open decisions
 
-1. **Points budgets.** 300 / 600 / 1000 above are placeholders chosen to sit sensibly against curriculum card points. They should be set against the real curriculum totals so a capstone is worth what you intend relative to coursework.
-2. **What CI runs** for a student project whose stack we do not control. Options: a generic "does `npm test` pass" workflow, or ask for the test command in the interview. The second is more reliable and costs one more question.
-3. **Whether a student can mark a story done without CI**, for projects where tests are impractical. Recommend yes, with an explicit "self-attested" flag that earns reduced points and is visible to staff.
-4. **Republish semantics.** When a plan is regenerated after work has started, completed stories are already preserved. Whether *points* for a story that later disappears from the plan should be clawed back — recommend no.
+1. **The capstone builder_xp numbers.** The mechanism is settled; the values are not. Benchmark is `implementation_task` at 80. These belong in `points_config` so they are tuned in the database, not in a deploy.
+2. **Whether the tier question survives** as an upfront choice, becomes a post-interview confirmation (recommended, §5b), or disappears entirely.
+3. **Republish semantics.** Completed stories are already preserved across a republish. Whether evidence for a story that later vanishes from the plan should be revoked — recommend no; the work was really done.
+4. **Where the business layer lives** — the PM dashboard, the project interior, or both. §6 assumes the dashboard.
