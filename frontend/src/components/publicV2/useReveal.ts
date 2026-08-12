@@ -1,33 +1,53 @@
 import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 
 /**
  * useReveal -- scroll-triggered reveals that cannot strand content.
  *
- * The prototype shipped a version of this that set `.rv { opacity: 0 }` in CSS
- * and relied on an IntersectionObserver to add the visible class. Full-page
- * screenshots came back blank below the fold, because an observer never fires
- * for elements that are offscreen when it is created and never scrolled to.
+ * THIS MECHANISM HAS NOW FAILED TWICE. Both failures are recorded here because
+ * the fix only makes sense against them:
  *
- * Three defences, all of them deliberate:
- *   1. CSS defaults to visible. The hidden state only applies under
- *      html.cbv2-reveal-on, which is added HERE -- so if this hook never runs,
- *      or JS fails entirely, every section is simply visible.
- *   2. A safety timer reveals everything after 2.5s regardless of the observer.
- *   3. Sections are observed, never individual cards. Nested and re-rendered
- *      cards were the ones that never received the class.
+ *   1. In the prototype, CSS defaulted `.rv` to opacity 0 and relied on an
+ *      observer to reveal it. Anything the observer never saw stayed invisible,
+ *      and full-page screenshots came back blank below the fold.
+ *
+ *   2. In React, this hook ran in the LAYOUT with an empty dependency array. The
+ *      layout does not remount on client-side navigation, so after clicking a
+ *      nav link the incoming page's sections were never observed -- while
+ *      `html.cbv2-reveal-on` was still set from the first page. Every section
+ *      below the hero was permanently invisible. Verified by loading each URL
+ *      directly, which remounts everything, so the bug was invisible to the
+ *      check that was supposed to catch it.
+ *
+ * Three defences, all deliberate:
+ *   a. CSS defaults to VISIBLE. The hidden state applies only under
+ *      `html.cbv2-reveal-on`, added here, so no JS means no hiding.
+ *   b. The effect re-runs on every pathname change, so each page's sections are
+ *      queried and observed after they mount.
+ *   c. Cleanup reveals everything and removes the opt-in class before the next
+ *      run, so a half-finished transition can never persist across a navigation.
+ *      Erring toward a visible flash rather than invisible content.
  */
 export default function useReveal(): void {
+  const { pathname } = useLocation();
+
   useEffect(() => {
     const root = document.documentElement;
-    const targets = Array.from(document.querySelectorAll('.cbv2-rv'));
-    if (!targets.length) return undefined;
 
     const reduced =
       typeof window.matchMedia === 'function' &&
       window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-    // With reduced motion we never opt in, so content just renders.
+    // Never opt in when motion is unwanted or the API is missing: content renders.
     if (reduced || typeof IntersectionObserver !== 'function') return undefined;
+
+    const targets = Array.from(document.querySelectorAll('.cbv2-rv'));
+    if (!targets.length) {
+      // No targets on this route. Make sure a previous route's opt-in does not
+      // linger, or the next page to mount would be hidden before its own run.
+      root.classList.remove('cbv2-reveal-on');
+      return undefined;
+    }
 
     root.classList.add('cbv2-reveal-on');
 
@@ -46,7 +66,7 @@ export default function useReveal(): void {
     );
     targets.forEach((el) => io.observe(el));
 
-    // Safety net: whatever happens, nothing stays hidden.
+    // Safety net, per route: whatever happens, nothing stays hidden.
     const timer = window.setTimeout(revealAll, 2500);
 
     return () => {
@@ -55,5 +75,5 @@ export default function useReveal(): void {
       revealAll();
       root.classList.remove('cbv2-reveal-on');
     };
-  }, []);
+  }, [pathname]);
 }
