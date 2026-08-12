@@ -90,10 +90,13 @@ export type NewBuildAnswers = {
   name?: string;
   idea: string;
   size: BuildSize;
+  /** Legacy four fields. Still populated from the ten answers for older callers. */
   users?: string;
   dataSources?: string;
   done?: string;
   weeks: number;
+  /** The ten sharpening answers, keyed by slot id. Supersedes the four above. */
+  answers?: Record<string, string>;
 };
 
 // ── persistence ────────────────────────────────────────────────────────────

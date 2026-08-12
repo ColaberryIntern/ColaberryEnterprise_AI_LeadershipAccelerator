@@ -14,7 +14,7 @@
 import portalApi from '../utils/portalApi';
 
 export type BuildStatus =
-  | 'captured' | 'generating' | 'gate_failed' | 'drafted'
+  | 'captured' | 'researching' | 'generating' | 'gate_failed' | 'drafted'
   | 'published' | 'awaiting_repo' | 'failed';
 
 export interface GateViolation { rule: string; message: string; subject?: string }
@@ -45,6 +45,38 @@ export interface StartBuildAnswers {
   data_sources?: string;
   done_definition?: string;
   target_weeks?: number;
+  /** Answers to the ten sharpening questions, keyed by slot id. */
+  answers?: Record<string, string>;
+}
+
+/** One of the ten sharpening questions, as the wizard renders it. */
+export interface SharpeningQuestion {
+  id: string;
+  index: number;
+  label: string;
+  text: string;
+  help: string;
+  examples: string[];
+  required: boolean;
+}
+
+/**
+ * Fetch the ten sharpening questions, reworded for this idea.
+ *
+ * Never fails the caller: on any error it resolves with `tailored: false` and an
+ * empty list, and the wizard falls back to its built-in copy. Tailoring is
+ * phrasing, and phrasing must never be the reason a student cannot start.
+ */
+export async function fetchQuestions(idea: string): Promise<{
+  questions: SharpeningQuestion[]; tailored: boolean;
+}> {
+  try {
+    const res = await portalApi.post('/api/portal/sbp/questions', { idea });
+    const questions = Array.isArray(res.data?.questions) ? res.data.questions : [];
+    return { questions, tailored: Boolean(res.data?.tailored) };
+  } catch {
+    return { questions: [], tailored: false };
+  }
 }
 
 /** A failure the UI must show rather than swallow. */

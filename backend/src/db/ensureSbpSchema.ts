@@ -71,6 +71,16 @@ export async function ensureSbpSchema(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS build_plans_unique_project_version ON build_plans (project_id, version)`,
     `CREATE INDEX IF NOT EXISTS idx_build_plans_project ON build_plans (project_id)`,
     `CREATE INDEX IF NOT EXISTS idx_build_plans_status ON build_plans (status)`,
+
+    // The ten sharpening answers, and the Architect job writing this build's
+    // document. Both ADD COLUMN IF NOT EXISTS — additive, no rewrite, safe on a
+    // table with live rows. `architect_job_id` is persisted before the ~15-minute
+    // wait begins so a backend restart can find a job still running upstream
+    // rather than orphaning it (FR-005).
+    `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS answers JSONB`,
+    `ALTER TABLE build_intake ADD COLUMN IF NOT EXISTS architect_job_id VARCHAR(120)`,
+    `CREATE INDEX IF NOT EXISTS idx_build_intake_architect_job ON build_intake (architect_job_id)
+       WHERE architect_job_id IS NOT NULL`,
   ];
 
   for (const sql of statements) {
@@ -92,6 +102,18 @@ const REQUIRED_INDEXES = [
 ] as const;
 
 /**
+ * Columns added after the table's first release. Checked explicitly, because
+ * `CREATE TABLE IF NOT EXISTS` is a no-op on an existing table — so on any
+ * database that already had `build_intake`, the ALTERs above are the ONLY thing
+ * that creates these, and a silently-skipped ALTER would leave saveIntake
+ * writing to a column that does not exist.
+ */
+const REQUIRED_COLUMNS: ReadonlyArray<[string, string]> = [
+  ['build_intake', 'answers'],
+  ['build_intake', 'architect_job_id'],
+];
+
+/**
  * Verify the post-condition against the catalog and report loudly if it is not
  * met. Exported so a test can prove the assertion actually fires against an
  * un-migrated database — an assertion nobody has seen fail is not an assertion.
@@ -111,6 +133,14 @@ export async function assertSbpSchema(): Promise<{ ok: boolean; missing: string[
     const foundIndexes: string[] = rows?.[0]?.indexes ?? [];
     for (const t of REQUIRED_TABLES) if (!foundTables.includes(t)) missing.push(`table:${t}`);
     for (const i of REQUIRED_INDEXES) if (!foundIndexes.includes(i)) missing.push(`index:${i}`);
+
+    const [colRows]: any = await sequelize.query(
+      `SELECT table_name, column_name FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = ANY($tables)`,
+      { bind: { tables: [...new Set(REQUIRED_COLUMNS.map(([t]) => t))] } },
+    );
+    const found = new Set((colRows ?? []).map((r: any) => `${r.table_name}.${r.column_name}`));
+    for (const [t, c] of REQUIRED_COLUMNS) if (!found.has(`${t}.${c}`)) missing.push(`column:${t}.${c}`);
   } catch (err: any) {
     console.warn('[DB] sbp schema post-check could not run:', err?.message);
     return { ok: false, missing: ['post-check-failed'] };

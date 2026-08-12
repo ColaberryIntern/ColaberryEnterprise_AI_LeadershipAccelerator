@@ -79,6 +79,47 @@ const startSchema = z.object({
   done_definition: z.string().max(2_000).optional(),
   target_weeks: z.number().int().min(1).max(52).optional(),
   document: z.string().max(400_000).optional(),
+  /**
+   * Answers to the ten sharpening questions, keyed by slot id. Bounded on both
+   * key count and value length: this reaches an LLM prompt and a third-party
+   * API, so an unbounded map here is an injection-surface and a cost bug.
+   */
+  answers: z.record(z.string().max(40), z.string().max(4_000)).refine(
+    (a) => Object.keys(a).length <= 20, { message: 'too many answers' },
+  ).optional(),
+  use_architect: z.boolean().optional(),
+});
+
+// ── the ten questions, tailored to this idea ────────────────────────────────
+const tailorSchema = z.object({ idea: z.string().max(20_000).default('') });
+
+/**
+ * Returns the ten sharpening questions, reworded for the student's idea.
+ *
+ * POST rather than GET because the idea is a body, not a query string — a
+ * 20,000-character idea does not belong in a URL. Nothing is persisted here;
+ * it is a pure read that happens to need input.
+ */
+router.post('/api/portal/sbp/questions', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const { idea } = tailorSchema.parse(req.body ?? {});
+
+    const { tailorQuestions } = await import('../services/sbp/tailorQuestions');
+    const { getBoundedClient } = await import('../services/sbp/decomposeService');
+
+    const out = await tailorQuestions(idea, { client: getBoundedClient() });
+    res.json({
+      tailored: out.tailored,
+      reason: out.reason,
+      // Only what the form renders. `guards` is internal design rationale and
+      // `feeds` is decomposer vocabulary; neither belongs on a student's screen.
+      questions: out.questions.map((q) => ({
+        id: q.id, index: q.index, label: q.label,
+        text: q.text, help: q.help, examples: q.examples, required: q.required,
+      })),
+    });
+  } catch (e) { fail(res, e, next); }
 });
 
 router.post('/api/portal/sbp/builds', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
@@ -99,6 +140,8 @@ router.post('/api/portal/sbp/builds', requireParticipant, async (req: Request, r
       doneDefinition: body.done_definition,
       targetWeeks: body.target_weeks,
       document: body.document,
+      answers: body.answers,
+      useArchitect: body.use_architect,
     });
     res.status(202).json(result);   // 202: accepted, generation continues
   } catch (e) { fail(res, e, next); }

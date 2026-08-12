@@ -72,6 +72,20 @@ function log(event: string, correlationId: string | undefined, outcome: string, 
 }
 
 let sharedClient: OpenAI | null = null;
+
+/**
+ * The shared, bounded OpenAI completions client — one instance per process, with
+ * this module's timeout and retry ceiling already applied.
+ *
+ * Exported so other SBP callers (question tailoring, plan repair) reuse the same
+ * bounded client rather than each constructing an unbounded one. A second `new
+ * OpenAI()` elsewhere in the codebase would quietly get the SDK's defaults,
+ * which is how an unbounded external call gets introduced by accident.
+ */
+export function getBoundedClient(): Pick<OpenAI['chat']['completions'], 'create'> {
+  return defaultClient();
+}
+
 function defaultClient(): Pick<OpenAI['chat']['completions'], 'create'> {
   if (!process.env.OPENAI_API_KEY) {
     throw new DecomposeError('ConfigError', 'OPENAI_API_KEY is not configured');

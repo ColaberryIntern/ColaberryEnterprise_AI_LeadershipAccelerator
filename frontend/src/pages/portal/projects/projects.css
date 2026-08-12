@@ -432,3 +432,24 @@
 .pj-root .pw-btn.ghost{background:var(--surface-sunken);color:var(--text-body);border:1px solid var(--border-default)}
 .pj-root .pw-btn.ghost:hover{border-color:var(--berry);color:var(--berry)}
 .pj-root .pw-btn:disabled{opacity:.5;cursor:not-allowed}
+
+/* ── the ten sharpening questions (wizard step 2) ─────────────────────────── */
+/* Ten fields is a long form. The numbered rail, the progress bar and the
+   per-question help exist so it reads as steady progress rather than a wall. */
+.pj-root .pjw-qprog{display:flex;align-items:center;gap:10px;margin:0 0 6px}
+.pj-root .pjw-qbar{flex:1;height:4px;border-radius:2px;background:var(--surface-sunken);overflow:hidden}
+.pj-root .pjw-qbar span{display:block;height:100%;background:var(--leaf-action);transition:width .25s ease}
+.pj-root .pjw-q{padding:14px 0;border-bottom:1px solid var(--border-subtle)}
+.pj-root .pjw-q:last-of-type{border-bottom:0}
+.pj-root .pjw-q .pjw-label{display:flex;align-items:baseline;gap:8px;margin-top:0;line-height:1.4}
+.pj-root .pjw-qn{flex:0 0 auto;width:20px;height:20px;border-radius:50%;background:var(--surface-sunken);
+  color:var(--text-muted);font-size:11px;font-weight:700;display:inline-flex;align-items:center;justify-content:center}
+.pj-root .pjw-q.gap .pjw-qn{background:rgba(251,40,50,.12);color:#E5121D}
+.pj-root .pjw-opt{font-weight:500;color:var(--text-muted);font-size:12px}
+.pj-root .pjw-qhelp{color:var(--text-muted);margin:0 0 8px 28px}
+.pj-root .pjw-q textarea.txt{width:100%;resize:vertical}
+.pj-root .pjw-q.gap textarea.txt{border-color:#E5121D}
+.pj-root .pjw-qgap{color:#E5121D;margin-top:6px}
+@media (max-width:640px){
+  .pj-root .pjw-qhelp{margin-left:0}
+}
