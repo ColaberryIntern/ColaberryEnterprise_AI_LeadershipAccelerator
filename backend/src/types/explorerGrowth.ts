@@ -11,6 +11,83 @@
  * Sibling precedent: src/types/inboxCase.ts, src/types/intelligence.ts.
  */
 
+// --- Signals (§6, §7.1-7.2) -------------------------------------------------
+
+/** Which score a signal feeds. */
+export type ExplorerSignalBand = 'engagement' | 'intent' | 'friction';
+
+/**
+ * Commitment tier for intent signals (§6.2). The whole point of the tiering is
+ * that a page view is not readiness: HIGH_INTENT requires at least one T3+
+ * signal, so twenty T1 views can never manufacture it.
+ *   1 view · 2 click · 3 start · 4 commit
+ */
+export type ExplorerIntentTier = 1 | 2 | 3 | 4;
+
+/** Where a signal is read from, so the reader knows which query owns it. */
+export type ExplorerSignalSource =
+  | 'student_navigation_events'
+  | 'timeline_card_progress'
+  | 'today_feed_impressions'
+  | 'student_points_events'
+  | 'community_contributions'
+  | 'community_members'
+  | 'attendance_records'
+  | 'assignment_submissions'
+  | 'reflection_entries'
+  | 'student_architecture_skill'
+  | 'projects'
+  | 'network_video_views'
+  | 'enrollments'
+  | 'page_events'
+  | 'behavioral_signals'
+  | 'interaction_outcomes'
+  | 'strategy_calls'
+  | 'inbox_cases'
+  | 'derived';
+
+export interface ExplorerSignalDefinition {
+  band: ExplorerSignalBand;
+  /** Contribution of a single fresh occurrence, before decay. */
+  weight: number;
+  /**
+   * Days for a contribution to halve: `2^(-ageDays / halfLifeDays)`.
+   * `null` means the signal never decays (a hard bounce does not become
+   * untrue with time).
+   */
+  halfLifeDays: number | null;
+  /** Maximum total contribution from this signal, however many occurrences. */
+  cap: number;
+  /** Intent signals only. Present iff band === 'intent'. */
+  tier?: ExplorerIntentTier;
+  source: ExplorerSignalSource;
+}
+
+/** One occurrence of a signal, as read back from its source table. */
+export interface ExplorerSignalOccurrence {
+  signal: string;
+  occurredAt: Date;
+  /** Contribution after decay and before the per-signal cap. */
+  weightedValue: number;
+}
+
+/** Per-band roll-up returned by the reader. Raw contributions, NOT a 0-100 score. */
+export interface ExplorerSignalBandTotal {
+  band: ExplorerSignalBand;
+  total: number;
+  signals: Array<{ signal: string; occurrences: number; contribution: number }>;
+}
+
+/** The reader's output — the contract EPIC 3's scorer consumes. */
+export interface ExplorerSignalReadout {
+  enrollment_id: string;
+  lead_id: number | null;
+  asOf: Date;
+  bands: Record<ExplorerSignalBand, ExplorerSignalBandTotal>;
+  /** Highest intent tier observed in the window; drives the HIGH_INTENT gate. */
+  highestIntentTier: ExplorerIntentTier | 0;
+}
+
 // --- Journey state (§8) -----------------------------------------------------
 
 /** Exactly one of these holds at a time. Learning states never regress. */
