@@ -14,6 +14,7 @@ jest.mock('../../models/Enrollment', () => ({}));
 jest.mock('../../services/communityCalendarService', () => ({ getUpcomingEvents: jest.fn() }));
 jest.mock('../../services/emailService', () => ({ sendCommunityDigestEmail: jest.fn() }));
 
+import { Op } from 'sequelize';
 import { runDailyDigest } from '../../services/communityDigestService';
 import CommunityMember from '../../models/CommunityMember';
 import CommunityPost from '../../models/CommunityPost';
@@ -51,6 +52,41 @@ describe('runDailyDigest', () => {
     expect(sendCommunityDigestEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({ to: 'ada@example.com', digestDate: '2026-07-14' })
     );
+  });
+
+  describe('DM notification count (offline-DM-notification fix)', () => {
+    it('happy: unread new_message notifications are counted separately from the general mentions/replies bucket', async () => {
+      findAllMembers.mockResolvedValue([memberA]);
+      findOrCreateDigestLog.mockResolvedValue([{ update: jest.fn() }, true]);
+      // First count() call excludes new_message (general bucket) -> 1;
+      // second count() call is new_message-only (DM bucket) -> 2.
+      countNotifications.mockResolvedValueOnce(1).mockResolvedValueOnce(2);
+
+      await runDailyDigest(now);
+
+      expect(countNotifications).toHaveBeenNthCalledWith(1, {
+        where: { member_id: 'member-a', read_at: null, notification_type: { [Op.ne]: 'new_message' } },
+      });
+      expect(countNotifications).toHaveBeenNthCalledWith(2, {
+        where: { member_id: 'member-a', read_at: null, notification_type: 'new_message' },
+      });
+      expect(sendCommunityDigestEmailMock).toHaveBeenCalledWith(
+        expect.objectContaining({ unreadNotificationCount: 1, unreadDmCount: 2 })
+      );
+    });
+
+    it('boundary: zero unread DM notifications still sends the digest with unreadDmCount 0', async () => {
+      findAllMembers.mockResolvedValue([memberA]);
+      findOrCreateDigestLog.mockResolvedValue([{ update: jest.fn() }, true]);
+      countNotifications.mockResolvedValue(0);
+
+      const result = await runDailyDigest(now);
+
+      expect(result).toEqual({ sent: 1, skipped: 0, errors: 0 });
+      expect(sendCommunityDigestEmailMock).toHaveBeenCalledWith(
+        expect.objectContaining({ unreadDmCount: 0 })
+      );
+    });
   });
 
   it('idempotency (trust control): a member already digested today is skipped, not re-sent', async () => {
