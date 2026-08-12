@@ -1,6 +1,6 @@
 import { generateIntakeQuestions } from '../intakeQuestionsService';
 import {
-  buildIntakeQuestionsPrompt, fallbackQuestions, QUESTION_TARGETS,
+  buildIntakeQuestionsPrompt, fallbackQuestions, QUESTION_TARGETS, INTAKE_SYSTEM_PROMPT,
 } from '../intakeQuestionsPrompt';
 
 /**
@@ -117,5 +117,76 @@ describe('the fallback set', () => {
     const text = JSON.stringify(fallbackQuestions('autonomous')).toLowerCase();
     expect(text).not.toContain('zendesk');
     expect(text).not.toContain('saas');
+  });
+});
+
+// ── the ten angles, and their order ─────────────────────────────────────────
+/**
+ * The priority ORDER is the design decision, not just the content.
+ *
+ * It is ranked by how likely a raw idea is to omit the fact, times how much the
+ * plan changes when it is missing. Measured across three projects on 2026-08-12:
+ * with no interview, plans named the student's real systems 0/14 times and
+ * carried their stated guardrail 0/6 times — and generating a 17,000-word
+ * requirements document first recovered neither (still 0/14 and 2/6). The
+ * interview is the only thing that supplies these facts, so the angles most
+ * likely to be missing sit at the top where a short interview still reaches them.
+ *
+ * A reorder changes what a workflow-tier student is asked. It has to be deliberate.
+ */
+describe('the ten angles', () => {
+  const prompt = INTAKE_SYSTEM_PROMPT;
+  const ORDER = [
+    'THE GUARDRAIL',
+    'SYSTEMS OF RECORD',
+    'WHEN IT IS NOT SURE',
+    'THE MEASURE',
+    'EARNING AUTONOMY',
+    'THE JUDGEMENT',
+    'THE OPERATOR',
+    'TRIGGER AND RHYTHM',
+    'THE STANDOUT AND THE CUT',
+    'THE JOB',
+  ];
+
+  it('names all ten', () => {
+    ORDER.forEach((angle) => expect(prompt).toContain(angle));
+  });
+
+  it('keeps them in priority order', () => {
+    const positions = ORDER.map((a) => prompt.indexOf(a));
+    expect(positions.every((p) => p >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
+  it('puts the two facts a raw idea never contains at the very top', () => {
+    // Systems 0/14 and guardrail 0/6 without an interview. A workflow-tier
+    // student only gets five questions — these must be two of them.
+    expect(prompt.indexOf('THE GUARDRAIL')).toBeLessThan(prompt.indexOf('THE JUDGEMENT'));
+    expect(prompt.indexOf('SYSTEMS OF RECORD')).toBeLessThan(prompt.indexOf('THE OPERATOR'));
+  });
+
+  it('protects the two feature-generating angles from being crowded out', () => {
+    // Confidence handling and earning autonomy are where preview, undo,
+    // escalation and explanations come from. Without them a student builds a
+    // system that assumes it is always right.
+    expect(prompt).toMatch(/Angles 3 and 5 are where the interesting features come from/);
+    expect(prompt.indexOf('WHEN IT IS NOT SURE')).toBeLessThan(prompt.indexOf('TRIGGER AND RHYTHM'));
+    expect(prompt.indexOf('EARNING AUTONOMY')).toBeLessThan(prompt.indexOf('THE JOB'));
+  });
+
+  it('asks for the standout and its cut together, not as separate questions', () => {
+    expect(prompt).toMatch(/Ask both halves together/);
+  });
+
+  it('still lets the model skip what the student already said', () => {
+    expect(prompt).toMatch(/does not already answer clearly/i);
+    expect(prompt).toMatch(/do ask\s*\n?\s*when they were vague/i);
+  });
+
+  it('gives the top tier enough questions to reach the last angle', () => {
+    expect(QUESTION_TARGETS.autonomous.max).toBe(10);
+    expect(QUESTION_TARGETS.workflow.max).toBeLessThan(QUESTION_TARGETS.project.max);
+    expect(QUESTION_TARGETS.project.max).toBeLessThan(QUESTION_TARGETS.autonomous.max);
   });
 });
