@@ -39,3 +39,10 @@
   align-items: center;
 }
 .cbv2-boundary__link:hover { text-decoration-thickness: 2px; }
+
+/* The captured banner sits between the "what you get" cards and the note it
+   evidences, so it reads as proof of that sentence rather than decoration. */
+.cbv2-try__proof {
+  margin: var(--space-7) 0 0;
+  max-width: 820px;
+}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { getUTMPayloadFields } from '../../services/utmService';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import Icon from '../../components/publicV2/Icon';
 import { CapabilityNotice } from '../../components/publicV2/Claim';
 import {
   LAB_STEPS,
@@ -216,9 +217,14 @@ function OpportunityLabV2(): React.ReactElement {
           </ol>
 
           <form className="cbv2-lab" onSubmit={handleSubmit} noValidate>
-            <h3 className="cbv2-lab__q" tabIndex={-1} ref={headingRef}>
-              {step.question}
-            </h3>
+            <div className="cbv2-lab__qrow">
+              <span className="cbv2-icon-tile cbv2-icon-tile--blue">
+                <Icon name={step.icon} size={22} />
+              </span>
+              <h3 className="cbv2-lab__q" tabIndex={-1} ref={headingRef}>
+                {step.question}
+              </h3>
+            </div>
             <p className="cbv2-lab__help">{step.help}</p>
 
             {step.options ? (

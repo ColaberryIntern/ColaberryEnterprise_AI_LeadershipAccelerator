@@ -21,6 +21,8 @@
  * already validated server-side by `leadSchema` in services/leadService.ts.
  */
 
+import type { IconName } from '../components/publicV2/Icon';
+
 export type StepId = 'function' | 'friction' | 'volume' | 'outcome' | 'contact';
 
 export interface LabOption {
@@ -31,6 +33,7 @@ export interface LabOption {
 }
 
 export interface LabStep {
+  readonly icon: IconName;
   readonly id: StepId;
   readonly n: number;
   readonly title: string;
@@ -42,6 +45,7 @@ export interface LabStep {
 export const LAB_STEPS: readonly LabStep[] = [
   {
     id: 'function',
+    icon: 'map',
     n: 1,
     title: 'The work',
     question: 'Where does the work happen?',
@@ -57,6 +61,7 @@ export const LAB_STEPS: readonly LabStep[] = [
   },
   {
     id: 'friction',
+    icon: 'wrench',
     n: 2,
     title: 'The friction',
     question: 'What makes it slow or expensive today?',
@@ -71,6 +76,7 @@ export const LAB_STEPS: readonly LabStep[] = [
   },
   {
     id: 'volume',
+    icon: 'pulse',
     n: 3,
     title: 'The scale',
     question: 'How often does this happen?',
@@ -84,6 +90,7 @@ export const LAB_STEPS: readonly LabStep[] = [
   },
   {
     id: 'outcome',
+    icon: 'target',
     n: 4,
     title: 'The outcome',
     question: 'What would make this worth doing?',
@@ -98,6 +105,7 @@ export const LAB_STEPS: readonly LabStep[] = [
   },
   {
     id: 'contact',
+    icon: 'people',
     n: 5,
     title: 'You',
     question: 'Who should we reply to?',

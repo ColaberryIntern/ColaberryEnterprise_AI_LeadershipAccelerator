@@ -307,3 +307,53 @@ html.cbv2-reveal-on .cbv2-rv.is-in { opacity: 1; transform: none; }
     transition: none !important;
   }
 }
+
+/* ------------------------------------------- ambient page heroes (CSS only) --
+
+   Every inner page hero gets the same depth treatment as the homepage, done
+   with pseudo-elements so no page component needs to carry decorative markup.
+   Both layers are behind content (.cbv2-wrap is already z-index 1) and neither
+   is announced to assistive technology, because a ::before cannot be.
+   ---------------------------------------------------------------------------- */
+
+.cbv2-pagehero { position: relative; overflow: hidden; }
+
+.cbv2-pagehero::before {
+  content: '';
+  position: absolute;
+  inset: -30% -10% auto -10%;
+  height: 190%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(46% 52% at 82% 6%, color-mix(in srgb, var(--color-cherry, #fb2832) 34%, transparent), transparent 70%),
+    radial-gradient(40% 48% at 4% 40%, color-mix(in srgb, var(--chart-1) 30%, transparent), transparent 72%);
+  filter: blur(44px);
+  opacity: 0.85;
+}
+
+.cbv2-pagehero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.45;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 78% 70% at 40% 40%, #000 35%, transparent 100%);
+}
+
+/* Two-column page hero, for the inner pages that carry an image beside the copy. */
+.cbv2-pagehero__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: var(--space-9, 48px);
+  align-items: center;
+}
+@media (max-width: 980px) {
+  .cbv2-pagehero__split { grid-template-columns: minmax(0, 1fr); }
+  .cbv2-pagehero__split .cbv2-shot-frame { display: none; }
+}

@@ -85,3 +85,6 @@
   .cbv2-withdrawn__item { grid-template-columns: minmax(0, 1fr); }
   .cbv2-withdrawn__item::before { grid-row: auto; }
 }
+
+/* Evidence-class and gate cards lead with an icon tile. */
+.cbv2-evcard .cbv2-icon-tile { margin-bottom: var(--space-1); }

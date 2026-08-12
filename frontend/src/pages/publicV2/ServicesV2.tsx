@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useParams } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import Icon from '../../components/publicV2/Icon';
 import { Claim } from '../../components/publicV2/Claim';
 import { SERVICE_DETAILS, getServiceBySlug } from '../../config/v2Services';
 import './servicesV2.css';
@@ -48,6 +49,9 @@ export function ServicesV2(): React.ReactElement {
           {SERVICE_DETAILS.map((s, i) => (
             <article className={`cbv2-svc${i % 2 === 1 ? ' cbv2-svc--flip' : ''}`} key={s.slug}>
               <div className="cbv2-svc__copy">
+                <span className="cbv2-icon-tile cbv2-icon-tile--blue">
+                  <Icon name={s.icon} size={22} />
+                </span>
                 <p className="cbv2-eyebrow">Service {s.number}</p>
                 <h2 className="cbv2-svc__name">
                   <Link to={`/v2/services/${s.slug}`}>{s.name}</Link>

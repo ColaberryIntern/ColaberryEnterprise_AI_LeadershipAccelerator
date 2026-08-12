@@ -30,7 +30,8 @@ function TryV2(): React.ReactElement {
       />
 
       <section className="cbv2-pagehero" aria-labelledby="cbv2-try-title">
-        <div className="cbv2-wrap">
+        <div className="cbv2-wrap cbv2-pagehero__split">
+          <div>
           <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Start free</p>
           <h1 id="cbv2-try-title">See it with your own eyes first</h1>
           {canShow('surface.free.workspace', ROUTE) ? (
@@ -48,6 +49,19 @@ function TryV2(): React.ReactElement {
               </span>
             ) : null}
           </div>
+          </div>
+          {/* The workspace navigation, so the reader recognises where they land. */}
+          <figure className="cbv2-shot-frame">
+            <img
+              className="cbv2-shot"
+              src="/site-v2/shot-nav.png"
+              alt="The workspace side navigation: Your company, Today, Path, Schedule, Projects, Classroom, Cert Prep and Community."
+              width={620}
+              height={900}
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
         </div>
       </section>
 
@@ -65,6 +79,27 @@ function TryV2(): React.ReactElement {
               </article>
             ))}
           </div>
+          {/*
+            The actual banner the workspace shows on arrival. Included because
+            this page's claim is "it opens on sample data and says so on screen"
+            -- showing the thing is stronger evidence than asserting it, and it
+            means the reader recognises the screen when they get there.
+          */}
+          <figure className="cbv2-shot-frame cbv2-try__proof">
+            <img
+              className="cbv2-shot"
+              src="/site-v2/shot-sample-banner.png"
+              alt={
+                'The banner shown at the top of the free workspace, reading: Free preview with ' +
+                'sample data, shaped to the real metrics we capture. Your free account gives you ' +
+                'both the learner experience and this management dashboard, no credit card.'
+              }
+              width={1340}
+              height={200}
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
           <p className="cbv2-note">{ARRIVAL_NOTE}</p>
         </div>
       </section>

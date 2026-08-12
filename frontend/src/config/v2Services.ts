@@ -12,7 +12,11 @@
  * numbers removes the surface for that mistake to recur.
  */
 
+import type { IconName } from '../components/publicV2/Icon';
+
 export interface ServiceDetail {
+  /** Icon name from components/publicV2/Icon. Decorative; the name beside it carries the meaning. */
+  readonly icon: IconName;
   readonly slug: string;
   readonly number: string;
   readonly name: string;
@@ -34,6 +38,7 @@ export interface ServiceDetail {
 export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   {
     slug: 'ai-opportunity-sprint',
+    icon: 'compass',
     number: '01',
     name: 'AI Opportunity and Readiness Sprint',
     fit: 'For organizations that do not know where to start, or have too many ideas to rank.',
@@ -66,6 +71,7 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   },
   {
     slug: 'claude-production-pilot',
+    icon: 'bolt',
     number: '02',
     name: 'Claude Production Pilot',
     fit: 'For one promising workflow that needs to be proven before wider investment.',
@@ -97,6 +103,7 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   },
   {
     slug: 'enterprise-build-modernization',
+    icon: 'blocks',
     number: '03',
     name: 'Enterprise Build and Modernization',
     fit: 'For integrating AI into real systems and workflows, not another sandbox.',
@@ -130,6 +137,7 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   },
   {
     slug: 'workforce-architect-accelerator',
+    icon: 'ladder',
     number: '04',
     name: 'Workforce Architect Accelerator',
     fit: 'For turning employees into AI builders and architects, not course completers.',
@@ -163,6 +171,7 @@ export const SERVICE_DETAILS: readonly ServiceDetail[] = [
   },
   {
     slug: 'embedded-ai-operations',
+    icon: 'people',
     number: '05',
     name: 'Embedded Architecture and AI Operations',
     fit: 'For teams that need experienced leadership or delivery capacity inside the team now.',

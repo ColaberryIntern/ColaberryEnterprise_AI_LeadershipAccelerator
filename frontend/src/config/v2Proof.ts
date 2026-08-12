@@ -24,7 +24,10 @@
  * blocked claim string appears in the rendered output.
  */
 
+import type { IconName } from '../components/publicV2/Icon';
+
 export interface EvidenceClassDoc {
+  readonly icon: IconName;
   readonly key: 'verified' | 'anonymized' | 'illustrative' | 'pending';
   readonly meaning: string;
   readonly rule: string;
@@ -34,21 +37,25 @@ export interface EvidenceClassDoc {
 export const EVIDENCE_CLASSES: readonly EvidenceClassDoc[] = [
   {
     key: 'verified',
+    icon: 'shieldCheck',
     meaning: 'Traceable to a named source that a third party could check.',
     rule: 'The source is recorded alongside the claim, not carried in memory.',
   },
   {
     key: 'anonymized',
+    icon: 'eye',
     meaning: 'Real, from a real engagement, with identifying details removed.',
     rule: 'Published only where the client has agreed to the anonymized form.',
   },
   {
     key: 'illustrative',
+    icon: 'grid',
     meaning: 'Sample data, shaped like the real thing so the surface reads correctly.',
     rule: 'Always carries a visible sample label. Never presented as an outcome.',
   },
   {
     key: 'pending',
+    icon: 'gauge',
     meaning: 'Believed true, not yet evidenced.',
     rule: 'Does not appear on a customer-facing page until it is verified.',
   },
@@ -100,14 +107,16 @@ export const WITHDRAWN: readonly WithdrawnItem[] = [
 ];
 
 /** The two independent gates every claim passes before it may render. */
-export const GATES: readonly { readonly title: string; readonly detail: string }[] = [
+export const GATES: readonly { readonly title: string; readonly detail: string; readonly icon: IconName }[] = [
   {
+    icon: 'scale',
     title: 'Is the claim true, and who checked?',
     detail:
       'Every claim records where its evidence lives, who owns it and when it was last ' +
       'verified. Unevidenced claims do not render, they are not merely flagged for later.',
   },
   {
+    icon: 'blocks',
     title: 'Does the thing it describes actually exist?',
     detail:
       'Kept deliberately separate from truth. A statement can be perfectly accurate about a ' +

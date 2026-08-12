@@ -197,3 +197,17 @@
   line-height: 1.6;
   color: var(--text-strong);
 }
+
+/* Step question with its icon. The icon is decorative; the question beside it
+   carries the meaning, which is why Icon gets no title here. */
+.cbv2-lab__qrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+.cbv2-lab__qrow .cbv2-lab__q { margin: 0; }
+@media (max-width: 560px) {
+  .cbv2-lab__qrow { gap: var(--space-3); }
+  .cbv2-lab__qrow .cbv2-icon-tile { width: 38px; height: 38px; }
+}

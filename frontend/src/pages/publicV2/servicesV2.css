@@ -130,3 +130,7 @@
   background: var(--surface-sunken);
   border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
 }
+
+/* Icon tile above the service name. Spacing matches the card rhythm so the row
+   does not grow taller than its paired panel. */
+.cbv2-svc__copy .cbv2-icon-tile { margin-bottom: var(--space-4); }

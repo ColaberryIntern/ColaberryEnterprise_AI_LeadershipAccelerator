@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import Icon from '../../components/publicV2/Icon';
 import { EvidenceBadge, CapabilityNotice, Metric } from '../../components/publicV2/Claim';
 import { blockedClaims } from '../../config/claimsRegistry';
 import { EVIDENCE_CLASSES, WITHDRAWN, GATES, PLANNED_PROOF_ROOM } from '../../config/v2Proof';
@@ -48,14 +49,32 @@ function ProofV2(): React.ReactElement {
       />
 
       <section className="cbv2-pagehero" aria-labelledby="cbv2-proof-title">
-        <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Proof</p>
-          <h1 id="cbv2-proof-title">Every number here can be opened</h1>
-          <p className="cbv2-pagehero__lede">
-            Buying AI capability means buying claims about people. This page sets out what we
-            count as evidence, and what we removed from this site when it did not meet that
-            standard.
-          </p>
+        <div className="cbv2-wrap cbv2-pagehero__split">
+          <div>
+            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Proof</p>
+            <h1 id="cbv2-proof-title">Every number here can be opened</h1>
+            <p className="cbv2-pagehero__lede">
+              Buying AI capability means buying claims about people. This page sets out what we
+              count as evidence, and what we removed from this site when it did not meet that
+              standard.
+            </p>
+          </div>
+          {/*
+            The metric tiles from the real product. Shown here because this page
+            is about figures carrying their provenance, and these are the figures
+            in question -- not a stock image of a dashboard.
+          */}
+          <figure className="cbv2-shot-frame">
+            <img
+              className="cbv2-shot"
+              src="/site-v2/shot-metrics.png"
+              alt="Metric tiles from the product: average architect readiness, builder XP per week, evidence shipped this week, projects and artifacts shipped, and live-session attendance."
+              width={1340}
+              height={420}
+              loading="lazy"
+              decoding="async"
+            />
+          </figure>
         </div>
       </section>
 
@@ -72,6 +91,9 @@ function ProofV2(): React.ReactElement {
           <div className="cbv2-grid cbv2-grid--2">
             {EVIDENCE_CLASSES.map((c) => (
               <article className="cbv2-card cbv2-evcard" key={c.key}>
+                <span className="cbv2-icon-tile cbv2-icon-tile--blue">
+                  <Icon name={c.icon} size={22} />
+                </span>
                 <EvidenceBadge evidence={c.key} />
                 <p className="cbv2-evcard__meaning">{c.meaning}</p>
                 <p className="cbv2-evcard__rule">{c.rule}</p>
@@ -90,6 +112,9 @@ function ProofV2(): React.ReactElement {
           <div className="cbv2-grid cbv2-grid--2">
             {GATES.map((g) => (
               <article className="cbv2-card" key={g.title}>
+                <span className="cbv2-icon-tile cbv2-icon-tile--green">
+                  <Icon name={g.icon} size={22} />
+                </span>
                 <h3 className="cbv2-card__title">{g.title}</h3>
                 <p className="cbv2-card__body">{g.detail}</p>
               </article>
