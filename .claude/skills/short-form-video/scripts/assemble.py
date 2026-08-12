@@ -57,7 +57,9 @@ def zoom_expr(motion, n, base=1.0):
 
 def render_shot(shot, project, W, H, fps):
     n = int(round(shot["dur"] * fps))
-    still = os.path.join(project, "images", f"{shot['id']}.png")
+    # `image` lets several beats share one generated plate; differing zoom_base
+    # values turn that into wide/tight coverage rather than a visible repeat.
+    still = os.path.join(project, "images", f"{shot.get('image') or shot['id']}.png")
     overlay = os.path.join(project, "overlays", f"{shot['id']}.png")
     out = os.path.join(project, "clips", f"{shot['id']}.mp4")
     for p in (still, overlay):
@@ -121,8 +123,9 @@ def main():
     out_path = args.out or os.path.join(project, meta.get("output_name", "master.mp4"))
     os.makedirs(os.path.join(project, "clips"), exist_ok=True)
 
-    missing = [s["id"] for s in cfg["shots"]
-               if not os.path.exists(os.path.join(project, "images", f"{s['id']}.png"))]
+    missing = sorted({(s.get("image") or s["id"]) for s in cfg["shots"]
+                      if not os.path.exists(
+                          os.path.join(project, "images", f"{s.get('image') or s['id']}.png"))})
     if missing:
         print(f"[abort] stills not generated yet: {', '.join(missing)}", file=sys.stderr)
         sys.exit(2)

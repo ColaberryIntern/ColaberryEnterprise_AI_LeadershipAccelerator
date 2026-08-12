@@ -99,14 +99,23 @@ def render_statement(shot, W, H, margin, accents):
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     usable = W - margin * 2
     lines = shot["lines"]
-    font = fit_font(FONT_BLACK, lines, int(W * 0.087), usable)
+    # More lines means smaller type; dialogue beats run to 3 lines where a
+    # statement beat runs to 2, so cap by line count rather than a fixed size.
+    cap = int(W * 0.087) if len(lines) <= 2 else int(W * 0.072)
+    font = fit_font(FONT_BLACK, lines, cap, usable)
     leading = int(font.size * 1.14)
     sub_text = shot.get("sub")
     sub_font = ImageFont.truetype(FONT_BOLD, int(W * 0.037)) if sub_text else None
 
-    rule_h, rule_gap = 9, 34
+    # A named speaker replaces the accent rule with a tracked name tag, so a
+    # two-hander stays followable without any face ever being on screen.
+    speaker = shot.get("speaker")
+    spk_font = ImageFont.truetype(FONT_BOLD, int(W * 0.030)) if speaker else None
+    head_h = 46 if speaker else 9
+    head_gap = 26 if speaker else 34
+
     block_h = leading * len(lines) + (78 if sub_text else 0)
-    total_h = rule_h + rule_gap + block_h
+    total_h = head_h + head_gap + block_h
     top = int(H * shot["anchor"] - total_h / 2)
     add_scrim(img, top - 150, top + total_h + 150)
 
@@ -114,8 +123,11 @@ def render_statement(shot, W, H, margin, accents):
     emphasis = shot.get("emphasis")
 
     def paint(d):
-        d.rectangle([margin, top, margin + 104, top + rule_h], fill=accent)
-        y = top + rule_h + rule_gap
+        if speaker:
+            draw_tracked(d, (margin, top), speaker.upper(), spk_font, accent, 8.0)
+        else:
+            d.rectangle([margin, top, margin + 104, top + 9], fill=accent)
+        y = top + head_h + head_gap
         for ln in lines:
             d.text((margin, y), ln, font=font, fill=accent if ln == emphasis else WHITE)
             y += leading

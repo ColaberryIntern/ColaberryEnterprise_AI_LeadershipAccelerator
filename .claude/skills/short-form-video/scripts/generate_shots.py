@@ -48,7 +48,11 @@ def api(path, payload=None, timeout=60):
     return json.loads(body) if body else {}
 
 
-def wait_for_server(timeout=300):
+def wait_for_server(timeout=900):
+    """Poll until ComfyUI answers. 900s, not 300s: a cold boot on a CPU-only box runs
+    alembic migrations and warms the RAM-pressure cache first, and was measured taking
+    over five minutes - a 300s ceiling aborted a reshoot on a server that was simply
+    still starting."""
     deadline = time.time() + timeout
     last = None
     while time.time() < deadline:
@@ -61,7 +65,8 @@ def wait_for_server(timeout=300):
     raise RuntimeError(f"ComfyUI not ready within {timeout}s (last error: {last})")
 
 
-def build_workflow(shot, style, meta, steps, ckpt, prefix):
+def build_workflow(shot, style, meta, steps, ckpt, prefix, key=None):
+    key = key or shot.get("image") or shot["id"]
     positive = f"{shot['prompt']}, {style['suffix']}"
     return {
         "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": ckpt}},
@@ -93,23 +98,41 @@ def build_workflow(shot, style, meta, steps, ckpt, prefix):
         "6": {"class_type": "VAEDecode", "inputs": {"samples": ["5", 0], "vae": ["1", 2]}},
         "7": {
             "class_type": "SaveImage",
-            "inputs": {"images": ["6", 0], "filename_prefix": f"{prefix}/{shot['id']}"},
+            "inputs": {"images": ["6", 0], "filename_prefix": f"{prefix}/{key}"},
         },
     }
 
 
-def run_shot(shot, style, meta, steps, images_dir, ckpt, prefix):
-    dest = os.path.join(images_dir, f"{shot['id']}.png")
+def unique_images(shots):
+    """One generation job per distinct image key.
+
+    A shot may carry `"image": "<key>"` to reuse a still another shot generated -
+    essential for longer narrative pieces, where 17 dialogue beats over 9 plates is
+    the difference between a 2-hour render and a 4-hour one. Reusing one plate at
+    two different `zoom_base` values reads as wide/tight coverage, not a repeat.
+    The first shot carrying a prompt for a key defines that image.
+    """
+    jobs = {}
+    for s in shots:
+        key = s.get("image") or s["id"]
+        if key not in jobs and s.get("prompt"):
+            jobs[key] = s
+    return jobs
+
+
+def run_shot(shot, style, meta, steps, images_dir, ckpt, prefix, key=None):
+    key = key or shot.get("image") or shot["id"]
+    dest = os.path.join(images_dir, f"{key}.png")
     if os.path.exists(dest) and os.path.getsize(dest) > 0:
-        print(f"[skip] {shot['id']} already rendered", flush=True)
+        print(f"[skip] {key} already rendered", flush=True)
         return dest
 
     t0 = time.time()
-    resp = api("/prompt", {"prompt": build_workflow(shot, style, meta, steps, ckpt, prefix)})
+    resp = api("/prompt", {"prompt": build_workflow(shot, style, meta, steps, ckpt, prefix, key)})
     prompt_id = resp.get("prompt_id")
     if not prompt_id:
-        raise RuntimeError(f"{shot['id']}: /prompt returned no prompt_id: {resp}")
-    print(f"[queue] {shot['id']} prompt_id={prompt_id}", flush=True)
+        raise RuntimeError(f"{key}: /prompt returned no prompt_id: {resp}")
+    print(f"[queue] {key} prompt_id={prompt_id}", flush=True)
 
     # CPU sampling is slow (minutes per step), so allow a generous per-shot ceiling.
     deadline = time.time() + 5400
@@ -126,12 +149,12 @@ def run_shot(shot, style, meta, steps, images_dir, ckpt, prefix):
                 img = images[0]
                 src = os.path.join(COMFY_DIR, "output", img.get("subfolder", ""), img["filename"])
                 if not os.path.exists(src):
-                    raise RuntimeError(f"{shot['id']}: reported output missing on disk: {src}")
+                    raise RuntimeError(f"{key}: reported output missing on disk: {src}")
                 shutil.copyfile(src, dest)
-                print(f"[done] {shot['id']} in {time.time()-t0:.0f}s -> {dest}", flush=True)
+                print(f"[done] {key} in {time.time()-t0:.0f}s -> {dest}", flush=True)
                 return dest
         time.sleep(5)
-    raise TimeoutError(f"{shot['id']}: not finished within 5400s")
+    raise TimeoutError(f"{key}: not finished within 5400s")
 
 
 def main():
@@ -154,18 +177,25 @@ def main():
     wait_for_server()
     print(f"[ok] ComfyUI reachable at {SERVER}", flush=True)
 
+    # Generate one image per distinct key, not one per beat. --only filters on the
+    # image key (which equals the shot id when no `image` field is used).
+    jobs = unique_images(cfg["shots"])
     only = {s.strip() for s in args.only.split(",") if s.strip()}
-    shots = [s for s in cfg["shots"] if not only or s["id"] in only]
+    if only:
+        jobs = {k: v for k, v in jobs.items() if k in only}
+    reused = len(cfg["shots"]) - len(unique_images(cfg["shots"]))
+    if reused > 0:
+        print(f"[plan] {len(cfg['shots'])} beats -> {len(jobs)} generations ({reused} reuse existing plates)", flush=True)
 
     failures = []
-    for shot in shots:
+    for key, shot in jobs.items():
         try:
-            run_shot(shot, cfg["style"], meta, args.steps, images_dir, ckpt, prefix)
+            run_shot(shot, cfg["style"], meta, args.steps, images_dir, ckpt, prefix, key)
         except Exception as e:  # noqa: BLE001 - one bad shot must not sink a multi-hour batch
-            print(f"[FAIL] {shot['id']}: {type(e).__name__}: {e}", flush=True)
-            failures.append(shot["id"])
+            print(f"[FAIL] {key}: {type(e).__name__}: {e}", flush=True)
+            failures.append(key)
 
-    print(f"\n[summary] {len(shots)-len(failures)}/{len(shots)} rendered", flush=True)
+    print(f"\n[summary] {len(jobs)-len(failures)}/{len(jobs)} rendered", flush=True)
     if failures:
         print(f"[summary] failed: {', '.join(failures)}", flush=True)
         sys.exit(1)
