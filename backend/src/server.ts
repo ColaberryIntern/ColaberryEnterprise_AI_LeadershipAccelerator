@@ -19,6 +19,7 @@ import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
+import devAuthRoutes from './routes/devAuthRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
 import alumniReferralRoutes from './routes/alumniReferralRoutes';
 import qrRedirectRoutes from './routes/qrRedirectRoutes';
@@ -103,6 +104,11 @@ app.use(participantRoutes);
 app.use(capePortalRoutes);
 app.use(capeAdminRoutes);
 app.use(capeGovernanceRoutes);
+// Local-dev one-click login for seeded @localdev.test accounts — never
+// mounted outside development, so the routes don't exist at all in prod.
+if (env.nodeEnv !== 'production') {
+  app.use(devAuthRoutes);
+}
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
 // COMMUNITY_ROOMS_ENABLED is off).
 app.use(communityRoomsRoutes);
@@ -2006,6 +2012,11 @@ async function ensureMissedOpportunitiesSchema() {
 async function ensureMessagingSchema() {
   const statements = [
     `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_read_at TIMESTAMPTZ`,
+    // DM delivery ticks (sent/delivered) + typing indicator — both poll-based,
+    // no websockets. delivered = peer's last_delivered_at >= message.created_at;
+    // typing = typing_at within a short freshness window (see dmService).
+    `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS last_delivered_at TIMESTAMPTZ`,
+    `ALTER TABLE room_memberships ADD COLUMN IF NOT EXISTS typing_at TIMESTAMPTZ`,
     `ALTER TABLE community_notifications DROP CONSTRAINT IF EXISTS ck_community_notifications_type`,
     `ALTER TABLE community_notifications ADD CONSTRAINT ck_community_notifications_type CHECK (notification_type IN ('mention','reply','like','friend_request','friend_accepted','new_message'))`,
   ];
@@ -2781,6 +2792,15 @@ async function start(): Promise<void> {
   if (env.enableFollowUpScheduler) {
     startScheduler();
   }
+
+  // Register the cognitive-incident email subscriber (BC #10099862873 P1 item 3,
+  // idempotent — re-registering on restart is safe, registerIncidentSubscriber
+  // just replaces the in-memory subscriber list)
+  import('./services/incidentSubscriberBootstrap').then(({ registerCognitiveIncidentSubscriber }) => {
+    registerCognitiveIncidentSubscriber().catch((err) => {
+      console.error('[Server] Failed to register cognitive incident subscriber:', err.message);
+    });
+  });
 
   app.listen(env.port, () => {
     console.log(`Server running on port ${env.port} [${env.nodeEnv}]`);

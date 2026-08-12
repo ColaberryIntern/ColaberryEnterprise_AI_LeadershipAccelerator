@@ -28,6 +28,7 @@ jest.mock('../pointsService', () => ({ award: jest.fn().mockResolvedValue(undefi
 
 const mockPersistClaims = persistResumeSkillClaims as unknown as jest.Mock;
 const mockRecompute = recomputeStudentArchitectureSkill as unknown as jest.Mock;
+jest.mock('../pointsService', () => ({ award: jest.fn().mockResolvedValue({ awarded: true, points: 25 }) }));
 
 describe('resumeIngestService', () => {
   beforeEach(() => {

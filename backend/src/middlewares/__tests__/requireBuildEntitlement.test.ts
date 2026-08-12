@@ -75,6 +75,28 @@ describe('isBuildEntitled (pure rule)', () => {
     // a genuine free Explorer cohort still does NOT entitle
     expect(isBuildEntitled({ payment_status: 'pending' }, { cohort_type: 'explorer' }, {})).toBe(false);
   });
+
+  // Cohort-start gate (Ali decision, BC #10160497402, relayed 2026-08-04): paying
+  // reserves the spot; build access unlocks when the cohort's class actually starts.
+  // Applies ONLY to the `paid` signal — sponsor/accelerator carve-outs are untouched.
+  describe('cohort-start gate on the paid signal', () => {
+    it('paid + cohort not yet started → false', () => {
+      expect(isBuildEntitled({ payment_status: 'paid' }, { start_date: '2099-01-01' }, {})).toBe(false);
+    });
+
+    it('paid + cohort already started → true', () => {
+      expect(isBuildEntitled({ payment_status: 'paid' }, { start_date: '2020-01-01' }, {})).toBe(true);
+    });
+
+    it('paid + no cohort resolved → true (fail open)', () => {
+      expect(isBuildEntitled({ payment_status: 'paid' }, null, {})).toBe(true);
+    });
+
+    it('sponsor/accelerator seat + cohort not yet started → still true (carve-out untouched)', () => {
+      expect(isBuildEntitled({ payment_status: 'pending' }, { cohort_type: 'sponsor', start_date: '2099-01-01' }, {})).toBe(true);
+      expect(isBuildEntitled({ payment_status: 'pending' }, { cohort_type: 'accelerator', start_date: '2099-01-01' }, {})).toBe(true);
+    });
+  });
 });
 
 describe('requireBuildEntitlement (middleware)', () => {
@@ -159,6 +181,20 @@ describe('requireBuildEntitlement (middleware)', () => {
 
     expect(next).toHaveBeenCalledTimes(1);
     expect(res.statusCode).toBe(0);
+  });
+
+  it('flag ON + paid but cohort not yet started → 402 with upgrade payload, no next()', async () => {
+    (env as any).buildPaidGateEnabled = true;
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'paid', cohort_id: 'c-future' });
+    findCohort.mockResolvedValue({ id: 'c-future', start_date: '2099-01-01' });
+    staffOf.mockResolvedValue(false);
+    compIdsOf.mockResolvedValue(new Set<string>());
+
+    const { req, res, next } = mockCtx();
+    await requireBuildEntitlement(req, res, next);
+
+    expect(res.statusCode).toBe(402);
+    expect(next).not.toHaveBeenCalled();
   });
 
   it('flag ON + NOT entitled (free Explorer) → 402 with upgrade payload, no next()', async () => {

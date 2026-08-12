@@ -1,7 +1,35 @@
+import '../config/env'; // side-effect: guarantees dotenv has loaded the root .env before the process.env fallback below reads it
 import { getSetting, getTestOverrides } from './settingsService';
 import { logActivity } from './activityService';
 import Lead from '../models/Lead';
 import { redactForLogs } from '../utils/piiRedaction';
+import { classifyError } from '../utils/errorClassifier';
+
+/**
+ * DB-backed system setting takes precedence; falls back to the GHL_API_KEY
+ * env var for local/manual testing before a value is saved via Admin
+ * Settings. Never logged — callers must not print the return value.
+ */
+async function resolveGhlApiKey(): Promise<string> {
+  const fromSettings = await getSetting('ghl_api_key');
+  if (fromSettings) return fromSettings;
+  return process.env.GHL_API_KEY || '';
+}
+
+// Lazy import (matches alertDeliveryService.ts's convention): avoids pulling
+// the full Sequelize/model graph into every ghlService import.
+async function emitFailureEvent(params: Parameters<typeof import('./aiEventService').emitAiEvent>[0]): Promise<void> {
+  try {
+    const { emitAiEvent } = await import('./aiEventService');
+    await emitAiEvent(params);
+  } catch (err: any) {
+    console.error(JSON.stringify({
+      level: 'error', service: 'backend', event: 'emit_failure_event_failed',
+      outcome: 'failure', error_class: err?.constructor?.name ?? 'Error',
+      context: { event_type: params.event_type, message: err?.message },
+    }));
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -36,38 +64,81 @@ export interface SyncResult {
 
 const GHL_BASE = 'https://rest.gohighlevel.com/v1';
 
+// Retry policy (BC — GHL outbound hardening): bounded exponential backoff on
+// transient failures only. 429/500/502/503/504 and timeouts retry up to
+// GHL_RETRY_MAX extra times (base 500ms, doubling); any other 4xx (401, 404,
+// 422, etc.) is a permanent failure and returns immediately with no retry.
+const GHL_RETRY_MAX = 2;
+const GHL_RETRY_BASE_DELAY_MS = 500;
+const GHL_RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function ghlFetch(
   path: string,
   method: string,
   body?: any
 ): Promise<GHLResult> {
-  const apiKey = await getSetting('ghl_api_key');
+  const apiKey = await resolveGhlApiKey();
   if (!apiKey) {
     return { success: false, error: 'GHL API key not configured' };
   }
 
-  try {
-    const response = await fetch(`${GHL_BASE}${path}`, {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
+  for (let attempt = 0; attempt <= GHL_RETRY_MAX; attempt++) {
+    try {
+      const response = await fetch(`${GHL_BASE}${path}`, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(15000),
+      });
 
-    const data: any = await response.json();
+      const data: any = await response.json();
 
-    if (!response.ok) {
-      console.error(`[GHL] API error ${response.status}:`, data);
-      return { success: false, error: data?.message || JSON.stringify(data) };
+      if (!response.ok) {
+        if (GHL_RETRYABLE_STATUS.has(response.status) && attempt < GHL_RETRY_MAX) {
+          console.warn(`[GHL] Retryable error ${response.status} on attempt ${attempt + 1}/${GHL_RETRY_MAX + 1} for ${method} ${path}, retrying...`);
+          await sleep(GHL_RETRY_BASE_DELAY_MS * 2 ** attempt);
+          continue;
+        }
+        console.error(`[GHL] API error ${response.status}:`, data);
+        emitFailureEvent({
+          event_type: 'ghl_request_failed',
+          outcome: 'failure',
+          external_system: 'ghl',
+          error_class: classifyError({ status: response.status, message: data?.message }),
+          metadata: { path, method, attempts: attempt + 1, message: String(data?.message || JSON.stringify(data)).slice(0, 200) },
+        });
+        return { success: false, error: data?.message || JSON.stringify(data) };
+      }
+
+      return { success: true, data };
+    } catch (error: any) {
+      if (attempt < GHL_RETRY_MAX) {
+        console.warn(`[GHL] Request error on attempt ${attempt + 1}/${GHL_RETRY_MAX + 1} for ${method} ${path} (${error.message}), retrying...`);
+        await sleep(GHL_RETRY_BASE_DELAY_MS * 2 ** attempt);
+        continue;
+      }
+      console.error('[GHL] Request failed:', error.message);
+      emitFailureEvent({
+        event_type: 'ghl_request_failed',
+        outcome: 'failure',
+        external_system: 'ghl',
+        error_class: classifyError(error),
+        metadata: { path, method, attempts: attempt + 1, message: String(error?.message || '').slice(0, 200) },
+      });
+      return { success: false, error: error.message };
     }
-
-    return { success: true, data };
-  } catch (error: any) {
-    console.error('[GHL] Request failed:', error.message);
-    return { success: false, error: error.message };
   }
+
+  // Unreachable: every loop iteration returns before falling through, but
+  // TypeScript needs an explicit exit path.
+  return { success: false, error: 'GHL request failed after retries' };
 }
 
 /* ------------------------------------------------------------------ */

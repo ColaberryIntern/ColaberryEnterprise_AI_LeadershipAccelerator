@@ -20,7 +20,7 @@ describe('parseCoraReply', () => {
       JSON.stringify({ subject: 'Re: Pricing', body: 'It is $4,500.', needs_human: false }),
       'Pricing'
     );
-    expect(r).toEqual({ subject: 'Re: Pricing', body: 'It is $4,500.', needsHuman: false });
+    expect(r).toEqual({ subject: 'Re: Pricing', body: 'It is $4,500.', needsHuman: false, persona: 'cora' });
   });
 
   it('flags needs_human when the model returns true (boolean and string forms)', () => {

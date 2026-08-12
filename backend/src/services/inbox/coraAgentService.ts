@@ -13,8 +13,15 @@
  * for the loop guards that stop such a storm even when live.
  */
 import OpenAI from 'openai';
-import { buildCoraSystemPromptFromDB, getCourseBySlug } from '../kbService';
+import { Op } from 'sequelize';
+import { getCourseBySlug } from '../kbService';
 import { logAuditEvent } from './inboxAuditService';
+import { emitAlert } from '../alertService';
+import CoraReplyLog from '../../models/CoraReplyLog';
+import InboxAuditLog from '../../models/InboxAuditLog';
+import type { CoraPersona } from './coraPersonaRouter';
+import { PERSONA_PROFILES, selectPersonaForEmail, buildPersonaSystemPromptFromDB } from './coraPersonaRouter';
+import { scoreCoraReplyStyle, STYLE_GATE_PASS_THRESHOLD } from './coraStyleGate';
 
 const LOG_PREFIX = '[InboxCOS][Cora]';
 
@@ -27,9 +34,18 @@ export function resolveDryRun(flag: string | undefined): boolean {
   return flag !== 'false';
 }
 
-const DRY_RUN = resolveDryRun(process.env.CORA_DRY_RUN);
+// Read per-call rather than cached at module load — makes CORA_DRY_RUN
+// flips take effect without a process restart, and lets tests toggle it
+// per-scenario without needing jest.resetModules(). Polarity comes from
+// resolveDryRun() so this stays the safe default (unset/anything-but-"false"
+// ⇒ dry run) rather than the pre-2026-07-17 version, which defaulted to LIVE
+// unless explicitly "true" — the exact default that let a stray deploy re-arm
+// live sending and produce the original self-reply storm.
+function isDryRun(): boolean {
+  return resolveDryRun(process.env.CORA_DRY_RUN);
+}
 
-if (!DRY_RUN) {
+if (!isDryRun()) {
   console.warn(
     `${LOG_PREFIX} LIVE SEND ENABLED (CORA_DRY_RUN="false") — Cora will send real email as the support mailbox.`
   );
@@ -99,6 +115,22 @@ export function coraAutoReplySkipReason(email: {
   return null;
 }
 
+// Circuit breaker (2026-07-14 mail-loop incident, BC #10095332194): if this
+// many real sends have happened in the trailing window, stop sending and
+// route everything to a human instead — a handful of duplicate replies is an
+// acceptable failure mode, 1,800 is not. Configurable so a real traffic spike
+// doesn't need a code change to raise the ceiling.
+const CIRCUIT_BREAKER_MAX_SENDS = parseInt(process.env.CORA_CIRCUIT_BREAKER_MAX_SENDS || '20', 10);
+const CIRCUIT_BREAKER_WINDOW_MS = parseInt(process.env.CORA_CIRCUIT_BREAKER_WINDOW_MINUTES || '10', 10) * 60_000;
+
+async function isCircuitBreakerTripped(): Promise<boolean> {
+  const since = new Date(Date.now() - CIRCUIT_BREAKER_WINDOW_MS);
+  const recentSends = await InboxAuditLog.count({
+    where: { action: 'cora_reply_sent', created_at: { [Op.gte]: since } },
+  });
+  return recentSends >= CIRCUIT_BREAKER_MAX_SENDS;
+}
+
 // KB Ops Phase 1 (BC #10036783688): Cora's system prompt is now DB-backed via
 // cora_kb_entries/cora_cohorts, not the static coraKnowledgeBase.ts. This slug
 // must match the seeded course in backend/src/seeds/seedKbData.ts.
@@ -114,6 +146,11 @@ export interface CoraReply {
    * whether the email is archived or routed back to the human INBOX.
    */
   needsHuman: boolean;
+  /** Which persona answered — Cora (support) or Cory (admissions). Drives the From-header/sign-off. */
+  persona: CoraPersona;
+  /** Style-gate score (0-100) for the final body sent, for audit visibility. */
+  styleGateScore: number;
+  styleGateViolations: string[];
 }
 
 /** Disposition of an email Cora handled — tells the dispatcher whether to archive. */
@@ -131,7 +168,11 @@ export interface CoraDispatchResult {
  * treats that as a generation failure). A missing/invalid needs_human defaults
  * to false (treat as a normal, fully-answered reply).
  */
-export function parseCoraReply(content: string, fallbackSubject: string): CoraReply {
+export function parseCoraReply(
+  content: string,
+  fallbackSubject: string,
+  persona: CoraPersona = 'cora'
+): Pick<CoraReply, 'subject' | 'body' | 'needsHuman' | 'persona'> {
   const parsed = JSON.parse(content) as {
     subject?: string;
     body?: string;
@@ -142,6 +183,7 @@ export function parseCoraReply(content: string, fallbackSubject: string): CoraRe
     subject: parsed.subject?.trim() || `Re: ${fallbackSubject}`,
     body: parsed.body,
     needsHuman: parsed.needs_human === true || parsed.needs_human === 'true',
+    persona,
   };
 }
 
@@ -170,26 +212,46 @@ export function decideCoraDisposition(opts: {
 }
 
 /**
- * Build Cora's system prompt from the KB Ops DB (cora_kb_entries/cora_cohorts),
- * scoped to the currently active program. Degrades to a generic handoff prompt
- * if the configured course isn't found, rather than failing the whole reply.
+ * Determine which persona (Cora/support or Cory/admissions) should answer this
+ * email, based on KB category matching. Any failure (DB unavailable, no course
+ * configured) degrades to Cora + no course, rather than failing the whole reply.
  */
-async function getCoraSystemPrompt(): Promise<string> {
+async function resolvePersonaAndCourse(
+  subject: string,
+  emailBody: string
+): Promise<{ persona: CoraPersona; course: { id: string } | null }> {
   try {
     const course = await getCourseBySlug(CORA_COURSE_SLUG);
-    if (!course) {
-      console.warn(`${LOG_PREFIX} No KB course found for slug "${CORA_COURSE_SLUG}"`);
-      return (
-        'You are Cora, the AI Admissions and Support Assistant for Colaberry School of Data Analytics. ' +
-        'No program knowledge base is currently configured — acknowledge receipt and route to support@colaberry.com.'
-      );
-    }
-    return await buildCoraSystemPromptFromDB(course.id);
+    if (!course) return { persona: 'cora', course: null };
+    const persona = await selectPersonaForEmail(course.id, `${subject}\n${emailBody}`);
+    return { persona, course };
+  } catch (error: any) {
+    console.warn(`${LOG_PREFIX} Could not resolve persona: ${error.message}`);
+    return { persona: 'cora', course: null };
+  }
+}
+
+/**
+ * Build the persona's system prompt from the KB Ops DB (cora_kb_entries/
+ * cora_cohorts), scoped to that persona's categories. Degrades to a generic
+ * handoff prompt if the course isn't found, rather than failing the whole reply.
+ */
+async function getPersonaSystemPrompt(persona: CoraPersona, course: { id: string } | null): Promise<string> {
+  const profile = PERSONA_PROFILES[persona];
+  if (!course) {
+    console.warn(`${LOG_PREFIX} No KB course found for slug "${CORA_COURSE_SLUG}"`);
+    return (
+      `${profile.voiceIntro} No program knowledge base is currently configured — ` +
+      `acknowledge receipt and route to support@colaberry.com. Sign every reply as "${profile.signOff}".`
+    );
+  }
+  try {
+    return await buildPersonaSystemPromptFromDB(course.id, persona);
   } catch (error: any) {
     console.warn(`${LOG_PREFIX} Could not build DB-backed system prompt: ${error.message}`);
     return (
-      'You are Cora, the AI Admissions and Support Assistant for Colaberry School of Data Analytics. ' +
-      'Acknowledge receipt and route to support@colaberry.com.'
+      `${profile.voiceIntro} Acknowledge receipt and route to support@colaberry.com. ` +
+      `Sign every reply as "${profile.signOff}".`
     );
   }
 }
@@ -203,29 +265,59 @@ export async function generateCoraReply(
 ): Promise<CoraReply> {
   const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+  const { persona, course } = await resolvePersonaAndCourse(subject, emailBody);
+  const basePrompt = await getPersonaSystemPrompt(persona, course);
   // response_format: json_object requires the literal word "json" to appear
   // somewhere in the messages (an OpenAI API constraint) — this also doubles
   // as the explicit schema instruction parseCoraReply() expects.
-  const systemPrompt = `${await getCoraSystemPrompt()}\n\nRespond ONLY with a JSON object with exactly these fields: "subject" (string), "body" (string), "needs_human" (boolean).`;
+  const jsonInstruction =
+    'Respond ONLY with a JSON object with exactly these fields: "subject" (string), "body" (string), "needs_human" (boolean).';
 
   const senderLine = fromName ? `From: ${fromName}` : '';
   const userMessage = `${senderLine}\nSubject: ${subject}\n\n${emailBody.substring(0, 3000)}`;
 
-  const response = await client.chat.completions.create({
-    model: 'gpt-4o-mini',
-    max_tokens: 1000,
-    temperature: 0.2,
-    response_format: { type: 'json_object' },
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userMessage },
-    ],
-  });
+  const callOpenAI = async (systemPrompt: string) => {
+    const response = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      max_tokens: 1000,
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userMessage },
+      ],
+    });
+    const content = response.choices?.[0]?.message?.content;
+    if (!content) throw new Error('Empty response from OpenAI');
+    return parseCoraReply(content, subject, persona);
+  };
 
-  const content = response.choices?.[0]?.message?.content;
-  if (!content) throw new Error('Empty response from OpenAI');
+  let reply = await callOpenAI(`${basePrompt}\n\n${jsonInstruction}`);
+  let gate = scoreCoraReplyStyle(reply.body, persona);
 
-  return parseCoraReply(content, subject);
+  // Style gate (BC #10109319420 "de-AI-ify" ask): one corrective retry with the
+  // specific violations fed back as instructions, then send regardless of the
+  // outcome — an imperfect but on-topic reply beats leaving the sender with no
+  // answer at all. Never more than one retry (Stall Detection: no infinite loops).
+  if (gate.score < STYLE_GATE_PASS_THRESHOLD) {
+    const correctionPrompt =
+      `${basePrompt}\n\nYour previous draft was flagged for these AI-sounding patterns: ` +
+      `${gate.violations.join('; ')}. Rewrite the reply avoiding all of them: vary sentence length, ` +
+      `no em dashes, no markdown formatting, no corporate buzzwords, no emoji, no numbered lists unless ` +
+      `truly necessary.\n\n${jsonInstruction}`;
+    try {
+      const retryReply = await callOpenAI(correctionPrompt);
+      const retryGate = scoreCoraReplyStyle(retryReply.body, persona);
+      if (retryGate.score > gate.score) {
+        reply = retryReply;
+        gate = retryGate;
+      }
+    } catch (error: any) {
+      console.warn(`${LOG_PREFIX} Style-gate retry generation failed, keeping first draft: ${error.message}`);
+    }
+  }
+
+  return { ...reply, styleGateScore: gate.score, styleGateViolations: gate.violations };
 }
 
 // ─── Main Dispatch Handler ────────────────────────────────────────────────
@@ -245,7 +337,9 @@ export async function handleCoraInquiry(email: {
 
   // Loop-prevention: never auto-reply to our own mail, to bounces, or to
   // auto-generated mail. Without this, a live Cora replies to its own replies
-  // (and to mailer-daemon bounces), producing a self-reply storm.
+  // (and to mailer-daemon bounces), producing a self-reply storm. Checked
+  // first — cheapest guard, and abstaining here should never consume a
+  // dedup-table reservation or count against the circuit breaker.
   const skipReason = coraAutoReplySkipReason(email);
   if (skipReason) {
     console.log(
@@ -260,6 +354,64 @@ export async function handleCoraInquiry(email: {
     });
     // Cora abstains: don't reply, and don't archive — leave it untouched for a human.
     return { archive: false, handoffReason: `cora_skipped_${skipReason}` };
+  }
+
+  const threadKey = email.provider_thread_id || email.provider_message_id;
+
+  // Circuit breaker (skipped in dry-run — nothing real would be sent anyway).
+  // Checked BEFORE reserving the dedup slot below so a tripped breaker leaves
+  // this thread free for a real attempt once volume subsides, rather than
+  // permanently marking it "already handled" with no reply ever sent.
+  if (!isDryRun() && (await isCircuitBreakerTripped())) {
+    const reason = `Circuit breaker tripped (>= ${CIRCUIT_BREAKER_MAX_SENDS} Cora sends in the last ${CIRCUIT_BREAKER_WINDOW_MS / 60_000}min)`;
+    console.error(`${LOG_PREFIX} ${reason} — routing ${email.id} to human instead of sending`);
+    await logAuditEvent({
+      email_id: email.id,
+      action: 'cora_circuit_breaker_tripped',
+      new_state: 'INBOX',
+      actor: 'cora',
+      reasoning: reason,
+      metadata: { thread_key: threadKey, max_sends: CIRCUIT_BREAKER_MAX_SENDS, window_ms: CIRCUIT_BREAKER_WINDOW_MS },
+    });
+    // Ops alerting (BC #10099862873 P0): the audit row above is discoverable
+    // only if someone opens the inbox dashboard — this is the exact gap that
+    // let the 2026-07-14 mail-loop incident run unnoticed. emitAlert()'s own
+    // 1h title+type dedup keeps repeat trips from re-paging Ali.
+    emitAlert({
+      type: 'critical',
+      severity: 5,
+      title: 'Circuit Breaker Tripped: cora_circuit_breaker',
+      description:
+        'Cora has stopped auto-replying to support inbox emails; inbound questions are piling up unanswered. ' +
+        `Send ceiling (${CIRCUIT_BREAKER_MAX_SENDS} replies / ${CIRCUIT_BREAKER_WINDOW_MS / 60_000}min) was hit. ` +
+        'Recommended action: check the inbox dashboard for a reply loop or traffic spike before raising the ceiling.',
+      sourceType: 'system',
+      impactArea: 'support_inbox',
+      urgency: 'immediate',
+      metadata: { thread_key: threadKey, max_sends: CIRCUIT_BREAKER_MAX_SENDS, window_ms: CIRCUIT_BREAKER_WINDOW_MS },
+    }).catch((err: any) => {
+      console.error(`${LOG_PREFIX} emitAlert failed for circuit breaker trip: ${err.message}`);
+    });
+    return { archive: false, handoffReason: 'cora_circuit_breaker_tripped' };
+  }
+
+  // Reserve-then-send dedup (loop guard, BC #10095332194): a second inquiry
+  // for a thread Cora has already replied to — however it got here, including
+  // her own reply being re-ingested — is skipped rather than answered again.
+  const [, reserved] = await CoraReplyLog.findOrCreate({
+    where: { thread_key: threadKey },
+    defaults: { thread_key: threadKey, email_id: email.id },
+  });
+  if (!reserved) {
+    console.warn(`${LOG_PREFIX} Duplicate thread ${threadKey} for email ${email.id} — already replied, skipping (loop guard)`);
+    await logAuditEvent({
+      email_id: email.id,
+      action: 'cora_reply_skipped_duplicate_thread',
+      new_state: 'AUTOMATION',
+      actor: 'cora',
+      metadata: { thread_key: threadKey },
+    });
+    return { archive: true };
   }
 
   let reply: CoraReply;
@@ -279,10 +431,10 @@ export async function handleCoraInquiry(email: {
       metadata: { error_class: 'GenerationError', error: error.message },
     });
     // Generation failed — don't bury the email; leave it for a human.
-    return decideCoraDisposition({ generated: false, dryRun: DRY_RUN, needsHuman: false, sent: false });
+    return decideCoraDisposition({ generated: false, dryRun: isDryRun(), needsHuman: false, sent: false });
   }
 
-  if (DRY_RUN) {
+  if (isDryRun()) {
     console.log(
       `${LOG_PREFIX} DRY RUN — would ${reply.needsHuman ? 'send handoff ack + flag for human' : 'send'} ` +
       `to ${email.from_address}:\nSubject: ${reply.subject}\n\n${reply.body}`
@@ -297,6 +449,9 @@ export async function handleCoraInquiry(email: {
         subject: reply.subject,
         body_preview: reply.body.substring(0, 300),
         needs_human: reply.needsHuman,
+        persona: reply.persona,
+        style_gate_score: reply.styleGateScore,
+        style_gate_violations: reply.styleGateViolations,
       },
     });
     return decideCoraDisposition({ generated: true, dryRun: true, needsHuman: reply.needsHuman, sent: false });
@@ -317,6 +472,9 @@ export async function handleCoraInquiry(email: {
         subject: reply.subject,
         body_preview: reply.body.substring(0, 300),
         needs_human: reply.needsHuman,
+        persona: reply.persona,
+        style_gate_score: reply.styleGateScore,
+        style_gate_violations: reply.styleGateViolations,
       },
     });
   } catch (error: any) {
@@ -377,7 +535,7 @@ export async function sendCoraReplyViaGmail(
     email.provider_message_id;
 
   const rawLines = [
-    `From: Cora (Colaberry Enterprise AI) <${fromAddress}>`,
+    `From: ${PERSONA_PROFILES[reply.persona].displayName} <${fromAddress}>`,
     `To: ${email.from_address}`,
     `Subject: ${reply.subject}`,
     `In-Reply-To: ${originalMessageId}`,

@@ -35,7 +35,10 @@ const router = Router();
 
 // SECURITY (TBI audit P0-1, CRITICAL): production-cleanup mutates prod data — it shipped
 // with NO auth. Require an authenticated admin for every route below.
-router.use(requireAdmin);
+// Scoped to this router's own path prefix — see autonomyRoutes.ts for why an
+// unscoped `router.use(requireAdmin)` here was silently 401-ing unrelated public
+// routes (e.g. the chat widget) mounted later in server.ts.
+router.use('/api/admin/production-cleanup', requireAdmin);
 
 // Protected campaign types — NEVER touch campaign_leads for these
 const PROTECTED_CAMPAIGN_TYPES = ['alumni', 'alumni_re_engagement', 'cold_outbound'];

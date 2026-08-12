@@ -30,12 +30,25 @@ export interface PostMessageInput {
   kind?: RoomMessageKind;
   thread_root_id?: string;
   resource_id?: string;
+  client_id?: string;
 }
 
 export async function postMessage(ctx: RoomAccessContext, roomId: string, input: PostMessageInput): Promise<RoomMessage> {
   const content = (input.content || '').trim();
   if (!content) throw validationError('Message content is required');
   if (content.length > MAX_CONTENT) throw validationError(`Message exceeds ${MAX_CONTENT} characters`);
+
+  // Idempotent send: a client-generated UUID lets a retried request (flaky
+  // connection, lost response) find the message it already sent instead of
+  // creating a duplicate. Same JSONB-containment pattern as postSystemMessage's
+  // marker check below.
+  if (input.client_id) {
+    const existing = await RoomMessage.findOne({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      where: { room_id: roomId, metadata: { [Op.contains]: { client_id: input.client_id } } } as any,
+    });
+    if (existing) return existing;
+  }
 
   const room = await loadRoom(roomId);
   const membership = await membershipFor(roomId, ctx.enrollmentId);
@@ -54,6 +67,7 @@ export async function postMessage(ctx: RoomAccessContext, roomId: string, input:
     }
     metadata = { resource_id: resource.id };
   }
+  if (input.client_id) metadata = { ...metadata, client_id: input.client_id };
 
   const member = await getOrCreateMember(ctx.enrollmentId);
   const message = await RoomMessage.create({

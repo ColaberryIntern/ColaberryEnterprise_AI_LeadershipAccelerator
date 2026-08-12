@@ -489,6 +489,39 @@ function IntegrationsTab({ settings, onChange }: FieldProps) {
           GHL integration syncs leads to GoHighLevel contacts with Interest Group tags, sends SMS via the Cory_SMS_Composed custom field (triggers GHL workflow), and receives reply webhooks.
           Webhook URL: <code>/api/webhook/ghl/sms-reply</code>
         </div>
+        <hr className="my-3" />
+        <div className="row g-3">
+          <div className="col-md-3">
+            <div className="form-check form-switch">
+              <input
+                className="form-check-input"
+                type="checkbox"
+                checked={settings.ghl_conversation_log_enabled ?? false}
+                onChange={(e) => onChange('ghl_conversation_log_enabled', e.target.checked)}
+                id="ghlConversationLogEnabled"
+              />
+              <label className="form-check-label" htmlFor="ghlConversationLogEnabled">
+                Log emails to GHL Conversations
+              </label>
+            </div>
+            <div className="form-text">
+              Writes every outbound campaign email as a staff-only note on the contact's Conversations tab (separate from GHL Notes)
+            </div>
+          </div>
+          <div className="col-md-4">
+            <label className="form-label small">GHL Conversations API Key</label>
+            <input
+              type="password"
+              className="form-control"
+              value={settings.ghl_conversations_api_key ?? ''}
+              onChange={(e) => onChange('ghl_conversations_api_key', e.target.value)}
+              placeholder="Private Integration token (conversations/* scopes)"
+            />
+            <div className="form-text">
+              Separate v2 Private Integration token, scoped for <code>conversations.readonly</code> + <code>conversations/message.write</code> — GHL doesn't add these scopes to the API key above.
+            </div>
+          </div>
+        </div>
       </SectionCard>
 
       {/* Synthflow Voice */}

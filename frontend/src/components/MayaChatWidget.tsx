@@ -29,7 +29,7 @@ function getQuickReplies(pathname: string): QuickReply[] {
   if (path.includes('program') || path.includes('curriculum') || path.includes('course')) {
     return [
       { label: 'What do I build?', value: 'What will I actually build during the program?' },
-      { label: 'Session breakdown', value: 'Walk me through the 5 sessions.' },
+      { label: 'Weekly breakdown', value: 'Walk me through the 12 weeks.' },
       { label: 'Is this for me?', value: "I'm a technical director — is this the right fit?" },
     ];
   }
@@ -41,7 +41,7 @@ function getQuickReplies(pathname: string): QuickReply[] {
     ];
   }
   return [
-    { label: 'What is this program?', value: 'What is the Enterprise AI Leadership Accelerator?' },
+    { label: 'What is this program?', value: 'What is the AI Systems Architect Accelerator?' },
     { label: 'What do I leave with?', value: 'What deliverables do I leave with after the program?' },
     { label: 'Book a strategy call', value: 'I would like to book a strategy call.' },
   ];
@@ -265,7 +265,7 @@ const MayaChatWidget: React.FC = () => {
     if (!visitorId) {
       setMessages([{
         role: 'assistant',
-        content: "Hi, I'm Maya, Director of Admissions at Colaberry. I'm here to help you explore the Enterprise AI Leadership Accelerator — a 5-session intensive where technical leaders build a working AI proof of capability for their organization. What would you like to know?",
+        content: "Hi, I'm Maya, Director of Admissions at Colaberry. I'm here to help you explore the AI Systems Architect Accelerator — a 12-week, project-based program where you build real, deployed AI systems with Claude Code. What would you like to know?",
       }]);
       setInitialized(true);
       return;
@@ -305,7 +305,7 @@ const MayaChatWidget: React.FC = () => {
     } catch {
       setMessages([{
         role: 'assistant',
-        content: "Hi, I'm Maya, Director of Admissions at Colaberry. I'm here to help you explore the Enterprise AI Leadership Accelerator. What questions can I answer for you?",
+        content: "Hi, I'm Maya, Director of Admissions at Colaberry. I'm here to help you explore the AI Systems Architect Accelerator. What questions can I answer for you?",
       }]);
     }
 

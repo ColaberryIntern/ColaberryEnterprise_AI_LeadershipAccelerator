@@ -274,38 +274,6 @@ export interface CoraKbResult {
   automation_potential: string;
 }
 
-/**
- * Build a Cora system prompt from the DB-backed KB.
- * Drop-in replacement for buildCoraSystemPrompt() in coraKnowledgeBase.ts once
- * the 20260706_add_kb_ops_tables migration is applied and seed verified.
- */
-export async function buildCoraSystemPromptFromDB(courseId: string): Promise<string> {
-  const active = await getActiveCohort(courseId);
-  const entries = await listEntries({ courseId, activeOnly: true });
-
-  const resolvedQA = entries.map((e) => {
-    const answer = active
-      ? resolveMergeTags(e.answer_template, active.cohort, active.course)
-      : e.answer_template;
-    return `Q: ${e.question_pattern}\nA: ${answer}`;
-  });
-
-  const cohortContext = active
-    ? `Current cohort: ${active.cohort.name} (starts ${active.cohort.start_date ?? 'TBD'}, $${active.cohort.price_annual ?? 'TBD'}/mo annual or $${active.cohort.price_monthly ?? 'TBD'}/mo monthly).`
-    : 'No active cohort — use placeholder responses.';
-
-  return [
-    'You are Cora, the AI Admissions and Support Assistant for Colaberry School of Data Analytics.',
-    'Respond to incoming emails with the tone: friendly, empathetic, confident, and professional.',
-    cohortContext,
-    '',
-    'Use the following Q&A knowledge base to answer questions accurately:',
-    resolvedQA.join('\n\n'),
-    '',
-    'If a question is not answered by the knowledge base, acknowledge receipt and route to the appropriate staff member.',
-  ].join('\n');
-}
-
 export async function queryKbForCora(courseId: string, keywords: string[]): Promise<CoraKbResult[]> {
   const entries = await listEntries({ courseId, activeOnly: true });
   const active = await getActiveCohort(courseId);

@@ -30,7 +30,10 @@ const router = Router();
 
 // SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
 // endpoints publicly callable. Require an authenticated admin for every route below.
-router.use(requireAdmin);
+// Scoped to this router's own path prefix — see autonomyRoutes.ts for why an
+// unscoped `router.use(requireAdmin)` here was silently 401-ing unrelated public
+// routes (e.g. the chat widget) mounted later in server.ts.
+router.use('/tickets', requireAdmin);
 
 // ROUTING FIX (discovered during ProofDesk Milestone 2, T010): every route string in
 // this file previously started with bare `/tickets...`, but `adminRoutes.ts` mounts

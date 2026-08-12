@@ -54,6 +54,33 @@ describe('hasFullCurriculumAccess (pure paywall rule)', () => {
     expect(hasFullCurriculumAccess(null, { cohort_type: 'business' }, { isStaff: true })).toBe(false);
     expect(hasFullCurriculumAccess(undefined, null, {})).toBe(false);
   });
+
+  // Cohort-start gate (Ali decision, BC #10160497402, relayed 2026-08-04): paying
+  // reserves the spot; full access unlocks when the cohort's class actually starts.
+  describe('cohort-start gate on the paid signal', () => {
+    const realDateNow = Date.now;
+    beforeAll(() => { Date.now = () => new Date('2026-08-06T12:00:00Z').getTime(); });
+    afterAll(() => { Date.now = realDateNow; });
+
+    it('paid + cohort start_date in the future → false (not started yet)', () => {
+      expect(hasFullCurriculumAccess({ payment_status: 'paid' }, { start_date: '2026-09-01' }, {})).toBe(false);
+    });
+
+    it('paid + cohort start_date today or in the past → true', () => {
+      expect(hasFullCurriculumAccess({ payment_status: 'paid' }, { start_date: '2026-08-06' }, {})).toBe(true);
+      expect(hasFullCurriculumAccess({ payment_status: 'paid' }, { start_date: '2026-07-23' }, {})).toBe(true);
+    });
+
+    it('paid + no cohort resolved → true (fail open)', () => {
+      expect(hasFullCurriculumAccess({ payment_status: 'paid' }, null, {})).toBe(true);
+    });
+
+    it('paid + not-yet-started cohort, but comped/staff/business → still true (unaffected by the gate)', () => {
+      expect(hasFullCurriculumAccess({ payment_status: 'pending' }, { start_date: '2026-09-01' }, { hasActiveComp: true })).toBe(true);
+      expect(hasFullCurriculumAccess({ payment_status: 'pending' }, { start_date: '2026-09-01' }, { isStaff: true })).toBe(true);
+      expect(hasFullCurriculumAccess({ payment_status: 'pending' }, { start_date: '2026-09-01', cohort_type: 'business' }, {})).toBe(true);
+    });
+  });
 });
 
 describe('isFreePreviewTier (async resolver)', () => {
@@ -124,6 +151,15 @@ describe('isFreePreviewTier (async resolver)', () => {
     expect(await isFreePreviewTier('e1')).toBe(false);
   });
 
+  it('flag ON + paid but cohort not yet started → GATED (true)', async () => {
+    (env as any).contentPaidGateEnabled = true;
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'paid', enrollment_type: 'standard', cohort_id: 'c-future' });
+    findCohort.mockResolvedValue({ id: 'c-future', start_date: '2099-01-01' });
+    staffOf.mockResolvedValue(false);
+    compIdsOf.mockResolvedValue(new Set<string>());
+    expect(await isFreePreviewTier('e1')).toBe(true);
+  });
+
   it('flag ON + business workspace cohort → NOT gated (false)', async () => {
     (env as any).contentPaidGateEnabled = true;
     findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'pending', enrollment_type: 'standard', cohort_id: 'c-biz' });
@@ -166,6 +202,15 @@ describe('resolveContentPageAccess (page-level paywall resolver)', () => {
     staffOf.mockResolvedValue(false);
     compIdsOf.mockResolvedValue(new Set<string>());
     expect(await resolveContentPageAccess('e1')).toEqual({ isStaff: false, hasFullAccess: true });
+  });
+
+  it('flag ON + paid but cohort not yet started → hasFullAccess false', async () => {
+    (env as any).contentPageGateEnabled = true;
+    findEnrollment.mockResolvedValue({ id: 'e1', payment_status: 'paid', cohort_id: 'c-future' });
+    findCohort.mockResolvedValue({ id: 'c-future', start_date: '2099-01-01' });
+    staffOf.mockResolvedValue(false);
+    compIdsOf.mockResolvedValue(new Set<string>());
+    expect(await resolveContentPageAccess('e1')).toEqual({ isStaff: false, hasFullAccess: false });
   });
 
   it('flag ON + unpaid, non-staff → hasFullAccess false', async () => {

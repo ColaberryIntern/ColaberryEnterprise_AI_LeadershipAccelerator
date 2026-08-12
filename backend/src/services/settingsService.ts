@@ -17,6 +17,7 @@ const DEFAULTS: Record<string, any> = {
   email_from: 'ali@colaberry.com',
   email_from_name: 'Colaberry Enterprise AI',
   admin_notification_emails: '', // comma-separated list; falls back to email_from
+  cognitive_incident_notification_emails: '', // comma-separated list; falls back to email_from
   // Voice (Synthflow) configuration
   synthflow_api_key: '',
   synthflow_welcome_agent_id: '',
@@ -49,6 +50,12 @@ const DEFAULTS: Record<string, any> = {
   ghl_enabled: false,
   ghl_api_key: '',
   ghl_location_id: 'JFWwp8q7l6T12NWTIOKG',
+  // GHL Conversations logging (v2 API, separate Private Integration token —
+  // GHL doesn't retroactively add conversations/* scopes to the v1 ghl_api_key
+  // token above). Kept off by default until a sandbox send confirms the
+  // InternalComment write lands correctly in a real GHL location.
+  ghl_conversation_log_enabled: false,
+  ghl_conversations_api_key: '',
   // Consent gate (TBI P0-3): 'off' | 'shadow' | 'enforce'. Default shadow = evaluate + log every
   // outbound send's consent verdict but NEVER block, until Ali flips it to 'enforce'.
   consent_enforcement: 'shadow',

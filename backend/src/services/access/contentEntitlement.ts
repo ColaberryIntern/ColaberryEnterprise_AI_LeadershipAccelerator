@@ -1,6 +1,7 @@
 import { Enrollment, Cohort } from '../../models';
 import { isStaffEnrollment } from './staffAccess';
 import { activeCompEnrollmentIds } from '../subscriptionService';
+import { hasCohortStarted } from '../cohortService';
 import { env } from '../../config/env';
 
 /**
@@ -8,8 +9,10 @@ import { env } from '../../config/env';
  * the FULL 12-week curriculum, or only the free "Week 0" preview?
  *
  * This is the launch access contract: register free -> enroll free (pick a cohort)
- * -> PAY -> see all 12 weeks. Access is keyed on PAYMENT, not on which cohort the
- * student sits in.
+ * -> PAY -> see all 12 weeks, once the cohort's class actually starts. Access is
+ * keyed on PAYMENT + the cohort having started (Ali decision, BC #10160497402,
+ * relayed 2026-08-04) — a paid-but-not-yet-started enrollment stays on the free
+ * preview until class begins. See hasCohortStarted (cohortService.ts).
  *
  * Deliberately STRICTER than `requireBuildEntitlement.isBuildEntitled`: that gate
  * treats accelerator-cohort membership as entitled (so invoice/net-terms students
@@ -42,7 +45,7 @@ type EntitlementEnrollment = {
    *  keeps free-tier access but full access shouldn't unlock early. */
   access_starts_at?: string | Date | null;
 } | null | undefined;
-type EntitlementCohort = { cohort_type?: string | null } | null | undefined;
+type EntitlementCohort = { cohort_type?: string | null; start_date?: string | Date | null } | null | undefined;
 
 function isAccessStartDeferred(accessStartsAt: string | Date | null | undefined, now: Date): boolean {
   if (!accessStartsAt) return false;
@@ -56,7 +59,9 @@ function isAccessStartDeferred(accessStartsAt: string | Date | null | undefined,
 
 /**
  * PURE paywall rule. "Full curriculum access" is the OR of:
- *   - PAID:      enrollment.payment_status === 'paid'  (a paid subscription/invoice)
+ *   - PAID:      enrollment.payment_status === 'paid' AND the cohort's class has
+ *                actually started (hasCohortStarted) — paying reserves the spot,
+ *                access unlocks at class start, not at payment.
  *   - comped:    an active admin "Free Access" comp subscription (roleInfo.hasActiveComp)
  *   - staff:     community_members.role === 'staff' (roleInfo.isStaff)
  *   - business:  the enrollment sits in a private business/owner workspace cohort
@@ -66,8 +71,9 @@ function isAccessStartDeferred(accessStartsAt: string | Date | null | undefined,
  * untouched either way — this only ever narrows access, never widens it).
  *
  * Everyone else — guests (free self-serve signups), explorers (open-house
- * prospects), and enrolled-but-UNPAID members — is on the free preview tier and
- * sees Week 0 only. A missing enrollment yields `false`.
+ * prospects), enrolled-but-UNPAID members, and paid members whose cohort hasn't
+ * started yet — is on the free preview tier and sees Week 0 only. A missing
+ * enrollment yields `false`.
  */
 export function hasFullCurriculumAccess(
   enrollment: EntitlementEnrollment,
@@ -76,8 +82,14 @@ export function hasFullCurriculumAccess(
   now: Date = new Date(),
 ): boolean {
   if (!enrollment) return false;
+  // MERGE RESOLUTION: two DELIBERATE and DIFFERENT gates, both kept.
+  //  - isAccessStartDeferred: per-student deferral (postponed cohort move) — main.
+  //  - hasCohortStarted: the general paywall rule, paid access does not unlock
+  //    until the cohort actually starts (Ali decision, BC #10160497402,
+  //    relayed 2026-08-04) — staging.
+  // Neither supersedes the other, so full access requires both to pass.
   if (isAccessStartDeferred(enrollment.access_starts_at, now)) return false;
-  const paid = enrollment.payment_status === 'paid';
+  const paid = enrollment.payment_status === 'paid' && hasCohortStarted(cohort);
   const comped = roleInfo?.hasActiveComp === true;
   const staff = roleInfo?.isStaff === true;
   const business = String(cohort?.cohort_type ?? '').toLowerCase() === 'business';
@@ -109,7 +121,7 @@ export async function isFreePreviewTier(enrollmentId: string): Promise<boolean> 
     }
 
     const cohort = enrollment.cohort_id
-      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type'] })
+      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type', 'start_date'] })
       : null;
     // isStaffEnrollment fails SAFE to false internally; a comp-lookup error rejects
     // and is caught below (fail open).
@@ -145,7 +157,7 @@ export async function resolveContentPageAccess(enrollmentId: string): Promise<{ 
     const enrollment = await Enrollment.findByPk(enrollmentId, { attributes: ['id', 'payment_status', 'cohort_id', 'access_starts_at'] });
     if (!enrollment) return { isStaff: false, hasFullAccess: true };
     const cohort = enrollment.cohort_id
-      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type'] })
+      ? await Cohort.findByPk(enrollment.cohort_id, { attributes: ['id', 'cohort_type', 'start_date'] })
       : null;
     const [isStaff, compIds] = await Promise.all([
       isStaffEnrollment(enrollmentId),

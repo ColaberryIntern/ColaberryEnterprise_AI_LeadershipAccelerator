@@ -8,6 +8,12 @@ import { postMessage, listMessages } from './roomMessageService';
 import { isStaffOrMgmt } from '../access/staffAccess';
 import { getReeseEnrollmentId } from '../reese/reeseIdentitySeed';
 
+// A peer's typing touch is considered stale after this window — client
+// throttles its touch to ~every 2.5s while actively typing, so 6s tolerates
+// one missed touch without the indicator flickering (same tolerance-window
+// pattern as RoomPresence's heartbeat).
+const TYPING_FRESH_MS = 6_000;
+
 // 1:1 direct messages, modelled as a 2-person private CommunityRoom
 // (room_type 'dm') so they reuse the persisted RoomMessage layer — messages
 // survive for an offline recipient with no new tables. A DM is keyed on a
@@ -149,9 +155,17 @@ async function notifyDmRecipient(roomId: string, senderId: string, messageId: st
 }
 
 /** Send a message in a DM room (room-service auth enforces membership). */
-export async function sendDmMessage(ctx: RoomAccessContext, roomId: string, content: string): Promise<RoomMessage> {
+/** Send a message in a DM room (room-service auth enforces membership). clientId
+ * makes a retried send idempotent - see postMessage's client_id dedup.
+ *
+ * MERGE RESOLUTION: staging added the clientId idempotency parameter; main added
+ * the offline-recipient notification and the Reese reply trigger. Staging branched
+ * before both, so its version of this function silently dropped them. Keeping the
+ * newer signature with main's full body - taking either side wholesale would have
+ * lost a shipped feature. */
+export async function sendDmMessage(ctx: RoomAccessContext, roomId: string, content: string, clientId?: string): Promise<RoomMessage> {
   await assertDmRoom(roomId);
-  const message = await postMessage(ctx, roomId, { content });
+  const message = await postMessage(ctx, roomId, { content, client_id: clientId });
   await notifyDmRecipient(roomId, ctx.enrollmentId, message.id);
   // Reese Phase 1 — reactive-only reply trigger. maybeTriggerReeseReply() is a
   // strict no-op for any room Reese isn't a member of, and for any message
@@ -172,10 +186,63 @@ export async function sendDmMessage(ctx: RoomAccessContext, roomId: string, cont
   return message;
 }
 
-/** List a DM's messages (room-service auth enforces membership). */
-export async function listDmMessages(ctx: RoomAccessContext, roomId: string, since?: string) {
+async function findOtherMembership(roomId: string, me: string): Promise<RoomMembership | null> {
+  const others = await RoomMembership.findAll({ where: { room_id: roomId, enrollment_id: { [Op.ne]: me } } });
+  return others[0] ?? null;
+}
+
+export interface DmListResult {
+  messages: Array<ReturnType<RoomMessage['toJSON']> & { delivery_state?: 'sent' | 'delivered' }>;
+  active_count: number;
+  peer_typing: boolean;
+}
+
+/**
+ * List a DM's messages (room-service auth enforces membership), enriched with
+ * delivery ticks and the peer's typing state — both derived from poll cursors
+ * on RoomMembership, no websockets.
+ *
+ * Delivery model: fetching this thread IS the delivery signal (the client just
+ * received whatever's in it), so touching my own `last_delivered_at` here lets
+ * the OTHER participant's next poll mark messages I authored as "delivered"
+ * once it sees my cursor has passed their created_at. "Sent" is the default
+ * until then. No read receipts in v1 (matches the approved mockup).
+ */
+export async function listDmMessages(ctx: RoomAccessContext, roomId: string, since?: string): Promise<DmListResult> {
   await assertDmRoom(roomId);
-  return listMessages(ctx, roomId, { since });
+  const me = ctx.enrollmentId;
+
+  try {
+    await RoomMembership.update({ last_delivered_at: new Date() }, { where: { room_id: roomId, enrollment_id: me } });
+  } catch {
+    // Non-fatal: worst case, delivery ticks lag a beat. Never blocks the read.
+  }
+
+  const [{ messages, active_count }, peer] = await Promise.all([
+    listMessages(ctx, roomId, { since }),
+    findOtherMembership(roomId, me),
+  ]);
+
+  const peerDeliveredThrough = peer?.last_delivered_at ?? null;
+  const peerTyping = !!peer?.typing_at && Date.now() - new Date(peer.typing_at).getTime() < TYPING_FRESH_MS;
+
+  const enriched = messages.map((m) => {
+    const dto = m.toJSON() as ReturnType<RoomMessage['toJSON']> & { delivery_state?: 'sent' | 'delivered' };
+    if (m.enrollment_id === me) {
+      dto.delivery_state = peerDeliveredThrough && new Date(peerDeliveredThrough) >= new Date(m.created_at) ? 'delivered' : 'sent';
+    }
+    return dto;
+  });
+
+  return { messages: enriched, active_count, peer_typing: peerTyping };
+}
+
+/** Touch my typing cursor in a DM. Fire-and-forget from the client, throttled
+ * client-side (~every 2.5s while actively typing). Idempotent — repeat calls
+ * just advance the timestamp, no duplicate side effect. */
+export async function touchDmTyping(me: string, roomId: string): Promise<void> {
+  await assertDmRoom(roomId);
+  await RoomMembership.update({ typing_at: new Date() }, { where: { room_id: roomId, enrollment_id: me } });
 }
 
 export interface DmConversation {
