@@ -36,13 +36,24 @@ function PlatformV2(): React.ReactElement {
       />
 
       <section className="cbv2-pagehero" aria-labelledby="cbv2-plat-title">
-        <div className="cbv2-wrap">
-          <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Platform</p>
-          <h1 id="cbv2-plat-title">The platform your team logs into</h1>
-          <p className="cbv2-pagehero__lede">
-            Every figure below is sample data, shaped to the metrics the product actually
-            captures. Nothing here is a customer&rsquo;s data.
-          </p>
+        <div className="cbv2-wrap cbv2-pagehero__split">
+          <div>
+            <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Platform</p>
+            <h1 id="cbv2-plat-title">The platform your team logs into</h1>
+            <p className="cbv2-pagehero__lede">
+              Every figure below is sample data, shaped to the metrics the product actually
+              captures. Nothing here is a customer&rsquo;s data.
+            </p>
+          </div>
+          <figure className="cbv2-shot-frame">
+            <img
+              className="cbv2-shot"
+              src="/site-v2/shot-hero-dashboard.png"
+              alt="The company view a manager logs into: readiness, builder XP, evidence shipped and evaluations passed for a sample organization."
+              loading="eager"
+              decoding="async"
+            />
+          </figure>
         </div>
       </section>
 
@@ -198,7 +209,7 @@ function PlatformV2(): React.ReactElement {
             <Claim claimKey="surface.free.workspace" route={ROUTE} />
           </p>
           <div className="cbv2-hero__ctas" style={{ justifyContent: 'center' }}>
-            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/try">
+            <Link className="cbv2-btn cbv2-btn--primary" to="/v2/start">
               Open the free workspace
             </Link>
             <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/services">

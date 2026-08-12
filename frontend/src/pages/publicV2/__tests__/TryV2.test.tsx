@@ -87,21 +87,27 @@ describe('TryV2 — expectations set before arrival', () => {
   });
 });
 
-describe('the reposition itself — V2 CTAs route through the front door', () => {
+/**
+ * UPDATED: free-workspace CTAs now point at /v2/start, the account-creation page,
+ * rather than at this explainer. The explainer still exists and is linked from
+ * the nav, but the primary path now ends in an account rather than in a preview
+ * with no way to sign up -- which was the gap in the funnel.
+ */
+describe('the reposition itself — V2 CTAs lead to account creation', () => {
   const render = (el: React.ReactElement, path: string): string =>
     renderToStaticMarkup(<MemoryRouter initialEntries={[path]}>{el}</MemoryRouter>);
 
-  it('HomeV2 sends free-workspace CTAs to /v2/try, not straight to /try', () => {
+  it('HomeV2 sends free-workspace CTAs to account creation', () => {
     const h = render(<HomeV2 />, '/v2');
-    expect(h).toContain('href="/v2/try"');
-    // A bare /try link would drop the visitor out of the V2 shell with no
-    // expectation-setting, which is the incoherence this task exists to fix.
+    expect(h).toContain('href="/v2/start"');
+    // A bare /try link would drop the visitor out of the V2 shell into a preview
+    // with no signup path at all.
     expect(h).not.toMatch(/href="\/try"/);
   });
 
   it('PlatformV2 does the same', () => {
     const h = render(<PlatformV2 />, '/v2/platform');
-    expect(h).toContain('href="/v2/try"');
+    expect(h).toContain('href="/v2/start"');
     expect(h).not.toMatch(/href="\/try"/);
   });
 });

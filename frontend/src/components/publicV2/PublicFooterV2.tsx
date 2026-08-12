@@ -51,7 +51,7 @@ const GROUPS: readonly FooterGroup[] = [
     heading: 'Platform',
     links: [
       { label: 'Platform', to: '/v2/platform' },
-      { label: 'Free workspace', to: '/v2/try' },
+      { label: 'Free workspace', to: '/v2/start' },
       { label: 'Pricing', to: '/pricing' },
     ],
   },

@@ -13,6 +13,7 @@ import ProofV2 from './pages/publicV2/ProofV2';
 import OpportunityLabV2 from './pages/publicV2/OpportunityLabV2';
 import TryV2 from './pages/publicV2/TryV2';
 import PrivacyV2 from './pages/publicV2/PrivacyV2';
+import SignupV2 from './pages/publicV2/SignupV2';
 import adminRoutes from './routes/adminRoutes';
 import portalRoutes from './routes/portalRoutes';
 import referralRoutes from './routes/referralRoutes';
@@ -59,6 +60,7 @@ function App() {
           <Route path="lab" element={<OpportunityLabV2 />} />
           <Route path="try" element={<TryV2 />} />
           <Route path="privacy" element={<PrivacyV2 />} />
+          <Route path="start" element={<SignupV2 />} />
         </Route>
         <Route element={<PublicLayout />}>
           {publicRoutes}

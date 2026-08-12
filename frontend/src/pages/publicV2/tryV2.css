@@ -46,3 +46,8 @@
   margin: var(--space-7) 0 0;
   max-width: 820px;
 }
+
+/* The nav capture is a tall portrait crop. Unconstrained it dominated the hero
+   and pushed the headline below the fold, which is what the review caught. Cap
+   its height so the copy leads and the image supports it. */
+.cbv2-pagehero__split .cbv2-shot-frame img { max-height: 420px; object-fit: cover; object-position: top; }

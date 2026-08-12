@@ -34,13 +34,23 @@ export function ServicesV2(): React.ReactElement {
       />
 
       <section className="cbv2-pagehero" aria-labelledby="cbv2-svc-title">
-        <div className="cbv2-wrap">
+        <div className="cbv2-wrap cbv2-pagehero__split"><div>
           <p className="cbv2-eyebrow cbv2-eyebrow--onDark">Services</p>
           <h1 id="cbv2-svc-title">What outcome do you need next?</h1>
           <p className="cbv2-pagehero__lede">
             Five productized engagements. Pick by the outcome you need, not by what the
             industry calls it.
           </p>
+        </div>
+          <figure className="cbv2-shot-frame">
+            <img
+              className="cbv2-shot"
+              src="/site-v2/shot-readiness.png"
+              alt="The architect readiness trajectory an engagement is measured against: 63 percent average readiness rising over eight weeks, with tiles for builder XP, evidence shipped and attendance."
+              loading="eager"
+              decoding="async"
+            />
+          </figure>
         </div>
       </section>
 
