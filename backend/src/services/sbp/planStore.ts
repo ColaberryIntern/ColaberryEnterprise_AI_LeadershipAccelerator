@@ -193,6 +193,8 @@ export interface BuildIntake {
   target_weeks?: number | null;
   correlation_id?: string | null;
   status?: string;
+  /** Adaptive intake interview Q&A. Null on rows captured before it existed. */
+  answers?: Array<{ id: string; question: string; answer: string }> | null;
 }
 
 /**
@@ -203,13 +205,14 @@ export interface BuildIntake {
 export async function saveIntake(intake: BuildIntake): Promise<{ project_id: string; status: string }> {
   const rows = await sequelize.query<{ project_id: string; status: string }>(
     `INSERT INTO build_intake
-       (project_id, enrollment_id, idea, name, size, users, data_sources, done_definition, target_weeks, correlation_id, status)
-     VALUES (:project_id, :enrollment_id, :idea, :name, :size, :users, :data_sources, :done_definition, :target_weeks, :correlation_id, :status)
+       (project_id, enrollment_id, idea, name, size, users, data_sources, done_definition, target_weeks, correlation_id, status, answers)
+     VALUES (:project_id, :enrollment_id, :idea, :name, :size, :users, :data_sources, :done_definition, :target_weeks, :correlation_id, :status, CAST(:answers AS JSONB))
      ON CONFLICT (project_id) DO UPDATE SET
        idea = EXCLUDED.idea, name = EXCLUDED.name, size = EXCLUDED.size,
        users = EXCLUDED.users, data_sources = EXCLUDED.data_sources,
        done_definition = EXCLUDED.done_definition, target_weeks = EXCLUDED.target_weeks,
-       correlation_id = EXCLUDED.correlation_id, status = EXCLUDED.status, updated_at = NOW()
+       correlation_id = EXCLUDED.correlation_id, status = EXCLUDED.status,
+       answers = COALESCE(EXCLUDED.answers, build_intake.answers), updated_at = NOW()
      RETURNING project_id, status`,
     {
       type: QueryTypes.SELECT,
@@ -223,6 +226,7 @@ export async function saveIntake(intake: BuildIntake): Promise<{ project_id: str
         data_sources: intake.data_sources ?? null,
         done_definition: intake.done_definition ?? null,
         target_weeks: intake.target_weeks ?? null,
+        answers: intake.answers ? JSON.stringify(intake.answers) : null,
         correlation_id: intake.correlation_id ?? null,
         status: intake.status ?? 'captured',
       },

@@ -33,15 +33,22 @@
 import { randomUUID } from 'crypto';
 import { QueryTypes } from 'sequelize';
 import { sequelize } from '../../config/database';
-import { type FeedVideo, type FeedBlog, type FeedContent } from './timelineService';
 import { resolve as resolveType } from './typeRegistry';
 import { pickAmbientBatch, AMBIENT_PROVIDERS, AMBIENT_REPEAT_COOLDOWN_DAYS, type AmbientProviderSlug, type AmbientItem } from './ambientPool';
 import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWithinAmbientCooldown, type TodayItemKind } from './todayFeedPlan';
 import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
+import { isDailyRefreshDue } from './todayDailyRefreshService';
 import { env } from '../../config/env';
 import { getFeedPolicy } from './feedConfigService';
-import { rankLearningValue } from '../cape/capeLearningValueRanker';
+import { type TodayFeedItem, type TodayPage, type ImpressionRow } from './todayFeedTypes';
+import { type CapeExplanation, extractCapeExplanation, applyCapeRankingIfEnabled, selectAnchoredOrder } from './todayFeedCapeRanking';
+
+// Re-exported so no existing `from './todayFeedComposer'` import site needed to
+// change when these were split out (2026-08-12, daily-refresh build — see
+// todayFeedTypes.ts / todayFeedCapeRanking.ts for why).
+export type { TodayFeedItem, TodayPage } from './todayFeedTypes';
+export { type CapeExplanation, extractCapeExplanation, applyCapeRankingIfEnabled, selectAnchoredOrder } from './todayFeedCapeRanking';
 
 /** Legacy default: inject one ambient item after every CADENCE anchored items.
  *  When FEED_CONTROL_ENABLED, cadence + the active ambient providers come from
@@ -49,46 +56,6 @@ import { rankLearningValue } from '../cape/capeLearningValueRanker';
 const CADENCE = 2;
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 30;
-
-export interface TodayFeedItem {
-  position: number;
-  kind: TodayItemKind;
-  ref: string;                 // `card:<id>` | `<provider>:<mediaId>`
-  surface: string;             // home_surface of the type (drives the section colour)
-  type: string;                // curriculum type slug
-  render_band: string;
-  card_id: string | null;      // anchored deep-link target (open/complete)
-  title: string | null;
-  subtitle: string | null;
-  description: string | null;
-  image: string | null;
-  video: FeedVideo | null;
-  blog: FeedBlog | null;
-  content: FeedContent | null;
-  week: number | null;
-  estimated_time: number | null;
-  status: string | null;       // anchored progress status
-  points?: { learning?: number; builder?: number; community?: number } | null;  // engagement points the card awards (anchored curriculum cards)
-  interacted: boolean;
-  author?: { name: string; avatar_url: string | null; level: number } | null;  // community posts: the member byline
-}
-
-export interface TodayPage {
-  items: TodayFeedItem[];
-  nextCursor: number;
-  exhausted: boolean;          // true only when even ambient produced nothing (empty pools)
-}
-
-interface ImpressionRow {
-  position: number;
-  kind: TodayItemKind;
-  ref: string;
-  provider: string | null;
-  card_id: string | null;
-  item: any;                   // stored TodayFeedItem payload
-  interacted_at: Date | null;
-  served_at: Date;
-}
 
 function ambientItemFrom(a: AmbientItem, position: number): TodayFeedItem {
   const def = resolveType(a.provider);
@@ -126,17 +93,6 @@ async function loadImpressions(enrollmentId: string): Promise<ImpressionRow[]> {
   );
 }
 
-/** CAPE Phase 4 Stage 5 explanation (design doc §9 Stage 5, §13) — present only
- * when `env.capeLearningValueRankerEnabled` is on and ranking succeeded for
- * this item; absent (all 4 columns stay NULL/[]) otherwise, including every
- * flag-off write. */
-export interface CapeExplanation {
-  rank_score: number;
-  reasons: string[];
-  policy_version: number;
-  learner_state_version: string;
-}
-
 export async function persistImpression(enrollmentId: string, it: TodayFeedItem, provider: string | null, explanation?: CapeExplanation): Promise<void> {
   await sequelize.query(
     `INSERT INTO today_feed_impressions
@@ -155,69 +111,6 @@ export async function persistImpression(enrollmentId: string, it: TodayFeedItem,
       type: QueryTypes.INSERT,
     },
   );
-}
-
-/** Extracts a CAPE explanation from a ranked candidate, if present. Ranked
- * items carry `rank_score`/`reasons`/`policy_version`/`learner_state_version`
- * at runtime (stamped by `capeLearningValueRanker.rankLearningValue`) even
- * though `TodayFeedItem`'s own type doesn't declare them — this is the one
- * place that bridges the two, via an explicit runtime check
- * (`typeof rank_score === 'number'`), never an unchecked cast. Returns
- * `undefined` for every flag-off item, so `persistImpression` writes NULL/[]
- * for all 4 new columns exactly as it did before this task. */
-export function extractCapeExplanation(cand: TodayFeedItem): CapeExplanation | undefined {
-  const c = cand as TodayFeedItem & Partial<CapeExplanation>;
-  if (typeof c.rank_score !== 'number') return undefined;
-  return {
-    rank_score: c.rank_score,
-    reasons: Array.isArray(c.reasons) ? c.reasons : [],
-    policy_version: c.policy_version ?? 0,
-    learner_state_version: c.learner_state_version ?? '',
-  };
-}
-
-/**
- * CAPE Phase 4 flag-ON ranking step (design doc §9, §16 Phase 4). Applied
- * AFTER `selectAnchoredOrder` (which stays a pure passthrough — see its own
- * doc comment) so the flag-off contract that function's tests prove is
- * completely unaffected by this function's existence. A ranking failure
- * (thrown `CapeLearnerStateError`, a DB blip, anything) is caught and logged
- * here — the feed falls back to the unranked precedence/week-bound order
- * rather than breaking, matching this file's own "fail-soft throughout"
- * contract.
- */
-export async function applyCapeRankingIfEnabled(enrollmentId: string, anchoredQueue: TodayFeedItem[]): Promise<TodayFeedItem[]> {
-  if (!env.capeLearningValueRankerEnabled || !anchoredQueue.length) return anchoredQueue;
-  try {
-    const ranked = await rankLearningValue(enrollmentId, anchoredQueue, new Date());
-    return ranked.items;
-  } catch (err: any) {
-    console.warn(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'warn',
-      service: 'backend',
-      event: 'cape_learning_value_ranking_failed',
-      error_class: err?.name || 'Error',
-      outcome: 'failure',
-      context: { enrollment_id: enrollmentId, candidate_count: anchoredQueue.length, message: err?.message },
-    }));
-    return anchoredQueue;
-  }
-}
-
-/**
- * CAPE Phase 4 wiring seam (design doc §9, §16 Phase 4). The single call site
- * both `extendFeed` and `composeReadOnlyPage` route the precedence/week-bound
- * queue through before consumption. Flag OFF (the default, everywhere
- * including production) returns the SAME array, SAME order `gatherAnchored`
- * produced — a pure passthrough, proven by identity (`toBe`, not just
- * `toEqual`) in `todayFeedComposer.capeFlagOff.test.ts`, so this is
- * byte-identical to pre-Phase-4 behavior. Flag ON routes through
- * `applyCapeRankingIfEnabled` (a separate function layered on top — see its
- * own doc comment) which delegates to the CAPE learning-value ranker.
- */
-export function selectAnchoredOrder(anchoredQueue: TodayFeedItem[], capeEnabled: boolean): TodayFeedItem[] {
-  return anchoredQueue;
 }
 
 /** Real ambient providers (raw blog_posts/podcasts/network_videos pickers) — the
@@ -453,6 +346,19 @@ export async function getTodayPage(enrollmentId: string, cursor = 0, pageSize = 
   }
 
   let existing = await loadImpressions(enrollmentId);
+
+  // Daily auto-refresh (env.todayDailyRefreshEnabled, default OFF): once per
+  // Central-time calendar day, opportunistically top up the feed with a small
+  // bounded batch BEFORE serving, so a student who doesn't scroll deep still
+  // sees something genuinely new — otherwise a long-tenured account's plain
+  // reload only ever reshuffles the same already-materialised pool (see this
+  // file's own "Deterministic pagination" docstring above). Reuses extendFeed()
+  // exactly as-is; this only changes WHEN it fires, not what it does.
+  if (env.todayDailyRefreshEnabled && (await isDailyRefreshDue(enrollmentId))) {
+    await extendFeed(enrollmentId, existing, env.todayDailyRefreshTopupSize);
+    existing = await loadImpressions(enrollmentId);
+  }
+
   let served = await buildServed(enrollmentId, existing, opts.seed);
   let exhausted = false;
 

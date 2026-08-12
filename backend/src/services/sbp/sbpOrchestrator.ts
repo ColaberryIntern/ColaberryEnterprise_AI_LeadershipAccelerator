@@ -23,6 +23,7 @@
  */
 import { randomUUID } from 'crypto';
 import { decomposeBuild } from './decomposeService';
+import { tierTargets } from './buildTiers';
 import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
 import { BuildPlan } from './planContract';
@@ -79,6 +80,12 @@ export interface StartBuildInput {
   targetWeeks?: number;
   /** The expanded requirements document, when one exists. Optional: the brief alone works. */
   document?: string;
+  /**
+   * Answers to the adaptive intake interview. Replaces the three fixed fields
+   * above for any client new enough to send them; both are supported so a
+   * cached older bundle still produces a build.
+   */
+  answers?: Array<{ id: string; question: string; answer: string }>;
 }
 
 /**
@@ -107,6 +114,7 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
     data_sources: input.dataSources ?? null,
     done_definition: input.doneDefinition ?? null,
     target_weeks: input.targetWeeks ?? null,
+    answers: input.answers ?? null,
     correlation_id: correlationId,
     status: 'generating',
   });
@@ -133,6 +141,9 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
     const { plan, attempts, model, client } = await decomposeBuild({
       brief: buildBriefText(input),
       document: input.document ?? '',
+      // FR-002: the tier the student picked has to change the plan's depth.
+      // Without this every tier produced the same shared DEFAULT_TARGETS.
+      targets: tierTargets(input.size),
       correlationId,
     });
 
@@ -193,6 +204,18 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
  */
 export function buildBriefText(input: StartBuildInput): string {
   const parts = [input.idea.trim()];
+  // The adaptive interview, when the client ran one. Each answer is carried
+  // with the question that produced it, so the decomposer reads the exchange
+  // rather than a bare value whose meaning lived in a label it never sees.
+  const answered = (input.answers ?? []).filter((a) => a.answer && a.answer.trim());
+  if (answered.length) {
+    parts.push(
+      ['THE STUDENT ANSWERED THESE QUESTIONS ABOUT THEIR OWN PROJECT:', ...answered.map(
+        (a) => `Q: ${a.question.trim()}\nA: ${a.answer.trim()}`,
+      )].join('\n\n'),
+    );
+  }
+  // Legacy fixed fields — still honoured when present so an older client works.
   if (input.users) parts.push(`WHO USES IT: ${input.users}`);
   if (input.dataSources) parts.push(`DATA SOURCES IT MUST CONNECT TO: ${input.dataSources}`);
   if (input.doneDefinition) parts.push(`WHAT DONE LOOKS LIKE (the guardrail): ${input.doneDefinition}`);

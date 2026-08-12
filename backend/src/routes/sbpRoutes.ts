@@ -10,6 +10,7 @@
  * OFF. Deploying this changes nothing until the flag is set, and unsetting it is
  * an instant rollback: the frontend falls back to the local path on a 404.
  *
+ *   POST  /api/portal/sbp/intake/questions        interview questions for an idea
  *   POST  /api/portal/sbp/builds                  start a build from the wizard
  *   GET   /api/portal/sbp/builds/:projectId       poll status + the draft plan
  *   POST  /api/portal/sbp/builds/:projectId/publish   promote + write the repo
@@ -66,6 +67,31 @@ async function repoFor(projectId: string): Promise<{ owner: string; repo: string
   return { owner: conn.repo_owner, repo: conn.repo_name, url: conn.repo_url || `https://github.com/${conn.repo_owner}/${conn.repo_name}` };
 }
 
+// ── interview ───────────────────────────────────────────────────────────────
+// Generates the "sharpen it" questions from the student's own idea. Deliberately
+// NOT tied to a project row: it runs while they are still typing, before a build
+// exists, so it takes the idea directly and creates nothing. Never fails to the
+// student — the service degrades to a generic set and reports `generated:false`.
+const questionsSchema = z.object({
+  idea: z.string().min(20, 'Tell us a bit more about what you want to build').max(20_000),
+  size: z.enum(['workflow', 'project', 'autonomous']).optional(),
+  name: z.string().max(200).optional(),
+});
+
+router.post('/api/portal/sbp/intake/questions', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!gate(res)) return;
+    const body = questionsSchema.parse(req.body ?? {});
+    const { generateIntakeQuestions } = await import('../services/sbp/intakeQuestionsService');
+    const result = await generateIntakeQuestions({
+      idea: body.idea,
+      size: body.size ?? 'project',
+      name: body.name,
+    });
+    res.json(result);
+  } catch (e) { fail(res, e, next); }
+});
+
 // ── start ───────────────────────────────────────────────────────────────────
 const startSchema = z.object({
   project_id: z.string().uuid(),
@@ -79,6 +105,14 @@ const startSchema = z.object({
   done_definition: z.string().max(2_000).optional(),
   target_weeks: z.number().int().min(1).max(52).optional(),
   document: z.string().max(400_000).optional(),
+  // The adaptive interview's answers: [{id, question, answer}]. The three
+  // legacy fields above are kept so an older client (or a cached bundle mid
+  // deploy) still starts a build rather than 400-ing.
+  answers: z.array(z.object({
+    id: z.string().max(80),
+    question: z.string().max(500),
+    answer: z.string().max(4_000),
+  })).max(20).optional(),
 });
 
 router.post('/api/portal/sbp/builds', requireParticipant, async (req: Request, res: Response, next: NextFunction) => {
@@ -99,6 +133,7 @@ router.post('/api/portal/sbp/builds', requireParticipant, async (req: Request, r
       doneDefinition: body.done_definition,
       targetWeeks: body.target_weeks,
       document: body.document,
+      answers: body.answers,
     });
     res.status(202).json(result);   // 202: accepted, generation continues
   } catch (e) { fail(res, e, next); }

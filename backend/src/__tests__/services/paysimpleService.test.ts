@@ -340,5 +340,60 @@ describe('PaySimple Service', () => {
       const result = verifyWebhookSignature('{"test": true}', 'deadbeef');
       expect(result).toBe(false);
     });
+
+    /*
+     * The load-bearing case. PaySimple sends the digest as UPPERCASE hex; Node's
+     * digest('hex') is lowercase. Comparing the digest TEXT therefore rejected every
+     * real webhook ('5F' is 0x35,0x46 vs '5f' 0x35,0x66) while the lowercase test
+     * above still passed, which is how this reached production and stayed there.
+     * Verified against a captured live delivery on 2026-08-12.
+     */
+    it('accepts the UPPERCASE hex digest PaySimple actually sends', () => {
+      const crypto = require('crypto');
+      const payload = '{"event_type":"payment_created","data":{"payment_id":123}}';
+      const sig = crypto.createHmac('sha256', 'test-webhook-secret').update(payload).digest('hex');
+
+      expect(sig).toBe(sig.toLowerCase());          // guards the premise of this test
+      expect(verifyWebhookSignature(payload, sig.toUpperCase())).toBe(true);
+    });
+
+    it('accepts a base64 digest (encoding-agnostic byte comparison)', () => {
+      const crypto = require('crypto');
+      const payload = '{"event_type":"payment_created","data":{"payment_id":123}}';
+      const sig = crypto.createHmac('sha256', 'test-webhook-secret').update(payload).digest('base64');
+
+      expect(verifyWebhookSignature(payload, sig)).toBe(true);
+    });
+
+    it('tolerates surrounding whitespace on the header value', () => {
+      const crypto = require('crypto');
+      const payload = '{"event_type":"payment_created","data":{"payment_id":123}}';
+      const sig = crypto.createHmac('sha256', 'test-webhook-secret').update(payload).digest('hex');
+
+      expect(verifyWebhookSignature(payload, `  ${sig.toUpperCase()} `)).toBe(true);
+    });
+
+    it('still rejects a well-formed digest for a DIFFERENT payload', () => {
+      const crypto = require('crypto');
+      const sig = crypto.createHmac('sha256', 'test-webhook-secret').update('{"a":1}').digest('hex');
+
+      expect(verifyWebhookSignature('{"a":2}', sig.toUpperCase())).toBe(false);
+    });
+
+    it('still rejects a digest computed with the WRONG secret', () => {
+      const crypto = require('crypto');
+      const payload = '{"event_type":"payment_created","data":{"payment_id":123}}';
+      const sig = crypto.createHmac('sha256', 'not-the-secret').update(payload).digest('hex');
+
+      expect(verifyWebhookSignature(payload, sig.toUpperCase())).toBe(false);
+    });
+
+    it('rejects a malformed header rather than comparing a truncated buffer', () => {
+      const payload = '{"test": true}';
+      expect(verifyWebhookSignature(payload, 'not-hex-at-all')).toBe(false);
+      expect(verifyWebhookSignature(payload, 'abc123')).toBe(false);        // too short
+      expect(verifyWebhookSignature(payload, '')).toBe(false);
+      expect(verifyWebhookSignature(payload, 'z'.repeat(64))).toBe(false);  // right length, not hex
+    });
   });
 });

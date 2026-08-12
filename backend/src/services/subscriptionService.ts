@@ -233,6 +233,43 @@ export type CheckoutResult =
   | { ok: true; payment_link: string; plan: SubscriptionPlan; amount: number; full_amount: number; applied_credit: number }
   | { ok: false; reason: 'unknown_plan' | 'enrollment_not_found' | 'billing_unconfigured' | 'checkout_failed'; message?: string };
 
+/**
+ * The PaySimple customer to bill this checkout against, reusing one we already
+ * created for this person before minting another.
+ *
+ * PaySimple's `GET /v4/customer?email=` filter is not honored server-side — it returns
+ * page 1 of the whole merchant account — so findCustomerByEmail's correctness guard
+ * (added after a shared customer id leaked across people) rejects every result and
+ * reports "not found". That is right, but it turns findOrCreateCustomer into
+ * create-every-time: Arinze Ohagwu's four checkout attempts on 2026-08-10 minted four
+ * duplicate customers. Checking what WE already stored fixes the repeat-attempt case
+ * without depending on a broken upstream filter.
+ */
+async function resolveCheckoutCustomerId(enrollment: Enrollment): Promise<string> {
+  if (enrollment.paysimple_customer_id) return String(enrollment.paysimple_customer_id);
+
+  // Best-effort: a failed lookup just means we mint a fresh customer, never that the
+  // student can't check out.
+  try {
+    const prior = await Subscription.findOne({
+      where: { enrollment_id: enrollment.id, paysimple_customer_id: { [Op.ne]: null } },
+      order: [['created_at', 'DESC']],
+      attributes: ['paysimple_customer_id'],
+    });
+    if (prior?.paysimple_customer_id) return String(prior.paysimple_customer_id);
+  } catch (err: any) {
+    console.error('[Subscription] prior customer lookup failed (non-fatal):', err?.message);
+  }
+
+  const customer = await findOrCreateCustomer({
+    fullName: enrollment.full_name || 'Student',
+    email: enrollment.email,
+    company: enrollment.company || 'Individual',
+    phone: enrollment.phone || undefined,
+  });
+  return String(customer.Id);
+}
+
 /** Start a hosted checkout for a plan. Creates a pending subscription keyed on
  *  the PaySimple external_id and returns the payment link to redirect to. */
 export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan, nowMs: number = Date.now()): Promise<CheckoutResult> {
@@ -263,12 +300,7 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
   const lastName = nameParts.slice(1).join(' ') || '-';
 
   try {
-    const customer = await findOrCreateCustomer({
-      fullName: enrollment.full_name || 'Student',
-      email: enrollment.email,
-      company: enrollment.company || 'Individual',
-      phone: enrollment.phone || undefined,
-    });
+    const customerId = await resolveCheckoutCustomerId(enrollment);
 
     const link = await createPaymentLink({
       externalId,
@@ -289,10 +321,23 @@ export async function startCheckout(enrollmentId: string, plan: SubscriptionPlan
       amount_cents: cfg.amount_cents,          // full recurring price (unchanged by the credit)
       applied_credit_cents: appliedCents,      // discount taken off this first charge
       payment_ref: externalId,
-      paysimple_customer_id: String(customer.Id),
+      paysimple_customer_id: customerId,
       created_at: new Date(nowMs),
       updated_at: new Date(nowMs),
     });
+
+    // Mirror the customer id onto the enrollment. The missed-webhook reconciler keys
+    // its candidate scan off enrollments; writing it only to the subscription row left
+    // 62 of 86 pending checkouts invisible to that safety net (found live 2026-08-12).
+    // Best-effort by design: the payment link is already valid and the subscription row
+    // already carries the id, so this bookkeeping must never fail a live checkout.
+    if (!enrollment.paysimple_customer_id) {
+      try {
+        await enrollment.update({ paysimple_customer_id: customerId });
+      } catch (err: any) {
+        console.error('[Subscription] enrollment customer-id mirror failed (non-fatal):', err?.message);
+      }
+    }
 
     return { ok: true, payment_link: link.payment_link, plan, amount: chargeAmount, full_amount: cfg.price, applied_credit: round2(appliedCents / 100) };
   } catch (err: any) {

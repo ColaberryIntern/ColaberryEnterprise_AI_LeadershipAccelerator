@@ -44,6 +44,13 @@ export interface StartBuildAnswers {
   users?: string;
   data_sources?: string;
   done_definition?: string;
+  /**
+   * The generated interview and the student's replies. The server persists
+   * these to `build_intake.answers` and folds them into the brief as Q/A
+   * pairs, so the requirements are shaped by what this student actually said
+   * rather than by three fixed fields.
+   */
+  answers?: Array<{ id: string; question: string; answer: string }>;
   target_weeks?: number;
 }
 
@@ -57,6 +64,47 @@ function toError(err: any): SbpError {
       : status === 503 ? 'We are at capacity right now — try again in a few minutes.'
         : err?.message || 'Something went wrong starting your build.');
   return { status, message };
+}
+
+/** One interview question, generated from the student's own idea. */
+export interface IntakeQuestion {
+  id: string;
+  question: string;
+  /** Why we're asking — shown under the field so the question isn't a black box. */
+  why: string;
+  placeholder: string;
+}
+
+export interface IntakeQuestionsResult {
+  questions: IntakeQuestion[];
+  /**
+   * false when the model failed and the server substituted its generic set.
+   * The UI must not claim these were tailored when this is false.
+   */
+  generated: boolean;
+  model: string | null;
+  attempts: number;
+}
+
+/**
+ * Ask the server for interview questions shaped by this specific idea.
+ *
+ * Runs pre-project: it creates nothing, so it can be called while the student
+ * is still in the wizard. The server never throws for this route — a model
+ * outage comes back as `generated:false` with a usable generic set — so a
+ * failure here means the request itself did not land.
+ */
+export async function fetchIntakeQuestions(input: {
+  idea: string;
+  size?: 'workflow' | 'project' | 'autonomous';
+  name?: string;
+}): Promise<{ ok: true; result: IntakeQuestionsResult } | { ok: false; error: SbpError }> {
+  try {
+    const res = await portalApi.post('/api/portal/sbp/intake/questions', input);
+    return { ok: true, result: res.data };
+  } catch (err) {
+    return { ok: false, error: toError(err) };
+  }
 }
 
 /** Start a build. Resolves as soon as the intake is durable; generation continues. */
