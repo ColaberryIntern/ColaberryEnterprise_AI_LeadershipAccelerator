@@ -50,3 +50,22 @@ kes-tasks/
 
 # Cron-env-wrapper Basecamp token cache - SECRET, never commit (rotates every 2 weeks)
 tmp/ops-engine/bc-token.cache
+
+# Story-Driven Build runtime secrets - SECRET, never commit.
+# .bctok (Ali Basecamp token) and .oaikey (advisor OpenAI key) are pulled from the
+# prod container at runtime by the story-build skill and wiped after each run.
+.bctok
+.oaikey
+
+# Local OAuth / API token dumps written by mailbox + auth scripts - SECRET, never commit.
+# These sit untracked at the repo root; without these rules a `git add -A` commits live tokens.
+*_token.txt
+hotmail_*.txt
+
+# loop-architect run state - ephemeral per-run ledgers/logs/dashboards, not source.
+.loop-architect/
+
+# Python bytecode - the repo ships Python only inside .claude/skills/*/scripts/,
+# and running or compile-checking those leaves __pycache__ noise in the tree.
+__pycache__/
+*.pyc

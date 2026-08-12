@@ -611,6 +611,16 @@ Code locations: `backend/src/services/agents/openclaw/openclawPlatformStrategy.t
 
 ---
 
+# Short-Form Video
+
+Vertical social video (TikTok/Reels/Shorts/LinkedIn) is generated locally: ComfyUI for imagery, Pillow for kinetic type, ffmpeg for the cut. No stock footage, no licensing exposure, no per-render API cost. **This machine has no discrete GPU**, so a text-to-video model is never the answer here; the stills-plus-ffmpeg-motion path is.
+
+**Full protocol (hardware triage, the cfg-1.0 negative-prompt trap, probe-verification gate, copy discipline) lives in the `short-form-video` skill.** Invoke via `/short-form-video`.
+
+Two non-negotiables: **every on-screen claim must trace to a verifiable source** (never invent a duration, price, or date), and **the delivered file's duration must be measured with `ffprobe`, never computed** - ffmpeg's concat demuxer drops unreadable segments and still exits 0. Reference build: `docs/marketing/FREE_CLASS_VIRAL_15S.md`.
+
+---
+
 # Screenshot Capture + Review HTML
 
 Sprints that ship user-facing portal changes end with an HTML review doc embedding real production screenshots (not CSS mockups). All capture scripts route through `scripts/captureHelpers.js` for safe-width downscaling (1800px ceiling).

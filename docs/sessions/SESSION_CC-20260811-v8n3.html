@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Session CC-20260811-v8n3 — Change Report</title>
+<style>
+  :root{
+    --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
+    --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --bg:#f1f5f9; --card:#ffffff;
+    --green:#059669; --green-bg:#ecfdf5;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  header{background:linear-gradient(135deg,var(--navy),var(--blue));color:#fff;padding:38px 40px 30px;}
+  header .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.8;font-weight:600}
+  header h1{margin:8px 0 6px;font-size:26px;font-weight:700;letter-spacing:-.01em}
+  header .meta{font-size:13px;opacity:.85}
+  header .sid{display:inline-block;margin-top:14px;background:rgba(255,255,255,.14);
+    border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:6px 12px;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;font-weight:600}
+  header .count{margin-left:10px;opacity:.8;font-size:13px}
+  main{max-width:980px;margin:0 auto;padding:28px 24px 60px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;
+    box-shadow:0 1px 3px rgba(15,41,66,.06);margin-bottom:18px;overflow:hidden}
+  .card-head{display:flex;align-items:center;gap:14px;padding:18px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(to bottom,#fafcff,#fff)}
+  .card-head .num{font-family:ui-monospace,monospace;font-size:13px;font-weight:700;color:#fff;
+    background:var(--blue-l);border-radius:7px;padding:5px 9px;flex:none}
+  .card-head h2{flex:1;margin:0;font-size:16px;font-weight:650;color:var(--navy-2);letter-spacing:-.01em}
+  .badge{flex:none;font-size:12px;color:var(--muted);background:#f8fafc;border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;font-weight:600}
+  .card-body{padding:18px 22px 20px}
+  .row{display:flex;gap:16px;padding:7px 0;border-bottom:1px dashed #eef2f7}
+  .row:last-child{border-bottom:none}
+  .k{flex:none;width:120px;font-size:12px;font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+  .v{flex:1;color:var(--ink)}
+  .v.ver{color:var(--green);font-weight:550}
+  .files{margin-top:14px;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+  .files-label{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;
+    letter-spacing:.06em;margin-bottom:8px}
+  .files table{width:100%;border-collapse:collapse;font-size:13px}
+  .files td{padding:6px 8px;vertical-align:top;border-top:1px solid #eef2f7}
+  .files tr:first-child td{border-top:none}
+  .files td.path{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+    color:var(--navy-2);white-space:nowrap;font-weight:600}
+  .empty{background:#fff;border:1px dashed var(--line);border-radius:14px;padding:40px;
+    text-align:center;color:var(--muted)}
+  footer{max-width:980px;margin:0 auto;padding:0 24px 40px;color:var(--muted);font-size:12px}
+  code{font-family:ui-monospace,monospace;background:#eef2f7;padding:1px 6px;border-radius:5px;font-size:.92em}
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
+    <h1>What changed this session</h1>
+    <div class="meta">Generated Wednesday, August 12, 2026 at 9:04 AM</div>
+    <div><span class="sid">CC-20260811-v8n3</span><span class="count">2 changes</span></div>
+  </header>
+  <main>
+    
+      <article class="card">
+        <div class="card-head">
+          <span class="num">01</span>
+          <h2>**Built a 15s 9:16 spot for the free AI class end to end on this machine - ComfyUI/SDXL-Turbo stills + ffmpeg cut - and shipped the master plus a production brief into `docs/marketing/`**</h2>
+          <span class="badge">2026-08-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New `docs/marketing/colaberry_free_ai_class_15s.mp4` (1080x1920, 30fps, H.264 High, yuv420p, silent AAC stereo, faststart, 6.46 MB) and `docs/marketing/FREE_CLASS_VIRAL_15S.md` documenting strategy, script, claim sourcing, design, pipeline and regeneration steps. Production pipeline lives OUTSIDE the repo at `C:\Users\ali_m\Downloads\colaberry-viral-15s\` (`shots.json` as single source of truth, `generate_shots.py`, `render_text.py`, `assemble.py`), with ComfyUI at `C:\Users\ali_m\Downloads\ComfyUI` - both kept out of OneDrive so multi-GB model files do not sync. **No backend/frontend/scripts code was touched.**</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">Final file measured with ffprobe, not asserted: **450 decoded frames = 15.000000s exactly** at 1080x1920/30fps, H.264 High/yuv420p, AAC stereo 48kHz, `moov` at offset 40 (faststart confirmed). Every on-screen claim traced to live `training.colaberry.com` copy - &quot;work partner / research, analysis, planning&quot;, &quot;Free - no card needed&quot;, and the tagline &quot;From AI curious to AI architect&quot;; **no class duration or session date is claimed anywhere because the site states neither.** CTA `myfreeaiclass.com` verified live returning 301 to training.colaberry.com carrying `utm_source=myfreeaiclass&amp;utm_medium=domain`, so the spot self-attributes. Visually verified via contact sheet across all 8 beats plus a full-res check of the busiest frame (shot 4, text over a wall of charts) - legible.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">**Found and fixed a silent-corruption defect in the assembler before it could ship a broken master.** An interrupted encode left a 48-byte `07_hero.mp4`; the mtime-based incremental skip reused it, ffmpeg&#39;s concat demuxer skipped the unreadable segment and still exited 0, and the script reported &quot;450 frames = 15.00s&quot; - a number computed from the shot list, never measured. Actual output was 339 frames / 11.30s, missing the last two beats. Hardened per Build-Break-Harden: clips are now reused only if they decode to the exact expected frame count, each encode is probe-verified, and the delivered file is probe-verified against the expected total with a non-zero exit on mismatch. Reproduced the original break against the hardened script and confirmed it now detects the stub, re-renders, and measures 450.</span></div>
+          
+        </div>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">02</span>
+          <h2>**Packaged the video capability as a reusable `short-form-video` skill (Ali asked whether one already existed - it did not)**</h2>
+          <span class="badge">2026-08-11</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">New `.claude/skills/short-form-video/` - `SKILL.md` plus `scripts/generate_shots.py`, `scripts/render_text.py`, `scripts/assemble.py` and `templates/shots.example.json`. Audited first and confirmed **no video skill existed**: 15 project skills + 1 global (`employee-catchup`), and the only `video` hit anywhere in the skills tree is one incidental line in `build-curriculum-type` about thumbnail backgrounds. Nearest neighbours are `screenshot-review` (static capture) and `fixing-motion-performance` (CSS animation), neither of which generates video. Generalised the one-off pipeline from the free-class spot into project-agnostic scripts: `--project &lt;dir&gt;` instead of hardcoded paths, `COMFY_DIR`/`COMFY_SERVER` env overrides, font fallback chain (Segoe UI Black -&gt; Arial Black -&gt; Impact), checkpoint/output names and brand accent hexes moved into `shots.json` `meta`. `SKILL.md` leads with a hardware-triage table because that decision drives everything else, and encodes the expensive lessons as hard rules.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">**Ran the skill end to end from a clean project dir** (scratchpad, template `shots.json` + the 8 existing stills): `render_text.py` produced all 8 overlays, `assemble.py` produced a master independently probed at **450 frames / 15.000000s / 1080x1920** - byte-for-byte the same spec as the hand-built deliverable. All three scripts pass `py_compile`; `generate_shots.py --help` parses; template JSON validates to 8 shots summing to exactly 450 frames. **`generate_shots.py` then verified against live ComfyUI too** (restarted the server for it rather than leaving the path unexercised): a 1-step 512x512 smoke shot drove the full loop - workflow build from `meta.checkpoint`, POST `/prompt`, `/history` poll, output located under the new `meta.output_prefix`, copy into the project - rendering in 148s. Re-running returned `[skip] already rendered` in **1s**, confirming the idempotent-resume path, and the take was retained at `ComfyUI/output/smoketest/smoke_01_00001_.png`, confirming the take-recovery claim. **Still unexercised: the GPU branch** (`--steps 4-6`, dropping `--cpu`) - reasoned but untestable on this hardware, so it needs a shakedown the first time it runs on a real GPU.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Skill codifies six rules that each cost real time to learn: (1) never attempt text-to-video on CPU, with the measured 172-240s/step figure as the justification; (2) **at cfg 1.0 the negative prompt is inert**, so never prompt anything implying writing; (3) type via Pillow, never ffmpeg `drawtext`; (4) **measure the output with ffprobe, never trust frame arithmetic**, citing the concat-exits-0 silent-drop defect; (5) fix weak shots with per-shot `zoom_base`/`grade` before paying for a re-generation; (6) discarded takes are recoverable from `ComfyUI/output/`. Also carries the copy discipline (every claim traceable, never invent a duration/price/date, verify the CTA URL resolves) and the brand-account caveat that TikTok/Instagram business accounts are limited to the Commercial Music Library. Per CLAUDE.md `.claude/skills/` is DRI-owned; this was created at Ali&#39;s direct request.</span></div>
+          
+        </div>
+      </article>
+  </main>
+  <footer>
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260811-v8n3</code>.
+    Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
+  </footer>
+</body>
+</html>
