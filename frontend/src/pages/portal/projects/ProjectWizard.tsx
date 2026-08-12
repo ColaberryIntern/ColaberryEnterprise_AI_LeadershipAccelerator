@@ -17,10 +17,20 @@ import { fetchIntakeQuestions, IntakeQuestion } from '../../../services/sbpApi';
 // own inputs and what actually happens next. Nothing here is presented as
 // generated unless it was.
 
-const SIZES: { key: BuildSize; title: string; time: string; desc: string }[] = [
-  { key: 'workflow', title: 'A workflow', time: '~5 min', desc: 'A focused automation. Cory drafts a tailored requirements doc fast — no repo needed.' },
-  { key: 'project', title: 'A full project', time: '~13 min', desc: 'The full build: requirements, an MCP server or app, reliability, and a showcase.' },
-  { key: 'autonomous', title: 'Fully autonomous', time: '~21 min · deepest', desc: 'A complete agent system designed end to end, with a live preview as it builds.' },
+// Tier copy states DEPTH, not a duration. It used to advertise a fixed number
+// of minutes per tier — figures with no telemetry behind them, on a pipeline
+// whose measured worst case under a 20-student rush was 237s. FR-002 wants the
+// displayed estimate derived from a trailing-7-day p50; that telemetry does not
+// exist yet, so rather than invent a second set of numbers these describe what
+// the tier actually produces.
+//
+// The counts MUST match TIER_DEPTH in backend/src/services/sbp/buildTiers.ts,
+// which is what the decomposer is actually told to hit. A backend test
+// (buildTiers.wizardCopy.test.ts) reads this file and fails if they drift.
+const SIZES: { key: BuildSize; title: string; depth: string; desc: string }[] = [
+  { key: 'workflow', title: 'A workflow', depth: '8-12 requirements', desc: 'A focused automation across 3 releases. Cory drafts a tailored requirements doc — no repo needed.' },
+  { key: 'project', title: 'A full project', depth: '18-24 requirements', desc: 'The full build across 5 releases: requirements, an MCP server or app, reliability, and a showcase.' },
+  { key: 'autonomous', title: 'Fully autonomous', depth: '30-40 requirements', desc: 'A complete agent system across 7 releases, designed end to end — the deepest build.' },
 ];
 
 const STEPS = ['Your idea', 'Sharpen it', 'Review & confirm'];
@@ -97,7 +107,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
               <button key={sz.key} type="button" className={`pjw-size${size === sz.key ? ' sel' : ''}`} onClick={() => setSize(sz.key)}>
                 <span className="rb" />
                 <span className="sz-b">
-                  <span className="sz-t">{sz.title} <span className="sz-time">{sz.time}</span></span>
+                  <span className="sz-t">{sz.title} <span className="sz-time">{sz.depth}</span></span>
                   <span className="sz-d">{sz.desc}</span>
                 </span>
               </button>

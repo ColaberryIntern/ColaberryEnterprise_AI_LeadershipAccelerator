@@ -23,6 +23,7 @@
  */
 import { randomUUID } from 'crypto';
 import { decomposeBuild } from './decomposeService';
+import { tierTargets } from './buildTiers';
 import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
 import { BuildPlan } from './planContract';
@@ -140,6 +141,9 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
     const { plan, attempts, model, client } = await decomposeBuild({
       brief: buildBriefText(input),
       document: input.document ?? '',
+      // FR-002: the tier the student picked has to change the plan's depth.
+      // Without this every tier produced the same shared DEFAULT_TARGETS.
+      targets: tierTargets(input.size),
       correlationId,
     });
 
