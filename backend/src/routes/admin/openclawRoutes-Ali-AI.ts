@@ -25,7 +25,11 @@ const router = Router();
 
 // SECURITY (TBI audit P0-1): this admin sub-router shipped with NO auth, leaving its
 // endpoints publicly callable. Require an authenticated admin for every route below.
-router.use(requireAdmin);
+// Scoped to this router's own path prefix — see autonomyRoutes.ts for why an
+// unscoped `router.use(requireAdmin)` here was silently 401-ing unrelated public
+// routes (e.g. the chat widget) mounted later in server.ts. (This file is currently
+// unimported/unused — fixed for consistency in case it's ever wired up.)
+router.use('/api/admin/openclaw', requireAdmin);
 const BASE = '/api/admin/openclaw';
 
 // ── Dashboard Aggregate Stats ─────────────────────────────────────

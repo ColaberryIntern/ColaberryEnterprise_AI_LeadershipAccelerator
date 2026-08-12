@@ -36,7 +36,7 @@ Your goals:
   // Page context
   const pageCategoryDescriptions: Record<string, string> = {
     homepage: 'the homepage - they are getting an overview of Colaberry',
-    program: 'the program details page - they are researching the AI Leadership Accelerator curriculum',
+    program: 'the program details page - they are researching the AI Systems Architect Accelerator curriculum',
     pricing: 'the pricing page - they are evaluating cost and ROI',
     enroll: 'the enrollment page - they are considering signing up',
     case_studies: 'the case studies page - they are looking at success stories',
@@ -294,7 +294,7 @@ export async function generateMayaGreeting(params: {
 
   // Page-specific greetings that anticipate visitor intent and offer service paths
   const pageGreetings: Record<string, string> = {
-    homepage: `Hi${nameTag}! I'm Maya, Director of Admissions at Colaberry. I can help you explore our AI Leadership Accelerator - whether you'd like an executive briefing, want to see pricing, or are ready to book a strategy call. What interests you?`,
+    homepage: `Hi${nameTag}! I'm Maya, Director of Admissions at Colaberry. I can help you explore our AI Systems Architect Accelerator - whether you'd like a program overview, want to see pricing, or are ready to book a strategy call. What interests you?`,
     program: `Hi${nameTag}! I'm Maya. I see you're looking at our curriculum. I can walk you through the program, share an executive briefing, or help you book a strategy call with our leadership team. What would you like to know?`,
     pricing: `Hi${nameTag}! I'm Maya, Director of Admissions. Evaluating ROI? I can break down our pricing, share the executive briefing with cost analysis, or set up a strategy call to discuss your organization's specific needs.`,
     enroll: `Hi${nameTag}! I'm Maya from Admissions. Exciting that you're looking at enrollment! I can walk you through the process, answer last questions, or connect you with our team for a quick call. How can I help?`,
@@ -308,7 +308,7 @@ export async function generateMayaGreeting(params: {
   };
 
   return pageGreetings[pageCategory] ||
-    `Hi${nameTag}! I'm Maya, Director of Admissions at Colaberry. I'm here to help with any questions about our AI Leadership Accelerator - whether you want an executive briefing, to book a strategy call, or learn about our program. What interests you?`;
+    `Hi${nameTag}! I'm Maya, Director of Admissions at Colaberry. I'm here to help with any questions about our AI Systems Architect Accelerator - whether you want a program overview, to book a strategy call, or to learn about pricing. What interests you?`;
 }
 
 /**

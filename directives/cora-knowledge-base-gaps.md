@@ -1,10 +1,12 @@
 # Cora Knowledge Base — Content Gaps & Ali Inputs Required
 
-**Status:** Cora migration code-complete (2026-06-16). Ali inputs partially applied 2026-06-16 (CC-20260616-k4m9).
+**Status:** Cora migration code-complete (2026-06-16). Ali inputs partially applied 2026-06-16 (CC-20260616-k4m9). Payment-schedule decisions applied 2026-08-03 (CC-20260803-q7v2).
 **Owner:** Ali Muwwakkil
 **Raised by:** Kes (CC-20260616-c0r4)
 
-**Remaining blockers before go-live:** #2 (refund policy — in motion, Taiwo, BC todo [10003806235](https://app.basecamp.com/3945211/buckets/47502609/todos/10003806235), due 2026-06-19), the Gmail send token (see "Gmail send token" below — the env var is misnamed, not missing), and the **dispatch-routing gap** for out-of-scope email (see "Scope decision" below). Keep `CORA_DRY_RUN=true` until these are resolved. #4 is resolved by directing to a strategy call.
+**⚠️ Architecture note (2026-08-03):** this file predates two later changes and some of its detail below is historical, not current. (1) Cora's system prompt is now built from the DB-backed `cora_kb_entries` table (KB Ops, BC #10036783688), not the static `coraKnowledgeBase.ts` this file was originally written against — that file, its `coraKnowledgeBaseQA.ts` companion, and the Google Sheet sync script that fed it (`syncCoraKbFromSheets.ts`) were all confirmed dead code (zero live callers) and deleted 2026-08-03. (2) Cora and Cory are now split personas (BC #10109319420) — Cora handles support@, Cory handles admissions/sales content. See "Files updated when inputs arrive" below for the current file list.
+
+**Remaining blockers before go-live:** the Gmail send token (see "Gmail send token" below — the env var is misnamed, not missing), and the **dispatch-routing gap** for out-of-scope email (see "Scope decision" below). Keep `CORA_DRY_RUN=true` until these are resolved. #2 and #4 are resolved.
 
 ---
 
@@ -33,19 +35,21 @@ Cora's inbox (support@colaberry.com) receives mostly **legacy bootcamp** email (
 
 ---
 
-### 2. Refund and Cancellation Policy — 🔄 IN MOTION (sourcing from Taiwo)
-**Gap:** Cora replies "contact us for our current terms" — a placeholder. The actual policy is not in the codebase anywhere. **Current behavior:** Cora escalates all refund/cancellation requests to Ali (does not attempt to resolve), which is safe but means it cannot answer policy questions.
-**Status (2026-06-16):** Assigned to **Taiwo Oludimimu** (Admissions Operations) to upload the finalized refund/cancellation agreement — Basecamp todo [10003806235](https://app.basecamp.com/3945211/buckets/47502609/todos/10003806235) (Accelerator → Sales & Admissions, due 2026-06-19). Once the document lands, load its terms into `coraKnowledgeBase.ts` (refund Q&A) and flip this item to RESOLVED. Until then, Cora keeps escalating — do not ship a guessed policy.
-**Needed from the document:**
-- Notice period required for cancellation
-- Whether full/partial refunds are offered and under what conditions
-- Whether participants can defer to a future cohort instead of cancelling
+### 2. Refund and Cancellation Policy — ✅ RESOLVED 2026-08-03 (the $50 seat-deposit piece; general subscription refund/cancellation terms were separately already live)
+**Gap (original):** Cora replied "contact us for our current terms" — a placeholder. The $50 Open House seat-deposit refund/no-show behavior specifically was undocumented anywhere in the KB.
+**Decision (Ali, 2026-08-03, on the payment-schedule ticket):** If a student reserved a seat with the $50 deposit and did not attend their live class, the $50 is fully refundable, or they can apply it as a credit toward the cohort of their choice. If a reserved seat's start date passes without the student completing enrollment, the reservation lapses automatically and the $50 becomes a credit on the account rather than a charge — no manual follow-up required to prevent a stray charge.
+**Also decided (same ticket):** access to curriculum (the Classroom tab) never starts before the cohort start date, regardless of when the deposit or first payment was made; the first subscription charge lands on the cohort start date, and each following charge lands on that same date each following month.
+**Implemented in:** `backend/src/seeds/seedKbData.ts` (two new `cora_kb_entries` rows: "How does the $50 seat deposit work..." and "Can I get my seat deposit back..."), `frontend/public/knowledge/sales/kb-data.js` (two new sales-KB Q&A entries, `refunds-guarantee`/`pricing-billing` categories), `frontend/public/knowledge/data/compliance-kb.js`, `frontend/public/knowledge/sales/app.js` (Cory chatbot fallback), `backend/src/controllers/salesHubCoryController.ts` (Cory's RAG-grounding `PINNED_FACTS`).
+**Separately found, not part of this decision:** the general monthly/annual subscription refund policy (monthly cancels anytime no partial refund; annual has a 14-day money-back window from kickoff, then non-refundable but stays active/locked) was already live and marked approved in `frontend/public/knowledge/sales/kb-data.js` as of 2026-07-20 — this predates and is independent of today's deposit decision. Several other files (`README.md`, `app.js`, `compliance-kb.js`, `salesHubCoryController.ts`) still carried stale "drafted, pending approval" language for that *general* policy; brought into consistency with `kb-data.js` today since it was directly adjacent to this ticket's edits. If that general policy is in fact still unapproved, flag it back — it was not re-confirmed by Ali on this ticket, only found already marked "grounded"/"Approved policy" in the live source.
+**BC todo [10003806235](https://app.basecamp.com/3945211/buckets/47502609/todos/10003806235)** (Taiwo, general refund/cancellation policy) — check whether this is now satisfied by the above or still tracks something distinct.
+
+**⚠️ UPDATE 2026-08-06 — the $50 deposit itself is now RETIRED, not just its refund policy.** Decision (Ali, relayed via Dhee, 2026-08-04, [BC #10164663348](https://app.basecamp.com/3945211/buckets/47502609/todos/10164663348)): the $50 Open House seat-deposit option is permanently removed. Reserving a spot now means paying the standard membership plan price directly — no separate discounted deposit. The access-timing rule above (curriculum never starts before cohort start date) still applies and now also gates actual code, not just KB copy — see [BC #10160497402](https://app.basecamp.com/3945211/buckets/47502609/todos/10160497402) and `hasCohortStarted()` in `backend/src/services/cohortService.ts`. The refund/no-show terms decided above still apply, but only to deposits paid *before* this retirement — new deposits cannot be created. Updated in the same files listed above, plus `backend/src/services/admissionsKnowledgeSeed.ts`, all three `docs/synthflow-*-prompt.md` files, and `directives/run-open-house-live-experience.md`'s "Claim slide" step was deliberately left as-is (flagged to Ali on the ticket instead) since no Open House is currently scheduled.
 
 ---
 
-### 3. Payment Plans / Installment Options — ✅ RESOLVED 2026-06-16
-**Decision (Ali):** Enrollment is now **subscription-first** via training.colaberry.com: **$149/month on the annual plan**, or **$199/month month-to-month**. Pay-in-full at **$4,500** remains available as an alternative.
-**How it was implemented:** `CORA_PROGRAM`, `CORA_PRICING`, the cost Q&A, and a new payment-plan Q&A all lead with the subscription and list $4,500 as the pay-in-full option. Pricing response rule #3 updated so Cora may state these specific numbers; group/corporate pricing still routes to "contact us."
+### 3. Payment Plans / Installment Options — ✅ RESOLVED 2026-06-16; $4,500 pay-in-full option retired 2026-08-03
+**Decision (Ali, 2026-06-16):** Enrollment is **subscription-first** via enterprise.colaberry.ai: **$149/month on the annual plan**, or **$199/month month-to-month**.
+**Decision (Ali, 2026-08-03):** the **$4,500 pay-in-full option is retired — remove it from everything** (KB, rubrics, prompts). It belonged to the old "Executive AI Build Accelerator" / "Enterprise AI Leadership Accelerator" program identity, which is itself retired (see architecture note at the top of this file — its static KB files were dead code and deleted; its Maya-facing admissions KB, `admissionsKnowledgeSeed.ts`, is still live and scheduled for retirement in the follow-up voice-agent-prompts pass). The live subscription pricing (`seedKbData.ts`, the sales KB) never carried the $4,500 option, so no code change was needed there beyond the file deletions above.
 
 ---
 
@@ -93,11 +97,17 @@ Reply on the linked Basecamp ticket (BC #9948562389) or send to support@colaberr
 
 ## Files updated when inputs arrive
 
-- `backend/src/services/inbox/coraKnowledgeBase.ts` — Q&A, pricing, system prompt, live cohort injection
+**Current (post KB Ops migration, DB-backed):**
+- `backend/src/seeds/seedKbData.ts` — `cora_kb_entries` seed rows (course/cohort facts, Q&A, pricing, deposit/refund). Additive `findOrCreate` by `question_pattern` — re-run `npx ts-node src/seeds/seedKbData.ts` against the target DB after any edit to actually apply new rows; editing existing rows' text here does NOT update already-seeded DB rows (use the `/admin/knowledge-ops` UI or a one-off corrective script for that).
+- `backend/src/services/inbox/coraPersonaRouter.ts` — persona routing + `buildPersonaSystemPromptFromDB`, reads `cora_kb_entries` live at send time
+- `backend/src/services/kbService.ts` — DB read layer
 - `backend/src/services/inbox/coraAgentService.ts` — reads next cohort from DB at send time
-- `backend/src/scripts/testCoraEmail.ts` — shadow-test cases (added payment-plan + cohort-date)
+- `backend/src/scripts/testCoraEmail.ts` — shadow-test cases
 - `directives/cora-knowledge-base-gaps.md` — this file
+
+**Historical (deleted 2026-08-03, dead code — do not recreate):**
+- ~~`backend/src/services/inbox/coraKnowledgeBase.ts`~~, ~~`coraKnowledgeBaseQA.ts`~~, ~~`backend/src/scripts/syncCoraKbFromSheets.ts`~~
 
 ---
 
-*Last updated: 2026-06-16 | Sessions CC-20260616-c0r4 (build), CC-20260616-k4m9 (Ali inputs applied)*
+*Last updated: 2026-08-03 (CC-20260803-q7v2) | Originally built: 2026-06-16, Sessions CC-20260616-c0r4 (build), CC-20260616-k4m9 (Ali inputs applied)*

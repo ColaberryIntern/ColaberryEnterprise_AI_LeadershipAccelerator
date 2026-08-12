@@ -7,7 +7,10 @@ const router = Router();
 // SECURITY (TBI audit P0-1): test-setup endpoints shipped with NO auth in production —
 // require an authenticated admin. (Test harnesses must authenticate; consider also
 // disabling this router entirely when NODE_ENV === 'production'.)
-router.use(requireAdmin);
+// Scoped to this router's own path prefix — see autonomyRoutes.ts for why an
+// unscoped `router.use(requireAdmin)` here was silently 401-ing unrelated public
+// routes (e.g. the chat widget) mounted later in server.ts.
+router.use('/api/admin/test-setup', requireAdmin);
 
 // ─── Create Test Enrollments (Cold + Warm) ──────────────────────────
 

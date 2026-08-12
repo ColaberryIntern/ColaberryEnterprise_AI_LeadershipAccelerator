@@ -13,66 +13,73 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'program',
     title: 'Program Overview',
-    content: 'The Enterprise AI Leadership Accelerator is a 5-session, 3-week intensive program where Directors and Technical Leaders build a working AI proof of capability for their organization. This is not a lecture series - participants leave with a production-architecture AI solution, an executive presentation deck, and a 90-day expansion roadmap. The program uses a hands-on "3-Agent Model": the enterprise leader (you), Claude Code as the execution engine, and your organization\'s approved LLM (ChatGPT, Claude, Gemini, or company-approved).',
+    content: 'The AI Systems Architect Accelerator is a 12-week online cohort for working professionals who want to move beyond using AI tools and actually design, build, and govern AI systems. Participants build a Business Workflow Assistant, a multi-agent AI team, a working MCP server integrated with a real system, and a complete Solution Architecture Package. Anthropic certifies knowledge; Colaberry certifies capability - participants finish with a deployed AI system, a GitHub portfolio, and Anthropic Architect certification (CCA-F) prep.',
     keywords: ['program', 'overview', 'accelerator', 'what is', 'about'],
     priority: 10,
   },
   {
     category: 'program',
     title: 'Program Format',
-    content: 'The program consists of 5 live virtual sessions over 3 weeks (Tuesdays and Thursdays). Each session is 2 hours. Between sessions, participants complete 2-4 hours of applied work building their actual AI initiative. The format is cohort-based with live instruction, hands-on exercises, and peer collaboration. Sessions are held on a consistent schedule: Week 1 (Tue/Thu), Week 2 (Tue/Thu), Week 3 (Thu - final presentations).',
+    content: 'Two live sessions per week: Monday (Architecture Day) and Thursday (Build Day), 2 hours each, 4 hours per week total. All sessions are recorded and posted within 24 hours, so falling behind on a given week never means falling out of the program. Fully online, CST time zone, with community access via the program portal (enterprise.colaberry.ai) and a WhatsApp group.',
     keywords: ['format', 'structure', 'delivery', 'how', 'cohort', 'sessions', 'schedule', 'virtual', 'live'],
     priority: 9,
   },
   {
     category: 'program',
     title: 'Program Duration',
-    content: 'The program runs for 3 weeks with 5 sessions total. Sessions are held on Tuesdays and Thursdays, each lasting 2 hours. Total program time is approximately 10 hours of live sessions plus 2-4 hours of applied work between each session.',
+    content: 'The program runs 12 weeks in four 3-week blocks: Weeks 1-3 (AI Foundation - Claude Code, the Claude API, and core agent skills), Weeks 4-6 (Build Your AI Team - prompt engineering, Model Context Protocol, multi-tool agent design), Weeks 7-9 (Connect AI to the Real World - multi-agent systems, workflow automation, reliability engineering), Weeks 10-12 (Design AI That Scales - governance frameworks, full system architecture, live Expo presentation).',
     keywords: ['duration', 'length', 'weeks', 'how long', 'time', 'sessions', 'hours'],
     priority: 9,
   },
   {
     category: 'program',
     title: 'Who Is This For',
-    content: 'The program is designed for: Directors and VPs of Engineering, Technology, or Data; Chief Technology Officers and Chief Data Officers; Senior Technical Architects responsible for AI adoption; Technical leaders at organizations with $50M+ in revenue; Leaders whose teams are being asked to deliver AI outcomes now. This is for builders and decision-makers, not observers.',
-    keywords: ['who', 'audience', 'executives', 'target', 'qualifications', 'prerequisites', 'directors', 'vp', 'cto'],
+    content: 'The program is built for working professionals who want hands-on experience building real AI agents and understanding AI governance - whether you\'re in tech, operations, product, or leadership. No prior AI experience is required, but you should be comfortable with basic software concepts like git and the command line, and you should arrive with a real business problem or idea you want to solve.',
+    keywords: ['who', 'audience', 'right for me', 'target', 'qualifications', 'prerequisites', 'background'],
     priority: 9,
   },
   {
     category: 'program',
     title: 'Next Cohort',
-    content: 'The next cohort starts March 31, 2026. Sessions run on Tuesdays and Thursdays over 3 weeks. Cohort sizes are kept small to ensure hands-on attention. Visit the enrollment page or ask Maya to help you secure your spot.',
-    keywords: ['start', 'date', 'when', 'next', 'cohort', 'begin', 'march'],
+    content: 'Enrollment is rolling - there is no fixed start date or capped Founding Cohort to wait for. You can create a free Explorer account and start exploring the material today at training.colaberry.com, or enroll in full paid access anytime. Full Classroom access unlocks when your assigned cohort\'s classes actually begin.',
+    keywords: ['start', 'date', 'when', 'next', 'cohort', 'begin'],
     priority: 10,
   },
 
   // Curriculum / Sessions
   {
     category: 'curriculum',
-    title: 'Week 1 - Strategic Alignment & Architecture',
-    content: 'Week 1 covers the Define & Architect phase. Session 1 (Tuesday): Set up the 3-Agent Model, identify your highest-priority AI use case, and establish your AI architecture foundation. Session 2 (Thursday): Deep-dive into enterprise AI architecture patterns, governance frameworks, and risk assessment. By end of Week 1, you have a scoped use case and architectural blueprint.',
-    keywords: ['week 1', 'strategy', 'architecture', 'session 1', 'session 2', 'define', 'use case'],
+    title: 'Weeks 1-3 - AI Foundation',
+    content: 'Get hands-on with Claude Code, the Claude API, and core agent skills. By the end of this block you\'ve built your first AI workflow assistant with reusable AI Skills.',
+    keywords: ['week 1', 'week 2', 'week 3', 'foundation', 'claude code', 'claude api', 'agent skills'],
     priority: 8,
   },
   {
     category: 'curriculum',
-    title: 'Week 2 - Guided Build & Executive Positioning',
-    content: 'Week 2 covers the Build & Position phase. Session 3 (Tuesday): Build your working AI proof of capability with guided hands-on development using Claude Code and your chosen LLM. Session 4 (Thursday): Craft your executive presentation deck - board and C-suite ready for internal buy-in and budget approval. By end of Week 2, you have a working system and a polished executive pitch.',
-    keywords: ['week 2', 'build', 'system', 'session 3', 'session 4', 'executive', 'presentation'],
+    title: 'Weeks 4-6 - Build Your AI Team',
+    content: 'Master prompt engineering, Model Context Protocol (MCP), and advanced multi-tool agent design. By the end of this block you\'ve built a multi-agent AI team with an Enterprise Prompt Library.',
+    keywords: ['week 4', 'week 5', 'week 6', 'mcp', 'prompt engineering', 'multi-agent'],
     priority: 8,
   },
   {
     category: 'curriculum',
-    title: 'Week 3 - Executive Readiness & Expansion',
-    content: 'Week 3 is the Operationalize & Present phase. Session 5 (Thursday): Final presentations to the cohort and advisors. Each participant presents their AI proof of capability, executive deck, and 90-day expansion roadmap. You receive peer feedback and advisory input to refine your approach before presenting internally.',
-    keywords: ['week 3', 'presentation', 'session 5', 'final', 'roadmap', 'operationalize'],
+    title: 'Weeks 7-9 - Connect AI to the Real World',
+    content: 'Build multi-agent systems, automate real workflows, and engineer for reliability. By the end of this block you have a working MCP server integrated with a real system.',
+    keywords: ['week 7', 'week 8', 'week 9', 'automation', 'reliability', 'mcp server'],
     priority: 8,
   },
   {
     category: 'curriculum',
-    title: 'The 3-Agent Model',
-    content: 'The program uses a unique "3-Agent Model" for AI development: (1) The Enterprise Leader - that\'s you, providing strategic direction and domain expertise; (2) Claude Code - the AI execution engine that writes production-quality code; (3) Your Custom LLM - ChatGPT, Claude, Gemini, or your company-approved model for reasoning and content. Participants bring their own LLM credentials. No company data is shared with Colaberry.',
-    keywords: ['3-agent', 'model', 'claude code', 'llm', 'chatgpt', 'tools', 'methodology'],
+    title: 'Weeks 10-12 - Design AI That Scales',
+    content: 'Apply governance frameworks (NIST AI RMF, ISO 42001, EU AI Act), architect a full AI system, and present at a live Expo. You leave with a complete Solution Architecture Package.',
+    keywords: ['week 10', 'week 11', 'week 12', 'governance', 'architecture', 'expo', 'presentation'],
+    priority: 8,
+  },
+  {
+    category: 'curriculum',
+    title: 'Tools Used',
+    content: 'You\'ll use Claude Code, the Claude API, Model Context Protocol (MCP), Docker Desktop, and GitHub throughout the program. Anthropic Architect Certification (CCA-F) exam prep is built into the curriculum.',
+    keywords: ['tools', 'claude code', 'claude api', 'mcp', 'docker', 'github', 'software'],
     priority: 8,
   },
 
@@ -80,8 +87,8 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'outcomes',
     title: 'What You Leave With',
-    content: 'By the end of the program, every participant leaves with 6 concrete deliverables: (1) A working AI Proof of Capability - production-architecture quality, scoped to your highest-priority use case; (2) An Executive AI Presentation Deck - board and C-suite ready for internal buy-in and budget approval; (3) A 90-Day AI Expansion Roadmap - prioritized, resourced, and governed for immediate execution; (4) Enterprise AI Architecture Templates - reusable patterns, governance frameworks, and risk assessment tools; (5) Governance & Risk Alignment - frameworks aligned to your regulatory environment and compliance posture; (6) Advisory Ecosystem Access - ongoing access to Colaberry\'s Enterprise AI Advisory Labs and peer network.',
-    keywords: ['outcomes', 'results', 'deliverables', 'what will i get', 'leave with', 'proof of capability'],
+    content: 'By the end of the program, every participant leaves with a deployed AI system, a GitHub portfolio of real projects, and Anthropic Architect certification (CCA-F) prep. Concretely, you build: a Business Workflow Assistant with reusable AI Skills, a multi-agent AI team with an Enterprise Prompt Library, a working MCP server integrated with a real system, and a complete Solution Architecture Package.',
+    keywords: ['outcomes', 'results', 'deliverables', 'what will i get', 'leave with', 'portfolio', 'certification'],
     priority: 9,
   },
 
@@ -89,61 +96,59 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'pricing',
     title: 'Program Investment',
-    content: 'The Enterprise AI Leadership Accelerator is $4,500 per participant. This includes all 5 live sessions, hands-on exercises, expert-guided project work, enterprise AI architecture templates, governance frameworks, and ongoing access to the Advisory Labs peer network.',
-    keywords: ['price', 'cost', 'individual', 'enrollment', 'how much', 'investment', '$4500', '4500'],
+    content: 'One membership, two ways to pay: $149/month billed annually (the founding rate, locked in for as long as your membership stays active), or $199/month month-to-month with cancel-anytime flexibility. That single price covers all four Architect Intensives, Anthropic certification prep, the internship experience, and guided GitHub portfolio projects - no separate course fees. There is also a small student-paid Anthropic tooling cost (~$20/mo for Claude Code, ~$10/mo for API usage) paid directly to Anthropic, not to Colaberry.',
+    keywords: ['price', 'cost', 'individual', 'enrollment', 'how much', 'investment', 'membership', '149', '199'],
+    priority: 10,
+  },
+  {
+    category: 'pricing',
+    title: 'Seat Deposit',
+    content: 'The $50 seat deposit is no longer offered. To reserve your spot, you pay your plan price directly - there is no separate deposit. Your first membership charge is what holds your seat, with each following charge landing on that same date each month after. Full program access starts the day your cohort\'s classes actually begin, not the moment you pay. If you paid the $50 deposit before this option was retired in August 2026, that credit and its refund/reapply terms are unchanged for you.',
+    keywords: ['deposit', 'down payment', '$50', 'reserve', 'seat', 'open house', 'when does access start'],
     priority: 10,
   },
   {
     category: 'pricing',
     title: 'ROI and Value',
-    content: 'The program pays for itself through reduced consulting spend, faster AI deployment, and avoided missteps. Participants leave with a production-ready AI proof of capability - Organizations typically take 6-12 months to move from AI strategy to production. The Accelerator compresses this to 3 weeks. The 90-day expansion roadmap alone saves months of strategic planning time.',
-    keywords: ['roi', 'value', 'return', 'worth', 'investment', 'benefit', 'consulting'],
+    content: 'The program pays for itself through the real deliverables you walk away with: a deployed AI system, a GitHub portfolio employers can actually review, and Anthropic Architect certification prep - proof of capability, not just a certificate claim. Scholarships are not currently available, but you can explore the material for free through the Explorer preview tier before committing to paid access.',
+    keywords: ['roi', 'value', 'return', 'worth', 'investment', 'benefit', 'scholarship'],
     priority: 9,
   },
   {
     category: 'pricing',
     title: 'Payment Options',
-    content: 'We offer flexible payment options including full payment, installment plans, and corporate invoicing. Corporate sponsorship and group rates are also available for organizations enrolling multiple leaders.',
-    keywords: ['payment', 'installment', 'financing', 'pay', 'options'],
+    content: 'Enrollment is a single membership - $149/month billed annually (founding rate) or $199/month month-to-month, no separate course fees or add-ons. There is no discounted deposit option - your plan payment itself is what reserves your seat, and full program access starts when your cohort\'s classes begin. Not ready to commit? Start with the free Explorer preview tier ($0, no payment) and upgrade whenever you\'re ready. Scholarships are not currently available.',
+    keywords: ['payment', 'options', 'pay', 'financing', 'scholarship'],
     priority: 7,
   },
-
-  // Enterprise / Sponsorship
   {
-    category: 'enterprise',
-    title: 'Corporate Sponsorship',
-    content: 'Organizations can sponsor leaders for the program with group rates, dedicated support, and coordinated project focus. Corporate sponsors receive progress reports and ROI tracking. This is ideal for organizations looking to build internal AI capability across multiple departments.',
-    keywords: ['corporate', 'sponsor', 'sponsorship', 'company', 'organization'],
-    priority: 8,
-  },
-  {
-    category: 'enterprise',
-    title: 'Group Enrollment',
-    content: 'Special pricing is available for organizations enrolling multiple participants. Group enrollment includes team alignment sessions and coordinated project work so your AI initiatives are strategically aligned.',
-    keywords: ['group', 'team', 'rates', 'discount', 'multiple', 'bulk'],
-    priority: 8,
+    category: 'pricing',
+    title: 'Free Explorer Preview',
+    content: 'If you\'re undecided, you don\'t have to commit right away. Create a free Explorer account at training.colaberry.com to preview the material and see how the program works - no payment required. When you\'re ready, upgrading to full paid access ($149/month annual or $199/month month-to-month) takes just a couple clicks from your account, and full Classroom access unlocks when your cohort\'s classes begin.',
+    keywords: ['free', 'explorer', 'preview', 'trial', 'try before', 'undecided', 'not ready'],
+    priority: 9,
   },
 
   // FAQ
   {
     category: 'faq',
     title: 'Technical Requirements',
-    content: 'Participants should be technical leaders comfortable with technology concepts, though no coding is required - Claude Code handles the execution. You will need a computer with internet access for live sessions, and access to at least one enterprise LLM (ChatGPT, Claude, Gemini, etc.). Participants bring their own LLM credentials; no company data is shared with Colaberry.',
+    content: 'No professional software engineering background is required, but you should be comfortable with basic concepts like git and the command line, and arrive with a real business problem or idea to work on. You\'ll need a laptop with internet access for live sessions, Claude Code (Anthropic subscription), Docker Desktop, and a GitHub account.',
     keywords: ['technical', 'requirements', 'coding', 'skills', 'need', 'prerequisite'],
     priority: 8,
   },
   {
     category: 'faq',
     title: 'Time Commitment',
-    content: 'The total time commitment is approximately 20-30 hours over 3 weeks: 10 hours of live sessions (5 sessions x 2 hours) plus 2-4 hours of applied work between each session building your AI proof of capability.',
+    content: 'About 4 hours of live sessions per week (Monday Architecture Day + Thursday Build Day, 2 hours each) across 12 weeks, plus applied project work between sessions. All sessions are recorded, so a missed week never means falling out of the program.',
     keywords: ['time', 'commitment', 'hours', 'week', 'schedule', 'busy'],
     priority: 8,
   },
   {
     category: 'faq',
     title: 'Certificate',
-    content: 'Participants who complete the program and present their AI proof of capability receive a certificate of completion from the Colaberry Enterprise AI Leadership Accelerator.',
-    keywords: ['certificate', 'credential', 'completion', 'certification'],
+    content: 'Participants who complete the program earn Anthropic Architect certification (CCA-F) prep and exam readiness, plus a GitHub portfolio of deployed projects as proof of capability. Anthropic certifies the knowledge; Colaberry certifies the capability.',
+    keywords: ['certificate', 'credential', 'completion', 'certification', 'cca-f'],
     priority: 6,
   },
 
@@ -151,14 +156,14 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'logistics',
     title: 'Strategy Call',
-    content: 'A strategy call is a 30-minute consultation to discuss your AI goals, assess fit for the program, and answer your questions. It is the best way to determine if the Accelerator is right for your situation. Book online through our calendar or ask Maya to schedule one.',
+    content: 'A strategy call is a 30-minute consultation to discuss your goals, assess fit for the program, and answer your questions. It\'s the best way to determine if the Accelerator is right for your situation. Book online through our calendar or ask Maya to schedule one.',
     keywords: ['strategy call', 'consultation', 'meeting', 'book', 'schedule', 'talk'],
     priority: 9,
   },
   {
     category: 'logistics',
     title: 'Enrollment Process',
-    content: 'To enroll: (1) Book a strategy call or submit an interest form to discuss your goals, (2) Receive the executive briefing with full program details, (3) Complete enrollment and payment, (4) Start with your cohort on day one. The next cohort begins March 31.',
+    content: 'Enrollment is rolling - start anytime at training.colaberry.com. (1) Create a free Explorer account to preview the material - no payment or commitment required, (2) When you\'re ready, select your plan (Annual or Month-to-Month) and complete checkout to reserve your seat, (3) Full program access starts when your assigned cohort\'s classes actually begin.',
     keywords: ['enroll', 'enrollment', 'process', 'steps', 'how to join', 'sign up', 'register'],
     priority: 9,
   },
@@ -174,17 +179,33 @@ const SEED_ENTRIES: SeedEntry[] = [
   {
     category: 'champion',
     title: 'AI Champion Network',
-    content: 'The AI Champion Network is our alumni and referral program. There are two paths: Path 1 - Enroll yourself in the AI Leadership Accelerator (your company can sponsor you), and earn $250 if your company pays. Path 2 - Refer others (leaders, managers, teams, or departments) and earn $250 per enrolled participant with no cap. Alumni can activate their referral account at enterprise.colaberry.ai/referrals/login. Three referral types are available: Corporate Sponsor (introduce the program to company leadership), Introduced Referral (we reach out mentioning your name), or Anonymous Referral (your name is never mentioned).',
-    keywords: ['champion', 'alumni', 'referral', 'refer', 'network', 'commission', 'earn', '$250', 'sponsor'],
+    content: 'The AI Champion Network is our alumni and referral program for the AI Systems Architect Accelerator. Refer others (individuals, teams, or departments) and earn $250 per enrolled participant with no cap. Alumni can activate their referral account at enterprise.colaberry.ai/referrals/login. Three referral types are available: Corporate Sponsor (introduce the program to company leadership), Introduced Referral (we reach out mentioning your name), or Anonymous Referral (your name is never mentioned).',
+    keywords: ['champion', 'alumni', 'referral', 'refer', 'network', 'commission', 'earn', '$250'],
     priority: 8,
   },
   {
     category: 'champion',
     title: 'AI Champion Referral Commission',
-    content: 'AI Champions earn $250 per enrolled participant - no cap. Examples: 1 enrollment = $250, 4 enrollments = $1,000, 10 enrollments = $2,500, 20 enrollments = $5,000. You earn commission when you enroll and your company pays, or when any leader, manager, team, or department enrolls through your referral.',
+    content: 'AI Champions earn $250 per enrolled participant - no cap. Examples: 1 enrollment = $250, 4 enrollments = $1,000, 10 enrollments = $2,500, 20 enrollments = $5,000. You earn commission whenever anyone you refer enrolls through your referral link.',
     keywords: ['commission', 'earn', 'money', 'referral', 'champion', 'reward', 'incentive', 'payment'],
     priority: 7,
   },
+];
+
+/**
+ * Titles retired 2026-08-03 when the KB was rewritten for the live "AI Systems
+ * Architect Accelerator" program (replacing the old "Enterprise AI Leadership
+ * Accelerator" / $4,500 identity). The upsert loop below only touches titles
+ * still present in SEED_ENTRIES, so these would otherwise stay active forever
+ * as orphaned stale rows — deactivate them explicitly instead.
+ */
+const RETIRED_TITLES = [
+  'Week 1 - Strategic Alignment & Architecture',
+  'Week 2 - Guided Build & Executive Positioning',
+  'Week 3 - Executive Readiness & Expansion',
+  'The 3-Agent Model',
+  'Corporate Sponsorship',
+  'Group Enrollment',
 ];
 
 /**
@@ -193,6 +214,16 @@ const SEED_ENTRIES: SeedEntry[] = [
 export async function seedAdmissionsKnowledge(): Promise<void> {
   let created = 0;
   let updated = 0;
+  let deactivated = 0;
+
+  for (const title of RETIRED_TITLES) {
+    const [count] = await AdmissionsKnowledgeEntry.update(
+      { active: false },
+      { where: { title, active: true } },
+    );
+    deactivated += count;
+  }
+
   for (const entry of SEED_ENTRIES) {
     const existing = await AdmissionsKnowledgeEntry.findOne({ where: { title: entry.title } });
     if (existing) {
@@ -218,7 +249,7 @@ export async function seedAdmissionsKnowledge(): Promise<void> {
       created++;
     }
   }
-  if (created > 0 || updated > 0) {
-    console.log(`[Admissions] Knowledge base: ${created} created, ${updated} updated`);
+  if (created > 0 || updated > 0 || deactivated > 0) {
+    console.log(`[Admissions] Knowledge base: ${created} created, ${updated} updated, ${deactivated} retired`);
   }
 }

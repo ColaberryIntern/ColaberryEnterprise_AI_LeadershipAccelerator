@@ -416,6 +416,12 @@ const PortalShell: React.FC<PortalShellProps> = ({ children, todayBadge, condens
               <span className="tx"><span className="lbl">Next event</span><span className="when mono">{ohCd ? `${ohCd.d}d ${ohCd.h}h` : '—'}</span></span>
             </span>
           </div>
+          {onlineNow > 0 && (
+            <Link to="/portal/community" className="te-presence-badge" title="See who's online in Community">
+              <span className="dot" aria-hidden="true" />
+              {onlineNow} online
+            </Link>
+          )}
           <MessagesButton onOpen={openChatTarget} />
           <NotificationBell />
           <button type="button" className="te-iconbtn" onClick={toggleTheme} title="Toggle theme" aria-label="Toggle dark mode">

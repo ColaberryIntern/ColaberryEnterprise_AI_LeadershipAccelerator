@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { requireParticipant } from '../middlewares/participantAuth';
 import { getInstrumentedOpenAI } from '../services/openaiInstrumented';
 import { SetPortfolioSharingSchema } from '../schemas/portfolioShareSchema';
@@ -402,6 +403,36 @@ router.post('/api/portal/projects', requireParticipant, async (req: Request, res
   } catch (err: any) {
     console.error('[ProjectRoutes] POST /projects error:', err.message);
     res.status(500).json({ error: err.message });
+  }
+});
+
+const SetProjectNameSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+});
+
+/**
+ * PATCH /api/portal/project/name — get-or-create the active project and save
+ * its name as soon as step 0 of the builder wizard is answered. Without
+ * this, no project row exists until the requirements-generation step, so a
+ * page reload before then has nothing to resume from and always resets to
+ * step 0.
+ */
+router.patch('/api/portal/project/name', requireParticipant, async (req: Request, res: Response) => {
+  const parsed = SetProjectNameSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() });
+    return;
+  }
+  try {
+    const enrollmentId = req.participant!.sub;
+    const { createProjectForEnrollment } = await import('../services/projectService');
+    const project = await createProjectForEnrollment(enrollmentId);
+    (project as any).name = parsed.data.name;
+    await project.save();
+    res.json({ id: project.id, name: (project as any).name });
+  } catch (err: any) {
+    console.error('[ProjectRoutes] PATCH /project/name error:', err.message);
+    res.status(500).json({ error: 'Failed to save project name' });
   }
 });
 
@@ -4722,7 +4753,33 @@ router.post('/api/portal/project/cognitive/incidents/:id/dispatch', requireParti
     if ((inc as any).project_id !== project.id) { res.status(403).json({ error: 'Forbidden' }); return; }
 
     const { fanOutIncident, persistDispatchLog } = await import('../intelligence/systemStateEngine/incidents/incidentFanoutEngine');
+    const { default: IncidentDispatchLog } = await import('../models/IncidentDispatchLog');
     const r = inc as any;
+
+    // Idempotency: a double-click or client retry on this endpoint must not
+    // re-send the incident email. Registering the email subscriber (this
+    // ticket) turns this manual-trigger route from an inert fanout (no
+    // subscribers were ever registered before) into one with a real side
+    // effect, so a dedup gate is required per the repo's idempotency rule.
+    const DISPATCH_COOLDOWN_MS = 15 * 60 * 1000;
+    const recent = await IncidentDispatchLog.findOne({
+      where: { incident_id: r.id },
+      order: [['dispatched_at', 'DESC']],
+    });
+    if (recent && Date.now() - new Date((recent as any).dispatched_at).getTime() < DISPATCH_COOLDOWN_MS) {
+      res.json({
+        incident_id: r.id,
+        attempted_subscribers: (recent as any).attempted_subscribers,
+        outcomes: (recent as any).outcomes,
+        succeeded: (recent as any).succeeded,
+        failed: (recent as any).failed,
+        skipped: 0,
+        elapsed_ms: 0,
+        deduped: true,
+      });
+      return;
+    }
+
     const payload = {
       incident_id: r.id,
       project_id: r.project_id,

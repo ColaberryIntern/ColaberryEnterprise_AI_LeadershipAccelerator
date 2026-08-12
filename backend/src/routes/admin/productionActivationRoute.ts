@@ -28,7 +28,10 @@ const router = Router();
 
 // SECURITY (TBI audit P0-1, CRITICAL): production-activate clears the kill switch and
 // enables agents — it shipped with NO auth. Require an authenticated admin for every route.
-router.use(requireAdmin);
+// Scoped to this router's own path prefixes — see autonomyRoutes.ts for why an
+// unscoped `router.use(requireAdmin)` here was silently 401-ing unrelated public
+// routes (e.g. the chat widget) mounted later in server.ts.
+router.use(['/api/admin/campaign', '/api/admin/production-activate'], requireAdmin);
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 

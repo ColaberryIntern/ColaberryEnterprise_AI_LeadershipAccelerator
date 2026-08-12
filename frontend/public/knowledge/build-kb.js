@@ -49,7 +49,7 @@ const out = {
   schema: "colaberry.kb/v1",
   version: "1.0",
   name: "Colaberry Knowledge Base",
-  description: "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund and cancellation terms are drafted, not final. The AI Systems Architect Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
+  description: "Company source of truth: Sales, Marketing, Design, Curriculum, Product, and Compliance. Machine-readable export for AI ingestion, built on the Colaberry design system. Refund/cancellation and $50 seat-deposit terms are approved (Ali, 2026-08-03). The AI Systems Architect Accelerator's own TWC status is not asserted here; only the Colaberry School of Data Analytics holds COA U5306. Do not invent facts beyond these entries.",
   generated_from: ["sales/kb-data.js", "marketing/hub-data.js", "data/design-kb.js", "data/curriculum-kb.js", "data/product-kb.js", "data/compliance-kb.js"],
   core_facts: (window.HUB_DATA && window.HUB_DATA.core) ? window.HUB_DATA.core : "",
   categories_by_domain: catsByDomain,

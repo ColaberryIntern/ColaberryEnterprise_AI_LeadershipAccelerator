@@ -297,7 +297,10 @@ export async function ingestBackground(
   // ingest — the "Upload your resume" setup step. Idempotent per enrollment
   // (event_key 'profile_completed'). Gated on meaningful input so a stray short
   // placeholder can never earn it. Best-effort — never fail the ingest.
-  if (resumeText.length > 40 || linkedinUrl) {
+  // MERGE: main's non-fatal implementation (dynamic import, guarded against
+  // short placeholder text) with staging's wider gate, which also counts a
+  // LinkedIn URL already stored on the profile.
+  if (resumeText.length > 40 || linkedinUrl || profile.linkedin_url) {
     try {
       const { award } = await import('./pointsService');
       await award(enrollmentId, { eventType: 'profile_completed' });

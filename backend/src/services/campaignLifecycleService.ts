@@ -2,6 +2,8 @@ import { Op } from 'sequelize';
 import { Campaign, CampaignLead, Lead, InteractionOutcome } from '../models';
 import { enrollLeadInSequence } from './sequenceService';
 import { recordOutcome } from './interactionService';
+import { getSetting } from './settingsService';
+import { syncLeadToGhl } from './ghlService';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -162,6 +164,25 @@ export async function detectInactiveLeads(): Promise<{
         campaign_cycle_number: cl.campaign_cycle_number || 1,
         last_campaign_entry: new Date(),
       } as any);
+
+      // Sync lead to GHL — leads moved here bypass enrollLeadsInCampaign's
+      // own GHL sync (they're transitioned directly, not enrolled via the
+      // campaign API), so without this admissions/sales never sees the lead
+      // re-enter the pipeline and no one is alerted to follow up.
+      try {
+        const ghlEnabled = await getSetting('ghl_enabled');
+        if (ghlEnabled && reengageCampaign.interest_group) {
+          const lead = await Lead.findByPk(cl.lead_id);
+          if (lead) {
+            const syncResult = await syncLeadToGhl(lead, reengageCampaign.interest_group);
+            if (syncResult.contactId && !syncResult.isTestMode && !lead.ghl_contact_id) {
+              await lead.update({ ghl_contact_id: syncResult.contactId });
+            }
+          }
+        }
+      } catch (ghlErr: any) {
+        console.warn(`[GHL] Sync failed during lifecycle transition for lead ${cl.lead_id}: ${ghlErr.message}`);
+      }
 
       // Create scheduled actions
       if (reengageCampaign.sequence_id) {

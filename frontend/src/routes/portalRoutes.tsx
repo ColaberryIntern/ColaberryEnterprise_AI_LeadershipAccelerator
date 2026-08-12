@@ -6,6 +6,7 @@ import PortalLayout from '../components/Layout/PortalLayout';
 import PortalLoginPage from '../pages/portal/PortalLoginPage';
 import PortalFreeSignupPage from '../pages/portal/PortalFreeSignupPage';
 import PortalVerifyPage from '../pages/portal/PortalVerifyPage';
+import DevLoginPage from '../pages/portal/DevLoginPage';
 import PortalViewAsPage from '../pages/portal/PortalViewAsPage';
 import PortalMgmtEnterPage from '../pages/portal/PortalMgmtEnterPage';
 import ReadOnlyBanner from '../components/portal/ReadOnlyBanner';
@@ -30,19 +31,26 @@ import RoomsPage from '../pages/portal/rooms/RoomsPage';
 import GlobalLibraryPage from '../pages/portal/library/GlobalLibraryPage';
 import CompanyPage from '../pages/portal/company/CompanyPage';
 import ClassroomWeekPage from '../pages/portal/ClassroomWeekPage';
+import ArchitectDashboard from '../pages/portal/ArchitectDashboard';
+import ProjectBuilderFlow from '../pages/portal/ProjectBuilderFlow';
 
-// The old AI Project Builder ("Cory") portal surfaces — CoryHome, Blueprint,
-// System, Critique / visual-workspace, RequirementsBuilder, walk-caps, the DNA
-// wizard, architect dashboard, etc. — were removed from the frontend on
+// Most of the old AI Project Builder ("Cory") portal surfaces — CoryHome,
+// Blueprint, System, Critique / visual-workspace, RequirementsBuilder,
+// walk-caps, the DNA wizard, etc. — were removed from the frontend on
 // 2026-07-18 so students only ever see the Design E student platform.
 // `/portal/home` and `/portal/dashboard` now redirect to the student home
-// (Today); every other retired builder URL simply 404s.
+// (Today); every other retired builder URL simply 404s. ArchitectDashboard
+// and ProjectBuilderFlow are the exception: ongoing dev work on them
+// (GitHub Activity widget, PR #720) survived the removal per explicit
+// decision, so those two stayed live at /portal/architect-dashboard and
+// /portal/project/builder.
 
 const portalRoutes = (
   <Route element={<ParticipantAuthProvider><ReadOnlyBanner /><Outlet /></ParticipantAuthProvider>}>
     <Route path="/portal/login" element={<PortalLoginPage />} />
     <Route path="/portal/signup" element={<PortalFreeSignupPage />} />
     <Route path="/portal/verify" element={<PortalVerifyPage />} />
+    <Route path="/portal/dev-login" element={<DevLoginPage />} />
     {/* Admin "View as member" — read-only impersonation landing (token in the URL hash). */}
     <Route path="/portal/view-as" element={<PortalViewAsPage />} />
     {/* Phone handoff — public: exchanges a one-time QR code for a session, then lands on Today. */}
@@ -94,6 +102,8 @@ const portalRoutes = (
         <Route path="/portal/sessions/:id" element={<Navigate to="/portal/sessions" replace />} />
         <Route path="/portal/assignments" element={<PortalAssignmentsPage />} />
         <Route path="/portal/progress" element={<PortalProgressPage />} />
+        <Route path="/portal/architect-dashboard" element={<ArchitectDashboard />} />
+        <Route path="/portal/project/builder" element={<ProjectBuilderFlow />} />
       </Route>
     </Route>
   </Route>

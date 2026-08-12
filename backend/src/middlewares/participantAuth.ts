@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
+import { logAuthFailure } from './authFailureLog';
 
 export interface ParticipantPayload {
   sub: string;
@@ -55,7 +56,8 @@ export function requireParticipant(req: Request, res: Response, next: NextFuncti
     }
     req.participant = payload;
     next();
-  } catch {
+  } catch (err) {
+    logAuthFailure('participant_auth_failed', err, 'participant', req.ip);
     res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import portalApi from '../../utils/portalApi';
 import { openSessionRecording } from '../../services/roomsApi';
+import { canJoinRoom } from '../../utils/sessionJoinWindow';
 
 interface SessionItem {
   id: string;
@@ -36,12 +37,18 @@ function PortalSessionsPage() {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     portalApi.get('/api/portal/sessions')
       .then((res) => setSessions(res.data.sessions || []))
       .catch(() => setError(true))
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(id);
   }, []);
 
   if (loading) {
@@ -92,15 +99,21 @@ function PortalSessionsPage() {
                       </p>
                     </div>
                     <div className="d-flex gap-2">
-                      {session.status === 'live' && session.meeting_link && (
-                        <a
-                          href={session.meeting_link}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="btn btn-danger btn-sm"
-                        >
-                          <i className="bi bi-camera-video me-1"></i>Join Now
-                        </a>
+                      {session.meeting_link && session.status !== 'cancelled' && (
+                        canJoinRoom(session.session_date, session.start_time, now) ? (
+                          <a
+                            href={session.meeting_link}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="btn btn-danger btn-sm"
+                          >
+                            <i className="bi bi-camera-video me-1"></i>Join Room
+                          </a>
+                        ) : (
+                          <button className="btn btn-outline-secondary btn-sm disabled" disabled title="Opens 30 minutes before the session starts and closes 30 minutes after">
+                            <i className="bi bi-camera-video me-1"></i>Join Room
+                          </button>
+                        )
                       )}
                       {session.status === 'completed' && session.recording_url && (
                         // Not an <a href>: recording_url is normally a Bearer-gated

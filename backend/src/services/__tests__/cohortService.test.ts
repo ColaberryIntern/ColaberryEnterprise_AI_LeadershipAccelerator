@@ -1,4 +1,4 @@
-import { selectNextOpenCohort } from '../cohortService';
+import { selectNextOpenCohort, hasCohortStarted } from '../cohortService';
 
 type C = { id: string; status: string; start_date: string; created_at?: Date };
 
@@ -58,5 +58,37 @@ describe('selectNextOpenCohort', () => {
     ];
     selectNextOpenCohort(cohorts, NOW);
     expect(cohorts.map((c) => c.id)).toEqual(['nov', 'jul']);
+  });
+});
+
+describe('hasCohortStarted', () => {
+  const realDateNow = Date.now;
+  beforeAll(() => {
+    // Fixed "now" so past/future assertions are deterministic.
+    Date.now = () => new Date('2026-08-06T12:00:00Z').getTime();
+  });
+  afterAll(() => {
+    Date.now = realDateNow;
+  });
+
+  it('start_date in the past → true', () => {
+    expect(hasCohortStarted({ start_date: '2026-07-23' })).toBe(true);
+  });
+
+  it('start_date today → true (boundary)', () => {
+    expect(hasCohortStarted({ start_date: '2026-08-06' })).toBe(true);
+  });
+
+  it('start_date in the future → false', () => {
+    expect(hasCohortStarted({ start_date: '2026-09-01' })).toBe(false);
+  });
+
+  it('missing cohort → true (fail open, never wrongly lock out a possibly-paying student)', () => {
+    expect(hasCohortStarted(null)).toBe(true);
+    expect(hasCohortStarted(undefined)).toBe(true);
+  });
+
+  it('cohort with no start_date → true (fail open)', () => {
+    expect(hasCohortStarted({ start_date: null })).toBe(true);
   });
 });

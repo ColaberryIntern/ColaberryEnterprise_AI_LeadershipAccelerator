@@ -270,6 +270,23 @@ export function selectNextOpenCohort<
   return byCreated[0] ?? null;
 }
 
+/**
+ * Has this cohort's live class actually started yet? Used by the payment-paywall
+ * predicates (contentEntitlement.hasFullCurriculumAccess, requireBuildEntitlement
+ * .isBuildEntitled) so a paid enrollment only unlocks full access once its cohort's
+ * start_date arrives, not the instant payment clears (Ali decision, BC #10160497402,
+ * relayed 2026-08-04: "full Classroom access should unlock when the student's class
+ * actually starts, not immediately on payment").
+ *
+ * Missing cohort or missing start_date fails OPEN (returns true / "started") —
+ * consistent with every other predicate in this codebase: a data anomaly must
+ * never wrongly lock out a possibly-paying student.
+ */
+export function hasCohortStarted(cohort: { start_date?: string | Date | null } | null | undefined): boolean {
+  if (!cohort?.start_date) return true;
+  return new Date(cohort.start_date) <= new Date();
+}
+
 export async function getLatestOpenCohort(): Promise<Cohort | null> {
   // Placement for new Explorers (Open House signups). Historically this picked
   // the open cohort with the LATEST start_date, which filed every new signup

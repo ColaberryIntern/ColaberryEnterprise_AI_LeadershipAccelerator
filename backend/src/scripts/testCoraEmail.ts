@@ -2,22 +2,28 @@
  * Cora Shadow Test — validate reply quality before go-live.
  *
  * Runs a set of synthetic inquiry emails through Cora's OpenAI call and
- * prints the generated subject + body for each one. No DB connection needed,
- * no email is sent.
+ * prints the generated subject + body for each one. DB connection is
+ * attempted (needed for real persona/KB routing) but optional — falls back
+ * to the generic prompt if unavailable. No email is ever sent.
  *
  * Usage:
- *   OPENAI_API_KEY=sk-... npx ts-node src/scripts/testCoraEmail.ts
+ *   npx ts-node src/scripts/testCoraEmail.ts        (from backend/, uses root .env)
  *
  * What to check in the output:
+ *   ✅ Persona matches the question's topic — Cory for admissions/pricing/
+ *      enrollment/Open House, Cora for everything else (BC #10109319420)
+ *   ✅ Style gate score >= 70 with no violations (or a passing retry if not)
  *   ✅ Subject is descriptive (not just "Re: Hello")
  *   ✅ Body answers the specific question without hallucinating program facts
  *   ✅ Tone is professional and concise — not salesy
  *   ✅ Refund/escalation case does NOT attempt to resolve — escalates to Ali
- *   ✅ Sign-off is "Cora | Colaberry Enterprise AI Support"
+ *   ✅ Sign-off matches the resolved persona (Cora or Cory)
  *   ✅ Every reply ends with a clear next step (enroll URL or strategy call)
  */
 
+import { connectDatabase } from '../config/database';
 import { generateCoraReply } from '../services/inbox/coraAgentService';
+import { PERSONA_PROFILES } from '../services/inbox/coraPersonaRouter';
 
 interface TestCase {
   label: string;
@@ -142,6 +148,18 @@ Thank you`,
     subject: '1098 tax form',
     body: `Hi, can you send me my 1098-T form for last year's tuition for my taxes? Thanks.`,
   },
+  {
+    label: '11. PERSONA CHECK — clear admissions question (expect Cory)',
+    fromName: 'Open House Attendee',
+    subject: 'Open House RSVP',
+    body: `Hi, I'd like to RSVP for the upcoming Open House. Is it still free to attend, and do I need to register in advance?`,
+  },
+  {
+    label: '12. PERSONA CHECK — clear support question (expect Cora)',
+    fromName: 'Enrolled Student',
+    subject: "Can't log into the portal",
+    body: `Hi, I can't log into the student portal, it says my password is wrong even after I reset it. Can you help?`,
+  },
 ];
 
 async function runTests(): Promise<void> {
@@ -149,6 +167,8 @@ async function runTests(): Promise<void> {
     console.error('ERROR: OPENAI_API_KEY is not set. Export it before running.');
     process.exit(1);
   }
+
+  await connectDatabase();
 
   console.log('='.repeat(72));
   console.log('CORA SHADOW TEST — ' + new Date().toISOString());
@@ -167,6 +187,9 @@ async function runTests(): Promise<void> {
     try {
       const reply = await generateCoraReply(tc.body, tc.subject, tc.fromName);
 
+      const profile = PERSONA_PROFILES[reply.persona];
+      console.log(`PERSONA: ${reply.persona} (${profile.displayName})`);
+      console.log(`STYLE GATE: ${reply.styleGateScore}/100${reply.styleGateViolations.length ? ` — ${reply.styleGateViolations.join('; ')}` : ' — clean'}`);
       console.log(`REPLY SUBJECT: ${reply.subject}`);
       console.log('-'.repeat(60));
       console.log(reply.body);

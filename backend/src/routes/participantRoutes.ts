@@ -1082,13 +1082,28 @@ router.get('/api/portal/dm/:roomId/messages', requireParticipant, async (req, re
 
 router.post('/api/portal/dm/:roomId/send', requireParticipant, async (req, res) => {
   const params = z.object({ roomId: z.string().uuid() }).safeParse(req.params);
-  const body = z.object({ content: z.string().min(1).max(4000) }).safeParse(req.body);
+  const body = z.object({ content: z.string().min(1).max(4000), client_id: z.string().uuid().optional() }).safeParse(req.body);
   if (!params.success || !body.success) { res.status(400).json({ error: 'Invalid message' }); return; }
   try {
     const { sendDmMessage } = await import('../services/communityRooms/dmService');
     const ctx = { enrollmentId: req.participant!.sub, cohortId: req.participant!.cohort_id, isAdmin: false };
-    const message = await sendDmMessage(ctx, params.data.roomId, body.data.content);
+    const message = await sendDmMessage(ctx, params.data.roomId, body.data.content, body.data.client_id);
     res.status(201).json({ message });
+  } catch (err: any) {
+    if (err?.name === 'DmError') { res.status(400).json({ error: err.message }); return; }
+    res.status(communityErrorStatus(err)).json({ error: err.message });
+  }
+});
+
+// Typing indicator — fire-and-forget touch, throttled client-side. Idempotent
+// (repeat touches just advance the timestamp).
+router.post('/api/portal/dm/:roomId/typing', requireParticipant, async (req, res) => {
+  const parsed = z.object({ roomId: z.string().uuid() }).safeParse(req.params);
+  if (!parsed.success) { res.status(400).json({ error: 'Invalid conversation' }); return; }
+  try {
+    const { touchDmTyping } = await import('../services/communityRooms/dmService');
+    await touchDmTyping(req.participant!.sub, parsed.data.roomId);
+    res.status(204).end();
   } catch (err: any) {
     if (err?.name === 'DmError') { res.status(400).json({ error: err.message }); return; }
     res.status(communityErrorStatus(err)).json({ error: err.message });
