@@ -157,6 +157,19 @@ export const env = {
   // documented in .env.example, matching the FEED_CONTROL_ENABLED/
   // CAPE_LEARNING_VALUE_RANKER_ENABLED inline-only convention.
   feedControlTypeSuppressionEnabled: process.env.FEED_CONTROL_TYPE_SUPPRESSION_ENABLED === 'true',
+  // Today daily auto-refresh — once per Central-time calendar day, a student's
+  // Today feed opportunistically tops up with a small batch of already-generated
+  // content BEFORE serving, instead of only extending when the student scrolls
+  // past everything already materialized (see todayDailyRefreshService.ts). Zero
+  // new generation cost: only surfaces content the intel-pipeline crons already
+  // produced on their own independent, capped daily budget. Default OFF
+  // everywhere including production — flag-off keeps getTodayPage() byte-identical
+  // to before. Not documented in .env.example, matching the FEED_CONTROL_ENABLED/
+  // CAPE_LEARNING_VALUE_RANKER_ENABLED inline-only convention.
+  todayDailyRefreshEnabled: process.env.TODAY_DAILY_REFRESH_ENABLED === 'true',
+  // Bounded top-up size for the above — kept small and tunable so the feature
+  // stays "economical" (Ali's own requirement) without a redeploy to retune it.
+  todayDailyRefreshTopupSize: Number(process.env.TODAY_DAILY_REFRESH_TOPUP_SIZE || 4),
   // CAPE Phase 4 — the learning-value ranker (design doc §9, §16 Phase 4). Reorders
   // the ANCHORED candidate queue in todayFeedComposer.ts by an explainable
   // skill-gap/prerequisite/goal-fit score instead of raw gatherAnchored() order.
