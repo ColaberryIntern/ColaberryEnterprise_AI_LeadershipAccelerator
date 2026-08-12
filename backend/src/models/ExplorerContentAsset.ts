@@ -1,5 +1,6 @@
 import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
+import type { ExplorerAssetType } from '../types/explorerGrowth';
 
 /**
  * explorer_content_assets — the Content Intelligence Registry INDEX.
@@ -25,29 +26,6 @@ import { sequelize } from '../config/database';
  * Rows are marked `active=false` rather than deleted when a source record
  * disappears, because a historical decision may reference them.
  */
-export type ExplorerAssetType =
-  | 'CURRICULUM'
-  | 'LESSON'
-  | 'BLOG'
-  | 'VIDEO'
-  | 'PODCAST'
-  | 'TESTIMONIAL'
-  | 'CASE_STUDY'
-  | 'EVENT'
-  | 'OPEN_HOUSE'
-  | 'COHORT'
-  | 'CLASS'
-  | 'SUBSCRIPTION'
-  | 'INTERNSHIP'
-  | 'CERTIFICATION'
-  | 'COMMUNITY'
-  | 'PROJECT'
-  | 'PLATFORM_FEATURE'
-  | 'ADVISORY_SERVICE'
-  | 'TOOL'
-  | 'RESOURCE'
-  | 'REFERRAL_OPPORTUNITY';
-
 interface ExplorerContentAssetAttributes {
   id?: string;
   asset_type: ExplorerAssetType;

@@ -251,6 +251,49 @@ describe('ExplorerContentAsset — registry defaults', () => {
   });
 });
 
+/**
+ * Guard against the exact drift the T002 verifier caught: `ExplorerAssetType`
+ * was declared verbatim in BOTH src/types/explorerGrowth.ts and
+ * ExplorerContentAsset.ts, with the model using its own local copy and the
+ * types/ copy having zero consumers. Compile-time only, no runtime blast
+ * radius — and nothing would have failed. In a task whose whole thesis is
+ * anti-drift, an untested duplicate type pair is the wrong thing to leave behind.
+ */
+describe('shared types are declared in exactly one place', () => {
+  const fs = require('fs') as typeof import('fs');
+  const path = require('path') as typeof import('path');
+
+  const TYPES_FILE = path.resolve(__dirname, '../../types/explorerGrowth.ts');
+  const MODEL_FILES = [
+    'ExplorerJourneyProfile.ts',
+    'ExplorerJourneyDecision.ts',
+    'ExplorerScoreSnapshot.ts',
+    'ExplorerExperimentAssignment.ts',
+    'ExplorerContentAsset.ts',
+  ].map((f) => path.resolve(__dirname, '..', f));
+
+  /** Exported type/interface names declared in a file. */
+  function exportedTypeNames(file: string): string[] {
+    const src = fs.readFileSync(file, 'utf8');
+    return [...src.matchAll(/export\s+(?:type|interface)\s+(\w+)/g)].map((m) => m[1]);
+  }
+
+  it('no model file re-declares a type that lives in types/explorerGrowth.ts', () => {
+    const canonical = new Set(exportedTypeNames(TYPES_FILE));
+    expect(canonical.size).toBeGreaterThan(0);
+
+    const duplicates: string[] = [];
+    for (const file of MODEL_FILES) {
+      for (const name of exportedTypeNames(file)) {
+        if (canonical.has(name)) {
+          duplicates.push(`${path.basename(file)} re-declares ${name}`);
+        }
+      }
+    }
+    expect(duplicates).toEqual([]);
+  });
+});
+
 describe('models barrel', () => {
   it('exports all five Explorer Growth models', async () => {
     const models = await import('../index');
