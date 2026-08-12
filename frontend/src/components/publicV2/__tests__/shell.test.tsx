@@ -32,7 +32,8 @@ describe('PublicHeaderV2', () => {
   });
 
   it('marks the active route with aria-current', () => {
-    const html = at('/platform', <PublicHeaderV2 />);
+    // Nav moved under /v2 in 1.11; the old '/platform' never existed as a route.
+    const html = at('/v2/platform', <PublicHeaderV2 />);
     expect(html).toContain('aria-current="page"');
   });
 

@@ -4,9 +4,11 @@ import { Link, useLocation } from 'react-router-dom';
 /**
  * PublicHeaderV2 — the V2 public site header.
  *
- * Information architecture per the approved prototype:
- *   Solutions · Services · Platform · Proof · Learn Free · Log in
+ * Information architecture:
+ *   Services · Platform · Proof · Start Free · Log in
  *   plus "Talk to an Architect" and "Explore the Platform".
+ * The prototype also listed "Solutions"; there is no such page, so it is gone
+ * rather than pointing at nothing.
  *
  * Two behaviours are deliberate, both from defects found during prototype review:
  *   1. On narrow viewports the CTAs move INTO the menu panel rather than merely
@@ -20,13 +22,24 @@ export interface NavItem {
   readonly to: string;
 }
 
-/** Routes here must exist by the time this header ships. */
+/**
+ * Primary navigation.
+ *
+ * FIXED IN 1.11: every one of these was a root path (/solutions, /services,
+ * /platform, /proof) while V2 is mounted under /v2, so the main nav 404'd on
+ * every page of the site. The line above this list used to read "Routes here
+ * must exist by the time this header ships" -- a comment is not a test, and the
+ * shell tests only asserted the labels rendered. `V2_NAV` is now checked against
+ * the real route table in linkIntegrity.test.tsx.
+ *
+ * "Solutions" was dropped rather than repointed: no such page exists, and
+ * inventing a destination for a nav label is how the dead links happened.
+ */
 export const V2_NAV: readonly NavItem[] = [
-  { label: 'Solutions', to: '/solutions' },
-  { label: 'Services', to: '/services' },
-  { label: 'Platform', to: '/platform' },
-  { label: 'Proof', to: '/proof' },
-  { label: 'Learn Free', to: '/try' },
+  { label: 'Services', to: '/v2/services' },
+  { label: 'Platform', to: '/v2/platform' },
+  { label: 'Proof', to: '/v2/proof' },
+  { label: 'Start Free', to: '/v2/try' },
 ];
 
 export interface PublicHeaderV2Props {
@@ -66,7 +79,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
   return (
     <header className="cbv2-header">
       <div className="cbv2-wrap cbv2-nav">
-        <Link className="cbv2-brand" to="/" aria-label="Colaberry Enterprise AI, home">
+        <Link className="cbv2-brand" to="/v2" aria-label="Colaberry Enterprise AI, home">
           <img src="/colaberry-logo.png" alt="" width={291} height={82} />
           <span className="cbv2-brand__text">Enterprise AI</span>
         </Link>
@@ -93,7 +106,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
               <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
                 Talk to an Architect
               </Link>
-              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/platform">
+              <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/v2/platform">
                 Explore the Platform
               </Link>
             </li>
@@ -115,7 +128,7 @@ function PublicHeaderV2({ navItems = V2_NAV }: PublicHeaderV2Props): React.React
           <Link className="cbv2-btn cbv2-btn--secondary cbv2-btn--sm" to="/contact">
             Talk to an Architect
           </Link>
-          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/platform">
+          <Link className="cbv2-btn cbv2-btn--primary cbv2-btn--sm" to="/v2/platform">
             Explore the Platform
           </Link>
         </div>

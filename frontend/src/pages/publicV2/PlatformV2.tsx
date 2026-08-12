@@ -80,6 +80,26 @@ function PlatformV2(): React.ReactElement {
                   {active.blurb}
                 </p>
 
+                {/*
+                  A real capture of the readiness surface, shown once above the
+                  figures. Only the readiness tab has a verified capture; the
+                  others show their figures alone rather than borrowing an image
+                  of a different screen, which would misrepresent them.
+                */}
+                {active.key === 'readiness' ? (
+                  <figure className="cbv2-shot-frame" style={{ marginBottom: 'var(--space-7)' }}>
+                    <img
+                      className="cbv2-shot"
+                      src="/site-v2/shot-readiness.png"
+                      alt="The architect readiness trajectory panel: 63 percent average readiness, a rising eight-week trend line, and tiles for builder XP, evidence shipped, projects shipped and attendance."
+                      width={1420}
+                      height={860}
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </figure>
+                ) : null}
+
                 <div className="cbv2-grid cbv2-grid--4">
                   {active.stats.map((s) => (
                     <Metric

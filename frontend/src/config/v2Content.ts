@@ -31,7 +31,7 @@ export const GOALS: readonly Goal[] = [
       'score them on value and feasibility, and hand back a prioritized map.',
     proof: 'An opportunity map and 90-day roadmap, produced from your own workflow inventory.',
     cta: 'Map an AI Opportunity',
-    ctaRoute: '/opportunity-lab',
+    ctaRoute: '/v2/lab',
     next: 'Run the AI Opportunity Lab to see the shape of the output.',
   },
   {
@@ -44,7 +44,7 @@ export const GOALS: readonly Goal[] = [
       'in production.',
     proof: 'A working pilot on your data, with evaluations and an auditable approval path.',
     cta: 'See the Production Pilot',
-    ctaRoute: '/services/claude-production-pilot',
+    ctaRoute: '/v2/services/claude-production-pilot',
     next: 'Review the pilot deliverables, then bring one workflow to a discovery call.',
   },
   {
@@ -56,7 +56,7 @@ export const GOALS: readonly Goal[] = [
       'on a real company project, and produce evidence a manager can inspect.',
     proof: 'Per-person readiness, shipped artifacts and evaluation results on one dashboard.',
     cta: 'Explore the Platform',
-    ctaRoute: '/platform',
+    ctaRoute: '/v2/platform',
     next: 'Open the free company workspace and invite two people to try it.',
   },
   {

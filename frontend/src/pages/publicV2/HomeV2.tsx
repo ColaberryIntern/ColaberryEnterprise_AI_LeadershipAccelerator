@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
-import { Claim, canShow, Metric, SampleBadge } from '../../components/publicV2/Claim';
+import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
+import Icon from '../../components/publicV2/Icon';
 import { GOALS, ENGINE, SERVICES } from '../../config/v2Content';
 import './homeV2.css';
 
@@ -39,6 +40,15 @@ function HomeV2(): React.ReactElement {
 
       {/* 1 ─────────────────────────────────────────────────────────── hero ── */}
       <section className="cbv2-hero" aria-labelledby="cbv2-hero-title">
+        {/* Ambient depth. Purely decorative, sits behind content, and carries no
+            information -- so it is hidden from assistive tech and stops moving
+            entirely under prefers-reduced-motion. */}
+        <div className="cbv2-mesh" aria-hidden="true">
+          <i />
+          <i />
+          <i />
+        </div>
+        <div className="cbv2-gridlines" aria-hidden="true" />
         <div className="cbv2-wrap cbv2-hero__grid">
           <div>
             <p className="cbv2-eyebrow">Enterprise AI &middot; Systems + People</p>
@@ -51,47 +61,47 @@ function HomeV2(): React.ReactElement {
               connected platform.
             </p>
             <div className="cbv2-hero__ctas">
-              <Link className="cbv2-btn cbv2-btn--primary" to="/platform">
+              <Link className="cbv2-btn cbv2-btn--primary" to="/v2/platform">
                 Explore the Live Platform
               </Link>
-              <Link className="cbv2-btn cbv2-btn--ghost" to="/opportunity-lab">
+              <Link className="cbv2-btn cbv2-btn--ghost" to="/v2/lab">
                 Map an AI Opportunity
               </Link>
             </div>
           </div>
 
-          {/* The readiness rollup is a LIVE surface, so it may be depicted. */}
+          {/*
+            The readiness rollup is a LIVE surface, so it may be depicted -- and it
+            is depicted with an actual capture of the product rather than boxes
+            drawn in HTML. The capture carries its own on-screen "sample data"
+            labelling, and a SampleBadge sits in the caption regardless, so the
+            claim holds even if the image fails to load.
+          */}
           {canShow('surface.readiness.rollup', ROUTE) ? (
-            <div className="cbv2-hero__panel">
-              <div className="cbv2-panel__bar">
-                <span className="cbv2-panel__url">Organization AI readiness</span>
-                <SampleBadge inverse />
-              </div>
-              <div className="cbv2-panel__body">
-                <Metric
-                  value="63%"
-                  label="Average Architect Readiness, computed from validated evidence"
-                  delta="+18 points in 8 weeks"
-                  evidence="illustrative"
-                  badgeHidden
+            <figure className="cbv2-shot-stack">
+              <div className="cbv2-shot-stack__main">
+                <img
+                  className="cbv2-shot"
+                  src="/site-v2/shot-hero-dashboard.png"
+                  alt="The organization readiness dashboard, showing average architect readiness, builder XP and evidence shipped for a sample company."
+                  width={1680}
+                  height={1120}
+                  loading="eager"
+                  decoding="async"
                 />
-                <div className="cbv2-tracks">
-                  {[
-                    { label: 'Evidence', pct: 78 },
-                    { label: 'Evaluations', pct: 64 },
-                    { label: 'Shipped work', pct: 52 },
-                  ].map((t) => (
-                    <div className="cbv2-track" key={t.label}>
-                      <span>{t.label}</span>
-                      <span className="cbv2-track__rail">
-                        <i style={{ width: `${t.pct}%` }} />
-                      </span>
-                      <b>{t.pct}%</b>
-                    </div>
-                  ))}
-                </div>
               </div>
-            </div>
+              <div className="cbv2-shot-stack__badge" aria-hidden="true">
+                <span className="cbv2-pulse" />
+                <span>
+                  <b>+18 pts</b>
+                  <span>readiness in 8 weeks</span>
+                </span>
+              </div>
+              <figcaption className="cbv2-shot-caption">
+                <SampleBadge inverse />
+                <span>The company view, as it ships today.</span>
+              </figcaption>
+            </figure>
           ) : null}
         </div>
       </section>
@@ -100,6 +110,9 @@ function HomeV2(): React.ReactElement {
       <section className="cbv2-section cbv2-section--sunken" aria-label="What we can state today">
         <div className="cbv2-wrap cbv2-grid cbv2-grid--3">
           <article className="cbv2-card">
+            <span className="cbv2-icon-tile cbv2-icon-tile--blue">
+              <Icon name="cpu" size={22} />
+            </span>
             <p className="cbv2-eyebrow cbv2-eyebrow--info">Capability</p>
             <h2 className="cbv2-card__title">
               <Claim claimKey="anthropic.capability" route={ROUTE} />
@@ -110,6 +123,9 @@ function HomeV2(): React.ReactElement {
           </article>
 
           <article className="cbv2-card">
+            <span className="cbv2-icon-tile cbv2-icon-tile--green">
+              <Icon name="medal" size={22} />
+            </span>
             <p className="cbv2-eyebrow cbv2-eyebrow--info">Credential path</p>
             <h2 className="cbv2-card__title">Claude Certified Architect, Foundations</h2>
             <p className="cbv2-card__body">
@@ -120,6 +136,9 @@ function HomeV2(): React.ReactElement {
           {/* Stating the absence is itself the honest move, and it is the thing
               reviewers scored 9/10. It is not a placeholder. */}
           <article className="cbv2-card cbv2-card--dashed">
+            <span className="cbv2-icon-tile cbv2-icon-tile--amber">
+              <Icon name="scale" size={22} />
+            </span>
             <p className="cbv2-eyebrow cbv2-eyebrow--warn">Pending verification</p>
             <h2 className="cbv2-card__title">Track-record claims withheld</h2>
             <p className="cbv2-card__body">
@@ -230,7 +249,7 @@ function HomeV2(): React.ReactElement {
           </div>
           <div className="cbv2-ribbon">
             {SERVICES.map((s) => (
-              <Link className="cbv2-ribbon__item" to={`/services/${s.slug}`} key={s.slug}>
+              <Link className="cbv2-ribbon__item" to={`/v2/services/${s.slug}`} key={s.slug}>
                 <span className="cbv2-ribbon__n">{s.number}</span>
                 <span className="cbv2-ribbon__title">{s.name}</span>
                 <span className="cbv2-ribbon__body">{s.fit}</span>
@@ -238,7 +257,7 @@ function HomeV2(): React.ReactElement {
             ))}
           </div>
           <p style={{ marginTop: 'var(--space-8)' }}>
-            <Link className="cbv2-btn cbv2-btn--secondary" to="/services">
+            <Link className="cbv2-btn cbv2-btn--secondary" to="/v2/services">
               Compare all five services
             </Link>
           </p>

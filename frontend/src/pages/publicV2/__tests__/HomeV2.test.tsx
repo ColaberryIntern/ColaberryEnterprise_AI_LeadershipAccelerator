@@ -108,12 +108,31 @@ describe('HomeV2 — structure', () => {
 });
 
 describe('HomeV2 — every figure is labelled', () => {
-  it('gives each metric an evidence class', () => {
+  /**
+   * UPDATED IN 1.11. The hero used to draw the readiness dashboard as HTML
+   * <Metric> components; it now shows the real product screenshot. The rule it
+   * was protecting is unchanged and still enforced: any figure presented as data
+   * must be labelled as sample. That labelling now comes from the SampleBadge in
+   * the figure caption, and it must survive the image failing to load, which is
+   * why the badge lives in the caption rather than being burnt into the picture.
+   */
+  it('labels the depicted product data as sample', () => {
+    const h = html();
+    expect(h).toContain('data-sample="true"');
+    expect(h).toContain('<figcaption');
+  });
+
+  it('gives any remaining rendered metric an evidence class', () => {
     const h = html();
     const metrics = (h.match(/data-metric="true"/g) || []).length;
     const labelled = (h.match(/data-evidence="/g) || []).length;
-    expect(metrics).toBeGreaterThan(0);
     expect(labelled).toBeGreaterThanOrEqual(metrics);
+  });
+
+  it('describes the screenshot for people who cannot see it', () => {
+    const h = html();
+    const alt = h.match(/alt="([^"]{40,})"/);
+    expect(alt).not.toBeNull();
   });
 
   it('marks the hero readiness panel as sample data', () => {

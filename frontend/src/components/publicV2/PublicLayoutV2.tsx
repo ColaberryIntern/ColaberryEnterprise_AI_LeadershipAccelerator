@@ -7,7 +7,9 @@ import { initTracker } from '../../utils/tracker';
 import { captureUTMFromURL } from '../../services/utmService';
 import { captureCampaignFromURL } from '../../services/campaignAttributionService';
 import { trackingAllowed } from '../../config/v2Consent';
+import useReveal from './useReveal';
 import './publicV2.css';
+import './cinematicV2.css';
 
 /**
  * PublicLayoutV2 — the shell every V2 public page renders inside.
@@ -32,6 +34,7 @@ import './publicV2.css';
  */
 function PublicLayoutV2(): React.ReactElement {
   const [started, setStarted] = useState(false);
+  useReveal();
 
   const startAttribution = useCallback(() => {
     if (started) return;
