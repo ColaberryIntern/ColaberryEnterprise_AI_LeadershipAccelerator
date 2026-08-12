@@ -90,3 +90,34 @@ export function convertTo24h(timeStr: string): string {
 export function classInstant(sessionDate: string, rawTime: string): Date {
   return centralWallClockToInstant(new Date(`${sessionDate}T${convertTo24h(rawTime)}:00Z`));
 }
+
+/**
+ * A class's stored time rendered for a human, e.g. ("2026-08-10", "18:30:00")
+ * → "6:30 PM CDT".
+ *
+ * The zone suffix is DERIVED from the session's own date, never hardcoded, for
+ * two reasons. First, the reminder email used to append a literal " ET" to the
+ * raw stored string, producing "18:30:00 ET" for a class that actually starts
+ * 6:30 PM Central — reported by staff 2026-08-11. Second, a hardcoded "CST" is
+ * wrong for most of the teaching year: Central is CDT from March to November,
+ * so the label has to follow DST the way the scheduling math already does.
+ *
+ * Pure. Returns the unformatted input if the time cannot be parsed, so a
+ * malformed row degrades to visible-but-ugly rather than to a wrong time.
+ * Note this deliberately does NOT lean on convertTo24h's '10:00' fallback:
+ * that default is safe for scheduling math (which needs *some* instant) but
+ * not for a label, where it would confidently announce a class at 10:00 AM
+ * that is not at 10:00 AM.
+ */
+export function formatCentralClock(sessionDate: string, rawTime: string): string {
+  if (!sessionDate || !rawTime) return rawTime || '';
+  if (!/^\d{1,2}:\d{2}(?::\d{2})?\s*(AM|PM)?$/i.test(rawTime.trim())) return rawTime;
+  const instant = classInstant(sessionDate, rawTime);
+  if (Number.isNaN(instant.getTime())) return rawTime;
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: CENTRAL_TZ,
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(instant);
+}

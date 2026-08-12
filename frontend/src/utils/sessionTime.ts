@@ -80,6 +80,43 @@ export function formatSessionTime(raw: string | null | undefined): string | null
 }
 
 /**
+ * Live class times are stored as Central wall-clock strings — the backend's
+ * scheduling math treats them that way unconditionally (see
+ * backend/src/services/centralDate.ts `classInstant`), so Central is what these
+ * digits actually mean regardless of who is reading them.
+ */
+export const CENTRAL_TZ = 'America/Chicago';
+
+/**
+ * A stored session time rendered with its true, DST-aware zone label, e.g.
+ * ("18:30:00", "2026-08-10") → "6:30 PM CDT".
+ *
+ * Exists because three surfaces were each appending a hardcoded " ET" to the
+ * raw string, printing "18:30:00 ET" for a 6:30 PM Central class (reported by
+ * staff 2026-08-11). Deriving the suffix from the session date also keeps it
+ * honest across the DST boundary, where a hardcoded "CST" would be wrong for
+ * most of the teaching year.
+ */
+export function formatCentralSessionTime(raw: string | null | undefined, dateStr?: string | null): string {
+  const clock = formatSessionTime(raw);
+  if (!clock) return raw ? String(raw) : '';
+  const zone = tzAbbrev(CENTRAL_TZ, dateStr);
+  return zone ? `${clock} ${zone}` : clock;
+}
+
+/** As formatCentralSessionTime, for a start/end pair: "6:30 - 8:30 PM CDT". */
+export function formatCentralSessionRange(
+  start: string | null | undefined,
+  end: string | null | undefined,
+  dateStr?: string | null
+): string {
+  const range = formatSessionTimeRange(start, end);
+  if (!range) return '';
+  const zone = tzAbbrev(CENTRAL_TZ, dateStr);
+  return zone ? `${range} ${zone}` : range;
+}
+
+/**
  * Format a start/end pair as a single 12-hour range, collapsing a shared
  * AM/PM suffix (e.g. "18:30:00"/"20:30:00" → "6:30 - 8:30 PM"; a range that
  * crosses noon keeps both suffixes, e.g. "11:30 AM - 1:30 PM"). Falls back to
