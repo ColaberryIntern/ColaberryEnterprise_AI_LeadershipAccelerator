@@ -193,6 +193,10 @@ export interface BuildIntake {
   target_weeks?: number | null;
   correlation_id?: string | null;
   status?: string;
+  /** Answers to the ten sharpening questions, keyed by slot id. */
+  answers?: Record<string, string> | null;
+  /** The Architect job currently writing this build's document, if any. */
+  architect_job_id?: string | null;
 }
 
 /**
@@ -203,13 +207,20 @@ export interface BuildIntake {
 export async function saveIntake(intake: BuildIntake): Promise<{ project_id: string; status: string }> {
   const rows = await sequelize.query<{ project_id: string; status: string }>(
     `INSERT INTO build_intake
-       (project_id, enrollment_id, idea, name, size, users, data_sources, done_definition, target_weeks, correlation_id, status)
-     VALUES (:project_id, :enrollment_id, :idea, :name, :size, :users, :data_sources, :done_definition, :target_weeks, :correlation_id, :status)
+       (project_id, enrollment_id, idea, name, size, users, data_sources, done_definition, target_weeks,
+        correlation_id, status, answers, architect_job_id)
+     VALUES (:project_id, :enrollment_id, :idea, :name, :size, :users, :data_sources, :done_definition, :target_weeks,
+             :correlation_id, :status, CAST(:answers AS JSONB), :architect_job_id)
      ON CONFLICT (project_id) DO UPDATE SET
        idea = EXCLUDED.idea, name = EXCLUDED.name, size = EXCLUDED.size,
        users = EXCLUDED.users, data_sources = EXCLUDED.data_sources,
        done_definition = EXCLUDED.done_definition, target_weeks = EXCLUDED.target_weeks,
-       correlation_id = EXCLUDED.correlation_id, status = EXCLUDED.status, updated_at = NOW()
+       correlation_id = EXCLUDED.correlation_id, status = EXCLUDED.status,
+       -- COALESCE, not EXCLUDED: setStatus/setArchitectJob round-trip the row and
+       -- would otherwise null out a field they never meant to touch.
+       answers = COALESCE(EXCLUDED.answers, build_intake.answers),
+       architect_job_id = COALESCE(EXCLUDED.architect_job_id, build_intake.architect_job_id),
+       updated_at = NOW()
      RETURNING project_id, status`,
     {
       type: QueryTypes.SELECT,
@@ -225,6 +236,8 @@ export async function saveIntake(intake: BuildIntake): Promise<{ project_id: str
         target_weeks: intake.target_weeks ?? null,
         correlation_id: intake.correlation_id ?? null,
         status: intake.status ?? 'captured',
+        answers: intake.answers ? JSON.stringify(intake.answers) : null,
+        architect_job_id: intake.architect_job_id ?? null,
       },
     },
   );

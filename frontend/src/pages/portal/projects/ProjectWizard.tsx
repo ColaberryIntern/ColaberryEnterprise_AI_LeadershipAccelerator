@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { NewBuildAnswers, BuildSize } from './projectsStore';
 import { useIsExplorer } from '../useIsExplorer';
+import { fetchQuestions, SharpeningQuestion } from '../../../services/sbpApi';
+import { FALLBACK_QUESTIONS } from './sharpeningFallback';
 
 // "Start a new build" — the questionnaire that shapes an idea into a project.
 // Three steps: (1) idea + size, (2) a few sharpening questions, (3) a generated
@@ -21,13 +23,44 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
   const [idea, setIdea] = useState('An AI agent that triages my support inbox and drafts replies');
   const [name, setName] = useState('');
   const [size, setSize] = useState<BuildSize>('project');
-  const [users, setUsers] = useState('Support reps at a 40-person SaaS');
-  const [dataSources, setDataSources] = useState('Zendesk API, internal KB');
-  const [done, setDone] = useState('Drafts are queued for human approval; it never auto-sends');
   const [weeks, setWeeks] = useState(6);
 
-  const answers: NewBuildAnswers = { idea, name, size, users, dataSources, done, weeks };
-  const primary = (dataSources.split(/[,;/]+/)[0] || 'your data').trim();
+  // The ten sharpening questions, reworded for this idea. Starts as the generic
+  // fallback so the form is never empty, even for a beat while tailoring runs.
+  const [questions, setQuestions] = useState<SharpeningQuestion[]>(FALLBACK_QUESTIONS);
+  const [tailoring, setTailoring] = useState(false);
+  const [tailored, setTailored] = useState(false);
+  const [replies, setReplies] = useState<Record<string, string>>({});
+  const [showGaps, setShowGaps] = useState(false);
+
+  const setReply = (id: string, v: string) => setReplies((r) => ({ ...r, [id]: v }));
+  const missing = questions.filter((q) => q.required && !(replies[q.id] ?? '').trim());
+  const answered = questions.filter((q) => (replies[q.id] ?? '').trim()).length;
+
+  /**
+   * Tailor on the way into step 2, not on every keystroke of step 1. Failure is
+   * silent by design — the generic questions are already on screen, and a
+   * phrasing helper must never block a build.
+   */
+  const goToSharpen = useCallback(async () => {
+    setStep(2);
+    if (tailored || tailoring) return;
+    setTailoring(true);
+    const out = await fetchQuestions(idea);
+    if (out.questions.length) { setQuestions(out.questions); setTailored(out.tailored); }
+    setTailoring(false);
+  }, [idea, tailored, tailoring]);
+
+  // The legacy four fields are still sent so an older backend keeps working;
+  // `answers` supersedes them when the pipeline understands it.
+  const answers: NewBuildAnswers = {
+    idea, name, size, weeks,
+    users: replies.q2_operator,
+    dataSources: replies.q4_systems,
+    done: replies.q6_never,
+    answers: replies,
+  };
+  const primary = ((replies.q4_systems || '').split(/[,;/]+/)[0] || 'your data').trim();
 
   return (
     <div>
@@ -59,7 +92,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
             ))}
           </div>
           <div className="pjw-actions">
-            <button className="btn primary grow" disabled={!idea.trim()} onClick={() => setStep(2)}>Sharpen my idea
+            <button className="btn primary grow" disabled={!idea.trim()} onClick={() => { void goToSharpen(); }}>Sharpen my idea
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
@@ -68,17 +101,59 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
 
       {step === 2 && (
         <div className="card pjw-pane">
-          <h3>A few questions to sharpen scope</h3>
-          <p className="lead">These shape your requirements and tasks. Edit the examples or keep them.</p>
-          <label className="pjw-label">Who uses it?</label>
-          <input className="txt" value={users} onChange={(e) => setUsers(e.target.value)} />
-          <label className="pjw-label">What data sources must it connect to?</label>
-          <input className="txt" value={dataSources} onChange={(e) => setDataSources(e.target.value)} />
-          <label className="pjw-label">What does "done" look like? (this becomes your safety guardrail)</label>
-          <input className="txt" value={done} onChange={(e) => setDone(e.target.value)} />
+          <h3>Ten questions to sharpen it</h3>
+          <p className="lead">
+            {tailoring
+              ? 'Reading your idea…'
+              : tailored
+                ? 'Written for your idea. Every answer shapes your requirements, releases and tasks — the more you give, the sharper the plan.'
+                : 'Every answer shapes your requirements, releases and tasks. Six are needed; the rest make the plan sharper.'}
+          </p>
+
+          <div className="pjw-qprog" aria-live="polite">
+            <div className="pjw-qbar"><span style={{ width: `${(answered / questions.length) * 100}%` }} /></div>
+            <span className="small">{answered} of {questions.length} answered</span>
+          </div>
+
+          {questions.map((q) => {
+            const value = replies[q.id] ?? '';
+            const isMissing = showGaps && q.required && !value.trim();
+            return (
+              <div key={q.id} className={`pjw-q${isMissing ? ' gap' : ''}`}>
+                <label className="pjw-label" htmlFor={`q-${q.id}`}>
+                  <span className="pjw-qn">{q.index + 1}</span>
+                  {q.text}
+                  {!q.required && <span className="pjw-opt"> optional</span>}
+                </label>
+                <div className="small pjw-qhelp">{q.help}</div>
+                <textarea
+                  id={`q-${q.id}`}
+                  className="txt"
+                  rows={2}
+                  value={value}
+                  onChange={(e) => setReply(q.id, e.target.value)}
+                  placeholder={q.examples[0] ? `e.g. ${q.examples[0]}` : undefined}
+                  aria-required={q.required}
+                  aria-invalid={isMissing || undefined}
+                />
+                {isMissing && <div className="small pjw-qgap">This one shapes the plan — a short answer is enough.</div>}
+              </div>
+            );
+          })}
+
+          {showGaps && missing.length > 0 && (
+            <div className="small pjw-qgap" role="alert">
+              {missing.length} question{missing.length === 1 ? '' : 's'} still needed above.
+            </div>
+          )}
+
           <div className="pjw-actions">
             <button className="btn ghost" onClick={() => setStep(1)}>Back</button>
-            <button className="btn primary grow" onClick={() => setStep(3)}>Generate my plan
+            <button
+              className="btn primary grow"
+              onClick={() => { if (missing.length) { setShowGaps(true); return; } setStep(3); }}
+            >
+              Generate my plan
               <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
             </button>
           </div>
@@ -93,7 +168,7 @@ const ProjectWizard: React.FC<{ onCreate: (a: NewBuildAnswers) => void | Promise
           <div className="section-title" style={{ margin: '4px 0 10px' }}>Requirements</div>
           <div className="pjw-req"><span className="rbadge">FUNC</span><div>Core action via a Claude {size === 'workflow' ? 'workflow' : 'agent'}, grounded in {primary}.</div></div>
           <div className="pjw-req"><span className="rbadge">FUNC</span><div>Read-only connector to {primary}.</div></div>
-          <div className="pjw-req"><span className="rbadge" style={{ background: 'rgba(91,166,60,.16)', color: '#468A2E' }}>SAFE</span><div>Guardrail: {done || 'human approval before any side effect'}.</div></div>
+          <div className="pjw-req"><span className="rbadge" style={{ background: 'rgba(91,166,60,.16)', color: '#468A2E' }}>SAFE</span><div>Guardrail: {replies.q6_never || 'human approval before any side effect'}.</div></div>
           <div className="pjw-req"><span className="rbadge" style={{ background: 'rgba(232,146,12,.16)', color: '#B5710A' }}>REL</span><div>Timeout + capped retries on the upstream call.</div></div>
 
           <div className="section-title" style={{ margin: '18px 0 10px' }}>Tasks &amp; timeline</div>

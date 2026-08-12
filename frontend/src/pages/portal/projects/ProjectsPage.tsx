@@ -168,6 +168,7 @@ const ProjectsPage: React.FC = () => {
       users: a.users || undefined,
       data_sources: a.dataSources || undefined,
       done_definition: a.done || undefined,
+      answers: a.answers && Object.keys(a.answers).length ? a.answers : undefined,
       target_weeks: a.weeks,
     });
     if (!started.ok) { setPipeline({ state: 'local', reason: started.error.message }); return; }

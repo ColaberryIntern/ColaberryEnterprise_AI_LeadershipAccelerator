@@ -33,11 +33,16 @@ import { hashPlan } from './planHash';
 import {
   saveIntake, getIntake, savePlanDraft, getPlan, publishPlan, StoredPlan, BuildIntake,
 } from './planStore';
-import { getProvisionQueue } from './boundedQueue';
+import { getProvisionQueue, getArchitectQueue } from './boundedQueue';
+import {
+  startJob, awaitDocument, jobNameFor, depthForSize, blueprintForSize, ArchitectError,
+} from './architectClient';
+import { buildBriefFromAnswers, reinforceNonNegotiables, Answers } from './sharpeningQuestions';
 
 /** Where a build is. Stored on `build_intake.status`. */
 export type BuildStatus =
   | 'captured'        // intake saved, nothing generated yet
+  | 'researching'     // the Architect is writing the requirements document (~15 min)
   | 'generating'      // a model call is in flight
   | 'gate_failed'     // generated, but the plan has violations — not publishable
   | 'drafted'         // generated and gate-clean, awaiting review
@@ -79,6 +84,14 @@ export interface StartBuildInput {
   targetWeeks?: number;
   /** The expanded requirements document, when one exists. Optional: the brief alone works. */
   document?: string;
+  /** Answers to the ten sharpening questions, keyed by slot id. */
+  answers?: Answers;
+  /**
+   * Generate the requirements document with the Architect before decomposing
+   * (FR-003). Off makes a build ~30s and thinner; on makes it ~15 minutes and
+   * chapter-scaffolded. Defaults to the SBP_USE_ARCHITECT env flag.
+   */
+  useArchitect?: boolean;
 }
 
 /**
@@ -91,11 +104,20 @@ export interface StartBuildInput {
 export async function startBuild(input: StartBuildInput): Promise<{ projectId: string; correlationId: string; status: BuildStatus }> {
   const correlationId = randomUUID();
 
+  // Every in-flight status, not just 'generating'. Adding 'researching' without
+  // this would let a re-submit during the ~15-minute Architect phase start a
+  // SECOND job — which either 409s on the same job name or races the first one
+  // to write the same intake. FR-001 idempotency covers the whole run, not one
+  // phase of it.
   const existing = await getIntake(input.projectId);
-  if (existing?.status === 'generating') {
-    log('sbp_build_already_running', correlationId, 'success', { projectId: input.projectId });
-    return { projectId: input.projectId, correlationId, status: 'generating' };
+  if (existing?.status && IN_FLIGHT.has(existing.status as BuildStatus)) {
+    log('sbp_build_already_running', correlationId, 'success', {
+      projectId: input.projectId, status: existing.status,
+    });
+    return { projectId: input.projectId, correlationId, status: existing.status as BuildStatus };
   }
+
+  const firstStatus: BuildStatus = useArchitect(input) && !input.document ? 'researching' : 'generating';
 
   await saveIntake({
     project_id: input.projectId,
@@ -108,9 +130,14 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
     done_definition: input.doneDefinition ?? null,
     target_weeks: input.targetWeeks ?? null,
     correlation_id: correlationId,
-    status: 'generating',
+    status: firstStatus,
+    answers: input.answers ?? null,
   });
-  log('sbp_build_started', correlationId, 'success', { projectId: input.projectId, idea_chars: input.idea.length });
+  log('sbp_build_started', correlationId, 'success', {
+    projectId: input.projectId, idea_chars: input.idea.length,
+    answered: input.answers ? Object.values(input.answers).filter((v) => (v ?? '').trim()).length : 0,
+    architect: firstStatus === 'researching',
+  });
 
   // Bounded: a cohort starting together queues rather than fanning out. The
   // promise is deliberately not awaited — the caller gets its answer now — but
@@ -123,20 +150,106 @@ export async function startBuild(input: StartBuildInput): Promise<{ projectId: s
       });
     });
 
-  return { projectId: input.projectId, correlationId, status: 'generating' };
+  return { projectId: input.projectId, correlationId, status: firstStatus };
+}
+
+/** Statuses that mean a run is already underway. Re-submitting must not start a second. */
+const IN_FLIGHT: ReadonlySet<BuildStatus> = new Set<BuildStatus>(['researching', 'generating']);
+
+/**
+ * Ask the Architect for the requirements document.
+ *
+ * Returns the markdown, or null when the document could not be produced — a
+ * failure here degrades the build to brief-only decomposition rather than
+ * failing it. That choice is deliberate: a thinner plan is a worse outcome, but
+ * losing a student's build entirely because a third-party service was down is a
+ * much worse one, and the traceability gate still holds the quality line.
+ *
+ * Runs on the ARCHITECT queue, not the provision queue — see getArchitectQueue.
+ */
+async function generateDocument(
+  input: StartBuildInput,
+  brief: string,
+  correlationId: string,
+): Promise<{ markdown: string; words: number } | null> {
+  const jobName = jobNameFor(input.name, input.projectId);
+  const started = Date.now();
+
+  try {
+    return await getArchitectQueue().run(async () => {
+      const { jobId } = await startJob({
+        projectName: jobName,
+        requirements: brief,
+        depthMode: depthForSize(input.size),
+        blueprint: blueprintForSize(input.size),
+        correlationId,
+      });
+
+      // Persisted before the wait begins, so a backend restart can find a job
+      // still running upstream instead of orphaning 15 minutes of work.
+      await setArchitectJob(input.projectId, jobId);
+
+      const doc = await awaitDocument(jobId, {
+        correlationId,
+        onProgress: (s) => log('sbp_architect_progress', correlationId, 'partial', {
+          projectId: input.projectId, job_id: jobId, percent: s.percent, phase: s.phase,
+        }),
+      });
+
+      log('sbp_architect_done', correlationId, 'success', {
+        projectId: input.projectId, job_id: jobId, words: doc.words,
+        duration_ms: Date.now() - started, quality_warning: Boolean(doc.qualityWarning),
+      });
+      return { markdown: doc.markdown, words: doc.words };
+    }, `architect:${input.projectId}`);
+  } catch (err: any) {
+    log('sbp_architect_failed', correlationId, 'failure', {
+      projectId: input.projectId,
+      duration_ms: Date.now() - started,
+      error_class: err instanceof ArchitectError ? err.error_class : (err?.error_class ?? 'Error'),
+      message: err?.message,
+    });
+    return null;   // degrade to brief-only, never lose the build
+  }
 }
 
 /** generate → gate → persist. Never throws to the queue; records the outcome instead. */
 async function runGeneration(input: StartBuildInput, correlationId: string): Promise<void> {
   const started = Date.now();
   try {
+    const brief = buildBriefText(input);
+
+    // FR-003: the document is built chapter-by-chapter by the Architect. A
+    // single completion asked for >=6,000 words returns ~1,450 — measured, not
+    // assumed (docs/REQUIREMENTS_GENERATOR_COMPARISON.html).
+    let document = input.document ?? '';
+    if (!document && useArchitect(input)) {
+      await setStatus(input.projectId, 'researching');
+      const generated = await generateDocument(input, brief, correlationId);
+      if (generated) {
+        // Measured on 2026-08-12: a 183k-char expansion of a 2k brief contained
+        // the word "approv" zero times, dropping the owner's stated guardrail.
+        // Restate the non-negotiables where the model finishes reading.
+        const { document: reinforced, reinstated } = reinforceNonNegotiables(
+          generated.markdown, input.answers ?? {},
+        );
+        document = reinforced;
+        if (reinstated.length) {
+          log('sbp_architect_non_negotiables_reinstated', correlationId, 'partial', {
+            projectId: input.projectId, reinstated, document_chars: reinforced.length,
+          });
+        }
+      }
+    }
+    await setStatus(input.projectId, 'generating');
+
     const { plan, attempts, model, client } = await decomposeBuild({
-      brief: buildBriefText(input),
-      document: input.document ?? '',
+      brief,
+      document,
       correlationId,
     });
 
-    const source = `${buildBriefText(input)}\n${input.document ?? ''}`;
+    const source = `${brief}\n${document}`;
 
     // The gate is strict by design, so a first pass usually has a gap — the
     // first live run produced 3 violations. Repair closes them in place rather
@@ -165,6 +278,7 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
       attempts,
       requirements: repaired.plan.requirements.length,
       stories: repaired.plan.stories.length,
+      document_words: document ? document.trim().split(/\s+/).length : 0,
       repair_attempts: repaired.attempts,
       repair_rejected: repaired.rejected,
       repaired_stories: repaired.changed.flat(),
@@ -192,6 +306,13 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
  * exactly the detail the pilot dropped.
  */
 export function buildBriefText(input: StartBuildInput): string {
+  // The ten sharpening answers supersede the four legacy fields when present.
+  // They carry the CONSTRAINT framing and the falsifiable success measure that
+  // the four fields never did — see sharpeningQuestions.buildBriefFromAnswers.
+  if (input.answers && Object.values(input.answers).some((v) => (v ?? '').trim())) {
+    return buildBriefFromAnswers(input.idea, input.answers, input.targetWeeks);
+  }
+
   const parts = [input.idea.trim()];
   if (input.users) parts.push(`WHO USES IT: ${input.users}`);
   if (input.dataSources) parts.push(`DATA SOURCES IT MUST CONNECT TO: ${input.dataSources}`);
@@ -213,6 +334,34 @@ async function setStatus(projectId: string, status: BuildStatus): Promise<void> 
   const intake = await getIntake(projectId);
   if (!intake) return;
   await saveIntake({ ...(intake as BuildIntake), project_id: projectId, status });
+}
+
+/**
+ * Record the Architect job id against the intake BEFORE the 15-minute wait, so a
+ * restart can resume rather than orphan the job (FR-005). Best-effort: failing
+ * to note the id must not abort a document that is already being written.
+ */
+async function setArchitectJob(projectId: string, jobId: string): Promise<void> {
+  try {
+    const intake = await getIntake(projectId);
+    if (!intake) return;
+    await saveIntake({ ...(intake as BuildIntake), project_id: projectId, architect_job_id: jobId } as BuildIntake);
+  } catch (err: any) {
+    console.warn(JSON.stringify({
+      level: 'warn', service: 'sbp-orchestrator', event: 'architect_job_id_not_persisted',
+      context: { projectId, jobId, message: err?.message },
+    }));
+  }
+}
+
+/**
+ * Whether to run the Architect. Per-build override wins; otherwise the env flag.
+ * Defaults OFF so deploying this changes nothing until it is switched on — the
+ * same rollout discipline as SBP_PIPELINE_ENABLED.
+ */
+function useArchitect(input: StartBuildInput): boolean {
+  if (typeof input.useArchitect === 'boolean') return input.useArchitect;
+  return String(process.env.SBP_USE_ARCHITECT || '').toLowerCase() === 'true';
 }
 
 /** Current state of a build, for polling. */

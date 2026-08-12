@@ -179,3 +179,48 @@ describe('saveIntake', () => {
     expect(r.target_weeks).toBeNull();
   });
 });
+
+// ── the ten answers, and the Architect job id ───────────────────────────────
+/**
+ * `setStatus` and `setArchitectJob` in the orchestrator both work by reading the
+ * intake, changing one field, and saving the whole row back. With plain
+ * `EXCLUDED` in the upsert, either of those round trips would null out a column
+ * it never meant to touch — silently discarding a student's ten answers the
+ * moment the build moved from `researching` to `generating`. Hence COALESCE, and
+ * hence these tests.
+ */
+describe('saveIntake persists answers and the architect job', () => {
+  const base = { project_id: 'proj-1', idea: 'An idea long enough to be real.' };
+
+  beforeEach(() => mockQuery.mockResolvedValue([{ project_id: 'proj-1', status: 'captured' }]));
+
+  const sentSql = () => String(mockQuery.mock.calls[0][0]);
+  const sentValues = () => mockQuery.mock.calls[0][1].replacements;
+
+  it('serialises answers as JSON for the JSONB column', async () => {
+    const answers = { q1_job: 'Warns the front desk.', q6_never: 'Never auto-cancels.' };
+    await saveIntake({ ...base, answers });
+    expect(JSON.parse(sentValues().answers)).toEqual(answers);
+    expect(sentSql()).toMatch(/CAST\(:answers AS JSONB\)/);
+  });
+
+  it('sends null — not the string "undefined" — when there are no answers', async () => {
+    await saveIntake({ ...base });
+    expect(sentValues().answers).toBeNull();
+    expect(sentValues().architect_job_id).toBeNull();
+  });
+
+  it('COALESCEs both columns so a status-only round trip cannot erase them', async () => {
+    // The actual defence. If this upsert ever goes back to bare EXCLUDED, a
+    // student's answers vanish the first time the status changes.
+    await saveIntake({ ...base, status: 'generating' });
+    const sql = sentSql();
+    expect(sql).toMatch(/answers\s*=\s*COALESCE\(EXCLUDED\.answers,\s*build_intake\.answers\)/);
+    expect(sql).toMatch(/architect_job_id\s*=\s*COALESCE\(EXCLUDED\.architect_job_id,\s*build_intake\.architect_job_id\)/);
+  });
+
+  it('records the architect job id', async () => {
+    await saveIntake({ ...base, architect_job_id: 'clinic-no-show-predictor-aaaaaaaa' });
+    expect(sentValues().architect_job_id).toBe('clinic-no-show-predictor-aaaaaaaa');
+  });
+});

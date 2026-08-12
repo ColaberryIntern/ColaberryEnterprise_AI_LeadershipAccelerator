@@ -110,7 +110,39 @@ export function getProvisionQueue(): BoundedQueue {
   return provisionQueue;
 }
 
+let architectQueue: BoundedQueue | null = null;
+
+/**
+ * A SEPARATE, wider ceiling for Architect document generation.
+ *
+ * The provision queue exists to cap LOCAL memory — decomposition holds a large
+ * model response in this process, and batch generation here has OOM'd at ~34
+ * concurrent. An Architect job is the opposite shape: ~15 minutes of remote work
+ * on advisor.colaberry.ai, during which this process holds a poll timer and
+ * nothing else.
+ *
+ * Running them on the same queue would be a serious regression. At concurrency
+ * 3, twenty students would serialise into seven 15-minute waves — about 105
+ * minutes for the last one, past the frontend's 25-minute poll deadline. The
+ * measured 20-way run (2026-08-10) finished in 237s precisely because nothing
+ * held a slot for long.
+ *
+ * So the ceiling here is about the ARCHITECT's capacity, not ours. Default 6 is
+ * deliberately conservative — advisor's concurrent-job limit has not been
+ * measured, and finding it by pointing a cohort at it is not the way.
+ */
+export function getArchitectQueue(): BoundedQueue {
+  if (!architectQueue) {
+    architectQueue = new BoundedQueue({
+      concurrency: Number(process.env.SBP_ARCHITECT_CONCURRENCY) || 6,
+      maxDepth: Number(process.env.SBP_ARCHITECT_MAX_DEPTH) || 100,
+    });
+  }
+  return architectQueue;
+}
+
 /** Test seam — resets the module-level singleton between cases. */
 export function __resetProvisionQueue(): void {
   provisionQueue = null;
+  architectQueue = null;
 }
