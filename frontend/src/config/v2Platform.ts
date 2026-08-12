@@ -25,6 +25,12 @@ export interface ShowroomSurface {
   readonly blurb: string;
   /** Where this actually lives in the product today. */
   readonly livesAt: string;
+  /**
+   * A real capture of this surface, if one has been taken and vetted.
+   * Optional on purpose: a surface with no verified capture shows its figures
+   * alone rather than borrowing a picture of a different screen.
+   */
+  readonly shot?: { readonly src: string; readonly alt: string };
   readonly stats: readonly { readonly value: string; readonly label: string }[];
   readonly rows: readonly { readonly label: string; readonly pct: number }[];
 }
@@ -38,6 +44,13 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
       'What a CIO or Chief People Officer sees: where the organization stands, how fast it ' +
       'is moving, and the evidence each number rests on.',
     livesAt: 'Portal, company view',
+    shot: {
+      src: '/site-v2/shot-readiness.png',
+      alt:
+        'The architect readiness trajectory panel: 63 percent average readiness, a rising ' +
+        'eight-week trend line, and tiles for builder XP, evidence shipped, projects shipped ' +
+        'and attendance.',
+    },
     stats: [
       { value: '63%', label: 'Average architect readiness' },
       { value: '1,640', label: 'Builder XP this week' },
@@ -59,6 +72,13 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
       'Every person on the roster, their level on the nine-rank ladder, readiness, weekly ' +
       'builder XP and streak. Click through to the evidence for any individual.',
     livesAt: 'Portal, company roster and member drilldown',
+    shot: {
+      src: '/site-v2/shot-roster.png',
+      alt:
+        'Team accomplishments beside the roster: promotions, validated evidence, evaluations ' +
+        'passed and streaks on the left; on the right each person with their ladder rank, ' +
+        'readiness percentage and weekly builder XP.',
+    },
     stats: [
       { value: '9', label: 'Ladder ranks, Builder to Architect' },
       { value: '7', label: 'Level-ups in the last 30 days' },
@@ -79,6 +99,12 @@ export const SHOWROOM_SURFACES: readonly ShowroomSurface[] = [
       'One free account gives a manager both perspectives at once: the learner experience and ' +
       'their own organization view, with sample data until their team fills it.',
     livesAt: 'The free workspace at /try',
+    shot: {
+      src: '/site-v2/shot-nav.png',
+      alt:
+        'The workspace side navigation: Your company, Today, Path, Schedule, Projects, ' +
+        'Classroom, Cert Prep and Community.',
+    },
     stats: [
       { value: '2', label: 'Perspectives in one account' },
       { value: '0', label: 'Credit card required' },

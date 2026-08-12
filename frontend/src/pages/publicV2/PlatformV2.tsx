@@ -81,19 +81,16 @@ function PlatformV2(): React.ReactElement {
                 </p>
 
                 {/*
-                  A real capture of the readiness surface, shown once above the
-                  figures. Only the readiness tab has a verified capture; the
-                  others show their figures alone rather than borrowing an image
-                  of a different screen, which would misrepresent them.
+                  The capture for THIS surface, when one exists. Driven from
+                  config so a surface without a vetted capture simply shows its
+                  figures rather than borrowing a picture of another screen.
                 */}
-                {active.key === 'readiness' ? (
+                {active.shot ? (
                   <figure className="cbv2-shot-frame" style={{ marginBottom: 'var(--space-7)' }}>
                     <img
                       className="cbv2-shot"
-                      src="/site-v2/shot-readiness.png"
-                      alt="The architect readiness trajectory panel: 63 percent average readiness, a rising eight-week trend line, and tiles for builder XP, evidence shipped, projects shipped and attendance."
-                      width={1420}
-                      height={860}
+                      src={active.shot.src}
+                      alt={active.shot.alt}
                       loading="lazy"
                       decoding="async"
                     />
@@ -151,6 +148,27 @@ function PlatformV2(): React.ReactElement {
               Nothing on the executive dashboard is self-reported.
             </p>
           </div>
+          {/*
+            One person's record, which is where the argument above stops being
+            an assertion: evidence records, GitHub commits, artifacts and
+            evaluations passed are all countable, and none of them is a course
+            marked complete. Carries an explicit sample badge because this crop,
+            unlike the workspace banner, has no labelling of its own.
+          */}
+          <figure className="cbv2-shot-frame cbv2-earned__shot">
+            <img
+              className="cbv2-shot"
+              src="/site-v2/shot-member.png"
+              alt="One team member's record: knowledge growth from pre-check to evaluation, architect readiness at 92 percent with all promotion gates cleared, competency confidence across four domains, and counts of evidence records, GitHub commits, artifacts, evaluations passed and implementations."
+              loading="lazy"
+              decoding="async"
+            />
+            <figcaption className="cbv2-shot-caption">
+              <SampleBadge />
+              <span>A single person&rsquo;s evidence, as the manager view shows it.</span>
+            </figcaption>
+          </figure>
+
           <div className="cbv2-grid cbv2-grid--3">
             {DATA_EARNED.map((d) => (
               <article className="cbv2-card" key={d.title}>

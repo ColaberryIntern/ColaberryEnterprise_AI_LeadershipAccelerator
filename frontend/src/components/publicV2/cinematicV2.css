@@ -26,9 +26,17 @@
 
 /*
  * Space Grotesk, self-hosted from the prototype (OFL-1.1, licence shipped
- * alongside the file at /site-v2/fonts/LICENSE.txt). Self-hosted rather than
- * loaded from a font CDN so there is no third-party request on a page that asks
- * visitors for consent to be measured.
+ * alongside the woff2 in ./fonts/). Self-hosted rather than loaded from a font
+ * CDN, so this face adds no third-party request to a page that is asking the
+ * visitor for consent before it measures anything.
+ *
+ * CORRECTION, and it matters: self-hosting this face does NOT make the page
+ * third-party-free. `public/index.html` still loads Quicksand, Roboto and Roboto
+ * Mono from fonts.googleapis.com on every page in the app, V2 included, and it
+ * fires BEFORE the consent banner is answered -- which hands the visitor's IP
+ * and user-agent to Google regardless of what they then choose. That link is in
+ * a file shared with the live site, so removing it is a cutover decision rather
+ * than something to change from inside this task. Logged in PROGRESS.md.
  *
  * font-display: swap so headings render immediately in the fallback and reflow
  * once, rather than leaving the hero blank while a 22KB file loads.
