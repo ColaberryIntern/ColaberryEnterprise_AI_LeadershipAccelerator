@@ -375,16 +375,35 @@ export function verifyWebhookSignature(
     return false;
   }
 
-  // PaySimple HMAC verification
+  // PaySimple HMAC verification.
+  //
+  // Compare the raw 32 DIGEST BYTES, not the text of the digest. PaySimple sends
+  // UPPERCASE hex ("5F0738DD...") while Node's digest('hex') returns lowercase
+  // ("5f0738dd..."), so the previous string-buffer comparison could never match:
+  // '5F' is 0x35,0x46 and '5f' is 0x35,0x66. That silently rejected 100% of real
+  // webhooks with a signature failure -- found live 2026-08-12 by capturing an
+  // actual PaySimple delivery, whose digest was byte-identical to ours apart from
+  // letter case. It is the third distinct cause of "every PaySimple webhook is
+  // rejected" (after the JSON.stringify raw-body bug on 2026-07-30 and the
+  // Content-Type matcher on 2026-07-31), so decoding to bytes here also makes the
+  // check immune to the encoding PaySimple happens to use: hex in either case, or
+  // base64, all reduce to the same 32 bytes.
   const expected = crypto
     .createHmac('sha256', env.paysimpleWebhookSecret)
     .update(payload)
-    .digest('hex');
+    .digest();
 
-  const sigBuf = Buffer.from(signature);
-  const expBuf = Buffer.from(expected);
+  const sigBuf = decodeDigest(signature.trim());
+  if (!sigBuf || sigBuf.length !== expected.length) return false;
 
-  if (sigBuf.length !== expBuf.length) return false;
+  return crypto.timingSafeEqual(sigBuf, expected);
+}
 
-  return crypto.timingSafeEqual(sigBuf, expBuf);
+/** A signature header decoded to its raw digest bytes: 64 hex chars (either case)
+ *  or standard base64. Null when it is neither, so a malformed header is rejected
+ *  rather than compared against a truncated buffer. */
+function decodeDigest(signature: string): Buffer | null {
+  if (/^[0-9a-fA-F]{64}$/.test(signature)) return Buffer.from(signature, 'hex');
+  if (/^[A-Za-z0-9+/]{43}=$/.test(signature)) return Buffer.from(signature, 'base64');
+  return null;
 }
