@@ -59,9 +59,24 @@ PYTHONPATH="C:/Users/ali_m/OneDrive/Business/Colaberry Novedea/AI Projects/AI Pr
 # 2. publish (gates first; identity-guards Ali; refuses to publish unless all 4 gates pass)
 node publish_story_build.js ../story_configs/<slug>.json
 
+# 2b. scaffolding (REQUIRED - the generated plan never includes these two tasks)
+node add_launch_scaffolding.js \
+  --bucket <bucket> --list <list_id> --builder <builder_id> \
+  --project "<Project Name>" --domain <slug>-demo.colaberry.dev \
+  --repo ColaberryIntern/<slug> --due <YYYY-MM-DD>
+
 # 3. wipe secrets
 rm -f .oaikey .bctok
 ```
+
+**Step 2b is not optional.** The generated plan describes what to *build*. It never
+says where the code *lives* or how it gets *in front of anyone*, so both get assumed
+and both get skipped. Audited 2026-08-11 across the four Gov Contracts builds: all
+four proposal tracks deep-linked a live demo, all four demo domains were dead, and
+across **171 story tasks there was not one deploy task and not one repo task**. One
+intern sat blocked 28 days on a demo URL nobody had been asked to create; another
+spent three weeks unable to push because no repo existed and her tooling defaulted
+to the **production platform repo**. Both failures were structural, not personal.
 
 Run several projects in parallel by kicking off step 1 for each config in the background,
 then publishing each as its plan lands.
@@ -91,7 +106,9 @@ hand-fix the plan. The pipeline's guards (drop-untraceable, deterministic releas
 - **Secrets from prod at runtime only.** `.oaikey` (advisor OPENAI_API_KEY) and `.bctok` (Ali BC token) are pulled from the prod container, never stored or committed, and wiped after the run. BC token rotates every 2 weeks.
 - **Identity guard.** The publisher fetches `/my/profile.json` and refuses to write unless the token is Ali (17454835). A degraded token halts instead of writing as someone else.
 - **No em-dashes** anywhere in generated content.
-- **Idempotency.** Re-running the publisher creates a NEW list; it does not de-dupe an existing one. To re-publish cleanly, trash the prior list first.
+- **Idempotency.** Re-running the publisher creates a NEW list; it does not de-dupe an existing one. To re-publish cleanly, trash the prior list first. (`add_launch_scaffolding.js` *is* idempotent and safe to re-run.)
+- **Every build ships with a repo and a deploy.** Run step 2b. A build with nowhere to push and nothing to show is not a build, and the intern will be the one who eats the delay.
+- **Bid builds never share a repository with the production platform.** One repo per build, under `ColaberryIntern`, with the builder granted write on theirs and nothing else.
 
 ## Known Basecamp targets
 
@@ -107,5 +124,6 @@ For anyone else, scan `GET /people.json` (paginate; ~1800 people, ~60 pages).
 
 - `scripts/gen_story_plan.py` - config-driven generator (runs the real pipeline).
 - `scripts/publish_story_build.js` - generalized, gated, identity-guarded publisher (builder + approver-mode + optional marketing co + create-or-existing target).
+- `scripts/add_launch_scaffolding.js` - **required step 2b.** Adds the repo task (first release) and the deploy task (Launch release) that the generated plan always omits. Idempotent, identity-guarded, `--dry` supported.
 - `story_configs/EXAMPLE.json` - fully annotated config template. Copy per project.
 - `MYDAY_SYNC.md` - the companion prompt to run in the AI Project Architect repo so a project created on My Day follows this exact process end to end.
