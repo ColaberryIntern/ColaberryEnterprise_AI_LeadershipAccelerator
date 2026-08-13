@@ -1,4 +1,4 @@
-# V2 design score — 2026-08-12
+# V2 design score — 2026-08-12 (second pass)
 
 Scored against `docs/enterprise-site-v2-preview/DESIGN_RATING_SYSTEM.md`, the same
 10-dimension rubric used on the prototype. Target is 9/10 per dimension.
@@ -53,3 +53,49 @@ choose. **One fix closes both**, and it belongs in the cutover because
 D2, D8 and D10 are at or near target. D10 at 10 is not flattery: it is the one
 dimension where this site would beat the benchmark set, because the governance is
 structural rather than editorial.
+
+
+---
+
+# Second pass — after the colour, light, layout and type work
+
+| # | Dimension | Was | Now | What changed |
+|---|---|---|---|---|
+| D1 | First-impression impact | 7 | **8** | The ambient field was too faint to read. Widened, opacity lifted, and a directional wash added at the top right so the product capture looks lit rather than pasted on. |
+| D2 | Real product presence | 9 | **9** | Unchanged. |
+| D3 | Typographic craft | 7 | **8** | Section headings now take real scale (`clamp(1.75rem, 3.2vw, 2.6rem)`, tightened tracking, balanced wrap), so the display face earns its keep below the hero. |
+| D4 | **Colour and light** | 5 | **7** | **The bottleneck, addressed.** Berry Blue introduced as a genuine second ground on the section carrying the central idea, with glass lanes instead of white tiles. Neutrals warmed a few degrees toward the accent so white sections stop reading as default. The page now runs dark hero → light → white → deep blue → white → warm → book → dark, rather than alternating two greys. |
+| D5 | Motion | 8 | **8** | Unchanged. |
+| D6 | Information design | 8 | **8** | Unchanged. |
+| D7 | Layout and composition | 7 | **8** | Both card walls broken. The service ribbon gives the first engagement a wider, weighted cell because it is where most buyers start; the four evidence classes lead with "verified" at full width because it is the standard the other three are measured against. Asymmetry that encodes something true. |
+| D8 | Iconography | 8 | **8** | Unchanged. |
+| D9 | Craft details | 8 | **9** | Every text node on a dark ground measured with proper alpha compositing: **29 sampled, all pass WCAG AA**, lowest 4.52:1. Fixed one pre-existing failure found by the sweep (hero badge subtitle at 3.36:1). |
+| D10 | Credibility and honesty | 10 | **10** | Unchanged. |
+| | **TOTAL** | 77 | **83 / 100** | **+6** |
+
+## What the contrast sweep cost, and why it was worth it
+
+Three of my own measurements were wrong before one was right, and each wrong one
+looked like a design failure:
+
+1. The sampler fell through a gradient to the page background and reported 1.0:1.
+   Fixed by giving the berry section a solid `background-color` under its
+   gradient — which is better practice anyway, since it is now a real fallback.
+2. It treated `rgba(255,255,255,0.055)` as an opaque white ground. Fixed by
+   compositing alpha properly instead of taking the first non-transparent layer.
+3. Only then did it expose two **real** failures: white text left on the lanes'
+   opaque step rows at 1.13:1, and the pre-existing hero badge at 3.36:1.
+
+The lesson is the one from the reveal bug: a check that models the page wrongly
+reports failures and passes with equal confidence. It is worth more effort to
+make the measurement trustworthy than to act on the first number it prints.
+
+## Still open
+
+- **Gate 3 still FAILS** — `fonts.googleapis.com` in `public/index.html`, fired
+  before consent. Unchanged, and still a cutover item because that file is shared
+  with the live site.
+- **D4 at 7, not 9** — two grounds is a palette with a second voice, not a rich
+  one. A third accent and more range in the light would take it further.
+- **D1 at 8** — lit and composed; still not the moment that makes someone
+  screenshot it.

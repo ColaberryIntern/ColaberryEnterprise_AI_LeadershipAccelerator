@@ -90,3 +90,26 @@
 
 /* Evidence-class and gate cards lead with an icon tile. */
 .cbv2-evcard .cbv2-icon-tile { margin-bottom: var(--space-1); }
+
+/* ============================================================================
+   D7 -- the four evidence classes were a flat 2x2 of identical cards. They are
+   not equal in weight: "verified" is the standard the other three are measured
+   against, so it takes the full width and leads.
+   ========================================================================== */
+@media (min-width: 860px) {
+  .cbv2-evcards {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-5);
+  }
+  .cbv2-evcards .cbv2-evcard:first-child {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--space-6);
+    background: linear-gradient(120deg,
+      color-mix(in srgb, var(--green-600) 8%, var(--surface-card)),
+      var(--surface-card) 55%);
+  }
+  .cbv2-evcards .cbv2-evcard:first-child .cbv2-evcard__meaning { font-size: var(--fs-body-lg); }
+}

@@ -59,6 +59,11 @@
  * this task's business.
  */
 .cbv2-shell {
+  /* Undefined in the design system, yet read by .cbv2-pagehero__lede and others,
+     which were each falling back to their own hardcoded hex. Defined once here. */
+  /* Measured: #a9b4c4 gave 4.26:1 on the berry step rows, under AA. Lifted for
+     every dark-ground use, not just this one. */
+  --text-on-inverse-muted: #ccd8e4;
   --font-display: 'Space Grotesk V2', 'Roboto', system-ui, -apple-system, sans-serif;
 }
 
@@ -386,3 +391,154 @@ html.cbv2-reveal-on .cbv2-rv.is-in { opacity: 1; transform: none; }
   padding: var(--space-3) var(--space-4);
   border-top: var(--border-1) solid var(--border-subtle);
 }
+
+/* ============================================================================
+   D4 -- COLOUR AND LIGHT
+   Scored 5/10: cherry, white and greys alternating, no second voice. The brand
+   has three colours and the site was using one. Berry Blue is introduced as a
+   genuine second ground, the neutrals are warmed so white sections stop reading
+   as default, and the ambient light is given real range instead of a faint wash.
+   ========================================================================== */
+
+/* Warmed neutrals. A pure grey ground reads as unstyled; a few degrees toward
+   the accent reads as chosen. Scoped to the V2 shell only. */
+.cbv2-shell {
+  --cbv2-warm-sunken: color-mix(in srgb, var(--color-cherry, #fb2832) 2.5%, var(--surface-sunken));
+  --cbv2-warm-page: color-mix(in srgb, var(--color-cherry, #fb2832) 1.2%, var(--surface-card));
+}
+.cbv2-section--sunken { background: var(--cbv2-warm-sunken); }
+
+/* ---------------------------------------------------- berry section ground -- */
+
+/*
+ * The second voice. Used once, on the section carrying the central idea, so it
+ * lands as emphasis rather than decoration. Text colours are set explicitly
+ * because a light-on-dark section that inherits body colour is how the 1.03:1
+ * heading shipped during prototype review.
+ */
+.cbv2-section--berry {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  /* Solid ground under the gradient: a fallback if gradients fail, and it gives
+     contrast tooling something real to measure instead of seeing through to the
+     page background. */
+  background-color: var(--blue-900);
+  background-image:
+    radial-gradient(120% 90% at 85% 0%, color-mix(in srgb, var(--blue-700) 55%, transparent), transparent 60%),
+    linear-gradient(165deg, var(--blue-900), var(--blue-800) 70%);
+  background-repeat: no-repeat;
+  color: var(--text-on-inverse, #fff);
+}
+/*
+ * Text colours are flipped at the TOKEN level, not per element.
+ *
+ * The first attempt set `.cbv2-section--berry h2 { color: ... }` and lost to the
+ * more specific `.cbv2-section__head h2` -- measured, not guessed: the heading
+ * computed rgb(26,26,26) on a rgb(26,57,71) ground, 1.43:1. Chasing selectors
+ * one at a time is how that recurs. Redefining the tokens means every descendant
+ * that already reads --text-strong / --text-muted flips automatically, including
+ * ones added later.
+ */
+.cbv2-section--berry {
+  --text-strong: var(--text-on-inverse, #ffffff);
+  /* Measured: #cddcea gave 4.26:1 on the step rows, just under AA. */
+  --text-body: #dfeaf4;
+  --text-muted: #dfeaf4;
+  --text-subtle: #a8bed2;
+  --border-default: rgba(255, 255, 255, 0.18);
+  --border-subtle: rgba(255, 255, 255, 0.12);
+}
+.cbv2-section--berry .cbv2-eyebrow { color: var(--blue-200, #bcd6e6); }
+
+/* Cards on the berry ground become glass rather than white blocks, so the
+   section reads as one surface with depth instead of a tray of tiles. */
+.cbv2-section--berry .cbv2-lane,
+.cbv2-section--berry .cbv2-card {
+  background: rgba(255, 255, 255, 0.055);
+  border-color: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+}
+.cbv2-section--berry .cbv2-lane__d { color: var(--text-on-inverse-muted, #c3d2e4); }
+.cbv2-section--berry .cbv2-lane__n {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-on-inverse, #fff);
+}
+/* The convergence statement is the point of the section: give it the accent. */
+.cbv2-section--berry .cbv2-converge {
+  background: color-mix(in srgb, var(--color-cherry, #fb2832) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-cherry, #fb2832) 45%, transparent);
+}
+.cbv2-section--berry .cbv2-converge strong { color: var(--text-on-inverse, #fff); }
+
+/* A faint grid, as on the hero, so the two dark grounds belong to one system. */
+.cbv2-section--berry::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 70% 80% at 70% 20%, #000 30%, transparent 100%);
+}
+
+/* ------------------------------------------------------ D1 -- hero light --- */
+
+/* Scored 7/10: composed but not arresting, because the ambient field was too
+   faint to read. Widen it, lift the opacity, and add a third source so the
+   light has direction rather than sitting as an even haze. */
+.cbv2-mesh { filter: blur(56px); opacity: 1; }
+.cbv2-mesh i:nth-child(1) { width: 58%; height: 72%; left: 50%; top: -22%; }
+.cbv2-mesh i:nth-child(2) { width: 52%; height: 64%; left: -14%; top: 10%; }
+.cbv2-mesh i:nth-child(3) { width: 44%; height: 56%; left: 22%; top: 54%; }
+
+/* A directional wash across the hero, warm at the top right where the product
+   capture sits, so the screenshot looks lit rather than pasted on. */
+.cbv2-hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(90% 70% at 78% 18%,
+    color-mix(in srgb, var(--color-cherry, #fb2832) 16%, transparent), transparent 62%);
+}
+
+/* Page heroes get the same treatment at lower strength. */
+.cbv2-pagehero::before { opacity: 1; filter: blur(52px); }
+
+/* ------------------------------------------------ D3 -- display type below -- */
+
+/* Scored 7/10: the display face earned its keep in the hero and nowhere else.
+   Section headings get real scale, so the page has a typographic spine. */
+.cbv2-section__head h2,
+.cbv2-section > .cbv2-wrap > h2 {
+  font-size: clamp(1.75rem, 3.2vw, 2.6rem);
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+/*
+ * The step rows inside each lane carry their own opaque light background from
+ * homeV2.css. The token flip above turned their text white, which put white on
+ * light grey at 1.13:1 -- measured, and worse than what it replaced. The rows
+ * become translucent here so the dark ground shows through and the flipped text
+ * lands on it.
+ */
+.cbv2-section--berry .cbv2-lane__steps li {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.10);
+}
+
+/*
+ * Pre-existing, found by the same sweep: the hero badge's second line used
+ * --text-subtle on a white card at 3.36:1, below AA for small text. It sits on
+ * an opaque light badge, so it needs the muted token rather than the subtle one.
+ */
+.cbv2-shot-stack__badge span span,
+.cbv2-shot-stack__badge > span > span:last-child { color: var(--text-muted); }

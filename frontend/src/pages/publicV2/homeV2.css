@@ -394,3 +394,32 @@
 }
 
 .cbv2-engine__photo { margin-top: var(--space-8); aspect-ratio: 21 / 7; }
+
+/* ============================================================================
+   D7 -- the service ribbon was a wall of five identical cards.
+   The first engagement is the one most buyers start with, so it takes a wider
+   cell and heavier type; the rest read as a supporting row. Asymmetry that
+   encodes something true beats five equal boxes.
+   ========================================================================== */
+@media (min-width: 1000px) {
+  .cbv2-ribbon {
+    grid-template-columns: 1.5fr repeat(4, 1fr);
+    align-items: stretch;
+  }
+  .cbv2-ribbon__item:first-child {
+    background: linear-gradient(160deg,
+      color-mix(in srgb, var(--color-cherry, #fb2832) 6%, var(--surface-card)),
+      var(--surface-card) 65%);
+    border-color: color-mix(in srgb, var(--color-cherry, #fb2832) 28%, transparent);
+  }
+  .cbv2-ribbon__item:first-child .cbv2-ribbon__title {
+    font-size: var(--fs-h4);
+    line-height: 1.2;
+  }
+}
+/* Reveal the reading order on hover without moving anything around it. */
+.cbv2-ribbon__item { transition: border-color 220ms ease, transform 220ms ease; }
+.cbv2-ribbon__item:hover { transform: translateY(-2px); }
+@media (prefers-reduced-motion: reduce) {
+  .cbv2-ribbon__item, .cbv2-ribbon__item:hover { transition: none; transform: none; }
+}

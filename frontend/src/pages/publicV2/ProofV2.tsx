@@ -88,7 +88,7 @@ function ProofV2(): React.ReactElement {
               policy written for this page.
             </p>
           </div>
-          <div className="cbv2-grid cbv2-grid--2">
+          <div className="cbv2-grid cbv2-grid--2 cbv2-evcards">
             {EVIDENCE_CLASSES.map((c) => (
               <article className="cbv2-card cbv2-evcard" key={c.key}>
                 <span className="cbv2-icon-tile cbv2-icon-tile--blue">

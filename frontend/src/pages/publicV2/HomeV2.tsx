@@ -203,7 +203,7 @@ function HomeV2(): React.ReactElement {
       </section>
 
       {/* 4 ────────────────────────────────────────── dual transformation ──── */}
-      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-engine-title">
+      <section className="cbv2-rv cbv2-section cbv2-section--berry" aria-labelledby="cbv2-engine-title">
         <div className="cbv2-wrap">
           <div className="cbv2-section__head">
             <p className="cbv2-eyebrow">The operating model</p>
