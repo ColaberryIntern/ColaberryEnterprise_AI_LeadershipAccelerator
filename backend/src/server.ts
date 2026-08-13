@@ -17,6 +17,7 @@ import strategyPrepRoutes from './routes/strategyPrepRoutes';
 import trackingRoutes from './routes/trackingRoutes';
 import participantRoutes from './routes/participantRoutes';
 import capePortalRoutes from './routes/capePortalRoutes';
+import explorerSignalRoutes from './routes/explorerSignalRoutes';
 import capeAdminRoutes from './routes/admin/capeAdminRoutes';
 import capeGovernanceRoutes from './routes/admin/capeGovernanceRoutes';
 import communityRoomsRoutes from './routes/communityRoomsRoutes';
@@ -103,6 +104,9 @@ app.use(leadRoutes);
 app.use(enrollmentRoutes);
 app.use(participantRoutes);
 app.use(capePortalRoutes);
+// Explorer Growth OS learner signal ingest (EPIC 2). Dark until
+// EXPLORER_SIGNAL_INGEST_ENABLED + the master flag are both on.
+app.use(explorerSignalRoutes);
 app.use(capeAdminRoutes);
 app.use(capeGovernanceRoutes);
 // Colaberry Commons — Community Rooms (flag-gated inside the router; 404s when
