@@ -10,12 +10,13 @@
  * feed stays Class-only until enabled. Each source is fail-soft (errors → []),
  * so one surface can never break the feed.
  */
-import { getFeed, type FeedCard, type FeedVideo } from './timelineService';
+import { getFeed, contentFromMetadata, type FeedCard, type FeedVideo } from './timelineService';
 import { surfaceOf, isAmbient, isTodayEligible } from './surfaces';
 import { anchoredWeekAllowed, weekStartedForToday, isWeekGated, groupByType } from './todayFeedPlan';
 import { resolve as resolveType } from './typeRegistry';
 import { blendSurfaces } from './todayAnchoredBlend';
 import { getActiveProjectTree } from '../projects/projectReadService';
+import TimelineCard from '../../models/TimelineCard';
 import CommunityPost from '../../models/CommunityPost';
 import CommunityMember from '../../models/CommunityMember';
 import LiveSession from '../../models/LiveSession';
@@ -51,6 +52,63 @@ export function anchoredItemFromCard(fc: FeedCard): TodayFeedItem {
     points: (fc as any).points ?? null,
     interacted: false,
   };
+}
+
+// The DYNAMIC fields of a class curriculum card — the ones an author can change
+// after the card has been placed into a feed. Shared by compose-time
+// (anchoredItemFromCard) and serve-time (rehydrateCardItems) so an edited card's
+// text and saved AI content always reflect the live row, never a stale snapshot.
+//
+// Deliberately NOT here: image/video/blog (derived by getFeed from the type
+// thumbnail + media services, not readable off the row alone), status/interacted
+// (per-student progress, not card definition), points/week (fixed at placement).
+export function cardFieldsFromRow(
+  row: { title?: string | null; subtitle?: string | null; description?: string | null; estimated_time?: number | null; metadata?: any },
+): Pick<TodayFeedItem, 'title' | 'subtitle' | 'description' | 'estimated_time' | 'content'> {
+  return {
+    title: row.title ?? null,
+    subtitle: row.subtitle ?? null,
+    description: row.description ?? null,
+    estimated_time: row.estimated_time ?? null,
+    content: contentFromMetadata(row.metadata),
+  };
+}
+
+/**
+ * Serve-time re-hydration: refresh placed class curriculum cards from the LIVE
+ * timeline_cards row so an edited or re-authored card never renders from the
+ * frozen impression snapshot (see reference_today_feed_append_only_snapshot).
+ *
+ * WHY THIS EXISTS: the Today feed is an append-only snapshot store. Before this,
+ * `card:` items were the only anchored kind with no serve-time refresh, so a
+ * content edit (admin authoring, the Self Study regen job, a seed script, a
+ * direct backfill) reached the card detail view — which loads live via
+ * ensureFreshContent — but NOT any feed item already placed for an enrollment.
+ * That split let one surface show the new reading and another the old one.
+ *
+ * One batched query, only when card items are present. Fail-soft — on error the
+ * snapshot is left untouched. Mutates `items` in place.
+ */
+export async function rehydrateCardItems(items: TodayFeedItem[]): Promise<void> {
+  const cards = items.filter((i) => typeof i.ref === 'string' && i.ref.startsWith('card:') && i.card_id);
+  if (!cards.length) return;
+  try {
+    const ids = Array.from(new Set(cards.map((i) => i.card_id as string)));
+    const rows = await TimelineCard.findAll({
+      where: { id: ids },
+      attributes: ['id', 'title', 'subtitle', 'description', 'estimated_time', 'metadata'],
+    });
+    const byId = new Map(rows.map((r) => { const plain = r.get({ plain: true }) as any; return [plain.id as string, plain]; }));
+    for (const it of cards) {
+      const row = byId.get(it.card_id as string);
+      if (!row) continue;
+      const f = cardFieldsFromRow(row);
+      it.title = f.title; it.subtitle = f.subtitle; it.description = f.description;
+      it.estimated_time = f.estimated_time; it.content = f.content;
+    }
+  } catch (err: any) {
+    console.warn('[todayAnchoredSources] card rehydrate failed:', err?.message?.split('\n')[0]);
+  }
 }
 
 function projectItem(t: { id: string; title: string | null; description: string | null; status: string; release_key: string | null }): TodayFeedItem {

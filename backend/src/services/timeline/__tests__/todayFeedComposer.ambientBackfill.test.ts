@@ -34,6 +34,7 @@ function mkFixtureItem(type: string, i: number) {
 const mockGatherAnchored = jest.fn();
 jest.mock('../todayAnchoredSources', () => ({
   gatherAnchored: (...args: any[]) => mockGatherAnchored(...args),
+  rehydrateCardItems: jest.fn().mockResolvedValue(undefined),
   rehydrateCommunityItems: jest.fn().mockResolvedValue(undefined),
   rehydrateSessionItems: jest.fn().mockResolvedValue(undefined),
 }));
