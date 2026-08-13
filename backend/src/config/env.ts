@@ -164,6 +164,18 @@ export const env = {
   // documented in .env.example, matching the FEED_CONTROL_ENABLED/
   // CAPE_LEARNING_VALUE_RANKER_ENABLED inline-only convention.
   feedControlTypeSuppressionEnabled: process.env.FEED_CONTROL_TYPE_SUPPRESSION_ENABLED === 'true',
+  // Feed Control ambient-provider suppression + backfill — extends the same
+  // Freq cap/Cooldown fields Ali already edits on the Feed Control board (gear
+  // icon) to blog/podcast/testimonial, which today are never read by
+  // ambientPool.ts/extendFeed()'s ambient path (see ambientTypeExposureService.ts).
+  // Paired with a cross-type slot backfill so suppressing an over-represented
+  // provider gives its slot to a sibling evergreen type's genuine surplus
+  // instead of just shrinking the page. Distinct from
+  // feedControlTypeSuppressionEnabled (anchored types) — independently
+  // rollback-able. Default OFF everywhere including production — flag-off keeps
+  // extendFeed() byte-identical to before. Not documented in .env.example,
+  // matching the inline-only convention for this flag family.
+  feedControlAmbientSuppressionEnabled: process.env.FEED_CONTROL_AMBIENT_SUPPRESSION_ENABLED === 'true',
   // Today daily auto-refresh — once per Central-time calendar day, a student's
   // Today feed opportunistically tops up with a small batch of already-generated
   // content BEFORE serving, instead of only extending when the student scrolls

@@ -39,6 +39,8 @@ import { planSlots, interleaveGroups, groupByType, isPrecedenceImpression, isWit
 import { gatherAnchored, rehydrateCommunityItems, rehydrateSessionItems } from './todayAnchoredSources';
 import { orderForVisit } from './todayFeedShuffle';
 import { isDailyRefreshDue } from './todayDailyRefreshService';
+import { getAmbientDistinctSeenCounts } from './ambientTypeExposureService';
+import { getRoutingMap } from './feedControlService';
 import { env } from '../../config/env';
 import { getFeedPolicy } from './feedConfigService';
 import { type TodayFeedItem, type TodayPage, type ImpressionRow } from './todayFeedTypes';
@@ -129,6 +131,21 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   const anchoredPlaced = existing.filter((r) => isPrecedenceImpression({ kind: r.kind, week: (r.item as TodayFeedItem | null)?.week ?? null })).length;
   const ambientPlaced = existing.length - anchoredPlaced;
   const placedRefs = new Set(existing.map((r) => r.ref));
+
+  // Feed Control ambient suppression (env.feedControlAmbientSuppressionEnabled,
+  // default OFF everywhere including production): extends the same Freq
+  // cap/Cooldown fields Ali already edits on the Feed Control board for
+  // testimonial/podcast/blog — today those fields are stored but never read by
+  // this path. Resolved ONCE per call so a per-provider Cooldown override can
+  // replace the single global AMBIENT_REPEAT_COOLDOWN_DAYS below, and so a
+  // per-provider Freq cap can be checked in the fetch loop further down. Flag
+  // off: both stay null and every provider falls back to the exact
+  // global-constant behavior — byte-identical to before this task.
+  const ambientSuppressionOn = env.feedControlAmbientSuppressionEnabled;
+  const [ambientRouting, ambientSeenCounts] = ambientSuppressionOn
+    ? await Promise.all([getRoutingMap(), getAmbientDistinctSeenCounts(enrollmentId)])
+    : [null, null];
+
   // Only recently-placed ambient items stay excluded — an all-time exclusion
   // permanently exhausts small pools (blog: 89 posts, podcast: 24 episodes) for
   // any long-lived account, defeating ambientPool's own least-recently-seen
@@ -137,9 +154,12 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   // own separate reuse mechanism (generatedContentRetention.ts).
   const placedMedia: Record<AmbientProviderSlug, string[]> = { blog: [], podcast: [], testimonial: [] };
   for (const r of existing) {
-    if (r.kind === 'ambient' && r.provider && r.ref.includes(':') && isWithinAmbientCooldown(r.served_at, AMBIENT_REPEAT_COOLDOWN_DAYS)) {
-      const mediaId = r.ref.slice(r.ref.indexOf(':') + 1);
-      if (r.provider in placedMedia) placedMedia[r.provider as AmbientProviderSlug].push(mediaId);
+    if (r.kind === 'ambient' && r.provider && r.ref.includes(':')) {
+      const cooldown = ambientRouting?.[r.provider]?.feed_cooldown_days ?? AMBIENT_REPEAT_COOLDOWN_DAYS;
+      if (isWithinAmbientCooldown(r.served_at, cooldown)) {
+        const mediaId = r.ref.slice(r.ref.indexOf(':') + 1);
+        if (r.provider in placedMedia) placedMedia[r.provider as AmbientProviderSlug].push(mediaId);
+      }
     }
   }
 
@@ -178,11 +198,27 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
   for (const s of plan.slots) if (s.kind === 'ambient' && s.provider) perKeyNeed[s.provider] = (perKeyNeed[s.provider] ?? 0) + 1;
   const ambientQueues: Record<string, AmbientItem[]> = {};
   const evergreenQueues: Record<string, TodayFeedItem[]> = {};
+  // Genuine, currently-discarded evergreen supply beyond what this call's own
+  // slots already claimed — the only legitimate backfill source (see below).
+  // ambientQueues is deliberately NOT mirrored here: it's already exactly
+  // sized to perKeyNeed with no surplus, and over-fetching it for backfill
+  // purposes would be a new DB call this task's contract forbids.
+  const evergreenSurplus: Record<string, TodayFeedItem[]> = {};
   for (const key of varietyKeys) {
     const n = perKeyNeed[key] ?? 0;
     if (n <= 0) continue;
     if (REAL_AMBIENT_PROVIDERS.has(key)) {
       const provider = key as AmbientProviderSlug;
+      // Feed Control ambient suppression: a routing Freq cap caps LIFETIME
+      // distinct items shown (see ambientTypeExposureService.ts docstring).
+      // Once a student has met/exceeded it, this provider is skipped for the
+      // whole call — ambientQueues[key] stays unset, making the slot(s) that
+      // would have used it "dry" and eligible for the evergreen backfill pass
+      // in the slot-fulfillment loop below.
+      const cap = ambientSuppressionOn ? ambientRouting?.[provider]?.feed_frequency_cap : undefined;
+      if (typeof cap === 'number' && cap > 0 && (ambientSeenCounts?.[provider] ?? 0) >= cap) {
+        continue;
+      }
       const fresh = await pickAmbientBatch(enrollmentId, provider, n, placedMedia[provider] ?? []);
       // Small ambient pools (podcast: 24 episodes) can be fully consumed by an
       // active student within the cooldown window itself — a provider going
@@ -196,7 +232,9 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
         ambientQueues[key] = fresh;
       }
     } else {
-      evergreenQueues[key] = (evergreenByType.get(key) ?? []).slice(0, n);
+      const candidates = evergreenByType.get(key) ?? [];
+      evergreenQueues[key] = candidates.slice(0, n);
+      if (ambientSuppressionOn) evergreenSurplus[key] = candidates.slice(n);
     }
   }
 
@@ -219,6 +257,22 @@ async function extendFeed(enrollmentId: string, existing: ImpressionRow[], need:
     } else if (slot.provider) {
       const cand = evergreenQueues[slot.provider]?.shift();
       if (cand) item = { ...cand, position: pos }; // real card — provider stays null, same as weekBound curriculum
+    }
+    if (!item && ambientSuppressionOn && slot.kind !== 'anchored') {
+      // Backfill: a dry slot (suppressed ambient provider or an exhausted
+      // evergreen type) gets one shot at a sibling evergreen type's genuine
+      // surplus — real candidates that existed for this call but lost the
+      // per-key slice above. Ambient is never a backfill source (see comment
+      // on evergreenSurplus). First key in varietyKeys order with surplus wins;
+      // single attempt, no retry loop, no new fetch.
+      for (const key of varietyKeys) {
+        const surplus = evergreenSurplus[key];
+        if (surplus && surplus.length > 0) {
+          const cand = surplus.shift()!;
+          item = { ...cand, position: pos };
+          break;
+        }
+      }
     }
     if (!item) continue; // source ran dry (e.g. empty pool) — skip the slot
     await persistImpression(enrollmentId, item, provider, explanation);
