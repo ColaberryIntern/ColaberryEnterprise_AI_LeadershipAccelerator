@@ -10,7 +10,15 @@
    @font-face rules. Roboto & Roboto Mono are Apache-2.0;
    Quicksand is OFL-1.1 (see assets/fonts/LICENSES.md).
    ============================================================ */
-@import url('https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,400;0,500;0,700;0,900;1,400&family=Roboto+Mono:wght@400;500;700&family=Quicksand:wght@500;600;700&display=swap');
+/*
+ * REMOVED 2026-08-13. This @import pulled Roboto, Roboto Mono and Quicksand from
+ * fonts.googleapis.com on every page of the app, before any consent was given.
+ * Removing the <link> from index.html was not enough on its own -- this import
+ * kept the request alive, which the request sweep caught.
+ *
+ * The same families are now declared from local woff2 in src/fonts/fonts.css,
+ * imported first in index.tsx. The note above about moving them local is done.
+ */
 
 /* ============================================================
    ICON FONT — RemixIcon (Apache-2.0, ~3,000 icons).

@@ -1,42 +1,95 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Rewritten 2026-08-13 at the V2 cutover.
+
+  It previously listed eight https://www.colaberry.com/ URLs and none of this
+  site's own, so search engines were being pointed at a different domain
+  entirely. It also listed /case-studies, which carried fabricated customer
+  stories and has since been withdrawn and redirected.
+
+  Only pages that exist and are publishable belong here. Retired marketing paths
+  (/program, /case-studies, /demo-day, /advisory, /consulting, /about) are
+  deliberately absent: they redirect, and listing a redirect target's source in a
+  sitemap invites a crawler to index the wrong URL.
+-->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.colaberry.com/</loc>
+    <loc>https://enterprise.colaberry.ai/</loc>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://www.colaberry.com/program</loc>
+    <loc>https://enterprise.colaberry.ai/services</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.colaberry.com/pricing</loc>
+    <loc>https://enterprise.colaberry.ai/services/ai-opportunity-sprint</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/services/claude-production-pilot</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/services/enterprise-build-modernization</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/services/workforce-architect-accelerator</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/services/embedded-ai-operations</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/platform</loc>
     <changefreq>monthly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.colaberry.com/sponsorship</loc>
+    <loc>https://enterprise.colaberry.ai/pricing</loc>
     <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.colaberry.com/advisory</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.colaberry.com/case-studies</loc>
-    <changefreq>monthly</changefreq>
-    <priority>0.8</priority>
-  </url>
-  <url>
-    <loc>https://www.colaberry.com/enroll</loc>
-    <changefreq>weekly</changefreq>
     <priority>0.9</priority>
   </url>
   <url>
-    <loc>https://www.colaberry.com/contact</loc>
+    <loc>https://enterprise.colaberry.ai/proof</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/stories</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/lab</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/start</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/free-workspace</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/privacy</loc>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
+    <loc>https://enterprise.colaberry.ai/contact</loc>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>

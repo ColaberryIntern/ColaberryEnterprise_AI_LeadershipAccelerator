@@ -6,9 +6,9 @@
 const { chromium } = require(process.env.PW_PATH);
 const BASE = 'http://localhost:3000';
 const ROUTES = [
-  ['home', '/v2'], ['services', '/v2/services'], ['svc-detail', '/v2/services/ai-opportunity-sprint'],
-  ['platform', '/v2/platform'], ['proof', '/v2/proof'], ['lab', '/v2/lab'],
-  ['try', '/v2/try'], ['privacy', '/v2/privacy'], ['start', '/v2/start'],
+  ['home', '/'], ['services', '/services'], ['svc-detail', '/services/ai-opportunity-sprint'],
+  ['platform', '/platform'], ['proof', '/proof'], ['lab', '/lab'],
+  ['free-workspace', '/free-workspace'], ['privacy', '/privacy'], ['start', '/start'], ['pricing', '/pricing'], ['stories', '/stories'],
 ];
 
 async function probe(page) {
@@ -51,7 +51,7 @@ async function probe(page) {
   }
 
   // Now click through the whole site in one session, never reloading.
-  await page.goto(BASE + '/v2', { waitUntil: 'networkidle' });
+  await page.goto(BASE + '/', { waitUntil: 'networkidle' });
   for (const label of ['Platform', 'Proof', 'Services', 'Start Free']) {
     await page.getByRole('link', { name: label, exact: true }).first().click();
     await page.waitForTimeout(400);
