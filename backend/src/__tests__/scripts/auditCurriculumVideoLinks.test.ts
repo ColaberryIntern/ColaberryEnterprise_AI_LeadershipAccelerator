@@ -7,7 +7,7 @@
  * chasing videos that are fine. These tests pin that boundary.
  */
 
-const { youtubeId, probe, probeAll } = require('../../scripts/auditCurriculumVideoLinks');
+import { youtubeId, probe, probeAll } from '../../scripts/auditCurriculumVideoLinks';
 
 describe('youtubeId', () => {
   it('extracts the id from every URL shape the curriculum uses', () => {
@@ -39,7 +39,7 @@ describe('probe', () => {
     await expect(probe('6wkFb2_cUik')).resolves.toEqual({
       state: 'OK',
       channel: 'Anthropic',
-      title: 'Tool use with the Claude 3 model family',
+      video_title: 'Tool use with the Claude 3 model family',
     });
     expect(global.fetch).toHaveBeenCalledTimes(1);
   });
@@ -78,7 +78,7 @@ describe('probe', () => {
     await expect(probe('h8gMhXYAv1k')).resolves.toEqual({
       state: 'OK',
       channel: 'IBM Technology',
-      title: 'What is Tool Calling?',
+      video_title: 'What is Tool Calling?',
     });
     expect(global.fetch).toHaveBeenCalledTimes(2);
   });
@@ -92,7 +92,7 @@ describe('probeAll', () => {
     global.fetch = jest.fn() as unknown as typeof fetch;
 
     const results = await probeAll([
-      { id: 'card-1', week: 3, bucket: 'learn', title: 'Self-hosted clip', video_url: 'https://cdn.colaberry.com/a.mp4' },
+      { id: 'card-1', week: 3, bucket: 'learn', type: 'video', subtitle: null, visibility: 'published', title: 'Self-hosted clip', video_url: 'https://cdn.colaberry.com/a.mp4' },
     ]);
 
     expect(results[0].state).toBe('SKIPPED');
@@ -107,10 +107,11 @@ describe('probeAll', () => {
       );
     }) as unknown as typeof fetch;
 
+    const base = { bucket: 'learn', type: 'video', subtitle: null, visibility: 'published' };
     const cards = [
-      { id: 'a', week: 1, bucket: 'learn', title: 'A', video_url: 'https://www.youtube.com/watch?v=AAAAAAAAAAA' },
-      { id: 'b', week: 2, bucket: 'learn', title: 'B', video_url: 'https://www.youtube.com/watch?v=DEADIDxxxxx' },
-      { id: 'c', week: 3, bucket: 'learn', title: 'C', video_url: 'https://www.youtube.com/watch?v=CCCCCCCCCCC' },
+      { ...base, id: 'a', week: 1, title: 'A', video_url: 'https://www.youtube.com/watch?v=AAAAAAAAAAA' },
+      { ...base, id: 'b', week: 2, title: 'B', video_url: 'https://www.youtube.com/watch?v=DEADIDxxxxx' },
+      { ...base, id: 'c', week: 3, title: 'C', video_url: 'https://www.youtube.com/watch?v=CCCCCCCCCCC' },
     ];
 
     const results = await probeAll(cards);
