@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
+import MaturityLadder from '../../components/publicV2/MaturityLadder';
 import { Claim, canShow, Metric, SampleBadge, CapabilityNotice } from '../../components/publicV2/Claim';
 import { SHOWROOM_SURFACES, STUDIO_DESCRIPTION, DATA_EARNED } from '../../config/v2Platform';
 import './platformV2.css';
@@ -146,6 +147,26 @@ function PlatformV2(): React.ReactElement {
             auditor.
           </p>
           <CapabilityNotice claimKey="surface.fourview.console" />
+        </div>
+      </section>
+
+      {/*
+        The maturity model, carried over from the live site. It sits here rather
+        than on the homepage because each level names a signal the platform
+        actually captures -- it belongs beside the explanation of how that data
+        is earned, and the homepage has a nine-section budget it was exceeding.
+      */}
+      <section className="cbv2-rv cbv2-section cbv2-section--sunken" aria-labelledby="cbv2-maturity-title">
+        <div className="cbv2-wrap">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">The maturity model</p>
+            <h2 id="cbv2-maturity-title">From AI Aware to AI Organization</h2>
+            <p className="cbv2-lede">
+              Five levels your people climb, and the platform measures every one. The point is
+              not the model; it is that each level names a signal we actually capture.
+            </p>
+          </div>
+          <MaturityLadder />
         </div>
       </section>
 

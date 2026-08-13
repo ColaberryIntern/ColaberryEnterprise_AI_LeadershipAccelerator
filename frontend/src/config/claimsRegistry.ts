@@ -141,6 +141,23 @@ export const CLAIMS: readonly Claim[] = [
     note: '32 occurrences on origin/main present this as a credential learners earn.',
   },
   {
+    /*
+     * A product fact rather than an outcome claim: how long the path is. Safe
+     * because it describes what we run, not what it achieved for anyone.
+     */
+    key: 'program.duration',
+    publicWording: '12 weeks',
+    verification: 'VERIFIED',
+    capability: 'live',
+    evidenceSource:
+      'curriculum_blueprints carries week blueprints 0-12, and the live site states a ' +
+      '"12-week path to Architect" on enterprise.colaberry.ai/program (read 2026-08-12).',
+    owner: 'Eng',
+    lastVerifiedAt: '2026-08-12',
+    approvedRoutes: ['*'],
+    requiresSampleLabel: false,
+  },
+  {
     key: 'credential.cca.safe',
     publicWording:
       'Claude Certified Architect, Foundations — certification preparation, aligned to the ' +

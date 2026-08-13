@@ -38,6 +38,7 @@ export interface NavItem {
 export const V2_NAV: readonly NavItem[] = [
   { label: 'Services', to: '/v2/services' },
   { label: 'Platform', to: '/v2/platform' },
+  { label: 'Pricing', to: '/v2/pricing' },
   { label: 'Proof', to: '/v2/proof' },
   { label: 'Start Free', to: '/v2/start' },
 ];

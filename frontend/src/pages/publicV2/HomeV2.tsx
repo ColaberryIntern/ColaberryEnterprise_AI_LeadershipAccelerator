@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import SeoV2 from '../../components/publicV2/SeoV2';
 import { Claim, canShow, SampleBadge } from '../../components/publicV2/Claim';
 import Icon from '../../components/publicV2/Icon';
+import Accolades from '../../components/publicV2/Accolades';
 import { GOALS, ENGINE, SERVICES } from '../../config/v2Content';
 import './homeV2.css';
 
@@ -145,6 +146,23 @@ function HomeV2(): React.ReactElement {
               Volume, partner-status and outcome claims are deliberately absent until verified.
             </p>
           </article>
+        </div>
+      </section>
+
+      {/* 2b ──────────────────────────────────────────────────── accolades ── */}
+      {/*
+        The live site's "built for outcomes" band, governed. Tiles render only
+        while their claim is publishable, so the three currently-unevidenced
+        accolades (careers launched, since-2012, the credential wording) appear
+        the moment someone records the evidence, and stay absent until then.
+      */}
+      <section className="cbv2-rv cbv2-section" aria-labelledby="cbv2-accolades-title">
+        <div className="cbv2-wrap">
+          <div className="cbv2-section__head">
+            <p className="cbv2-eyebrow">Built for outcomes</p>
+            <h2 id="cbv2-accolades-title">What we can put our name to</h2>
+          </div>
+          <Accolades />
         </div>
       </section>
 

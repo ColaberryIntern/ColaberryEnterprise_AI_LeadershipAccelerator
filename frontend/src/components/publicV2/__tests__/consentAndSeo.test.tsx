@@ -40,6 +40,7 @@ const DECLARED_ROUTES = [
   '/v2/try',
   '/v2/privacy',
   '/v2/start',
+  '/v2/pricing',
   '/pricing',
   '/contact',
   '/try',
