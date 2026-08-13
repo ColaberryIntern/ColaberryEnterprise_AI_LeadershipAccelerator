@@ -26,7 +26,8 @@ import { decomposeBuild } from './decomposeService';
 import { tierTargets } from './buildTiers';
 import { GateResult, formatViolations, blockingViolations, advisoryViolations, isPublishable } from './planGate';
 import { gateAndRepair } from './planRepair';
-import { scopeAgents } from './scopeAgents';
+import { scopeAgents, agentScopingEnabledFor } from './scopeAgents';
+import { env } from '../../config/env';
 import { BuildPlan } from './planContract';
 import { renderDocs } from './renderDocs';
 import { writeDocsToRepo } from './repoWriter';
@@ -173,7 +174,9 @@ async function runGeneration(input: StartBuildInput, correlationId: string): Pro
     // agents describe how the student's system runs, not whether the plan is
     // sound, and a scoping failure must never cost them a publishable build —
     // scopeAgents returns the plan untouched when anything goes wrong.
-    const scoped = await scopeAgents(repaired.plan, { client, correlationId });
+    const scoped = agentScopingEnabledFor(input.enrollmentId, env.sbpAgentScoping)
+      ? await scopeAgents(repaired.plan, { client, correlationId })
+      : { plan: repaired.plan, scoped: false, gated: [] as string[], reason: 'disabled' };
     if (scoped.gated.length) {
       log('sbp_agents_autonomy_capped', correlationId, 'partial', {
         projectId: input.projectId, agents: scoped.gated,

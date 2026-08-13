@@ -200,6 +200,23 @@ function parseRoster(raw: unknown): PlanAgent[] | null {
  */
 const NON_AGENT_NAMES = /^(system|team|developer|development team|user|admin|staff|unassigned)$/i;
 
+/**
+ * Is agent scoping on for this enrollment?
+ *
+ * SBP_AGENT_SCOPING is 'off' (default), 'all', or a comma-separated list of
+ * enrollment ids. A list rather than a boolean because the first audience is a
+ * single account being tested while a cohort is mid-class on the same
+ * deployment — turning it on for everyone to try it on one project is how a
+ * class gets a code path nobody has watched run.
+ */
+export function agentScopingEnabledFor(enrollmentId: string | null | undefined, setting: string): boolean {
+  const v = (setting || 'off').trim();
+  if (v === 'off' || v === '') return false;
+  if (v === 'all') return true;
+  if (!enrollmentId) return false;
+  return v.split(',').map((s) => s.trim()).filter(Boolean).includes(enrollmentId);
+}
+
 export async function scopeAgents(plan: BuildPlan, deps: ScopeAgentsDeps): Promise<ScopeAgentsResult> {
   const model = deps.model || process.env.SBP_AGENT_MODEL || MODEL_DEFAULT;
   const started = Date.now();

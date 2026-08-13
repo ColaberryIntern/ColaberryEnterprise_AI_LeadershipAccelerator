@@ -18,7 +18,7 @@
  *   1. An agent touching a SAFE requirement cannot be autonomous.
  *   2. A failure here never costs the student a publishable plan.
  */
-import { scopeAgents } from '../scopeAgents';
+import { scopeAgents, agentScopingEnabledFor } from '../scopeAgents';
 import { BuildPlan, PlanRequirement, PlanStory } from '../planContract';
 
 function req(id: string, over: Partial<PlanRequirement> = {}): PlanRequirement {
@@ -225,5 +225,41 @@ describe('assignment', () => {
     expect(sent).toContain('REQ-002');
     expect(sent).toContain('STORY-002');
     expect(sent).toMatch(/Nothing is sent to a client/);
+  });
+});
+
+describe('rollout gate — one account at a time', () => {
+  /**
+   * Scoping adds a model call to generation. The first audience for it is a
+   * single account being tested while a cohort is mid-class on the SAME
+   * deployment, so it rolls out by enrollment rather than as a boolean.
+   */
+  const ALI = 'aced5b39-0b47-496a-b172-e1f5c042bf8a';
+  const OTHER = 'f0000000-0000-0000-0000-000000000000';
+
+  it('is off when unset — deploying changes nothing', () => {
+    expect(agentScopingEnabledFor(ALI, 'off')).toBe(false);
+    expect(agentScopingEnabledFor(ALI, '')).toBe(false);
+  });
+
+  it('lets one named enrollment through and nobody else', () => {
+    expect(agentScopingEnabledFor(ALI, ALI)).toBe(true);
+    expect(agentScopingEnabledFor(OTHER, ALI)).toBe(false);
+  });
+
+  it('accepts a list, tolerating the spaces a human will leave in it', () => {
+    const list = ` ${ALI} , ${OTHER} `;
+    expect(agentScopingEnabledFor(ALI, list)).toBe(true);
+    expect(agentScopingEnabledFor(OTHER, list)).toBe(true);
+    expect(agentScopingEnabledFor('someone-else', list)).toBe(false);
+  });
+
+  it('opens to everyone on "all"', () => {
+    expect(agentScopingEnabledFor(OTHER, 'all')).toBe(true);
+  });
+
+  it('refuses an unknown enrollment rather than defaulting it on', () => {
+    expect(agentScopingEnabledFor(null, ALI)).toBe(false);
+    expect(agentScopingEnabledFor(undefined, 'all')).toBe(true); // 'all' is explicit
   });
 });
