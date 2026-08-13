@@ -27,6 +27,13 @@ export const COMMAND_CENTER_STORY_ID = 'STORY-000';
 export const COMMAND_CENTER_TITLE = 'STORY-000 · Build your Command Center';
 
 const bullet = (s: string) => `- ${s}`;
+
+/** How an autonomy level reads on a card, in the student's language. */
+const AUTONOMY_LABEL: Record<string, string> = {
+  suggests: 'drafts for a person',
+  acts_with_approval: 'prepares, then waits for a human to release it',
+  acts_autonomously: 'completes on its own',
+};
 const fmt = (d: Date | null | undefined) =>
   d ? d.toISOString().slice(0, 10) : null;
 
@@ -214,8 +221,34 @@ export function commandCenterPrompt(plan: BuildPlan, schedule?: Schedule | null)
   lines.push('');
 
   lines.push('### 7. AI agents');
-  lines.push('One card per agent, showing what it owns and what it is allowed to decide on its own. From your plan:');
-  roster.forEach((a) => lines.push(bullet(`**${a.name}** — owns ${a.stories.join(', ')}`)));
+  if (plan.agents?.length) {
+    lines.push('One card per agent. Each shows what fires it, what it reads and produces, how much it decides on its own, and when it must stop and ask:');
+    for (const a of plan.agents) {
+      lines.push('');
+      lines.push(`**${a.name}** — ${a.purpose}`);
+      lines.push(bullet(`Fires on: ${a.trigger || 'not specified'} (${a.trigger_type})`));
+      if (a.inputs.length) lines.push(bullet(`Reads: ${a.inputs.join(', ')}`));
+      if (a.outputs.length) lines.push(bullet(`Produces: ${a.outputs.join(', ')}`));
+      lines.push(bullet(`Autonomy: **${AUTONOMY_LABEL[a.autonomy_level]}**`));
+      if (a.approval_gates.length) {
+        lines.push(bullet(`Cannot act alone because of: ${a.approval_gates.join('; ')}`));
+      }
+      if (a.escalation_rules.length) lines.push(bullet(`Stops and asks when: ${a.escalation_rules.join('; ')}`));
+      if (a.skills.length) lines.push(bullet(`Skills it needs: ${a.skills.join(', ')}`));
+      lines.push(bullet(`Owns: ${a.owns.join(', ') || 'nothing yet'}`));
+    }
+    lines.push('');
+    lines.push(
+      'Autonomy is not decoration. An agent marked "waits for approval" must have somewhere on '
+      + 'this page showing what is waiting and who has to release it — otherwise the guardrail '
+      + 'exists only in the plan.',
+    );
+  } else {
+    lines.push('Your plan does not carry a scoped agent roster yet, so build this tab from who owns each story:');
+    roster.forEach((a) => lines.push(bullet(`**${a.name}** — owns ${a.stories.join(', ')}`)));
+    lines.push('');
+    lines.push('These are owners, not scoped agents — say so on the tab rather than presenting a job title as an AI agent.');
+  }
   lines.push('');
   lines.push('Each card carries a skills list. On real data there are no skills yet — show "no skills registered yet", not an empty box.');
   lines.push('');
