@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Session CC-20260812-k4m9 — Change Report</title>
+<title>Session CC-20260812-q8w3 — Change Report</title>
 <style>
   :root{
     --navy:#0f2942; --navy-2:#1a365d; --blue:#2b6cb0; --blue-l:#3b82f6;
@@ -56,8 +56,8 @@
   <header>
     <div class="eyebrow">Colaberry Accelerator · Session Change Report</div>
     <h1>What changed this session</h1>
-    <div class="meta">Generated Thursday, August 13, 2026 at 9:33 AM</div>
-    <div><span class="sid">CC-20260812-k4m9</span><span class="count">7 changes</span></div>
+    <div class="meta">Generated Thursday, August 13, 2026 at 10:49 AM</div>
+    <div><span class="sid">CC-20260812-q8w3</span><span class="count">5 changes</span></div>
   </header>
   <main>
     
@@ -94,51 +94,6 @@
       <article class="card">
         <div class="card-head">
           <span class="num">03</span>
-          <h2>**Explorer Growth OS EPIC 2 (Signal Engine): planned, audited, and partially built — T001 + T005 landed, T002 is the resume point**</h2>
-          <span class="badge">2026-08-12</span>
-        </div>
-        <div class="card-body">
-          <div class="row"><span class="k">What changed</span><span class="v">On `workstream/explorer-growth-epic2` off `12ca8700`. **T001** `backend/src/services/explorerGrowth/explorerSignalDefinitions.ts` (148 lines) — the single constant table mapping every plan-§6 signal to `{band, weight, halfLifeDays, cap, tier, source}`, mirroring `behavioralSignalService.SIGNAL_DEFINITIONS` with `intentScoringService`&#39;s `2^(-ageDays/halfLifeDays)` decay; plus the signal type contract in `types/explorerGrowth.ts` that EPIC 3&#39;s scorer will consume. **T005** `frontend/src/utils/oncePerSession.ts` (new pure guard), `EnrollPage.tsx` (emits `form_start`), `SubscriptionSection.tsx` (emits `payment_attempt`), and `trackingController.ts` (`payment_attempt` added to `VALID_EVENT_TYPES`). Commits `54a59e03`, `28e2b069`. **Nothing sends; no cron; no schema change.**</span></div>
-          <div class="row"><span class="k">Verification</span><span class="v ver">Plan independently audited by `loop-plan-auditor` — **cycle 1 FAILED 14/20, cycle 2 PASSED 18/20**. T001 24/24 jest green (decay asserted at 0/1/2/10 half-lives, null half-life, future-dated clamp, unknown-signal-returns-0). T005 6/6 green on the pure guard (first-call true / subsequent false / fresh session true / fails OPEN when sessionStorage throws). Backend tsc = baseline (1 pre-existing `@anthropic-ai/sdk`). Grep confirms zero `eslint-disable` added. **Both tasks were producer-graded only — NOT run through `loop-task-verifier`** — and that is recorded in the run&#39;s state ledger as an item for whoever resumes.</span></div>
-          
-        <div class="row"><span class="k">Notes</span><span class="v">**The cycle-1 audit caught a hard contradiction that would have wasted the build**: T001 was specified to assert login/session signals *absent* while T002 rejects unknown event types, so the first writer to `student_navigation_events` would have had no legal event type at all and T002/T003/T006 were unbuildable. It also caught that **`--build backend` would never have shipped the frontend** — `docker-compose.production.yml` has no `frontend` service and `nginx/Dockerfile:9` runs `npm run build:frontend`, so `EnrollPage.tsx` would have looked deployed and not been; and that `VALID_EVENT_TYPES` lacked `payment_*`, so &quot;reuse the existing ingest, no new plumbing&quot; held for `form_start` only. **After the plan passed I fixed two more of my own**: the deploy proof grepped the served bundle for the literal `form_start`, which already ships in `JourneyTimeline.tsx:326` and `WarRoomPage.tsx:314,324` — it would have passed on a completely unchanged bundle — and nothing verified the payment signal at all. Two design calls worth keeping: `form_start` fires on first field interaction rather than on mount (on mount it emits for every page view, turning a tier-3 commitment signal into a tier-1 view signal wearing the wrong label and corrupting the HIGH_INTENT gate), and **`payment_failed` was deliberately NOT invented** — checkout is a PaySimple hosted redirect so the app only ever observes the attempt; &quot;attempted and did not complete&quot; is derived by pairing it with `enrollments.payment_status`. **Correction to this session&#39;s own recorded baseline**: the plan and contract state &quot;frontend tsc baseline 0&quot;; on this box it is 10 pre-existing errors in `TimelineBuilderPanel.tsx`/`TimelineEditorTab.tsx` from `@dnd-kit/*` being declared in package.json but absent from the junctioned `node_modules` (CI installs fresh and passes). Zero are in files this epic touched, but a baseline that silently moves makes a differential gate meaningless, so it is corrected in the ledger rather than restated. Full run state at `.loop-architect/runs/20260812-explorer-growth-epic2/` — not merged, not deployed.</span></div>
-          
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="card-head">
-          <span class="num">04</span>
-          <h2>**Explorer Growth OS EPIC 2 (Signal Engine): T002, T003, T004 and the real-database verification**</h2>
-          <span class="badge">2026-08-12</span>
-        </div>
-        <div class="card-body">
-          <div class="row"><span class="k">What changed</span><span class="v">**T002** `services/explorerGrowth/explorerSignalWriter.ts` — the first writer `student_navigation_events` has ever had (that table was already read by studentBehaviorIntelligenceAgent, reeseSignalService and personHistoryService, with zero writers). **T003** `routes/explorerSignalRoutes.ts` + `server.ts` — authenticated, enrollment-scoped portal ingest. **T004** `services/explorerGrowth/explorerSignalReader.ts` — unified read across nine source tables, decayed per-signal and grouped by band; its output shape lives in `types/explorerGrowth.ts` as the contract EPIC 3&#39;s scorer consumes. Commits `28dfef6e`, `2e956b41`, plus T004. **Nothing sends; no cron; no schema change.**</span></div>
-          <div class="row"><span class="k">Verification</span><span class="v ver">**Quality gate green** — backend jest 7524 passed across 546 suites with **zero failing suites outside the pre-measured known-failing union** and all 5 new backend suites green (63 new backend tests + 6 frontend). Backend tsc = baseline (1 pre-existing `@anthropic-ai/sdk`); frontend tsc = baseline 10 pre-existing `@dnd-kit` errors with **0 in files this epic touched**. `lint-route-auth` OK (90 files), `secret-scan` OK (3955 files). Greps confirm 0 new `cron.schedule`, 0 new send paths, 0 `eslint-disable` in code. Diff 16 files, **+1497 / −0**. **T006 real-database check on `accelerator_dev1`**: all 9 reader queries EXPLAIN-validated against the live schema with zero errors and all using indexes (including `idx_page_events_lead_event`, created in EPIC 1); a `portal_session` signal written for a real dev Explorer and read back in the reader&#39;s exact `(signal, occurred_at)` shape; probe rows deleted with 0 left behind.</span></div>
-          
-        <div class="row"><span class="k">Notes</span><span class="v">**T006 exists because EPIC 1&#39;s backfill bug passed 11 green tests by mocking a driver return shape that this dialect never produces — and it earned its place immediately.** The dev check surfaced that `student_navigation_events.id` is `NOT NULL` with **no database default**: the Sequelize model declares `defaultValue: UUIDV4` so `create()` generates it client-side and the writer is safe, but any future raw-SQL writer would hit a not-null violation. Documented at the call site rather than left to be rediscovered. Two security properties worth recording: T003 takes `enrollment_id` from the verified participant token and **`enrollment_id` is not in the Zod schema at all**, so a body-supplied one cannot be honoured — a test sends both `enrollment_id` and `enrollmentId` and asserts the other learner&#39;s id reaches nothing; and `requireParticipant` already refuses mutating requests from a read-only &quot;view as member&quot; impersonation, so an admin inspecting a learner&#39;s portal cannot manufacture signals attributed to them (asserted, not assumed). The writer enforces a **closed alphabet in two layers** — unknown signals rejected, and real signals belonging to other source tables rejected too, because accepting `card_completed` here would create a second divergent record of the same fact and let a client forge learning progress. The reader **degrades per-source rather than per-learner**: one unavailable table logs and yields nothing while every other source still contributes, so a single bad table cannot take a learner&#39;s whole profile dark.</span></div>
-          
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="card-head">
-          <span class="num">05</span>
-          <h2>**Fixed a backfill row-count bug found by production evidence, not by tests**</h2>
-          <span class="badge">2026-08-12</span>
-        </div>
-        <div class="card-body">
-          <div class="row"><span class="k">What changed</span><span class="v">`backend/src/scripts/backfillPageEventLeadId.ts` — extracted row counts via a new exported `extractRowCount()` that reads `metadata.rowCount` (the real Postgres shape) as well as bare-number and `affectedRows` shapes, and hardened the loop so a zero-row batch with candidates still outstanding reports `stoppedBecause:&#39;stalled&#39;` with a `BackfillStalled` warning instead of exiting as `complete`. Test mock corrected to Postgres&#39;s actual `[results, pgResult]` return shape.</span></div>
-          <div class="row"><span class="k">Verification</span><span class="v ver">19/19 jest green (was 11). **Proven the tests catch the bug**: reverting to the original extraction fails 3 of them (`stops when a batch updates zero rows`, `respects --max-batches`, `reports the true updated count for a multi-batch run`); restoring passes all 19. Backend tsc = baseline (1 pre-existing).</span></div>
-          
-        <div class="row"><span class="k">Notes</span><span class="v">The original code did `const [, affected] = result; typeof affected === &#39;number&#39; ? affected : 0`. For Postgres, `sequelize.query()` resolves to `[results, pgResultObject]`, so that always evaluated to 0. **Not merely cosmetic** — the batch loop terminates on `rows === 0`, so it stopped after ONE batch while still reporting `outcome:&#39;complete&#39;`. The first production run had 65 attributable rows, under a single 5000-row batch, so it completed correctly by luck and the DB confirmed 65/65 attributed with 0 remaining. With more than `batchSize` rows it would have silently left the remainder unattributed and claimed success. **The 11 original tests all passed because the mock resolved `[[], rows]` — a shape this dialect never returns — so the suite asserted my assumption about the driver rather than the driver&#39;s behaviour.** Found only by running against the real database and noticing that `candidates:65 -&gt; updated:0 -&gt; remaining:0` cannot all be true.</span></div>
-          
-        </div>
-      </article>
-
-      <article class="card">
-        <div class="card-head">
-          <span class="num">06</span>
           <h2>**Follow-up: make the video link audit actually runnable where it is meant to run**</h2>
           <span class="badge">2026-08-13</span>
         </div>
@@ -153,7 +108,7 @@
 
       <article class="card">
         <div class="card-head">
-          <span class="num">07</span>
+          <span class="num">04</span>
           <h2>**The seeded sample card reverted my DB fix on the next boot — fixed at the source**</h2>
           <span class="badge">2026-08-13</span>
         </div>
@@ -165,9 +120,24 @@
           
         </div>
       </article>
+
+      <article class="card">
+        <div class="card-head">
+          <span class="num">05</span>
+          <h2>**Stop the dev sample-card seed from force-publishing demo content to production on every boot, and wire the video audit to actually alert**</h2>
+          <span class="badge">2026-08-13</span>
+        </div>
+        <div class="card-body">
+          <div class="row"><span class="k">What changed</span><span class="v">Closes the two items left open above. **(1) The sample seed.** `seedIntelSampleCards.ts` describes itself in its own docstring as a &quot;MANUAL/dev validation seed (**not wired into boot**)&quot; — and `server.ts:2501` called it unconditionally on every backend start, force-setting `visibility: &#39;published&#39;, status: &#39;active&#39;` on all 10 cards each time. That is what reverted the dead-video fix, and it also meant no admin could ever unpublish a sample card. The boot comment justified it as carrying the Today feed &quot;before the ingestion pipelines run&quot;; those pipelines have since produced **351 real published cards** across the same 10 types (17 to 69 each), so the justification has expired. The seed is now behind `SEED_INTEL_SAMPLE_CARDS=true` (default off, so prod stops running it, dev/preview can opt in), and an **update no longer touches `visibility`** — an archived card stays archived, and the seed only refreshes content. The stale docstring is corrected rather than left to mislead the next reader. **(2) Alerting.** The audit shipped read-only with an exit code and nothing watching it. New `scripts/videoLinkAuditAlert.js` runs it in the container, parses `--json`, and emails on **change** rather than on state: a dead link already triaged does not re-send daily (that is how people learn to filter a sender), and a link that starts resolving again sends an all-clear so the channel is provably not write-only. State persists to `/var/lib/colaberry/video-link-audit/known-dead.json`; a failed send deliberately does **not** advance state, so the next run retries instead of swallowing the only warning anyone would see. Always exits 0.</span></div>
+          <div class="row"><span class="k">Verification</span><span class="v ver">13/13 new jest on the pure alert logic (including the load-bearing &quot;does NOT re-alert while the same link stays dead&quot; and the no-week/pluralisation cases), `tsc --noEmit` 0 errors in `src/`. Deployed, then the 10 sample cards archived in prod and **confirmed still archived after a full backend restart** — the exact check the earlier fix failed. Cron installed and the alert script run live end to end.</span></div>
+          
+        <div class="row"><span class="k">Notes</span><span class="v">Worth recording that this seed had already caused a *second*, separate production bug: its permanent card meant an intel type&#39;s card count was never 0, which silently suppressed the `INTEL_SOURCE_EXHAUSTED` / `POOL_EMPTY` diagnostics until `feedTypeStatsService.ts` added an explicit `metadata-&gt;&gt;&#39;source&#39; IS DISTINCT FROM &#39;intel_sample_seed&#39;` exclusion on 2026-08-10. I left that exclusion in place; it is defensive and correct either way. On the content itself: the samples are demo specimens with placeholder attribution (a research digest linking to `arxiv.org` root rather than a paper, a quote credited to &quot;An enterprise-AI leader&quot; at &quot;Industry keynote&quot;, generic `github.com` URLs), which is fine for a render fixture and not fine in front of 145 students, which is why they are archived rather than rewritten. Archiving is reversible and preserves every progress row and points event. **Session ID note:** this session originally minted `CC-20260812-k4m9` without first checking `PROGRESS.md` for it, and a concurrent instance had already used that exact ID for three unrelated entries (Explorer Growth OS EPIC 2 x2, a backfill row-count fix). Discovered when the changelog generator pulled all eight entries into one report. My five entries were retagged to `CC-20260812-q8w3`; the other instance&#39;s three were left untouched, per the rule about never editing another session&#39;s entries. Commit bodies and PR descriptions for this work still reference the original `k4m9` and are traceable through this note. The mint step should grep `PROGRESS.md` first, which is the whole point of the uniqueness requirement and is exactly what I skipped.</span></div>
+          
+        </div>
+      </article>
   </main>
   <footer>
-    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260812-k4m9</code>.
+    Sourced from <code>PROGRESS.md</code> entries tagged <code>CC-20260812-q8w3</code>.
     Regenerated after each change per <code>CLAUDE.md</code> → Per-session change report.
   </footer>
 </body>
