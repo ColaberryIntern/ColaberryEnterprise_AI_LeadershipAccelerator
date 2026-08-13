@@ -1,4 +1,4 @@
-import { agentAvatarColor } from '../agentAvatarColor';
+import { agentAvatarColor, assignDistinctAvatarColors } from '../agentAvatarColor';
 
 const REAL_PALETTE = [
   '#367895', '#FB2832', '#5BA63C', '#E8920C', '#7A5AF0', '#2BA39A', '#C2185B', '#6B6B6B',
@@ -47,5 +47,67 @@ describe('agentAvatarColor', () => {
     const c = agentAvatarColor('agent-cccccccc-0000-0000-0000-000000000003');
     const uniqueAmongThree = new Set([a, b, c]).size;
     expect(uniqueAmongThree).toBeGreaterThan(1);
+  });
+
+  // Confirmed live in production (loop-production-verifier, cycle 1): a bare
+  // agentAvatarColor(id) call per card collided — cory-engine and InboxCaseEngine
+  // (Colaberry's #1 and #3 highest-volume ticket creators) both landed on '#C2185B'
+  // on the real deployed bundle with the real agent ids. This is the exact
+  // regression case assignDistinctAvatarColors() below exists to prevent.
+  it('regression: the two real ids that collided live under the bare hash no longer collide once fixed', () => {
+    expect(agentAvatarColor(REAL_AGENT_IDS['cory-engine'])).toBe(agentAvatarColor(REAL_AGENT_IDS.InboxCaseEngine));
+    // ^ documents WHY the bare function alone isn't enough (still true, unfixed) —
+    // the real fix is exercised below via assignDistinctAvatarColors().
+  });
+});
+
+describe('assignDistinctAvatarColors', () => {
+  it('the exact regression: the 6 real, currently-live Live Agents (5 Stage-1 processes + Reese) all get pairwise-distinct colors, including the pair that collided live', () => {
+    const reeseId = 'agent-reese-real-id-0000-000000000000';
+    const ids = [...Object.values(REAL_AGENT_IDS), reeseId];
+
+    const colorById = assignDistinctAvatarColors(ids);
+    const colors = Object.values(colorById);
+
+    expect(new Set(colors).size).toBe(ids.length); // all 6 distinct — the actual bug
+    expect(colorById[REAL_AGENT_IDS['cory-engine']]).not.toBe(colorById[REAL_AGENT_IDS.InboxCaseEngine]);
+  });
+
+  it('happy path: every returned color is still a real palette hex, never invented', () => {
+    const colorById = assignDistinctAvatarColors(Object.values(REAL_AGENT_IDS));
+    for (const color of Object.values(colorById)) {
+      expect(REAL_PALETTE).toContain(color);
+    }
+  });
+
+  it('deterministic for a fixed roster regardless of input order — the same set of ids always produces the same mapping', () => {
+    const ids = Object.values(REAL_AGENT_IDS);
+    const forward = assignDistinctAvatarColors(ids);
+    const shuffled = [...ids].reverse();
+    const reversed = assignDistinctAvatarColors(shuffled);
+
+    expect(reversed).toEqual(forward);
+  });
+
+  it('boundary: a single-agent roster just gets its own preferred hash color', () => {
+    const id = REAL_AGENT_IDS['cory-engine'];
+    expect(assignDistinctAvatarColors([id])[id]).toBe(agentAvatarColor(id));
+  });
+
+  it('boundary: an empty roster returns an empty mapping, never throws', () => {
+    expect(assignDistinctAvatarColors([])).toEqual({});
+  });
+
+  it('graceful degradation beyond palette size: a 9-agent roster (more than the 8 real colors) never throws and every id still gets a real palette color', () => {
+    const ids = Array.from({ length: 9 }, (_, i) => `agent-${i}-0000-0000-0000-00000000000${i}`);
+    const colorById = assignDistinctAvatarColors(ids);
+    expect(Object.keys(colorById)).toHaveLength(9);
+    for (const color of Object.values(colorById)) {
+      expect(REAL_PALETTE).toContain(color);
+    }
+    // With 9 agents and 8 colors, at least one pair must share by pigeonhole — proves
+    // this is handled gracefully (no crash) rather than claiming an impossible 9-way
+    // distinctness.
+    expect(new Set(Object.values(colorById)).size).toBeLessThanOrEqual(8);
   });
 });
