@@ -4,7 +4,7 @@ import TicketDetailModal from '../../components/admin/TicketDetailModal';
 import { PageHeader, StatCard, StatusBadge, SectionCard } from '../../components/admin/shell';
 import { TrustSignal } from '../../components/admin/shell/trust';
 import { getAgentDisplayName } from '../../utils/agentDisplayNames';
-import { buildTicketTypeFilterOptions, getTicketTypeTone } from '../../utils/ticketTypeMeta';
+import { buildTicketTypeFilterOptions, getTicketTypeTone, isTicketStale } from '../../utils/ticketTypeMeta';
 
 interface Ticket {
   id: string;
@@ -312,6 +312,9 @@ export default function AdminTicketBoardPage() {
                       <p className="mb-1 small fw-medium" style={{ lineHeight: 1.3 }}>{ticket.title}</p>
                       <div className="d-flex gap-1 flex-wrap align-items-center">
                         <StatusBadge label={ticket.type} tone={getTicketTypeTone(ticket.type)} />
+                        {isTicketStale(ticket.updated_at, ticket.status) && (
+                          <StatusBadge label="Stale" tone="warning" icon="time-line" />
+                        )}
                         {ticket.assigned_to_id && (
                           <StatusBadge
                             label={ticket.assigned_to_id.length > 20 ? ticket.assigned_to_id.slice(0, 20) + '...' : ticket.assigned_to_id}

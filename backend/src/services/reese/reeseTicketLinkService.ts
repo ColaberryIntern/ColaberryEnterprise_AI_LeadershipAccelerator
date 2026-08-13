@@ -4,6 +4,7 @@ import {
   snippet,
 } from '../agentBlueprint/agentTicketLinkService';
 import { getReeseAdminUserId } from './reeseIdentitySeed';
+import { resolveStudentDisplayName } from './resolveStudentDisplayName';
 
 // Reese Phase 1 — ProofDesk integration (the core requirement: Ali must be able
 // to see the ticket, who Reese is talking to, why, and follow up over time).
@@ -23,15 +24,20 @@ export async function ensureReeseTicketForRoom(
   firstMessageContent: string,
 ): Promise<{ id: string }> {
   const reeseAdminUserId = await getReeseAdminUserId();
+  // Real student name, never the raw enrollmentId, in human-facing text (Ali's
+  // live feedback: "reporting the id of the user is not helpful"). entity_id
+  // below is the roomId (unaffected — this ticket was never keyed on the
+  // enrollmentId to begin with).
+  const studentName = await resolveStudentDisplayName(studentEnrollmentId);
 
   return ensureAgentTicketForRoom({
     roomId,
     agentAdminUserId: reeseAdminUserId,
     agentLabel: 'Reese',
-    title: `Student support — DM conversation (${studentEnrollmentId})`,
+    title: `Student support — DM conversation (${studentName})`,
     description:
-      `Reese is in a direct-message conversation with student enrollment ` +
-      `${studentEnrollmentId}. Opening message: "${snippet(firstMessageContent)}"`,
+      `Reese is in a direct-message conversation with ${studentName}. ` +
+      `Opening message: "${snippet(firstMessageContent)}"`,
     type: 'student_support',
     entityType: 'community_room',
   });

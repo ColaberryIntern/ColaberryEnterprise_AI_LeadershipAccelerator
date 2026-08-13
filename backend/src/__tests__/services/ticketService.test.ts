@@ -81,6 +81,108 @@ describe('createTicket', () => {
   });
 });
 
+describe('createTicket — student_support hourly reuse/reopen rule (Ali\'s live feedback: "one ticket per person per hour")', () => {
+  function makeTicket(overrides: Partial<{ id: string; status: string; updated_at: Date; created_at: Date }>) {
+    const ticket: any = { id: 'ticket-1', status: 'in_progress', updated_at: new Date(), created_at: new Date(), ...overrides };
+    ticket.update = jest.fn(async (fields: any) => Object.assign(ticket, fields));
+    return ticket;
+  }
+
+  const BASE_INPUT = {
+    title: 'Student support — DM conversation (Jordan Rivera)',
+    created_by_type: 'ai_staff' as const,
+    created_by_id: 'reese-admin-1',
+    entity_type: 'community_room',
+    entity_id: 'room-1',
+    type: 'student_support' as const,
+  };
+
+  it('happy path: reuses (and REOPENS) a CLOSED ticket whose last activity was within the past hour — same ticket id, not a new one', async () => {
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60 * 1000);
+    const closedTicket = makeTicket({ id: 'ticket-1', status: 'cancelled', updated_at: thirtyMinAgo });
+    ticketFindOne.mockResolvedValue(closedTicket);
+    activityCreate.mockResolvedValue({ id: 'activity-reopen' });
+
+    const result = await createTicket(BASE_INPUT);
+
+    expect(result).toBe(closedTicket);
+    expect(result.status).toBe('todo'); // reopened, not left cancelled
+    expect(ticketFindOne).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { entity_type: 'community_room', entity_id: 'room-1', type: 'student_support' } }),
+    );
+    expect(closedTicket.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'todo' }));
+    expect(activityCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ ticket_id: 'ticket-1', action: 'reopened', from_value: 'cancelled', to_value: 'todo' }),
+    );
+    expect(mockEmit).toHaveBeenCalledWith(expect.objectContaining({ intent: 'ticket.reopened', ticketId: 'ticket-1' }));
+    expect(ticketCreate).not.toHaveBeenCalled(); // no NEW ticket row
+  });
+
+  it('boundary: 61+ minutes since last activity creates a NEW ticket rather than reopening the old, possibly-stale one', async () => {
+    const sixtyOneMinAgo = new Date(Date.now() - 61 * 60 * 1000);
+    const staleTicket = makeTicket({ id: 'ticket-old', status: 'in_progress', updated_at: sixtyOneMinAgo });
+    ticketFindOne.mockResolvedValue(staleTicket);
+    const newTicket = { id: 'ticket-new', status: 'backlog', priority: 'medium', type: 'student_support', title: BASE_INPUT.title };
+    ticketCreate.mockResolvedValue(newTicket);
+    activityCreate.mockResolvedValue({ id: 'activity-created' });
+
+    const result = await createTicket(BASE_INPUT);
+
+    expect(result).toBe(newTicket);
+    expect(result.id).not.toBe('ticket-old');
+    expect(staleTicket.update).not.toHaveBeenCalled(); // the old, stale ticket is left untouched
+    expect(ticketCreate).toHaveBeenCalled();
+  });
+
+  it('an already-OPEN ticket within the hour is reused as-is (no status change) but its updated_at is bumped', async () => {
+    const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const openTicket = makeTicket({ id: 'ticket-open', status: 'in_progress', updated_at: tenMinAgo });
+    ticketFindOne.mockResolvedValue(openTicket);
+
+    const result = await createTicket(BASE_INPUT);
+
+    expect(result).toBe(openTicket);
+    expect(result.status).toBe('in_progress'); // unchanged — it was never closed
+    expect(openTicket.update).toHaveBeenCalledWith(expect.objectContaining({ updated_at: expect.any(Date) }));
+    expect(activityCreate).not.toHaveBeenCalled(); // no 'reopened' activity for a ticket that was never closed
+    expect(ticketCreate).not.toHaveBeenCalled();
+  });
+
+  it('no existing student_support ticket at all creates a fresh one (first-ever conversation with this student)', async () => {
+    ticketFindOne.mockResolvedValue(null);
+    const newTicket = { id: 'ticket-first', status: 'backlog', priority: 'medium', type: 'student_support' };
+    ticketCreate.mockResolvedValue(newTicket);
+    activityCreate.mockResolvedValue({ id: 'activity-created' });
+
+    const result = await createTicket(BASE_INPUT);
+
+    expect(result).toBe(newTicket);
+    expect(ticketCreate).toHaveBeenCalled();
+  });
+
+  it('regression: non-student_support types keep the ORIGINAL unbounded-while-open behavior — no time window leaks in', async () => {
+    // A `task` ticket, still open, last touched 10 days ago — must still be reused
+    // exactly as before this change, proving the hourly window is scoped strictly
+    // to student_support and never applies to any other ticket type.
+    const tenDaysAgo = new Date(Date.now() - 10 * 24 * 60 * 60 * 1000);
+    const oldOpenTaskTicket = makeTicket({ id: 'task-1', status: 'in_progress', updated_at: tenDaysAgo });
+    ticketFindOne.mockResolvedValue(oldOpenTaskTicket);
+
+    const result = await createTicket({
+      title: 'Some task',
+      created_by_type: 'human',
+      created_by_id: 'ali',
+      entity_type: 'campaign',
+      entity_id: 'c1',
+      type: 'task',
+    });
+
+    expect(result).toBe(oldOpenTaskTicket);
+    expect(oldOpenTaskTicket.update).not.toHaveBeenCalled(); // untouched — old behavior never bumps updated_at
+    expect(ticketCreate).not.toHaveBeenCalled();
+  });
+});
+
 describe('updateTicketStatus', () => {
   function makeTicket(status: string) {
     const ticket: any = { id: 't2', status };

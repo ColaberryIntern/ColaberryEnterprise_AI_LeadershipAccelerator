@@ -13,6 +13,7 @@ import {
 } from './reeseSignalService';
 import { generateOutreachMessage } from './reeseOutreachMessageService';
 import { initiateDm } from './reeseInitiateDmService';
+import { resolveStudentDisplayName } from './resolveStudentDisplayName';
 
 // Reese Phase 2 (Autonomous Outreach) — the decision + orchestration sweep.
 // Named, non-negotiable constants (see execution-contract.md — logged there as
@@ -106,10 +107,15 @@ async function sendNewOutreach(
   // awareness, so a bare enrollment id would let a second, DIFFERENT signal
   // silently collide onto the first signal's still-open ticket. entity_id is
   // STRING(255) (Ticket.ts), not a strict UUID column, so this is safe.
+  //
+  // title/description use the student's real name, never the raw enrollmentId
+  // (Ali's live feedback: "reporting the id of the user is not helpful") —
+  // entity_id/metadata below still carry the UUID for systems that need it.
+  const studentName = await resolveStudentDisplayName(enrollmentId);
   const ticket = await createTicket({
-    title: `Reese autonomous outreach — ${signalType} (${enrollmentId})`,
+    title: `Reese autonomous outreach — ${signalType} (${studentName})`,
     description:
-      `Reese is proactively reaching out to student enrollment ${enrollmentId}. ` +
+      `Reese is proactively reaching out to ${studentName}. ` +
       `Signal: ${signalType}. Goal: ${goal}`,
     type: 'reese_autonomous_outreach',
     status: 'in_progress',

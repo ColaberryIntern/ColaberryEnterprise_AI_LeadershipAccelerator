@@ -145,4 +145,25 @@ describe('Activity Timeline — real data only', () => {
 
     expect(container.textContent).toContain('No activity yet');
   });
+
+  // T008 (ticket-ux-fixes run) — Ali's live feedback: "AI org task for the timeline
+  // should be clickable to go to the tickets - just like they are in the agent
+  // dashboard." + "Format the time everywhere you see it to cst."
+  it('makes each timeline entry a real link to its ticket, reusing the exact route pattern AgentDetailPage uses', async () => {
+    mockApi({ activity: [REESE_EVENT] });
+    await renderPage();
+
+    const link = container.querySelector('a[href="/admin/tickets?open=t1"]');
+    expect(link).toBeTruthy();
+    expect(link?.textContent).toContain('Reached out to a struggling student');
+  });
+
+  it('renders the timeline timestamp with a CST/CDT label, never the browser-local unlabeled toLocaleString() shape', async () => {
+    mockApi({ activity: [REESE_EVENT] }); // occurred_at: '2026-08-10T00:00:00Z'
+    await renderPage();
+
+    // 2026-08-10T00:00:00Z is 7:00 PM Central the prior day during CDT.
+    expect(container.textContent).toContain('7:00 PM CDT');
+    expect(container.textContent).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/);
+  });
 });

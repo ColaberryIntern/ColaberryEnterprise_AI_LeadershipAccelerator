@@ -4,6 +4,7 @@ import api from '../../../utils/api';
 import { workforceCss, readTheme, writeTheme } from './themeKit';
 import StatusBadge from '../../../components/admin/shell/StatusBadge';
 import { getTicketTypeTone, getTicketTypeLabel } from '../../../utils/ticketTypeMeta';
+import { fmtCentralDateTime } from '../../../utils/centralTime';
 
 /**
  * WorkforceOSPage — the AI Workforce Operating System. An executive opens one
@@ -180,14 +181,23 @@ const WorkforceOSPage: React.FC = () => {
             <div className="wf-muted">No activity yet.</div>
           ) : (
             liveAgentActivity.map((ev) => (
-              <div className="wf-msg" key={ev.ticket_id}>
-                <div className="rt">{ev.agent_name} · TK-{ev.ticket_number ?? '—'} · {ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : ''}</div>
+              // Clickable through to the ticket — reuses the exact same route
+              // pattern AgentDetailPage.tsx's Ticket activity table already uses
+              // (`/admin/tickets?open=<id>`), matching the Live Agents Link 20
+              // lines above rather than inventing a second navigation pattern.
+              <Link
+                to={`/admin/tickets?open=${ev.ticket_id}`}
+                className="wf-msg"
+                key={ev.ticket_id}
+                style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
+              >
+                <div className="rt">{ev.agent_name} · TK-{ev.ticket_number ?? '—'} · {ev.occurred_at ? fmtCentralDateTime(ev.occurred_at) : ''}</div>
                 <div className="sb" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   {ev.title}
                   <StatusBadge label={getTicketTypeLabel(ev.type)} tone={getTicketTypeTone(ev.type)} />
                 </div>
                 <div className="wf-muted">{ev.status}</div>
-              </div>
+              </Link>
             ))
           )}
         </section>

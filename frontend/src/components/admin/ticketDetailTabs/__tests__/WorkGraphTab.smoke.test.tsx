@@ -111,6 +111,10 @@ describe('WorkGraphContent — 2-unit linear chain', () => {
     const html = renderToStaticMarkup(<WorkGraphContent ticketId="tk-3" workUnits={workUnits} dependencies={[]} />);
     expect(html).toContain('Active lease');
     expect(html).toContain('PlatformFixAgent');
+    // Ali's live feedback: format all time to CST, labeled — never a silent shift.
+    // 2026-08-03T12:00:00Z is 7:00 AM Central during CDT (UTC-5).
+    expect(html).toContain('7:00 AM CDT');
+    expect(html).not.toMatch(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/); // never the raw ISO string
   });
 });
 
