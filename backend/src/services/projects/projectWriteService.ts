@@ -18,6 +18,27 @@ import type { ProjectTreeDto } from './projectTreeDto';
 export interface ImportListInput { cluster: string; title?: string; position?: number; tasks: ImportTaskInput[]; }
 export interface ImportProjectInput { name?: string; lists: ImportListInput[]; }
 
+/** Structured note when an import is refused rather than performed. */
+function log(event: string, ctx: Record<string, unknown>): void {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(), level: 'warn', service: 'project-write',
+    event, outcome: 'partial', context: ctx,
+  }));
+}
+
+/**
+ * True when the pipeline has published a plan for this project. Raw SQL rather
+ * than a model because build_plans belongs to the SBP layer and importing its
+ * model here would tie the legacy write path to the pipeline's schema.
+ */
+export async function hasPublishedBuild(projectId: string): Promise<boolean> {
+  const [rows]: any = await sequelize.query(
+    `SELECT 1 FROM build_plans WHERE project_id = $pid AND status = 'published' LIMIT 1`,
+    { bind: { pid: projectId } },
+  );
+  return Array.isArray(rows) && rows.length > 0;
+}
+
 /** Set a task's status — scoped to the requesting enrollment. Null if not found / not owned. */
 export async function setTaskStatus(
   enrollmentId: string,
@@ -78,6 +99,27 @@ export async function importProject(enrollmentId: string, payload: ImportProject
   // Outside the transaction: the project is a get-or-create that must survive a
   // rolled-back import (the student still owns the project, just not this plan).
   const project = await createProjectForEnrollment(enrollmentId);
+
+  // MEASURED, 2026-08-13, production. `createProjectForEnrollment` returns the
+  // ACTIVE project, and the portal mirrors localStorage on load. A build was
+  // published at 08:30 and became active; the student opened the portal at
+  // 08:35 and their stale client-side project was written straight over it —
+  // all 18 tasks rewritten, because both plans number their stories STORY-001
+  // upward and story_id is the identity key. The published lists were left
+  // empty beside six new ones. The header above calls this import idempotent
+  // and says re-import never clobbers progress; against a published plan that
+  // was not true.
+  //
+  // A published plan is authored by the pipeline, not by the browser, so the
+  // browser is never the newer truth. Import stays available for the legacy
+  // client-only projects it was written for.
+  if (await hasPublishedBuild(project.id)) {
+    log('project_import_skipped_published', {
+      enrollmentId, projectId: project.id, lists: payload.lists.length,
+      reason: 'project has a published build plan; client state is not authoritative',
+    });
+    return getOwnedProjectTree(enrollmentId, project.id);
+  }
 
   await sequelize.transaction(async (t: Transaction) => {
     let listPos = 0;
